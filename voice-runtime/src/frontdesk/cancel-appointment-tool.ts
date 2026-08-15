@@ -2,8 +2,9 @@ import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
-import type { FrontDeskUserData } from "./userdata";
-import { markBookingCancelled } from "./userdata";
+import { guardCalendarTool } from "./booking-operation-guard";
+import { markBookingOperationCancelled } from "./booking-operation";
+import { markBookingCancelled, type FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
 import {
@@ -42,6 +43,8 @@ export function buildFrontDeskCancelAppointmentTool() {
     execute: async ({ appointment_id, confirmed }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
+
+      guardCalendarTool(ud, "cancel_appointment");
 
       if (!confirmed) {
         return "Ask the caller to confirm before cancelling.";
@@ -87,6 +90,7 @@ export function buildFrontDeskCancelAppointmentTool() {
 
             if (fromThisCall) {
               markBookingCancelled(ud);
+              markBookingOperationCancelled(ud, "appointment_cancelled");
               await prisma.voiceCall
                 .update({
                   where: { id: ud.callId },

@@ -1,4 +1,5 @@
 import type { CalendlyCalendar } from "./calendly-calendar";
+import type { BookingOperation } from "./booking-operation";
 import {
   isFrontDeskProfile as isFrontDeskProfileFromConfig,
   usesFrontDeskRealtimeVoicePipeline,
@@ -60,6 +61,14 @@ export type FrontDeskUserData = {
   bookingConfirmationSmsSent?: boolean;
   /** True while schedule_appointment is writing to Calendly. */
   bookingInProgress?: boolean;
+  /** Deterministic booking operation lifecycle (collecting_email → writing_calendar → terminal). */
+  bookingOperation?: BookingOperation;
+  /** Promise waiter for inline email collection during schedule_appointment. */
+  bookingEmailWaiter?: {
+    resolve: (result: { email: string; declined: boolean }) => void;
+    reject: (err: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  };
   /** IntakeSequenceCollectionTask is running inside a tool — blocks duplicate collect_required_fields. */
   intakeSequenceActive?: boolean;
   /** Background CRM prefetch started for caller ANI. */
@@ -109,6 +118,7 @@ export function markBookingCancelled(userData: FrontDeskUserData): void {
   userData.bookingComplete = false;
   userData.bookedTimeLabel = undefined;
   userData.pendingSlotId = undefined;
+  userData.bookingInProgress = false;
 }
 
 export function isFrontDeskUserData(

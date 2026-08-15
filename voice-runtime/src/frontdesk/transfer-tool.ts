@@ -4,6 +4,7 @@ import type { AgentSession } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
 import { transferLiveKitSipParticipant } from "@/lib/voice/livekit/sip-transfer";
 import { initiateTransfer } from "@/lib/voice/transfers";
+import { deliverScriptedSpeech } from "../outbound/scripted-speech";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import { notifyReceptionistStaff } from "@/lib/voice/receptionist/notifications";
@@ -138,6 +139,15 @@ export function buildFrontDeskTransferTool() {
             "I can't transfer this call right now — I can take a message for the team instead.",
           );
         }
+
+        const isEmergency = isEmergencyTransfer(reason, ud);
+        const bridgeLine = isEmergency
+          ? "I understand this is urgent — let me connect you with someone right now. Please hold."
+          : "Let me connect you with someone who can help. Please hold.";
+        await deliverScriptedSpeech(session, bridgeLine, {
+          allowInterruptions: false,
+          addToChatCtx: true,
+        });
 
         const transferPolicy = ud.receptionistCompiled?.transferPolicy as
           | { warmTransfer?: boolean }

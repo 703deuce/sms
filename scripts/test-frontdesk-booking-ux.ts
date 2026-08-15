@@ -54,8 +54,12 @@ assert.ok(
   "booking bridge line is passed to runAsyncWorkWithBridge",
 );
 assert.ok(
+  bookingToolsSource.includes("collectEmailInlineForBooking"),
+  "schedule_appointment uses inline email collection",
+);
+assert.ok(
   emailTaskSource.includes("speakBeforeTaskHandoff"),
-  "email task speaks bridge before handoff to parent",
+  "email task speaks bridge before handoff to parent (legacy AgentTask path)",
 );
 assert.ok(
   emailTaskSource.includes("deliverScriptedSpeech"),

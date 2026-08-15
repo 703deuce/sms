@@ -14,7 +14,8 @@ import {
 import {
   resolveConfirmedEmail,
 } from "./email-collection-tools";
-import { runEmailCollectionTask } from "./email-collection-task";
+import { guardCalendarTool } from "./booking-operation-guard";
+import { collectEmailInlineForBooking } from "./booking-email-inline";
 import {
   syncFrontDeskBookingToCrm,
 } from "@/lib/voice/crm/frontdesk-crm-sync";
@@ -59,6 +60,8 @@ export function buildFrontDeskRescheduleAppointmentTool(
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
 
+      guardCalendarTool(ud, "reschedule_appointment");
+
       if (!confirmed) {
         return "Ask the caller to confirm the new time before rescheduling.";
       }
@@ -74,7 +77,7 @@ export function buildFrontDeskRescheduleAppointmentTool(
         if (attendeeEmail) ud.confirmedEmail = attendeeEmail;
       }
       if (!attendeeEmail) {
-        const collected = await runEmailCollectionTask(session);
+        const collected = await collectEmailInlineForBooking(session);
         if (collected.declined || !collected.email) {
           return "Email is required to reschedule. Offer to call back later.";
         }

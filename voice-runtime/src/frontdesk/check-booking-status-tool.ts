@@ -57,6 +57,20 @@ export function buildFrontDeskCheckBookingStatusTool() {
           );
         }
 
+        const opState = ud.bookingOperation?.state;
+        if (opState === "collecting_email") {
+          return (
+            "pending: Still collecting email for the calendar invite. " +
+            "Ask the caller for their email, then use record_booking_email when they confirm it."
+          );
+        }
+        if (opState === "failed") {
+          return (
+            `failed: Booking did not complete (${ud.bookingOperation?.errorReason ?? "unknown"}). ` +
+            "Do not claim the caller is booked. Offer list_available_slots or take_message."
+          );
+        }
+
         const row = await appointmentOnThisCall(ud);
         if (row) {
           const when = formatBookedTimeLabel(row.startsAt, ud.timezone);

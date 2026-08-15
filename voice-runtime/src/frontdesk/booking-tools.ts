@@ -10,7 +10,22 @@ import {
   scheduleAppointmentResilient,
 } from "./booking-recovery";
 import { resolveConfirmedEmail } from "./email-collection-tools";
-import { runEmailCollectionTask, EMAIL_COLLECTION_PROMPT } from "./email-collection-task";
+import { EMAIL_COLLECTION_PROMPT } from "./email-collection-task";
+import {
+  collectEmailInlineForBooking,
+  buildDeclineBookingEmailTool,
+  buildRecordBookingEmailTool,
+  clearBookingEmailWaiter,
+} from "./booking-email-inline";
+import {
+  beginBookingOperation,
+  canStartScheduleAppointment,
+  markBookingOperationConfirmed,
+  markBookingOperationFailed,
+  markBookingOperationState,
+  isBookingOperationActive,
+} from "./booking-operation";
+import { guardCalendarTool } from "./booking-operation-guard";
 import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";
 import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
@@ -111,6 +126,7 @@ export function buildFrontDeskBookingTools(input: {
     }),
     execute: async ({ range }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      guardCalendarTool(session.userData, "list_available_slots");
       return withLiveKitToolTelemetry(session.userData, "list_available_slots", { range }, async () => {
         const cal = session.userData.cal;
         const rangeDays = range === "+1month" || range === "+3month" ? 14 : 14;
@@ -147,15 +163,24 @@ export function buildFrontDeskBookingTools(input: {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const userData = session.userData;
 
+      guardCalendarTool(userData, "schedule_appointment");
+
       const alreadyBooked = alreadyBookedToolMessage(userData);
       if (alreadyBooked) return alreadyBooked;
+
+      if (!canStartScheduleAppointment(userData)) {
+        throw new llm.ToolError(
+          "A booking is already in progress. Tell the caller you're finishing that step, " +
+            "then use check_booking_status if they ask whether it worked.",
+        );
+      }
 
       const slot = slotsMap.get(slot_id);
       if (!slot) {
         throw new llm.ToolError(`Slot ${slot_id} was not found — call list_available_slots again.`);
       }
 
-      userData.pendingSlotId = slot_id;
+      beginBookingOperation(userData, slot_id);
       userData.bookingInProgress = true;
 
       try {
@@ -164,8 +189,11 @@ export function buildFrontDeskBookingTools(input: {
         const email = resolveConfirmedEmail(userData, inlineEmail);
         if (!email) {
           await speakBookingLine(session, EMAIL_COLLECTION_PROMPT);
-          const collected = await runEmailCollectionTask(session, { skipOnEnterPrompt: true });
+          const collected = await collectEmailInlineForBooking(session, {
+            skipPrompt: true,
+          });
           if (collected.declined || !collected.email) {
+            markBookingOperationFailed(userData, "email_required");
             return (
               "Email is required for the calendar invite. Explain that and offer to call back later."
             );
@@ -176,6 +204,7 @@ export function buildFrontDeskBookingTools(input: {
         }
 
         const confirmedEmail = userData.confirmedEmail!;
+        markBookingOperationState(userData, "writing_calendar");
 
         return await withLiveKitToolTelemetry(
           userData,
@@ -202,6 +231,7 @@ export function buildFrontDeskBookingTools(input: {
                 providerEventId: booked.eventUri,
                 bookedTimeLabel: local,
               });
+              markBookingOperationConfirmed(userData);
               void onRealEstateBookingConfirmed(userData);
 
               const appointmentId = await lookupAppointmentIdForCallWithRetry({
@@ -257,6 +287,7 @@ export function buildFrontDeskBookingTools(input: {
             } catch (err) {
               if (err instanceof SlotUnavailableError) {
                 userData.slotUnavailableCount += 1;
+                markBookingOperationFailed(userData, "slot_unavailable");
                 await speakBookingLine(
                   session,
                   buildBookingFailureLine(
@@ -276,16 +307,27 @@ export function buildFrontDeskBookingTools(input: {
                   error: err instanceof Error ? err.message : String(err),
                 }),
               );
+              markBookingOperationFailed(
+                userData,
+                err instanceof Error ? err.message : String(err),
+              );
               await speakBookingLine(session, buildBookingFailureLine(bookingFailureReason(err)));
               return BOOKING_FAILED_TOOL_RESULT;
             }
           },
         );
       } finally {
+        if (isBookingOperationActive(userData)) {
+          markBookingOperationFailed(userData, "booking_interrupted");
+        }
         userData.bookingInProgress = false;
+        clearBookingEmailWaiter(userData);
       }
     },
   });
+
+  const recordBookingEmail = buildRecordBookingEmailTool();
+  const declineBookingEmail = buildDeclineBookingEmailTool();
 
   const endCallTools = buildFrontDeskEndCallToolset(
     "End when the caller is done after booking or if they say goodbye.",
@@ -295,6 +337,8 @@ export function buildFrontDeskBookingTools(input: {
     slotsMap,
     toolDefs: [
       getCurrentTime,
+      recordBookingEmail,
+      declineBookingEmail,
       ...(includeBooking
         ? [
             listAvailableSlots,

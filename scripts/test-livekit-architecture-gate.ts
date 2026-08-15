@@ -269,14 +269,15 @@ check("RE intake uses single IntakeSequenceCollectionTask", () => {
   assert.ok(taskCtx.includes("sessionUsesRealtimeLlm"));
 });
 
-check("booking uses EmailCollectionTask and LiveKit end call", () => {
+check("booking uses inline email gate and LiveKit end call", () => {
   const booking = readProjectFile("voice-runtime/src/frontdesk/booking-tools.ts");
-  const emailTask = readProjectFile("voice-runtime/src/frontdesk/email-collection-task.ts");
+  const emailInline = readProjectFile("voice-runtime/src/frontdesk/booking-email-inline.ts");
   const bridge = readProjectFile("voice-runtime/src/task-async-work-bridge.ts");
-  assert.ok(booking.includes("runEmailCollectionTask"));
+  assert.ok(booking.includes("collectEmailInlineForBooking"));
+  assert.ok(booking.includes("record_booking_email"));
   assert.ok(booking.includes("buildFrontDeskEndCallToolset"));
   assert.ok(booking.includes("runAsyncWorkWithBridge"));
-  assert.ok(emailTask.includes("speakBeforeTaskHandoff"));
+  assert.ok(emailInline.includes("record_booking_email"));
   assert.ok(bridge.includes("runAsyncWorkWithBridge"));
   assert.ok(bridge.includes("speakBeforeTaskHandoff"));
 });

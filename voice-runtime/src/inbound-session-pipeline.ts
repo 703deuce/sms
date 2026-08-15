@@ -28,6 +28,7 @@ import {
   resolveOutboundRealtimeOutputMode,
 } from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
+import { attachOperationSilenceWatchdog } from "./operation-silence-watchdog";
 import { buildFrontDeskRealtimeTurnHandling } from "./frontdesk-realtime-turn-handling";
 import { attachLiveKitTranscriptPersistence } from "./transcript-persistence";
 import { attachOutputGain, resolveLiveKitOutputGainDb } from "./output-gain";
@@ -494,6 +495,8 @@ export function attachObservers(input: {
         : { enabled: false, preemptiveTts: false },
     ttsConfig: input.latencyTtsConfig,
   });
+
+  attachOperationSilenceWatchdog(input.session);
 
   attachLiveKitTranscriptPersistence(input.session, {
     workspaceId: input.routing.workspaceId,
