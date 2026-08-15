@@ -1,16 +1,21 @@
 "use client";
 
 import {
+  parseVoicemailApiPayload,
+  type PersonalVoicemailBox,
+  type PersonalVoicemailMessage,
+} from "@/lib/personal/voicemail-mappers";
+import { runPersonalNumberAction } from "@/lib/personal/client-actions";
+import {
   Archive,
   Cloud,
   Folder,
-  HelpCircle,
   Mic,
   Phone,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, Fragment } from "react";
+import { useCallback, useEffect, useState, Fragment } from "react";
 import { formatPhone } from "@/lib/utils";
 import {
   PersonalAsideCard,
@@ -25,42 +30,153 @@ import {
   pMuted,
 } from "./personal-ui";
 
-type VoicemailMessage = {
-  id: string;
-  callerNumber: string;
-  durationSec: number;
-  createdAt: string;
-  transcript?: string | null;
-  readAt?: string | null;
-};
-
 export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
-  const [messages, setMessages] = useState<VoicemailMessage[]>([]);
+  const [messages, setMessages] = useState<PersonalVoicemailMessage[]>([]);
+  const [box, setBox] = useState<PersonalVoicemailBox | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
   const [autoTranscription, setAutoTranscription] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [forwardEmail, setForwardEmail] = useState("");
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  const loadVoicemail = useCallback(async () => {
+    const res = await fetch("/api/phone/voicemail");
+    const j = await res.json().catch(() => ({}));
+    const { boxes, messages: rows } = parseVoicemailApiPayload(j.data);
+    setMessages(rows);
+    const primary = boxes[0] ?? null;
+    setBox(primary);
+    if (primary) {
+      setForwardEmail(primary.emailNotify || "");
+      setAutoTranscription(primary.transcriptionEnabled ?? true);
+      setEmailAlerts(Boolean(primary.emailNotify));
+    }
+    if (rows[0]) setExpandedId((cur) => cur ?? rows[0].id);
+  }, []);
 
   useEffect(() => {
-    fetch("/api/phone/voicemail")
-      .then((r) => r.json())
-      .then((j) => {
-        const boxes = j.data || [];
-        const all: VoicemailMessage[] = [];
-        for (const box of boxes) {
-          for (const m of box.messages || []) {
-            all.push(m);
-          }
-        }
-        setMessages(all);
-        if (all[0]) setExpandedId(all[0].id);
-      })
-      .finally(() => setLoading(false));
-  }, [numberId]);
+    loadVoicemail().finally(() => setLoading(false));
+  }, [loadVoicemail, numberId]);
 
   const unread = messages.filter((m) => !m.readAt).length;
-  const totalGreetings = 4;
+  const totalGreetings = box?.greetingUrl ? 2 : box?.greetingText ? 1 : 0;
+
+  async function markRead(messageId: string) {
+    await fetch("/api/phone/voicemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_read", messageId }),
+    });
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, readAt: new Date().toISOString() } : m)),
+    );
+  }
+
+  async function deleteMessage(messageId: string) {
+    if (!window.confirm("Delete this voicemail permanently?")) return;
+    const res = await fetch("/api/phone/voicemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_message", messageId }),
+    });
+    if (!res.ok) return;
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    if (expandedId === messageId) setExpandedId(null);
+  }
+
+  async function saveSettings() {
+    setSavingSettings(true);
+    setSettingsMessage(null);
+    try {
+      let boxId = box?.id;
+      if (!boxId) {
+        const ensureRes = await fetch("/api/phone/voicemail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "ensure_personal", name: "Personal voicemail" }),
+        });
+        const ensureJson = await ensureRes.json().catch(() => ({}));
+        if (!ensureRes.ok) {
+          throw new Error(ensureJson.error || "Could not create voicemail box.");
+        }
+        boxId = ensureJson.data?.id;
+      }
+
+      if (boxId) {
+        const updateRes = await fetch("/api/phone/voicemail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update_box",
+            boxId,
+            emailNotify: emailAlerts ? forwardEmail.trim() || null : null,
+            transcriptionEnabled: autoTranscription,
+          }),
+        });
+        const updateJson = await updateRes.json().catch(() => ({}));
+        if (!updateRes.ok) {
+          throw new Error(updateJson.error || "Could not save voicemail settings.");
+        }
+      }
+
+      if (numberId) {
+        await runPersonalNumberAction(
+          numberId,
+          emailAlerts ? "enable_voicemail" : "disable_voicemail",
+        );
+      }
+
+      setSettingsMessage("Settings saved.");
+      await loadVoicemail();
+    } catch (e) {
+      setSettingsMessage(e instanceof Error ? e.message : "Could not save settings.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  async function saveGreetingText() {
+    const text = window.prompt(
+      "Greeting message callers will hear:",
+      box?.greetingText || "Please leave a message after the tone.",
+    );
+    if (!text?.trim()) return;
+
+    const res = await fetch("/api/phone/voicemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: box?.id ? "update_box" : "ensure_personal",
+        boxId: box?.id,
+        greetingText: text.trim(),
+        name: "Personal voicemail",
+      }),
+    });
+    if (res.ok) await loadVoicemail();
+  }
+
+  async function uploadGreetingPrompt() {
+    const url = window.prompt(
+      "Paste a public URL to your greeting audio file (MP3):",
+      box?.greetingUrl || "",
+    );
+    if (!url?.trim()) return;
+
+    const res = await fetch("/api/phone/voicemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: box?.id ? "update_box" : "ensure_personal",
+        boxId: box?.id,
+        greetingUrl: url.trim(),
+        name: "Personal voicemail",
+      }),
+    });
+    if (res.ok) await loadVoicemail();
+  }
 
   return (
     <PersonalPageWrap
@@ -87,9 +203,9 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
           <div className={pCard + " p-4 text-center"}>
             <p className="text-[13px] font-semibold text-[#111827]">Storage</p>
             <div className="mx-auto mt-3 flex h-20 w-20 items-center justify-center rounded-full border-4 border-[#6366f1] text-[14px] font-bold text-[#6366f1]">
-              50%
+              {Math.min(100, Math.round((messages.length / 20) * 100))}%
             </div>
-            <p className="mt-2 text-[12px] text-[#6b7280]">2.5 GB of 5 GB used</p>
+            <p className="mt-2 text-[12px] text-[#6b7280]">{messages.length} messages stored</p>
             <Link href="/settings/billing" className="mt-2 text-[12px] font-semibold text-[#6366f1]">
               Upgrade to Pro
             </Link>
@@ -102,11 +218,11 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
         description="Manage your voicemails, greetings, and transcriptions for your numbers."
         actions={
           <>
-            <PersonalOutlineButton className="gap-1.5">
+            <PersonalOutlineButton className="gap-1.5" onClick={uploadGreetingPrompt}>
               <Upload className="h-4 w-4" />
               Upload Greeting
             </PersonalOutlineButton>
-            <PersonalPrimaryButton className="gap-1.5">
+            <PersonalPrimaryButton className="gap-1.5" onClick={saveGreetingText}>
               <Mic className="h-4 w-4" />
               Create Greeting
             </PersonalPrimaryButton>
@@ -124,14 +240,14 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
         />
         <PersonalStatCard
           label="Storage Used"
-          value="2.5 GB"
-          sub="of 5 GB"
+          value={`${messages.length}`}
+          sub="messages"
           icon={Cloud}
           iconClass="bg-[#eff6ff] text-[#2563eb]"
         />
         <PersonalStatCard
           label="Total Greetings"
-          value={totalGreetings}
+          value={totalGreetings || 1}
           icon={Mic}
           iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
@@ -168,10 +284,19 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
                     <Fragment key={m.id}>
                       <tr
                         className="border-b border-[#f3f4f6] cursor-pointer hover:bg-[#f9fafb]"
-                        onClick={() => setExpandedId(expanded ? null : m.id)}
+                        onClick={() => {
+                          const next = expanded ? null : m.id;
+                          setExpandedId(next);
+                          if (next && !m.readAt) markRead(m.id);
+                        }}
                       >
                         <td className="py-3">
-                          <input type="checkbox" readOnly className="rounded" />
+                          <input
+                            type="checkbox"
+                            readOnly
+                            checked={Boolean(m.readAt)}
+                            className="rounded"
+                          />
                         </td>
                         <td className="py-3 pr-3 font-medium text-[#111827]">Caller</td>
                         <td className="py-3 pr-3">{formatPhone(m.callerNumber || "Unknown")}</td>
@@ -191,26 +316,53 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
                               Transcription: {m.transcript ? "Done" : "Pending"}
                             </p>
                             <div className="mt-3 flex items-center gap-3 rounded-lg bg-white border border-[#e5e7eb] px-4 py-3">
-                              <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#6366f1] text-white">
-                                ▶
+                              <button
+                                type="button"
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#6366f1] text-white"
+                                onClick={() =>
+                                  setPlayingId(playingId === m.id ? null : m.id)
+                                }
+                              >
+                                {playingId === m.id ? "■" : "▶"}
                               </button>
-                              <div className="flex-1 h-2 rounded-full bg-[#e5e7eb]">
-                                <div className="h-full w-1/3 rounded-full bg-[#6366f1]" />
-                              </div>
-                              <span className="text-[11px] text-[#9ca3af]">0:{String(m.durationSec).padStart(2, "0")}</span>
+                              {playingId === m.id ? (
+                                <audio
+                                  controls
+                                  autoPlay
+                                  className="flex-1"
+                                  src={`/api/phone/voicemail/${m.id}/recording`}
+                                />
+                              ) : (
+                                <div className="flex-1 h-2 rounded-full bg-[#e5e7eb]">
+                                  <div className="h-full w-1/3 rounded-full bg-[#6366f1]" />
+                                </div>
+                              )}
+                              <span className="text-[11px] text-[#9ca3af]">
+                                0:{String(m.durationSec).padStart(2, "0")}
+                              </span>
                             </div>
                             {m.transcript ? (
                               <p className="mt-3 text-[13px] text-[#374151]">{m.transcript}</p>
                             ) : (
-                              <p className="mt-3 text-[13px] text-[#9ca3af]">Transcription not available.</p>
+                              <p className="mt-3 text-[13px] text-[#9ca3af]">
+                                Transcription not available.
+                              </p>
                             )}
                             <div className="mt-4 flex flex-wrap gap-2">
-                              <PersonalOutlineButton>Call Back</PersonalOutlineButton>
-                              <PersonalOutlineButton className="gap-1.5">
+                              <a href={`tel:${m.callerNumber}`}>
+                                <PersonalOutlineButton>Call Back</PersonalOutlineButton>
+                              </a>
+                              <PersonalOutlineButton
+                                className="gap-1.5"
+                                onClick={() => markRead(m.id)}
+                              >
                                 <Archive className="h-3.5 w-3.5" />
                                 Archive
                               </PersonalOutlineButton>
-                              <PersonalOutlineButton className="text-[#dc2626] border-[#fecaca]">
+                              <PersonalOutlineButton
+                                className="text-[#dc2626] border-[#fecaca]"
+                                onClick={() => deleteMessage(m.id)}
+                              >
                                 Delete
                               </PersonalOutlineButton>
                               <a
@@ -239,12 +391,18 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
         <div className="mt-4 grid gap-6 lg:grid-cols-2">
           <div>
             <label className="text-[12px] font-medium text-[#6b7280]">Greeting to play</label>
-            <select className="mt-1 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]">
-              <option>Default Greeting</option>
+            <select
+              className="mt-1 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
+              value={box?.id || "default"}
+              onChange={() => undefined}
+            >
+              <option value={box?.id || "default"}>
+                {box?.greetingText ? "Personal Greeting" : "Default Greeting"}
+              </option>
             </select>
             <div className="mt-2 flex gap-2">
-              <PersonalOutlineButton>Upload New</PersonalOutlineButton>
-              <PersonalOutlineButton>Record New</PersonalOutlineButton>
+              <PersonalOutlineButton onClick={uploadGreetingPrompt}>Upload New</PersonalOutlineButton>
+              <PersonalOutlineButton onClick={saveGreetingText}>Record New</PersonalOutlineButton>
             </div>
           </div>
           <div className="space-y-3">
@@ -275,7 +433,16 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
             </div>
           </div>
         </div>
-        <PersonalPrimaryButton className="mt-4">Save Settings</PersonalPrimaryButton>
+        <PersonalPrimaryButton
+          className="mt-4"
+          disabled={savingSettings}
+          onClick={saveSettings}
+        >
+          {savingSettings ? "Saving…" : "Save Settings"}
+        </PersonalPrimaryButton>
+        {settingsMessage ? (
+          <p className="mt-2 text-[12px] text-[#6b7280]">{settingsMessage}</p>
+        ) : null}
       </div>
 
       <PersonalSection title="Recent Activity">

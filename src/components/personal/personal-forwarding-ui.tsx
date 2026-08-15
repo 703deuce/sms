@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   PersonalAsideCard,
@@ -44,6 +45,7 @@ export function PersonalForwardingUI({
   numbers: PhoneNumber[];
   initialNumberId?: string;
 }) {
+  const router = useRouter();
   const [_rules, setRules] = useState<ForwardingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -87,7 +89,7 @@ export function PersonalForwardingUI({
   async function save() {
     setMessage(null);
     try {
-      await fetch("/api/phone/forwarding", {
+      const fwdRes = await fetch("/api/phone/forwarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,15 +101,34 @@ export function PersonalForwardingUI({
           ringSeconds: 25,
         }),
       });
-      await fetch(`/api/numbers/${editId}`, {
+      const fwdJson = await fwdRes.json().catch(() => ({}));
+      if (!fwdRes.ok) {
+        throw new Error(
+          typeof fwdJson.error === "string" ? fwdJson.error : "Could not save forwarding rule.",
+        );
+      }
+
+      const patchRes = await fetch(`/api/numbers/${editId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ voiceForwardTo: enabled ? destination : null }),
       });
+      const patchJson = await patchRes.json().catch(() => ({}));
+      if (!patchRes.ok) {
+        throw new Error(
+          typeof patchJson.error === "string" ? patchJson.error : "Could not update number.",
+        );
+      }
+
       setMessage("Forwarding saved.");
-    } catch {
-      setMessage("Could not save forwarding.");
+      router.refresh();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not save forwarding.");
     }
+  }
+
+  function scrollToEditForm() {
+    document.getElementById("forwarding-edit-form")?.scrollIntoView({ behavior: "smooth" });
   }
 
   return (
@@ -159,7 +180,7 @@ export function PersonalForwardingUI({
         description="Manage how and where you receive incoming calls for your phone numbers."
         actions={
           <>
-            <PersonalPrimaryButton className="gap-1.5">
+            <PersonalPrimaryButton className="gap-1.5" onClick={scrollToEditForm}>
               <Plus className="h-4 w-4" />
               Add New Rule
             </PersonalPrimaryButton>
@@ -286,7 +307,7 @@ export function PersonalForwardingUI({
               </table>
             </div>
 
-            <div className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+            <div id="forwarding-edit-form" className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
               <p className="text-[13px] font-semibold text-[#111827]">Edit forwarding rule</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <select
@@ -311,7 +332,9 @@ export function PersonalForwardingUI({
               </label>
               <div className="mt-4 flex gap-2">
                 <PersonalPrimaryButton onClick={save}>Save Changes</PersonalPrimaryButton>
-                <PersonalOutlineButton type="button">Add another line</PersonalOutlineButton>
+                <Link href="/personal/numbers/premium">
+                  <PersonalOutlineButton type="button">Add another line</PersonalOutlineButton>
+                </Link>
               </div>
               {message ? <p className="mt-2 text-[12px] text-[#6b7280]">{message}</p> : null}
             </div>
@@ -335,9 +358,9 @@ export function PersonalForwardingUI({
             ))}
           </ul>
         )}
-        <button type="button" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
+        <Link href="/personal/numbers" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
           View All Activity
-        </button>
+        </Link>
       </PersonalSection>
     </PersonalPageWrap>
   );

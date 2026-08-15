@@ -32,11 +32,13 @@ export function PersonalOverviewUI({
   userName,
   numbers,
   activity,
+  premiumCartCount = 0,
   portRequests,
 }: {
   userName: string;
   numbers: PersonalNumberRow[];
   activity: PersonalActivityRow[];
+  premiumCartCount?: number;
   portRequests: PortRow[];
 }) {
   const activeCount = numbers.filter((n) => n.serviceState !== "PARKED").length;
@@ -73,8 +75,8 @@ export function PersonalOverviewUI({
         />
         <PersonalStatCard
           label="Find a Number"
-          value={0}
-          sub="search premium inventory"
+          value={premiumCartCount}
+          sub="in your cart"
           icon={Search}
           iconClass="bg-[#ecfdf5] text-[#059669]"
           href="/personal/numbers/premium"

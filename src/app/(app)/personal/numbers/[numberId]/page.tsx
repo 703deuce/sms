@@ -2,6 +2,7 @@ import {
   MoveToBusinessClient,
   PortAwayWindowBanner,
 } from "@/components/personal/personal-pages";
+import { KeepWithTransovoButton, PersonalParkButton } from "@/components/personal/personal-action-buttons";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { deriveAcquisitionType } from "@/lib/workspace/personal-service";
@@ -44,9 +45,7 @@ export default async function PersonalNumberDetailPage({
         <h2 className="text-sm font-semibold">Current service</h2>
         <p className="text-sm">{number.serviceLabel}</p>
         <div className="flex flex-wrap gap-2 pt-2">
-          <Link href={`/personal/vault?numberId=${number.id}`}>
-            <Button size="sm" variant="outline">Park</Button>
-          </Link>
+          <PersonalParkButton numberId={number.id} label="Park" />
           <Link href={`/personal/forwarding?numberId=${number.id}`}>
             <Button size="sm" variant="outline">Forwarding</Button>
           </Link>

@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
 import { formatPhone } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
@@ -21,14 +21,8 @@ export function PersonalVoicemailClient({ numberId }: { numberId?: string }) {
     fetch("/api/phone/voicemail")
       .then((r) => r.json())
       .then((j) => {
-        const boxes = j.data || [];
-        const all: VoicemailMessage[] = [];
-        for (const box of boxes) {
-          for (const m of box.messages || []) {
-            all.push(m);
-          }
-        }
-        setMessages(all);
+        const { messages: rows } = parseVoicemailApiPayload(j.data);
+        setMessages(rows);
       })
       .finally(() => setLoading(false));
   }, [numberId]);
@@ -57,13 +51,14 @@ export function PersonalVoicemailClient({ numberId }: { numberId?: string }) {
               <p className="mt-1 text-sm text-muted-foreground">{m.transcript}</p>
             ) : null}
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline">
-              <a href={`/api/phone/voicemail/${m.id}/recording`} target="_blank" rel="noreferrer">
-                Play
-              </a>
-            </Button>
-          </div>
+          <a
+            href={`/api/phone/voicemail/${m.id}/recording`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-primary"
+          >
+            Play
+          </a>
         </li>
       ))}
     </ul>

@@ -1,17 +1,15 @@
 import { PersonalOverviewUI } from "@/components/personal/personal-overview-ui";
 import { listPortRequests } from "@/lib/numbers/port-service";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import {
-  loadPersonalActivity,
-  loadPersonalNumbers,
-} from "@/lib/workspace/personal-data";
+import { loadPremiumCartCount } from "@/lib/workspace/personal-number-actions";
 
 export default async function PersonalOverviewPage() {
   const { workspaceId, session } = await requireWorkspaceContext();
-  const [numbers, activity, portRequests] = await Promise.all([
+  const [numbers, activity, portRequests, premiumCartCount] = await Promise.all([
     loadPersonalNumbers(workspaceId),
     loadPersonalActivity(workspaceId),
     listPortRequests(workspaceId),
+    loadPremiumCartCount(workspaceId),
   ]);
 
   return (
@@ -19,6 +17,7 @@ export default async function PersonalOverviewPage() {
       userName={session.name}
       numbers={numbers}
       activity={activity}
+      premiumCartCount={premiumCartCount}
       portRequests={portRequests.map((p: { id: string; phone?: string; status?: string; statusLabel?: string }) => ({
         id: String(p.id),
         phone: String(p.phone ?? ""),

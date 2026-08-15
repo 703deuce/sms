@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { PersonalParkButton, KeepWithTransovoButton } from "@/components/personal/personal-action-buttons";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { PersonalActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import { formatPhone } from "@/lib/utils";
 import { ArrowRight, Phone, Sparkles, Vault } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 export function PersonalOverviewClient({
   numbers,
@@ -145,9 +146,7 @@ export function PersonalNumbersListClient({ numbers }: { numbers: PersonalNumber
             <Link href={`/personal/forwarding?numberId=${n.id}`}>
               <Button size="sm" variant="outline">Forward</Button>
             </Link>
-            <Link href={`/personal/vault`}>
-              <Button size="sm" variant="outline">Park</Button>
-            </Link>
+            <PersonalParkButton numberId={n.id} label="Park" />
             <Link href={`/personal/voicemail?numberId=${n.id}`}>
               <Button size="sm" variant="outline">Voicemail</Button>
             </Link>
@@ -177,9 +176,7 @@ export function PortAwayWindowBanner({
         <Link href={`/personal/porting?tab=out&numberId=${number.id}`}>
           <Button size="sm">Start Port Away</Button>
         </Link>
-        <Link href={`/personal/numbers/${number.id}?keep=1`}>
-          <Button size="sm" variant="outline">Keep With Transovo</Button>
-        </Link>
+        <KeepWithTransovoButton numberId={number.id} />
       </div>
     </div>
   );

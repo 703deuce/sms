@@ -1,12 +1,12 @@
 "use client";
 
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
+import { runPersonalNumberAction } from "@/lib/personal/client-actions";
 import { formatPhone } from "@/lib/utils";
 import {
   Archive,
   Clock,
   DollarSign,
-  HelpCircle,
   Lock,
   Pencil,
   Plus,
@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   PersonalAsideCard,
@@ -31,9 +32,24 @@ import {
 
 type VaultActivity = { id: string; text: string; at: string };
 
-export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRow[]; parked: PersonalNumberRow[] }) {
+export function PersonalVaultUI({
+  numbers,
+  parked,
+  initialNumberId,
+}: {
+  numbers: PersonalNumberRow[];
+  parked: PersonalNumberRow[];
+  initialNumberId?: string;
+}) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
-  const [reactivateId, setReactivateId] = useState(parked[0]?.id || "");
+  const [reactivateId, setReactivateId] = useState(
+    initialNumberId && parked.some((n) => n.id === initialNumberId)
+      ? initialNumberId
+      : parked[0]?.id || "",
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -46,14 +62,53 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
     );
   }, [parked, search]);
 
+  const activeToPark = numbers.filter((n) => n.serviceState !== "PARKED");
   const monthlyEst = numbers.reduce((s, n) => s + n.monthlyCost, 0);
-  const activeCount = numbers.filter((n) => n.serviceState !== "PARKED").length;
+  const activeCount = activeToPark.length;
 
-  const activity: VaultActivity[] = parked.slice(0, 3).map((n, i) => ({
+  const activity: VaultActivity[] = parked.slice(0, 3).map((n) => ({
     id: n.id,
     text: `Number ${formatPhone(n.number)} vaulted`,
     at: n.parkedSince ? new Date(n.parkedSince).toLocaleDateString() : "Recently",
   }));
+
+  async function reactivateSelected() {
+    if (!reactivateId) return;
+    setBusy("reactivate");
+    setError(null);
+    try {
+      await runPersonalNumberAction(reactivateId, "reactivate");
+      router.push(`/personal/forwarding?numberId=${reactivateId}`);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reactivate number.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeFromVault(numberId: string) {
+    if (
+      !window.confirm(
+        "Remove this number from your vault? It will return to active service in your account.",
+      )
+    ) {
+      return;
+    }
+    setBusy(numberId);
+    setError(null);
+    try {
+      await runPersonalNumberAction(numberId, "reactivate");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove from vault.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const addToVaultHref =
+    activeToPark.length > 0 ? "/personal/numbers" : "/personal/numbers/premium";
 
   return (
     <PersonalPageWrap
@@ -75,20 +130,30 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
           </PersonalAsideCard>
           <div className={pCard + " p-4"}>
             <h3 className="text-[13px] font-semibold text-[#111827]">Quick Reactivation</h3>
-            <select
-              className="mt-3 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
-              value={reactivateId}
-              onChange={(e) => setReactivateId(e.target.value)}
-            >
-              {parked.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {formatPhone(n.number)} {n.friendlyName ? `· ${n.friendlyName}` : ""}
-                </option>
-              ))}
-            </select>
-            <Link href={`/personal/forwarding?numberId=${reactivateId}`} className="mt-3 block">
-              <PersonalPrimaryButton className="w-full">Reactivate Number</PersonalPrimaryButton>
-            </Link>
+            {parked.length === 0 ? (
+              <p className="mt-3 text-[12px] text-[#6b7280]">No vaulted numbers to reactivate.</p>
+            ) : (
+              <>
+                <select
+                  className="mt-3 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
+                  value={reactivateId}
+                  onChange={(e) => setReactivateId(e.target.value)}
+                >
+                  {parked.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {formatPhone(n.number)} {n.friendlyName ? `· ${n.friendlyName}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <PersonalPrimaryButton
+                  className="mt-3 w-full"
+                  disabled={!reactivateId || busy === "reactivate"}
+                  onClick={reactivateSelected}
+                >
+                  {busy === "reactivate" ? "Reactivating…" : "Reactivate Number"}
+                </PersonalPrimaryButton>
+              </>
+            )}
           </div>
           <PersonalAsideCard title="Need Help?">
             <p>Questions about vault pricing or reactivation?</p>
@@ -102,7 +167,7 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
         description="Keep your valuable phone numbers safe, even when not actively using them."
         actions={
           <>
-            <Link href="/personal/numbers/premium">
+            <Link href={addToVaultHref}>
               <PersonalPrimaryButton className="gap-1.5">
                 <Plus className="h-4 w-4" />
                 Add to Vault
@@ -121,11 +186,13 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
         }
       />
 
+      {error ? <p className="text-[13px] text-rose-600">{error}</p> : null}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <PersonalStatCard
           label="Active Numbers"
           value={activeCount}
-          sub="+1 since last month"
+          sub="not in vault"
           icon={Shield}
         />
         <PersonalStatCard
@@ -155,8 +222,8 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
         {filtered.length === 0 ? (
           <div className="py-8 text-center">
             <p className={pMuted}>No numbers in your vault yet.</p>
-            <Link href="/personal/numbers/premium" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
-              Find a number to vault
+            <Link href={addToVaultHref} className="mt-3 text-[13px] font-semibold text-[#6366f1]">
+              {activeToPark.length > 0 ? "Park a number from My Numbers" : "Find a number to vault"}
             </Link>
           </div>
         ) : (
@@ -188,26 +255,29 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
                     <td className="py-3 pr-3 text-[#6b7280]">Vault</td>
                     <td className="py-3 pr-3 font-medium">${n.monthlyCost.toFixed(2)}</td>
                     <td className="py-3 pr-3 text-[#6b7280]">
-                      {n.parkedSince
-                        ? new Date(n.parkedSince).toLocaleDateString()
-                        : "—"}
+                      {n.parkedSince ? new Date(n.parkedSince).toLocaleDateString() : "—"}
                     </td>
                     <td className="py-3 pr-3">
-                      <PersonalStatusBadge
-                        status={n.status === "Active" ? "protected" : "warning"}
-                      />
+                      <PersonalStatusBadge status="protected" />
                     </td>
-                    <td className="py-3 pr-3 text-[#6b7280]">—</td>
+                    <td className="py-3 pr-3 text-[#6b7280]">Vaulted</td>
                     <td className="py-3 pr-3 text-[#6b7280]">Low</td>
                     <td className="py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <Link
                           href={`/personal/numbers/${n.id}`}
                           className="rounded-md p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
+                          aria-label="Edit number"
                         >
                           <Pencil className="h-4 w-4" />
                         </Link>
-                        <button type="button" className="rounded-md p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]">
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-50"
+                          aria-label="Remove from vault"
+                          disabled={busy === n.id}
+                          onClick={() => removeFromVault(n.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -223,7 +293,7 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
         )}
       </PersonalSection>
 
-      <PersonalSection title="Recent Vault Activity">
+      <PersonalSection title="Recent Vault Activity" id="vault-activity">
         {activity.length === 0 ? (
           <p className={pMuted}>No vault activity yet.</p>
         ) : (
@@ -241,9 +311,9 @@ export function PersonalVaultUI({ numbers, parked }: { numbers: PersonalNumberRo
             ))}
           </ul>
         )}
-        <button type="button" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
+        <Link href="#vault-activity" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
           View all activity
-        </button>
+        </Link>
       </PersonalSection>
     </PersonalPageWrap>
   );

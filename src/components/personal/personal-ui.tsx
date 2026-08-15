@@ -134,14 +134,16 @@ export function PersonalSection({
   description,
   children,
   action,
+  id,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   action?: ReactNode;
+  id?: string;
 }) {
   return (
-    <div className={cn(pCard, "overflow-hidden")}>
+    <div id={id} className={cn(pCard, "overflow-hidden")}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] px-5 py-4">
         <div>
           <h2 className="text-[15px] font-semibold text-[#111827]">{title}</h2>

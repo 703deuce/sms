@@ -25,8 +25,16 @@ export async function POST(request: Request) {
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Record<string, unknown>;
     const targetUserId = (body.userId as string) || auth.session.userId;
-    // Workspace-wide / other-user / number-level rules need phone admin.
-    if (targetUserId !== auth.session.userId || body.phoneNumberId) {
+    const workspace = await getPrisma().workspace.findUnique({
+      where: { id: auth.workspaceId },
+      select: { type: true },
+    });
+    const personalWorkspace = workspace?.type === "PERSONAL";
+    // Personal workspace owners manage their own number forwarding without phone admin.
+    if (
+      !personalWorkspace &&
+      (targetUserId !== auth.session.userId || body.phoneNumberId)
+    ) {
       const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
       await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
     }
