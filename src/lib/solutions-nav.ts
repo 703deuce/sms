@@ -24,7 +24,7 @@ export type SolutionNavInstance = {
   label: string;
   status: string;
   href: string;
-  children?: Array<{ label: string; href: string }>;
+  children?: Array<{ label: string; href: string; badge?: string }>;
 };
 
 export type SolutionsNavOptions = {
@@ -167,6 +167,7 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
       children: [
         { label: "My Numbers", href: "/numbers" },
         { label: "Buy Number", href: "/numbers/buy" },
+        { label: "Premium Numbers", href: "/numbers/premium", badge: "NEW" },
         { label: "Port Number", href: "/numbers/port" },
       ],
     },

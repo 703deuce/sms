@@ -6,18 +6,12 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { numberTabs } from "@/lib/number-tabs";
 import type { NumberSearchResult } from "@/lib/messaging/types";
 import { formatCurrency, formatPhone } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-const numberTabs = [
-  { label: "My Numbers", href: "/numbers" },
-  { label: "Buy", href: "/numbers/buy" },
-  { label: "Port", href: "/numbers/port" },
-  { label: "Sender Pools", href: "/numbers/pools" },
-];
 
 const US_STATES = [
   { code: "AL", name: "Alabama" }, { code: "AK", name: "Alaska" },

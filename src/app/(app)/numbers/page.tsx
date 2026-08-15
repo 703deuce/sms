@@ -9,6 +9,7 @@ import {
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { numberTabs } from "@/lib/number-tabs";
 import { requireWorkspaceContext, loadPhoneNumbers } from "@/lib/workspace-data";
 import { cn, formatCurrency, formatPhone } from "@/lib/utils";
 import {
@@ -20,13 +21,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
-
-const numberTabs = [
-  { label: "My Numbers", href: "/numbers" },
-  { label: "Buy", href: "/numbers/buy" },
-  { label: "Port", href: "/numbers/port" },
-  { label: "Sender Pools", href: "/numbers/pools" },
-];
 
 const cityByAreaCode: Record<string, string> = {
   "415": "San Francisco, CA",

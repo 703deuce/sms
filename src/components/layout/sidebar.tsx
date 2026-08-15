@@ -192,7 +192,14 @@ function NavLinkRow({
           : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
       )}
     >
-      {link.label}
+      <span className="flex items-center gap-2">
+        {link.label}
+        {link.badge ? (
+          <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+            {link.badge}
+          </span>
+        ) : null}
+      </span>
     </Link>
   );
 }

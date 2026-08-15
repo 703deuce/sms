@@ -112,6 +112,8 @@ model User {
   assignedConversations Conversation[] @relation("Assignee")
   auditLogs           AuditLog[]
   phoneAssignments    PhoneNumberAssignment[]
+  premiumNumberReservations PremiumNumberReservation[]
+  premiumNumberSearchLogs   PremiumNumberSearchLog[]
   inAppNotifications  InAppNotification[]
   invitesSent         WorkspaceInvite[] @relation("InviteSender")
 
@@ -138,6 +140,8 @@ model Workspace {
   createdAt            DateTime @default(now())
   memberships Membership[]
   phoneNumbers PhoneNumber[]
+  premiumNumberReservations PremiumNumberReservation[]
+  premiumNumberSearchLogs PremiumNumberSearchLog[]
   contacts    Contact[]
   lists       ContactList[]
   segments    Segment[]
@@ -329,6 +333,60 @@ model PhoneNumber {
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
+}
+
+model PremiumNumberReservation {
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  userId               String
+  phoneNumber          String
+  vanityDisplay        String?
+  displayNumber        String?
+  searchMode           String
+  searchContextJson    Json?
+  businessMatchScore   Int       @default(0)
+  numberQualityScore   Int       @default(0)
+  premiumPriceCents    Int
+  premiumPriceBand     String?
+  telnyxReservationId  String?
+  reservationExpiresAt DateTime?
+  reservationStatus    String    @default("reserving")
+  paymentStatus        String    @default("none")
+  orderStatus          String    @default("none")
+  telnyxOrderId        String?
+  phoneNumberId        String?
+  searchLogId          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, phoneNumber])
+  @@index([telnyxReservationId])
+  @@map("premium_number_reservations")
+}
+
+model PremiumNumberSearchLog {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  userId              String?
+  mode                String
+  areaCode            String
+  industry            String?
+  keywordsJson        Json?
+  businessMatchCount  Int      @default(0)
+  memorableMatchCount Int      @default(0)
+  totalResults        Int      @default(0)
+  resultsJson         Json?
+  selectedNumber      String?
+  checkoutStarted     Boolean  @default(false)
+  purchaseCompleted   Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("premium_number_search_logs")
 }
 
 model PhoneNumberAssignment {

@@ -1,16 +1,10 @@
 import { SenderPoolsPanel } from "@/components/numbers/sender-pools-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
+import { numberTabs } from "@/lib/number-tabs";
 import { getPrisma } from "@/lib/db";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { AlertTriangle } from "lucide-react";
-
-const numberTabs = [
-  { label: "My Numbers", href: "/numbers" },
-  { label: "Buy", href: "/numbers/buy" },
-  { label: "Port", href: "/numbers/port" },
-  { label: "Sender Pools", href: "/numbers/pools" },
-];
 
 export default async function SenderPoolsPage() {
   const { workspaceId } = await requireWorkspaceContext();

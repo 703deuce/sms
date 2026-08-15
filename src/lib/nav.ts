@@ -23,6 +23,7 @@ export type NavLink = {
   type?: "link";
   label: string;
   href: string;
+  badge?: string;
 };
 
 /** Visual group header with nested links (not a route by itself). */
@@ -585,6 +586,7 @@ export const pageTitles: Record<string, string> = {
   "/reports/integrations": "Integration Reports",
   "/numbers": "Phone Numbers",
   "/numbers/buy": "Buy Number",
+  "/numbers/premium": "Premium Numbers",
   "/numbers/port": "Port Number",
   "/numbers/pools": "Sender Pools",
   "/phone": "Softphone",

@@ -5,16 +5,10 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
+import { numberTabs } from "@/lib/number-tabs";
 import { PORT_STATUSES, portStatusLabel } from "@/lib/numbers/port-constants";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-
-const numberTabs = [
-  { label: "My Numbers", href: "/numbers" },
-  { label: "Buy", href: "/numbers/buy" },
-  { label: "Port", href: "/numbers/port" },
-  { label: "Sender Pools", href: "/numbers/pools" },
-];
 
 type PortDoc = {
   id: string;
