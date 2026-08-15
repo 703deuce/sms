@@ -2,6 +2,9 @@
  * Tunable scoring weights — business match vs number quality blend.
  * Industry searches: final = 70% business match + 30% number quality.
  */
+export const BUSINESS_MATCH_LIST_THRESHOLD = 55;
+export const MEMORABLE_NUMBER_QUALITY_THRESHOLD = 40;
+
 export const SCORING_WEIGHTS = {
   blend: {
     businessMatch: 0.7,

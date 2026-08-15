@@ -129,19 +129,39 @@ export async function searchTelnyxInventoryOnce(
   }
 }
 
+type PatternFilterChunks = {
+  endsWith: string[];
+  contains: string[];
+  startsWith: string[];
+};
+
 /** Telnyx limits pattern filters with NDC — ends_with/contains max ~4 digits on subscriber tail. */
-export function patternFilterChunks(digits: string): {
-  endsWith?: string;
-  contains?: string;
-  startsWith?: string;
-} {
-  if (digits.length <= 4) return { endsWith: digits };
-  const last4 = digits.slice(-4);
-  const starts = digits.slice(0, Math.min(5, digits.length - 1));
+export function patternFilterChunks(digits: string): PatternFilterChunks {
+  const endsWith: string[] = [];
+  const contains: string[] = [];
+  const startsWith: string[] = [];
+
+  if (digits.length <= 4) {
+    endsWith.push(digits);
+    return { endsWith, contains, startsWith };
+  }
+
+  endsWith.push(digits.slice(-4));
+
+  const head5 = digits.slice(0, Math.min(5, digits.length));
+  if (head5.length >= 3) startsWith.push(head5);
+  if (digits.length >= 5) startsWith.push(digits.slice(0, 4));
+
+  // Sliding 4-digit windows — surfaces rare 5–7 letter word inventory.
+  for (let i = 0; i <= digits.length - 4; i++) {
+    contains.push(digits.slice(i, i + 4));
+  }
+
+  const dedupe = (values: string[]) => [...new Set(values)];
   return {
-    endsWith: last4,
-    contains: last4,
-    startsWith: starts.length >= 3 ? starts : undefined,
+    endsWith: dedupe(endsWith),
+    contains: dedupe(contains),
+    startsWith: dedupe(startsWith),
   };
 }
 
@@ -156,8 +176,17 @@ export async function runTelnyxInventorySearches(input: {
 }> {
   const attempts: TelnyxSearchAttempt[] = [];
   const byPhone = new Map<string, TelnyxRawCandidate>();
+  const seenQueries = new Set<string>();
 
   const run = async (opts: InventorySearchOptions) => {
+    const queryKey = JSON.stringify({
+      endsWith: opts.endsWith ?? "",
+      contains: opts.contains ?? "",
+      startsWith: opts.startsWith ?? "",
+    });
+    if (seenQueries.has(queryKey)) return;
+    seenQueries.add(queryKey);
+
     const { candidates, attempt } = await searchTelnyxInventoryOnce(opts);
     attempts.push(attempt);
     for (const c of candidates) {
@@ -173,25 +202,25 @@ export async function runTelnyxInventorySearches(input: {
 
   for (const digits of input.keywordDigitStrings) {
     const chunks = patternFilterChunks(digits);
-    if (chunks.endsWith) {
+    for (const tail of chunks.endsWith) {
       await run({
         areaCode: input.areaCode,
-        strategy: `keyword_ends_with:${digits}`,
-        endsWith: chunks.endsWith,
+        strategy: `keyword_ends_with:${digits}:${tail}`,
+        endsWith: tail,
       });
     }
-    if (chunks.contains && chunks.contains !== chunks.endsWith) {
+    for (const mid of chunks.contains) {
       await run({
         areaCode: input.areaCode,
-        strategy: `keyword_contains:${digits}`,
-        contains: chunks.contains,
+        strategy: `keyword_contains:${digits}:${mid}`,
+        contains: mid,
       });
     }
-    if (chunks.startsWith) {
+    for (const head of chunks.startsWith) {
       await run({
         areaCode: input.areaCode,
-        strategy: `keyword_starts_with:${digits}`,
-        startsWith: chunks.startsWith,
+        strategy: `keyword_starts_with:${digits}:${head}`,
+        startsWith: head,
       });
     }
   }

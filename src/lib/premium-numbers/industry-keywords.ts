@@ -1,17 +1,109 @@
 import { normalizeWord, wordToKeypadDigits } from "./keypad";
 import type { KeywordEntry } from "./types";
 
-/** Deterministic industry → commercial keypad words (no LLM). */
+/**
+ * Deterministic industry → commercial keypad words (no LLM).
+ * Longer words listed first — rare but high value when inventory exists.
+ */
 export const INDUSTRY_KEYWORD_MAP: Record<string, string[]> = {
-  roofing: ["ROOF", "ROOFER", "ROOFS"],
-  plumbing: ["PIPE", "PIPES", "PLUMB"],
-  hvac: ["HVAC", "HEAT", "COOL", "AIR"],
-  lawn_care: ["LAWN", "MOW", "MOWER"],
-  junk_removal: ["JUNK", "HAUL"],
-  moving: ["MOVE", "MOVERS"],
-  legal: ["LAW", "LEGAL"],
-  dental: ["DENTAL", "SMILE", "TEETH"],
-  auto: ["AUTO", "CARS", "TIRE"],
+  roofing: [
+    "ROOFING",
+    "ROOFERS",
+    "ROOFER",
+    "SHINGLE",
+    "RAFTERS",
+    "RAFTER",
+    "ROOFS",
+    "ROOF",
+  ],
+  plumbing: [
+    "PLUMBER",
+    "PLUMBERS",
+    "PLUMBING",
+    "FIXING",
+    "FAUCET",
+    "DRAINS",
+    "PLUMB",
+    "PIPES",
+    "PIPE",
+    "DRAIN",
+    "FIXER",
+    "LEAKS",
+  ],
+  hvac: [
+    "HEATING",
+    "COOLING",
+    "FURNACE",
+    "HEATERS",
+    "COOLERS",
+    "HEATER",
+    "HVAC",
+    "HEAT",
+    "COOL",
+    "AIR",
+  ],
+  lawn_care: [
+    "MOWING",
+    "MOWERS",
+    "TRIMMER",
+    "GARDEN",
+    "MOWER",
+    "CUTTER",
+    "LAWNS",
+    "GRASS",
+    "LAWN",
+    "MOW",
+    "YARD",
+  ],
+  junk_removal: [
+    "HAULING",
+    "REMOVAL",
+    "HAULER",
+    "REMOVE",
+    "TRASH",
+    "LOADS",
+    "JUNK",
+    "HAUL",
+  ],
+  moving: [
+    "MOVING",
+    "MOVERS",
+    "PACKERS",
+    "PACKER",
+    "MOVER",
+    "MOVE",
+    "LOAD",
+  ],
+  legal: [
+    "LAWYERS",
+    "LAWYER",
+    "ATTORNEY",
+    "LITIGATE",
+    "LEGAL",
+    "TRIAL",
+    "LAW",
+  ],
+  dental: [
+    "DENTIST",
+    "BRACES",
+    "SMILES",
+    "DENTAL",
+    "TOOTH",
+    "SMILE",
+    "TEETH",
+  ],
+  auto: [
+    "MECHANIC",
+    "REPAIR",
+    "GARAGE",
+    "MOTORS",
+    "BRAKES",
+    "TIRES",
+    "PARTS",
+    "AUTO",
+    "CARS",
+    "TIRE",
+  ],
 };
 
 function normalizeIndustryKey(industry: string): string {
@@ -26,7 +118,6 @@ export function resolveIndustryKeywords(industry?: string): {
   const key = normalizeIndustryKey(industry);
   const words = INDUSTRY_KEYWORD_MAP[key];
   if (words) return { primary: words, industryKey: key };
-  // Allow free-text industry as a single custom word when not in dictionary.
   const custom = normalizeWord(industry);
   if (custom.length >= 3) return { primary: [custom], industryKey: key };
   return { primary: [], industryKey: key };
@@ -59,9 +150,10 @@ export function buildKeywordEntries(input: {
     orderedWords.push(n);
   };
 
-  for (const w of primary) push(w);
-  for (const w of custom) push(w);
-  for (const w of secondarySet) push(w);
+  // Longer words first for search priority and display.
+  const allWords = [...primary, ...custom, ...secondarySet];
+  allWords.sort((a, b) => b.length - a.length);
+  for (const w of allWords) push(w);
 
   return orderedWords
     .map((word) => {
@@ -77,4 +169,17 @@ export function buildKeywordEntries(input: {
       };
     })
     .filter((e): e is KeywordEntry => e !== null);
+}
+
+/** Export helper: longest matched primary word length for a candidate. */
+export function longestMatchedWordLength(
+  matchedWords: string[],
+  keywords: KeywordEntry[],
+): number {
+  let max = 0;
+  for (const w of matchedWords) {
+    const entry = keywords.find((k) => k.word === w);
+    if (entry) max = Math.max(max, entry.word.length);
+  }
+  return max;
 }

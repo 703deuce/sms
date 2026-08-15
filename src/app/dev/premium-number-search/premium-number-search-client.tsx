@@ -3,7 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { PremiumSearchResult } from "@/lib/premium-numbers/types";
+import type { PremiumSearchResult, ScoredCandidate } from "@/lib/premium-numbers/types";
+import {
+  BUSINESS_MATCH_LIST_THRESHOLD,
+  MEMORABLE_NUMBER_QUALITY_THRESHOLD,
+} from "@/lib/premium-numbers/scoring-config";
 import { useState } from "react";
 
 const INDUSTRY_OPTIONS = [
@@ -119,64 +123,138 @@ export function PremiumNumberSearchClient() {
               {result.statistics.highestScore} · Average: {result.statistics.averageScore}
             </p>
             <p className="mt-2 font-mono text-xs">
-              Keywords:{" "}
+              Keywords (longest first):{" "}
               {result.keywords.map((k) => `${k.word}=${k.digits}`).join(", ") || "—"}
             </p>
           </div>
 
-          <div className="space-y-3">
-            {result.candidates.map((c, idx) => (
-              <div key={c.phoneNumber} className="rounded-lg border p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
-                    <span className="text-lg font-semibold">{idx + 1}. {c.formattedNumber}</span>
-                    <span className="text-muted-foreground ml-2 text-sm">
-                      {c.score}/100 · {c.tier} · BM {c.businessMatchScore} · NQ {c.numberQualityScore}
-                    </span>
-                  </div>
-                  {c.telnyxCost?.monthlyCost && (
-                    <span className="text-muted-foreground text-xs">
-                      ${c.telnyxCost.monthlyCost}/mo
-                      {c.telnyxCost.upfrontCost ? ` · $${c.telnyxCost.upfrontCost} upfront` : ""}
-                    </span>
-                  )}
-                </div>
-                {c.matchedWords.length > 0 && (
-                  <p className="mt-2 text-sm">
-                    <strong>Words:</strong> {c.matchedWords.join(", ")}
-                  </p>
+          {(() => {
+            const business = result.candidates.filter(
+              (c) => c.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD,
+            );
+            const memorable = result.candidates.filter(
+              (c) =>
+                c.businessMatchScore < BUSINESS_MATCH_LIST_THRESHOLD &&
+                c.numberQualityScore >= MEMORABLE_NUMBER_QUALITY_THRESHOLD,
+            );
+            const other = result.candidates.filter(
+              (c) =>
+                c.businessMatchScore < BUSINESS_MATCH_LIST_THRESHOLD &&
+                c.numberQualityScore < MEMORABLE_NUMBER_QUALITY_THRESHOLD,
+            );
+            return (
+              <>
+                <ResultSection
+                  title="Best Matches for Your Business"
+                  subtitle={`Business match ≥ ${BUSINESS_MATCH_LIST_THRESHOLD}`}
+                  candidates={business}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                />
+                <ResultSection
+                  title="Other Memorable Numbers"
+                  subtitle={`Number quality ≥ ${MEMORABLE_NUMBER_QUALITY_THRESHOLD}, weaker business fit`}
+                  candidates={memorable}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                />
+                {other.length > 0 && (
+                  <ResultSection
+                    title="Other Results"
+                    subtitle="Lower business and numeric scores"
+                    candidates={other}
+                    expanded={expanded}
+                    setExpanded={setExpanded}
+                  />
                 )}
-                {c.matchedPatterns.length > 0 && (
-                  <p className="text-sm">
-                    <strong>Patterns:</strong> {c.matchedPatterns.join("; ")}
-                  </p>
-                )}
-                <ul className="mt-2 space-y-0.5 text-sm">
-                  {c.reasons.map((r) => (
-                    <li key={`${r.label}-${r.points}`}>
-                      {r.points >= 0 ? "+" : ""}{r.points} {r.label}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="text-muted-foreground mt-2 text-xs underline"
-                  onClick={() =>
-                    setExpanded(expanded === c.phoneNumber ? null : c.phoneNumber)
-                  }
-                >
-                  {expanded === c.phoneNumber ? "Hide raw Telnyx" : "Show raw Telnyx"}
-                </button>
-                {expanded === c.phoneNumber && c.rawTelnyx && (
-                  <pre className="bg-muted mt-2 overflow-x-auto rounded p-2 text-xs">
-                    {JSON.stringify(c.rawTelnyx, null, 2)}
-                  </pre>
-                )}
-              </div>
-            ))}
-          </div>
+              </>
+            );
+          })()}
         </div>
       )}
+    </div>
+  );
+}
+
+function ResultSection({
+  title,
+  subtitle,
+  candidates,
+  expanded,
+  setExpanded,
+}: {
+  title: string;
+  subtitle: string;
+  candidates: ScoredCandidate[];
+  expanded: string | null;
+  setExpanded: (v: string | null) => void;
+}) {
+  if (!candidates.length) return null;
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="text-muted-foreground text-sm">{subtitle} · {candidates.length} numbers</p>
+      </div>
+      {candidates.map((c, idx) => (
+        <div key={c.phoneNumber} className="rounded-lg border p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <span className="text-lg font-semibold">{idx + 1}. {c.formattedNumber}</span>
+              <span className="text-muted-foreground ml-2 text-sm">
+                {c.score}/100 · {c.tier} · BM {c.businessMatchScore} · NQ {c.numberQualityScore}
+              </span>
+            </div>
+            {c.telnyxCost?.monthlyCost && (
+              <span className="text-muted-foreground text-xs">
+                ${c.telnyxCost.monthlyCost}/mo
+                {c.telnyxCost.upfrontCost ? ` · $${c.telnyxCost.upfrontCost} upfront` : ""}
+              </span>
+            )}
+          </div>
+          {c.matchedWords.length > 0 && (
+            <p className="mt-2 text-sm">
+              <strong>Words:</strong> {c.matchedWords.join(", ")}
+            </p>
+          )}
+          {c.matchedPatterns.length > 0 && (
+            <p className="text-sm">
+              <strong>Patterns:</strong> {c.matchedPatterns.join("; ")}
+            </p>
+          )}
+          <details className="mt-2 text-sm">
+            <summary className="cursor-pointer text-muted-foreground">Score breakdown</summary>
+            <p className="mt-1 font-medium">Business</p>
+            <ul className="space-y-0.5">
+              {c.businessReasons.map((r) => (
+                <li key={`b-${r.label}`}>
+                  {r.points >= 0 ? "+" : ""}{r.points} {r.label}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 font-medium">Number quality</p>
+            <ul className="space-y-0.5">
+              {c.numberQualityReasons.map((r) => (
+                <li key={`n-${r.label}`}>
+                  {r.points >= 0 ? "+" : ""}{r.points} {r.label}
+                </li>
+              ))}
+            </ul>
+          </details>
+          <button
+            type="button"
+            className="text-muted-foreground mt-2 text-xs underline"
+            onClick={() => setExpanded(expanded === c.phoneNumber ? null : c.phoneNumber)}
+          >
+            {expanded === c.phoneNumber ? "Hide raw Telnyx" : "Show raw Telnyx"}
+          </button>
+          {expanded === c.phoneNumber && c.rawTelnyx && (
+            <pre className="bg-muted mt-2 overflow-x-auto rounded p-2 text-xs">
+              {JSON.stringify(c.rawTelnyx, null, 2)}
+            </pre>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
