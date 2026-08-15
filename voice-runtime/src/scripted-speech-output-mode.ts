@@ -9,8 +9,8 @@ import type { FrontDeskUserData } from "./frontdesk/userdata";
  * Resolve half-cascade vs native realtime for scripted speech on this session.
  * Must use session snapshot — env-only resolution misses inbound receptionist config.
  */
-export function resolveSessionScriptedSpeechOutputMode(
-  session: AgentSession<unknown>,
+export function resolveSessionScriptedSpeechOutputMode<T>(
+  session: AgentSession<T>,
 ): OutboundRealtimeOutputMode {
   const ud = session.userData as FrontDeskUserData | undefined;
   const fromCompiled = ud?.receptionistCompiled?.realtimeOutputMode;
@@ -19,6 +19,6 @@ export function resolveSessionScriptedSpeechOutputMode(
   return resolveOutboundRealtimeOutputMode();
 }
 
-export function sessionUsesTtsSay(session: AgentSession<unknown>): boolean {
+export function sessionUsesTtsSay<T>(session: AgentSession<T>): boolean {
   return resolveSessionScriptedSpeechOutputMode(session) === "elevenlabs";
 }
