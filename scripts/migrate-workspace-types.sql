@@ -19,3 +19,5 @@ CREATE INDEX IF NOT EXISTS "Workspace_type_idx" ON "Workspace" ("type");
 
 -- Existing customers remain business workspaces.
 UPDATE "Workspace" SET "type" = 'BUSINESS' WHERE "type" IS NULL;
+
+-- ownerUserId backfill runs in scripts/migrate-workspace-types.ts (OWNER membership + fallback).

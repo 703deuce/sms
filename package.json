@@ -17,6 +17,7 @@
     "db:schema": "npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > supabase/schema.sql",
     "db:bootstrap": "node scripts/generate-bootstrap-sql.mjs",
     "db:seed": "tsx prisma/seed.ts",
+    "migrate:workspace-types": "tsx scripts/migrate-workspace-types.ts",
     "worker:all": "tsx scripts/worker-all.ts",
     "test:messaging-wiring": "tsx scripts/test-messaging-wiring.ts",
     "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts",
