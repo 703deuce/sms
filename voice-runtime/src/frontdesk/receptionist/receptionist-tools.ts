@@ -11,12 +11,14 @@ import {
 } from "@/lib/voice/receptionist/field-collection-scope";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
+import { isBookingOperationActive } from "../booking-operation";
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
   formatToolFeedbackForModel,
   formatGatewayResultForModel,
   toolFeedbackMissingCallerField,
+  toolFeedbackRecoverable,
   toolFeedbackSuccess,
 } from "@/lib/voice/tool-feedback";
 import { ReceptionistFieldCollectionTask, speakReceptionistCollectionLine } from "./field-collection-task";
@@ -222,6 +224,28 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
         const purpose = (args.purpose as ReceptionistCollectionPurpose | undefined) || "service";
         if (purpose === "message") {
           return "Use take_message for callback requests — do not run field collection.";
+        }
+        if (purpose === "booking" && isBookingOperationActive(ud)) {
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              "Booking is already in progress. Tell the caller you're finishing the appointment. " +
+                "If they ask whether it worked, use check_booking_status.",
+              { tool: "collect_caller_fields", next_action: "check_booking_status" },
+            ),
+          );
+        }
+        if (purpose === "booking" && ud.pendingSlotId) {
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "collect_caller_fields",
+              recovery_class: "OPERATION_IN_PROGRESS",
+              reason: "booking_slot_pending",
+              next_action: "retry_same_tool",
+              guidance:
+                `A time slot is already chosen (${ud.pendingSlotId}). Ask for any missing name or phone in one question, ` +
+                "then call schedule_appointment with that slot_id — do not run collect_caller_fields.",
+            }),
+          );
         }
         if (ud.receptionistMessageTaken && purpose !== "booking") {
           return (

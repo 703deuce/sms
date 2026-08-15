@@ -300,6 +300,7 @@ export function toolFeedbackMissingField(input: {
   slotId: string;
   fieldId: string;
   fieldLabel: string;
+  hint?: string;
 }): ToolFeedback {
   const isEmail = input.fieldId === "email";
   return toolFeedbackRecoverable({
@@ -311,6 +312,7 @@ export function toolFeedbackMissingField(input: {
     next_action: isEmail ? "collect_email_then_retry" : "collect_field_then_retry",
     context: { slot_id: input.slotId },
     guidance:
+      input.hint ||
       `Missing ${input.fieldLabel} before booking. Ask naturally — do not mention a system error.`,
   });
 }

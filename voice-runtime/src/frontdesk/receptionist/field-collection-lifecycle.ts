@@ -24,10 +24,16 @@ export function buildReceptionistCollectionToolResult(
   ud.receptionistFieldCollectionComplete = true;
   ud.receptionistFieldsAcknowledged = true;
 
+  const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
+  const bookingTail = pendingSlot
+    ? ` Call schedule_appointment immediately with slot_id ${pendingSlot} to finish booking.`
+    : "";
+
   return (
     `COLLECTION_COMPLETE: ${summary || "no fields"}. ` +
     "These fields were captured during collection and already acknowledged. " +
     "Continue immediately with take_message, booking, transfer, or answering. " +
-    "Do not thank again or reconfirm captured fields."
+    "Do not thank again or reconfirm captured fields." +
+    bookingTail
   );
 }

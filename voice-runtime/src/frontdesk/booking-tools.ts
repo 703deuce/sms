@@ -16,6 +16,7 @@ import {
   clearBookingEmailWaiter,
 } from "./booking-email-inline";
 import { findBookingPrerequisiteGaps } from "./booking-prerequisites";
+import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
 import {
   beginBookingOperation,
   canStartScheduleAppointment,
@@ -58,6 +59,25 @@ import { sendBookingConfirmationSms, sendBookingSmsAsync } from "./booking-sms";
 import { markAppointmentBooked, persistCallState } from "@/lib/voice/real-estate/state";
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
+import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
+
+function prefillReceptionistFieldsForBooking(
+  session: AgentSession<FrontDeskUserData>,
+): void {
+  const userData = session.userData;
+  const manifest = userData.receptionistCompiled?.fieldManifest;
+  if (!manifest?.length) return;
+  if (!userData.receptionistFields) userData.receptionistFields = {};
+  userData.receptionistFields = applyReceptionistFieldBackfill({
+    chatCtx: session.chatCtx,
+    manifest,
+    receptionistFields: userData.receptionistFields,
+  });
+  if (!userData.receptionistFields.phone?.trim() && userData.callerE164?.trim()) {
+    const ani = tryNormalizeE164(userData.callerE164.trim());
+    if (ani) userData.receptionistFields.phone = ani;
+  }
+}
 
 async function onRealEstateBookingConfirmed(userData: FrontDeskUserData): Promise<void> {
   if (!userData.callState) return;
@@ -200,6 +220,8 @@ export function buildFrontDeskBookingTools(input: {
 
       userData.pendingSlotId = slot_id;
 
+      prefillReceptionistFieldsForBooking(session);
+
       const prerequisiteGaps = findBookingPrerequisiteGaps(userData, inlineEmail);
       if (prerequisiteGaps.length > 0) {
         const first = prerequisiteGaps[0];
@@ -214,6 +236,9 @@ export function buildFrontDeskBookingTools(input: {
             slotId: slot_id,
             fieldId: first.fieldId,
             fieldLabel: first.label,
+            hint:
+              `Ask for their ${first.label} in one short question. When they answer, call schedule_appointment again with the same slot_id. ` +
+              "Do NOT call collect_caller_fields during booking — it blocks the calendar write.",
           }),
         );
       }
