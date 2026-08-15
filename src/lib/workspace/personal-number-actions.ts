@@ -1,11 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { mapPhoneNumber } from "@/lib/mappers";
-
-function readSettings(row: { settingsJson: unknown }): Record<string, unknown> {
-  return row.settingsJson && typeof row.settingsJson === "object"
-    ? { ...(row.settingsJson as Record<string, unknown>) }
-    : {};
-}
+import { transitionNumberService } from "@/lib/numbers/state-service";
 
 async function getOwnedNumber(workspaceId: string, numberId: string) {
   const row = await getPrisma().phoneNumber.findFirst({
@@ -16,53 +11,21 @@ async function getOwnedNumber(workspaceId: string, numberId: string) {
 }
 
 export async function parkPersonalNumber(workspaceId: string, numberId: string) {
-  const row = await getOwnedNumber(workspaceId, numberId);
-  const settings = readSettings(row);
-  const now = new Date().toISOString();
-
-  await getPrisma().callForwardingRule.updateMany({
-    where: { workspaceId, phoneNumberId: numberId, active: true },
-    data: { active: false },
-  });
-
-  const updated = await getPrisma().phoneNumber.update({
-    where: { id: numberId },
-    data: {
-      voiceForwardTo: null,
-      settingsJson: {
-        ...settings,
-        parked: true,
-        personalParked: true,
-        personalServiceState: "PARKED",
-        parkedSince: settings.parkedSince || now,
-      },
-    },
-  });
-  return mapPhoneNumber(updated as Parameters<typeof mapPhoneNumber>[0]);
+  await getOwnedNumber(workspaceId, numberId);
+  return transitionNumberService(workspaceId, numberId, "park");
 }
 
 export async function reactivatePersonalNumber(workspaceId: string, numberId: string) {
-  const row = await getOwnedNumber(workspaceId, numberId);
-  const settings = readSettings(row);
-
-  const updated = await getPrisma().phoneNumber.update({
-    where: { id: numberId },
-    data: {
-      settingsJson: {
-        ...settings,
-        parked: false,
-        personalParked: false,
-        personalServiceState: row.voiceForwardTo ? "FORWARDING" : "ACTIVE",
-        parkedSince: null,
-      },
-    },
-  });
-  return mapPhoneNumber(updated as Parameters<typeof mapPhoneNumber>[0]);
+  await getOwnedNumber(workspaceId, numberId);
+  return transitionNumberService(workspaceId, numberId, "reactivate");
 }
 
 export async function clearPortAwayWindow(workspaceId: string, numberId: string) {
   const row = await getOwnedNumber(workspaceId, numberId);
-  const settings = readSettings(row);
+  const settings =
+    row.settingsJson && typeof row.settingsJson === "object"
+      ? { ...(row.settingsJson as Record<string, unknown>) }
+      : {};
 
   const updated = await getPrisma().phoneNumber.update({
     where: { id: numberId },
@@ -82,32 +45,12 @@ export async function setPersonalVoicemailEnabled(
   numberId: string,
   enabled: boolean,
 ) {
-  const row = await getOwnedNumber(workspaceId, numberId);
-  const settings = readSettings(row);
-  const parked = settings.parked === true || settings.personalParked === true;
-
-  let personalServiceState = settings.personalServiceState as string | undefined;
-  if (parked) {
-    personalServiceState = "PARKED";
-  } else if (row.voiceForwardTo) {
-    personalServiceState = "FORWARDING";
-  } else if (enabled) {
-    personalServiceState = "VOICEMAIL";
-  } else {
-    personalServiceState = "ACTIVE";
-  }
-
-  const updated = await getPrisma().phoneNumber.update({
-    where: { id: numberId },
-    data: {
-      settingsJson: {
-        ...settings,
-        voicemailEnabled: enabled,
-        personalServiceState,
-      },
-    },
-  });
-  return mapPhoneNumber(updated as Parameters<typeof mapPhoneNumber>[0]);
+  await getOwnedNumber(workspaceId, numberId);
+  return transitionNumberService(
+    workspaceId,
+    numberId,
+    enabled ? "enable_voicemail" : "disable_voicemail",
+  );
 }
 
 export async function loadPremiumCartCount(workspaceId: string): Promise<number> {

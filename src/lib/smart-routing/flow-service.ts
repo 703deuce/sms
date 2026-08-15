@@ -174,6 +174,21 @@ export async function publishFlow(workspaceId: string, flowId: string, createdBy
     throw new Error(`Flow validation failed: ${validation.issues[0]?.message}`);
   }
 
+  if (!flow.assignedPhoneNumberId) {
+    throw new Error("Assign a phone number before publishing Smart Routing");
+  }
+
+  const { diagnoseWorkspaceNumber } = await import("@/lib/phone/telnyx-dual-provision");
+  const diag = await diagnoseWorkspaceNumber({
+    workspaceId,
+    phoneNumberId: flow.assignedPhoneNumberId,
+  });
+  if (!diag.ready.voice) {
+    throw new Error(
+      "Assigned number is not voice-ready. Run number provision/repair before publishing.",
+    );
+  }
+
   const compiled = compileDraftConfig(draft);
   const prisma = getPrisma();
   const lastVersion = await prisma.smartRoutingFlowVersion.findFirst({
@@ -201,15 +216,36 @@ export async function publishFlow(workspaceId: string, flowId: string, createdBy
       activatedAt: new Date(),
     },
   });
+
+  const { transitionNumberService } = await import("@/lib/numbers/state-service");
+  await transitionNumberService(
+    workspaceId,
+    flow.assignedPhoneNumberId!,
+    "set_smart_routing_owner",
+  );
+
   return version;
 }
 
 export async function pauseFlow(workspaceId: string, flowId: string) {
   const prisma = getPrisma();
-  return prisma.smartRoutingFlow.updateMany({
+  const flow = await prisma.smartRoutingFlow.findFirst({
+    where: { id: flowId, workspaceId },
+    select: { assignedPhoneNumberId: true },
+  });
+  const result = await prisma.smartRoutingFlow.updateMany({
     where: { id: flowId, workspaceId },
     data: { status: "paused" },
   });
+  if (flow?.assignedPhoneNumberId) {
+    const { transitionNumberService } = await import("@/lib/numbers/state-service");
+    await transitionNumberService(
+      workspaceId,
+      flow.assignedPhoneNumberId,
+      "clear_smart_routing_owner",
+    );
+  }
+  return result;
 }
 
 export async function rollbackFlow(workspaceId: string, flowId: string, versionId: string) {

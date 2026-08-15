@@ -252,6 +252,12 @@ export const messagingOnboarding = {
   },
 
   async purchaseNumber(workspaceId: string, phoneNumber: string) {
+    const { assertCanPurchaseNumber } = await import("@/lib/numbers/acquire-guard");
+    const guard = await assertCanPurchaseNumber(workspaceId, { source: "standard" });
+    if (!guard.ok) {
+      throw new Error(guard.error);
+    }
+
     const e164 = normalizeE164(phoneNumber);
     await ensureRegistrationRow(workspaceId);
     const name = await workspaceName(workspaceId);

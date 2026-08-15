@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError, requireWorkspaceFeature } from "@/lib/api-auth";
 import { completePremiumPurchase } from "@/lib/numbers/purchase-service";
 import { isNumberTestPaymentMode } from "@/lib/payments/number-payment-provider";
 
@@ -20,6 +20,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const purchaseAuth = await requireWorkspaceFeature("buy_number");
+    if ("error" in purchaseAuth) return purchaseAuth.error;
+
     const workspaceId = await resolveWorkspaceId(auth.session, body?.workspaceId);
     const dryRun =
       body?.dryRun === true || process.env.NUMBER_SKIP_TELNYX_PURCHASE?.trim() === "1";

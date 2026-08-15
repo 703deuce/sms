@@ -375,7 +375,7 @@ export function toolFeedbackTransferFailure(input: {
     input.recoveryClass === "TRANSFER_BUSY" ||
     input.recoveryClass === "TRANSFER_NO_ANSWER" ||
     input.recoveryClass === "TEMPORARY_PROVIDER_ERROR";
-  const nextAction = input.takeMessage ? "take_message" : "none";
+  const nextAction: ToolNextAction = input.takeMessage ? "take_message" : "none";
   const guidance = input.takeMessage
     ? "Transfer didn't connect — offer to take a message naturally."
     : "Transfer failed. Apologize briefly and ask if there's anything else.";

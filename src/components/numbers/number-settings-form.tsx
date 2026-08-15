@@ -67,11 +67,7 @@ export function NumberSettingsForm({
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Failed to release number");
       } else {
-        const res = await fetch(`/api/numbers/${numberId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "Released" }),
-        });
+        const res = await fetch(`/api/numbers/${numberId}`, { method: "DELETE" });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Failed to release number");
       }

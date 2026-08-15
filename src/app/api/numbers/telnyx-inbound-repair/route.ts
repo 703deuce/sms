@@ -26,7 +26,13 @@ export async function POST(request: Request) {
 
     let workspaceId = "";
     if (request.headers.get(BOOTSTRAP_HEADER) === BOOTSTRAP_VALUE) {
-      workspaceId = String(body.workspaceId || "ws_1").trim();
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json({ error: "Bootstrap repair disabled in production" }, { status: 403 });
+      }
+      workspaceId = String(body.workspaceId || "").trim();
+      if (!workspaceId) {
+        return NextResponse.json({ error: "workspaceId required for bootstrap repair" }, { status: 400 });
+      }
     } else {
       const auth = await requireSession();
       if ("error" in auth) return auth.error;

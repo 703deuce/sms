@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
+import { requireSession, resolveWorkspaceId, jsonError, requireWorkspaceFeature } from "@/lib/api-auth";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { listRegistrationEvents } from "@/lib/messaging/store";
 import type { RegistrationAction } from "@/lib/messaging/types";
@@ -33,6 +33,11 @@ export async function POST(request: Request) {
     );
     const action = String(body.action || "") as RegistrationAction;
     if (!action) return NextResponse.json({ error: "action is required" }, { status: 400 });
+
+    if (action === "purchase_number") {
+      const purchaseAuth = await requireWorkspaceFeature("buy_number");
+      if ("error" in purchaseAuth) return purchaseAuth.error;
+    }
 
     const result = await messagingOnboarding.handleAction(workspaceId, action, body);
     return NextResponse.json({ data: result });

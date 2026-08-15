@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapPhoneNumber } from "@/lib/mappers";
 import { validateForwardingDestination } from "@/lib/numbers/forwarding-validation";
+import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
 
 const assignmentsInclude = {
   assignments: { include: { user: { select: { id: true, name: true } } } },
@@ -49,9 +50,15 @@ export async function PATCH(
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    if (body.status === "Released") {
+      return NextResponse.json(
+        { error: "Use DELETE to release a number — direct status patch is not allowed" },
+        { status: 400 },
+      );
+    }
+
     const data: Record<string, unknown> = {
       friendlyName: body.friendlyName ?? undefined,
-      status: body.status ?? undefined,
     };
     if (body.voiceForwardTo !== undefined) {
       const nextForward = body.voiceForwardTo?.trim() || null;
@@ -81,9 +88,7 @@ export async function PATCH(
     if (body.webhookUrl !== undefined) {
       data.webhookUrl = body.webhookUrl?.trim() || null;
     }
-    if (body.settingsJson !== undefined) {
-      data.settingsJson = body.settingsJson ?? null;
-    }
+    // settingsJson is server-managed via state transitions — do not accept raw client patches.
 
     await prisma.phoneNumber.update({ where: { id: numberId }, data });
 
@@ -111,6 +116,24 @@ export async function PATCH(
       include: assignmentsInclude,
     });
     return NextResponse.json({ data: mapPhoneNumber(updated!) });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ numberId: string }> },
+) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    const { numberId } = await params;
+    const result = await releaseWorkspaceNumber(auth.workspaceId, numberId);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({ data: result });
   } catch (err) {
     return jsonError(err, 400);
   }

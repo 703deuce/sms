@@ -82,7 +82,7 @@ function defaultParkedSettings(input: {
   paymentId: string;
 }) {
   const isPersonal = input.searchMode === "personal";
-  return {
+  const base = {
     parked: true,
     personalParked: isPersonal,
     personalServiceState: "PARKED",
@@ -95,10 +95,12 @@ function defaultParkedSettings(input: {
     displayNumber: input.displayNumber,
     premiumReservationId: input.reservationId,
     paymentId: input.paymentId,
+    routingOwner: null,
     provisioning: {
       state: "purchased",
     },
   };
+  return base;
 }
 
 async function reconcileTelnyxOwnedNumber(e164: string): Promise<{
@@ -254,6 +256,19 @@ export async function completePremiumPurchase(
   const prisma = getPrisma();
   const idempotencyKey =
     input.idempotencyKey?.trim() || `premium:${input.reservationId}`;
+
+  const { assertCanPurchaseNumber } = await import("./acquire-guard");
+  const acquireGuard = await assertCanPurchaseNumber(input.workspaceId, {
+    source: "premium",
+  });
+  if (!acquireGuard.ok) {
+    return {
+      ok: false,
+      status: "limit_reached",
+      error: acquireGuard.error,
+      operationId,
+    };
+  }
 
   const reservation = await prisma.premiumNumberReservation.findFirst({
     where: { id: input.reservationId, workspaceId: input.workspaceId },
@@ -509,7 +524,7 @@ export async function completePremiumPurchase(
     userId: input.userId,
     e164,
     providerNumberId,
-    telnyxOrderId,
+    telnyxOrderId: telnyxOrderId ?? undefined,
     reservationId: reservation.id,
     searchMode: reservation.searchMode,
     premiumPriceCents: reservation.premiumPriceCents,
@@ -539,7 +554,7 @@ export async function completePremiumPurchase(
     phoneNumberId: phoneRow.id,
     e164: phoneRow.e164,
     paymentId: payment.paymentId,
-    telnyxOrderId,
+    telnyxOrderId: telnyxOrderId ?? undefined,
     providerNumberId,
     operationId,
   };

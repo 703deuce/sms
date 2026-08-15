@@ -108,6 +108,7 @@ function transferRecoveryClass(reason: string): RecoveryClass {
   return "UNKNOWN_FAILURE";
 }
 
+async function markVoiceCallTransferred(
   workspaceId: string,
   callId: string,
   destination: string,

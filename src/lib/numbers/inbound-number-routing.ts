@@ -20,6 +20,12 @@ function readSettings(row: PhoneNumber): Record<string, unknown> {
 
 export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute {
   const settings = readSettings(row);
+  const routingOwner = settings.routingOwner as string | undefined;
+
+  if (routingOwner === "smart_routing") {
+    return { kind: "default" };
+  }
+
   const parked =
     settings.parked === true ||
     settings.personalParked === true ||

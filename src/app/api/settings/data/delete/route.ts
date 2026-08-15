@@ -33,25 +33,9 @@ export async function POST(request: Request) {
     for (const membership of ownerMemberships as Array<{ workspaceId: string }>) {
       const workspaceId = membership.workspaceId;
 
-      // Best-effort provider release of the registered number.
-      try {
-        const { messagingOnboarding } = await import("@/lib/messaging/service");
-        await messagingOnboarding.releaseNumber(workspaceId);
-      } catch {
-        // No number to release, or provider unavailable — continue.
-      }
-
-      // Mark any remaining active numbers as released in our records.
-      const activeNumbers = await prisma.phoneNumber.findMany({
-        where: { workspaceId, status: { not: "Released" } },
-      });
-      if (activeNumbers.length) {
-        await prisma.phoneNumber.updateMany({
-          where: { workspaceId, status: { not: "Released" } },
-          data: { status: "Released", releasedAt: now },
-        });
-        releasedNumbers += activeNumbers.length;
-      }
+      const { releaseAllWorkspaceNumbers } = await import("@/lib/numbers/release-service");
+      const releaseResult = await releaseAllWorkspaceNumbers(workspaceId);
+      releasedNumbers += releaseResult.released;
 
       await prisma.auditLog.create({
         data: {
