@@ -5,7 +5,7 @@ import {
 import type { ScoredCandidate, KeywordEntry } from "./types";
 import { longestMatchedWordLength } from "./industry-keywords";
 import { quotePremiumPrice, type PremiumSearchMode } from "./premium-pricing";
-import { buildVanityDisplay, starRatingFromScores } from "./vanity-display";
+import { buildVanityDisplay } from "./vanity-display";
 
 export type PremiumNumberAvailabilityStatus =
   | "available"
@@ -30,7 +30,8 @@ export type PremiumNumberProductResult = {
   memorabilityLabel: string;
   premiumPriceCents: number;
   premiumPriceBand: string;
-  starRating: number;
+  headlineLabel: string;
+  cardBullets: string[];
   tags: string[];
   whyReasons: string[];
   providerPremium: boolean;
@@ -54,18 +55,96 @@ export type PremiumSearchProductResponse = {
 };
 
 function businessMatchLabel(score: number, matchedWords: string[]): string {
+  if (score >= 85) return "Excellent Match";
   if (score >= 75) return "Strong Business Match";
   if (score >= 55) return "Good Business Match";
   if (matchedWords.length) return "Keyword Match";
   return "No Business Match";
 }
 
-function memorabilityLabel(nq: number): string {
-  if (nq >= 80) return "Exceptional";
+function memorabilityLabel(nq: number, hasBusinessWord: boolean): string {
+  if (nq >= 80) return hasBusinessWord ? "Exceptional Match" : "Exceptional Number";
   if (nq >= 55) return "Very Memorable";
   if (nq >= 40) return "Memorable";
   if (nq >= 25) return "Nice Pattern";
   return "Standard";
+}
+
+function simplifyReason(reason: string): string | null {
+  const lower = reason.toLowerCase();
+  if (lower.includes("four-digit repeater")) return "Four-digit repeating ending";
+  if (lower.includes("sequence")) return "Easy numeric sequence";
+  if (lower.includes("palindrome")) return "Memorable palindrome pattern";
+  if (lower.includes("exact") && lower.includes("keyword ending")) {
+    const wordMatch = reason.match(/\(([A-Z]+)/);
+    const word = wordMatch?.[1];
+    const lenMatch = reason.match(/(\d)-digit/);
+    const len = lenMatch?.[1];
+    if (word && len) return `Exact ${len}-letter ${word.toLowerCase()} match`;
+    return "Exact industry keyword match";
+  }
+  if (lower.includes("primary industry")) return "Primary industry keyword";
+  if (lower.includes("clean exact")) return "Clean word placement at end of number";
+  if (lower.includes("simplicity")) return "Simple, easy-to-read number";
+  if (lower.includes("memorable numeric")) return "Memorable numeric pattern";
+  if (lower.includes("provider")) return null;
+  return null;
+}
+
+function buildCardBullets(
+  candidate: ScoredCandidate,
+  mode: PremiumSearchMode,
+  areaCode: string,
+  wordLen: number,
+): string[] {
+  const bullets: string[] = [];
+  const hasWord = candidate.matchedWords.length > 0;
+
+  for (const r of [...candidate.businessReasons, ...candidate.numberQualityReasons]) {
+    if (r.points <= 0) continue;
+    const simplified = simplifyReason(r.label);
+    if (simplified && !bullets.includes(simplified)) bullets.push(simplified);
+    if (bullets.length >= 3) break;
+  }
+
+  if (mode === "business" && hasWord && wordLen >= 4 && bullets.length < 3) {
+    const word = candidate.matchedWords[0];
+    const exact = `Exact ${wordLen}-letter ${word.toLowerCase()} match`;
+    if (!bullets.some((b) => b.includes("letter"))) bullets.unshift(exact);
+  }
+
+  if (areaCode && bullets.length < 3) {
+    const local = `Local ${areaCode} area code`;
+    if (!bullets.includes(local)) bullets.push(local);
+  }
+
+  if (mode === "business" && hasWord && wordLen >= 4 && bullets.length < 3) {
+    bullets.push("Easy to say and advertise");
+  }
+
+  if (!hasWord && candidate.numberQualityScore >= 55 && bullets.length < 3) {
+    if (!bullets.some((b) => b.includes("remember"))) {
+      bullets.push("Very easy to remember");
+    }
+  }
+
+  return bullets.slice(0, 3);
+}
+
+function buildHeadlineLabel(
+  candidate: ScoredCandidate,
+  mode: PremiumSearchMode,
+): string {
+  const matchLabel =
+    mode === "business" && candidate.businessMatchScore >= 55
+      ? businessMatchLabel(candidate.businessMatchScore, candidate.matchedWords)
+      : memorabilityLabel(candidate.numberQualityScore, candidate.matchedWords.length > 0);
+
+  const word = candidate.matchedWords[0];
+  if (word && candidate.businessMatchScore >= 55) {
+    return `${matchLabel} · ${word}`;
+  }
+  return matchLabel;
 }
 
 function buildTags(
@@ -103,6 +182,7 @@ export function toProductResult(
   mode: PremiumSearchMode,
   keywords: KeywordEntry[],
   listSection: PremiumNumberProductResult["listSection"],
+  areaCode?: string,
 ): PremiumNumberProductResult {
   const wordLen = longestMatchedWordLength(candidate.matchedWords, keywords);
   const telnyxVanity = candidate.rawTelnyx?.vanity_format as string | undefined;
@@ -115,6 +195,12 @@ export function toProductResult(
   const monthly = Number(candidate.telnyxCost?.monthlyCost);
   const providerPremium = Number.isFinite(monthly) && monthly >= 2;
 
+  const bmLabel = businessMatchLabel(candidate.businessMatchScore, candidate.matchedWords);
+  const memLabel = memorabilityLabel(
+    candidate.numberQualityScore,
+    candidate.matchedWords.length > 0,
+  );
+
   return {
     resultId: candidate.phoneNumber,
     phoneNumber: candidate.phoneNumber,
@@ -124,14 +210,12 @@ export function toProductResult(
     numberQualityScore: candidate.numberQualityScore,
     matchedWords: candidate.matchedWords,
     patterns: candidate.matchedPatterns,
-    businessMatchLabel: businessMatchLabel(candidate.businessMatchScore, candidate.matchedWords),
-    memorabilityLabel: memorabilityLabel(candidate.numberQualityScore),
+    businessMatchLabel: bmLabel,
+    memorabilityLabel: memLabel,
     premiumPriceCents: price.premiumPriceCents,
     premiumPriceBand: price.band,
-    starRating: starRatingFromScores(
-      candidate.businessMatchScore,
-      candidate.numberQualityScore,
-    ),
+    headlineLabel: buildHeadlineLabel(candidate, mode),
+    cardBullets: buildCardBullets(candidate, mode, areaCode ?? "", wordLen),
     tags: buildTags(candidate, mode, wordLen),
     whyReasons: whyReasons(candidate),
     providerPremium,
@@ -156,7 +240,7 @@ export function buildProductSearchResponse(input: {
     const topPicks = candidates
       .filter((c) => c.numberQualityScore >= MEMORABLE_NUMBER_QUALITY_THRESHOLD)
       .slice(0, 24)
-      .map((c) => toProductResult(c, mode, keywords, "top_pick"));
+      .map((c) => toProductResult(c, mode, keywords, "top_pick", input.areaCode));
 
     return {
       mode,
@@ -182,7 +266,7 @@ export function buildProductSearchResponse(input: {
       return b.numberQualityScore - a.numberQualityScore;
     })
     .slice(0, 24)
-    .map((c) => toProductResult(c, mode, keywords, "business_match"));
+    .map((c) => toProductResult(c, mode, keywords, "business_match", input.areaCode));
 
   const memorableAlternatives = candidates
     .filter(
@@ -192,7 +276,7 @@ export function buildProductSearchResponse(input: {
     )
     .sort((a, b) => b.numberQualityScore - a.numberQualityScore)
     .slice(0, 24)
-    .map((c) => toProductResult(c, mode, keywords, "memorable_alternative"));
+    .map((c) => toProductResult(c, mode, keywords, "memorable_alternative", input.areaCode));
 
   return {
     mode,

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { extractBusinessNameKeywords } from "@/lib/premium-numbers/business-name-keywords";
+import {
+  mergeCustomerKeywords,
+  suggestIndustryVanityKeywords,
+} from "@/lib/premium-numbers/business-keyword-llm";
+import { inferIndustryFromText } from "@/lib/premium-numbers/business-name-keywords";
 import { searchPremiumNumbersPersonal, type PersonalPreference } from "@/lib/premium-numbers/personal-search";
 import { searchPremiumNumbers } from "@/lib/premium-numbers/premium-number-search";
 import {
@@ -10,6 +14,11 @@ import {
 } from "@/lib/premium-numbers/product-api";
 import type { PremiumSearchMode } from "@/lib/premium-numbers/premium-pricing";
 import { serializeResultsForLog } from "@/lib/premium-numbers/reservation-service";
+import {
+  type NumberType,
+  type TollFreePrefix,
+  resolveSearchAreaCodes,
+} from "@/lib/premium-numbers/toll-free";
 
 export async function POST(request: Request) {
   const auth = await requireSession();
@@ -19,8 +28,12 @@ export async function POST(request: Request) {
     workspaceId?: string;
     mode?: PremiumSearchMode;
     areaCode?: string;
+    areaCodes?: string[];
+    numberType?: NumberType;
+    tollFreePrefix?: TollFreePrefix;
     industry?: string;
-    businessName?: string;
+    suggestedKeywords?: string[];
+    extraKeywords?: string[];
     customKeywords?: string[];
     preferences?: PersonalPreference[];
     limit?: number;
@@ -28,30 +41,79 @@ export async function POST(request: Request) {
 
   try {
     const workspaceId = await resolveWorkspaceId(auth.session, body?.workspaceId);
-    const areaCode = String(body?.areaCode || "").trim();
-    if (!/^\d{3}$/.test(areaCode)) {
-      return NextResponse.json({ error: "Valid 3-digit area code required" }, { status: 400 });
-    }
-
     const mode: PremiumSearchMode = body?.mode === "personal" ? "personal" : "business";
-    const businessKeywords = extractBusinessNameKeywords(body?.businessName);
-    const customKeywords = [
-      ...(body?.customKeywords ?? []),
-      ...businessKeywords,
-    ].filter(Boolean);
 
     let searchResult;
+    let areaCode = "";
+    let areaCodes: string[] = [];
+
     if (mode === "personal") {
+      areaCodes = (body?.areaCodes ?? [])
+        .map((c) => c.replace(/\D/g, "").slice(0, 3))
+        .filter((c) => c.length === 3);
+      if (!areaCodes.length && body?.areaCode) {
+        const single = body.areaCode.replace(/\D/g, "").slice(0, 3);
+        if (single.length === 3) areaCodes = [single];
+      }
+      if (!areaCodes.length) {
+        return NextResponse.json({ error: "Enter at least one 3-digit area code" }, { status: 400 });
+      }
+      areaCode = areaCodes[0];
       searchResult = await searchPremiumNumbersPersonal({
         areaCode,
+        areaCodes,
         preferences: body?.preferences,
         limit: body?.limit ?? 80,
       });
     } else {
+      const industryText = String(body?.industry ?? "").trim();
+      if (industryText.length < 2) {
+        return NextResponse.json(
+          { error: "Enter your industry or type of business" },
+          { status: 400 },
+        );
+      }
+
+      const numberType: NumberType =
+        body?.numberType === "tollfree" ? "tollfree" : "local";
+      areaCodes = resolveSearchAreaCodes({
+        numberType,
+        areaCodes: body?.areaCodes,
+        areaCode: body?.areaCode,
+        tollFreePrefix: body?.tollFreePrefix,
+      });
+      if (!areaCodes.length) {
+        return NextResponse.json(
+          {
+            error:
+              numberType === "local"
+                ? "Enter at least one valid 3-digit area code"
+                : "Choose a toll-free prefix",
+          },
+          { status: 400 },
+        );
+      }
+      areaCode = areaCodes[0];
+
+      const llm = await suggestIndustryVanityKeywords(industryText);
+      const userSuggested = body?.suggestedKeywords ?? [];
+      const customKeywords = mergeCustomerKeywords({
+        suggestedKeywords: [...llm.keywords, ...userSuggested],
+        extraKeywords: body?.extraKeywords ?? body?.customKeywords,
+      });
+
+      const industry =
+        inferIndustryFromText(industryText) ||
+        inferIndustryFromText(customKeywords.join(" ")) ||
+        industryText;
+
+      // Backend: ends_with + contains Telnyx queries; scoring ranks word-at-end higher.
       searchResult = await searchPremiumNumbers({
         areaCode,
-        industry: body?.industry?.trim() || undefined,
+        areaCodes,
+        industry,
         customKeywords,
+        matchStyle: "both",
         limit: body?.limit ?? 80,
       });
     }
@@ -60,7 +122,7 @@ export async function POST(request: Request) {
     const product = buildProductSearchResponse({
       mode,
       areaCode,
-      industry: body?.industry,
+      industry: searchResult.industry,
       status: searchResult.status,
       message: searchResult.message,
       candidates: searchResult.candidates,
@@ -79,10 +141,14 @@ export async function POST(request: Request) {
         userId: auth.session.userId,
         mode: mode.toUpperCase(),
         areaCode,
-        industry: body?.industry?.trim() || null,
+        industry: searchResult.industry ?? null,
         keywordsJson: {
-          custom: body?.customKeywords ?? [],
-          businessName: body?.businessName ?? null,
+          numberType: body?.numberType ?? "local",
+          areaCodes,
+          tollFreePrefix: body?.tollFreePrefix ?? null,
+          industry: body?.industry ?? null,
+          suggestedKeywords: body?.suggestedKeywords ?? [],
+          extraKeywords: body?.extraKeywords ?? body?.customKeywords ?? [],
           preferences: body?.preferences ?? [],
         },
         businessMatchCount: product.businessMatchCount,
