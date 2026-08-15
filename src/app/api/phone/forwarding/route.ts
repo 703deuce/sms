@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { listForwardingRules, upsertForwardingRule } from "@/lib/phone/forwarding-service";
 import { getPrisma } from "@/lib/db";
+import { validateForwardingDestination } from "@/lib/numbers/forwarding-validation";
 
 export async function GET(request: Request) {
   try {
@@ -38,11 +39,32 @@ export async function POST(request: Request) {
       const { requireWorkspacePhoneAdmin } = await import("@/lib/phone/softphone-permissions");
       await requireWorkspacePhoneAdmin(auth.workspaceId, auth.session.userId);
     }
+    const targetValue = String(body.targetValue || "");
+    const phoneNumberId = (body.phoneNumberId as string) || null;
+    if (body.targetType === "external" && targetValue) {
+      let numberE164: string | undefined;
+      if (phoneNumberId) {
+        const pn = await getPrisma().phoneNumber.findFirst({
+          where: { id: phoneNumberId, workspaceId: auth.workspaceId },
+          select: { e164: true },
+        });
+        numberE164 = pn?.e164;
+      }
+      const validated = validateForwardingDestination({
+        destination: targetValue,
+        numberE164,
+      });
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.error }, { status: 400 });
+      }
+      body.targetValue = validated.e164;
+    }
+
     const row = await upsertForwardingRule({
       workspaceId: auth.workspaceId,
       id: body.id as string | undefined,
       userId: targetUserId,
-      phoneNumberId: (body.phoneNumberId as string) || null,
+      phoneNumberId,
       mode: String(body.mode || "always"),
       targetType: String(body.targetType || "external"),
       targetValue: String(body.targetValue || ""),

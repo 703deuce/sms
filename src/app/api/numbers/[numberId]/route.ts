@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapPhoneNumber } from "@/lib/mappers";
+import { validateForwardingDestination } from "@/lib/numbers/forwarding-validation";
 
 const assignmentsInclude = {
   assignments: { include: { user: { select: { id: true, name: true } } } },
@@ -53,7 +54,29 @@ export async function PATCH(
       status: body.status ?? undefined,
     };
     if (body.voiceForwardTo !== undefined) {
-      data.voiceForwardTo = body.voiceForwardTo?.trim() || null;
+      const nextForward = body.voiceForwardTo?.trim() || null;
+      if (nextForward) {
+        const validated = validateForwardingDestination({
+          destination: nextForward,
+          numberE164: existing.e164,
+        });
+        if (!validated.ok) {
+          return NextResponse.json({ error: validated.error }, { status: 400 });
+        }
+        data.voiceForwardTo = validated.e164;
+      } else {
+        data.voiceForwardTo = null;
+      }
+
+      const settings =
+        existing.settingsJson && typeof existing.settingsJson === "object"
+          ? { ...(existing.settingsJson as Record<string, unknown>) }
+          : {};
+      const parked = settings.parked === true || settings.personalParked === true;
+      if (!parked) {
+        settings.personalServiceState = nextForward ? "FORWARDING" : settings.voicemailEnabled ? "VOICEMAIL" : "ACTIVE";
+      }
+      data.settingsJson = settings;
     }
     if (body.webhookUrl !== undefined) {
       data.webhookUrl = body.webhookUrl?.trim() || null;

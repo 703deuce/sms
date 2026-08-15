@@ -13,6 +13,7 @@ import {
 import { resolveForwarding } from "./forwarding-service";
 import { handleInboundHumanCall, isTelnyxPhoneConfigured } from "./human-call-service";
 import { listPresence } from "./presence-service";
+import { resolveNumberInboundRoute } from "@/lib/numbers/inbound-number-routing";
 
 export async function processSoftphoneInbound(input: {
   workspaceId: string;
@@ -26,6 +27,49 @@ export async function processSoftphoneInbound(input: {
   const pn = await prisma.phoneNumber.findFirst({
     where: { workspaceId: input.workspaceId, e164: to },
   });
+
+  if (pn && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+    const numberRoute = resolveNumberInboundRoute(pn);
+    if (numberRoute.kind === "parked") {
+      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
+        method: "POST",
+        body: {
+          payload: "This number is not accepting calls right now.",
+          voice: "female",
+          language: "en-US",
+        },
+      }).catch(() => undefined);
+      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
+        method: "POST",
+        body: {},
+      }).catch(() => undefined);
+      return { parked: true as const, from };
+    }
+    if (numberRoute.kind === "forward") {
+      return forwardExternal(input, numberRoute.destination, "number_forward");
+    }
+    if (numberRoute.kind === "voicemail") {
+      const assignment = await prisma.phoneNumberAssignment.findFirst({
+        where: { phoneNumberId: pn.id },
+      });
+      const human = await handleInboundHumanCall({
+        workspaceId: input.workspaceId,
+        fromE164: from,
+        toE164: to,
+        telnyxCallControlId: input.telnyxCallControlId,
+        routingNote: "number_voicemail",
+        autoAnswer: true,
+      });
+      const { leaveVoicemailOnCall } = await import("./voicemail-service");
+      await leaveVoicemailOnCall({
+        workspaceId: input.workspaceId,
+        humanCallId: human.callId,
+        telnyxCallControlId: input.telnyxCallControlId,
+        userId: assignment?.userId ?? null,
+      });
+      return { ...human, voicemail: true };
+    }
+  }
 
   // Blocked / suppressed callers — hang up immediately.
   const blocked = await prisma.suppression.findFirst({

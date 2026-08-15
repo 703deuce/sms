@@ -25,6 +25,7 @@
     "test:nav-crosswalk": "tsx scripts/test-nav-crosswalk.ts",
     "test:smart-routing-compiler": "tsx scripts/test-smart-routing-compiler.ts",
     "test:smart-routing-preprod": "tsx scripts/smart-routing-preprod-suite.ts",
+    "test:number-product-lifecycle": "tsx scripts/test-number-product-lifecycle.ts",
     "test:automation-builder": "tsx scripts/test-automation-builder.ts",
     "test:automation-e2e": "tsx scripts/test-automation-e2e.ts",
     "test:forms-e2e": "tsx scripts/test-forms-e2e.ts",

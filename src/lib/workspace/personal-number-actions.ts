@@ -20,6 +20,11 @@ export async function parkPersonalNumber(workspaceId: string, numberId: string) 
   const settings = readSettings(row);
   const now = new Date().toISOString();
 
+  await getPrisma().callForwardingRule.updateMany({
+    where: { workspaceId, phoneNumberId: numberId, active: true },
+    data: { active: false },
+  });
+
   const updated = await getPrisma().phoneNumber.update({
     where: { id: numberId },
     data: {

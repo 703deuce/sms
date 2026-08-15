@@ -69,6 +69,8 @@ type CheckoutState = {
   displayNumber?: string;
   premiumPriceCents: number;
   expiresAt: string;
+  phoneNumberId?: string;
+  e164?: string;
 };
 
 export function PremiumNumbersPageClient({ workspaceId, initialMode = "business" }: Props) {
@@ -482,8 +484,8 @@ export function PremiumNumbersPageClient({ workspaceId, initialMode = "business"
           state={checkout}
           workspaceId={workspaceId}
           onClose={() => setCheckout(null)}
-          onComplete={() => {
-            setSuccess(checkout);
+          onComplete={(result) => {
+            setSuccess({ ...checkout, ...result });
             setCheckout(null);
           }}
         />
@@ -920,9 +922,11 @@ function CheckoutModal({
   state: CheckoutState;
   workspaceId: string;
   onClose: () => void;
-  onComplete: () => void;
+  onComplete: (result: { phoneNumberId?: string; e164?: string }) => void;
 }) {
   const [remaining, setRemaining] = useState(() => calcRemaining(state.expiresAt));
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -968,15 +972,43 @@ function CheckoutModal({
           {expired ? "Reservation expired — search again." : `Time remaining: ${formatCountdown(remaining)}`}
         </p>
         <div className="mt-6 flex gap-2">
-          <Button variant="outline" className="flex-1 rounded-lg" onClick={onClose}>Back</Button>
+          <Button variant="outline" className="flex-1 rounded-lg" onClick={onClose} disabled={purchasing}>
+            Back
+          </Button>
           <Button
             className="flex-1 rounded-lg bg-[#6366f1] hover:bg-[#5558e3]"
-            disabled={expired}
-            onClick={onComplete}
+            disabled={expired || purchasing}
+            onClick={async () => {
+              setPurchasing(true);
+              setPurchaseError("");
+              try {
+                const res = await fetch("/api/numbers/premium/complete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    workspaceId,
+                    reservationId: state.reservationId,
+                    idempotencyKey: `premium:${state.reservationId}`,
+                  }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  throw new Error(data.error || data.status || "Purchase failed");
+                }
+                onComplete({ phoneNumberId: data.phoneNumberId, e164: data.e164 });
+              } catch (err) {
+                setPurchaseError(err instanceof Error ? err.message : "Purchase failed");
+              } finally {
+                setPurchasing(false);
+              }
+            }}
           >
-            Continue setup
+            {purchasing ? "Purchasing…" : "Complete purchase (test payment)"}
           </Button>
         </div>
+        {purchaseError ? (
+          <p className="mt-3 text-[13px] text-red-600">{purchaseError}</p>
+        ) : null}
       </div>
     </div>
   );
