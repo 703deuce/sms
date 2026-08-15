@@ -15,7 +15,7 @@ export function PersonalParkButton({
   numberId: string;
   label?: string;
   variant?: "outline" | "primary" | "ghost";
-  size?: "sm" | "default";
+  size?: "sm" | "md";
   className?: string;
 }) {
   const router = useRouter();

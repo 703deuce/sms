@@ -2,6 +2,10 @@ import { PersonalOverviewUI } from "@/components/personal/personal-overview-ui";
 import { listPortRequests } from "@/lib/numbers/port-service";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { loadPremiumCartCount } from "@/lib/workspace/personal-number-actions";
+import {
+  loadPersonalActivity,
+  loadPersonalNumbers,
+} from "@/lib/workspace/personal-data";
 
 export default async function PersonalOverviewPage() {
   const { workspaceId, session } = await requireWorkspaceContext();
