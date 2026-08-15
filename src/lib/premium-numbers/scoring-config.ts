@@ -1,46 +1,64 @@
 /**
  * Tunable scoring weights for vanity number ranking.
- * Adjust after batch Telnyx inventory tests.
+ * Tuned after first live Telnyx inventory test (2026-08-15).
  */
 export const SCORING_WEIGHTS = {
   word: {
-    exactEnding: {
-      seven: 50,
-      six: 42,
+    /** Exact ending on primary industry keyword (subscriber digits). */
+    exactEndingPrimary: {
+      seven: 75,
+      six: 68,
+      five: 62,
+      four: 55,
+      three: 25,
+    },
+    /** Exact ending on secondary/custom keyword (not primary industry list). */
+    exactEndingSecondary: {
+      seven: 45,
+      six: 40,
       five: 35,
       four: 28,
-      three: 15,
+      three: 12,
     },
     contains: {
-      sixSeven: 30,
-      fourFive: 20,
-      three: 8,
+      sixSeven: 22,
+      fourFive: 15,
+      three: 6,
     },
-    industryPrimary: 10,
-    industrySecondary: 5,
+    industryPrimaryBonus: 10,
+    industrySecondaryBonus: 5,
+    cleanPlacementBonus: 10,
+    memorablePrefixBonus: 12,
   },
   pattern: {
-    last4Identical: 40,
-    last3Identical: 22,
-    repeatedPair: 25,
-    sequence: 25,
-    ends0000: 40,
-    endsX000: 22,
+    /** Mutually exclusive tail family — only strongest applies. */
+    last4AllIdentical: 45,
+    ends0000: 45,
+    exceptionalRepetition: 58,
+    fullPalindrome: 50,
+    ababOrRepeatedPair: 38,
+    sequence: 38,
+    palindromeLast4: 20,
+    endsX000: 20,
+    last3Identical: 15,
     triplePrefix: 15,
-    palindromeStrong: 25,
-    palindromeWeak: 15,
-    abab: 20,
   },
   combination: {
-    strongWordAndPattern: 15,
+    strongWordAndPattern: 12,
     exceptionalSimplicity: 5,
   },
+  providerCost: {
+    baselineMonthly: 1,
+    premiumThreshold: 2,
+    highPremiumThreshold: 4,
+    premiumBonus: 5,
+    highPremiumBonus: 8,
+  },
   penalties: {
-    awkwardPosition: 12,
-    shortAccidental: 10,
-    conflictingInterpretations: 8,
-    hardToRemember: 10,
-    weakKeywordOnly: 6,
+    shortAccidental: 8,
+    conflictingInterpretations: 6,
+    hardToRemember: 8,
+    weakKeywordOnly: 5,
   },
   memorablePatternSearchDigits: [
     "0000",
@@ -67,11 +85,11 @@ export const SCORING_WEIGHTS = {
 } as const;
 
 export const TIER_THRESHOLDS: Array<{ min: number; tier: import("./types").QualityTier }> = [
-  { min: 95, tier: "Exceptional" },
-  { min: 88, tier: "Premium" },
-  { min: 80, tier: "Excellent" },
-  { min: 70, tier: "Good" },
-  { min: 60, tier: "Nice" },
+  { min: 90, tier: "Exceptional" },
+  { min: 80, tier: "Premium" },
+  { min: 70, tier: "Excellent" },
+  { min: 55, tier: "Good" },
+  { min: 35, tier: "Nice" },
   { min: 0, tier: "Ordinary" },
 ];
 

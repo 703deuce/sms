@@ -1,0 +1,28 @@
+SCORING TUNING — BEFORE vs AFTER
+
+formatted       before                after                 delta   words
+--------------------------------------------------------------------------------
+540-572-4444    100 Exceptional   53 Nice          -47
+  → +45 Four-digit repeater (4444)
+
+571-240-1111    100 Exceptional   53 Nice          -47
+  → +45 Four-digit repeater (1111)
+
+540-929-5296    38 Ordinary      75 Excellent     +37LAWN
+  → +55 Exact 4-digit keyword ending (LAWN → 5296); +10 Clean exact industry word placement; +10 Primary industry match
+
+571-680-7663    38 Ordinary      75 Excellent     +37ROOF
+  → +55 Exact 4-digit keyword ending (ROOF → 7663); +10 Clean exact industry word placement; +10 Primary industry match
+
+571-704-7663    38 Ordinary      75 Excellent     +37ROOF
+  → +55 Exact 4-digit keyword ending (ROOF → 7663); +10 Clean exact industry word placement; +10 Primary industry match
+
+540-296-6937    41 Ordinary      82 Premium       +41MOWER
+  → +62 Exact 5-digit keyword ending (MOWER → 66937); +10 Clean exact industry word placement; +10 Primary industry match
+
+571-932-1212    45 Ordinary      38 Nice          -7
+  → +38 Repeating pair (1212)
+
+540-655-1234    25 Ordinary      38 Nice          +13
+  → +38 Sequence (1234)
+
