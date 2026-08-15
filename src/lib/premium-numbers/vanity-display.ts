@@ -29,6 +29,8 @@ const LETTER_TO_DIGIT: Record<string, string> = {
   Z: "9",
 };
 
+export type WordPlacement = "ending" | "embedded";
+
 function vanityHasLetters(value: string): boolean {
   return /[A-Z]/i.test(value);
 }
@@ -38,12 +40,14 @@ export function vanityCharacterCount(parts: {
   area: string;
   digitPrefix: string;
   word: string;
+  digitSuffix?: string;
 }): number {
-  return parts.area.length + parts.digitPrefix.length + parts.word.length;
-}
-
-function isTenCharacterVanity(area: string, digitPrefix: string, word: string): boolean {
-  return vanityCharacterCount({ area, digitPrefix, word }) === 10;
+  return (
+    parts.area.length +
+    parts.digitPrefix.length +
+    parts.word.length +
+    (parts.digitSuffix?.length ?? 0)
+  );
 }
 
 /**
@@ -73,69 +77,152 @@ export function vanityAlignsWithPhone(vanity: string, phoneNumber: string): bool
   return phoneIndex === 10;
 }
 
-/** Words that can be shown as trailing letters in a 10-character vanity display. */
-export function pickVanityDisplayWords(phoneNumber: string, matchedWords: string[]): string[] {
+function formatVanityParts(
+  area: string,
+  digitPrefix: string,
+  word: string,
+  digitSuffix: string,
+): string {
+  const parts: string[] = [area];
+  if (digitPrefix) parts.push(digitPrefix);
+  parts.push(word);
+  if (digitSuffix) parts.push(digitSuffix);
+  return parts.join("-");
+}
+
+type SubscriberWordSpan = {
+  prefix: string;
+  suffix: string;
+  placement: WordPlacement;
+};
+
+function findSubscriberWordSpan(subscriber: string, word: string): SubscriberWordSpan | undefined {
+  const wordNorm = normalizeWord(word);
+  const wordDigits = wordToKeypadDigits(wordNorm);
+  if (wordDigits.length < 3) return undefined;
+
+  const idx = subscriber.indexOf(wordDigits);
+  if (idx < 0) return undefined;
+
+  const end = idx + wordDigits.length;
+  if (subscriber.slice(idx, end) !== wordDigits) return undefined;
+
+  const prefix = subscriber.slice(0, idx);
+  const suffix = subscriber.slice(end);
+  const placement: WordPlacement = end >= subscriber.length ? "ending" : "embedded";
+
+  return { prefix, suffix, placement };
+}
+
+function buildVanityFromSpan(
+  area: string,
+  subscriber: string,
+  word: string,
+  span: SubscriberWordSpan,
+): string | undefined {
+  const wordNorm = normalizeWord(word);
+  const charCount = vanityCharacterCount({
+    area,
+    digitPrefix: span.prefix,
+    word: wordNorm,
+    digitSuffix: span.suffix,
+  });
+  if (charCount !== 10) return undefined;
+
+  // Re-verify subscriber reconstruction
+  const wordDigits = wordToKeypadDigits(wordNorm);
+  if (span.prefix + wordDigits + span.suffix !== subscriber) return undefined;
+
+  return formatVanityParts(area, span.prefix, wordNorm, span.suffix);
+}
+
+/**
+ * Build vanity like 240-20-SPARK (word at end) or 757-LAWN-262 (word embedded).
+ */
+function buildVanityForWord(area: string, subscriber: string, word: string): string | undefined {
+  const span = findSubscriberWordSpan(subscriber, word);
+  if (!span) return undefined;
+  return buildVanityFromSpan(area, subscriber, word, span);
+}
+
+/** Words that can be shown as trailing letters at the end of the vanity. */
+export function pickEndingVanityWords(phoneNumber: string, matchedWords: string[]): string[] {
   const digits10 = parsePhoneDigits(phoneNumber);
   if (digits10.length !== 10) return [];
 
-  const area = digits10.slice(0, 3);
   const subscriber = digits10.slice(3);
-  const displayable = matchedWords.filter((word) =>
-    Boolean(buildTenCharVanity(area, subscriber, word)),
-  );
+  const ending = matchedWords.filter((word) => {
+    const span = findSubscriberWordSpan(subscriber, word);
+    return span?.placement === "ending";
+  });
 
-  return [...new Set(displayable.map((w) => normalizeWord(w)))].sort(
+  return [...new Set(ending.map((w) => normalizeWord(w)))].sort(
     (a, b) => b.length - a.length,
   );
 }
 
-function extractTrailingWordFromVanity(vanity: string): string | undefined {
-  const parts = vanity.split("-").filter(Boolean);
-  const last = parts[parts.length - 1];
-  if (!last || !/^[A-Z]+$/i.test(last)) return undefined;
-  return normalizeWord(last);
+/** Words embedded in the subscriber with digits after the keyword letters. */
+export function pickEmbeddedVanityWords(phoneNumber: string, matchedWords: string[]): string[] {
+  const digits10 = parsePhoneDigits(phoneNumber);
+  if (digits10.length !== 10) return [];
+
+  const subscriber = digits10.slice(3);
+  const embedded = matchedWords.filter((word) => {
+    const span = findSubscriberWordSpan(subscriber, word);
+    return span?.placement === "embedded";
+  });
+
+  return [...new Set(embedded.map((w) => normalizeWord(w)))].sort(
+    (a, b) => b.length - a.length,
+  );
 }
 
-/**
- * Build vanity like 240-20-SPARK or 240-91-VOLTS:
- * 3-digit area + remaining digit prefix + word letters = 10 characters total.
- */
-function buildTenCharVanity(
-  area: string,
-  subscriber: string,
-  word: string,
-): string | undefined {
-  const wordNorm = normalizeWord(word);
-  const wordLen = wordNorm.length;
-  if (wordLen < 3 || wordLen > 7) return undefined;
+/** @deprecated Use pickEndingVanityWords */
+export function pickVanityDisplayWords(phoneNumber: string, matchedWords: string[]): string[] {
+  return pickEndingVanityWords(phoneNumber, matchedWords);
+}
 
-  const wordDigits = wordToKeypadDigits(wordNorm);
-  if (wordDigits.length < 3) return undefined;
+function extractDisplayWordFromAlignedVanity(
+  vanity: string,
+  phoneNumber: string,
+): { word: string; placement: WordPlacement } | undefined {
+  if (!vanityAlignsWithPhone(vanity, phoneNumber)) return undefined;
 
-  const digitPrefixLen = 7 - wordLen;
-  if (digitPrefixLen < 0) return undefined;
+  const vanityChars = vanity.replace(/-/g, "").replace(/\s/g, "");
+  const runs: { word: string; length: number }[] = [];
 
-  const digitPrefix = subscriber.slice(0, digitPrefixLen);
-  const suffixDigits = subscriber.slice(digitPrefixLen);
-
-  if (suffixDigits !== wordDigits) return undefined;
-  if (!isTenCharacterVanity(area, digitPrefix, wordNorm)) return undefined;
-
-  if (digitPrefixLen === 0) {
-    return `${area}-${wordNorm}`;
+  let i = 0;
+  while (i < vanityChars.length) {
+    if (/[A-Z]/i.test(vanityChars[i])) {
+      let j = i;
+      while (j < vanityChars.length && /[A-Z]/i.test(vanityChars[j])) j += 1;
+      const word = normalizeWord(vanityChars.slice(i, j));
+      if (word.length >= 3) runs.push({ word, length: word.length });
+      i = j;
+    } else {
+      i += 1;
+    }
   }
-  return `${area}-${digitPrefix}-${wordNorm}`;
+
+  const best = runs.sort((a, b) => b.length - a.length)[0];
+  if (!best) return undefined;
+
+  const subscriber = parsePhoneDigits(phoneNumber).slice(3);
+  const wordDigits = wordToKeypadDigits(best.word);
+  const placement: WordPlacement = subscriber.endsWith(wordDigits) ? "ending" : "embedded";
+  return { word: best.word, placement };
 }
 
 export type VanityPresentation = {
   vanityDisplay?: string;
-  /** Word shown as letters in vanityDisplay — must map to ending digits. */
+  /** Word shown as letters in vanityDisplay. */
   displayWord?: string;
+  wordPlacement?: WordPlacement;
 };
 
 /**
  * Resolve customer-facing vanity + the word letters actually shown.
- * Only exact-ending keypad matches are eligible; Telnyx vanity must align with digits.
+ * Prefers exact-ending words (premium); falls back to embedded keyword spans.
  */
 export function resolveVanityPresentation(
   phoneNumber: string,
@@ -143,13 +230,25 @@ export function resolveVanityPresentation(
   telnyxVanityFormat?: string,
 ): VanityPresentation {
   const telnyx = telnyxVanityFormat?.trim();
-  if (telnyx && vanityHasLetters(telnyx) && vanityAlignsWithPhone(telnyx, phoneNumber)) {
-    const candidateWord = extractTrailingWordFromVanity(telnyx);
-    if (
-      candidateWord &&
-      pickVanityDisplayWords(phoneNumber, [candidateWord]).includes(candidateWord)
-    ) {
-      return { vanityDisplay: telnyx, displayWord: candidateWord };
+  if (telnyx && vanityHasLetters(telnyx)) {
+    const extracted = extractDisplayWordFromAlignedVanity(telnyx, phoneNumber);
+    if (extracted) {
+      const span = findSubscriberWordSpan(
+        parsePhoneDigits(phoneNumber).slice(3),
+        extracted.word,
+      );
+      if (span && buildVanityFromSpan(
+        parsePhoneDigits(phoneNumber).slice(0, 3),
+        parsePhoneDigits(phoneNumber).slice(3),
+        extracted.word,
+        span,
+      )) {
+        return {
+          vanityDisplay: telnyx,
+          displayWord: extracted.word,
+          wordPlacement: extracted.placement,
+        };
+      }
     }
   }
 
@@ -158,11 +257,19 @@ export function resolveVanityPresentation(
 
   const area = digits10.slice(0, 3);
   const subscriber = digits10.slice(3);
-  const exactWords = pickVanityDisplayWords(phoneNumber, matchedWords);
 
-  for (const word of exactWords) {
-    const vanity = buildTenCharVanity(area, subscriber, word);
-    if (vanity) return { vanityDisplay: vanity, displayWord: word };
+  for (const word of pickEndingVanityWords(phoneNumber, matchedWords)) {
+    const vanity = buildVanityForWord(area, subscriber, word);
+    if (vanity) {
+      return { vanityDisplay: vanity, displayWord: word, wordPlacement: "ending" };
+    }
+  }
+
+  for (const word of pickEmbeddedVanityWords(phoneNumber, matchedWords)) {
+    const vanity = buildVanityForWord(area, subscriber, word);
+    if (vanity) {
+      return { vanityDisplay: vanity, displayWord: word, wordPlacement: "embedded" };
+    }
   }
 
   return {};

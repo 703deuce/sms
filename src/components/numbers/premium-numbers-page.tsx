@@ -774,10 +774,20 @@ function NumberCard({
   const subNumber = vanityTitle ? result.displayNumber : null;
 
   const badge =
-    variant === "business" && result.displayWord && result.businessMatchScore >= 75
+    variant === "business" &&
+    result.displayWord &&
+    result.wordPlacement === "ending" &&
+    result.businessMatchScore >= 75
       ? "EXACT MATCH"
-      : variant === "business" && result.displayWord && result.businessMatchScore >= 55
+      : variant === "business" &&
+          result.displayWord &&
+          result.wordPlacement === "ending" &&
+          result.businessMatchScore >= 55
         ? "STRONG MATCH"
+        : variant === "business" &&
+            result.displayWord &&
+            result.wordPlacement === "embedded"
+          ? "KEYWORD MATCH"
         : result.premiumPriceBand === "exceptional" || result.numberQualityScore >= 80
           ? "BEST MATCH"
           : null;

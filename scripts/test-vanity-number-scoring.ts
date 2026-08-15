@@ -7,7 +7,9 @@ import { buildKeywordEntries } from "../src/lib/premium-numbers/industry-keyword
 import { scoreCandidate } from "../src/lib/premium-numbers/scoring";
 import {
   buildVanityDisplay,
-  pickVanityDisplayWords,
+  pickEndingVanityWords,
+  pickEmbeddedVanityWords,
+  resolveVanityPresentation,
   vanityAlignsWithPhone,
 } from "../src/lib/premium-numbers/vanity-display";
 import { toProductResult } from "../src/lib/premium-numbers/product-api";
@@ -47,18 +49,26 @@ assert(
   "ROOFER vanity must be 10 chars (571-2-ROOFER)",
 );
 assert(
-  pickVanityDisplayWords("+17575296262", ["LAWN"]).length === 0,
-  "5296262 must not display LAWN letters",
+  pickEndingVanityWords("+17575296262", ["LAWN"]).length === 0,
+  "5296262 must not end with LAWN letters",
 );
 assert(
-  pickVanityDisplayWords("+15409295296", ["LAWN"]).includes("LAWN"),
-  "9295296 must display LAWN letters",
+  pickEmbeddedVanityWords("+17575296262", ["LAWN"]).includes("LAWN"),
+  "5296262 must embed LAWN letters",
+);
+assert(
+  pickEndingVanityWords("+15409295296", ["LAWN"]).includes("LAWN"),
+  "9295296 must end with LAWN letters",
 );
 
 assert(
-  buildVanityDisplay("+17575296262", ["LAWN"]) === undefined,
-  "contains-only LAWN must not produce vanity",
+  buildVanityDisplay("+17575296262", ["LAWN"]) === "757-LAWN-262",
+  "embedded LAWN vanity must show trailing digits",
 );
+const lawnEmbedded = resolveVanityPresentation("+17575296262", ["LAWN"]);
+assert(lawnEmbedded.displayWord === "LAWN", "embedded LAWN displayWord");
+assert(lawnEmbedded.wordPlacement === "embedded", "embedded LAWN placement");
+
 const lawnContainsProduct = toProductResult(
   scoreCandidate({
     phoneNumber: "+17575296262",
@@ -69,17 +79,19 @@ const lawnContainsProduct = toProductResult(
   "memorable_alternative",
   "757",
 );
+assert(lawnContainsProduct.displayWord === "LAWN", "embedded LAWN sets displayWord");
+assert(lawnContainsProduct.wordPlacement === "embedded", "embedded LAWN placement in product");
 assert(
-  !lawnContainsProduct.displayWord,
-  "contains-only LAWN must not set displayWord",
+  lawnContainsProduct.cardBullets.some((b) => b.includes("lawn in number")),
+  "embedded LAWN must describe in-number keyword",
 );
 assert(
-  !lawnContainsProduct.cardBullets.some((b) => b.includes("letter")),
-  "contains-only LAWN must not claim exact letter match",
+  !lawnContainsProduct.cardBullets.some((b) => b.toLowerCase().includes("exact")),
+  "embedded LAWN must not claim exact match",
 );
 assert(
   lawnContainsProduct.premiumPriceCents < 4900,
-  "contains-only LAWN must not get word-tier $49 pricing",
+  "embedded LAWN must not get ending-word $49 pricing",
 );
 
 assert(
@@ -87,8 +99,12 @@ assert(
   "757-607-YARD must align with 7576079273",
 );
 assert(
+  vanityAlignsWithPhone("757-LAWN-262", "+17575296262"),
+  "757-LAWN-262 must align with 7575296262",
+);
+assert(
   !vanityAlignsWithPhone("757-529-LAWN", "+17575296262"),
-  "mislabeled vanity must fail digit alignment",
+  "mislabeled ending vanity must fail digit alignment",
 );
 
 assert(

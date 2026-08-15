@@ -4,7 +4,7 @@ import {
 } from "./scoring-config";
 import { normalizeWord } from "./keypad";
 import { quotePremiumPrice, type PremiumSearchMode } from "./premium-pricing";
-import { resolveVanityPresentation } from "./vanity-display";
+import { resolveVanityPresentation, type WordPlacement } from "./vanity-display";
 import type { ScoredCandidate, KeywordEntry } from "./types";
 
 export type PremiumNumberAvailabilityStatus =
@@ -22,8 +22,10 @@ export type PremiumNumberProductResult = {
   phoneNumber: string;
   displayNumber: string;
   vanityDisplay?: string;
-  /** Word letters shown in vanityDisplay (exact ending match only). */
+  /** Word letters shown in vanityDisplay. */
   displayWord?: string;
+  /** Whether the keyword letters end the number or sit earlier with digits after. */
+  wordPlacement?: WordPlacement;
   businessMatchScore: number;
   numberQualityScore: number;
   matchedWords: string[];
@@ -99,6 +101,7 @@ function buildCardBullets(
   mode: PremiumSearchMode,
   areaCode: string,
   displayWord?: string,
+  wordPlacement?: WordPlacement,
 ): string[] {
   const bullets: string[] = [];
   const hasDisplayWord = Boolean(displayWord);
@@ -112,8 +115,16 @@ function buildCardBullets(
   }
 
   if (mode === "business" && hasDisplayWord && displayWordLen >= 4 && bullets.length < 3) {
-    const exact = `Exact ${displayWordLen}-letter ${displayWord!.toLowerCase()} match`;
-    if (!bullets.some((b) => b.includes("letter"))) bullets.unshift(exact);
+    if (wordPlacement === "ending") {
+      const exact = `Exact ${displayWordLen}-letter ${displayWord!.toLowerCase()} match`;
+      if (!bullets.some((b) => b.includes("letter"))) bullets.unshift(exact);
+    } else if (wordPlacement === "embedded") {
+      const embedded = `${displayWordLen}-letter ${displayWord!.toLowerCase()} in number`;
+      if (!bullets.some((b) => b.includes("letter"))) bullets.unshift(embedded);
+      if (bullets.length < 3) {
+        bullets.push("Additional digits after keyword");
+      }
+    }
   }
 
   if (areaCode && bullets.length < 3) {
@@ -121,7 +132,7 @@ function buildCardBullets(
     if (!bullets.includes(local)) bullets.push(local);
   }
 
-  if (mode === "business" && hasDisplayWord && displayWordLen >= 4 && bullets.length < 3) {
+  if (mode === "business" && hasDisplayWord && displayWordLen >= 4 && wordPlacement === "ending" && bullets.length < 3) {
     bullets.push("Easy to say and advertise");
   }
 
@@ -190,13 +201,13 @@ export function toProductResult(
   areaCode?: string,
 ): PremiumNumberProductResult {
   const telnyxVanity = candidate.rawTelnyx?.vanity_format as string | undefined;
-  const { vanityDisplay, displayWord } = resolveVanityPresentation(
+  const { vanityDisplay, displayWord, wordPlacement } = resolveVanityPresentation(
     candidate.phoneNumber,
     candidate.matchedWords,
     telnyxVanity,
   );
   const wordLen = displayWord ? normalizeWord(displayWord).length : 0;
-  const price = quotePremiumPrice(candidate, mode, wordLen);
+  const price = quotePremiumPrice(candidate, mode, wordLen, wordPlacement);
   const monthly = Number(candidate.telnyxCost?.monthlyCost);
   const providerPremium = Number.isFinite(monthly) && monthly >= 2;
 
@@ -212,6 +223,7 @@ export function toProductResult(
     displayNumber: candidate.formattedNumber,
     vanityDisplay,
     displayWord,
+    wordPlacement,
     businessMatchScore: candidate.businessMatchScore,
     numberQualityScore: candidate.numberQualityScore,
     matchedWords: candidate.matchedWords,
@@ -221,7 +233,7 @@ export function toProductResult(
     premiumPriceCents: price.premiumPriceCents,
     premiumPriceBand: price.band,
     headlineLabel: buildHeadlineLabel(candidate, mode, displayWord),
-    cardBullets: buildCardBullets(candidate, mode, areaCode ?? "", displayWord),
+    cardBullets: buildCardBullets(candidate, mode, areaCode ?? "", displayWord, wordPlacement),
     tags: buildTags(candidate, mode, displayWord),
     whyReasons: whyReasons(candidate),
     providerPremium,
@@ -235,6 +247,14 @@ function candidateHasDisplayWord(candidate: ScoredCandidate): boolean {
   return Boolean(
     resolveVanityPresentation(candidate.phoneNumber, candidate.matchedWords, telnyxVanity)
       .displayWord,
+  );
+}
+
+function isEndingPlacement(candidate: ScoredCandidate): boolean {
+  const telnyxVanity = candidate.rawTelnyx?.vanity_format as string | undefined;
+  return (
+    resolveVanityPresentation(candidate.phoneNumber, candidate.matchedWords, telnyxVanity)
+      .wordPlacement === "ending"
   );
 }
 
@@ -277,6 +297,9 @@ export function buildProductSearchResponse(input: {
         c.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD && candidateHasDisplayWord(c),
     )
     .sort((a, b) => {
+      const aEnding = isEndingPlacement(a);
+      const bEnding = isEndingPlacement(b);
+      if (aEnding !== bEnding) return aEnding ? -1 : 1;
       if (b.businessMatchScore !== a.businessMatchScore) {
         return b.businessMatchScore - a.businessMatchScore;
       }

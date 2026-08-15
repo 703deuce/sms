@@ -1,4 +1,5 @@
 import type { ScoredCandidate } from "./types";
+import type { WordPlacement } from "./vanity-display";
 
 export type PremiumSearchMode = "business" | "personal";
 
@@ -40,6 +41,7 @@ export function quotePremiumPrice(
   candidate: ScoredCandidate,
   mode: PremiumSearchMode,
   matchedWordLength?: number,
+  wordPlacement?: WordPlacement,
 ): PremiumPriceQuote {
   const wordLen =
     matchedWordLength ??
@@ -72,6 +74,23 @@ export function quotePremiumPrice(
       premiumPriceCents: PREMIUM_PRICE_POLICY.personal.normal,
       band: "normal",
       displayLabel: "Standard",
+    };
+  }
+
+  // Embedded keyword (not at end) — valuable but far below ending-word premiums.
+  if (wordPlacement === "embedded") {
+    const nq = candidate.numberQualityScore;
+    if (nq >= 55) {
+      return {
+        premiumPriceCents: PREMIUM_PRICE_POLICY.personal.memorable,
+        band: "memorable",
+        displayLabel: "Embedded Keyword",
+      };
+    }
+    return {
+      premiumPriceCents: PREMIUM_PRICE_POLICY.personal.nice,
+      band: "nice",
+      displayLabel: "Embedded Keyword",
     };
   }
 
