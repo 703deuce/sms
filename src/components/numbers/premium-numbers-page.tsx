@@ -8,6 +8,7 @@ import {
   type PremiumSearchProductResponse,
 } from "@/lib/premium-numbers/product-api";
 import { formatPremiumPrice } from "@/lib/premium-numbers/premium-pricing";
+import { buildVanityDisplay } from "@/lib/premium-numbers/vanity-display";
 import type { PersonalPreference } from "@/lib/premium-numbers/personal-search";
 import {
   TOLL_FREE_AREA_CODES,
@@ -763,9 +764,13 @@ function NumberCard({
   onToggleFavorite: () => void;
   onGetNumber: () => void;
 }) {
-  const hasVanity = Boolean(result.vanityDisplay);
-  const heroTitle = hasVanity ? result.vanityDisplay! : result.displayNumber;
-  const subNumber = hasVanity ? result.displayNumber : null;
+  const vanityTitle =
+    result.vanityDisplay ??
+    (result.matchedWords.length > 0
+      ? buildVanityDisplay(result.phoneNumber, result.matchedWords)
+      : undefined);
+  const heroTitle = vanityTitle ?? result.displayNumber;
+  const subNumber = vanityTitle ? result.displayNumber : null;
 
   const badge =
     variant === "business" && result.businessMatchScore >= 75

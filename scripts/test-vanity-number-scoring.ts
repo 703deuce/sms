@@ -5,6 +5,7 @@
 import { wordToKeypadDigits } from "../src/lib/premium-numbers/keypad";
 import { buildKeywordEntries } from "../src/lib/premium-numbers/industry-keywords";
 import { scoreCandidate } from "../src/lib/premium-numbers/scoring";
+import { buildVanityDisplay } from "../src/lib/premium-numbers/vanity-display";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -27,6 +28,23 @@ function scoreSub(
 
 assert(wordToKeypadDigits("ROOF") === "7663");
 assert(wordToKeypadDigits("MOVERS") === "668377");
+
+assert(
+  buildVanityDisplay("+12402077275", ["SPARK"]) === "240-20-SPARK",
+  "SPARK vanity must be 10 chars (240-20-SPARK)",
+);
+assert(
+  buildVanityDisplay("+12409186587", ["VOLTS"]) === "240-91-VOLTS",
+  "VOLTS vanity must be 10 chars (240-91-VOLTS)",
+);
+assert(
+  buildVanityDisplay("+15712766377", ["ROOFER"]) === "571-2-ROOFER",
+  "ROOFER vanity must be 10 chars (571-2-ROOFER)",
+);
+assert(
+  buildVanityDisplay("+12402077275", ["SPARK"]) !== "240-207-SPARK",
+  "SPARK vanity must not use 11-char exchange format",
+);
 
 const plain1111 = scoreSub("2401111", "roofing", "5");
 const roof777 = scoreSub("7777663", "roofing", "1");
