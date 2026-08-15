@@ -27,7 +27,7 @@ const page = await context.newPage();
 await page.goto(`${BASE}/numbers/premium`, { waitUntil: "networkidle" });
 await page.screenshot({ path: `${OUT}/premium-numbers-page.png`, fullPage: true });
 
-await page.getByRole("button", { name: /search for numbers/i }).click();
+await page.getByRole("button", { name: /find premium numbers/i }).click();
 await page.waitForTimeout(25000);
 await page.screenshot({ path: `${OUT}/premium-numbers-search-results.png`, fullPage: true });
 
