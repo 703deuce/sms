@@ -34,6 +34,8 @@ export type TelnyxCost = {
   currency?: string;
 };
 
+import type { PersonalPatternAnalysis } from "./personal-pattern-scoring";
+
 export type ScoredCandidate = {
   phoneNumber: string;
   formattedNumber: string;
@@ -53,6 +55,8 @@ export type ScoredCandidate = {
   rawDigits: string;
   subscriberDigits: string;
   rawTelnyx?: Record<string, unknown>;
+  /** Personal memorable-number pattern analysis (personal search only). */
+  personalPattern?: PersonalPatternAnalysis;
 };
 
 export type TelnyxSearchAttempt = {

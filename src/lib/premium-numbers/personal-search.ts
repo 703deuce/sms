@@ -1,5 +1,6 @@
 import { buildKeywordEntries } from "./industry-keywords";
-import { scoreCandidate, sortCandidates } from "./scoring";
+import { applyPersonalScoringToCandidate } from "./personal-pattern-scoring";
+import { scoreCandidate } from "./scoring";
 import { SCORING_WEIGHTS } from "./scoring-config";
 import { runTelnyxInventorySearches } from "./telnyx-inventory-search";
 import { parsePhoneDigits } from "./keypad";
@@ -126,8 +127,8 @@ export async function searchPremiumNumbersPersonal(input: {
   allCandidates = [...byPhone.values()];
 
   const scored = allCandidates
-    .map((raw) =>
-      scoreCandidate({
+    .map((raw) => {
+      const base = scoreCandidate({
         phoneNumber: raw.phoneNumber,
         keywords,
         telnyxCost:
@@ -139,9 +140,13 @@ export async function searchPremiumNumbersPersonal(input: {
               }
             : undefined,
         rawTelnyx: raw.raw,
-      }),
-    )
-    .filter((c): c is ScoredCandidate => c !== null);
+      });
+      if (!base) return null;
+      return applyPersonalScoringToCandidate(base);
+    })
+    .filter((c): c is ScoredCandidate & { personalPattern: NonNullable<ScoredCandidate["personalPattern"]> } =>
+      c !== null,
+    );
 
   const sorted = sortPersonalCandidates(scored);
   const limit = input.limit ?? 100;
@@ -151,7 +156,7 @@ export async function searchPremiumNumbersPersonal(input: {
   const status =
     !hadInventory
       ? "NO_INVENTORY"
-      : candidates.some((c) => c.numberQualityScore >= 55)
+      : candidates.some((c) => c.numberQualityScore >= 58)
         ? "RESULTS_FOUND"
         : candidates.length
           ? "RESULTS_FOUND_BUT_NONE_PREMIUM"

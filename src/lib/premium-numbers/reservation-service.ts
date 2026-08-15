@@ -30,6 +30,15 @@ type StoredResultRow = {
   displayNumber?: string;
   businessMatchScore?: number;
   numberQualityScore?: number;
+  areaCode?: string;
+  patternTypes?: string[];
+  lastFourPattern?: string;
+  fullNumberPattern?: string;
+  personalTier?: string;
+  matchedWord?: string;
+  keywordTier?: string;
+  businessTier?: string;
+  providerCostCents?: number;
 };
 
 export async function reservePremiumNumber(
@@ -156,6 +165,15 @@ export function serializeResultsForLog(
     displayNumber: r.displayNumber,
     businessMatchScore: r.businessMatchScore,
     numberQualityScore: r.numberQualityScore,
+    areaCode: r.areaCode,
+    patternTypes: r.patternTypes,
+    lastFourPattern: r.lastFourPattern,
+    fullNumberPattern: r.fullNumberPattern,
+    personalTier: r.personalTier,
+    matchedWord: r.matchedWord,
+    keywordTier: r.keywordTier,
+    businessTier: r.businessTier,
+    providerCostCents: r.providerCostCents,
   }));
 }
 

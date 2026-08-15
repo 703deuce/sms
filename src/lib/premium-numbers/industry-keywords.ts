@@ -146,6 +146,9 @@ export function buildKeywordEntries(input: {
     .map((k) => normalizeWord(k))
     .filter((k) => k.length >= 3);
 
+  // Customer-entered keywords reflect explicit search intent — treat as primary.
+  for (const w of custom) primarySet.add(w);
+
   const orderedWords: string[] = [];
   const seen = new Set<string>();
   const push = (w: string) => {

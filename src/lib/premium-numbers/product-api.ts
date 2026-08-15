@@ -41,6 +41,16 @@ export type PremiumNumberProductResult = {
   providerPremium: boolean;
   availabilityStatus: PremiumNumberAvailabilityStatus;
   listSection: "business_match" | "memorable_alternative" | "top_pick" | "other";
+  /** Analytics fields stored in search logs for purchase tuning. */
+  areaCode?: string;
+  patternTypes?: string[];
+  lastFourPattern?: string;
+  fullNumberPattern?: string;
+  personalTier?: string;
+  matchedWord?: string;
+  keywordTier?: string;
+  businessTier?: string;
+  providerCostCents?: number;
 };
 
 export type PremiumSearchProductResponse = {
@@ -103,6 +113,15 @@ function buildCardBullets(
   displayWord?: string,
   wordPlacement?: WordPlacement,
 ): string[] {
+  if (mode === "personal" && candidate.personalPattern) {
+    const bullets = [...candidate.personalPattern.bulletLabels];
+    if (areaCode && bullets.length < 3) {
+      const local = `Local ${areaCode} area code`;
+      if (!bullets.includes(local)) bullets.push(local);
+    }
+    return bullets.slice(0, 3);
+  }
+
   const bullets: string[] = [];
   const hasDisplayWord = Boolean(displayWord);
   const displayWordLen = displayWord ? normalizeWord(displayWord).length : 0;
@@ -150,6 +169,10 @@ function buildHeadlineLabel(
   mode: PremiumSearchMode,
   displayWord?: string,
 ): string {
+  if (mode === "personal" && candidate.personalPattern) {
+    return candidate.personalPattern.customerLabel;
+  }
+
   const hasDisplayWord = Boolean(displayWord);
   const matchLabel =
     mode === "business" && candidate.businessMatchScore >= 55
@@ -168,6 +191,16 @@ function buildTags(
   displayWord?: string,
 ): string[] {
   const tags: string[] = [];
+  if (mode === "personal") {
+    if (candidate.personalPattern) {
+      tags.push(candidate.personalPattern.customerLabel);
+      if (candidate.personalPattern.kind !== "NONE") {
+        tags.push(candidate.personalPattern.kind.replace(/_/g, " "));
+      }
+    }
+    return [...new Set(tags)].slice(0, 3);
+  }
+
   const displayWordLen = displayWord ? normalizeWord(displayWord).length : 0;
   if (mode === "business" && candidate.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD) {
     tags.push("Smart Match");
@@ -207,15 +240,47 @@ export function toProductResult(
     telnyxVanity,
   );
   const wordLen = displayWord ? normalizeWord(displayWord).length : 0;
-  const price = quotePremiumPrice(candidate, mode, wordLen, wordPlacement);
+  const keywordEntry = displayWord
+    ? keywords.find((k) => k.word === displayWord)
+    : undefined;
+  const price = quotePremiumPrice(candidate, mode, {
+    wordLen,
+    wordPlacement,
+    areaCode,
+    displayWord,
+    keywords,
+  });
   const monthly = Number(candidate.telnyxCost?.monthlyCost);
   const providerPremium = Number.isFinite(monthly) && monthly >= 2;
+  const providerCostCents =
+    Number(candidate.telnyxCost?.upfrontCost) > 0 || Number(candidate.telnyxCost?.monthlyCost) > 0
+      ? Math.round(
+          (Number(candidate.telnyxCost?.upfrontCost) || 0) * 100 +
+            (Number(candidate.telnyxCost?.monthlyCost) || 0) * 100,
+        )
+      : 0;
 
-  const bmLabel = businessMatchLabel(
-    candidate.businessMatchScore,
-    displayWord ? [displayWord] : [],
-  );
-  const memLabel = memorabilityLabel(candidate.numberQualityScore, Boolean(displayWord));
+  const bmLabel =
+    mode === "personal"
+      ? ""
+      : businessMatchLabel(candidate.businessMatchScore, displayWord ? [displayWord] : []);
+  const memLabel =
+    mode === "personal" && candidate.personalPattern
+      ? candidate.personalPattern.customerLabel
+      : memorabilityLabel(candidate.numberQualityScore, Boolean(displayWord));
+
+  const patternTypes =
+    mode === "personal" && candidate.personalPattern
+      ? [candidate.personalPattern.kind, candidate.personalPattern.lastFourPattern].filter(Boolean)
+      : candidate.matchedPatterns;
+
+  const keywordTier = keywordEntry
+    ? keywordEntry.isPrimary
+      ? "primary"
+      : keywordEntry.isSecondary
+        ? "secondary"
+        : "other"
+    : undefined;
 
   return {
     resultId: candidate.phoneNumber,
@@ -228,7 +293,7 @@ export function toProductResult(
     numberQualityScore: candidate.numberQualityScore,
     matchedWords: candidate.matchedWords,
     patterns: candidate.matchedPatterns,
-    businessMatchLabel: bmLabel,
+    businessMatchLabel: mode === "personal" ? memLabel : bmLabel,
     memorabilityLabel: memLabel,
     premiumPriceCents: price.premiumPriceCents,
     premiumPriceBand: price.band,
@@ -239,6 +304,15 @@ export function toProductResult(
     providerPremium,
     availabilityStatus: "available",
     listSection,
+    areaCode,
+    patternTypes,
+    lastFourPattern: candidate.personalPattern?.lastFourPattern,
+    fullNumberPattern: candidate.personalPattern?.fullNumberPattern,
+    personalTier: candidate.personalPattern?.tier,
+    matchedWord: displayWord,
+    keywordTier,
+    businessTier: mode === "business" ? price.displayLabel : undefined,
+    providerCostCents,
   };
 }
 
