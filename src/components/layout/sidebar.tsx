@@ -10,6 +10,7 @@ import {
 } from "@/lib/solutions-nav";
 import { smartRoutingFlowIdFromPath } from "@/lib/smart-routing/display";
 import { buildRealtorNav } from "@/lib/realtor/nav";
+import { buildPersonalNav } from "@/lib/workspace/personal-nav";
 import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
@@ -242,6 +243,7 @@ export function Sidebar({
   outcomeInstances = {},
   primaryVoiceAgentId = null,
   realtorMode = false,
+  personalMode = false,
   inboxBadge = 0,
   collapsed = false,
   onToggleCollapse,
@@ -254,6 +256,7 @@ export function Sidebar({
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
+  personalMode?: boolean;
   inboxBadge?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -267,6 +270,7 @@ export function Sidebar({
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
+    if (personalMode) return buildPersonalNav();
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
     const smartRoutingFlowId =
@@ -276,7 +280,7 @@ export function Sidebar({
       primarySmartRoutingFlowId: smartRoutingFlowId,
       inboxBadge,
     });
-  }, [primaryVoiceAgentId, pathname, realtorMode, inboxBadge]);
+  }, [primaryVoiceAgentId, pathname, realtorMode, personalMode, inboxBadge]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
@@ -302,7 +306,13 @@ export function Sidebar({
     >
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
         <Link
-          href={realtorMode ? "/realtor/dashboard" : "/outcomes"}
+          href={
+            realtorMode
+              ? "/realtor/dashboard"
+              : personalMode
+                ? "/personal"
+                : "/outcomes"
+          }
           className="flex items-start gap-2.5"
           onClick={onClose}
         >
@@ -316,7 +326,7 @@ export function Sidebar({
               </span>
               {!realtorMode ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  AI receptionist + SMS
+                  {personalMode ? "Your phone numbers" : "AI receptionist + SMS"}
                 </span>
               ) : null}
             </span>

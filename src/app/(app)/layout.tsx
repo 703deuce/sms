@@ -1,7 +1,7 @@
 import "./product-theme.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
-import { getActiveWorkspaceId, getSession } from "@/lib/auth";
+import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
 import { getMaintenanceState } from "@/lib/platform-flags";
@@ -26,6 +26,7 @@ export default async function AppLayout({
   }
 
   const workspaceId = await getActiveWorkspaceId();
+  const workspaceType = await getActiveWorkspaceType();
   const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow] = await Promise.all([
     loadShellData(session.userId, workspaceId),
     loadOutcomeInstances(workspaceId),
@@ -45,6 +46,7 @@ export default async function AppLayout({
       isAdmin={session.isAdmin}
       workspaceId={workspaceId}
       workspaceName={workspaceName}
+      workspaceType={workspaceType}
       workspaces={shell.workspaces}
       phoneNumbers={shell.phoneNumbers}
       metrics={shell.metrics}

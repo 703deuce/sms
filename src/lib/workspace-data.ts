@@ -27,10 +27,11 @@ export async function loadWorkspacesForUser(userId: string): Promise<Workspace[]
   const memberships = await getPrisma().membership.findMany({
     where: { userId },
     include: { workspace: true },
+    orderBy: { workspace: { createdAt: "asc" } },
   });
-  return (memberships as Array<{ workspace: { id: string; name: string; slug: string } }>).map((m) =>
-    mapWorkspace(m.workspace),
-  );
+  return (memberships as Array<{
+    workspace: { id: string; name: string; slug: string; type?: string };
+  }>).map((m) => mapWorkspace(m.workspace));
 }
 
 export type TeamMember = User & { membershipId: string };

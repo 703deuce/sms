@@ -10,15 +10,27 @@ import { usePathname } from "next/navigation";
 export function MobileNav({
   onMore,
   realtorMode = false,
+  personalMode = false,
 }: {
   onMore: () => void;
   realtorMode?: boolean;
+  personalMode?: boolean;
 }) {
   const pathname = usePathname();
-  const items = realtorMode ? buildRealtorMobileNav() : mobilePrimaryNav;
+  const items = realtorMode
+    ? buildRealtorMobileNav()
+    : personalMode
+      ? [
+          { label: "Home", href: "/personal", icon: mobilePrimaryNav[0].icon },
+          { label: "Numbers", href: "/personal/numbers", icon: mobilePrimaryNav[0].icon },
+          { label: "Find", href: "/personal/numbers/find", icon: mobilePrimaryNav[0].icon },
+          { label: "Vault", href: "/personal/vault", icon: mobilePrimaryNav[0].icon },
+        ]
+      : mobilePrimaryNav;
 
   return (
     <>
+      {!personalMode ? (
       <Link
         href={realtorMode ? "/realtor/test" : "/send"}
         className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:bg-primary-hover lg:hidden"
@@ -26,6 +38,7 @@ export function MobileNav({
       >
         <Send className="h-5 w-5" />
       </Link>
+      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-header/95 backdrop-blur lg:hidden">
         <div className="grid grid-cols-5 gap-1 px-1 py-1.5">

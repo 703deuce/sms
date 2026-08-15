@@ -1,7 +1,9 @@
 import { hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
+import type { WorkspaceType } from "@/lib/workspace/types";
 import {
   PHONE_VERIFIED_COOKIE,
   normalizePhone,
@@ -36,6 +38,7 @@ export async function POST(request: Request) {
       email?: string;
       password?: string;
       businessName?: string;
+      workspaceType?: WorkspaceType;
       phone?: string;
       stripePaymentMethodId?: string;
     };
@@ -68,10 +71,12 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hash(body.password, 10);
-    const businessName = (body.businessName || `${body.name}'s Workspace`).trim();
-    let slug = slugify(businessName);
-    const slugTaken = await prisma.workspace.findUnique({ where: { slug } });
-    if (slugTaken) slug = `${slug}-${Date.now().toString(36)}`;
+    const workspaceType: WorkspaceType =
+      body.workspaceType === "PERSONAL" ? "PERSONAL" : "BUSINESS";
+    const businessName =
+      workspaceType === "PERSONAL"
+        ? "Personal"
+        : (body.businessName || `${body.name}'s Workspace`).trim();
 
     let user;
     try {
@@ -98,28 +103,39 @@ export async function POST(request: Request) {
       });
     }
 
+    let slug =
+      workspaceType === "PERSONAL"
+        ? `personal-${user.id.slice(-10)}`
+        : slugify(businessName);
+    const slugTaken = await prisma.workspace.findUnique({ where: { slug } });
+    if (slugTaken) slug = `${slug}-${Date.now().toString(36)}`;
+
     const workspace = await prisma.workspace.create({
       data: {
         name: businessName,
         slug,
+        type: workspaceType,
+        ownerUserId: user.id,
         billingPlan: trial.requireCard ? "trial_pending_card" : "trial",
         creditBalanceCents: 0,
         memberships: {
           create: { userId: user.id, role: "OWNER" },
         },
-        messagingRegistration: {
-          create: {},
-        },
-        workspaceLimits: {
-          create: {
-            limits: {
-              dailyCap: trial.messages || 500,
-              maxNumbers: trial.numbers || 1,
-              trialDays: trial.days || 14,
-              requireCard: trial.requireCard,
-            },
-          },
-        },
+        ...(workspaceType === "BUSINESS"
+          ? {
+              messagingRegistration: { create: {} },
+              workspaceLimits: {
+                create: {
+                  limits: {
+                    dailyCap: trial.messages || 500,
+                    maxNumbers: trial.numbers || 1,
+                    trialDays: trial.days || 14,
+                    requireCard: trial.requireCard,
+                  },
+                },
+              },
+            }
+          : {}),
       },
     });
 
@@ -142,17 +158,18 @@ export async function POST(request: Request) {
       isAdmin: user.isPlatformAdmin,
     };
 
-    const res = NextResponse.json({ ok: true, workspace: workspace.name, workspaceId: workspace.id });
+    const res = NextResponse.json({
+      ok: true,
+      workspace: workspace.name,
+      workspaceId: workspace.id,
+      workspaceType,
+    });
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
       path: "/",
       sameSite: "lax",
     });
-    res.cookies.set(WORKSPACE_COOKIE, workspace.id, {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+    applyWorkspaceCookies(res, workspace.id, workspaceType);
     return res;
   } catch (err) {
     console.error("[auth/signup]", err);

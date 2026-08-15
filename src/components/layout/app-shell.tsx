@@ -6,8 +6,10 @@ import { RealtorHeader } from "@/components/realtor/realtor-header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { getPageTitle } from "@/lib/nav";
 import { getRealtorPageTitle } from "@/lib/realtor/nav";
+import { getPersonalPageTitle } from "@/lib/workspace/personal-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
+import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { usePathname } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -17,6 +19,7 @@ export function AppShell({
   isAdmin,
   workspaceId,
   workspaceName,
+  workspaceType = "BUSINESS",
   workspaces,
   phoneNumbers,
   metrics,
@@ -31,6 +34,7 @@ export function AppShell({
   isAdmin?: boolean;
   workspaceId?: string;
   workspaceName?: string;
+  workspaceType?: WorkspaceTypeCookie;
   workspaces?: Workspace[];
   phoneNumbers: PhoneNumber[];
   metrics: DashboardMetrics;
@@ -43,6 +47,7 @@ export function AppShell({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const personalMode = workspaceType === "PERSONAL" || pathname.startsWith("/personal");
   const hideChromeTitle =
     realtorMode &&
     (pathname.startsWith("/realtor/setup") ||
@@ -56,7 +61,9 @@ export function AppShell({
           pathname === "/agents" ||
           pathname.startsWith("/agents/")
         ? ""
-        : (realtorMode ? getRealtorPageTitle(pathname) : null) || getPageTitle(pathname);
+        : (realtorMode ? getRealtorPageTitle(pathname) : null) ||
+          (personalMode ? getPersonalPageTitle(pathname) : null) ||
+          getPageTitle(pathname);
 
   return (
     <div className="product-theme min-h-screen bg-background">
@@ -69,6 +76,7 @@ export function AppShell({
           outcomeInstances={outcomeInstances}
           primaryVoiceAgentId={primaryVoiceAgentId}
           realtorMode={realtorMode}
+          personalMode={personalMode}
           inboxBadge={unreadNotifications}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
@@ -92,6 +100,11 @@ export function AppShell({
           <Header
             title={title}
             userName={userName}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName || "Workspace"}
+            workspaceType={workspaceType}
+            workspaces={workspaces}
+            personalMode={personalMode}
             phoneNumbers={phoneNumbers}
             metrics={metrics}
             activeFromNumberId={activeFromNumberId}
@@ -101,7 +114,7 @@ export function AppShell({
         )}
         <main className="px-4 pb-28 pt-5 lg:px-6 lg:pb-8">{children}</main>
       </div>
-      <MobileNav realtorMode={realtorMode} onMore={() => setMenuOpen(true)} />
+      <MobileNav realtorMode={realtorMode} personalMode={personalMode} onMore={() => setMenuOpen(true)} />
     </div>
   );
 }

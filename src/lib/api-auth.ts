@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { canUseFeature } from "@/lib/workspace/capabilities";
+import type { WorkspaceFeature } from "@/lib/workspace/types";
 
 export async function requireSession() {
   const session = await getSession();
@@ -9,6 +11,35 @@ export async function requireSession() {
   }
   const workspaceId = await getActiveWorkspaceId();
   return { session, workspaceId };
+}
+
+/** Enforce business-only API surfaces for the active workspace. */
+export async function requireWorkspaceFeature(feature: WorkspaceFeature) {
+  const auth = await requireSession();
+  if ("error" in auth) return auth;
+  if (!auth.workspaceId) {
+    return { error: NextResponse.json({ error: "workspaceId required" }, { status: 400 }) };
+  }
+  try {
+    const workspace = await getPrisma().workspace.findUnique({
+      where: { id: auth.workspaceId },
+      select: { type: true },
+    });
+    const workspaceType = workspace?.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
+    if (!canUseFeature(workspaceType, feature)) {
+      return {
+        error: NextResponse.json(
+          { error: "This feature is not available in your current workspace." },
+          { status: 403 },
+        ),
+      };
+    }
+  } catch {
+    return {
+      error: NextResponse.json({ error: "Could not verify workspace" }, { status: 500 }),
+    };
+  }
+  return auth;
 }
 
 /**

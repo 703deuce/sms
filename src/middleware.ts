@@ -1,4 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  isBusinessOnlyPath,
+  isPersonalOnlyPath,
+} from "@/lib/workspace/capabilities";
+
+const WORKSPACE_TYPE_COOKIE = "transovo_workspace_type";
 
 const publicExact = new Set([
   "/",
@@ -112,8 +118,23 @@ export async function middleware(request: NextRequest) {
   // Logged-in users skip auth pages; landing (/) stays available for marketing/Telnyx review.
   if (session && authPages.has(pathname)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
+    url.pathname = wsType === "PERSONAL" ? "/personal" : "/outcomes";
     return NextResponse.redirect(url);
+  }
+
+  if (session && !isPublic) {
+    const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
+    if (wsType === "PERSONAL" && isBusinessOnlyPath(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/personal";
+      return NextResponse.redirect(url);
+    }
+    if (wsType === "BUSINESS" && isPersonalOnlyPath(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/outcomes";
+      return NextResponse.redirect(url);
+    }
   }
 
   return NextResponse.next();

@@ -1,6 +1,6 @@
 import type { Prisma } from "@/lib/domain";
 import { NextResponse } from "next/server";
-import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
+import { requireWorkspaceFeature, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
   buildSequenceForCategory,
@@ -12,7 +12,7 @@ import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence
 
 export async function GET() {
   try {
-    const auth = await requireSession();
+    const auth = await requireWorkspaceFeature("campaigns");
     if ("error" in auth) return auth.error;
     const campaigns = await getPrisma().campaign.findMany({
       where: { workspaceId: auth.workspaceId },
@@ -27,7 +27,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireWorkspaceFeature("campaigns");
     if ("error" in auth) return auth.error;
 
     const body = (await request.json()) as {
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
 /** Activate / pause / resume / cancel a campaign. */
 export async function PATCH(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireWorkspaceFeature("campaigns");
     if ("error" in auth) return auth.error;
 
     const body = (await request.json()) as {

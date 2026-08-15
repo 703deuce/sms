@@ -1,6 +1,8 @@
 "use client";
 
-import type { DashboardMetrics, PhoneNumber } from "@/lib/types";
+import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
+import type { WorkspaceTypeCookie } from "@/lib/auth";
+import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { formatNumber, formatPhone } from "@/lib/utils";
 import {
   Bell,
@@ -34,6 +36,11 @@ type NotificationItem = {
 export function Header({
   title,
   userName,
+  workspaceId,
+  workspaceName,
+  workspaceType = "BUSINESS",
+  workspaces = [],
+  personalMode = false,
   phoneNumbers,
   metrics,
   activeFromNumberId,
@@ -42,6 +49,11 @@ export function Header({
 }: {
   title: string;
   userName: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  workspaceType?: WorkspaceTypeCookie;
+  workspaces?: Workspace[];
+  personalMode?: boolean;
   phoneNumbers: PhoneNumber[];
   metrics: DashboardMetrics;
   activeFromNumberId?: string | null;
@@ -189,6 +201,14 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
+        <WorkspaceSwitcher
+          workspaceId={workspaceId}
+          workspaceName={workspaceName || "Workspace"}
+          workspaceType={workspaceType}
+          workspaces={workspaces}
+          className="shrink-0"
+        />
+
         {title ? (
           <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
             {title}
@@ -197,6 +217,7 @@ export function Header({
           <span className="shrink-0" aria-hidden />
         )}
 
+        {!personalMode ? (
         <div className="mx-auto hidden w-full max-w-[440px] flex-1 md:block" ref={searchRef}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -235,9 +256,10 @@ export function Header({
             ) : null}
           </div>
         </div>
+        ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          {phoneNumbers.length > 0 ? (
+          {!personalMode && phoneNumbers.length > 0 ? (
             <select
               className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"
               value={numberId}
@@ -252,6 +274,7 @@ export function Header({
             </select>
           ) : null}
 
+          {!personalMode ? (
           <Link
             href="/settings/billing"
             className="hidden h-9 items-center gap-1.5 rounded-full bg-violet-50 px-3 text-[12px] font-semibold text-violet-700 ring-1 ring-violet-100 hover:bg-violet-100 sm:inline-flex"
@@ -259,6 +282,7 @@ export function Header({
             <Coins className="h-3.5 w-3.5" />
             {formatNumber(metrics.creditsRemaining)} credits
           </Link>
+          ) : null}
 
           <div className="relative" ref={notifRef}>
             <button

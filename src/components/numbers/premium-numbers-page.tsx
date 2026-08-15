@@ -59,6 +59,7 @@ const PERSONAL_CHIPS: { id: PersonalPreference; label: string }[] = [
 
 type Props = {
   workspaceId: string;
+  initialMode?: SearchMode;
 };
 
 type CheckoutState = {
@@ -70,8 +71,8 @@ type CheckoutState = {
   expiresAt: string;
 };
 
-export function PremiumNumbersPageClient({ workspaceId }: Props) {
-  const [mode, setMode] = useState<SearchMode>("business");
+export function PremiumNumbersPageClient({ workspaceId, initialMode = "business" }: Props) {
+  const [mode, setMode] = useState<SearchMode>(initialMode);
   const [numberType, setNumberType] = useState<NumberType>("local");
   const [areaCodesInput, setAreaCodesInput] = useState("");
   const [tollFreePrefix, setTollFreePrefix] = useState<TollFreePrefix>("all");

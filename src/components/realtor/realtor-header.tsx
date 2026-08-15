@@ -103,7 +103,7 @@ export function RealtorHeader({
     setWorkspaceOpen(false);
     try {
       await fetch("/api/workspace", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId: id }),
       });

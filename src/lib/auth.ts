@@ -3,6 +3,9 @@ import { getPrisma } from "@/lib/db";
 
 export const SESSION_COOKIE = "transovo_session";
 export const WORKSPACE_COOKIE = "transovo_workspace";
+export const WORKSPACE_TYPE_COOKIE = "transovo_workspace_type";
+
+export type WorkspaceTypeCookie = "PERSONAL" | "BUSINESS";
 
 export type Session = {
   userId: string;
@@ -19,6 +22,25 @@ export async function getSession(): Promise<Session | null> {
     return JSON.parse(decodeURIComponent(raw)) as Session;
   } catch {
     return null;
+  }
+}
+
+export async function getActiveWorkspaceType(): Promise<WorkspaceTypeCookie> {
+  const jar = await cookies();
+  const fromCookie = jar.get(WORKSPACE_TYPE_COOKIE)?.value;
+  if (fromCookie === "PERSONAL" || fromCookie === "BUSINESS") return fromCookie;
+
+  const workspaceId = await getActiveWorkspaceId();
+  if (!workspaceId) return "BUSINESS";
+
+  try {
+    const row = await getPrisma().workspace.findUnique({
+      where: { id: workspaceId },
+      select: { type: true },
+    });
+    return row?.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
+  } catch {
+    return "BUSINESS";
   }
 }
 

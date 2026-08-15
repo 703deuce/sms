@@ -95,6 +95,11 @@ enum PaymentLinkStatus {
   canceled
 }
 
+enum WorkspaceType {
+  PERSONAL
+  BUSINESS
+}
+
 model User {
   id                  String       @id @default(cuid())
   email               String       @unique
@@ -116,14 +121,17 @@ model User {
   premiumNumberSearchLogs   PremiumNumberSearchLog[]
   inAppNotifications  InAppNotification[]
   invitesSent         WorkspaceInvite[] @relation("InviteSender")
+  ownedWorkspaces     Workspace[] @relation("WorkspaceOwner")
 
   @@index([phone])
 }
 
 model Workspace {
-  id                   String   @id @default(cuid())
+  id                   String        @id @default(cuid())
   name                 String
-  slug                 String   @unique
+  slug                 String        @unique
+  type                 WorkspaceType @default(BUSINESS)
+  ownerUserId          String?
   displayName          String?
   logoUrl              String?
   primaryColor         String?  @default("#0f766e")
@@ -280,6 +288,10 @@ model Workspace {
   smartRoutingAudioAssets SmartRoutingAudioAsset[]
   smartRoutingCallSessions SmartRoutingCallSession[]
   smartRoutingSmsConsentEvents SmartRoutingSmsConsentEvent[]
+  owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId])
+  @@index([type])
 }
 
 model SenderPool {

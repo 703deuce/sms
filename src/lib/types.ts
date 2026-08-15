@@ -32,6 +32,7 @@ export type Workspace = {
   id: string;
   name: string;
   slug: string;
+  type?: "PERSONAL" | "BUSINESS";
 };
 
 export type User = {

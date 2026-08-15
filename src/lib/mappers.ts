@@ -35,8 +35,15 @@ function titleCaseStatus(value: string): StatusChip {
   return map[value?.toUpperCase?.() || ""] || ((value || "Pending") as StatusChip);
 }
 
-export function mapWorkspace(w: { id: string; name: string; slug: string }): Workspace {
-  return { id: w.id, name: w.name, slug: w.slug };
+export function mapWorkspace(w: {
+  id: string;
+  name: string;
+  slug: string;
+  type?: string;
+}): Workspace {
+  const type =
+    w.type === "PERSONAL" || w.type === "BUSINESS" ? w.type : undefined;
+  return { id: w.id, name: w.name, slug: w.slug, type };
 }
 
 export function mapRole(role: string): User["role"] {
