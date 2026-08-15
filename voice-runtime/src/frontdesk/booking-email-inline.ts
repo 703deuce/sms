@@ -11,8 +11,9 @@ import { speakBeforeTaskHandoff } from "../task-async-work-bridge";
 import {
   formatToolFeedbackForModel,
   toolFeedbackInvalidEmail,
+  toolFeedbackRecoverable,
   toolFeedbackSuccess,
-} from "../tool-feedback";
+} from "@/lib/voice/tool-feedback";
 import type { FrontDeskUserData } from "./userdata";
 
 export class BookingEmailTimeoutError extends Error {
@@ -144,11 +145,26 @@ export function buildDeclineBookingEmailTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       if (!ud.bookingEmailWaiter) {
-        throw new llm.ToolError("No active booking email collection.");
+        return formatToolFeedbackForModel(
+          toolFeedbackRecoverable({
+            tool: "decline_booking_email",
+            recovery_class: "MISSING_INFORMATION",
+            reason: "email_declined",
+            field_id: "email",
+            next_action: "take_message",
+            guidance:
+              "Caller declined email. Explain the calendar needs email for invites, or offer take_message.",
+          }),
+        );
       }
       ud.draftEmail = undefined;
       resolveBookingEmailWaiter(ud, { email: "", declined: true });
-      return `Caller declined email (${reason}).`;
+      return formatToolFeedbackForModel(
+        toolFeedbackSuccess(`Caller declined email (${reason}). Offer take_message or callback.`, {
+          tool: "decline_booking_email",
+          next_action: "take_message",
+        }),
+      );
     },
   });
 }

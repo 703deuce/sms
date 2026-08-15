@@ -15,7 +15,7 @@ import { findBookingPrerequisiteGaps } from "../voice-runtime/src/frontdesk/book
 import {
   formatToolFeedbackForModel,
   toolFeedbackMissingEmail,
-} from "../voice-runtime/src/tool-feedback";
+} from "../src/lib/voice/tool-feedback";
 import {
   isCalendlyMissingFieldError,
   missingFieldIdFromBookingError,

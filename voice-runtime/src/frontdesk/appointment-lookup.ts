@@ -3,6 +3,12 @@ import { getPrisma } from "@/lib/db";
 import type { FrontDeskUserData } from "./userdata";
 import { isBookingConfirmed } from "./userdata";
 import { formatBookedTimeLabel } from "./booking-recovery";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackRecoverable,
+  toolFeedbackTerminal,
+  type ToolFeedback,
+} from "@/lib/voice/tool-feedback";
 
 export type AppointmentRow = {
   id: string;
@@ -11,6 +17,10 @@ export type AppointmentRow = {
   externalId: string | null;
   metadata?: unknown;
 };
+
+export type AppointmentResolveResult =
+  | { ok: true; appointment: AppointmentRow }
+  | { ok: false; feedback: ToolFeedback };
 
 async function activeFutureAppointmentsForCaller(
   workspaceId: string,
@@ -36,6 +46,85 @@ async function activeFutureAppointmentsForCaller(
     orderBy: { startsAt: "asc" },
     select: { id: true, callId: true, startsAt: true, externalId: true, metadata: true },
   });
+}
+
+function appointmentLookupFeedback(
+  tool: string,
+  guidance: string,
+  extra?: Partial<ToolFeedback>,
+): ToolFeedback {
+  return toolFeedbackRecoverable({
+    tool,
+    recovery_class: "RESOURCE_UNAVAILABLE",
+    reason: "appointment_not_found",
+    next_action: "none",
+    guidance,
+    ...extra,
+  });
+}
+
+export async function tryResolveFrontDeskAppointment(
+  ud: FrontDeskUserData,
+  appointment_id?: string,
+  action: "cancel" | "reschedule" = "cancel",
+): Promise<AppointmentResolveResult> {
+  const toolName = action === "reschedule" ? "reschedule_appointment" : "cancel_appointment";
+  try {
+    const appointment = await resolveFrontDeskAppointment(ud, appointment_id, action);
+    return { ok: true, appointment };
+  } catch (err) {
+    if (err instanceof llm.ToolError) {
+      const message = err.message;
+      if (/Multiple upcoming appointments/i.test(message)) {
+        return {
+          ok: false,
+          feedback: toolFeedbackRecoverable({
+            tool: toolName,
+            recovery_class: "INVALID_INFORMATION",
+            reason: "ambiguous_appointment",
+            next_action: "collect_field_then_retry",
+            guidance: message,
+          }),
+        };
+      }
+      if (/did not complete/i.test(message)) {
+        return {
+          ok: false,
+          feedback: toolFeedbackRecoverable({
+            tool: toolName,
+            recovery_class: "RESOURCE_UNAVAILABLE",
+            reason: "no_booking_on_call",
+            next_action: "list_slots_then_retry",
+            guidance:
+              "No booking completed on this call. Do not claim cancel/reschedule succeeded. " +
+              "Offer to book with list_available_slots or check other visits on file.",
+          }),
+        };
+      }
+      return {
+        ok: false,
+        feedback: appointmentLookupFeedback(toolName, message, {
+          next_action: action === "cancel" ? "take_message" : "list_slots_then_retry",
+        }),
+      };
+    }
+    return {
+      ok: false,
+      feedback: toolFeedbackTerminal({
+        tool: toolName,
+        recovery_class: "UNKNOWN_FAILURE",
+        reason: "lookup_failed",
+        next_action: "take_message",
+        guidance: "Could not find that appointment. Offer take_message or try again.",
+      }),
+    };
+  }
+}
+
+export function formatAppointmentResolveFailure(
+  result: AppointmentResolveResult & { ok: false },
+): string {
+  return formatToolFeedbackForModel(result.feedback);
 }
 
 export async function resolveFrontDeskAppointment(

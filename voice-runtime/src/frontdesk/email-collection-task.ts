@@ -7,6 +7,10 @@ import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../tasks/ta
 import { POST_EMAIL_BOOKING_FILLER } from "../booking-completion-messages";
 import { speakBeforeTaskHandoff } from "../task-async-work-bridge";
 import {
+  formatToolFeedbackForModel,
+  toolFeedbackInvalidEmail,
+} from "@/lib/voice/tool-feedback";
+import {
   markFirstReplyRequested,
   markTaskExitFinished,
   markTaskExitStarted,
@@ -52,7 +56,7 @@ export class EmailCollectionTask extends voice.AgentTask<EmailCollectionResult> 
               execute: async ({ email }) => {
                 const normalized = normalizeSpokenEmail(email);
                 if (!isValidEmail(normalized)) {
-                  throw new llm.ToolError(`Invalid email: ${email}`);
+                  return formatToolFeedbackForModel(toolFeedbackInvalidEmail(email));
                 }
                 this.sessionRef.userData.confirmedEmail = normalized;
                 this.sessionRef.userData.draftEmail = undefined;

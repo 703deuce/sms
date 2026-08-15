@@ -2,6 +2,7 @@ import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types"
 import type { AmyRealtimeSession } from "@/lib/voice/realtime-session/types";
 import type { WorkflowState } from "@/lib/voice/workflow-engine/types";
 import type { DomainActionResult } from "./booking-actions";
+import { formatDomainResultForModel } from "@/lib/voice/tool-feedback";
 
 export type ModelFieldRef = {
   id: string;
@@ -161,6 +162,18 @@ export function formatModelToolResult(
 
   if (result.data?.nextAction) {
     payload.nextAction = result.data.nextAction;
+  }
+
+  if (options?.toolName) {
+    payload.tool_feedback = formatDomainResultForModel(
+      {
+        ok: result.ok,
+        speak: result.speak,
+        error_code: result.error_code,
+        data: result.data as Record<string, unknown> | undefined,
+      },
+      options.toolName,
+    );
   }
 
   return payload;

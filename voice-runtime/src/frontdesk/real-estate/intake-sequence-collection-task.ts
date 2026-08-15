@@ -18,6 +18,11 @@ import {
 } from "../../task-transition-instrumentation";
 import { agentTaskSuperOptions, nestedTaskOptionsFromSession } from "../../tasks/task-context";
 import type { FrontDeskUserData } from "../userdata";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackMissingCallerField,
+  toolFeedbackRecoverable,
+} from "@/lib/voice/tool-feedback";
 
 export type IntakeSequenceCollectionResult = {
   collected: string[];
@@ -88,12 +93,28 @@ export class IntakeSequenceCollectionTask extends voice.AgentTask<IntakeSequence
           return "All intake fields are already collected.";
         }
         if (!trimmed) {
-          throw new llm.ToolError(`Please provide your ${current.label}.`);
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "record_schema_field_value",
+              fieldId: current.field_id,
+              fieldLabel: current.label,
+            }),
+          );
         }
 
         const saved = await handlers.onRecordField(current, trimmed);
         if (!saved.ok) {
-          throw new llm.ToolError("I couldn't save that.");
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "record_schema_field_value",
+              recovery_class: "INVALID_INFORMATION",
+              reason: "save_failed",
+              field_id: current.field_id,
+              field_label: current.label,
+              next_action: "collect_field_then_retry",
+              guidance: "That didn't save — ask for the answer again naturally.",
+            }),
+          );
         }
         if (!sequenceState.collectedIds.includes(current.field_id)) {
           sequenceState.collectedIds.push(current.field_id);
@@ -132,12 +153,29 @@ export class IntakeSequenceCollectionTask extends voice.AgentTask<IntakeSequence
               }),
               execute: async ({ field_id, value }) => {
                 const trimmed = value.trim();
+                const field = optional.find((f) => f.field_id === field_id);
                 if (!trimmed) {
-                  throw new llm.ToolError("Please provide a value for that field.");
+                  return formatToolFeedbackForModel(
+                    toolFeedbackMissingCallerField({
+                      tool: "record_additional_intake_field",
+                      fieldId: field_id,
+                      fieldLabel: field?.label || field_id,
+                    }),
+                  );
                 }
                 const saved = await handlers.onRecordAdditionalField!(field_id, trimmed);
                 if (!saved.ok) {
-                  throw new llm.ToolError("I couldn't save that.");
+                  return formatToolFeedbackForModel(
+                    toolFeedbackRecoverable({
+                      tool: "record_additional_intake_field",
+                      recovery_class: "INVALID_INFORMATION",
+                      reason: "save_failed",
+                      field_id,
+                      field_label: field?.label || field_id,
+                      next_action: "collect_field_then_retry",
+                      guidance: "Ask for that detail again naturally.",
+                    }),
+                  );
                 }
                 return "OK";
               },

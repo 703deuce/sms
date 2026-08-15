@@ -17,6 +17,11 @@ import {
   markTaskOnEnterStarted,
   markTaskStarted,
 } from "../../task-transition-instrumentation";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackMissingCallerField,
+  toolFeedbackRecoverable,
+} from "@/lib/voice/tool-feedback";
 
 export type ReceptionistFieldCollectionResult = {
   collected: string[];
@@ -112,7 +117,13 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
         const current = currentField();
         if (!current) return "All fields are already collected.";
         if (!trimmed) {
-          throw new llm.ToolError(`Please provide your ${current.label}.`);
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "record_caller_field",
+              fieldId: current.id,
+              fieldLabel: current.label,
+            }),
+          );
         }
 
         let normalized: string;
@@ -120,7 +131,17 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
           normalized = validateReceptionistFieldValue(current, trimmed);
         } catch (err) {
           const message = err instanceof Error ? err.message : `Please provide your ${current.label}.`;
-          throw new llm.ToolError(message);
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "record_caller_field",
+              recovery_class: "INVALID_INFORMATION",
+              reason: "validation_failed",
+              field_id: current.id,
+              field_label: current.label,
+              next_action: "collect_field_then_retry",
+              guidance: message,
+            }),
+          );
         }
 
         const ud = sessionRef.userData;

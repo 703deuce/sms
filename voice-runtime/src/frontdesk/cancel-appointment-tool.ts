@@ -2,7 +2,7 @@ import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
-import { guardCalendarTool } from "./booking-operation-guard";
+import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { markBookingOperationCancelled } from "./booking-operation";
 import { markBookingCancelled, type FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
@@ -11,11 +11,19 @@ import {
   cancelCalendlyEventResilient,
   formatBookedTimeLabel,
 } from "./booking-recovery";
-import { resolveFrontDeskAppointment } from "./appointment-lookup";
+import {
+  formatAppointmentResolveFailure,
+  tryResolveFrontDeskAppointment,
+} from "./appointment-lookup";
 import { speakBookingLine } from "./booking-speech";
 import { POST_CANCEL_FILLER } from "../booking-completion-messages";
-import { bookingFailureReason } from "../booking-error";
 import { syncFrontDeskCancelToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackFromBookingWriteError,
+  toolFeedbackRecoverable,
+  toolFeedbackSuccess,
+} from "@/lib/voice/tool-feedback";
 
 function externalEventUri(externalId: string | null | undefined): string | null {
   if (!externalId) return null;
@@ -23,11 +31,6 @@ function externalEventUri(externalId: string | null | undefined): string | null 
   return raw.trim() || null;
 }
 
-/**
- * Cancel the caller's upcoming appointment (Calendly + DB).
- * Prefers appointments booked on the current call; never silently cancels an older visit
- * when this call has no completed booking.
- */
 export function buildFrontDeskCancelAppointmentTool() {
   return llm.tool({
     name: "cancel_appointment",
@@ -44,94 +47,113 @@ export function buildFrontDeskCancelAppointmentTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
 
-      guardCalendarTool(ud, "cancel_appointment");
+      const blocked = calendarToolGuardFeedback(ud, "cancel_appointment");
+      if (blocked) return formatToolFeedbackForModel(blocked);
 
       if (!confirmed) {
-        return "Ask the caller to confirm before cancelling.";
+        return formatToolFeedbackForModel(
+          toolFeedbackRecoverable({
+            tool: "cancel_appointment",
+            recovery_class: "MISSING_INFORMATION",
+            reason: "confirmation_required",
+            next_action: "none",
+            guidance: "Ask the caller to confirm before cancelling.",
+          }),
+        );
       }
+
+      const resolved = await tryResolveFrontDeskAppointment(ud, appointment_id, "cancel");
+      if (!resolved.ok) {
+        return formatAppointmentResolveFailure(resolved);
+      }
+      const appointment = resolved.appointment;
 
       return withLiveKitToolTelemetry(
         ud,
         "cancel_appointment",
         { appointment_id, confirmed },
         async () => {
-          const appointment = await resolveFrontDeskAppointment(ud, appointment_id, "cancel");
-          const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
-          const fromThisCall = appointment.callId === ud.callId;
+          try {
+            const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
+            const fromThisCall = appointment.callId === ud.callId;
 
-          await runAsyncWorkWithBridge(session, POST_CANCEL_FILLER, async () => {
-            const eventUri = externalEventUri(appointment.externalId);
-            if (eventUri) {
-              try {
+            await runAsyncWorkWithBridge(session, POST_CANCEL_FILLER, async () => {
+              const eventUri = externalEventUri(appointment.externalId);
+              if (eventUri) {
                 await cancelCalendlyEventResilient({
                   workspaceId: ud.workspaceId,
                   eventUri,
                   reason: "Canceled by caller on phone",
                 });
-              } catch (err) {
-                console.warn(
-                  JSON.stringify({
-                    source: "frontdesk-cancel",
-                    event: "calendly_cancel_failed",
-                    callId: ud.callId,
-                    appointmentId: appointment.id,
-                    error: err instanceof Error ? err.message : String(err),
-                  }),
-                );
-                throw new llm.ToolError(bookingFailureReason(err));
               }
-            }
 
-            const prisma = getPrisma();
-            await prisma.voiceAppointment.update({
-              where: { id: appointment.id },
-              data: { status: "cancelled" },
+              const prisma = getPrisma();
+              await prisma.voiceAppointment.update({
+                where: { id: appointment.id },
+                data: { status: "cancelled" },
+              });
+
+              if (fromThisCall) {
+                markBookingCancelled(ud);
+                markBookingOperationCancelled(ud, "appointment_cancelled");
+                await prisma.voiceCall
+                  .update({
+                    where: { id: ud.callId },
+                    data: { appointmentBooked: false, outcome: "appointment_cancelled" },
+                  })
+                  .catch(() => undefined);
+              }
             });
 
+            const line = `Your appointment for ${when} has been cancelled.`;
+            await speakBookingLine(session, line);
+
+            void syncFrontDeskCancelToCrm({
+              workspaceId: ud.workspaceId,
+              callId: ud.callId,
+              appointmentId: appointment.id,
+            }).catch(() => undefined);
+
             if (fromThisCall) {
-              markBookingCancelled(ud);
-              markBookingOperationCancelled(ud, "appointment_cancelled");
-              await prisma.voiceCall
-                .update({
-                  where: { id: ud.callId },
-                  data: { appointmentBooked: false, outcome: "appointment_cancelled" },
-                })
-                .catch(() => undefined);
+              return formatToolFeedbackForModel(
+                toolFeedbackSuccess(
+                  "Cancellation already spoken. Do not repeat. Ask if they need anything else or end_call.",
+                  {
+                    tool: "cancel_appointment",
+                    caller_already_heard_success: true,
+                    context: { appointment_id: appointment.id, when },
+                  },
+                ),
+              );
             }
-          });
-
-          const line = `Your appointment for ${when} has been cancelled.`;
-          await speakBookingLine(session, line);
-
-          void syncFrontDeskCancelToCrm({
-            workspaceId: ud.workspaceId,
-            callId: ud.callId,
-            appointmentId: appointment.id,
-          }).catch((err) => {
+            return formatToolFeedbackForModel(
+              toolFeedbackSuccess(
+                `${line} That visit was from an earlier call, not the booking on this call.`,
+                { tool: "cancel_appointment", context: { appointment_id: appointment.id } },
+              ),
+            );
+          } catch (err) {
             console.warn(
               JSON.stringify({
                 source: "frontdesk-cancel",
-                event: "crm_sync_failed",
+                event: "cancel_failed",
                 callId: ud.callId,
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-          });
-
-          if (fromThisCall) {
-            return (
-              "CANCEL_COMPLETE_ALREADY_SPOKEN: The cancellation was already spoken to the caller. " +
-              "Do not repeat the details. Ask if they need anything else or call end_call."
+            await speakBookingLine(session, "I'm sorry — I couldn't cancel that on the calendar.");
+            return formatToolFeedbackForModel(
+              toolFeedbackFromBookingWriteError(err, {
+                tool: "cancel_appointment",
+                slotId: appointment.id,
+                callerAlreadyHeardFailure: true,
+              }),
             );
           }
-          return (
-            `${line} Note: that visit was from an earlier call, not the booking on this call.`
-          );
         },
       );
     },
   });
 }
 
-// Re-export for tests and reschedule tool.
-export { resolveFrontDeskAppointment } from "./appointment-lookup";
+export { resolveFrontDeskAppointment, tryResolveFrontDeskAppointment } from "./appointment-lookup";

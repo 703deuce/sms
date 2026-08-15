@@ -15,8 +15,10 @@ import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
   formatToolFeedbackForModel,
+  formatGatewayResultForModel,
   toolFeedbackMissingCallerField,
-} from "../../tool-feedback";
+  toolFeedbackSuccess,
+} from "@/lib/voice/tool-feedback";
 import { ReceptionistFieldCollectionTask, speakReceptionistCollectionLine } from "./field-collection-task";
 import { buildReceptionistCollectionToolResult } from "./field-collection-lifecycle";
 import { markParentResumed } from "../../task-transition-instrumentation";
@@ -136,10 +138,11 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
           preferred_callback: args.preferred_callback?.trim() || undefined,
           notes: args.notes,
         });
-        return (
-          "Message recorded. Tell the caller someone from the team will follow up once — " +
-          "do not repeat the callback script. If they change their mind and want to book, " +
-          "proceed with booking using collect_caller_fields with purpose booking."
+        return formatToolFeedbackForModel(
+          toolFeedbackSuccess(
+            "Message recorded. Tell the caller someone will follow up once — do not repeat the callback script.",
+            { tool: "take_message" },
+          ),
         );
       });
     },
@@ -171,7 +174,14 @@ function buildSendSmsTool() {
           callerE164: ud.callerE164,
         });
         if (!to) {
-          throw new llm.ToolError("No phone number available to send a text.");
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "send_sms",
+              fieldId: "phone",
+              fieldLabel: "phone number",
+              hint: "Ask for the phone number to text — do not say SMS failed.",
+            }),
+          );
         }
         const result = await executeAgentTool({
           toolType: "send_sms",
@@ -182,10 +192,7 @@ function buildSendSmsTool() {
           },
           raw: { message, phone: to },
         });
-        if (result.ok === false || result.error) {
-          throw new llm.ToolError(String(result.error || "SMS failed"));
-        }
-        return "Text message sent.";
+        return formatGatewayResultForModel(result, "send_sms");
       });
     },
   });

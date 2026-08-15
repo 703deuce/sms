@@ -9,7 +9,9 @@ import {
   toolFeedbackMissingEmail,
   toolFeedbackRecoverable,
   toolFeedbackSuccess,
-} from "../voice-runtime/src/tool-feedback";
+} from "../src/lib/voice/tool-feedback";
+import { toolSuccess, toLegacyVoiceShape } from "../src/lib/voice/agent-tool-gateway/envelope";
+import { AgentToolError, failResult } from "../src/lib/voice/agent-tool-gateway/errors";
 
 const emailFb = toolFeedbackMissingEmail({ tool: "schedule_appointment", slotId: "ST_abc" });
 assert.equal(emailFb.outcome, "recoverable_failure");
@@ -44,5 +46,20 @@ const recoverable = toolFeedbackRecoverable({
   guidance: "Offer to take a message.",
 });
 assert.equal(recoverable.outcome, "recoverable_failure");
+
+const legacyOk = toLegacyVoiceShape(
+  toolSuccess({
+    status: "confirmed",
+    data: { tool: "book_appointment" },
+    user_message: "Booked.",
+  }),
+);
+assert.ok(typeof legacyOk.tool_feedback === "string");
+assert.match(String(legacyOk.tool_feedback), /TOOL_FEEDBACK: success/);
+
+const legacyFail = toLegacyVoiceShape(
+  failResult(new AgentToolError("MISSING_REQUIRED_FIELD", "need email", false, "Need email"), "op1"),
+);
+assert.match(String(legacyFail.tool_feedback), /recoverable_failure|MISSING_INFORMATION/);
 
 console.log("tool feedback tests: PASS");

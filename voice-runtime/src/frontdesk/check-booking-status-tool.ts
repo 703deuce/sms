@@ -8,6 +8,12 @@ import {
 } from "./booking-recovery";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import { isBookingConfirmed, markBookingConfirmed, type FrontDeskUserData } from "./userdata";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackRecoverable,
+  toolFeedbackSuccess,
+  toolFeedbackTerminal,
+} from "@/lib/voice/tool-feedback";
 
 async function appointmentOnThisCall(
   ud: FrontDeskUserData,
@@ -24,9 +30,6 @@ async function appointmentOnThisCall(
   });
 }
 
-/**
- * Lets the agent verify whether a booking completed — for callers waiting during/after Calendly writes.
- */
 export function buildFrontDeskCheckBookingStatusTool() {
   return llm.tool({
     name: "check_booking_status",
@@ -42,32 +45,55 @@ export function buildFrontDeskCheckBookingStatusTool() {
         if (isBookingConfirmed(ud)) {
           const when =
             ud.booking?.bookedTimeLabel || ud.bookedTimeLabel || "the time you chose";
-          return (
-            `confirmed: The appointment IS confirmed for ${when}. ` +
-            "Tell the caller confidently they are all set and a confirmation text was sent. " +
-            "Do not sound uncertain or say you are still checking."
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              `Appointment IS confirmed for ${when}. Tell the caller confidently they are all set.`,
+              {
+                tool: "check_booking_status",
+                caller_already_heard_success: true,
+                context: { booked_time_label: when },
+              },
+            ),
           );
         }
 
         if (ud.bookingInProgress) {
-          return (
-            "pending: The calendar write is still finishing. " +
-            "Tell the caller you're putting it on the calendar and ask them to hold one moment, " +
-            "then call check_booking_status again."
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "check_booking_status",
+              recovery_class: "OPERATION_IN_PROGRESS",
+              reason: "writing_calendar",
+              next_action: "check_booking_status",
+              guidance:
+                "Calendar write still finishing. Tell the caller to hold one moment, then call check_booking_status again.",
+            }),
           );
         }
 
         const opState = ud.bookingOperation?.state;
         if (opState === "collecting_email") {
-          return (
-            "pending: Still collecting email for the calendar invite. " +
-            "Ask the caller for their email, then use record_booking_email when they confirm it."
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "check_booking_status",
+              recovery_class: "MISSING_INFORMATION",
+              reason: "missing_email",
+              field_id: "email",
+              next_action: "collect_email_then_retry",
+              guidance:
+                "Still need email for the invite. Ask for email and use record_booking_email.",
+            }),
           );
         }
         if (opState === "failed") {
-          return (
-            `failed: Booking did not complete (${ud.bookingOperation?.errorReason ?? "unknown"}). ` +
-            "Do not claim the caller is booked. Offer list_available_slots or take_message."
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "check_booking_status",
+              recovery_class: "UNKNOWN_FAILURE",
+              reason: ud.bookingOperation?.errorReason ?? "booking_failed",
+              next_action: "list_slots_then_retry",
+              guidance:
+                "Booking did not complete. Do not claim they are booked. Offer list_available_slots or take_message.",
+            }),
           );
         }
 
@@ -79,9 +105,11 @@ export function buildFrontDeskCheckBookingStatusTool() {
             providerEventId: row.externalId || undefined,
             bookedTimeLabel: when,
           });
-          return (
-            `confirmed: The appointment is confirmed for ${when}. ` +
-            "Tell the caller they're all set and a confirmation text was sent."
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              `Appointment is confirmed for ${when}. Tell the caller they're all set.`,
+              { tool: "check_booking_status", context: { appointment_id: row.id } },
+            ),
           );
         }
 
@@ -102,24 +130,37 @@ export function buildFrontDeskCheckBookingStatusTool() {
               providerEventId: appt.externalId || undefined,
               bookedTimeLabel: when,
             });
-            return (
-              `confirmed: The appointment is confirmed for ${when}. ` +
-              "Tell the caller they're all set and a confirmation text was sent."
+            return formatToolFeedbackForModel(
+              toolFeedbackSuccess(
+                `Appointment is confirmed for ${when}. Tell the caller they're all set.`,
+                { tool: "check_booking_status", context: { appointment_id: appt.id } },
+              ),
             );
           }
         }
 
         if (ud.pendingSlotId && ud.confirmedEmail) {
-          return (
-            "pending: The calendar booking is still processing. " +
-            "Tell the caller you're still putting it on the calendar and to hold for a moment, " +
-            "then call check_booking_status again in a few seconds."
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "check_booking_status",
+              recovery_class: "OPERATION_IN_PROGRESS",
+              reason: "pending_write",
+              next_action: "check_booking_status",
+              guidance:
+                "Booking still processing. Ask caller to hold, then check_booking_status again shortly.",
+            }),
           );
         }
 
-        return (
-          "not_found: No confirmed appointment on file for this call yet. " +
-          "Do not claim a booking succeeded. Offer to try schedule_appointment again or list_available_slots."
+        return formatToolFeedbackForModel(
+          toolFeedbackTerminal({
+            tool: "check_booking_status",
+            recovery_class: "RESOURCE_UNAVAILABLE",
+            reason: "not_found",
+            next_action: "list_slots_then_retry",
+            guidance:
+              "No confirmed appointment on this call yet. Offer schedule_appointment or list_available_slots.",
+          }),
         );
       });
     },

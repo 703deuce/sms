@@ -18,6 +18,10 @@ import { parseLocalContactIdFromSafeId } from "@/lib/voice/real-estate/contact-i
 import type { FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
+  formatToolFeedbackForModel,
+  toolFeedbackTerminal,
+} from "@/lib/voice/tool-feedback";
+import {
   INTAKE_INTENTS,
   startIntakeSequenceFromTools,
   TOOL_RESULT_INTAKE_ACTIVE_SILENT,
@@ -68,7 +72,15 @@ export function buildRealEstateIntentTools() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       if (!ud.callState) {
-        throw new llm.ToolError("Call state not initialized.");
+        return formatToolFeedbackForModel(
+          toolFeedbackTerminal({
+            tool: "set_intent",
+            recovery_class: "UNKNOWN_FAILURE",
+            reason: "call_state_missing",
+            next_action: "take_message",
+            guidance: "Session not ready — take a message for the team.",
+          }),
+        );
       }
       return withLiveKitToolTelemetry(ud, "set_intent", { intent }, async () => {
         if (!isIntentEnabled(intent)) {
@@ -106,7 +118,15 @@ export function buildRealEstateIntentTools() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       if (!ud.callState) {
-        throw new llm.ToolError("Call state not initialized.");
+        return formatToolFeedbackForModel(
+          toolFeedbackTerminal({
+            tool: "add_secondary_intent",
+            recovery_class: "UNKNOWN_FAILURE",
+            reason: "call_state_missing",
+            next_action: "take_message",
+            guidance: "Session not ready — take a message for the team.",
+          }),
+        );
       }
       return withLiveKitToolTelemetry(ud, "add_secondary_intent", { intent }, async () => {
         if (!isIntentEnabled(intent)) {
@@ -139,7 +159,15 @@ export function buildRealEstateCollectRequiredFieldsTool() {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       if (!ud.callState) {
-        throw new llm.ToolError("Call state not initialized.");
+        return formatToolFeedbackForModel(
+          toolFeedbackTerminal({
+            tool: "collect_required_fields",
+            recovery_class: "UNKNOWN_FAILURE",
+            reason: "call_state_missing",
+            next_action: "take_message",
+            guidance: "Session not ready — take a message for the team.",
+          }),
+        );
       }
       return withLiveKitToolTelemetry(ud, "collect_required_fields", {}, async () => {
         if (ud.intakeSequenceActive) {

@@ -1,4 +1,5 @@
 import type { AgentToolResult, AgentToolStatus } from "./types";
+import { formatGatewayResultForModel } from "@/lib/voice/tool-feedback";
 
 export function toolSuccess<T extends Record<string, unknown>>(input: {
   status: AgentToolStatus;
@@ -22,7 +23,8 @@ export function toolSuccess<T extends Record<string, unknown>>(input: {
 
 /** Map gateway envelope to legacy builtin-actions shape Telnyx already consumes. */
 export function toLegacyVoiceShape(result: AgentToolResult): Record<string, unknown> {
-  return {
+  const toolName = String((result.data as { tool?: string } | undefined)?.tool || "gateway_tool");
+  const legacy = {
     ok: result.ok,
     success: result.success,
     status: result.status,
@@ -37,4 +39,6 @@ export function toLegacyVoiceShape(result: AgentToolResult): Record<string, unkn
       ? {}
       : { error: result.user_message || "Tool failed" }),
   };
+  legacy.tool_feedback = formatGatewayResultForModel(result, toolName);
+  return legacy;
 }
