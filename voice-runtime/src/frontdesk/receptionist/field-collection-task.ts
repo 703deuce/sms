@@ -71,6 +71,7 @@ export class ReceptionistFieldCollectionTask extends voice.AgentTask<Receptionis
         chatCtx: sessionRef.chatCtx,
         manifest: fields,
         receptionistFields: ud.receptionistFields,
+        authoritativeFieldIds: ud.authoritativeFieldIds,
       });
     };
 

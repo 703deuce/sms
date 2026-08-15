@@ -169,12 +169,24 @@ export function applyReceptionistFieldBackfill(input: {
   chatCtx: ChatContext;
   manifest: AgentFieldDefinition[];
   receptionistFields: Record<string, string>;
+  authoritativeFieldIds?: string[];
 }): Record<string, string> {
   const utterances = userUtterancesFromChatCtx(input.chatCtx);
+  const locked = new Set(input.authoritativeFieldIds ?? []);
+  const receptionistFields = { ...input.receptionistFields };
+  for (const fieldId of locked) {
+    const value = input.receptionistFields[fieldId]?.trim();
+    if (value) receptionistFields[fieldId] = value;
+  }
   const backfill = heuristicReceptionistFieldBackfill(
     utterances,
     input.manifest,
-    input.receptionistFields,
+    receptionistFields,
   );
-  return { ...input.receptionistFields, ...backfill };
+  const merged = { ...receptionistFields, ...backfill };
+  for (const fieldId of locked) {
+    const authoritative = input.receptionistFields[fieldId]?.trim();
+    if (authoritative) merged[fieldId] = authoritative;
+  }
+  return merged;
 }

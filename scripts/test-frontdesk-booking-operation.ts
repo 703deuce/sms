@@ -7,10 +7,13 @@ import {
   calendarToolBlockedReason,
   beginBookingOperation,
   canStartScheduleAppointment,
+  finalizeScheduleAppointmentAttempt,
   isBookingOperationActive,
   markBookingOperationConfirmed,
   markBookingOperationFailed,
+  resetBookingOperationForRetry,
 } from "../voice-runtime/src/frontdesk/booking-operation";
+import { markBookingConfirmed } from "../voice-runtime/src/frontdesk/userdata";
 import { findBookingPrerequisiteGaps } from "../voice-runtime/src/frontdesk/booking-prerequisites";
 import {
   formatToolFeedbackForModel,
@@ -49,6 +52,24 @@ markBookingOperationConfirmed(ud);
 assert.equal(ud.bookingOperation?.state, "confirmed");
 assert.equal(isBookingOperationActive(ud), false);
 assert.equal(canStartScheduleAppointment(ud), true);
+
+const udConfirmed = baseUserData();
+beginBookingOperation(udConfirmed, "ST_ok");
+udConfirmed.bookingInProgress = true;
+markBookingConfirmed(udConfirmed, {
+  slotId: "ST_ok",
+  bookedTimeLabel: "Monday 9 AM",
+});
+finalizeScheduleAppointmentAttempt(udConfirmed);
+assert.equal(udConfirmed.bookingOperation?.state, "confirmed");
+assert.notEqual(udConfirmed.bookingOperation?.errorReason, "booking_interrupted");
+
+const udRetry = baseUserData();
+beginBookingOperation(udRetry, "ST_fail");
+markBookingOperationFailed(udRetry, "rate_limited");
+resetBookingOperationForRetry(udRetry);
+assert.equal(udRetry.bookingOperation, undefined);
+assert.equal(canStartScheduleAppointment(udRetry), true);
 
 const ud2 = baseUserData();
 beginBookingOperation(ud2, "ST_fail");

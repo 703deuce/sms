@@ -1,4 +1,5 @@
 import type { FrontDeskUserData } from "./userdata";
+import { isBookingConfirmed } from "./userdata";
 
 /** Deterministic booking operation lifecycle — terminal states only when done. */
 export type BookingOperationTerminalState = "confirmed" | "failed" | "cancelled";
@@ -90,6 +91,31 @@ export function markBookingOperationCancelled(ud: FrontDeskUserData, reason?: st
 export function canStartScheduleAppointment(ud: FrontDeskUserData): boolean {
   if (isBookingOperationActive(ud)) return false;
   return true;
+}
+
+/** Clear failed/cancelled op so schedule_appointment can retry with corrected fields. */
+export function resetBookingOperationForRetry(ud: FrontDeskUserData): void {
+  if (isBookingConfirmed(ud)) return;
+  const state = ud.bookingOperation?.state;
+  if (state === "failed" || state === "cancelled") {
+    ud.bookingOperation = undefined;
+    ud.bookingInProgress = false;
+  }
+}
+
+/** End of schedule_appointment attempt — never mark interrupted when booking already confirmed. */
+export function finalizeScheduleAppointmentAttempt(ud: FrontDeskUserData): void {
+  if (isBookingConfirmed(ud)) {
+    if (ud.bookingOperation?.state !== "confirmed") {
+      markBookingOperationConfirmed(ud);
+    }
+    ud.bookingInProgress = false;
+    return;
+  }
+  if (isBookingOperationActive(ud)) {
+    markBookingOperationFailed(ud, "booking_interrupted");
+  }
+  ud.bookingInProgress = false;
 }
 
 const LOCKED_CALENDAR_TOOLS = new Set([

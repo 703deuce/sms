@@ -11,6 +11,7 @@ import { missingReceptionistFields } from "../src/lib/voice/receptionist/field-c
 import { validateReceptionistFieldValue } from "../src/lib/voice/receptionist/field-validation";
 import type { AgentFieldDefinition } from "../src/lib/voice/receptionist/types";
 import { deriveAuthoritativeBookingState } from "../voice-runtime/src/frontdesk/booking-state";
+import { invalidateStaleSlotSelection } from "../voice-runtime/src/frontdesk/booking-field-coherence";
 import { findBookingPrerequisiteGaps } from "../voice-runtime/src/frontdesk/booking-prerequisites";
 import { resolveConfirmedEmail } from "../voice-runtime/src/frontdesk/email-collection-tools";
 import { buildBookingIntakeToolResult } from "../voice-runtime/src/frontdesk/booking-intake-lifecycle";
@@ -254,10 +255,9 @@ assert.ok(caseF.receptionistFields?.phone, "F: phone stored on interrupt");
 const caseG = baseUserData({ pendingSlotId: "ST_old_slot" });
 persistField(caseG, "reason", "AC not cooling");
 caseG.receptionistFields!.preferred_time = "Wednesday morning";
-// Caller changed mind — supervisor should clear stale slot when time changes
-caseG.pendingSlotId = undefined;
+invalidateStaleSlotSelection(caseG, "time_preference_changed");
 const stateG = deriveAuthoritativeBookingState(caseG);
-assert.equal(stateG.selectedSlotId, undefined, "G: stale slot cleared");
+assert.equal(stateG.selectedSlotId, undefined, "G: stale slot cleared on time preference change");
 
 // --- Case H: custom field pre-supplied ---
 

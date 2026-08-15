@@ -16,6 +16,7 @@ import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import { isBookingOperationActive } from "../booking-operation";
 import { validateBookingNotesField } from "../booking-field-validation";
+import { afterReceptionistFieldPersisted } from "../booking-field-coherence";
 import { formatBookingEmailSavedFeedback, persistConfirmedBookingEmail } from "../booking-email-state";
 import { isBookingConfirmed, type FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
@@ -59,6 +60,7 @@ function backfillReceptionistFields(
     chatCtx: session.chatCtx,
     manifest,
     receptionistFields: ud.receptionistFields,
+    authoritativeFieldIds: ud.authoritativeFieldIds,
   });
 }
 
@@ -119,11 +121,15 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
 
           const normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
           if (!ud.receptionistFields) ud.receptionistFields = {};
+          const previous = ud.receptionistFields[field_id];
           ud.receptionistFields[field_id] = normalized;
+          const coherence = afterReceptionistFieldPersisted(ud, field_id, normalized, previous);
           const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
           const bookingTail = pendingSlot
             ? ` Then call schedule_appointment with slot_id ${pendingSlot}.`
-            : "";
+            : coherence.slotInvalidated
+              ? " Time preference changed — call list_available_slots and let the caller pick a new time."
+              : "";
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
               `${field.label} saved.${bookingTail}`,
@@ -332,6 +338,15 @@ function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnaps
               "Booking is already in progress. Tell the caller you're finishing the appointment. " +
                 "If they ask whether it worked, use check_booking_status.",
               { tool: "collect_booking_requirements", next_action: "check_booking_status" },
+            ),
+          );
+        }
+
+        if (ud.bookingIntakeActive) {
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(
+              "Booking intake is already running. Wait for it to finish — do not start a second intake.",
+              { tool: "collect_booking_requirements", next_action: "none" },
             ),
           );
         }

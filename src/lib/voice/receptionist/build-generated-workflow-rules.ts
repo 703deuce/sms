@@ -76,6 +76,8 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
       "- For email during booking, use record_receptionist_field (field_id email) — do not also call record_booking_email.",
       "- After schedule_appointment succeeds, answer outcome questions from booking state — do not call check_booking_status unless the write may still be in progress.",
       "- Do not call schedule_appointment repeatedly while a calendar write is already running.",
+      "- FAQ or pricing questions do not erase collected booking fields — continue booking from what is already known.",
+      "- If the caller changes their preferred day or time after choosing a slot, call list_available_slots again.",
     );
     const fallback = snapshot.fallbackPolicy as { onBookingFail?: string } | undefined;
     if (fallback?.onBookingFail === "take_message") {

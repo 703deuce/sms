@@ -6,6 +6,7 @@ import { missingReceptionistFields } from "@/lib/voice/receptionist/field-collec
 import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
 import { validateReceptionistFieldValue } from "@/lib/voice/receptionist/field-validation";
 import { validateBookingNotesField } from "./booking-field-validation";
+import { afterReceptionistFieldPersisted } from "./booking-field-coherence";
 import { persistConfirmedBookingEmail } from "./booking-email-state";
 import { FIELD_TRANSITION_BRIDGE_RULES } from "@/lib/voice/field-transition-bridge";
 import { buildReceptionistFieldTransitionLine } from "@/lib/voice/receptionist/field-transition-phrases";
@@ -50,6 +51,7 @@ function syncBookingFieldsFromSession(
     chatCtx: session.chatCtx,
     manifest,
     receptionistFields: ud.receptionistFields,
+    authoritativeFieldIds: ud.authoritativeFieldIds,
   });
   if (!ud.receptionistFields.phone?.trim() && ud.callerE164?.trim()) {
     const ani = tryNormalizeE164(ud.callerE164.trim());
@@ -128,13 +130,17 @@ export class BookingIntakeTask extends voice.AgentTask<BookingIntakeResult> {
       if (!ud.receptionistFields) ud.receptionistFields = {};
       const hadValue = ud.receptionistFields[field.id]?.trim();
       ud.receptionistFields[field.id] = normalized;
-      if (hadValue && hadValue !== normalized) {
+      const coherence = afterReceptionistFieldPersisted(ud, field.id, normalized, hadValue);
+      if (coherence.corrected) {
         logBookingIntake(ud.callId, "field_corrected", {
           fieldId: field.id,
           previous: hadValue.slice(0, 32),
         });
       } else {
         logBookingIntake(ud.callId, "field_persisted", { fieldId: field.id });
+      }
+      if (coherence.slotInvalidated) {
+        logBookingIntake(ud.callId, "slot_invalidated", { fieldId: field.id });
       }
 
       syncBookingFieldsFromSession(sessionRef, manifest);

@@ -4,6 +4,7 @@ import {
   toolFeedbackSuccess,
 } from "@/lib/voice/tool-feedback";
 import { isValidEmail, normalizeSpokenEmail } from "./email-utils";
+import { markFieldAuthoritative } from "./booking-field-coherence";
 import type { FrontDeskUserData } from "./userdata";
 
 export type PersistBookingEmailResult =
@@ -30,6 +31,7 @@ export function persistConfirmedBookingEmail(
   ud.draftEmail = undefined;
   if (!ud.receptionistFields) ud.receptionistFields = {};
   ud.receptionistFields.email = normalized;
+  markFieldAuthoritative(ud, "email");
 
   return { ok: true, email: normalized, unchanged };
 }

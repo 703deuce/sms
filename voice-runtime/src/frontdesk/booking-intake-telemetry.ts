@@ -7,7 +7,8 @@ type BookingIntakeTelemetryEvent =
   | "intake_complete"
   | "booking_attempt"
   | "booking_result"
-  | "idempotent_replay";
+  | "idempotent_replay"
+  | "slot_invalidated";
 
 export function logBookingIntake(
   callId: string,

@@ -89,6 +89,8 @@ export type FrontDeskUserData = {
   };
   /** Call is in closing phase — block duplicate end_call. */
   callClosing?: boolean;
+  /** Field ids persisted via tools — chat backfill must not overwrite these values. */
+  authoritativeFieldIds?: string[];
 };
 
 export function isBookingConfirmed(userData: FrontDeskUserData): boolean {

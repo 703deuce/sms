@@ -20,10 +20,11 @@ import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-b
 import {
   beginBookingOperation,
   canStartScheduleAppointment,
+  finalizeScheduleAppointmentAttempt,
   markBookingOperationConfirmed,
   markBookingOperationFailed,
   markBookingOperationState,
-  isBookingOperationActive,
+  resetBookingOperationForRetry,
 } from "./booking-operation";
 import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";
@@ -72,6 +73,7 @@ function prefillReceptionistFieldsForBooking(
     chatCtx: session.chatCtx,
     manifest,
     receptionistFields: userData.receptionistFields,
+    authoritativeFieldIds: userData.authoritativeFieldIds,
   });
   if (!userData.receptionistFields.phone?.trim() && userData.callerE164?.trim()) {
     const ani = tryNormalizeE164(userData.callerE164.trim());
@@ -214,6 +216,8 @@ export function buildFrontDeskBookingTools(input: {
       if (!canStartScheduleAppointment(userData)) {
         return formatToolFeedbackForModel(toolFeedbackBookingInProgress("schedule_appointment"));
       }
+
+      resetBookingOperationForRetry(userData);
 
       const slot = slotsMap.get(slot_id);
       if (!slot) {
@@ -390,10 +394,7 @@ export function buildFrontDeskBookingTools(input: {
           },
         );
       } finally {
-        if (isBookingOperationActive(userData)) {
-          markBookingOperationFailed(userData, "booking_interrupted");
-        }
-        userData.bookingInProgress = false;
+        finalizeScheduleAppointmentAttempt(userData);
         clearBookingEmailWaiter(userData);
       }
     },
