@@ -63,38 +63,54 @@ function sortPersonalCandidates(candidates: ScoredCandidate[]): ScoredCandidate[
  */
 export async function searchPremiumNumbersPersonal(input: {
   areaCode: string;
+  areaCodes?: string[];
   preferences?: PersonalPreference[];
   limit?: number;
 }): Promise<PremiumSearchResult> {
-  const areaCode = input.areaCode.replace(/\D/g, "").slice(0, 3);
-  if (areaCode.length !== 3) {
+  const areaCodes =
+    input.areaCodes?.length
+      ? [...new Set(input.areaCodes.map((c) => c.replace(/\D/g, "").slice(0, 3)).filter((c) => c.length === 3))]
+      : [input.areaCode.replace(/\D/g, "").slice(0, 3)];
+
+  const primaryAreaCode = areaCodes[0] ?? "";
+  if (!areaCodes.length || areaCodes.some((c) => c.length !== 3)) {
     return {
       status: "NOT_CONFIGURED",
-      areaCode,
+      areaCode: primaryAreaCode,
       keywords: [],
       candidates: [],
       statistics: emptyStats(),
       searchAttempts: [],
-      message: "areaCode must be a 3-digit US area code",
+      message: "At least one valid 3-digit area code is required",
     };
   }
 
   const keywords = buildKeywordEntries({});
   const memorablePatterns = patternsForPreferences(input.preferences ?? ["surprise_me"]);
 
-  let inventory;
+  let allCandidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"] = [];
+  const attempts: PremiumSearchResult["searchAttempts"] = [];
+
   try {
-    inventory = await runTelnyxInventorySearches({
-      areaCode,
-      keywordDigitStrings: [],
-      memorablePatterns,
-      baseLimit: 50,
-    });
+    for (const areaCode of areaCodes) {
+      const inventory = await runTelnyxInventorySearches({
+        areaCode,
+        keywordDigitStrings: [],
+        memorablePatterns,
+        baseLimit: areaCodes.length > 1 ? 30 : 50,
+      });
+      attempts.push(...inventory.attempts);
+      const filtered = inventory.candidates.filter((c) => {
+        const digits = parsePhoneDigits(c.phoneNumber);
+        return digits.length === 10 && digits.startsWith(areaCode);
+      });
+      allCandidates.push(...filtered);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
       status: /not configured|TELNYX_API_KEY/i.test(message) ? "NOT_CONFIGURED" : "TELNYX_ERROR",
-      areaCode,
+      areaCode: primaryAreaCode,
       keywords: [],
       candidates: [],
       statistics: emptyStats(),
@@ -103,13 +119,13 @@ export async function searchPremiumNumbersPersonal(input: {
     };
   }
 
-  inventory.candidates = inventory.candidates.filter((c) => {
-    const digits = parsePhoneDigits(c.phoneNumber);
-    return digits.length === 10 && digits.startsWith(areaCode);
-  });
+  const byPhone = new Map<string, Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"][0]>();
+  for (const c of allCandidates) {
+    if (!byPhone.has(c.phoneNumber)) byPhone.set(c.phoneNumber, c);
+  }
+  allCandidates = [...byPhone.values()];
 
-  const attempts = inventory.attempts;
-  const scored = inventory.candidates
+  const scored = allCandidates
     .map((raw) =>
       scoreCandidate({
         phoneNumber: raw.phoneNumber,
@@ -131,7 +147,7 @@ export async function searchPremiumNumbersPersonal(input: {
   const limit = input.limit ?? 100;
   const candidates = sorted.slice(0, limit);
 
-  const hadInventory = inventory.candidates.length > 0;
+  const hadInventory = allCandidates.length > 0;
   const status =
     !hadInventory
       ? "NO_INVENTORY"
@@ -141,11 +157,11 @@ export async function searchPremiumNumbersPersonal(input: {
           ? "RESULTS_FOUND_BUT_NONE_PREMIUM"
           : "NO_INVENTORY";
 
-  const statistics = buildStats(sorted, attempts, inventory.candidates.length);
+  const statistics = buildStats(sorted, attempts, allCandidates.length);
 
   return {
     status,
-    areaCode,
+    areaCode: primaryAreaCode,
     keywords,
     candidates,
     statistics,

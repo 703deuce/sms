@@ -1,5 +1,6 @@
 import { extractJsonFromLlm, llmChatCompletion } from "@/lib/ai/llm";
-import { extractBusinessNameKeywords } from "./business-name-keywords";
+import { inferIndustryFromText } from "./business-name-keywords";
+import { INDUSTRY_KEYWORD_MAP } from "./industry-keywords";
 import { normalizeWord } from "./keypad";
 
 const MAX_KEYWORDS = 24;
@@ -17,51 +18,54 @@ function normalizeKeywordList(values: string[]): string[] {
   return out;
 }
 
-/** Merge customer keyword fields into one deduped search list (primary first). */
+/** Merge LLM + user keyword lists with optional extras (e.g. MIKE for Mike's Plumber). */
 export function mergeCustomerKeywords(input: {
-  primaryKeyword?: string;
   suggestedKeywords?: string[];
   extraKeywords?: string[];
-  businessName?: string;
 }): string[] {
   const chunks: string[] = [];
-  if (input.primaryKeyword?.trim()) chunks.push(input.primaryKeyword.trim());
   if (input.suggestedKeywords?.length) chunks.push(...input.suggestedKeywords);
   if (input.extraKeywords?.length) chunks.push(...input.extraKeywords);
-  if (input.businessName?.trim()) chunks.push(...extractBusinessNameKeywords(input.businessName));
   return normalizeKeywordList(chunks);
 }
 
+function deterministicIndustryKeywords(industry: string): string[] {
+  const inferred = inferIndustryFromText(industry);
+  const mapWords = inferred ? INDUSTRY_KEYWORD_MAP[inferred] ?? [] : [];
+  return normalizeKeywordList([...mapWords, industry]);
+}
+
 /**
- * LLM-powered vanity keyword ideas from a business description.
- * Falls back to deterministic name tokenization when no LLM is configured.
+ * LLM vanity keyword ideas for an industry or trade.
+ * Falls back to mapped industry words when no LLM is configured.
  */
-export async function suggestBusinessVanityKeywords(
-  businessDescription: string,
+export async function suggestIndustryVanityKeywords(
+  industry: string,
 ): Promise<{ keywords: string[]; source: "llm" | "deterministic" }> {
-  const trimmed = businessDescription.trim();
+  const trimmed = industry.trim();
   if (!trimmed) {
     return { keywords: [], source: "deterministic" };
   }
 
-  const fallback = normalizeKeywordList(extractBusinessNameKeywords(trimmed));
+  const fallback = deterministicIndustryKeywords(trimmed);
 
   const system = `You help US businesses find memorable vanity phone numbers.
-Given a business name or short description, return JSON only:
+Given an industry or trade (plumbing, roofing, junk removal, law firm, dental, HVAC, etc.), return JSON only:
 {"keywords":["WORD1","WORD2",...]}
 
 Rules:
-- 8–20 uppercase A–Z words (no digits), each 3–7 letters
-- Words must map to telephone keypad letters (vanity spelling)
-- Include the core trade word, synonyms, and short catchy variants customers would dial
-- Prefer words people say in ads (e.g. ROOF, PLUMB, LAWN, DENTAL)
-- No company filler (LLC, INC, THE)
+- 10–24 uppercase A–Z words (no digits), each 3–7 letters
+- Words must use telephone keypad letters (vanity spelling)
+- Include the core trade word plus synonyms, short adspeak, and common customer phrases
+- Examples: plumbing → PLUMB, PLUMBER, PLUMBING, PIPES, DRAIN; roofing → ROOF, ROOFER, SHINGLE
+- Prefer words people say in ads and on trucks
+- No filler (LLC, INC, THE)
 - No duplicates`;
 
   try {
     const result = await llmChatCompletion(system, trimmed, {
       temperature: 0.4,
-      maxTokens: 800,
+      maxTokens: 900,
     });
     if (!result?.content) {
       return { keywords: fallback, source: "deterministic" };
@@ -72,7 +76,8 @@ Rules:
     if (!llmWords.length) {
       return { keywords: fallback, source: "deterministic" };
     }
-    return { keywords: llmWords, source: "llm" };
+    const merged = normalizeKeywordList([...llmWords, ...fallback]);
+    return { keywords: merged, source: "llm" };
   } catch {
     return { keywords: fallback, source: "deterministic" };
   }

@@ -129,7 +129,7 @@ export async function searchPremiumNumbers(
   });
 
   const keywordDigitStrings = [...new Set(keywords.map((k) => k.digits))];
-  const matchStyle = input.matchStyle ?? "ends_with";
+  const matchStyle = input.matchStyle ?? "both";
 
   let allCandidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"] = [];
   const attempts: TelnyxSearchAttempt[] = [];

@@ -9,9 +9,9 @@ import {
 } from "@/lib/premium-numbers/product-api";
 import { formatPremiumPrice } from "@/lib/premium-numbers/premium-pricing";
 import type { PersonalPreference } from "@/lib/premium-numbers/personal-search";
-import type { KeywordMatchStyle } from "@/lib/premium-numbers/telnyx-inventory-search";
 import {
   TOLL_FREE_AREA_CODES,
+  parseAreaCodesInput,
   type NumberType,
   type TollFreePrefix,
 } from "@/lib/premium-numbers/toll-free";
@@ -72,11 +72,9 @@ type CheckoutState = {
 export function PremiumNumbersPageClient({ workspaceId }: Props) {
   const [mode, setMode] = useState<SearchMode>("business");
   const [numberType, setNumberType] = useState<NumberType>("local");
-  const [areaCode, setAreaCode] = useState("");
+  const [areaCodesInput, setAreaCodesInput] = useState("");
   const [tollFreePrefix, setTollFreePrefix] = useState<TollFreePrefix>("all");
-  const [primaryKeyword, setPrimaryKeyword] = useState("");
-  const [matchStyle, setMatchStyle] = useState<KeywordMatchStyle>("ends_with");
-  const [businessName, setBusinessName] = useState("");
+  const [industry, setIndustry] = useState("");
   const [suggestedKeywords, setSuggestedKeywords] = useState("");
   const [extraKeywords, setExtraKeywords] = useState("");
   const [suggestingKeywords, setSuggestingKeywords] = useState(false);
@@ -93,17 +91,19 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
   const [success, setSuccess] = useState<CheckoutState | null>(null);
   const [reserveError, setReserveError] = useState("");
 
+  const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
+
   const canSearch =
     mode === "personal"
-      ? areaCode.length === 3
+      ? parsedAreaCodes.length > 0
       : numberType === "local"
-        ? areaCode.length === 3
-        : true;
+        ? parsedAreaCodes.length > 0 && industry.trim().length >= 2
+        : industry.trim().length >= 2;
 
   async function onSuggestKeywords() {
-    const description = businessName.trim();
-    if (description.length < 2) {
-      setSuggestError("Tell us your business name first");
+    const industryText = industry.trim();
+    if (industryText.length < 2) {
+      setSuggestError("Enter your industry first");
       return;
     }
     setSuggestingKeywords(true);
@@ -112,14 +112,14 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
       const res = await fetch("/api/numbers/premium/suggest-keywords", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ businessDescription: description }),
+        body: JSON.stringify({ industry: industryText }),
       });
       const data = (await res.json()) as { keywords?: string[]; error?: string };
       if (!res.ok) throw new Error(data.error || "Could not suggest keywords");
       if (data.keywords?.length) {
         setSuggestedKeywords(data.keywords.join(", "));
       } else {
-        setSuggestError("No keyword ideas returned — try adding your main word manually.");
+        setSuggestError("No keyword ideas returned — try different wording.");
       }
     } catch (err) {
       setSuggestError(err instanceof Error ? err.message : "Suggestion failed");
@@ -142,18 +142,16 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
               workspaceId,
               mode,
               numberType,
-              areaCode: numberType === "local" ? areaCode.trim() : undefined,
+              areaCodes: parsedAreaCodes,
               tollFreePrefix: numberType === "tollfree" ? tollFreePrefix : undefined,
-              matchStyle,
-              primaryKeyword: primaryKeyword.trim(),
+              industry: industry.trim(),
               suggestedKeywords: splitKeywordInput(suggestedKeywords),
               extraKeywords: splitKeywordInput(extraKeywords),
-              businessName: businessName.trim(),
             }
           : {
               workspaceId,
               mode,
-              areaCode: areaCode.trim(),
+              areaCodes: parsedAreaCodes,
               preferences,
             };
 
@@ -214,21 +212,25 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
           ? tollFreePrefix === "all"
             ? "toll-free numbers"
             : `toll-free ${tollFreePrefix}`
-          : `area ${areaCode}`;
-      const word = primaryKeyword.trim() || splitKeywordInput(suggestedKeywords)[0];
-      const wordPart = word ? ` for “${word.toUpperCase()}”` : "";
-      return `${searchResponse.resultCount} numbers found in ${searchDurationSec}s${wordPart} · ${location}`;
+          : parsedAreaCodes.length === 1
+            ? `area ${parsedAreaCodes[0]}`
+            : `areas ${parsedAreaCodes.join(", ")}`;
+      const ind = industry.trim();
+      return `${searchResponse.resultCount} numbers found in ${searchDurationSec}s for ${ind} · ${location}`;
     }
-    return `${searchResponse.resultCount} memorable numbers found in ${searchDurationSec}s for area ${areaCode}`;
+    const areas =
+      parsedAreaCodes.length === 1
+        ? `area ${parsedAreaCodes[0]}`
+        : `areas ${parsedAreaCodes.join(", ")}`;
+    return `${searchResponse.resultCount} memorable numbers found in ${searchDurationSec}s for ${areas}`;
   }, [
     searchResponse,
     searchDurationSec,
     mode,
-    areaCode,
+    parsedAreaCodes,
     numberType,
     tollFreePrefix,
-    primaryKeyword,
-    suggestedKeywords,
+    industry,
   ]);
 
   const showPreSearch = !searchResponse && !loading && !success;
@@ -288,13 +290,17 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     {numberType === "local" ? (
-                      <Field label="Area code" required hint="Any US area code">
+                      <Field
+                        label="Area codes"
+                        required
+                        hint="Add multiple — comma separated"
+                      >
                         <Input
-                          value={areaCode}
+                          value={areaCodesInput}
                           onChange={(e) =>
-                            setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))
+                            setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
                           }
-                          placeholder="e.g. 571"
+                          placeholder="e.g. 571, 703, 540"
                           className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                         />
                       </Field>
@@ -312,51 +318,31 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
                       </Field>
                     )}
 
-                    <Field
-                      label="Word in your number"
-                      hint="What customers should remember"
-                    >
+                    <Field label="Industry" required hint="What type of business are you?">
                       <Input
-                        value={primaryKeyword}
-                        onChange={(e) => setPrimaryKeyword(e.target.value)}
-                        placeholder="e.g. ROOF, PLUMB, LAWN"
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                        placeholder="e.g. Plumbing, Roofing, Junk removal"
                         className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                       />
                     </Field>
                   </div>
 
-                  <div>
-                    <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#6b7280]">
-                      Match style
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <MatchStyleChip
-                        active={matchStyle === "ends_with"}
-                        onClick={() => setMatchStyle("ends_with")}
-                        title="Ends with your word"
-                        subtitle="Best match · highest value"
-                      />
-                      <MatchStyleChip
-                        active={matchStyle === "contains"}
-                        onClick={() => setMatchStyle("contains")}
-                        title="Anywhere in the number"
-                        subtitle="More options"
-                      />
-                    </div>
-                  </div>
-
                   <div className="grid gap-4 lg:grid-cols-2">
-                    <Field label="Your business" hint="We’ll suggest words to search">
-                      <Input
-                        value={businessName}
-                        onChange={(e) => setBusinessName(e.target.value)}
-                        placeholder="e.g. Jackson Roofing"
-                        className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                    <Field
+                      label="Keyword ideas"
+                      hint="We’ll search words that fit your industry"
+                    >
+                      <Textarea
+                        value={suggestedKeywords}
+                        onChange={(e) => setSuggestedKeywords(e.target.value)}
+                        placeholder="Filled automatically — or click Suggest keywords"
+                        className="min-h-[88px] rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                       />
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={suggestingKeywords || businessName.trim().length < 2}
+                        disabled={suggestingKeywords || industry.trim().length < 2}
                         onClick={onSuggestKeywords}
                         className="mt-2 h-9 rounded-lg border-[#e5e7eb] text-[13px]"
                       >
@@ -369,35 +355,32 @@ export function PremiumNumbersPageClient({ workspaceId }: Props) {
                     </Field>
 
                     <Field
-                      label="Suggested keywords"
-                      hint="Edit or add — comma separated"
+                      label="Extra keywords (optional)"
+                      hint="Business name, nicknames — e.g. MIKE for Mike’s Plumbing"
                     >
-                      <Textarea
-                        value={suggestedKeywords}
-                        onChange={(e) => setSuggestedKeywords(e.target.value)}
-                        placeholder="ROOF, ROOFER, SHINGLE…"
-                        className="min-h-[88px] rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                      <Input
+                        value={extraKeywords}
+                        onChange={(e) => setExtraKeywords(e.target.value)}
+                        placeholder="e.g. MIKE, PRO"
+                        className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                       />
                     </Field>
                   </div>
-
-                  <Field label="Extra keywords (optional)" hint="Anything else to try">
-                    <Input
-                      value={extraKeywords}
-                      onChange={(e) => setExtraKeywords(e.target.value)}
-                      placeholder="e.g. HOME, PRO"
-                      className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
-                    />
-                  </Field>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Field label="Area code" required hint="Any US area code">
+                  <Field
+                    label="Area codes"
+                    required
+                    hint="Add multiple — comma separated"
+                  >
                     <Input
-                      value={areaCode}
-                      onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                      placeholder="e.g. 571"
-                      className="h-11 max-w-[160px] rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                      value={areaCodesInput}
+                      onChange={(e) =>
+                        setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
+                      }
+                      placeholder="e.g. 571, 703, 540"
+                      className="h-11 max-w-md rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                     />
                   </Field>
                   <div>
@@ -564,34 +547,6 @@ function Field({
       {hint ? <p className="text-[11px] text-[#9ca3af]">{hint}</p> : null}
       {children}
     </div>
-  );
-}
-
-function MatchStyleChip({
-  active,
-  onClick,
-  title,
-  subtitle,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-lg border px-4 py-2.5 text-left transition",
-        active
-          ? "border-[#6366f1] bg-[#eef2ff] ring-1 ring-[#6366f1]/30"
-          : "border-[#e5e7eb] bg-white hover:border-[#c7d2fe]",
-      )}
-    >
-      <span className="block text-[13px] font-semibold text-[#111827]">{title}</span>
-      <span className="block text-[11px] text-[#6b7280]">{subtitle}</span>
-    </button>
   );
 }
 
