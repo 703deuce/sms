@@ -16,16 +16,16 @@ function isAbabOrRepeatedPair(last4: string): boolean {
   return /^(\d{2})\1$/.test(last4) || /^(\d)(\d)\1\2$/.test(last4);
 }
 
-/** One strongest tail pattern — no stacking 1111 as identical + palindrome + ABAB. */
 function detectTailPattern(subscriber: string): DetectedPattern | null {
   const last4 = subscriber.slice(-4);
   const last3 = subscriber.slice(-3);
+  const nq = SCORING_WEIGHTS.numberQuality;
 
   if (last4 === "0000") {
     return {
       id: "ends_0000",
       label: "Ends in 0000",
-      points: SCORING_WEIGHTS.pattern.ends0000,
+      points: nq.ends0000,
       strength: "strong",
       family: "tail",
     };
@@ -35,7 +35,7 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "last4_identical",
       label: `Four-digit repeater (${last4})`,
-      points: SCORING_WEIGHTS.pattern.last4AllIdentical,
+      points: nq.last4AllIdentical,
       strength: "strong",
       family: "tail",
     };
@@ -45,7 +45,7 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "abab_pair",
       label: `Repeating pair (${last4})`,
-      points: SCORING_WEIGHTS.pattern.ababOrRepeatedPair,
+      points: nq.ababOrRepeatedPair,
       strength: "medium",
       family: "tail",
     };
@@ -55,7 +55,7 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "sequence",
       label: `Sequence (${last4})`,
-      points: SCORING_WEIGHTS.pattern.sequence,
+      points: nq.sequence,
       strength: "medium",
       family: "tail",
     };
@@ -65,7 +65,7 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "palindrome_last4",
       label: `Palindrome (${last4})`,
-      points: SCORING_WEIGHTS.pattern.palindromeLast4,
+      points: nq.palindromeLast4,
       strength: "medium",
       family: "tail",
     };
@@ -75,7 +75,7 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "last3_identical",
       label: `Last three identical (${last3})`,
-      points: SCORING_WEIGHTS.pattern.last3Identical,
+      points: nq.last3Identical,
       strength: "weak",
       family: "tail",
     };
@@ -85,7 +85,7 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "ends_x000",
       label: "Ends in X000",
-      points: SCORING_WEIGHTS.pattern.endsX000,
+      points: nq.endsX000,
       strength: "medium",
       family: "ends",
     };
@@ -95,11 +95,12 @@ function detectTailPattern(subscriber: string): DetectedPattern | null {
 }
 
 function detectFullSubscriberPattern(subscriber: string): DetectedPattern | null {
+  const nq = SCORING_WEIGHTS.numberQuality;
   if (/^(\d)\1{6}$/.test(subscriber)) {
     return {
       id: "exceptional_repetition",
       label: "Exceptional digit repetition (full subscriber)",
-      points: SCORING_WEIGHTS.pattern.exceptionalRepetition,
+      points: nq.exceptionalRepetition,
       strength: "strong",
       family: "full",
     };
@@ -108,7 +109,7 @@ function detectFullSubscriberPattern(subscriber: string): DetectedPattern | null
     return {
       id: "full_palindrome",
       label: "Full subscriber palindrome",
-      points: SCORING_WEIGHTS.pattern.fullPalindrome,
+      points: nq.fullPalindrome,
       strength: "strong",
       family: "full",
     };
@@ -122,7 +123,7 @@ function detectPrefixPattern(subscriber: string): DetectedPattern | null {
     return {
       id: "triple_prefix",
       label: `Triple repeating prefix (${first3})`,
-      points: SCORING_WEIGHTS.pattern.triplePrefix,
+      points: SCORING_WEIGHTS.numberQuality.triplePrefix,
       strength: "medium",
       family: "prefix",
     };
@@ -130,10 +131,6 @@ function detectPrefixPattern(subscriber: string): DetectedPattern | null {
   return null;
 }
 
-/**
- * Returns non-overlapping numeric patterns (one per family max).
- * Tail repeater 1111 does not stack palindrome/ABAB bonuses on the same digits.
- */
 export function detectNumericPatterns(subscriber: string): DetectedPattern[] {
   if (subscriber.length !== 7) return [];
 
@@ -145,7 +142,6 @@ export function detectNumericPatterns(subscriber: string): DetectedPattern[] {
   if (tail) patterns.push(tail);
 
   const prefix = detectPrefixPattern(subscriber);
-  // Skip prefix if it's the same repetition already credited via full/tail (e.g. 4444444).
   if (prefix && !full && tail?.id !== "last4_identical") {
     patterns.push(prefix);
   }
@@ -155,12 +151,6 @@ export function detectNumericPatterns(subscriber: string): DetectedPattern[] {
 
 export function simplicityScore(subscriber: string): number {
   const unique = new Set(subscriber.split(""));
-  if (unique.size <= 2) return SCORING_WEIGHTS.combination.exceptionalSimplicity;
-  if (unique.size === 3) return 3;
+  if (unique.size <= 2) return SCORING_WEIGHTS.numberQuality.simplicity;
   return 0;
-}
-
-export function hasMemorablePrefix(subscriber: string): boolean {
-  const first3 = subscriber.slice(0, 3);
-  return /^(\d)\1{2}$/.test(first3);
 }

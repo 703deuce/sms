@@ -24,7 +24,8 @@ type ExportRow = ScoredCandidate & {
   upfrontCost: string;
   matchedWordsStr: string;
   matchedPatternsStr: string;
-  reasonsStr: string;
+  businessReasonsStr: string;
+  numberQualityReasonsStr: string;
 };
 
 function csvEscape(value: string): string {
@@ -39,6 +40,8 @@ function rowToCsv(row: ExportRow): string {
     row.phoneNumber,
     row.score,
     row.tier,
+    row.businessMatchScore,
+    row.numberQualityScore,
     row.areaCode,
     row.industry,
     row.searchLabel,
@@ -46,7 +49,8 @@ function rowToCsv(row: ExportRow): string {
     row.matchedPatternsStr,
     row.monthlyCost,
     row.upfrontCost,
-    row.reasonsStr,
+    row.businessReasonsStr,
+    row.numberQualityReasonsStr,
   ]
     .map((v) => csvEscape(String(v)))
     .join(",");
@@ -82,7 +86,10 @@ async function main() {
         upfrontCost: cand.telnyxCost?.upfrontCost ?? "",
         matchedWordsStr: cand.matchedWords.join(", "),
         matchedPatternsStr: cand.matchedPatterns.join("; "),
-        reasonsStr: cand.reasons
+        businessReasonsStr: cand.businessReasons
+          .map((r) => `${r.points > 0 ? "+" : ""}${r.points} ${r.label}`)
+          .join("; "),
+        numberQualityReasonsStr: cand.numberQualityReasons
           .map((r) => `${r.points > 0 ? "+" : ""}${r.points} ${r.label}`)
           .join("; "),
       });
@@ -106,7 +113,7 @@ async function main() {
   const payload = {
     generatedAt: new Date().toISOString(),
     description:
-      "Vanity Number Hunter sample run — 5 area codes, read-only Telnyx inventory. Ranked by score (highest first).",
+      "Vanity Number Hunter — 70% business match + 30% number quality blend. Ranked by overall score.",
     searches: CASES.map((c) => ({
       areaCode: c.areaCode,
       industry: c.industry,
@@ -125,7 +132,7 @@ async function main() {
   };
 
   const csvHeader =
-    "rank,formatted_number,e164,score,tier,area_code,industry,search_label,matched_words,matched_patterns,monthly_cost,upfront_cost,reasons";
+    "rank,formatted_number,e164,score,tier,business_match,number_quality,area_code,industry,search_label,matched_words,matched_patterns,monthly_cost,upfront_cost,business_reasons,number_quality_reasons";
 
   const csvBody = [csvHeader, ...ranked.map(rowToCsv)].join("\n");
 

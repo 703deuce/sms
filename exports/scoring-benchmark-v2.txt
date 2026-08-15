@@ -1,0 +1,12 @@
+BENCHMARK SCORES (70% business + 30% number quality)
+
+number          overall tier        BM    NQ    words
+540-572-4444    29      Ordinary    0     95    
+571-240-1111    29      Ordinary    0     95    
+540-929-5296    46      Nice        65    0     LAWN
+571-680-7663    46      Nice        65    0     ROOF
+571-704-7663    46      Nice        65    0     ROOF
+540-296-6937    56      Good        80    0     MOWER
+571-932-1212    17      Ordinary    0     55    
+540-655-1234    17      Ordinary    0     55    
+571-777-7663    62      Good        65    55    ROOF

@@ -131,7 +131,7 @@ export function PremiumNumberSearchClient() {
                   <div>
                     <span className="text-lg font-semibold">{idx + 1}. {c.formattedNumber}</span>
                     <span className="text-muted-foreground ml-2 text-sm">
-                      {c.score}/100 · {c.tier}
+                      {c.score}/100 · {c.tier} · BM {c.businessMatchScore} · NQ {c.numberQualityScore}
                     </span>
                   </div>
                   {c.telnyxCost?.monthlyCost && (

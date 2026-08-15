@@ -1,64 +1,63 @@
 /**
- * Tunable scoring weights for vanity number ranking.
- * Tuned after first live Telnyx inventory test (2026-08-15).
+ * Tunable scoring weights — business match vs number quality blend.
+ * Industry searches: final = 70% business match + 30% number quality.
  */
 export const SCORING_WEIGHTS = {
-  word: {
-    /** Exact ending on primary industry keyword (subscriber digits). */
+  blend: {
+    businessMatch: 0.7,
+    numberQuality: 0.3,
+  },
+  businessMatch: {
+    /** Exact primary industry keyword ending (subscriber digits). Steep length curve. */
     exactEndingPrimary: {
-      seven: 75,
-      six: 68,
-      five: 62,
+      seven: 100,
+      six: 85,
+      five: 70,
       four: 55,
-      three: 25,
+      three: 20,
     },
-    /** Exact ending on secondary/custom keyword (not primary industry list). */
+    /** Exact non-primary keyword ending. */
     exactEndingSecondary: {
-      seven: 45,
-      six: 40,
-      five: 35,
-      four: 28,
+      seven: 85,
+      six: 72,
+      five: 58,
+      four: 42,
       three: 12,
     },
     contains: {
-      sixSeven: 22,
-      fourFive: 15,
-      three: 6,
+      sixSeven: 18,
+      fourFive: 12,
+      three: 4,
     },
-    industryPrimaryBonus: 10,
-    industrySecondaryBonus: 5,
-    cleanPlacementBonus: 10,
-    memorablePrefixBonus: 12,
+    industryPrimaryBonus: 5,
+    industrySecondaryBonus: 3,
+    cleanPlacementBonus: 5,
   },
-  pattern: {
-    /** Mutually exclusive tail family — only strongest applies. */
-    last4AllIdentical: 45,
-    ends0000: 45,
-    exceptionalRepetition: 58,
-    fullPalindrome: 50,
-    ababOrRepeatedPair: 38,
-    sequence: 38,
-    palindromeLast4: 20,
-    endsX000: 20,
-    last3Identical: 15,
-    triplePrefix: 15,
-  },
-  combination: {
-    strongWordAndPattern: 12,
-    exceptionalSimplicity: 5,
+  numberQuality: {
+    last4AllIdentical: 85,
+    ends0000: 85,
+    exceptionalRepetition: 95,
+    fullPalindrome: 80,
+    ababOrRepeatedPair: 55,
+    sequence: 55,
+    palindromeLast4: 45,
+    endsX000: 40,
+    last3Identical: 25,
+    triplePrefix: 45,
+    simplicity: 5,
+    wordPlusNumericBoost: 10,
   },
   providerCost: {
     baselineMonthly: 1,
     premiumThreshold: 2,
     highPremiumThreshold: 4,
-    premiumBonus: 5,
-    highPremiumBonus: 8,
+    premiumBonus: 8,
+    highPremiumBonus: 10,
   },
   penalties: {
-    shortAccidental: 8,
-    conflictingInterpretations: 6,
-    hardToRemember: 8,
-    weakKeywordOnly: 5,
+    shortAccidental: 6,
+    conflictingInterpretations: 5,
+    weakKeywordOnly: 4,
   },
   memorablePatternSearchDigits: [
     "0000",
@@ -98,4 +97,16 @@ export function scoreToTier(score: number): import("./types").QualityTier {
     if (score >= row.min) return row.tier;
   }
   return "Ordinary";
+}
+
+export function blendScores(businessMatch: number, numberQuality: number): number {
+  const { businessMatch: bW, numberQuality: nW } = SCORING_WEIGHTS.blend;
+  return Math.max(
+    0,
+    Math.min(100, Math.round(businessMatch * bW + numberQuality * nW)),
+  );
+}
+
+export function capDimension(score: number): number {
+  return Math.max(0, Math.min(100, Math.round(score)));
 }

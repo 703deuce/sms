@@ -37,11 +37,18 @@ export type TelnyxCost = {
 export type ScoredCandidate = {
   phoneNumber: string;
   formattedNumber: string;
+  /** Blended overall score (70% business + 30% number quality). */
   score: number;
   tier: QualityTier;
+  /** Business / industry word relevance (0–100). */
+  businessMatchScore: number;
+  /** Generic numeric memorability (0–100). */
+  numberQualityScore: number;
   matchedWords: string[];
   matchedPatterns: string[];
   reasons: ScoringReason[];
+  businessReasons: ScoringReason[];
+  numberQualityReasons: ScoringReason[];
   telnyxCost?: TelnyxCost;
   rawDigits: string;
   subscriberDigits: string;

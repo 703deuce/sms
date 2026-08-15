@@ -1,140 +1,140 @@
-rank,formatted_number,e164,score,tier,area_code,industry,search_label,matched_words,matched_patterns,monthly_cost,upfront_cost,reasons
-1,540-296-6937,+15402966937,82,Premium,540,lawn_care,540 · VA lawn care,MOWER,,1.00000,1.00000,+62 Exact 5-digit keyword ending (MOWER → 66937); +10 Clean exact industry word placement; +10 Primary industry match
-2,540-929-5296,+15409295296,75,Excellent,540,lawn_care,540 · VA lawn care,LAWN,,1.00000,1.00000,+55 Exact 4-digit keyword ending (LAWN → 5296); +10 Clean exact industry word placement; +10 Primary industry match
-3,571-680-7663,+15716807663,75,Excellent,571,roofing,571 · Northern VA roofing,ROOF,,1.00000,1.00000,+55 Exact 4-digit keyword ending (ROOF → 7663); +10 Clean exact industry word placement; +10 Primary industry match
-4,571-704-7663,+15717047663,75,Excellent,571,roofing,571 · Northern VA roofing,ROOF,,1.00000,1.00000,+55 Exact 4-digit keyword ending (ROOF → 7663); +10 Clean exact industry word placement; +10 Primary industry match
-5,571-788-4444,+15717884444,56,Good,571,roofing,571 · Northern VA roofing,,Four-digit repeater (4444),5.00000,5.00000,+45 Four-digit repeater (4444); +3 High overall simplicity; +8 Provider marks this number as premium inventory
-6,540-572-4444,+15405724444,53,Nice,540,lawn_care,540 · VA lawn care,,Four-digit repeater (4444),5.00000,5.00000,+45 Four-digit repeater (4444); +8 Provider marks this number as premium inventory
-7,540-658-1111,+15406581111,53,Nice,540,lawn_care,540 · VA lawn care,,Four-digit repeater (1111),5.00000,5.00000,+45 Four-digit repeater (1111); +8 Provider marks this number as premium inventory
-8,571-240-1111,+15712401111,53,Nice,571,roofing,571 · Northern VA roofing,,Four-digit repeater (1111),5.00000,5.00000,+45 Four-digit repeater (1111); +8 Provider marks this number as premium inventory
-9,571-759-4444,+15717594444,53,Nice,571,roofing,571 · Northern VA roofing,,Four-digit repeater (4444),5.00000,5.00000,+45 Four-digit repeater (4444); +8 Provider marks this number as premium inventory
-10,571-932-1111,+15719321111,53,Nice,571,roofing,571 · Northern VA roofing,,Four-digit repeater (1111),5.00000,5.00000,+45 Four-digit repeater (1111); +8 Provider marks this number as premium inventory
-11,540-358-9669,+15403589669,50,Nice,540,lawn_care,540 · VA lawn care,MOW,Palindrome (9669),1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; +20 Palindrome (9669); -5 Only weak keyword signal
-12,540-360-9669,+15403609669,50,Nice,540,lawn_care,540 · VA lawn care,MOW,Palindrome (9669),1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; +20 Palindrome (9669); -5 Only weak keyword signal
-13,540-669-1313,+15406691313,41,Nice,540,lawn_care,540 · VA lawn care,MOW,Repeating pair (1313),1.00000,1.00000,+6 Keyword contained (MOW → 669); +10 Primary industry match; +38 Repeating pair (1313); -8 Short accidental 3-digit match (MOW); -5 Only weak keyword signal
-14,540-472-4321,+15404724321,38,Nice,540,lawn_care,540 · VA lawn care,,Sequence (4321),1.00000,1.00000,+38 Sequence (4321)
-15,540-655-1234,+15406551234,38,Nice,540,lawn_care,540 · VA lawn care,,Sequence (1234),1.00000,1.00000,+38 Sequence (1234)
-16,540-889-1313,+15408891313,38,Nice,540,lawn_care,540 · VA lawn care,,Repeating pair (1313),1.00000,1.00000,+38 Repeating pair (1313)
-17,571-600-2525,+15716002525,38,Nice,571,roofing,571 · Northern VA roofing,,Repeating pair (2525),1.00000,1.00000,+38 Repeating pair (2525)
-18,571-696-4321,+15716964321,38,Nice,571,roofing,571 · Northern VA roofing,,Sequence (4321),1.00000,1.00000,+38 Sequence (4321)
-19,571-759-4321,+15717594321,38,Nice,571,roofing,571 · Northern VA roofing,,Sequence (4321),1.00000,1.00000,+38 Sequence (4321)
-20,571-932-1212,+15719321212,38,Nice,571,roofing,571 · Northern VA roofing,,Repeating pair (1212),1.00000,1.00000,+38 Repeating pair (1212)
-21,571-932-1234,+15719321234,38,Nice,571,roofing,571 · Northern VA roofing,,Sequence (1234),1.00000,1.00000,+38 Sequence (1234)
-22,571-932-1313,+15719321313,38,Nice,571,roofing,571 · Northern VA roofing,,Repeating pair (1313),1.00000,1.00000,+38 Repeating pair (1313)
-23,540-669-1234,+15406691234,33,Ordinary,540,lawn_care,540 · VA lawn care,MOW,Sequence (1234),1.00000,1.00000,+6 Keyword contained (MOW → 669); +10 Primary industry match; +38 Sequence (1234); -8 Short accidental 3-digit match (MOW); -5 Only weak keyword signal; -8 Random-looking number despite weak keyword hit
-24,540-698-8669,+15406988669,33,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; +3 High overall simplicity; -5 Only weak keyword signal
-25,540-218-8669,+15402188669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-26,540-385-8669,+15403858669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-27,540-418-8669,+15404188669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-28,540-495-8669,+15404958669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-29,540-592-8669,+15405928669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-30,540-634-8669,+15406348669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-31,540-660-8669,+15406608669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-32,540-755-8669,+15407558669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-33,540-858-8669,+15408588669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-34,540-923-6669,+15409236669,30,Ordinary,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+25 Exact 3-digit keyword ending (MOW → 669); +10 Primary industry match; -5 Only weak keyword signal
-35,571-773-0730,+15717730730,3,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,+3 High overall simplicity
-36,571-788-4744,+15717884744,3,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,+3 High overall simplicity
-37,571-934-9939,+15719349939,3,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,+3 High overall simplicity
-38,214-286-6951,+12142866951,0,Ordinary,214,plumbing,214 · Dallas plumbing,,,1.00000,1.00000,
-39,214-771-9509,+12147719509,0,Ordinary,214,plumbing,214 · Dallas plumbing,,,1.00000,1.00000,
-40,540-253-8945,+15402538945,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-41,540-296-6034,+15402966034,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-42,540-307-8445,+15403078445,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-43,540-385-8220,+15403858220,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-44,540-385-8270,+15403858270,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-45,540-385-8272,+15403858272,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-46,540-385-8278,+15403858278,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-47,540-385-8284,+15403858284,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-48,540-385-8291,+15403858291,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-49,540-390-8701,+15403908701,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-50,540-390-8711,+15403908711,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-51,540-390-8747,+15403908747,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-52,540-390-8749,+15403908749,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-53,540-390-8775,+15403908775,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-54,540-390-8786,+15403908786,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-55,540-390-8956,+15403908956,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-56,540-390-8961,+15403908961,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-57,540-390-8964,+15403908964,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-58,540-390-8971,+15403908971,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-59,540-390-8979,+15403908979,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-60,540-390-8980,+15403908980,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-61,540-390-8986,+15403908986,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-62,540-401-1124,+15404011124,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-63,540-401-1252,+15404011252,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-64,540-401-1263,+15404011263,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-65,540-401-1266,+15404011266,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-66,540-401-1270,+15404011270,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-67,540-401-1284,+15404011284,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-68,540-401-1295,+15404011295,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-69,540-401-1302,+15404011302,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-70,540-401-1315,+15404011315,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-71,540-401-1317,+15404011317,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-72,540-401-1320,+15404011320,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-73,540-401-1327,+15404011327,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-74,540-401-1332,+15404011332,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-75,540-401-1335,+15404011335,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-76,540-401-1339,+15404011339,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-77,540-401-1341,+15404011341,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-78,540-401-1344,+15404011344,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-79,540-401-1345,+15404011345,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-80,540-401-1705,+15404011705,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-81,540-401-1706,+15404011706,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-82,540-401-1727,+15404011727,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-83,540-401-1736,+15404011736,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-84,540-469-1037,+15404691037,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-85,540-495-8614,+15404958614,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-86,540-660-8058,+15406608058,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-87,540-698-8840,+15406988840,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-88,540-861-0782,+15408610782,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-89,540-861-0870,+15408610870,0,Ordinary,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,
-90,571-473-0182,+15714730182,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-91,571-530-6337,+15715306337,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-92,571-536-7090,+15715367090,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-93,571-698-0826,+15716980826,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-94,571-698-0838,+15716980838,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-95,571-704-7865,+15717047865,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-96,571-708-6337,+15717086337,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-97,571-720-6637,+15717206637,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-98,571-741-6637,+15717416637,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-99,571-773-0638,+15717730638,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-100,571-773-0656,+15717730656,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-101,571-773-0664,+15717730664,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-102,571-773-0665,+15717730665,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-103,571-773-0684,+15717730684,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-104,571-773-0692,+15717730692,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-105,571-773-0693,+15717730693,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-106,571-773-0701,+15717730701,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-107,571-773-0735,+15717730735,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-108,571-773-0747,+15717730747,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-109,571-773-0767,+15717730767,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-110,571-773-0790,+15717730790,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-111,571-781-9052,+15717819052,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-112,571-934-9806,+15719349806,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-113,571-934-9812,+15719349812,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-114,571-934-9813,+15719349813,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-115,571-934-9830,+15719349830,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-116,571-934-9835,+15719349835,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-117,571-934-9837,+15719349837,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-118,571-934-9841,+15719349841,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-119,571-934-9842,+15719349842,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-120,571-934-9854,+15719349854,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-121,571-934-9869,+15719349869,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-122,571-934-9873,+15719349873,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-123,571-934-9891,+15719349891,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-124,571-934-9892,+15719349892,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-125,571-934-9895,+15719349895,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-126,571-934-9903,+15719349903,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-127,571-934-9913,+15719349913,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-128,571-934-9915,+15719349915,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-129,571-934-9917,+15719349917,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-130,571-934-9918,+15719349918,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-131,571-934-9922,+15719349922,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-132,571-934-9924,+15719349924,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-133,571-934-9925,+15719349925,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-134,571-934-9926,+15719349926,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-135,571-934-9927,+15719349927,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-136,571-934-9931,+15719349931,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-137,571-934-9935,+15719349935,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-138,571-934-9936,+15719349936,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
-139,571-934-9953,+15719349953,0,Ordinary,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,
+rank,formatted_number,e164,score,tier,business_match,number_quality,area_code,industry,search_label,matched_words,matched_patterns,monthly_cost,upfront_cost,business_reasons,number_quality_reasons
+1,540-296-6937,+15402966937,56,Good,80,0,540,lawn_care,540 · VA lawn care,MOWER,,1.00000,1.00000,+70 Exact 5-digit keyword ending (MOWER → 66937); +5 Clean exact industry word placement; +5 Primary industry match,
+2,540-929-5296,+15409295296,46,Nice,65,0,540,lawn_care,540 · VA lawn care,LAWN,,1.00000,1.00000,+55 Exact 4-digit keyword ending (LAWN → 5296); +5 Clean exact industry word placement; +5 Primary industry match,
+3,571-680-7663,+15716807663,46,Nice,65,0,571,roofing,571 · Northern VA roofing,ROOF,,1.00000,1.00000,+55 Exact 4-digit keyword ending (ROOF → 7663); +5 Clean exact industry word placement; +5 Primary industry match,
+4,571-704-7663,+15717047663,46,Nice,65,0,571,roofing,571 · Northern VA roofing,ROOF,,1.00000,1.00000,+55 Exact 4-digit keyword ending (ROOF → 7663); +5 Clean exact industry word placement; +5 Primary industry match,
+5,540-572-4444,+15405724444,29,Ordinary,0,95,540,lawn_care,540 · VA lawn care,,Four-digit repeater (4444),5.00000,5.00000,,+85 Four-digit repeater (4444); +10 Provider marks this number as premium inventory
+6,540-658-1111,+15406581111,29,Ordinary,0,95,540,lawn_care,540 · VA lawn care,,Four-digit repeater (1111),5.00000,5.00000,,+85 Four-digit repeater (1111); +10 Provider marks this number as premium inventory
+7,571-240-1111,+15712401111,29,Ordinary,0,95,571,roofing,571 · Northern VA roofing,,Four-digit repeater (1111),5.00000,5.00000,,+85 Four-digit repeater (1111); +10 Provider marks this number as premium inventory
+8,571-759-4444,+15717594444,29,Ordinary,0,95,571,roofing,571 · Northern VA roofing,,Four-digit repeater (4444),5.00000,5.00000,,+85 Four-digit repeater (4444); +10 Provider marks this number as premium inventory
+9,571-788-4444,+15717884444,29,Ordinary,0,95,571,roofing,571 · Northern VA roofing,,Four-digit repeater (4444),5.00000,5.00000,,+85 Four-digit repeater (4444); +10 Provider marks this number as premium inventory
+10,571-932-1111,+15719321111,29,Ordinary,0,95,571,roofing,571 · Northern VA roofing,,Four-digit repeater (1111),5.00000,5.00000,,+85 Four-digit repeater (1111); +10 Provider marks this number as premium inventory
+11,540-358-9669,+15403589669,28,Ordinary,21,45,540,lawn_care,540 · VA lawn care,MOW,Palindrome (9669),1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,+45 Palindrome (9669)
+12,540-360-9669,+15403609669,28,Ordinary,21,45,540,lawn_care,540 · VA lawn care,MOW,Palindrome (9669),1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,+45 Palindrome (9669)
+13,540-472-4321,+15404724321,17,Ordinary,0,55,540,lawn_care,540 · VA lawn care,,Sequence (4321),1.00000,1.00000,,+55 Sequence (4321)
+14,540-655-1234,+15406551234,17,Ordinary,0,55,540,lawn_care,540 · VA lawn care,,Sequence (1234),1.00000,1.00000,,+55 Sequence (1234)
+15,540-669-1234,+15406691234,17,Ordinary,0,55,540,lawn_care,540 · VA lawn care,MOW,Sequence (1234),1.00000,1.00000,+4 Keyword contained (MOW → 669); +5 Primary industry match; -6 Short accidental 3-digit match (MOW); -4 Only weak keyword signal,+55 Sequence (1234)
+16,540-669-1313,+15406691313,17,Ordinary,0,55,540,lawn_care,540 · VA lawn care,MOW,Repeating pair (1313),1.00000,1.00000,+4 Keyword contained (MOW → 669); +5 Primary industry match; -6 Short accidental 3-digit match (MOW); -4 Only weak keyword signal,+55 Repeating pair (1313)
+17,540-889-1313,+15408891313,17,Ordinary,0,55,540,lawn_care,540 · VA lawn care,,Repeating pair (1313),1.00000,1.00000,,+55 Repeating pair (1313)
+18,571-600-2525,+15716002525,17,Ordinary,0,55,571,roofing,571 · Northern VA roofing,,Repeating pair (2525),1.00000,1.00000,,+55 Repeating pair (2525)
+19,571-696-4321,+15716964321,17,Ordinary,0,55,571,roofing,571 · Northern VA roofing,,Sequence (4321),1.00000,1.00000,,+55 Sequence (4321)
+20,571-759-4321,+15717594321,17,Ordinary,0,55,571,roofing,571 · Northern VA roofing,,Sequence (4321),1.00000,1.00000,,+55 Sequence (4321)
+21,571-932-1212,+15719321212,17,Ordinary,0,55,571,roofing,571 · Northern VA roofing,,Repeating pair (1212),1.00000,1.00000,,+55 Repeating pair (1212)
+22,571-932-1234,+15719321234,17,Ordinary,0,55,571,roofing,571 · Northern VA roofing,,Sequence (1234),1.00000,1.00000,,+55 Sequence (1234)
+23,571-932-1313,+15719321313,17,Ordinary,0,55,571,roofing,571 · Northern VA roofing,,Repeating pair (1313),1.00000,1.00000,,+55 Repeating pair (1313)
+24,540-218-8669,+15402188669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+25,540-385-8669,+15403858669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+26,540-418-8669,+15404188669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+27,540-495-8669,+15404958669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+28,540-592-8669,+15405928669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+29,540-634-8669,+15406348669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+30,540-660-8669,+15406608669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+31,540-698-8669,+15406988669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+32,540-755-8669,+15407558669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+33,540-858-8669,+15408588669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+34,540-923-6669,+15409236669,15,Ordinary,21,0,540,lawn_care,540 · VA lawn care,MOW,,1.00000,1.00000,+20 Exact 3-digit keyword ending (MOW → 669); +5 Primary industry match; -4 Only weak keyword signal,
+35,214-286-6951,+12142866951,0,Ordinary,0,0,214,plumbing,214 · Dallas plumbing,,,1.00000,1.00000,,
+36,214-771-9509,+12147719509,0,Ordinary,0,0,214,plumbing,214 · Dallas plumbing,,,1.00000,1.00000,,
+37,540-253-8945,+15402538945,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+38,540-296-6034,+15402966034,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+39,540-307-8445,+15403078445,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+40,540-385-8220,+15403858220,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+41,540-385-8270,+15403858270,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+42,540-385-8272,+15403858272,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+43,540-385-8278,+15403858278,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+44,540-385-8284,+15403858284,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+45,540-385-8291,+15403858291,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+46,540-390-8701,+15403908701,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+47,540-390-8711,+15403908711,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+48,540-390-8747,+15403908747,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+49,540-390-8749,+15403908749,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+50,540-390-8775,+15403908775,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+51,540-390-8786,+15403908786,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+52,540-390-8956,+15403908956,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+53,540-390-8961,+15403908961,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+54,540-390-8964,+15403908964,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+55,540-390-8971,+15403908971,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+56,540-390-8979,+15403908979,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+57,540-390-8980,+15403908980,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+58,540-390-8986,+15403908986,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+59,540-401-1124,+15404011124,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+60,540-401-1252,+15404011252,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+61,540-401-1263,+15404011263,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+62,540-401-1266,+15404011266,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+63,540-401-1270,+15404011270,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+64,540-401-1284,+15404011284,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+65,540-401-1295,+15404011295,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+66,540-401-1302,+15404011302,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+67,540-401-1315,+15404011315,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+68,540-401-1317,+15404011317,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+69,540-401-1320,+15404011320,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+70,540-401-1327,+15404011327,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+71,540-401-1332,+15404011332,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+72,540-401-1335,+15404011335,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+73,540-401-1339,+15404011339,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+74,540-401-1341,+15404011341,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+75,540-401-1344,+15404011344,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+76,540-401-1345,+15404011345,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+77,540-401-1705,+15404011705,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+78,540-401-1706,+15404011706,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+79,540-401-1727,+15404011727,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+80,540-401-1736,+15404011736,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+81,540-469-1037,+15404691037,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+82,540-495-8614,+15404958614,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+83,540-660-8058,+15406608058,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+84,540-698-8840,+15406988840,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+85,540-861-0782,+15408610782,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+86,540-861-0870,+15408610870,0,Ordinary,0,0,540,lawn_care,540 · VA lawn care,,,1.00000,1.00000,,
+87,571-473-0182,+15714730182,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+88,571-530-6337,+15715306337,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+89,571-536-7090,+15715367090,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+90,571-698-0826,+15716980826,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+91,571-698-0838,+15716980838,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+92,571-704-7865,+15717047865,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+93,571-708-6337,+15717086337,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+94,571-720-6637,+15717206637,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+95,571-741-6637,+15717416637,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+96,571-773-0638,+15717730638,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+97,571-773-0656,+15717730656,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+98,571-773-0664,+15717730664,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+99,571-773-0665,+15717730665,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+100,571-773-0684,+15717730684,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+101,571-773-0692,+15717730692,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+102,571-773-0693,+15717730693,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+103,571-773-0701,+15717730701,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+104,571-773-0730,+15717730730,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+105,571-773-0735,+15717730735,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+106,571-773-0747,+15717730747,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+107,571-773-0767,+15717730767,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+108,571-773-0790,+15717730790,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+109,571-781-9052,+15717819052,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+110,571-788-4744,+15717884744,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+111,571-934-9806,+15719349806,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+112,571-934-9812,+15719349812,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+113,571-934-9813,+15719349813,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+114,571-934-9830,+15719349830,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+115,571-934-9835,+15719349835,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+116,571-934-9837,+15719349837,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+117,571-934-9841,+15719349841,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+118,571-934-9842,+15719349842,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+119,571-934-9854,+15719349854,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+120,571-934-9869,+15719349869,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+121,571-934-9873,+15719349873,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+122,571-934-9891,+15719349891,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+123,571-934-9892,+15719349892,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+124,571-934-9895,+15719349895,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+125,571-934-9903,+15719349903,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+126,571-934-9913,+15719349913,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+127,571-934-9915,+15719349915,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+128,571-934-9917,+15719349917,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+129,571-934-9918,+15719349918,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+130,571-934-9922,+15719349922,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+131,571-934-9924,+15719349924,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+132,571-934-9925,+15719349925,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+133,571-934-9926,+15719349926,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+134,571-934-9927,+15719349927,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+135,571-934-9931,+15719349931,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+136,571-934-9935,+15719349935,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+137,571-934-9936,+15719349936,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+138,571-934-9939,+15719349939,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
+139,571-934-9953,+15719349953,0,Ordinary,0,0,571,roofing,571 · Northern VA roofing,,,1.00000,1.00000,,
