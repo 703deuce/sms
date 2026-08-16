@@ -132,6 +132,9 @@ async def run_inbound_session(ctx: JobContext) -> None:
     ctx.add_shutdown_callback(shutdown_backend)
 
     participant = await ctx.wait_for_participant()
+    # Connect early (frontdesk / hotel_receptionist pattern) once SIP participant exists.
+    await ctx.connect()
+
     attrs = dict(participant.attributes or {})
     bootstrap = await backend.call(
         "bootstrap_inbound",
@@ -207,8 +210,6 @@ async def run_inbound_session(ctx: JobContext) -> None:
 
     session = AgentSession(llm=realtime_llm, userdata=ud)
     agent = create_amy_agent(ud, backend)
-
-    await ctx.connect()
 
     await session.start(
         agent=agent,

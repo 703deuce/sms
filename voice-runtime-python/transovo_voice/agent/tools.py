@@ -19,9 +19,11 @@ if TYPE_CHECKING:
     from transovo_voice.agent.amy import AmyAgent
 
 
-def _end_call_toolset() -> EndCallTool:
+def _end_call_toolset(ud: SessionUserData) -> EndCallTool:
+    # When warm transfer is enabled, keep the room if the session ends without transfer
+    # (warm-transfer example uses delete_room_on_close=False for supervisor leg).
     return EndCallTool(
-        delete_room=True,
+        delete_room=not ud.can_transfer(),
         end_instructions="Thank the caller warmly and say goodbye.",
     )
 
@@ -160,7 +162,7 @@ def _faq_and_end_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
             return result.get("error") or "I couldn't find that information."
         return result.get("speak") or ""
 
-    tools.extend([get_business_answer, _end_call_toolset(), *_optional_transfer(agent, backend)])
+    tools.extend([get_business_answer, _end_call_toolset(ud), *_optional_transfer(agent, backend)])
     return tools
 
 
