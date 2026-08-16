@@ -3,12 +3,16 @@ import { mkdirSync } from "fs";
 
 const BASE = (
   process.env.PERSONAL_SCREENSHOT_BASE ||
+  process.env.APP_URL ||
+  process.env.BASE_URL ||
   process.env.LOCAL_APP_URL ||
   "http://localhost:3000"
 ).replace(/\/$/, "");
+const PERSONAL_WORKSPACE_ID =
+  process.env.PERSONAL_WORKSPACE_ID || "cmsu9n9zq3y57165y5c2x3m59";
+const OUT = process.env.SCREENSHOT_OUT || "/opt/cursor/artifacts/screenshots/personal-prod";
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
 const EMAIL = (process.env.OWNER_EMAIL || "alex@harborhome.co").trim().toLowerCase();
-const OUT = "/opt/cursor/artifacts/screenshots/personal";
 mkdirSync(OUT, { recursive: true });
 
 async function smokeLogin(page) {
@@ -29,12 +33,12 @@ async function smokeLogin(page) {
 async function ensurePersonal(page) {
   const res = await page.request.post(`${BASE}/api/workspace`, {
     headers: { "content-type": "application/json" },
-    data: { action: "create_personal" },
+    data: { workspaceId: PERSONAL_WORKSPACE_ID },
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok()) {
     throw new Error(
-      `create_personal failed: ${res.status()} ${JSON.stringify(body)}`,
+      `select personal workspace failed: ${res.status()} ${JSON.stringify(body)}`,
     );
   }
   return body;
@@ -55,7 +59,8 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await context.newPage();
 
-await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 60000 });
+console.log(`Screenshot base: ${BASE}`);
+console.log(`Workspace: ${PERSONAL_WORKSPACE_ID}`);
 await smokeLogin(page);
 await ensurePersonal(page);
 
