@@ -190,7 +190,8 @@ check("receptionist field collection uses silent handoff", () => {
   assert.ok(fieldTask.includes("FIELD_TRANSITION_BRIDGE_RULES"));
   assert.ok(fieldTask.includes("addToChatCtx: false"));
   assert.ok(fieldTask.includes("receptionistOperationalTaskOptionsFromSession"));
-  assert.ok(lifecycle.startsWith("TOOL_FEEDBACK: success"));
+  assert.ok(lifecycle.includes("formatToolFeedbackForModel"));
+  assert.ok(lifecycle.includes("toolFeedbackFromCollectionResult"));
   assert.ok(tools.includes("buildReceptionistCollectionToolResult"));
   assert.ok(tools.includes("markParentResumed"));
   assert.ok(taskCtx.includes("receptionistOperationalTaskOptionsFromSession"));
@@ -216,12 +217,12 @@ check("receptionist compiles layered prompt and hybrid voice pipeline", () => {
   assert.ok(prompt.includes("YOUR JOB"));
   assert.ok(prompt.includes("BUSINESS"));
   assert.ok(prompt.includes("CALL CONFIGURATION"));
-  assert.ok(constitution.includes("Never claim an action happened"));
+  assert.ok(constitution.includes("Never claim an action succeeded"));
   assert.ok(catalog.includes("RECEPTIONIST_ELEVENLABS_VOICES"));
   assert.ok(pipeline.includes("voicePipelineCfgForHybridAgent"));
   assert.ok(hybrid.includes("maybeNormalizeForElevenLabsModel"));
   assert.ok(agent.includes("compiledPrompt"));
-  assert.ok(about.includes("What should your receptionist do?"));
+  assert.ok(about.includes("what your receptionist should know"));
 });
 
 check("realtime pipeline supports per-agent speed and VAD", () => {
@@ -275,7 +276,7 @@ check("booking uses inline email gate and LiveKit end call", () => {
   const bridge = readProjectFile("voice-runtime/src/task-async-work-bridge.ts");
   assert.ok(booking.includes("formatToolFeedbackForModel"));
   assert.ok(booking.includes("findBookingPrerequisiteGaps"));
-  assert.ok(booking.includes("record_booking_email"));
+  assert.ok(booking.includes("buildRecordBookingEmailTool"));
   assert.ok(booking.includes("buildFrontDeskEndCallToolset"));
   assert.ok(booking.includes("runAsyncWorkWithBridge"));
   assert.ok(emailInline.includes("record_booking_email"));
