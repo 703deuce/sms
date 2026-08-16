@@ -16,7 +16,7 @@ import {
   looksLikeAvailabilityRequest,
 } from "../voice-runtime/src/frontdesk/receptionist/collection-utterance-validation";
 import { persistActiveFieldAnswer } from "../voice-runtime/src/frontdesk/receptionist/process-active-field-answer";
-import { extractFieldsFromUtterance } from "../voice-runtime/src/frontdesk/receptionist/collection-field-extractor";
+import { extractDeterministicFieldsFromUtterance } from "../voice-runtime/src/frontdesk/receptionist/collection-field-extractor";
 import type { FrontDeskUserData } from "../voice-runtime/src/frontdesk/userdata";
 
 function baseUserData(): FrontDeskUserData {
@@ -103,7 +103,7 @@ if (phoneSave.status === "saved") {
 }
 
 const multiManifest = ud.receptionistCompiled!.fieldManifest;
-const multi = extractFieldsFromUtterance(
+const multi = extractDeterministicFieldsFromUtterance(
   "Yeah I'm Anthony Johnson, my number is 571-477-6175, I'm at 123 Main Street in Arlington, and my AC stopped cooling.",
   multiManifest,
   {},

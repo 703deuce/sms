@@ -102,11 +102,11 @@ assert.ok(!allowed.has("schedule_appointment"));
 assert.equal(bookingFieldsComplete(ud), true);
 
 enterCollectionState(ud, "booking");
-ud.receptionistWorkflow!.state = "BOOKING_AWAIT_SLOT";
+ud.receptionistWorkflow!.state = "BOOKING_SELECT_SLOT";
 assert.equal(
   isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "schedule_appointment"),
   false,
-  "schedule_appointment blocked during BOOKING_AWAIT_SLOT — runtime owns slot pick",
+  "schedule_appointment blocked during BOOKING_SELECT_SLOT — runtime owns slot pick",
 );
 assert.equal(
   isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "end_call"),

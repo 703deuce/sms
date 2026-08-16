@@ -21,6 +21,13 @@ export type FrontDeskBookingState = {
   bookedTimeLabel?: string;
 };
 
+export type FrontDeskBookingReceipt = {
+  slotId: string;
+  bookedTimeLabel: string;
+  providerEventId?: string;
+  appointmentId?: string;
+};
+
 export type FrontDeskUserData = {
   workspaceId: string;
   agentId: string;
@@ -60,6 +67,8 @@ export type FrontDeskUserData = {
   bookingComplete?: boolean;
   bookedTimeLabel?: string;
   pendingSlotId?: string;
+  /** Authoritative receipt after runtime-confirmed Calendly write. */
+  bookingReceipt?: FrontDeskBookingReceipt;
   /** Prevents duplicate booking confirmation SMS on retry or reschedule. */
   bookingConfirmationSmsSent?: boolean;
   /** True while schedule_appointment is writing to Calendly. */

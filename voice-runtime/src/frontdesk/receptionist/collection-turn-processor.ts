@@ -11,8 +11,8 @@ import {
 } from "./collection-state-lifecycle";
 import {
   COLLECTION_FIELD_SAVE_ORDER,
-  extractFieldsFromUtterance,
 } from "./collection-field-extractor";
+import { extractFieldsFromUtterance } from "./collection-semantic-extractor";
 import {
   classifyCollectionUtterance,
 } from "./collection-utterance-validation";
@@ -93,10 +93,15 @@ export async function processCollectionTurn(
   }
 
   const turnId = deps.bumpTurnId(ud);
-  const extraction = extractFieldsFromUtterance(
+  const extraction = await extractFieldsFromUtterance(
     normalizedTranscript,
     manifest,
     ud.receptionistFields || {},
+    {
+      callerE164: ud.callerE164,
+      activeFieldId: wf.activeFieldId,
+      callId: ud.callId,
+    },
   );
 
   if (extraction.skippedReason === "availability_request") {
@@ -149,6 +154,7 @@ export async function processCollectionTurn(
       deps.log("collection_fields_extracted", {
         transcript: normalizedTranscript,
         correction: extraction.correction,
+        extractionSource: extraction.extractionSource ?? "deterministic",
         savedFieldIds: saved.map((s) => s.fieldId),
         ...collectionStateSnapshot(ud),
       });

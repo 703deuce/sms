@@ -12,7 +12,7 @@ import {
 } from "./booking-email-inline";
 import { findBookingPrerequisiteGaps } from "./booking-prerequisites";
 import { prefillReceptionistFieldsForBooking } from "./booking-prefill";
-import { canStartScheduleAppointment } from "./booking-operation";
+import { executeScheduleAppointmentForSession } from "./runtime-schedule-appointment";
 import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";
 import { buildFrontDeskRescheduleAppointmentTool } from "./reschedule-appointment-tool";
@@ -193,18 +193,7 @@ export function buildFrontDeskBookingTools(input: {
         userData.confirmedEmail = resolvedEmail;
       }
 
-      return formatToolFeedbackForModel(
-        toolFeedbackSuccess(
-          "Slot selected. Runtime is committing the appointment now — do not speak.",
-          {
-            tool: "schedule_appointment",
-            next_action: "schedule_appointment_retry",
-            runtime_handled_retry: true,
-            context: { slot_id, deferred_commit: true },
-            guidance: "Runtime owns the calendar write. Do not speak or call schedule_appointment again.",
-          },
-        ),
-      );
+      return await executeScheduleAppointmentForSession(session, slotsMap, slot_id, inlineEmail);
     },
   });
 

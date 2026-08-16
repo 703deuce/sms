@@ -13,7 +13,7 @@ export type ReceptionistWorkflowState =
   | "BOOKING_COLLECT"
   | "BOOKING_CHECK_AVAILABILITY"
   | "BOOKING_OFFER_SLOTS"
-  | "BOOKING_AWAIT_SLOT"
+  | "BOOKING_SELECT_SLOT"
   | "BOOKING_CONFIRM_SLOT"
   | "BOOKING_COMMIT"
   | "BOOKING_DONE"
@@ -41,6 +41,8 @@ export type ReceptionistWorkflowSnapshot = {
   speechLocked?: boolean;
   /** Slots offered to the caller in the current booking attempt. */
   offeredSlotIds?: string[];
+  /** Slot the caller selected — validated against offeredSlotIds before confirm. */
+  selectedSlotId?: string;
   /** Monotonic turn counter for collection generation logging. */
   collectionTurnSeq?: number;
   /** Last transcript saved for the active field — dedupe double STT finalization. */

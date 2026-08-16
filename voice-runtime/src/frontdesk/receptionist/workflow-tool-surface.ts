@@ -77,7 +77,7 @@ export function isToolAllowedInWorkflow(
       return false;
 
     case "BOOKING_OFFER_SLOTS":
-    case "BOOKING_AWAIT_SLOT":
+    case "BOOKING_SELECT_SLOT":
     case "BOOKING_CONFIRM_SLOT":
       return toolName === "get_business_answer" || toolName === "end_call";
 

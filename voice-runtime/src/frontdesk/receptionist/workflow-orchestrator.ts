@@ -249,7 +249,7 @@ async function runtimeListAvailableSlots(session: AgentSession<FrontDeskUserData
     const lines = cal.formatSlotsForModel(slots);
     const wf = ensureReceptionistWorkflow(ud);
     wf.offeredSlotIds = slots.map((s) => s.slotId);
-    setWorkflowState(ud, "BOOKING_AWAIT_SLOT", { offeredSlotIds: wf.offeredSlotIds });
+    setWorkflowState(ud, "BOOKING_OFFER_SLOTS", { offeredSlotIds: wf.offeredSlotIds });
 
     const slotText = lines || "No appointment slots are available right now.";
     const instructions =
@@ -261,6 +261,7 @@ async function runtimeListAvailableSlots(session: AgentSession<FrontDeskUserData
       instructions,
       toolChoice: "none",
     });
+    setWorkflowState(ud, "BOOKING_SELECT_SLOT", { offeredSlotIds: wf.offeredSlotIds });
     await syncAgentToolSurface(session);
     logOrchestrator(ud.callId, "availability_offered", { slotCount: slots.length });
   } catch (err) {
@@ -288,15 +289,22 @@ async function runtimeFinalizeTerminalSuccess(session: AgentSession<FrontDeskUse
   session.shutdown({ reason: "workflow_terminal_success" });
 }
 
-/** Runtime-direct calendar write — no model decision turn after slot selection. */
+/** Runtime-direct calendar write — only after BOOKING_CONFIRM_SLOT acceptance. */
 export async function runtimeCommitBooking(
   session: AgentSession<FrontDeskUserData>,
   slotId?: string,
 ): Promise<void> {
   const ud = session.userData;
-  const id = slotId || ud.pendingSlotId || ud.bookingOperation?.slotId;
+  const wf = ensureReceptionistWorkflow(ud);
+  const id = slotId || wf.selectedSlotId || ud.pendingSlotId || ud.bookingOperation?.slotId;
   if (!id || !bookingFieldsComplete(ud) || ud.bookingCommitInFlight) return;
   if (isBookingConfirmed(ud)) return;
+
+  const offered = wf.offeredSlotIds ?? [];
+  if (offered.length > 0 && !offered.includes(id)) {
+    logOrchestrator(ud.callId, "commit_slot_not_offered", { slotId: id, offered });
+    return;
+  }
 
   const slotsMap = ud.receptionistSlotsMap;
   if (!slotsMap) {
@@ -305,7 +313,7 @@ export async function runtimeCommitBooking(
   }
 
   ud.bookingCommitInFlight = true;
-  setWorkflowState(ud, "BOOKING_COMMIT");
+  setWorkflowState(ud, "BOOKING_COMMIT", { selectedSlotId: id });
   await syncAgentToolSurface(session);
 
   try {
@@ -330,7 +338,7 @@ async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>
       await runtimeListAvailableSlots(session);
       return;
     case "BOOKING_COMMIT":
-      await runtimeCommitBooking(session);
+      // Commit only enters via BOOKING_CONFIRM_SLOT acceptance — not proactive retry.
       return;
     case "BOOKING_DONE":
       if (isBookingConfirmed(ud) && wf.speechLocked) {
@@ -368,10 +376,6 @@ export async function prepareWorkflowForTool(
       await beginDeterministicFieldCollection(session, "booking", { skipFirstQuestion: true });
       await syncAgentToolSurface(session);
       await askNextCollectionField(session, "booking");
-      return;
-    }
-    if (toolName === "schedule_appointment" && ud.pendingSlotId) {
-      setWorkflowState(ud, "BOOKING_COMMIT", { requiredTool: "schedule_appointment" });
     }
   }
   if (intent === "message") {
@@ -409,28 +413,10 @@ export async function afterReceptionistToolExecuted(
     return;
   }
 
-  if (toolName === "record_current_field" && feedback.outcome === "success") {
-    const purpose = ud.receptionistWorkflow?.collectionPurpose || "booking";
-    const wf = ensureReceptionistWorkflow(ud);
-    const savedValue =
-      typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined;
-    wf.collectionLastSavedTranscript = undefined;
-    clearCollectionStuckWatchdog(ud);
-    logOrchestrator(ud.callId, "record_field_tool_fallback", {
-      field_id: feedback.field_id,
-      note: "model_called_record_current_field_outside_runtime_path",
-    });
-    logFieldSaveProgress(ud, feedback.field_id, savedValue);
-    await advanceCollectionAfterFieldSaved(session, purpose, feedback.field_id, savedValue);
-    return;
-  }
-
-  if (toolName === "record_current_field" && feedback.outcome !== "success") {
-    logOrchestrator(ud.callId, "record_field_not_success", {
+  if (toolName === "record_current_field") {
+    logOrchestrator(ud.callId, "record_field_obsolete", {
       outcome: feedback.outcome,
-      reason: feedback.reason,
-      field_id: feedback.field_id,
-      recovery_class: feedback.recovery_class,
+      note: "record_current_field removed — runtime saves from transcript",
     });
     return;
   }
@@ -440,19 +426,31 @@ export async function afterReceptionistToolExecuted(
   }
 
   if (toolName === "schedule_appointment" && feedback.outcome === "success") {
-    const deferredCommit = feedback.context?.deferred_commit === true;
-    if (deferredCommit && !isBookingConfirmed(ud)) {
-      const slotId =
-        typeof feedback.context?.slot_id === "string" ? feedback.context.slot_id : ud.pendingSlotId;
-      await runtimeCommitBooking(session, slotId);
-      return;
+    const wf = ensureReceptionistWorkflow(ud);
+    const slotId =
+      typeof feedback.context?.slot_id === "string"
+        ? feedback.context.slot_id
+        : wf.selectedSlotId || ud.pendingSlotId;
+    const bookedTimeLabel = ud.bookedTimeLabel || ud.booking?.bookedTimeLabel;
+    if (slotId && bookedTimeLabel) {
+      ud.bookingReceipt = {
+        slotId,
+        bookedTimeLabel,
+        providerEventId: ud.booking?.providerEventId,
+        appointmentId: ud.booking?.appointmentId,
+      };
     }
 
-    const wf = transitionFromToolFeedback(ud, toolName, feedback);
     wf.speechLocked = true;
     wf.state = "BOOKING_DONE";
     wf.requiredTool = "end_call";
+    wf.selectedSlotId = slotId || wf.selectedSlotId;
     await syncAgentToolSurface(session);
+    logOrchestrator(ud.callId, "booking_done", {
+      slotId,
+      bookedTimeLabel,
+      receipt: ud.bookingReceipt,
+    });
     if (feedback.caller_already_heard_success) {
       await runProactiveWorkflowStep(session);
     }
@@ -470,12 +468,9 @@ export async function afterReceptionistToolExecuted(
   }
 
   if (toolName === "list_available_slots" && feedback.outcome === "success") {
-    transitionFromToolFeedback(ud, toolName, feedback);
-    await syncAgentToolSurface(session);
-    if (feedback.next_action === "offer_slots_and_confirm") {
-      setWorkflowState(ud, "BOOKING_OFFER_SLOTS", { requiredTool: "schedule_appointment" });
-      await syncAgentToolSurface(session);
-    }
+    logOrchestrator(ud.callId, "list_slots_obsolete_model_path", {
+      note: "runtime owns availability — model list_available_slots ignored",
+    });
     return;
   }
 
@@ -577,11 +572,7 @@ async function handleCollectionClarification(
 
 function isRuntimeBookingSlotState(ud: FrontDeskUserData): boolean {
   const state = ud.receptionistWorkflow?.state;
-  return (
-    state === "BOOKING_OFFER_SLOTS" ||
-    state === "BOOKING_AWAIT_SLOT" ||
-    state === "BOOKING_CONFIRM_SLOT"
-  );
+  return state === "BOOKING_SELECT_SLOT" || state === "BOOKING_CONFIRM_SLOT";
 }
 
 function handleBookingUtterance(

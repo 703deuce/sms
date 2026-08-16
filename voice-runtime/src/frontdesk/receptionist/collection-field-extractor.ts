@@ -4,6 +4,7 @@ import {
   looksLikeFreeformCallerStatement,
 } from "@/lib/voice/receptionist/field-backfill";
 import { validateReceptionistFieldValue } from "@/lib/voice/receptionist/field-validation";
+import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   looksLikeAvailabilityRequest,
   looksLikeMetaQuestion,
@@ -15,17 +16,22 @@ const CORRECTION_RE =
 const BUSINESS_QUESTION_RE =
   /\b(how much|what do you charge|cost of|price of|service call cost|diagnostic fee)\b/i;
 
+const CALLER_ID_PHONE_RE =
+  /\b(calling from|number i'?m calling from|number i am calling from|use (my |the )?number|this number|same number|number i'?m on)\b/i;
+
 export type FieldExtractionResult = {
   fields: Record<string, string>;
   correction: boolean;
   skippedReason?: string;
+  extractionSource?: "deterministic" | "semantic_llm";
 };
 
-/** Heuristic multi-field extraction from one finalized caller utterance — no tool calls. */
-export function extractFieldsFromUtterance(
+/** Fast deterministic extraction — phone digits, email, obvious patterns. No LLM. */
+export function extractDeterministicFieldsFromUtterance(
   transcript: string,
   manifest: AgentFieldDefinition[],
   currentFields: Record<string, string>,
+  callerE164?: string,
 ): FieldExtractionResult {
   const trimmed = transcript.trim();
   if (!trimmed) return { fields: {}, correction: false, skippedReason: "empty" };
@@ -51,7 +57,6 @@ export function extractFieldsFromUtterance(
     if (/\b(reason|issue|problem|ac|hvac)\b/i.test(trimmed)) delete baseFields.reason;
   }
 
-  // Avoid stuffing pricing questions into reason when nothing else matched.
   if (
     !correction &&
     looksLikeFreeformCallerStatement(trimmed) &&
@@ -83,7 +88,7 @@ export function extractFieldsFromUtterance(
   const addressField = manifest.find((f) => f.id === "address");
   if (!fields.address && !baseFields.address?.trim() && addressField) {
     const addressMatch = trimmed.match(
-      /\b(?:i'?m at|i am at|i live at|we'?re at|at)\s+([^,]+(?:,\s*[A-Za-z .]+)?)(?=\s*,\s*and|\s+and\s+my\s+)/i,
+      /\b(?:i'?m at|i am at|i live at|we'?re at|at|over on)\s+([^,]+(?:,\s*[A-Za-z .]+)?)(?=\s*,\s*and|\s+and\s+)/i,
     );
     if (addressMatch?.[1]) {
       try {
@@ -106,7 +111,17 @@ export function extractFieldsFromUtterance(
     }
   }
 
-  return { fields, correction };
+  if (
+    !fields.phone &&
+    !baseFields.phone?.trim() &&
+    CALLER_ID_PHONE_RE.test(trimmed) &&
+    callerE164
+  ) {
+    const normalized = tryNormalizeE164(callerE164) || callerE164;
+    fields.phone = normalized;
+  }
+
+  return { fields, correction, extractionSource: "deterministic" };
 }
 
 /** Stable save order when multiple fields arrive in one utterance. */

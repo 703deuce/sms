@@ -132,8 +132,8 @@ export function transitionFromToolFeedback(
     case "do_not_speak":
       return wf;
     case "offer_slots_and_confirm":
-      wf.state = "BOOKING_OFFER_SLOTS";
-      wf.requiredTool = "schedule_appointment";
+      wf.state = "BOOKING_SELECT_SLOT";
+      wf.requiredTool = undefined;
       return wf;
     case "list_slots_then_retry":
       wf.state = "BOOKING_CHECK_AVAILABILITY";
@@ -222,8 +222,9 @@ export function transitionAfterRecordField(
   }
 
   const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
-  if (pendingSlot) {
-    wf.state = "BOOKING_COMMIT";
+  if (pendingSlot && wf.offeredSlotIds?.includes(pendingSlot)) {
+    wf.state = "BOOKING_CONFIRM_SLOT";
+    wf.selectedSlotId = pendingSlot;
     wf.requiredTool = undefined;
     wf.activeFieldId = undefined;
     return wf;
@@ -259,6 +260,10 @@ export function runtimeNextActionForState(
       return "list_slots_then_retry";
     case "BOOKING_OFFER_SLOTS":
       return "offer_slots_and_confirm";
+    case "BOOKING_SELECT_SLOT":
+      return "offer_slots_and_confirm";
+    case "BOOKING_CONFIRM_SLOT":
+      return "schedule_appointment_retry";
     case "BOOKING_COMMIT":
       return "schedule_appointment_retry";
     case "BOOKING_DONE":

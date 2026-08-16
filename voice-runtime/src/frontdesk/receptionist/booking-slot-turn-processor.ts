@@ -13,16 +13,26 @@ import {
   controlledGenerateReply,
 } from "./collection-realtime-control";
 
-type BookingTurnLog = (event: string, extra?: Record<string, unknown>) => void;
-
 type BookingSlotTurnDeps = {
-  log: BookingTurnLog;
+  log: (event: string, extra?: Record<string, unknown>) => void;
   commitBooking: (session: AgentSession<FrontDeskUserData>) => Promise<void>;
 };
 
+function clearSelectedSlot(ud: FrontDeskUserData): void {
+  ud.pendingSlotId = undefined;
+  const wf = ensureReceptionistWorkflow(ud);
+  wf.selectedSlotId = undefined;
+}
+
+function applySelectedSlot(ud: FrontDeskUserData, slotId: string): void {
+  ud.pendingSlotId = slotId;
+  const wf = ensureReceptionistWorkflow(ud);
+  wf.selectedSlotId = slotId;
+}
+
 /**
- * Runtime-owned slot pick + confirm after availability is offered.
- * final transcript → match slot → confirm prompt → yes → commit.
+ * Runtime-owned slot pick + confirm:
+ * SELECT_SLOT → CONFIRM_SLOT → COMMIT (via deps.commitBooking).
  */
 export async function processBookingSlotTurn(
   session: AgentSession<FrontDeskUserData>,
@@ -41,15 +51,23 @@ export async function processBookingSlotTurn(
 
   if (wf.state === "BOOKING_CONFIRM_SLOT") {
     if (utteranceIndicatesBookingConfirmation(normalized)) {
-      log("booking_confirm_accepted", { transcript: normalized });
+      const selected = wf.selectedSlotId || ud.pendingSlotId;
+      if (!selected || !offered.includes(selected)) {
+        log("booking_confirm_invalid_selection", { selected, offered });
+        clearSelectedSlot(ud);
+        setWorkflowState(ud, "BOOKING_SELECT_SLOT");
+        return;
+      }
+      log("booking_confirm_accepted", { transcript: normalized, selectedSlotId: selected });
+      setWorkflowState(ud, "BOOKING_COMMIT");
       await deps.commitBooking(session);
       return;
     }
 
     if (utteranceIndicatesBookingRejection(normalized)) {
       log("booking_confirm_rejected", { transcript: normalized });
-      ud.pendingSlotId = undefined;
-      setWorkflowState(ud, "BOOKING_AWAIT_SLOT");
+      clearSelectedSlot(ud);
+      setWorkflowState(ud, "BOOKING_SELECT_SLOT");
       await controlledGenerateReply(session, "booking_slot_rejected", bumpCollectionTurnSeq(ud), {
         instructions:
           "The caller does not want that time. Ask exactly one question: which of the offered times works for them?",
@@ -58,14 +76,9 @@ export async function processBookingSlotTurn(
       return;
     }
 
-    const rematch = matchOfferedSlotFromUtterance(
-      normalized,
-      offered,
-      slotsMap,
-      ud.timezone,
-    );
-    if (rematch) {
-      ud.pendingSlotId = rematch.slotId;
+    const rematch = matchOfferedSlotFromUtterance(normalized, offered, slotsMap, ud.timezone);
+    if (rematch && offered.includes(rematch.slotId)) {
+      applySelectedSlot(ud, rematch.slotId);
       const label = formatSlotSpokenLabel(rematch, ud.timezone);
       log("booking_slot_rematched", { slotId: rematch.slotId, label });
       await controlledGenerateReply(session, "booking_confirm_reprompt", bumpCollectionTurnSeq(ud), {
@@ -76,7 +89,7 @@ export async function processBookingSlotTurn(
     }
 
     log("booking_confirm_unclear", { transcript: normalized });
-    const pending = ud.pendingSlotId ? slotsMap.get(ud.pendingSlotId) : undefined;
+    const pending = wf.selectedSlotId ? slotsMap.get(wf.selectedSlotId) : undefined;
     const label = pending ? formatSlotSpokenLabel(pending, ud.timezone) : "that time";
     await controlledGenerateReply(session, "booking_confirm_unclear", bumpCollectionTurnSeq(ud), {
       instructions:
@@ -87,14 +100,14 @@ export async function processBookingSlotTurn(
     return;
   }
 
-  if (wf.state !== "BOOKING_OFFER_SLOTS" && wf.state !== "BOOKING_AWAIT_SLOT") return;
+  if (wf.state !== "BOOKING_SELECT_SLOT") return;
 
   const matched = matchOfferedSlotFromUtterance(normalized, offered, slotsMap, ud.timezone);
-  if (matched) {
-    ud.pendingSlotId = matched.slotId;
-    setWorkflowState(ud, "BOOKING_CONFIRM_SLOT");
+  if (matched && offered.includes(matched.slotId)) {
+    applySelectedSlot(ud, matched.slotId);
+    setWorkflowState(ud, "BOOKING_CONFIRM_SLOT", { selectedSlotId: matched.slotId });
     const label = formatSlotSpokenLabel(matched, ud.timezone);
-    log("booking_slot_matched", { slotId: matched.slotId, label, transcript: normalized });
+    log("booking_slot_selected", { slotId: matched.slotId, label, transcript: normalized });
     await controlledGenerateReply(session, "booking_confirm_prompt", bumpCollectionTurnSeq(ud), {
       instructions:
         `The caller chose ${label}. Confirm in one short sentence and ask exactly one yes-or-no question to book it.`,
