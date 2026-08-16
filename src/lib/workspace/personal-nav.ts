@@ -1,5 +1,8 @@
 import {
+  Activity,
   ArrowRightLeft,
+  BarChart3,
+  Ban,
   CreditCard,
   Hash,
   LayoutDashboard,
@@ -7,6 +10,7 @@ import {
   PhoneForwarded,
   Vault,
   Voicemail,
+  Gauge,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 
@@ -19,6 +23,10 @@ export function buildPersonalNav(): NavItem[] {
     { label: "Number Vault", href: "/personal/vault", icon: Vault },
     { label: "Forwarding", href: "/personal/forwarding", icon: PhoneForwarded },
     { label: "Voicemail", href: "/personal/voicemail", icon: Voicemail },
+    { label: "Call Activity", href: "/personal/activity", icon: Activity },
+    { label: "Analytics", href: "/personal/analytics", icon: BarChart3 },
+    { label: "Blocked", href: "/personal/blocked", icon: Ban },
+    { label: "Usage", href: "/personal/usage", icon: Gauge },
     { label: "Porting", href: "/personal/porting", icon: ArrowRightLeft },
     { label: "Billing", href: "/settings/billing", icon: CreditCard },
   ];
@@ -32,6 +40,10 @@ export function getPersonalPageTitle(pathname: string): string {
   if (pathname === "/personal/vault") return "";
   if (pathname === "/personal/forwarding") return "";
   if (pathname === "/personal/voicemail") return "";
+  if (pathname === "/personal/activity") return "";
+  if (pathname === "/personal/analytics") return "";
+  if (pathname === "/personal/blocked") return "Blocked Numbers";
+  if (pathname === "/personal/usage") return "Usage";
   if (pathname === "/personal/porting") return "Porting";
   return "";
 }

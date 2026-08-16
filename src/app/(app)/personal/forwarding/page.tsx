@@ -1,5 +1,6 @@
 import { PersonalForwardingUI } from "@/components/personal/personal-forwarding-ui";
-import { loadPhoneNumbers, requireWorkspaceContext } from "@/lib/workspace-data";
+import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
+import { requireWorkspaceContext } from "@/lib/workspace-data";
 
 export default async function PersonalForwardingPage({
   searchParams,
@@ -7,7 +8,7 @@ export default async function PersonalForwardingPage({
   searchParams: Promise<{ numberId?: string }>;
 }) {
   const { workspaceId } = await requireWorkspaceContext();
-  const numbers = await loadPhoneNumbers(workspaceId);
+  const numbers = await loadPersonalNumbers(workspaceId);
   const { numberId } = await searchParams;
 
   return <PersonalForwardingUI numbers={numbers} initialNumberId={numberId} />;

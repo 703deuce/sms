@@ -40,6 +40,7 @@ export function derivePersonalServiceState(number: PhoneNumber): PersonalService
   if (derived === "PARKED") return "PARKED";
   if (derived === "FORWARDING") return "FORWARDING";
   if (derived === "VOICEMAIL") return "VOICEMAIL";
+  if (derived === "ANNOUNCEMENT") return "VOICEMAIL"; // announcement-only uses VOICEMAIL bucket for billing
   if (derived === "SMART_ROUTING") return "ACTIVE";
 
   return "ACTIVE";
@@ -56,7 +57,13 @@ export function deriveAcquisitionType(number: PhoneNumber): PersonalAcquisitionT
   return "PURCHASED";
 }
 
-export function personalServiceLabel(state: PersonalServiceState): string {
+export function personalServiceLabel(
+  state: PersonalServiceState,
+  number?: PhoneNumber,
+): string {
+  if (number && derivePersonalDisplayState(number) === "ANNOUNCEMENT") {
+    return "Announcement only";
+  }
   switch (state) {
     case "PARKED":
       return "Parked in Number Vault";

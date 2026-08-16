@@ -33,7 +33,32 @@ export async function processSoftphoneInbound(input: {
   });
 
   if (pn && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
+    const blocked = await prisma.suppression.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        OR: [
+          { phone: from },
+          { suppressionKey: `p:${from}` },
+          { suppressionKey: `${input.workspaceId}:p:${from}` },
+        ],
+      },
+    });
+    if (blocked) {
+      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
+        method: "POST",
+        body: {},
+      }).catch(() => undefined);
+      return { blocked: true as const, from };
+    }
+
     const numberRoute = resolveNumberInboundRoute(pn);
+    if (numberRoute.kind === "vault_silent") {
+      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
+        method: "POST",
+        body: {},
+      }).catch(() => undefined);
+      return { parked: true as const, silent: true, from };
+    }
     if (numberRoute.kind === "vault_message") {
       await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
         method: "POST",
@@ -69,6 +94,21 @@ export async function processSoftphoneInbound(input: {
         userId: assignment?.userId ?? null,
       });
       return { ...human, voicemail: true, vault: true };
+    }
+    if (numberRoute.kind === "announcement") {
+      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
+        method: "POST",
+        body: {
+          payload: numberRoute.message,
+          voice: "female",
+          language: "en-US",
+        },
+      }).catch(() => undefined);
+      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
+        method: "POST",
+        body: {},
+      }).catch(() => undefined);
+      return { announcement: true as const, from };
     }
     if (numberRoute.kind === "forward") {
       return forwardPersonalWithRing(input, pn, numberRoute);
@@ -111,7 +151,7 @@ export async function processSoftphoneInbound(input: {
     }
   }
 
-  // Blocked / suppressed callers — hang up immediately.
+  // Blocked / suppressed callers — hang up immediately (non-number routes).
   const blocked = await prisma.suppression.findFirst({
     where: {
       workspaceId: input.workspaceId,
@@ -424,9 +464,12 @@ async function forwardPersonalWithRing(
   },
   pn: { id: string; settingsJson: unknown; voiceForwardTo: string | null },
   route: {
-    destination: string;
+    destinations: string[];
+    mode: "single" | "sequential" | "simultaneous";
     ringSeconds: number;
     unansweredAction: "voicemail" | "end";
+    callScreening: boolean;
+    callerIdDisplay: "original" | "transovo_number";
   },
 ) {
   const human = await handleInboundHumanCall({
@@ -434,7 +477,7 @@ async function forwardPersonalWithRing(
     fromE164: input.fromE164,
     toE164: input.toE164,
     telnyxCallControlId: input.telnyxCallControlId,
-    routingNote: `number_forward:${route.destination}`,
+    routingNote: `number_forward:${route.destinations.join(",")}`,
   });
 
   if (!input.telnyxCallControlId || !isTelnyxPhoneConfigured()) {
@@ -451,33 +494,74 @@ async function forwardPersonalWithRing(
     body: {},
   }).catch(() => undefined);
 
-  const { dialHuntTarget } = await import("./hunt-service");
-  const legId = await dialHuntTarget({
-    workspaceId: input.workspaceId,
-    humanCallId: human.callId,
-    parentCallControlId: controlId,
-    fromE164: input.toE164,
-    target: route.destination,
-    sequential: false,
-  });
+  const sequential = route.mode === "sequential";
+  const simultaneous = route.mode === "simultaneous";
+  const targets = route.destinations;
+
+  if (route.callScreening && targets[0]) {
+    // Screening rings first destination with accept prompt (softphone path).
+    const { dialHuntTarget } = await import("./hunt-service");
+    const legId = await dialHuntTarget({
+      workspaceId: input.workspaceId,
+      humanCallId: human.callId,
+      parentCallControlId: controlId,
+      fromE164: input.toE164,
+      target: targets[0],
+      sequential: false,
+    });
+    const callSettings = readPersonalCallSettings(pn);
+    const tag = `[personal_forward:screening] [forward_unanswered:${route.unansweredAction}] [ring_seconds:${route.ringSeconds}] [voicemail_enabled:${callSettings.voicemailEnabled ? "1" : "0"}]`;
+    const call = await getPrisma().humanCall.findUnique({ where: { id: human.callId } });
+    await getPrisma()
+      .humanCall.update({
+        where: { id: human.callId },
+        data: {
+          onHold: true,
+          notes: `${call?.notes || ""}\n${tag}${legId ? ` [ring_legs:${legId}]` : ""}`.trim(),
+        },
+      })
+      .catch(() => undefined);
+  } else if (simultaneous && targets.length > 1) {
+    await ringExternalTargets(
+      input,
+      targets,
+      false,
+      human.callId,
+    );
+  } else if (sequential && targets.length > 1) {
+    await ringExternalTargets(input, targets, true, human.callId);
+  } else {
+    const { dialHuntTarget } = await import("./hunt-service");
+    const legId = await dialHuntTarget({
+      workspaceId: input.workspaceId,
+      humanCallId: human.callId,
+      parentCallControlId: controlId,
+      fromE164: input.toE164,
+      target: targets[0],
+      sequential: false,
+    });
+    const callSettings = readPersonalCallSettings(pn);
+    const tag = `[personal_forward:1] [forward_unanswered:${route.unansweredAction}] [ring_seconds:${route.ringSeconds}] [voicemail_enabled:${callSettings.voicemailEnabled ? "1" : "0"}] [caller_id:${route.callerIdDisplay}]`;
+    const call = await getPrisma().humanCall.findUnique({ where: { id: human.callId } });
+    await getPrisma()
+      .humanCall.update({
+        where: { id: human.callId },
+        data: {
+          onHold: true,
+          notes: `${call?.notes || ""}\n${tag}${legId ? ` [ring_legs:${legId}]` : ""}`.trim(),
+        },
+      })
+      .catch(() => undefined);
+  }
 
   const callSettings = readPersonalCallSettings(pn);
-  const tag = `[personal_forward:1] [forward_unanswered:${route.unansweredAction}] [ring_seconds:${route.ringSeconds}] [voicemail_enabled:${callSettings.voicemailEnabled ? "1" : "0"}]`;
-  const call = await getPrisma().humanCall.findUnique({ where: { id: human.callId } });
-  await getPrisma()
-    .humanCall.update({
-      where: { id: human.callId },
-      data: {
-        onHold: true,
-        notes: `${call?.notes || ""}\n${tag}${legId ? ` [ring_legs:${legId}]` : ""}`.trim(),
-      },
-    })
-    .catch(() => undefined);
-
   try {
     const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
     await enqueueJob({
-      jobType: "phone_softphone_ring_timeout",
+      jobType:
+        sequential && targets.length > 1
+          ? "phone_hunt_advance"
+          : "phone_softphone_ring_timeout",
       queueName: "voice-calls",
       workspaceId: input.workspaceId,
       payload: {
@@ -489,7 +573,10 @@ async function forwardPersonalWithRing(
         forwardUnansweredAction: route.unansweredAction,
         voicemailEnabled: callSettings.voicemailEnabled,
       },
-      idempotencyKey: `personal-forward-timeout-${human.callId}`,
+      idempotencyKey:
+        sequential && targets.length > 1
+          ? `hunt-advance-${human.callId}-0`
+          : `personal-forward-timeout-${human.callId}`,
       runAfter: new Date(Date.now() + route.ringSeconds * 1000),
     });
   } catch {

@@ -3,7 +3,7 @@
 import { PersonalParkButton, KeepWithTransovoButton } from "@/components/personal/personal-action-buttons";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { PersonalActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import type { PersonalOverviewActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import { formatPhone } from "@/lib/utils";
 import { ArrowRight, Phone, Sparkles, Vault } from "lucide-react";
 import Link from "next/link";
@@ -14,7 +14,7 @@ export function PersonalOverviewClient({
   activity,
 }: {
   numbers: PersonalNumberRow[];
-  activity: PersonalActivityRow[];
+  activity: PersonalOverviewActivityRow[];
 }) {
   if (numbers.length === 0) {
     return (

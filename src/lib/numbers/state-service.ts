@@ -262,12 +262,26 @@ export function applyPersonalCallSettingsToRow(
   patch: {
     forwardingEnabled?: boolean;
     forwardDestination?: string | null;
+    forwardTargets?: string[];
+    forwardMode?: "single" | "sequential" | "simultaneous";
     forwardRingSeconds?: number;
     forwardUnansweredAction?: "voicemail" | "end";
+    forwardBusyAction?: "voicemail" | "another_number" | "announcement" | "end";
+    forwardFailedAction?: "voicemail" | "another_number" | "announcement" | "end";
     voicemailEnabled?: boolean;
     directVoicemail?: boolean;
-    vaultIncomingMode?: "parked_message" | "voicemail";
+    incomingCallHandling?: "forward" | "voicemail_only" | "announcement_only";
+    vaultIncomingMode?: "silent" | "parked_message" | "voicemail";
     parkedMessageText?: string;
+    announcementText?: string;
+    callerIdDisplay?: "original" | "transovo_number";
+    callScreeningEnabled?: boolean;
+    forwardScheduleMode?: "always" | "custom";
+    portOutAccountNumber?: string | null;
+    portOutPin?: string | null;
+    portOutLocked?: boolean;
+    voicemailSecondaryEmail?: string | null;
+    verificationWarningAcknowledged?: boolean;
   },
 ): {
   voiceForwardTo: string | null;
@@ -278,15 +292,46 @@ export function applyPersonalCallSettingsToRow(
   let voiceForwardTo = existing.voiceForwardTo;
 
   const settingsPatch = mergePersonalCallSettingsPatch(settings, {
+    incomingCallHandling: patch.incomingCallHandling,
     forwardRingSeconds: patch.forwardRingSeconds ?? callSettings.forwardRingSeconds,
     forwardUnansweredAction:
       patch.forwardUnansweredAction ?? callSettings.forwardUnansweredAction,
+    forwardBusyAction: patch.forwardBusyAction,
+    forwardFailedAction: patch.forwardFailedAction,
     voicemailEnabled: patch.voicemailEnabled,
     directVoicemail: patch.directVoicemail,
     vaultIncomingMode: patch.vaultIncomingMode,
     parkedMessageText: patch.parkedMessageText,
+    announcementText: patch.announcementText,
     forwardingEnabled: patch.forwardingEnabled,
+    forwardMode: patch.forwardMode,
+    callerIdDisplay: patch.callerIdDisplay,
+    callScreeningEnabled: patch.callScreeningEnabled,
+    forwardScheduleMode: patch.forwardScheduleMode,
+    portOutAccountNumber: patch.portOutAccountNumber,
+    portOutPin: patch.portOutPin,
+    portOutLocked: patch.portOutLocked,
+    voicemailSecondaryEmail: patch.voicemailSecondaryEmail,
+    verificationWarningAcknowledged: patch.verificationWarningAcknowledged,
   });
+
+  let validatedTargets: string[] = callSettings.forwardTargets;
+
+  if (patch.forwardTargets !== undefined) {
+    validatedTargets = [];
+    for (const dest of patch.forwardTargets.slice(0, 5)) {
+      const trimmed = dest?.trim();
+      if (!trimmed) continue;
+      const validated = validateForwardingDestination({
+        destination: trimmed,
+        numberE164: existing.e164,
+      });
+      if (!validated.ok) throw new Error(validated.error);
+      validatedTargets.push(validated.e164);
+    }
+    settingsPatch.forwardTargets = validatedTargets;
+    voiceForwardTo = validatedTargets[0] ?? null;
+  }
 
   if (patch.forwardDestination !== undefined) {
     if (patch.forwardDestination?.trim()) {
@@ -296,16 +341,27 @@ export function applyPersonalCallSettingsToRow(
       });
       if (!validated.ok) throw new Error(validated.error);
       voiceForwardTo = validated.e164;
+      validatedTargets = [validated.e164];
+      settingsPatch.forwardTargets = validatedTargets;
     } else {
       voiceForwardTo = null;
+      validatedTargets = [];
+      settingsPatch.forwardTargets = [];
     }
   }
 
   if (patch.forwardingEnabled === false) {
     voiceForwardTo = null;
     settingsPatch.forwardingEnabled = false;
-  } else if (voiceForwardTo) {
+    settingsPatch.forwardTargets = [];
+  } else if (validatedTargets.length > 0) {
+    voiceForwardTo = validatedTargets[0];
     settingsPatch.forwardingEnabled = true;
+  }
+
+  if (patch.incomingCallHandling === "voicemail_only") {
+    settingsPatch.directVoicemail = true;
+    settingsPatch.voicemailEnabled = true;
   }
 
   return {

@@ -59,7 +59,7 @@ export function PersonalStatCard({
   label: string;
   value: string | number;
   sub?: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   iconClass?: string;
   href?: string;
   hrefLabel?: string;
@@ -77,14 +77,16 @@ export function PersonalStatCard({
             </a>
           ) : null}
         </div>
-        <div
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-            iconClass,
-          )}
-        >
-          <Icon className="h-4 w-4" />
-        </div>
+        {Icon ? (
+          <div
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+              iconClass,
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+        ) : null}
       </div>
     </div>
   );

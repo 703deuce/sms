@@ -3,18 +3,19 @@
 import { PortNumberForm } from "@/components/numbers/port-number-form";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { personalPortInStatusLabel } from "@/lib/numbers/port-constants";
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
 import { formatPhone } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-const PORT_IN_STATUSES = [
-  "Started",
+const PORT_IN_STAGES = [
+  "Preparing",
   "Submitted",
-  "Waiting for Carrier",
-  "FOC / Scheduled",
+  "Carrier Review",
+  "Action Required",
+  "Scheduled",
   "Completed",
-  "Failed / Action Required",
 ];
 
 export function PersonalPortingClient({
@@ -50,9 +51,14 @@ export function PersonalPortingClient({
       {tab === "in" ? (
         <div className="space-y-6">
           <p className="text-sm text-muted-foreground">
-            Bring your existing number to Transovo. We use the same carrier porting flow as business
-            accounts.
+            Bring your existing number to Transovo — find a number or bring your number, equal paths
+            into the product.
           </p>
+          <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-4 text-sm text-amber-900">
+            <strong>Important:</strong> Do not cancel service with your current carrier until your
+            port to Transovo is completed. Cancelling first can cause the number to be lost or the
+            port to fail.
+          </div>
           <PortNumberForm />
           {portRequests.length > 0 ? (
             <div className="surface rounded-xl p-4">
@@ -60,7 +66,7 @@ export function PersonalPortingClient({
               <ul className="mt-3 space-y-2 text-sm">
                 {portRequests.map((p) => (
                   <li key={p.id}>
-                    {formatPhone(p.phoneNumber)} — {p.status}
+                    {formatPhone(p.phoneNumber)} — {personalPortInStatusLabel(p.status)}
                   </li>
                 ))}
               </ul>
@@ -96,7 +102,7 @@ export function PersonalPortingClient({
             </ul>
           )}
           <p className="text-xs text-muted-foreground">
-            Port-out stages: requested → pending → completed
+            Status flow: {PORT_IN_STAGES.join(" → ")}
           </p>
         </div>
       )}

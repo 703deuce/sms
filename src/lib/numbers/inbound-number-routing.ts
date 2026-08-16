@@ -12,13 +12,18 @@ import {
 } from "./personal-call-settings";
 
 export type NumberInboundRoute =
+  | { kind: "vault_silent" }
   | { kind: "vault_message"; message: string }
   | { kind: "vault_voicemail" }
+  | { kind: "announcement"; message: string }
   | {
       kind: "forward";
-      destination: string;
+      destinations: string[];
+      mode: "single" | "sequential" | "simultaneous";
       ringSeconds: number;
       unansweredAction: ForwardUnansweredAction;
+      callScreening: boolean;
+      callerIdDisplay: "original" | "transovo_number";
     }
   | { kind: "voicemail" }
   | { kind: "unavailable" }
@@ -44,19 +49,37 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
     if (callSettings.vaultIncomingMode === "voicemail" && callSettings.voicemailEnabled) {
       return { kind: "vault_voicemail" };
     }
+    if (callSettings.vaultIncomingMode === "silent") {
+      return { kind: "vault_silent" };
+    }
     return { kind: "vault_message", message: callSettings.parkedMessageText };
   }
 
-  if (callSettings.forwardingEnabled && row.voiceForwardTo?.trim()) {
+  if (callSettings.incomingCallHandling === "announcement_only") {
+    return { kind: "announcement", message: callSettings.announcementText };
+  }
+
+  if (
+    callSettings.incomingCallHandling === "forward" &&
+    callSettings.forwardingEnabled &&
+    callSettings.forwardTargets.length > 0
+  ) {
     return {
       kind: "forward",
-      destination: row.voiceForwardTo.trim(),
+      destinations: callSettings.forwardTargets,
+      mode: callSettings.forwardMode,
       ringSeconds: callSettings.forwardRingSeconds,
       unansweredAction: callSettings.forwardUnansweredAction,
+      callScreening: callSettings.callScreeningEnabled,
+      callerIdDisplay: callSettings.callerIdDisplay,
     };
   }
 
   if (callSettings.voicemailEnabled || callSettings.directVoicemail) {
+    return { kind: "voicemail" };
+  }
+
+  if (callSettings.incomingCallHandling === "voicemail_only") {
     return { kind: "voicemail" };
   }
 

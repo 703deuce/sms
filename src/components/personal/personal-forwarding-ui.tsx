@@ -1,11 +1,12 @@
 "use client";
 
-import type { PhoneNumber } from "@/lib/types";
+import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
+import { FORWARD_RING_PRESETS } from "@/lib/numbers/personal-call-settings";
 import { formatPhone } from "@/lib/utils";
-import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PersonalNumberSelector } from "./personal-number-selector";
 import {
   PersonalPageHeader,
   PersonalPageWrap,
@@ -15,19 +16,31 @@ import {
   pMuted,
 } from "./personal-ui";
 
+type FallbackAction = "voicemail" | "another_number" | "announcement" | "end";
+
 export function PersonalForwardingUI({
   numbers,
   initialNumberId,
 }: {
-  numbers: PhoneNumber[];
+  numbers: PersonalNumberRow[];
   initialNumberId?: string;
 }) {
   const router = useRouter();
   const [editId, setEditId] = useState(initialNumberId || numbers[0]?.id || "");
-  const [destination, setDestination] = useState("");
+  const [targets, setTargets] = useState<string[]>([""]);
   const [forwardingOn, setForwardingOn] = useState(false);
+  const [forwardMode, setForwardMode] = useState<"single" | "sequential" | "simultaneous">("single");
   const [ringSeconds, setRingSeconds] = useState(25);
+  const [useCustomRing, setUseCustomRing] = useState(false);
   const [unansweredAction, setUnansweredAction] = useState<"voicemail" | "end">("voicemail");
+  const [busyAction, setBusyAction] = useState<FallbackAction>("voicemail");
+  const [failedAction, setFailedAction] = useState<FallbackAction>("voicemail");
+  const [incomingHandling, setIncomingHandling] = useState<
+    "forward" | "voicemail_only" | "announcement_only"
+  >("forward");
+  const [callerIdDisplay, setCallerIdDisplay] = useState<"original" | "transovo_number">("original");
+  const [callScreening, setCallScreening] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<"always" | "custom">("always");
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -35,40 +48,82 @@ export function PersonalForwardingUI({
 
   useEffect(() => {
     if (!selected) return;
-    setDestination(selected.voiceForwardTo || "");
-    setForwardingOn(Boolean(selected.voiceForwardTo));
+    setEditId(selected.id);
     const settings =
       selected.settingsJson && typeof selected.settingsJson === "object"
         ? (selected.settingsJson as Record<string, unknown>)
         : {};
+    const rawTargets = settings.forwardTargets;
+    const list =
+      Array.isArray(rawTargets) && rawTargets.length > 0
+        ? (rawTargets as string[])
+        : selected.voiceForwardTo
+          ? [selected.voiceForwardTo]
+          : [""];
+    setTargets(list);
+    setForwardingOn(Boolean(selected.voiceForwardTo || list[0]));
     const ring = settings.forwardRingSeconds;
-    setRingSeconds(typeof ring === "number" ? ring : 25);
+    const ringVal = typeof ring === "number" ? ring : 25;
+    setRingSeconds(ringVal);
+    setUseCustomRing(!(FORWARD_RING_PRESETS as readonly number[]).includes(ringVal));
     setUnansweredAction(settings.forwardUnansweredAction === "end" ? "end" : "voicemail");
+    setBusyAction((settings.forwardBusyAction as FallbackAction) || "voicemail");
+    setFailedAction((settings.forwardFailedAction as FallbackAction) || "voicemail");
+    setIncomingHandling(
+      settings.incomingCallHandling === "voicemail_only" ||
+        settings.incomingCallHandling === "announcement_only"
+        ? settings.incomingCallHandling
+        : "forward",
+    );
+    setForwardMode(
+      settings.forwardMode === "sequential" || settings.forwardMode === "simultaneous"
+        ? settings.forwardMode
+        : "single",
+    );
+    setCallerIdDisplay(
+      settings.callerIdDisplay === "transovo_number" ? "transovo_number" : "original",
+    );
+    setCallScreening(settings.callScreeningEnabled === true);
+    setScheduleMode(settings.forwardScheduleMode === "custom" ? "custom" : "always");
   }, [selected]);
 
-  const activity = numbers
-    .filter((n) => n.voiceForwardTo)
-    .slice(0, 3)
-    .map((n) => ({
-      id: n.id,
-      from: formatPhone(n.number),
-      to: formatPhone(n.voiceForwardTo!),
-    }));
+  function updateTarget(index: number, value: string) {
+    setTargets((prev) => prev.map((t, i) => (i === index ? value : t)));
+  }
+
+  function addTarget() {
+    if (targets.length >= 5) return;
+    setTargets((prev) => [...prev, ""]);
+  }
+
+  function removeTarget(index: number) {
+    setTargets((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function save() {
     setMessage(null);
     setSaving(true);
     try {
+      const cleanedTargets = targets.map((t) => t.trim()).filter(Boolean);
       const res = await fetch(`/api/numbers/${editId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           personalCallSettings: {
-            forwardingEnabled: forwardingOn,
-            forwardDestination: forwardingOn ? destination : null,
+            incomingCallHandling: incomingHandling,
+            forwardingEnabled: forwardingOn && incomingHandling === "forward",
+            forwardTargets: cleanedTargets,
+            forwardDestination: cleanedTargets[0] || null,
+            forwardMode: forwardMode,
             forwardRingSeconds: ringSeconds,
             forwardUnansweredAction: unansweredAction,
-            voicemailEnabled: unansweredAction === "voicemail",
+            forwardBusyAction: busyAction,
+            forwardFailedAction: failedAction,
+            voicemailEnabled: unansweredAction === "voicemail" || incomingHandling === "voicemail_only",
+            directVoicemail: incomingHandling === "voicemail_only",
+            callerIdDisplay,
+            callScreeningEnabled: callScreening,
+            forwardScheduleMode: scheduleMode,
           },
         }),
       });
@@ -96,6 +151,8 @@ export function PersonalForwardingUI({
     );
   }
 
+  const mappedNumbers = numbers;
+
   return (
     <PersonalPageWrap>
       <PersonalPageHeader
@@ -103,112 +160,281 @@ export function PersonalForwardingUI({
         description="Ring your phone first. If you don't answer, Transovo can take the voicemail — not your carrier."
       />
 
-      <PersonalSection title="Your forwarding setup">
-        <div className="space-y-4">
-          <div>
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-              Your number
-            </p>
-            <select
-              className="mt-1 h-10 w-full max-w-md rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold"
-              value={editId}
-              onChange={(e) => setEditId(e.target.value)}
-            >
-              {numbers.map((n) => (
-                <option key={n.id} value={n.id}>{formatPhone(n.number)}</option>
-              ))}
-            </select>
-          </div>
+      <PersonalNumberSelector numbers={mappedNumbers} selectedId={editId} />
 
-          <div>
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-              Forward calls to
-            </p>
-            <input
-              className="mt-1 h-10 w-full max-w-md rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
-              placeholder="(571) 477-6175"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              disabled={!forwardingOn}
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-[13px] font-semibold text-[#374151]">Forwarding</span>
+      <PersonalSection title="Incoming call handling">
+        <div className="flex flex-wrap gap-2 text-[13px]">
+          {(
+            [
+              ["forward", "Forward calls"],
+              ["voicemail_only", "Voicemail only"],
+              ["announcement_only", "Announcement only"],
+            ] as const
+          ).map(([value, label]) => (
             <button
+              key={value}
               type="button"
-              onClick={() => setForwardingOn((v) => !v)}
-              className={`rounded-full px-3 py-1 text-[12px] font-bold ${
-                forwardingOn
-                  ? "bg-[#ecfdf5] text-[#059669]"
-                  : "bg-[#f3f4f6] text-[#6b7280]"
+              onClick={() => setIncomingHandling(value)}
+              className={`rounded-lg border px-3 py-2 ${
+                incomingHandling === value
+                  ? "border-[#6366f1] bg-[#eef2ff] text-[#4338ca]"
+                  : "border-[#e5e7eb] bg-white text-[#374151]"
               }`}
             >
-              {forwardingOn ? "ON" : "OFF"}
+              {label}
             </button>
-            <PersonalStatusBadge status={forwardingOn ? "active" : "inactive"} />
-          </div>
-
-          {forwardingOn ? (
-            <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
-              <p className="text-[13px] font-semibold text-[#111827]">If unanswered</p>
-              <div className="flex flex-wrap items-center gap-2 text-[13px]">
-                <span>After</span>
-                <input
-                  type="number"
-                  min={10}
-                  max={60}
-                  className="h-9 w-16 rounded-lg border border-[#e5e7eb] bg-white px-2 text-center"
-                  value={ringSeconds}
-                  onChange={(e) => setRingSeconds(Number(e.target.value) || 25)}
-                />
-                <span>seconds</span>
-              </div>
-              <div className="space-y-2 text-[13px]">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="unanswered"
-                    checked={unansweredAction === "voicemail"}
-                    onChange={() => setUnansweredAction("voicemail")}
-                  />
-                  Send to Transovo Voicemail
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="unanswered"
-                    checked={unansweredAction === "end"}
-                    onChange={() => setUnansweredAction("end")}
-                  />
-                  End the call
-                </label>
-              </div>
-            </div>
-          ) : null}
-
-          <PersonalPrimaryButton onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </PersonalPrimaryButton>
-          {message ? <p className="text-[12px] text-[#6b7280]">{message}</p> : null}
+          ))}
         </div>
       </PersonalSection>
 
-      <PersonalSection title="Recent forwarding activity">
-        {activity.length === 0 ? (
-          <p className={pMuted}>No forwarding activity yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {activity.map((a) => (
-              <li key={a.id} className="flex items-center gap-3 text-[13px]">
-                <span className="font-medium">{a.from}</span>
-                <ArrowRight className="h-3 w-3 text-[#9ca3af]" />
-                <span className="text-[#6b7280]">{a.to}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      {incomingHandling === "forward" ? (
+        <PersonalSection title="Your forwarding setup">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-[13px] font-semibold text-[#374151]">Forwarding</span>
+              <button
+                type="button"
+                onClick={() => setForwardingOn((v) => !v)}
+                className={`rounded-full px-3 py-1 text-[12px] font-bold ${
+                  forwardingOn
+                    ? "bg-[#ecfdf5] text-[#059669]"
+                    : "bg-[#f3f4f6] text-[#6b7280]"
+                }`}
+              >
+                {forwardingOn ? "ON" : "OFF"}
+              </button>
+              <PersonalStatusBadge status={forwardingOn ? "active" : "inactive"} />
+            </div>
+
+            {forwardingOn ? (
+              <>
+                <div>
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                    Forward mode
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[13px]">
+                    {(
+                      [
+                        ["single", "Single destination"],
+                        ["sequential", "Sequential — ring one after another"],
+                        ["simultaneous", "Simultaneous — ring all together"],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <label key={mode} className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="forwardMode"
+                          checked={forwardMode === mode}
+                          onChange={() => setForwardMode(mode)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                    Forward to
+                  </p>
+                  {targets.map((target, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        className="h-10 flex-1 max-w-md rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
+                        placeholder={i === 0 ? "(571) 477-6175" : "Add another line"}
+                        value={target}
+                        onChange={(e) => updateTarget(i, e.target.value)}
+                      />
+                      {i > 0 ? (
+                        <button
+                          type="button"
+                          className="text-[12px] text-[#6b7280]"
+                          onClick={() => removeTarget(i)}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  {targets.length < 5 ? (
+                    <button
+                      type="button"
+                      className="text-[13px] font-medium text-[#6366f1]"
+                      onClick={addTarget}
+                    >
+                      + Add another line
+                    </button>
+                  ) : null}
+                  <p className={pMuted}>
+                    Sequential: Cell → Work → Voicemail. Simultaneous: Cell + Home ring together.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
+                  <p className="text-[13px] font-semibold text-[#111827]">Ring time</p>
+                  <div className="flex flex-wrap gap-2">
+                    {FORWARD_RING_PRESETS.map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => {
+                          setRingSeconds(sec);
+                          setUseCustomRing(false);
+                        }}
+                        className={`rounded-lg px-3 py-1 text-[12px] ${
+                          !useCustomRing && ringSeconds === sec
+                            ? "bg-[#6366f1] text-white"
+                            : "bg-white border border-[#e5e7eb]"
+                        }`}
+                      >
+                        {sec}s
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setUseCustomRing(true)}
+                      className={`rounded-lg px-3 py-1 text-[12px] ${
+                        useCustomRing ? "bg-[#6366f1] text-white" : "bg-white border border-[#e5e7eb]"
+                      }`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  {useCustomRing ? (
+                    <input
+                      type="number"
+                      min={10}
+                      max={60}
+                      className="h-9 w-20 rounded-lg border border-[#e5e7eb] bg-white px-2 text-center text-[13px]"
+                      value={ringSeconds}
+                      onChange={(e) => setRingSeconds(Number(e.target.value) || 25)}
+                    />
+                  ) : null}
+                </div>
+
+                <FallbackSelect
+                  label="If not answered"
+                  value={unansweredAction}
+                  onChange={(v) => setUnansweredAction(v as "voicemail" | "end")}
+                  options={[
+                    ["voicemail", "Voicemail"],
+                    ["end", "End call"],
+                  ]}
+                />
+                <FallbackSelect
+                  label="If busy"
+                  value={busyAction}
+                  onChange={(v) => setBusyAction(v as FallbackAction)}
+                />
+                <FallbackSelect
+                  label="If destination fails"
+                  value={failedAction}
+                  onChange={(v) => setFailedAction(v as FallbackAction)}
+                />
+
+                <div className="rounded-lg border border-[#e5e7eb] p-4 space-y-3">
+                  <p className="text-[13px] font-semibold">Incoming caller ID on your phone</p>
+                  <label className="flex items-center gap-2 text-[13px]">
+                    <input
+                      type="radio"
+                      checked={callerIdDisplay === "original"}
+                      onChange={() => setCallerIdDisplay("original")}
+                    />
+                    Show original caller
+                  </label>
+                  <label className="flex items-center gap-2 text-[13px]">
+                    <input
+                      type="radio"
+                      checked={callerIdDisplay === "transovo_number"}
+                      onChange={() => setCallerIdDisplay("transovo_number")}
+                    />
+                    Show my Transovo number
+                  </label>
+                </div>
+
+                <details className="rounded-lg border border-[#e5e7eb] p-4">
+                  <summary className="text-[13px] font-semibold cursor-pointer">Advanced</summary>
+                  <div className="mt-3 space-y-3">
+                    <label className="flex items-center gap-2 text-[13px]">
+                      <input
+                        type="checkbox"
+                        checked={callScreening}
+                        onChange={(e) => setCallScreening(e.target.checked)}
+                      />
+                      Call screening — destination hears who is calling before accepting
+                    </label>
+                    <div>
+                      <p className="text-[13px] font-semibold mb-2">Schedule</p>
+                      <label className="flex items-center gap-2 text-[13px]">
+                        <input
+                          type="radio"
+                          checked={scheduleMode === "always"}
+                          onChange={() => setScheduleMode("always")}
+                        />
+                        Always
+                      </label>
+                      <label className="flex items-center gap-2 text-[13px] mt-1">
+                        <input
+                          type="radio"
+                          checked={scheduleMode === "custom"}
+                          onChange={() => setScheduleMode("custom")}
+                        />
+                        Custom schedule (coming soon — saved as preference)
+                      </label>
+                    </div>
+                  </div>
+                </details>
+              </>
+            ) : null}
+          </div>
+        </PersonalSection>
+      ) : null}
+
+      <PersonalPrimaryButton onClick={save} disabled={saving}>
+        {saving ? "Saving…" : "Save"}
+      </PersonalPrimaryButton>
+      {message ? <p className="text-[12px] text-[#6b7280]">{message}</p> : null}
+
+      <PersonalSection title="Call activity">
+        <p className={pMuted}>
+          View full call history on{" "}
+          <Link href="/personal/activity" className="text-[#6366f1]">Call Activity</Link>.
+        </p>
       </PersonalSection>
     </PersonalPageWrap>
+  );
+}
+
+function FallbackSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options?: Array<[string, string]>;
+}) {
+  const defaultOptions: Array<[string, string]> = [
+    ["voicemail", "Voicemail"],
+    ["another_number", "Another number"],
+    ["announcement", "Play announcement"],
+    ["end", "End call"],
+  ];
+  const list = options ?? defaultOptions;
+  return (
+    <div>
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">{label}</p>
+      <select
+        className="mt-1 h-10 w-full max-w-md rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {list.map(([v, l]) => (
+          <option key={v} value={v}>{l}</option>
+        ))}
+      </select>
+    </div>
   );
 }

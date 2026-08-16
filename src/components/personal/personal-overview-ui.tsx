@@ -1,6 +1,6 @@
 "use client";
 
-import type { PersonalActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import type { PersonalOverviewActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import { formatPhone } from "@/lib/utils";
 import {
   ArrowRight,
@@ -37,7 +37,7 @@ export function PersonalOverviewUI({
 }: {
   userName: string;
   numbers: PersonalNumberRow[];
-  activity: PersonalActivityRow[];
+  activity: PersonalOverviewActivityRow[];
   premiumCartCount?: number;
   portRequests: PortRow[];
 }) {

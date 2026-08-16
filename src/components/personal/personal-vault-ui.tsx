@@ -264,16 +264,23 @@ export function PersonalVaultUI({
                         value={n.vaultIncomingMode}
                         disabled={busy === n.id}
                         onChange={async (e) => {
-                          const mode = e.target.value as "parked_message" | "voicemail";
+                          const mode = e.target.value as "silent" | "parked_message" | "voicemail";
                           setBusy(n.id);
                           setError(null);
                           try {
-                            await runPersonalNumberAction(
-                              n.id,
-                              mode === "voicemail"
-                                ? "set_vault_voicemail"
-                                : "set_vault_message_only",
-                            );
+                            if (mode === "voicemail") {
+                              await runPersonalNumberAction(n.id, "set_vault_voicemail");
+                            } else if (mode === "parked_message") {
+                              await runPersonalNumberAction(n.id, "set_vault_message_only");
+                            } else {
+                              await fetch(`/api/numbers/${n.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  personalCallSettings: { vaultIncomingMode: "silent" },
+                                }),
+                              });
+                            }
                             router.refresh();
                           } catch (err) {
                             setError(
@@ -284,7 +291,8 @@ export function PersonalVaultUI({
                           }
                         }}
                       >
-                        <option value="parked_message">Parked message</option>
+                        <option value="silent">Silent / no service</option>
+                        <option value="parked_message">Play announcement</option>
                         <option value="voicemail">Voicemail</option>
                       </select>
                     </td>
