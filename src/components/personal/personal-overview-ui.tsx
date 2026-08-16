@@ -220,7 +220,7 @@ export function PersonalOverviewUI({
               ))}
             </ul>
           )}
-          <Link href="/personal/numbers" className="mt-4 text-[13px] font-semibold text-[#6366f1]">
+          <Link href="/personal/activity" className="mt-4 text-[13px] font-semibold text-[#6366f1]">
             View all activity ›
           </Link>
         </PersonalSection>
