@@ -380,68 +380,19 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
 
       const personalForward =
-        Boolean(payload.personalForward) || (call.notes || "").includes("[personal_forward:1]");
+        Boolean(payload.personalForward) || (call.notes || "").includes("[personal_forward:");
       if (personalForward && controlId) {
-        const unansweredAction =
-          String(payload.forwardUnansweredAction || "").trim() === "end"
-            ? "end"
-            : (call.notes || "").includes("[forward_unanswered:end]")
-              ? "end"
-              : "voicemail";
-        const voicemailEnabled =
-          payload.voicemailEnabled === true ||
-          (call.notes || "").includes("[voicemail_enabled:1]");
-
-        await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
-          method: "POST",
-          body: {},
-        }).catch(() => undefined);
-
-        if (unansweredAction === "voicemail" && voicemailEnabled) {
-          await leaveVoicemailOnCall({
-            workspaceId,
-            humanCallId: call.id,
-            telnyxCallControlId: controlId,
-            userId: call.agentUserId,
-          }).catch(async () => {
-            await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
-              method: "POST",
-              body: {},
-            }).catch(() => undefined);
-            await prisma.humanCall.update({
-              where: { id: call.id },
-              data: {
-                status: "missed",
-                disposition: "missed:forward_no_voicemail",
-                endedAt: new Date(),
-              },
-            });
-          });
-          return { ok: true, action: "personal_forward_voicemail" };
-        }
-
-        await telnyxRequest(`/calls/${controlId}/actions/speak`, {
-          method: "POST",
-          body: {
-            payload: "The person you are trying to reach is not available.",
-            voice: "female",
-            language: "en-US",
-          },
-        }).catch(() => undefined);
-        await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
-          method: "POST",
-          body: {},
-        }).catch(() => undefined);
-        await prisma.humanCall.update({
-          where: { id: call.id },
-          data: {
-            status: "missed",
-            disposition: "personal_forward_no_answer",
-            endedAt: new Date(),
-            onHold: false,
-          },
+        const { applyPersonalForwardOverflow } = await import(
+          "@/lib/numbers/personal-forward-fallback"
+        );
+        await applyPersonalForwardOverflow({
+          workspaceId,
+          humanCallId: call.id,
+          telnyxCallControlId: controlId,
+          toE164,
+          reason: "unanswered",
         });
-        return { ok: true, action: "personal_forward_end" };
+        return { ok: true, action: "personal_forward_overflow" };
       }
 
       const pn = toE164

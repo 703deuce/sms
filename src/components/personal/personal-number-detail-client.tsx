@@ -8,7 +8,7 @@ import { PERSONAL_VERIFICATION_WARNING } from "@/lib/numbers/personal-call-setti
 import { formatPhone } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function PersonalNumberDetailClient({
   number,
@@ -24,27 +24,49 @@ export function PersonalNumberDetailClient({
   const router = useRouter();
   const [portMessage, setPortMessage] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
+  const [accountNumber, setAccountNumber] = useState(
+    number.portOutAccountNumber || number.number.replace(/\D/g, "").slice(-10),
+  );
+  const [portPin, setPortPin] = useState<string | null>(
+    number.portOutLocked ? null : number.portOutPin,
+  );
+  const [locked, setLocked] = useState(number.portOutLocked);
 
-  const accountNumber =
-    number.portOutAccountNumber || number.number.replace(/\D/g, "").slice(-10);
-  const portPin = number.portOutPin || "Request unlock to reveal";
+  useEffect(() => {
+    fetch(`/api/personal/numbers/${number.id}/port-out`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.accountNumber) setAccountNumber(j.data.accountNumber);
+        if (!j.data?.locked && j.data?.pin) setPortPin(j.data.pin);
+        setLocked(j.data?.locked ?? number.portOutLocked);
+      })
+      .catch(() => undefined);
+  }, [number.id, number.portOutLocked]);
 
-  async function togglePortLock() {
+  async function portAction(action: "unlock" | "lock" | "sync") {
     setUnlocking(true);
     setPortMessage(null);
     try {
-      const res = await fetch(`/api/numbers/${number.id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/personal/numbers/${number.id}/port-out`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personalCallSettings: {
-            portOutLocked: !number.portOutLocked,
-          },
-        }),
+        body: JSON.stringify({ action }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || "Could not update port-out lock.");
-      setPortMessage(number.portOutLocked ? "Number unlocked for port-out." : "Number locked.");
+      if (!res.ok) throw new Error(j.error || "Port-out update failed.");
+      if (j.data?.accountNumber) setAccountNumber(j.data.accountNumber);
+      if (j.data?.pin) setPortPin(j.data.pin);
+      if (action === "lock") {
+        setLocked(true);
+        setPortPin(null);
+        setPortMessage("Number locked for port-out.");
+      } else if (action === "unlock") {
+        setLocked(false);
+        setPortPin(j.data?.pin || j.pin);
+        setPortMessage("Port-out credentials revealed. Share with your new carrier.");
+      } else {
+        setPortMessage("Synced with Telnyx.");
+      }
       router.refresh();
     } catch (e) {
       setPortMessage(e instanceof Error ? e.message : "Update failed.");
@@ -84,7 +106,7 @@ export function PersonalNumberDetailClient({
           label="Usage"
           value={`${stats.forwardingMinutes} min`}
           sub="forwarded this period"
-          href={`/personal/usage`}
+          href="/personal/usage"
         />
         <StatTile
           label="Calls"
@@ -118,16 +140,29 @@ export function PersonalNumberDetailClient({
           </div>
           <div>
             <dt className="text-muted-foreground">Port-out PIN</dt>
-            <dd className="font-mono font-medium">{portPin}</dd>
+            <dd className="font-mono font-medium">
+              {locked ? "Locked — unlock to reveal" : portPin || "—"}
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Lock status</dt>
-            <dd>{number.portOutLocked ? "Locked" : "Unlocked for port-out"}</dd>
+            <dd>{locked ? "Locked" : "Unlocked for port-out"}</dd>
           </div>
         </dl>
-        <Button size="sm" variant="outline" onClick={togglePortLock} disabled={unlocking}>
-          {number.portOutLocked ? "Unlock for port-out" : "Lock number"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {locked ? (
+            <Button size="sm" variant="outline" onClick={() => portAction("unlock")} disabled={unlocking}>
+              Unlock for port-out
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => portAction("lock")} disabled={unlocking}>
+              Lock number
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => portAction("sync")} disabled={unlocking}>
+            Sync from Telnyx
+          </Button>
+        </div>
         {portMessage ? <p className="text-xs text-muted-foreground">{portMessage}</p> : null}
         <p className="text-xs text-muted-foreground">
           <Link href="/personal/porting?tab=out" className="text-primary">Porting center</Link>

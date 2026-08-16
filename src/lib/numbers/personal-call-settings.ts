@@ -32,6 +32,9 @@ export type PersonalCallSettings = {
   portOutLocked: boolean;
   voicemailSecondaryEmail: string | null;
   verificationWarningAcknowledged: boolean;
+  blockedCallerAction: "disconnect" | "unavailable_message";
+  forwardBusyNumber: string | null;
+  forwardFailedNumber: string | null;
 };
 
 const DEFAULT_PARKED_MESSAGE =
@@ -139,6 +142,18 @@ export function readPersonalCallSettings(row: {
         ? settings.voicemailSecondaryEmail.trim() || null
         : null,
     verificationWarningAcknowledged: settings.verificationWarningAcknowledged === true,
+    blockedCallerAction:
+      settings.blockedCallerAction === "unavailable_message"
+        ? "unavailable_message"
+        : "disconnect",
+    forwardBusyNumber:
+      typeof settings.forwardBusyNumber === "string"
+        ? settings.forwardBusyNumber.trim() || null
+        : null,
+    forwardFailedNumber:
+      typeof settings.forwardFailedNumber === "string"
+        ? settings.forwardFailedNumber.trim() || null
+        : null,
   };
 }
 
@@ -198,6 +213,10 @@ export type PersonalCallSettingsPatch = Partial<{
   portOutLocked: boolean;
   voicemailSecondaryEmail: string | null;
   verificationWarningAcknowledged: boolean;
+  blockedCallerAction: "disconnect" | "unavailable_message";
+  forwardBusyNumber: string | null;
+  forwardFailedNumber: string | null;
+  forwardSchedule: Record<string, unknown> | null;
 }>;
 
 export function mergePersonalCallSettingsPatch(
@@ -267,6 +286,18 @@ export function mergePersonalCallSettingsPatch(
   }
   if (patch.verificationWarningAcknowledged !== undefined) {
     next.verificationWarningAcknowledged = patch.verificationWarningAcknowledged;
+  }
+  if (patch.blockedCallerAction !== undefined) {
+    next.blockedCallerAction = patch.blockedCallerAction;
+  }
+  if (patch.forwardBusyNumber !== undefined) {
+    next.forwardBusyNumber = patch.forwardBusyNumber;
+  }
+  if (patch.forwardFailedNumber !== undefined) {
+    next.forwardFailedNumber = patch.forwardFailedNumber;
+  }
+  if (patch.forwardSchedule !== undefined) {
+    next.forwardSchedule = patch.forwardSchedule;
   }
   return next;
 }

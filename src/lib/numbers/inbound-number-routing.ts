@@ -9,7 +9,12 @@ import {
   isPersonalNumberParked,
   readPersonalCallSettings,
   type ForwardUnansweredAction,
+  type IncomingCallHandling,
 } from "./personal-call-settings";
+import {
+  readPersonalForwardSchedule,
+  resolveForwardSchedule,
+} from "./personal-forward-schedule";
 
 export type NumberInboundRoute =
   | { kind: "vault_silent" }
@@ -45,6 +50,23 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
 
   const callSettings = readPersonalCallSettings(row);
 
+  let handling: IncomingCallHandling = callSettings.incomingCallHandling;
+  let targets = callSettings.forwardTargets;
+
+  if (callSettings.forwardScheduleMode === "custom") {
+    const schedule = readPersonalForwardSchedule(settings);
+    if (schedule) {
+      const resolved = resolveForwardSchedule(schedule);
+      handling = resolved.handling;
+      targets =
+        resolved.targets.length > 0
+          ? resolved.targets
+          : resolved.handling === "forward"
+            ? callSettings.forwardTargets
+            : [];
+    }
+  }
+
   if (isPersonalNumberParked(row)) {
     if (callSettings.vaultIncomingMode === "voicemail" && callSettings.voicemailEnabled) {
       return { kind: "vault_voicemail" };
@@ -55,18 +77,18 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
     return { kind: "vault_message", message: callSettings.parkedMessageText };
   }
 
-  if (callSettings.incomingCallHandling === "announcement_only") {
+  if (handling === "announcement_only") {
     return { kind: "announcement", message: callSettings.announcementText };
   }
 
   if (
-    callSettings.incomingCallHandling === "forward" &&
+    handling === "forward" &&
     callSettings.forwardingEnabled &&
-    callSettings.forwardTargets.length > 0
+    targets.length > 0
   ) {
     return {
       kind: "forward",
-      destinations: callSettings.forwardTargets,
+      destinations: targets,
       mode: callSettings.forwardMode,
       ringSeconds: callSettings.forwardRingSeconds,
       unansweredAction: callSettings.forwardUnansweredAction,
@@ -75,11 +97,7 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
     };
   }
 
-  if (callSettings.voicemailEnabled || callSettings.directVoicemail) {
-    return { kind: "voicemail" };
-  }
-
-  if (callSettings.incomingCallHandling === "voicemail_only") {
+  if (handling === "voicemail_only" || callSettings.voicemailEnabled || callSettings.directVoicemail) {
     return { kind: "voicemail" };
   }
 

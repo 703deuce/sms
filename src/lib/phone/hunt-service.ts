@@ -6,6 +6,10 @@ import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { isTelnyxPhoneConfigured } from "./human-call-service";
+import {
+  applyPersonalForwardOverflow,
+  isPersonalForwardCall,
+} from "@/lib/numbers/personal-forward-fallback";
 
 function encodeClientState(data: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(data)).toString("base64");
@@ -32,22 +36,38 @@ export async function dialHuntTarget(input: {
   fromE164: string;
   target: string;
   sequential: boolean;
+  /** When set, rings destination with screening gather on answer */
+  screening?: boolean;
+  callerE164?: string;
+  callerIdDisplay?: "original" | "transovo_number";
+  transovoNumberE164?: string;
 }) {
   if (!isTelnyxPhoneConfigured()) return null;
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
   if (!connectionId) return null;
+
+  const displayFrom =
+    input.callerIdDisplay === "original" && input.callerE164
+      ? normalizeE164(input.callerE164)
+      : input.transovoNumberE164
+        ? normalizeE164(input.transovoNumberE164)
+        : input.fromE164;
+
+  const ringKind = input.screening ? "personal_call_screening" : "simultaneous_ring";
+
   const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
     method: "POST",
     body: {
       connection_id: connectionId,
-      from: input.fromE164,
+      from: displayFrom,
       to: normalizeE164(input.target),
       client_state: encodeClientState({
         workspaceId: input.workspaceId,
         humanCallId: input.humanCallId,
-        kind: "simultaneous_ring",
+        kind: ringKind,
         parentCallControlId: input.parentCallControlId,
         sequential: input.sequential,
+        callerE164: input.callerE164 || null,
       }),
     },
   }).catch(() => null);
@@ -88,6 +108,16 @@ export async function advanceSequentialHunt(input: {
   }
 
   if (nextIndex >= targets.length) {
+    if (isPersonalForwardCall(call.notes)) {
+      await applyPersonalForwardOverflow({
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        telnyxCallControlId: input.telnyxCallControlId,
+        toE164: input.toE164,
+        reason: "unanswered",
+      });
+      return { overflow: true, personal: true };
+    }
     const { leaveVoicemailOnCall } = await import("./voicemail-service");
     await leaveVoicemailOnCall({
       workspaceId: input.workspaceId,
@@ -97,6 +127,11 @@ export async function advanceSequentialHunt(input: {
     return { overflow: true };
   }
 
+  const screening = (call.notes || "").includes("[personal_forward:screening]");
+  const callerIdMatch = (call.notes || "").match(/\[caller_id:(original|transovo_number)\]/);
+  const callerIdDisplay =
+    callerIdMatch?.[1] === "transovo_number" ? "transovo_number" : "original";
+
   const nextTarget = targets[nextIndex]!;
   const legId = await dialHuntTarget({
     workspaceId: input.workspaceId,
@@ -105,6 +140,10 @@ export async function advanceSequentialHunt(input: {
     fromE164: input.toE164,
     target: nextTarget,
     sequential: true,
+    screening,
+    callerE164: call.from,
+    callerIdDisplay,
+    transovoNumberE164: input.toE164,
   });
 
   const notes = (call.notes || "")
@@ -116,6 +155,9 @@ export async function advanceSequentialHunt(input: {
     data: { notes: notes.includes("[hunt_index:") ? notes : `${notes} [hunt_index:${nextIndex}]`.trim() },
   });
 
+  const ringSecondsMatch = (call.notes || "").match(/\[ring_seconds:(\d+)\]/);
+  const ringMs = ringSecondsMatch ? Number(ringSecondsMatch[1]) * 1000 : 25_000;
+
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
   await enqueueJob({
     jobType: "phone_hunt_advance",
@@ -126,9 +168,10 @@ export async function advanceSequentialHunt(input: {
       humanCallId: call.id,
       telnyxCallControlId: input.telnyxCallControlId,
       toE164: input.toE164,
+      personalForward: isPersonalForwardCall(call.notes),
     },
     idempotencyKey: `hunt-advance-${call.id}-${nextIndex}`,
-    runAfter: new Date(Date.now() + 25_000),
+    runAfter: new Date(Date.now() + ringMs),
   });
 
   return { advanced: true, nextIndex, target: nextTarget };

@@ -282,6 +282,10 @@ export function applyPersonalCallSettingsToRow(
     portOutLocked?: boolean;
     voicemailSecondaryEmail?: string | null;
     verificationWarningAcknowledged?: boolean;
+    blockedCallerAction?: "disconnect" | "unavailable_message";
+    forwardBusyNumber?: string | null;
+    forwardFailedNumber?: string | null;
+    forwardSchedule?: Record<string, unknown> | null;
   },
 ): {
   voiceForwardTo: string | null;
@@ -313,6 +317,10 @@ export function applyPersonalCallSettingsToRow(
     portOutLocked: patch.portOutLocked,
     voicemailSecondaryEmail: patch.voicemailSecondaryEmail,
     verificationWarningAcknowledged: patch.verificationWarningAcknowledged,
+    blockedCallerAction: patch.blockedCallerAction,
+    forwardBusyNumber: patch.forwardBusyNumber,
+    forwardFailedNumber: patch.forwardFailedNumber,
+    forwardSchedule: patch.forwardSchedule ?? undefined,
   });
 
   let validatedTargets: string[] = callSettings.forwardTargets;

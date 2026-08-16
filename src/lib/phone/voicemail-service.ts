@@ -155,19 +155,36 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
   });
 
   // Optional email notify when the box has emailNotify configured (Brevo when keyed).
-  if (box?.emailNotify) {
+  const notifyTargets = [
+    box?.emailNotify,
+    box?.secondaryEmailNotify,
+  ].filter((e): e is string => Boolean(e && String(e).trim()));
+
+  if (notifyTargets.length > 0) {
     try {
       const { sendTransactionalEmail } = await import("@/lib/email/brevo");
       const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
-      await sendTransactionalEmail({
-        to: String(box.emailNotify),
-        subject: `New voicemail from ${updated.fromE164 || "unknown"}`,
-        htmlContent: `<p>New voicemail on <strong>${box.name}</strong>.</p>
+      const transcriptBlock = updated.transcriptText
+        ? `<p><strong>Transcript:</strong> ${updated.transcriptText}</p>`
+        : "";
+      const recordingLink = appUrl
+        ? `<p><a href="${appUrl}/api/phone/voicemail/${updated.id}/recording">Download recording</a></p>`
+        : "";
+      const html = `<p>New voicemail on <strong>${box.name}</strong>.</p>
 <p>From: ${updated.fromE164 || "unknown"}</p>
+<p>To: ${updated.toE164 || "—"}</p>
 <p>Duration: ${updated.durationSeconds ?? "—"}s</p>
-${appUrl ? `<p><a href="${appUrl}/phone/settings">Open voicemail</a></p>` : ""}`,
-        textContent: `New voicemail on ${box.name} from ${updated.fromE164 || "unknown"}`,
-      });
+${transcriptBlock}
+${recordingLink}
+${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></p>` : ""}`;
+      for (const to of notifyTargets) {
+        await sendTransactionalEmail({
+          to: String(to),
+          subject: `New voicemail from ${updated.fromE164 || "unknown"}`,
+          htmlContent: html,
+          textContent: `New voicemail on ${box.name} from ${updated.fromE164 || "unknown"}. ${updated.transcriptText || ""}`,
+        });
+      }
     } catch (err) {
       console.warn("[voicemail] email notify failed", err);
     }

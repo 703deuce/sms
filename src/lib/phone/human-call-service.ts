@@ -1565,6 +1565,7 @@ export async function processHumanCallWebhookEvent(input: {
     "warm_transfer_consult",
     "call_flip",
     "call_screening",
+    "personal_call_screening",
     "human_bridge_dest",
     "human_bridge_agent",
   ]);
@@ -1841,9 +1842,13 @@ export async function processHumanCallWebhookEvent(input: {
     }
 
     // Call screening: agent phone answered — gather accept/decline on the agent leg.
-    if (kind === "call_screening" && eventControlId) {
+    if ((kind === "call_screening" || kind === "personal_call_screening") && eventControlId) {
+      const callerLabel =
+        kind === "personal_call_screening"
+          ? String(clientState.callerE164 || call.from || "unknown caller")
+          : call.from;
       await telnyxAction(eventControlId, "gather_using_speak", {
-        payload: `Call from ${call.from}. Press 1 to accept, press 2 to send to voicemail.`,
+        payload: `Call from ${callerLabel}. Press 1 to accept, press 2 to send to voicemail.`,
         voice: "female",
         language: "en-US",
         valid_digits: "12",
@@ -1853,7 +1858,7 @@ export async function processHumanCallWebhookEvent(input: {
         client_state: encodeClientState({
           workspaceId: call.workspaceId,
           humanCallId: call.id,
-          kind: "call_screening",
+          kind,
           userId: clientState.userId || null,
           parentCallControlId: clientState.parentCallControlId || call.telnyxCallControlId,
         }),
@@ -1897,7 +1902,8 @@ export async function processHumanCallWebhookEvent(input: {
   // Never dump to voicemail after accept/bridge or once the customer call is live.
   if (
     input.eventType === "call.hangup" &&
-    String(clientState.kind || "") === "call_screening" &&
+    (String(clientState.kind || "") === "call_screening" ||
+      String(clientState.kind || "") === "personal_call_screening") &&
     call.telnyxCallControlId &&
     !isActiveControl
   ) {
@@ -1907,13 +1913,26 @@ export async function processHumanCallWebhookEvent(input: {
       ["in_progress", "completed", "transferred", "voicemail", "parked"].includes(call.status) ||
       Boolean(call.answeredAt);
     if (!alreadyAccepted) {
-      const { leaveVoicemailOnCall } = await import("./voicemail-service");
-      await leaveVoicemailOnCall({
-        workspaceId: call.workspaceId,
-        humanCallId: call.id,
-        telnyxCallControlId: call.telnyxCallControlId,
-        userId: clientState.userId ? String(clientState.userId) : null,
-      }).catch(() => undefined);
+      if (String(clientState.kind || "") === "personal_call_screening") {
+        const { applyPersonalForwardOverflow } = await import(
+          "@/lib/numbers/personal-forward-fallback"
+        );
+        await applyPersonalForwardOverflow({
+          workspaceId: call.workspaceId,
+          humanCallId: call.id,
+          telnyxCallControlId: call.telnyxCallControlId,
+          toE164: call.to,
+          reason: "failed",
+        }).catch(() => undefined);
+      } else {
+        const { leaveVoicemailOnCall } = await import("./voicemail-service");
+        await leaveVoicemailOnCall({
+          workspaceId: call.workspaceId,
+          humanCallId: call.id,
+          telnyxCallControlId: call.telnyxCallControlId,
+          userId: clientState.userId ? String(clientState.userId) : null,
+        }).catch(() => undefined);
+      }
     }
   }
 

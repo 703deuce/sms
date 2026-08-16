@@ -41,6 +41,22 @@ export function PersonalForwardingUI({
   const [callerIdDisplay, setCallerIdDisplay] = useState<"original" | "transovo_number">("original");
   const [callScreening, setCallScreening] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"always" | "custom">("always");
+  const [scheduleTimezone, setScheduleTimezone] = useState("America/New_York");
+  const [scheduleBlocks, setScheduleBlocks] = useState<
+    Array<{
+      id: string;
+      days: number[];
+      startTime: string;
+      endTime: string;
+      handling: "forward" | "voicemail_only" | "announcement_only";
+      targets: string[];
+    }>
+  >([]);
+  const [outsideHandling, setOutsideHandling] = useState<"forward" | "voicemail_only" | "announcement_only">(
+    "voicemail_only",
+  );
+  const [busyNumber, setBusyNumber] = useState("");
+  const [failedNumber, setFailedNumber] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +101,40 @@ export function PersonalForwardingUI({
     );
     setCallScreening(settings.callScreeningEnabled === true);
     setScheduleMode(settings.forwardScheduleMode === "custom" ? "custom" : "always");
+    const sched = settings.forwardSchedule;
+    if (sched && typeof sched === "object") {
+      const s = sched as Record<string, unknown>;
+      if (typeof s.timezone === "string") setScheduleTimezone(s.timezone);
+      if (Array.isArray(s.blocks)) {
+        setScheduleBlocks(
+          s.blocks.map((b, i) => {
+            const row = b as Record<string, unknown>;
+            return {
+              id: typeof row.id === "string" ? row.id : `block-${i}`,
+              days: Array.isArray(row.days) ? (row.days as number[]) : [1, 2, 3, 4, 5],
+              startTime: typeof row.startTime === "string" ? row.startTime : "09:00",
+              endTime: typeof row.endTime === "string" ? row.endTime : "17:00",
+              handling:
+                row.handling === "voicemail_only" || row.handling === "announcement_only"
+                  ? row.handling
+                  : "forward",
+              targets: Array.isArray(row.targets) ? (row.targets as string[]) : [],
+            };
+          }),
+        );
+      }
+      if (
+        s.outsideHandling === "voicemail_only" ||
+        s.outsideHandling === "announcement_only" ||
+        s.outsideHandling === "forward"
+      ) {
+        setOutsideHandling(s.outsideHandling);
+      }
+    }
+    setBusyNumber(typeof settings.forwardBusyNumber === "string" ? settings.forwardBusyNumber : "");
+    setFailedNumber(
+      typeof settings.forwardFailedNumber === "string" ? settings.forwardFailedNumber : "",
+    );
   }, [selected]);
 
   function updateTarget(index: number, value: string) {
@@ -119,11 +169,23 @@ export function PersonalForwardingUI({
             forwardUnansweredAction: unansweredAction,
             forwardBusyAction: busyAction,
             forwardFailedAction: failedAction,
+            forwardBusyNumber: busyAction === "another_number" ? busyNumber.trim() || null : null,
+            forwardFailedNumber:
+              failedAction === "another_number" ? failedNumber.trim() || null : null,
             voicemailEnabled: unansweredAction === "voicemail" || incomingHandling === "voicemail_only",
             directVoicemail: incomingHandling === "voicemail_only",
             callerIdDisplay,
             callScreeningEnabled: callScreening,
             forwardScheduleMode: scheduleMode,
+            forwardSchedule:
+              scheduleMode === "custom"
+                ? {
+                    timezone: scheduleTimezone,
+                    blocks: scheduleBlocks,
+                    outsideHandling,
+                    outsideTargets: outsideHandling === "forward" ? cleanedTargets : [],
+                  }
+                : null,
           },
         }),
       });
@@ -326,11 +388,27 @@ export function PersonalForwardingUI({
                   value={busyAction}
                   onChange={(v) => setBusyAction(v as FallbackAction)}
                 />
+                {busyAction === "another_number" ? (
+                  <input
+                    className="mt-1 h-9 w-full max-w-md rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
+                    placeholder="Alternate number if busy"
+                    value={busyNumber}
+                    onChange={(e) => setBusyNumber(e.target.value)}
+                  />
+                ) : null}
                 <FallbackSelect
                   label="If destination fails"
                   value={failedAction}
                   onChange={(v) => setFailedAction(v as FallbackAction)}
                 />
+                {failedAction === "another_number" ? (
+                  <input
+                    className="mt-1 h-9 w-full max-w-md rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
+                    placeholder="Alternate number if forwarding fails"
+                    value={failedNumber}
+                    onChange={(e) => setFailedNumber(e.target.value)}
+                  />
+                ) : null}
 
                 <div className="rounded-lg border border-[#e5e7eb] p-4 space-y-3">
                   <p className="text-[13px] font-semibold">Incoming caller ID on your phone</p>
@@ -363,8 +441,8 @@ export function PersonalForwardingUI({
                       />
                       Call screening — destination hears who is calling before accepting
                     </label>
-                    <div>
-                      <p className="text-[13px] font-semibold mb-2">Schedule</p>
+                    <div className="space-y-3">
+                      <p className="text-[13px] font-semibold">Schedule</p>
                       <label className="flex items-center gap-2 text-[13px]">
                         <input
                           type="radio"
@@ -373,14 +451,165 @@ export function PersonalForwardingUI({
                         />
                         Always
                       </label>
-                      <label className="flex items-center gap-2 text-[13px] mt-1">
+                      <label className="flex items-center gap-2 text-[13px]">
                         <input
                           type="radio"
                           checked={scheduleMode === "custom"}
-                          onChange={() => setScheduleMode("custom")}
+                          onChange={() => {
+                            setScheduleMode("custom");
+                            if (scheduleBlocks.length === 0) {
+                              setScheduleBlocks([
+                                {
+                                  id: "weekdays",
+                                  days: [1, 2, 3, 4, 5],
+                                  startTime: "08:00",
+                                  endTime: "17:00",
+                                  handling: "forward",
+                                  targets: targets.filter(Boolean),
+                                },
+                              ]);
+                            }
+                          }}
                         />
-                        Custom schedule (coming soon — saved as preference)
+                        Custom schedule
                       </label>
+                      {scheduleMode === "custom" ? (
+                        <div className="mt-2 space-y-3 rounded-lg border border-[#e5e7eb] p-3">
+                          <label className="text-[12px] text-[#6b7280]">
+                            Timezone
+                            <input
+                              className="mt-1 h-9 w-full rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+                              value={scheduleTimezone}
+                              onChange={(e) => setScheduleTimezone(e.target.value)}
+                            />
+                          </label>
+                          {scheduleBlocks.map((block, idx) => (
+                            <div key={block.id} className="space-y-2 border-t border-[#f3f4f6] pt-2">
+                              <p className="text-[12px] font-semibold">Window {idx + 1}</p>
+                              <div className="flex flex-wrap gap-2 text-[12px]">
+                                {[
+                                  ["0", "Sun"],
+                                  ["1", "Mon"],
+                                  ["2", "Tue"],
+                                  ["3", "Wed"],
+                                  ["4", "Thu"],
+                                  ["5", "Fri"],
+                                  ["6", "Sat"],
+                                ].map(([d, label]) => (
+                                  <label key={d} className="flex items-center gap-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={block.days.includes(Number(d))}
+                                      onChange={(e) => {
+                                        const day = Number(d);
+                                        setScheduleBlocks((prev) =>
+                                          prev.map((b) =>
+                                            b.id === block.id
+                                              ? {
+                                                  ...b,
+                                                  days: e.target.checked
+                                                    ? [...b.days, day]
+                                                    : b.days.filter((x) => x !== day),
+                                                }
+                                              : b,
+                                          ),
+                                        );
+                                      }}
+                                    />
+                                    {label}
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <input
+                                  type="time"
+                                  className="h-9 rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+                                  value={block.startTime}
+                                  onChange={(e) =>
+                                    setScheduleBlocks((prev) =>
+                                      prev.map((b) =>
+                                        b.id === block.id
+                                          ? { ...b, startTime: e.target.value }
+                                          : b,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <span className="text-[13px]">to</span>
+                                <input
+                                  type="time"
+                                  className="h-9 rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+                                  value={block.endTime}
+                                  onChange={(e) =>
+                                    setScheduleBlocks((prev) =>
+                                      prev.map((b) =>
+                                        b.id === block.id
+                                          ? { ...b, endTime: e.target.value }
+                                          : b,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </div>
+                              <select
+                                className="h-9 w-full rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+                                value={block.handling}
+                                onChange={(e) =>
+                                  setScheduleBlocks((prev) =>
+                                    prev.map((b) =>
+                                      b.id === block.id
+                                        ? {
+                                            ...b,
+                                            handling: e.target.value as typeof block.handling,
+                                          }
+                                        : b,
+                                    ),
+                                  )
+                                }
+                              >
+                                <option value="forward">Forward calls</option>
+                                <option value="voicemail_only">Voicemail only</option>
+                                <option value="announcement_only">Announcement only</option>
+                              </select>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="text-[12px] font-medium text-[#6366f1]"
+                            onClick={() =>
+                              setScheduleBlocks((prev) => [
+                                ...prev,
+                                {
+                                  id: `block-${Date.now()}`,
+                                  days: [6],
+                                  startTime: "00:00",
+                                  endTime: "23:59",
+                                  handling: "voicemail_only",
+                                  targets: [],
+                                },
+                              ])
+                            }
+                          >
+                            + Add window
+                          </button>
+                          <div>
+                            <p className="text-[12px] font-semibold mb-1">Outside schedule</p>
+                            <select
+                              className="h-9 w-full rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+                              value={outsideHandling}
+                              onChange={(e) =>
+                                setOutsideHandling(
+                                  e.target.value as typeof outsideHandling,
+                                )
+                              }
+                            >
+                              <option value="forward">Forward calls</option>
+                              <option value="voicemail_only">Voicemail only</option>
+                              <option value="announcement_only">Announcement only</option>
+                            </select>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </details>

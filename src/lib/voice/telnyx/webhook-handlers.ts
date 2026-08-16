@@ -107,7 +107,7 @@ export async function processVoiceWebhookEvent(input: {
         return {};
       }
     })();
-    if (screeningState.kind === "call_screening") {
+    if (screeningState.kind === "call_screening" || screeningState.kind === "personal_call_screening") {
       // Screening gather / answer can arrive as gather.ended on the agent leg,
       // or as call.answered when the agent phone picks up (handled below via human webhook).
       const digit = String(eventPayload.digits || eventPayload.digit || "").trim();
@@ -118,13 +118,27 @@ export async function processVoiceWebhookEvent(input: {
 
       if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
         if ((digit === "2" || !digit) && humanCallId && parentId) {
-          const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
-          await leaveVoicemailOnCall({
-            workspaceId,
-            humanCallId,
-            telnyxCallControlId: parentId,
-            userId: screeningState.userId ? String(screeningState.userId) : null,
-          }).catch(() => undefined);
+          if (screeningState.kind === "personal_call_screening") {
+            const callRow = await prisma.humanCall.findUnique({ where: { id: humanCallId } });
+            const { applyPersonalForwardOverflow } = await import(
+              "@/lib/numbers/personal-forward-fallback"
+            );
+            await applyPersonalForwardOverflow({
+              workspaceId,
+              humanCallId,
+              telnyxCallControlId: parentId,
+              toE164: callRow?.to || "",
+              reason: "unanswered",
+            }).catch(() => undefined);
+          } else {
+            const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+            await leaveVoicemailOnCall({
+              workspaceId,
+              humanCallId,
+              telnyxCallControlId: parentId,
+              userId: screeningState.userId ? String(screeningState.userId) : null,
+            }).catch(() => undefined);
+          }
           if (agentControlId) {
             const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
             await telnyxRequest(`/calls/${agentControlId}/actions/hangup`, {

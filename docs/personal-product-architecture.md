@@ -83,5 +83,4 @@ Blocked callers (`Suppression` with `p:+E164`) terminate before routing.
 ## Phases
 
 - **P0 (this build):** Settings schema, UI surfaces, activity/analytics/usage/blocked APIs, port-out display, expanded forwarding UI, number hub.
-- **P1:** Scheduled forwarding runtime, call screening for Personal forward, caller-ID on outbound leg to destination.
-- **P2:** Telnyx-native port-out PIN sync, metered transcription billing.
+- **P1:** Metered transcription billing integration.

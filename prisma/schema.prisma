@@ -2782,6 +2782,7 @@ model VoicemailBox {
   greetingUrl     String?
   afterHoursGreetingUrl String?
   emailNotify     String?
+  secondaryEmailNotify String?
   transcriptionEnabled Boolean @default(true)
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())

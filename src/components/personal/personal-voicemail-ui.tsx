@@ -39,6 +39,9 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
   const [autoTranscription, setAutoTranscription] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [forwardEmail, setForwardEmail] = useState("");
+  const [secondaryEmail, setSecondaryEmail] = useState("");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "unread" | "read">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -51,6 +54,7 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
     setBox(primary);
     if (primary) {
       setForwardEmail(primary.emailNotify || "");
+      setSecondaryEmail(primary.secondaryEmailNotify || "");
       setAutoTranscription(primary.transcriptionEnabled ?? true);
       setEmailAlerts(Boolean(primary.emailNotify));
     }
@@ -113,6 +117,7 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
             action: "update_box",
             boxId,
             emailNotify: emailAlerts ? forwardEmail.trim() || null : null,
+            secondaryEmailNotify: emailAlerts ? secondaryEmail.trim() || null : null,
             transcriptionEnabled: autoTranscription,
           }),
         });
@@ -242,6 +247,26 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
       </div>
 
       <PersonalSection title="Voicemail Inbox">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(["all", "unread", "read"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setInboxFilter(f)}
+              className={`rounded-lg px-3 py-1 text-[12px] ${
+                inboxFilter === f ? "bg-[#6366f1] text-white" : "bg-[#f3f4f6]"
+              }`}
+            >
+              {f === "all" ? "All" : f === "unread" ? "Unread" : "Read"}
+            </button>
+          ))}
+        </div>
+        <input
+          className="mb-4 h-10 w-full max-w-md rounded-lg border border-[#e5e7eb] px-3 text-[14px]"
+          placeholder="Search caller, number, or transcription"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
         {loading ? (
           <p className={pMuted}>Loading voicemail…</p>
         ) : messages.length === 0 ? (
@@ -266,7 +291,18 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {messages.map((m) => {
+                {messages
+                  .filter((m) => {
+                    if (inboxFilter === "unread" && m.readAt) return false;
+                    if (inboxFilter === "read" && !m.readAt) return false;
+                    const q = searchQuery.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      (m.callerNumber || "").includes(q) ||
+                      (m.transcript || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((m) => {
                   const expanded = expandedId === m.id;
                   return (
                     <Fragment key={m.id}>
@@ -353,6 +389,18 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
                               >
                                 Delete
                               </PersonalOutlineButton>
+                              <PersonalOutlineButton
+                                onClick={async () => {
+                                  if (!m.callerNumber) return;
+                                  await fetch("/api/personal/blocked", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ phone: m.callerNumber }),
+                                  });
+                                }}
+                              >
+                                Block caller
+                              </PersonalOutlineButton>
                               <a
                                 href={`/api/phone/voicemail/${m.id}/recording`}
                                 target="_blank"
@@ -437,12 +485,21 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
               />
             </label>
             <div>
-              <label className="text-[12px] font-medium text-[#6b7280]">Forward to Email</label>
+              <label className="text-[12px] font-medium text-[#6b7280]">Primary email</label>
               <input
                 className="mt-1 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
                 placeholder="you@email.com"
                 value={forwardEmail}
                 onChange={(e) => setForwardEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-[#6b7280]">Second notification email</label>
+              <input
+                className="mt-1 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
+                placeholder="optional@email.com"
+                value={secondaryEmail}
+                onChange={(e) => setSecondaryEmail(e.target.value)}
               />
             </div>
           </div>

@@ -14,6 +14,7 @@ export type PersonalVoicemailBox = {
   greetingText?: string | null;
   greetingUrl?: string | null;
   emailNotify?: string | null;
+  secondaryEmailNotify?: string | null;
   transcriptionEnabled?: boolean;
 };
 

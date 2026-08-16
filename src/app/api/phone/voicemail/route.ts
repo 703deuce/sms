@@ -78,6 +78,7 @@ export async function POST(request: Request) {
         greetingText: body.greetingText,
         greetingUrl: body.greetingUrl,
         emailNotify: body.emailNotify,
+        secondaryEmailNotify: (body as { secondaryEmailNotify?: string }).secondaryEmailNotify,
         name: body.name,
       };
       if (typeof (body as { transcriptionEnabled?: boolean }).transcriptionEnabled === "boolean") {
