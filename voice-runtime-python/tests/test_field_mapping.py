@@ -40,6 +40,34 @@ def test_opportunistic_prefill_gating() -> None:
     assert should_run_opportunistic_prefill(ud)
 
 
+def test_prefill_caller_phone() -> None:
+    from transovo_voice.session.inbound import _prefill_caller_phone
+    from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData
+
+    ud = SessionUserData(
+        workspace_id="w",
+        agent_id="a",
+        call_id="c",
+        business_name="Test",
+        timezone="America/New_York",
+        caller_e164="+15714776175",
+        receptionist=ReceptionistCompiled(
+            business_name="Test",
+            agent_display_name="Amy",
+            greeting="Hi",
+            timezone="America/New_York",
+            compiled_prompt="",
+            field_manifest=[
+                ManifestField("phone", "phone", "Phone?", "phone", True),
+                ManifestField("email", "email", "Email?", "email", True),
+            ],
+        ),
+    )
+    _prefill_caller_phone(ud)
+    assert ud.collected_fields["phone"] == "+15714776175"
+    assert "email" not in ud.collected_fields
+
+
 def test_multi_field_volunteer_skip_logic() -> None:
     """Fields already collected should not appear in missing list."""
     from transovo_voice.workflows.booking_intake import _missing_fields

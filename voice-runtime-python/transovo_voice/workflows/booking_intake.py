@@ -93,15 +93,20 @@ async def opportunistic_prefill(
         return
     if not transcript.strip():
         return
-    result = await backend.call(
-        "extract_fields",
-        {
-            "transcript": transcript,
-            "manifest": ud.manifest_dicts(),
-            "currentFields": ud.collected_fields,
-            "callerE164": ud.caller_e164,
-        },
-    )
+    try:
+        result = await backend.call(
+            "extract_fields",
+            {
+                "transcript": transcript,
+                "manifest": ud.manifest_dicts(),
+                "currentFields": ud.collected_fields,
+                "callerE164": ud.caller_e164,
+            },
+        )
+    except RuntimeError as err:
+        if "client has been closed" in str(err):
+            return
+        raise
     if not result.get("ok"):
         return
     fields = result.get("fields") or {}
@@ -168,7 +173,8 @@ async def run_booking_intake_task_group(
         ud.intake_active = False
         return BookingIntakeResult(fields=dict(ud.collected_fields), complete=True)
 
-    chat_ctx = session.chat_ctx
+    # AgentSession exposes conversation history via `.history` (not `.chat_ctx`).
+    chat_ctx = session.history
 
     async def on_completed(event: TaskCompletedEvent) -> None:
         result = event.result
