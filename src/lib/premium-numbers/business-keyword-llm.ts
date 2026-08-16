@@ -70,7 +70,7 @@ export function mergeCustomerKeywords(input: {
 
 function deterministicIndustryKeywords(industry: string): string[] {
   const inferred = inferIndustryFromText(industry);
-  const mapWords = inferred ? INDUSTRY_KEYWORD_MAP[inferred] ?? [] : [];
+  const mapWords = inferred ? INDUSTRY_KEYWORD_MAP[inferred]?.map((d) => d.word) ?? [] : [];
   return filterConsumerFriendlyKeywords(
     normalizeKeywordList([...mapWords, industry]),
   );

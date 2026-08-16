@@ -1,9 +1,12 @@
 /**
  * Tunable scoring weights — business match vs number quality blend.
- * Industry searches: final = 70% business match + 30% number quality.
+ * Industry searches: final list rank = 70% business match + 30% number quality.
  */
 export const BUSINESS_MATCH_LIST_THRESHOLD = 55;
 export const MEMORABLE_NUMBER_QUALITY_THRESHOLD = 40;
+
+/** Hard cap for accidental 3-letter keypad matches unless explicitly requested. */
+export const THREE_LETTER_BUSINESS_MATCH_CAP = 35;
 
 export const SCORING_WEIGHTS = {
   blend: {
@@ -11,51 +14,55 @@ export const SCORING_WEIGHTS = {
     numberQuality: 0.3,
   },
   businessMatch: {
-    /** Exact primary industry keyword ending (subscriber digits). Steep length curve. */
-    exactEndingPrimary: {
-      seven: 100,
-      six: 85,
-      five: 70,
-      four: 55,
-      three: 20,
+    /** Base points by exact-ending word length (before tier/placement/local bonuses). */
+    exactEndingBase: {
+      seven: 55,
+      six: 52,
+      five: 50,
+      four: 40,
+      three: 10,
     },
-    /** Exact non-primary keyword ending. */
-    exactEndingSecondary: {
-      seven: 85,
-      six: 72,
-      five: 58,
-      four: 42,
-      three: 12,
-    },
-    contains: {
+    containsBase: {
       sixSeven: 18,
       fourFive: 12,
       three: 4,
     },
-    industryPrimaryBonus: 5,
-    industrySecondaryBonus: 3,
-    cleanPlacementBonus: 5,
+    tierBonus: {
+      PRIMARY: 15,
+      SECONDARY: 8,
+      TERTIARY: 3,
+    },
+    placementBonus: {
+      exactEnding: 10,
+      cleanEnding: 5,
+      beginning: 3,
+      interior: 2,
+    },
+    localFitMax: 20,
+    areaCodeMarketDefault: 50,
   },
   numberQuality: {
-    last4AllIdentical: 85,
-    ends0000: 85,
     exceptionalRepetition: 95,
-    fullPalindrome: 80,
-    ababOrRepeatedPair: 55,
-    sequence: 55,
-    palindromeLast4: 45,
-    endsX000: 40,
-    last3Identical: 25,
-    triplePrefix: 45,
-    simplicity: 5,
-    wordPlusNumericBoost: 10,
+    strongRepeatedBlocks: 88,
+    last4AllIdentical: 78,
+    ends0000: 40,
+    ababOrRepeatedPair: 48,
+    sequence: 45,
+    roundEnding: 32,
+    shortPalindromeLast4: 22,
+    hiddenFullPalindrome: 12,
+    last3Identical: 18,
+    triplePrefix: 42,
+    chunkabilityMax: 22,
+    simplicityMax: 8,
+    wordPlusNumericBoost: 18,
   },
   providerCost: {
     baselineMonthly: 1,
     premiumThreshold: 2,
     highPremiumThreshold: 4,
-    premiumBonus: 8,
-    highPremiumBonus: 10,
+    premiumSignal: 3,
+    highPremiumSignal: 5,
   },
   penalties: {
     shortAccidental: 6,
@@ -100,6 +107,25 @@ export function scoreToTier(score: number): import("./types").QualityTier {
     if (score >= row.min) return row.tier;
   }
   return "Ordinary";
+}
+
+export function numberQualityToLabel(score: number): import("./types").NumberQualityLabel {
+  if (score >= 95) return "Signature Number";
+  if (score >= 85) return "Elite Number";
+  if (score >= 70) return "Premium Pattern";
+  if (score >= 55) return "Highly Memorable";
+  if (score >= 40) return "Memorable";
+  if (score >= 25) return "Distinctive";
+  return "Standard";
+}
+
+export function businessMatchToLabel(score: number): import("./types").BusinessFitLabel {
+  if (score >= 95) return "Exceptional Business Match";
+  if (score >= 85) return "Excellent Business Match";
+  if (score >= 70) return "Strong Business Match";
+  if (score >= 50) return "Good Business Match";
+  if (score >= 25) return "Related";
+  return "No Direct Match";
 }
 
 export function blendScores(businessMatch: number, numberQuality: number): number {
