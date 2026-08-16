@@ -141,7 +141,14 @@ export function buildFrontDeskBookingTools(input: {
           minute: "2-digit",
           timeZone: session.userData.timezone,
         });
-        return `The current date and time is ${formatted}.`;
+        return formatToolFeedbackForModel(
+          toolFeedbackSuccess(`The current date and time is ${formatted}.`, {
+            tool: "get_current_time",
+            next_action: "continue_conversation",
+            guidance:
+              "Use this clock for relative dates. Continue the caller's request — one thought at a time.",
+          }),
+        );
       });
     },
   });
@@ -170,7 +177,17 @@ export function buildFrontDeskBookingTools(input: {
             slotsMap.set(slot.slotId, slot);
           }
           const lines = cal.formatSlotsForModel(slots);
-          return lines || "No slots available at the moment.";
+          const slotText = lines || "No slots available at the moment.";
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(slotText, {
+              tool: "list_available_slots",
+              next_action: lines ? "offer_slots_and_confirm" : "continue_conversation",
+              context: { slot_count: slots.length },
+              guidance: lines
+                ? "Offer up to two or three times from the list. When the caller picks one, call schedule_appointment with that slot_id. Ask only one question — which time works?"
+                : "No openings right now. Tell the caller briefly, then offer to check again later or take a message.",
+            }),
+          );
         } catch (err) {
           return formatToolFeedbackForModel(
             toolFeedbackFromError(err, {
@@ -385,6 +402,8 @@ export function buildFrontDeskBookingTools(input: {
                   toolFeedbackSuccess(recovered, {
                     tool: "schedule_appointment",
                     recovery_class: "DUPLICATE_OPERATION",
+                    next_action: "end_call",
+                    caller_already_heard_success: true,
                   }),
                 );
               }

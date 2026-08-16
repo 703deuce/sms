@@ -16,7 +16,7 @@ function silentTaskFeedback(tool: string, guidance: string): ToolFeedback {
   return toolFeedbackSuccess(guidance, {
     tool,
     runtime_handled_retry: true,
-    next_action: "none",
+    next_action: "do_not_speak",
     guidance,
   });
 }
@@ -49,17 +49,20 @@ function parseLifecyclePrefix(raw: string, tool: string): ToolFeedback | null {
       tool,
       recovery_class: "OPERATION_IN_PROGRESS",
       reason: "collection_partial",
-      next_action: "none",
+      next_action: "do_not_speak",
       runtime_handled_retry: true,
       guidance: trimmed.replace(/^COLLECTION_PARTIAL:\s*/, ""),
     });
   }
 
   if (trimmed.startsWith("COLLECTION_COMPLETE:")) {
-    return toolFeedbackSuccess(trimmed.replace(/^COLLECTION_COMPLETE:\s*/, ""), {
+    const body = trimmed.replace(/^COLLECTION_COMPLETE:\s*/, "");
+    return toolFeedbackSuccess(body, {
       tool,
-      next_action: trimmed.includes("schedule_appointment") ? "schedule_appointment_retry" : "none",
-      guidance: trimmed.replace(/^COLLECTION_COMPLETE:\s*/, ""),
+      next_action: trimmed.includes("schedule_appointment")
+        ? "schedule_appointment_retry"
+        : "continue_conversation",
+      guidance: body,
     });
   }
 
@@ -68,7 +71,7 @@ function parseLifecyclePrefix(raw: string, tool: string): ToolFeedback | null {
       tool,
       recovery_class: "OPERATION_IN_PROGRESS",
       reason: "intake_partial",
-      next_action: "none",
+      next_action: "do_not_speak",
       runtime_handled_retry: true,
       guidance: trimmed.replace(/^BOOKING_INTAKE_PARTIAL:\s*/, ""),
     });
@@ -137,8 +140,8 @@ export function normalizeToolResultForModel(tool: string, raw: string): string {
         tool,
         recovery_class: "UNKNOWN_FAILURE",
         reason: "empty_tool_result",
-        next_action: "none",
-        guidance: "Tool returned no result. Do not claim success — retry or take a message.",
+        next_action: "take_message",
+        guidance: "Tool returned no result. Do not claim success — retry the tool or offer take_message.",
       }),
     );
   }
@@ -164,7 +167,7 @@ export function normalizeToolResultForModel(tool: string, raw: string): string {
         tool,
         recovery_class: "MISSING_INFORMATION",
         reason: "operational_redirect",
-        next_action: "none",
+        next_action: "continue_conversation",
         guidance: trimmed,
       }),
     );
@@ -173,6 +176,7 @@ export function normalizeToolResultForModel(tool: string, raw: string): string {
   return formatToolFeedbackForModel(
     toolFeedbackSuccess(trimmed, {
       tool,
+      next_action: "continue_conversation",
       guidance: trimmed,
     }),
   );

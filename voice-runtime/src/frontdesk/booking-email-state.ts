@@ -56,7 +56,7 @@ export function formatBookingEmailSavedFeedback(
         `Email is already ${result.email}. Do NOT call record_booking_email or record email again.${scheduleTail}`,
         {
           tool,
-          next_action: slotId ? "schedule_appointment_retry" : "none",
+          next_action: slotId ? "schedule_appointment_retry" : "continue_conversation",
         },
       ),
     );
@@ -65,7 +65,7 @@ export function formatBookingEmailSavedFeedback(
   return formatToolFeedbackForModel(
     toolFeedbackSuccess(`Email saved as ${result.email}.${scheduleTail}`, {
       tool,
-      next_action: slotId ? "schedule_appointment_retry" : "none",
+      next_action: slotId ? "schedule_appointment_retry" : "continue_conversation",
       context: slotId ? { slot_id: slotId } : undefined,
     }),
   );

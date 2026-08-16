@@ -158,7 +158,7 @@ export function buildFrontDeskTransferTool() {
               tool: "transfer_to_human",
               recovery_class: "RESOURCE_UNAVAILABLE",
               reason: "no_destination",
-              next_action: takeMessage ? "take_message" : "none",
+              next_action: takeMessage ? "take_message" : "continue_conversation",
               guidance: takeMessage
                 ? "Transfer isn't configured. Offer to take a message for the team."
                 : "Transfer isn't available right now.",
@@ -207,6 +207,8 @@ export function buildFrontDeskTransferTool() {
           return formatToolFeedbackForModel(
             toolFeedbackSuccess("Transferring now — caller is on hold.", {
               tool: "transfer_to_human",
+              next_action: "end_call",
+              guidance: "Stay silent after the bridge line — the transfer is in progress.",
             }),
           );
         }
@@ -234,6 +236,8 @@ export function buildFrontDeskTransferTool() {
           return formatToolFeedbackForModel(
             toolFeedbackSuccess("Transferring now — caller is on hold.", {
               tool: "transfer_to_human",
+              next_action: "end_call",
+              guidance: "Stay silent after the bridge line — the transfer is in progress.",
             }),
           );
         }
@@ -247,7 +251,7 @@ export function buildFrontDeskTransferTool() {
             tool: "transfer_to_human",
             recovery_class: "RESOURCE_UNAVAILABLE",
             reason: "no_transfer_path",
-            next_action: takeMessage ? "take_message" : "none",
+            next_action: takeMessage ? "take_message" : "continue_conversation",
             runtime_handled_retry: true,
             caller_already_heard_failure: true,
             guidance: takeMessage
