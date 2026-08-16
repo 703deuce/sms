@@ -3,24 +3,14 @@ import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
 import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
-import {
-  peekEmailForFrontDeskCall,
-  resolveFrontDeskAppointment,
-} from "./appointment-lookup";
-import {
-  formatBookedTimeLabel,
-  rescheduleAppointmentResilient,
-} from "./booking-recovery";
+import { peekEmailForFrontDeskCall, resolveFrontDeskAppointment } from "./appointment-lookup";
+import { formatBookedTimeLabel } from "./booking-recovery";
 import { resolveConfirmedEmail } from "./email-collection-tools";
 import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
-import {
-  buildBookingFailureLine,
-  buildBookingSuccessLine,
-  POST_EMAIL_BOOKING_FILLER,
-} from "../booking-completion-messages";
-import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
+import { buildBookingFailureLine, buildBookingSuccessLine } from "../booking-completion-messages";
+import { writeRescheduleToProvider } from "./reschedule-provider-write";
 import {
   formatToolFeedbackForModel,
   toolFeedbackBookingCompleteSpeakNow,
@@ -33,6 +23,7 @@ import {
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import { sendBookingSmsAsync } from "./booking-sms";
 import { speakBookingLine } from "./booking-speech";
+import { tryConfirmationSpeech } from "./runtime-transaction";
 
 function externalEventUri(externalId: string | null | undefined): string | null {
   if (!externalId) return null;
@@ -102,21 +93,16 @@ export function buildFrontDeskRescheduleAppointmentTool(
             const oldEventUri = externalEventUri(appointment.externalId);
             const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
 
-            const rescheduled = await runAsyncWorkWithBridge(
-              session,
-              POST_EMAIL_BOOKING_FILLER,
-              () =>
-                rescheduleAppointmentResilient({
-                  session,
-                  appointmentId: appointment.id,
-                  oldEventUri,
-                  slot,
-                  attendeeEmail,
-                  existingMetadata: appointment.metadata,
-                }),
-            );
+            const { rescheduled, bookedTimeLabel: local } = await writeRescheduleToProvider({
+              userData: ud,
+              appointmentId: appointment.id,
+              oldEventUri,
+              slot,
+              slotId: slot_id,
+              attendeeEmail,
+              existingMetadata: appointment.metadata,
+            });
 
-            const local = formatBookedTimeLabel(rescheduled.slot.startTime, ud.timezone);
             markBookingConfirmed(ud, {
               slotId: slot_id,
               providerEventId: rescheduled.eventUri,
@@ -133,9 +119,14 @@ export function buildFrontDeskRescheduleAppointmentTool(
               businessName: ud.businessName,
             }).catch(() => undefined);
 
-            sendBookingSmsAsync(session, rescheduled.slot.startTime);
+            sendBookingSmsAsync(ud, rescheduled.slot.startTime);
 
-            const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
+            const spoken = await tryConfirmationSpeech(
+              session,
+              "reschedule",
+              buildBookingSuccessLine(local),
+              speakBookingLine,
+            );
             const base = spoken
               ? toolFeedbackBookingCompleteSpoken()
               : toolFeedbackBookingCompleteSpeakNow(local);
@@ -146,17 +137,19 @@ export function buildFrontDeskRescheduleAppointmentTool(
           } catch (err) {
             if (err instanceof SlotUnavailableError) {
               ud.slotUnavailableCount += 1;
-              await speakBookingLine(
+              const heardFailure = await tryConfirmationSpeech(
                 session,
+                "reschedule",
                 buildBookingFailureLine(
                   "That new time isn't available anymore — I can check what else is open.",
                 ),
+                speakBookingLine,
               );
               return formatToolFeedbackForModel(
                 toolFeedbackFromBookingWriteError(err, {
                   tool: "reschedule_appointment",
                   slotId: slot_id,
-                  callerAlreadyHeardFailure: true,
+                  callerAlreadyHeardFailure: heardFailure,
                 }),
               );
             }
@@ -169,12 +162,17 @@ export function buildFrontDeskRescheduleAppointmentTool(
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-            await speakBookingLine(session, buildBookingFailureLine());
+            const heardFailure = await tryConfirmationSpeech(
+              session,
+              "reschedule",
+              buildBookingFailureLine(),
+              speakBookingLine,
+            );
             return formatToolFeedbackForModel(
               toolFeedbackFromBookingWriteError(err, {
                 tool: "reschedule_appointment",
                 slotId: slot_id,
-                callerAlreadyHeardFailure: true,
+                callerAlreadyHeardFailure: heardFailure,
               }),
             );
           }

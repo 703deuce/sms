@@ -6,22 +6,14 @@ import {
   scheduleAppointmentResilientForUserData,
 } from "./booking-recovery";
 import type { FrontDeskUserData } from "./userdata";
+import {
+  logRuntimeTransaction,
+  transactionContextFromUserData,
+  tryConfirmationSpeech,
+} from "./runtime-transaction";
+import { speakBookingLine } from "./booking-speech";
 
-function logProviderWrite(
-  event: string,
-  userData: FrontDeskUserData,
-  extra?: Record<string, unknown>,
-): void {
-  console.log(
-    JSON.stringify({
-      source: "booking-provider-write",
-      event,
-      callId: userData.callId,
-      workspaceId: userData.workspaceId,
-      ...extra,
-    }),
-  );
-}
+const SOURCE = "booking-provider-write";
 
 /**
  * Direct backend calendar write — no AgentSession interrupt, bridge speech, or TTS.
@@ -32,11 +24,15 @@ export async function writeBookingToProvider(input: {
   slot: AvailableSlot;
   slotId: string;
   attendeeEmail: string;
-}): Promise<{ booked: Awaited<ReturnType<typeof scheduleAppointmentResilientForUserData>>; bookedTimeLabel: string }> {
+}): Promise<{
+  booked: Awaited<ReturnType<typeof scheduleAppointmentResilientForUserData>>;
+  bookedTimeLabel: string;
+}> {
+  const ctx = transactionContextFromUserData(input.userData);
   const idempotencyKey = `${input.userData.callId}:${input.slotId}`;
   const startMs = Date.now();
 
-  logProviderWrite("booking_provider_write_started", input.userData, {
+  logRuntimeTransaction(SOURCE, "booking_write_started", ctx, {
     slotId: input.slotId,
     idempotencyKey,
   });
@@ -49,7 +45,7 @@ export async function writeBookingToProvider(input: {
     });
     const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, input.userData.timezone);
 
-    logProviderWrite("booking_provider_write_succeeded", input.userData, {
+    logRuntimeTransaction(SOURCE, "booking_write_succeeded", ctx, {
       slotId: input.slotId,
       idempotencyKey,
       providerEventId: booked.eventUri,
@@ -60,7 +56,7 @@ export async function writeBookingToProvider(input: {
 
     return { booked, bookedTimeLabel };
   } catch (err) {
-    logProviderWrite("booking_provider_write_failed", input.userData, {
+    logRuntimeTransaction(SOURCE, "booking_write_failed", ctx, {
       slotId: input.slotId,
       idempotencyKey,
       durationMs: Date.now() - startMs,
@@ -76,30 +72,5 @@ export async function trySpeakAfterProviderWrite(
   text: string,
   speak: (session: AgentSession<FrontDeskUserData>, text: string) => Promise<boolean>,
 ): Promise<boolean> {
-  const { isAgentSessionAlive } = await import("../session-utils");
-  if (!isAgentSessionAlive(session)) {
-    console.log(
-      JSON.stringify({
-        source: "booking-speech",
-        event: "confirmation_speech_skipped",
-        callId: session.userData.callId,
-        reason: "session_not_alive",
-        preview: text.slice(0, 80),
-      }),
-    );
-    return false;
-  }
-
-  const spoken = await speak(session, text);
-  if (!spoken) {
-    console.log(
-      JSON.stringify({
-        source: "booking-speech",
-        event: "confirmation_speech_failed",
-        callId: session.userData.callId,
-        preview: text.slice(0, 80),
-      }),
-    );
-  }
-  return spoken;
+  return tryConfirmationSpeech(session, "booking", text, speak);
 }

@@ -1,35 +1,23 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
-import { getPrisma } from "@/lib/db";
 import { calendarToolGuardFeedback } from "./booking-operation-guard";
-import { markBookingOperationCancelled } from "./booking-operation";
-import { markBookingCancelled, type FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
-import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
-import {
-  cancelCalendlyEventResilient,
-  formatBookedTimeLabel,
-} from "./booking-recovery";
 import {
   formatAppointmentResolveFailure,
   tryResolveFrontDeskAppointment,
 } from "./appointment-lookup";
 import { speakBookingLine } from "./booking-speech";
-import { POST_CANCEL_FILLER } from "../booking-completion-messages";
+import { writeCancelToProvider } from "./cancel-provider-write";
 import { syncFrontDeskCancelToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
+import { tryConfirmationSpeech } from "./runtime-transaction";
 import {
   formatToolFeedbackForModel,
   toolFeedbackFromBookingWriteError,
   toolFeedbackRecoverable,
   toolFeedbackSuccess,
 } from "@/lib/voice/tool-feedback";
-
-function externalEventUri(externalId: string | null | undefined): string | null {
-  if (!externalId) return null;
-  const raw = externalId.startsWith("calendly:") ? externalId.slice("calendly:".length) : externalId;
-  return raw.trim() || null;
-}
+import type { FrontDeskUserData } from "./userdata";
 
 export function buildFrontDeskCancelAppointmentTool() {
   return llm.tool({
@@ -73,40 +61,18 @@ export function buildFrontDeskCancelAppointmentTool() {
         "cancel_appointment",
         { appointment_id, confirmed },
         async () => {
+          const fromThisCall = appointment.callId === ud.callId;
           try {
-            const when = formatBookedTimeLabel(appointment.startsAt, ud.timezone);
-            const fromThisCall = appointment.callId === ud.callId;
-
-            await runAsyncWorkWithBridge(session, POST_CANCEL_FILLER, async () => {
-              const eventUri = externalEventUri(appointment.externalId);
-              if (eventUri) {
-                await cancelCalendlyEventResilient({
-                  workspaceId: ud.workspaceId,
-                  eventUri,
-                  reason: "Canceled by caller on phone",
-                });
-              }
-
-              const prisma = getPrisma();
-              await prisma.voiceAppointment.update({
-                where: { id: appointment.id },
-                data: { status: "cancelled" },
-              });
-
-              if (fromThisCall) {
-                markBookingCancelled(ud);
-                markBookingOperationCancelled(ud, "appointment_cancelled");
-                await prisma.voiceCall
-                  .update({
-                    where: { id: ud.callId },
-                    data: { appointmentBooked: false, outcome: "appointment_cancelled" },
-                  })
-                  .catch(() => undefined);
-              }
+            const result = await writeCancelToProvider({
+              userData: ud,
+              appointmentId: appointment.id,
+              externalId: appointment.externalId,
+              startsAt: appointment.startsAt,
+              fromThisCall,
             });
 
-            const line = `Your appointment for ${when} has been cancelled.`;
-            await speakBookingLine(session, line);
+            const line = `Your appointment for ${result.whenLabel} has been cancelled.`;
+            const heard = await tryConfirmationSpeech(session, "cancel", line, speakBookingLine);
 
             void syncFrontDeskCancelToCrm({
               workspaceId: ud.workspaceId,
@@ -117,12 +83,14 @@ export function buildFrontDeskCancelAppointmentTool() {
             if (fromThisCall) {
               return formatToolFeedbackForModel(
                 toolFeedbackSuccess(
-                  "Cancellation already spoken. Do not repeat. Ask if they need anything else or end_call.",
+                  heard
+                    ? "Cancellation already spoken. Do not repeat. Ask if they need anything else or end_call."
+                    : line,
                   {
                     tool: "cancel_appointment",
                     next_action: "continue_conversation",
-                    caller_already_heard_success: true,
-                    context: { appointment_id: appointment.id, when },
+                    caller_already_heard_success: heard,
+                    context: { appointment_id: appointment.id, when: result.whenLabel },
                   },
                 ),
               );
@@ -146,12 +114,17 @@ export function buildFrontDeskCancelAppointmentTool() {
                 error: err instanceof Error ? err.message : String(err),
               }),
             );
-            await speakBookingLine(session, "I'm sorry — I couldn't cancel that on the calendar.");
+            const heardFailure = await tryConfirmationSpeech(
+              session,
+              "cancel",
+              "I'm sorry — I couldn't cancel that on the calendar.",
+              speakBookingLine,
+            );
             return formatToolFeedbackForModel(
               toolFeedbackFromBookingWriteError(err, {
                 tool: "cancel_appointment",
                 slotId: appointment.id,
-                callerAlreadyHeardFailure: true,
+                callerAlreadyHeardFailure: heardFailure,
               }),
             );
           }

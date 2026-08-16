@@ -1,13 +1,13 @@
 import { llm } from "@livekit/agents";
 import { z } from "zod";
 import type { AgentSession } from "@livekit/agents";
-import { getPrisma } from "@/lib/db";
-import { transferLiveKitSipParticipant } from "@/lib/voice/livekit/sip-transfer";
-import { initiateTransfer } from "@/lib/voice/transfers";
 import { deliverScriptedSpeech } from "../outbound/scripted-speech";
+import { isAgentSessionAlive } from "../session-utils";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
 import { notifyReceptionistStaff } from "@/lib/voice/receptionist/notifications";
+import { writeTransferToProvider } from "./transfer-provider-write";
+import { tryConfirmationSpeech } from "./runtime-transaction";
 import {
   formatToolFeedbackForModel,
   toolFeedbackSuccess,
@@ -34,12 +34,6 @@ async function notifyTransferFailure(
     detail: [reason, failureReason].filter(Boolean).join(" — "),
     snapshot: ud.receptionistCompiled,
   }).catch(() => undefined);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 }
 
 function isEmergencyTransfer(reason?: string, ud?: FrontDeskUserData): boolean {
@@ -91,6 +85,7 @@ async function resolveTransferDestination(
   const fallback = process.env.VOICE_TRANSFER_FALLBACK_E164?.trim();
   if (fallback) return fallback;
 
+  const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
   const dest = await prisma.voiceTransferDestination.findFirst({
     where: { workspaceId, enabled: true },
@@ -108,32 +103,20 @@ function transferRecoveryClass(reason: string): RecoveryClass {
   return "UNKNOWN_FAILURE";
 }
 
-async function markVoiceCallTransferred(
-  workspaceId: string,
-  callId: string,
-  destination: string,
-  reason?: string,
-): Promise<void> {
-  const prisma = getPrisma();
-  const call = await prisma.voiceCall.findFirst({
-    where: { id: callId, workspaceId },
-    select: { metadata: true },
-  });
-  const meta = asRecord(call?.metadata);
-  await prisma.voiceCall.update({
-    where: { id: callId },
-    data: {
-      transferred: true,
-      status: "TRANSFERRED",
-      outcome: "transferred",
-      metadata: {
-        ...meta,
-        transferDestination: destination,
-        transferReason: reason || "Caller requested human",
-        transferCompletedAt: new Date().toISOString(),
-      },
-    },
-  });
+async function speakTransferBridge(
+  session: AgentSession<FrontDeskUserData>,
+  text: string,
+): Promise<boolean> {
+  if (!isAgentSessionAlive(session)) return false;
+  try {
+    await deliverScriptedSpeech(session, text, {
+      allowInterruptions: false,
+      addToChatCtx: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function buildFrontDeskTransferTool() {
@@ -166,97 +149,61 @@ export function buildFrontDeskTransferTool() {
           );
         }
 
-        const isEmergency = isEmergencyTransfer(reason, ud);
-        const bridgeLine = isEmergency
-          ? "I understand this is urgent — let me connect you with someone right now. Please hold."
-          : "Let me connect you with someone who can help. Please hold.";
-        await deliverScriptedSpeech(session, bridgeLine, {
-          allowInterruptions: false,
-          addToChatCtx: true,
-        });
-
         const transferPolicy = ud.receptionistCompiled?.transferPolicy as
           | { warmTransfer?: boolean }
           | undefined;
         const transferType =
           transferPolicy?.warmTransfer === false ? "blind_transfer" : "warm_transfer";
 
-        const prisma = getPrisma();
-        const call = await prisma.voiceCall.findUnique({
-          where: { id: ud.callId },
-          select: { telnyxCallControlId: true, metadata: true },
+        const result = await writeTransferToProvider({
+          userData: ud,
+          destination,
+          reason,
+          transferType,
         });
-        const meta = asRecord(call?.metadata);
-        const livekitRoomName =
-          ud.livekitRoomName ||
-          (typeof meta.livekitRoomName === "string" ? meta.livekitRoomName : null);
-        const livekitParticipantId =
-          ud.livekitParticipantId ||
-          (typeof meta.livekitParticipantId === "string" ? meta.livekitParticipantId : null);
 
-        if (call?.telnyxCallControlId) {
-          await initiateTransfer({
-            workspaceId: ud.workspaceId,
-            callId: ud.callId,
-            destination,
-            transferType,
-            summary: reason || "Caller requested human",
-            timeoutSeconds: 25,
-          });
-          await markVoiceCallTransferred(ud.workspaceId, ud.callId, destination, reason);
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess("Transferring now — caller is on hold.", {
-              tool: "transfer_to_human",
-              next_action: "end_call",
-              guidance: "Stay silent after the bridge line — the transfer is in progress.",
-            }),
-          );
-        }
+        if (!result.ok) {
+          await notifyTransferFailure(ud, reason, result.reason);
+          const takeMessage =
+            (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
+              ?.takeMessageOnFailure !== false;
 
-        if (livekitRoomName && livekitParticipantId) {
-          const xfer = await transferLiveKitSipParticipant({
-            roomName: livekitRoomName,
-            participantIdentity: livekitParticipantId,
-            destinationE164: destination,
-          });
-          if (!xfer.ok) {
-            await notifyTransferFailure(ud, reason, xfer.reason);
-            const takeMessage =
-              (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
-                ?.takeMessageOnFailure !== false;
+          if (result.reason === "no_transfer_path") {
             return formatToolFeedbackForModel(
-              toolFeedbackTransferFailure({
-                reason: xfer.reason || "transfer_failed",
-                takeMessage,
-                recoveryClass: transferRecoveryClass(xfer.reason || ""),
+              toolFeedbackTerminal({
+                tool: "transfer_to_human",
+                recovery_class: "RESOURCE_UNAVAILABLE",
+                reason: "no_transfer_path",
+                next_action: takeMessage ? "take_message" : "continue_conversation",
+                runtime_handled_retry: true,
+                caller_already_heard_failure: true,
+                guidance: takeMessage
+                  ? "Can't transfer this call right now — offer to take a message."
+                  : "Can't transfer this call right now.",
               }),
             );
           }
-          await markVoiceCallTransferred(ud.workspaceId, ud.callId, destination, reason);
+
           return formatToolFeedbackForModel(
-            toolFeedbackSuccess("Transferring now — caller is on hold.", {
-              tool: "transfer_to_human",
-              next_action: "end_call",
-              guidance: "Stay silent after the bridge line — the transfer is in progress.",
+            toolFeedbackTransferFailure({
+              reason: result.reason,
+              takeMessage,
+              recoveryClass: transferRecoveryClass(result.reason),
             }),
           );
         }
 
-        await notifyTransferFailure(ud, reason, "no_transfer_path");
-        const takeMessage =
-          (ud.receptionistCompiled?.transferPolicy as { takeMessageOnFailure?: boolean } | undefined)
-            ?.takeMessageOnFailure !== false;
+        const isEmergency = isEmergencyTransfer(reason, ud);
+        const bridgeLine = isEmergency
+          ? "I understand this is urgent — let me connect you with someone right now. Please hold."
+          : "Let me connect you with someone who can help. Please hold.";
+        await tryConfirmationSpeech(session, "transfer", bridgeLine, speakTransferBridge);
+
         return formatToolFeedbackForModel(
-          toolFeedbackTerminal({
+          toolFeedbackSuccess("Transferring now — caller is on hold.", {
             tool: "transfer_to_human",
-            recovery_class: "RESOURCE_UNAVAILABLE",
-            reason: "no_transfer_path",
-            next_action: takeMessage ? "take_message" : "continue_conversation",
-            runtime_handled_retry: true,
-            caller_already_heard_failure: true,
-            guidance: takeMessage
-              ? "Can't transfer this call right now — offer to take a message."
-              : "Can't transfer this call right now.",
+            next_action: "end_call",
+            guidance: "Stay silent after the bridge line — the transfer is in progress.",
           }),
         );
       });

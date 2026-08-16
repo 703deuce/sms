@@ -1,5 +1,5 @@
-import type { AgentSession } from "@livekit/agents";
 import type { FrontDeskUserData } from "./userdata";
+import { durableCallWorkContextFromUserData } from "./runtime-transaction";
 
 function logBookingSmsResult(
   callId: string,
@@ -19,26 +19,45 @@ function logBookingSmsResult(
   );
 }
 
-/** Queue booking confirmation SMS without blocking the caller audio path. */
-export function sendBookingSmsAsync(
-  session: AgentSession<FrontDeskUserData>,
-  startsAt: Date,
-): void {
-  void sendBookingConfirmationSms(session, startsAt).catch((err) => {
+/** Queue booking confirmation SMS without blocking on AgentSession / TTS. */
+export function sendBookingSmsAsync(userData: FrontDeskUserData, startsAt: Date): void {
+  if (userData.bookingConfirmationSmsSent) return;
+  userData.bookingConfirmationSmsSent = true;
+
+  const durable = durableCallWorkContextFromUserData(userData);
+  void sendBookingConfirmationSmsFromContext(durable, startsAt).catch((err) => {
     console.warn(
       JSON.stringify({
         source: "frontdesk-booking",
         event: "booking_confirmation_sms_failed",
-        callId: session.userData.callId,
+        callId: durable.callId,
         error: err instanceof Error ? err.message : String(err),
       }),
     );
   });
 }
 
-/** Send (or skip) booking confirmation SMS before telling the caller it was sent. */
+/** Send (or skip) booking confirmation SMS using durable call context (no live session). */
+export async function sendBookingConfirmationSmsFromContext(
+  ctx: ReturnType<typeof durableCallWorkContextFromUserData>,
+  startsAt: Date,
+): Promise<{ sent: boolean; reason?: string }> {
+  const { sendVoiceBookingConfirmationSms } = await import("@/lib/voice/booking-confirmation-sms");
+  const sms = await sendVoiceBookingConfirmationSms({
+    workspaceId: ctx.workspaceId,
+    agentId: ctx.agentId,
+    callId: ctx.callId,
+    startsAt,
+    businessName: ctx.businessName,
+    timezone: ctx.timezone,
+  });
+  logBookingSmsResult(ctx.callId, sms, "booking_confirmation_sms");
+  return sms;
+}
+
+/** @deprecated Prefer sendBookingSmsAsync(userData, startsAt) — session not required. */
 export async function sendBookingConfirmationSms(
-  session: AgentSession<FrontDeskUserData>,
+  session: { userData: FrontDeskUserData },
   startsAt: Date,
 ): Promise<{ sent: boolean; reason?: string }> {
   const ud = session.userData;
@@ -46,16 +65,5 @@ export async function sendBookingConfirmationSms(
     return { sent: false, reason: "already_sent" };
   }
   ud.bookingConfirmationSmsSent = true;
-
-  const { sendVoiceBookingConfirmationSms } = await import("@/lib/voice/booking-confirmation-sms");
-  const sms = await sendVoiceBookingConfirmationSms({
-    workspaceId: ud.workspaceId,
-    agentId: ud.agentId,
-    callId: ud.callId,
-    startsAt,
-    businessName: ud.businessName,
-    timezone: ud.timezone,
-  });
-  logBookingSmsResult(ud.callId, sms, "booking_confirmation_sms");
-  return sms;
+  return sendBookingConfirmationSmsFromContext(durableCallWorkContextFromUserData(ud), startsAt);
 }

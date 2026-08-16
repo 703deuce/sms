@@ -207,29 +207,68 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-/** Reschedule: book new slot first, update canonical row, cancel old Calendly event. */
-export async function rescheduleAppointmentResilient(input: {
-  session: AgentSession<FrontDeskUserData>;
+/** Reschedule without coupling to AgentSession lifecycle. */
+export async function rescheduleAppointmentResilientForUserData(input: {
+  userData: FrontDeskUserData;
   appointmentId: string;
   oldEventUri: string | null;
   slot: AvailableSlot;
   attendeeEmail: string;
   existingMetadata?: unknown;
+  idempotencyKey?: string;
 }): Promise<BookedAppointment> {
-  const { session, slot, attendeeEmail, appointmentId, oldEventUri, existingMetadata } = input;
-  const { workspaceId, callId, cal } = session.userData;
-
-  const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
-  const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, session.userData.timezone);
+  const { userData, slot, attendeeEmail, appointmentId, oldEventUri, existingMetadata } = input;
+  const { workspaceId, callId, cal } = userData;
 
   const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+    select: {
+      startsAt: true,
+      endsAt: true,
+      externalId: true,
+      status: true,
+      metadata: true,
+    },
+  });
+
+  if (
+    row?.startsAt &&
+    row.status === "confirmed" &&
+    row.startsAt.getTime() === slot.startTime.getTime()
+  ) {
+    const meta = asRecord(row.metadata);
+    const durationMin = row.endsAt
+      ? Math.max(1, Math.round((row.endsAt.getTime() - row.startsAt.getTime()) / 60_000))
+      : slot.durationMin;
+    const eventUri = row.externalId?.startsWith("calendly:")
+      ? row.externalId.slice("calendly:".length)
+      : row.externalId || "";
+    const booked: BookedAppointment = {
+      slot: { startTime: row.startsAt, durationMin, slotId: slot.slotId },
+      attendeeEmail,
+      inviteeUri: String(meta.inviteeUri || ""),
+      eventUri,
+    };
+    const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
+    markBookingConfirmed(userData, {
+      slotId: slot.slotId,
+      providerEventId: booked.eventUri,
+      appointmentId,
+      bookedTimeLabel,
+    });
+    return booked;
+  }
+
+  const booked = await cal.scheduleAppointment({ slot, attendeeEmail });
+  const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
+
   const externalId = booked.eventUri.startsWith("calendly:")
     ? booked.eventUri
     : `calendly:${booked.eventUri}`;
   const endsAt = new Date(booked.slot.startTime.getTime() + booked.slot.durationMin * 60_000);
-  const priorMeta = asRecord(existingMetadata);
+  const priorMeta = asRecord(existingMetadata ?? row?.metadata);
 
-  // appointment.book write-through may create a duplicate row — keep the canonical one.
   await prisma.voiceAppointment.deleteMany({
     where: {
       workspaceId,
@@ -253,6 +292,7 @@ export async function rescheduleAppointmentResilient(input: {
         rescheduledAt: new Date().toISOString(),
         rescheduledVia: "frontdesk_voice",
         previousExternalId: oldEventUri || priorMeta.previousExternalId || null,
+        idempotencyKey: input.idempotencyKey || null,
       },
     },
   });
@@ -278,7 +318,7 @@ export async function rescheduleAppointmentResilient(input: {
     }
   }
 
-  markBookingConfirmed(session.userData, {
+  markBookingConfirmed(userData, {
     slotId: slot.slotId,
     providerEventId: booked.eventUri,
     appointmentId,
@@ -293,6 +333,25 @@ export async function rescheduleAppointmentResilient(input: {
     .catch(() => undefined);
 
   return booked;
+}
+
+/** Session wrapper — provider mutation uses userData only. */
+export async function rescheduleAppointmentResilient(input: {
+  session: AgentSession<FrontDeskUserData>;
+  appointmentId: string;
+  oldEventUri: string | null;
+  slot: AvailableSlot;
+  attendeeEmail: string;
+  existingMetadata?: unknown;
+}): Promise<BookedAppointment> {
+  return rescheduleAppointmentResilientForUserData({
+    userData: input.session.userData,
+    appointmentId: input.appointmentId,
+    oldEventUri: input.oldEventUri,
+    slot: input.slot,
+    attendeeEmail: input.attendeeEmail,
+    existingMetadata: input.existingMetadata,
+  });
 }
 
 /** Cancel on Calendly with timeout, retries, and idempotent already-cancelled handling. */

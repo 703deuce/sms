@@ -6,6 +6,7 @@ import {
   lookupAppointmentIdForCallWithRetry,
 } from "./booking-recovery";
 import { writeBookingToProvider, trySpeakAfterProviderWrite } from "./booking-provider-write";
+import { logRuntimeTransaction, transactionContextFromUserData } from "./runtime-transaction";
 import { resolveConfirmedEmail } from "./email-collection-tools";
 import { clearBookingEmailWaiter } from "./booking-email-inline";
 import { findBookingPrerequisiteGaps } from "./booking-prerequisites";
@@ -160,6 +161,16 @@ export async function executeScheduleAppointmentForSession(
           bookedTimeLabel: local,
         });
         markBookingOperationConfirmed(userData);
+        logRuntimeTransaction(
+          "booking-provider-write",
+          "booking_receipt_persisted",
+          transactionContextFromUserData(userData),
+          {
+            slotId: slot_id,
+            providerEventId: booked.eventUri,
+            bookedTimeLabel: local,
+          },
+        );
         void onRealEstateBookingConfirmed(userData);
 
         void markVoiceCallBooked({
@@ -181,7 +192,7 @@ export async function executeScheduleAppointmentForSession(
         const smsEnabled =
           userData.receptionistCompiled?.bookingPolicy?.sendSmsConfirmation !== false;
         if (smsEnabled) {
-          sendBookingSmsAsync(session, booked.slot.startTime);
+          sendBookingSmsAsync(userData, booked.slot.startTime);
         }
 
         void lookupAppointmentIdForCallWithRetry({

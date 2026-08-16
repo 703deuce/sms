@@ -60,12 +60,12 @@ assert.ok(
   "schedule commit must not wrap Calendly write in async-work bridge",
 );
 assert.ok(
-  providerWriteSource.includes("booking_provider_write_started"),
-  "provider write logs booking_provider_write_started",
+  providerWriteSource.includes("booking_write_started"),
+  "provider write logs booking_write_started",
 );
 assert.ok(
-  providerWriteSource.includes("booking_provider_write_succeeded"),
-  "provider write logs booking_provider_write_succeeded",
+  providerWriteSource.includes("booking_write_succeeded"),
+  "provider write logs booking_write_succeeded",
 );
 assert.ok(
   scheduleRuntimeSource.includes("trySpeakAfterProviderWrite"),
