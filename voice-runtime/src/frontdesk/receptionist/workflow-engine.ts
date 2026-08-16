@@ -103,6 +103,8 @@ export function enterCollectionState(
   wf.collectionLastForcedTranscript = undefined;
   ud.collectionPhoneDigitsBuffer = undefined;
   ud.collectionAwaitingAnswer = false;
+  ud.collectionStuckFieldId = undefined;
+  ud.collectionStuckNonFieldTurns = 0;
   return wf;
 }
 
