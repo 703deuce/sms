@@ -47,12 +47,6 @@ fi
 echo "[coolify-build] installing Python voice runtime (post-build — avoids Turbopack .venv symlink trace)"
 if bash scripts/install-voice-python-venv.sh; then
   echo "[coolify-build] Python venv installed"
-  if bash scripts/check-voice-python.sh; then
-    echo "[coolify-build] Python voice runtime checks passed"
-  else
-    echo "[coolify-build] ERROR: Python voice runtime checks failed"
-    exit 1
-  fi
 else
   echo "[coolify-build] WARN: Python venv install failed — worker will fall back to typescript if configured"
 fi

@@ -16,6 +16,10 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - run: npx tsc --noEmit
+      - run: npm run build:voice-python
       - run: npm run test:realtor-release-gate
       - run: npm run test:agent-runtime
