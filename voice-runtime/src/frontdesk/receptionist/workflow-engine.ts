@@ -134,7 +134,7 @@ export function transitionFromToolFeedback(
       return wf;
     case "schedule_appointment_retry":
       wf.state = "BOOKING_COMMIT";
-      wf.requiredTool = "schedule_appointment";
+      wf.requiredTool = undefined;
       return wf;
     case "collect_field_then_retry":
     case "record_field_then_retry":
@@ -210,6 +210,14 @@ export function transitionAfterRecordField(
   if (purpose === "message") {
     wf.state = "MESSAGE_COMMIT";
     wf.requiredTool = "take_message";
+    wf.activeFieldId = undefined;
+    return wf;
+  }
+
+  const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
+  if (pendingSlot) {
+    wf.state = "BOOKING_COMMIT";
+    wf.requiredTool = undefined;
     wf.activeFieldId = undefined;
     return wf;
   }

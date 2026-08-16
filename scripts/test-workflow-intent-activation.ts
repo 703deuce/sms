@@ -21,7 +21,11 @@ assert.ok(receptionistTools.includes("set_workflow_intent"), "set_workflow_inten
 assert.ok(!receptionistTools.includes("record_receptionist_field"), "no duplicate field tool");
 
 const orchestrator = read("voice-runtime/src/frontdesk/receptionist/workflow-orchestrator.ts");
-assert.ok(orchestrator.includes("BOOKING_FAILED"), "booking failure state handled");
-assert.ok(orchestrator.includes("runtimeFinalizeBookingFailure"), "failure speech lock");
+assert.ok(orchestrator.includes("runtimeCommitBooking"), "runtime-direct booking commit");
+assert.ok(orchestrator.includes("UserInputTranscribed"), "force record_current_field on caller speech");
+assert.ok(orchestrator.includes("deferred_commit"), "schedule tool defers to runtime commit");
+
+const scheduleRuntime = read("voice-runtime/src/frontdesk/runtime-schedule-appointment.ts");
+assert.ok(scheduleRuntime.includes("executeScheduleAppointmentForSession"), "shared commit executor");
 
 console.log("✓ workflow intent activation tests passed");

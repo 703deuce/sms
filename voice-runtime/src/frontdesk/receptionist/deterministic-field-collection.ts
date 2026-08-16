@@ -39,7 +39,6 @@ export async function beginDeterministicFieldCollection(
   if (options?.skipFirstQuestion) return;
 
   await speakReceptionistCollectionLine(session, first.question, { addToChatCtx: true });
-  await forceRecordCurrentFieldTurn(session);
 }
 
 export async function askNextCollectionField(

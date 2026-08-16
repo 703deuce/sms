@@ -3,10 +3,9 @@ import { isBookingConfirmed } from "../userdata";
 import type { FrontDeskUserData } from "../userdata";
 import { bookingFieldsComplete, ensureReceptionistWorkflow, messageFieldsComplete } from "./workflow-engine";
 
-/** Tools always available unless speech is locked to a terminal outcome. */
+/** Tools always available unless speech is locked or in strict collection/commit states. */
 const ALWAYS_AVAILABLE = new Set([
   "get_current_time",
-  "get_business_answer",
   "end_call",
 ]);
 
@@ -47,6 +46,10 @@ export function isToolAllowedInWorkflow(
     return toolName === "end_call" || toolName === "get_business_answer";
   }
 
+  if (wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT") {
+    return toolName === "record_current_field";
+  }
+
   if (ALWAYS_AVAILABLE.has(toolName)) {
     if (toolName === "take_message") {
       return wf.state === "MESSAGE_COMMIT" && messageFieldsComplete(ud);
@@ -59,6 +62,7 @@ export function isToolAllowedInWorkflow(
       if (toolName === "record_current_field" || toolName === "set_workflow_intent") {
         return true;
       }
+      if (toolName === "get_business_answer") return true;
       if (toolName === "take_message") {
         return messageFieldsComplete(ud);
       }
@@ -69,26 +73,16 @@ export function isToolAllowedInWorkflow(
       return false;
 
     case "BOOKING_COLLECT":
-      return (
-        toolName === "record_current_field" ||
-        toolName === "get_business_answer" ||
-        toolName === "end_call"
-      );
+      return toolName === "record_current_field";
 
     case "BOOKING_CHECK_AVAILABILITY":
     case "BOOKING_COMMIT":
-      return toolName === "get_business_answer" || toolName === "end_call";
+      return false;
 
     case "BOOKING_OFFER_SLOTS":
     case "BOOKING_AWAIT_SLOT":
     case "BOOKING_CONFIRM_SLOT":
-      return (
-        toolName === "schedule_appointment" ||
-        toolName === "list_available_slots" ||
-        toolName === "record_current_field" ||
-        toolName === "get_business_answer" ||
-        toolName === "end_call"
-      );
+      return toolName === "schedule_appointment" || toolName === "get_business_answer";
 
     case "BOOKING_DONE":
       return toolName === "end_call" || toolName === "get_business_answer";
@@ -104,11 +98,7 @@ export function isToolAllowedInWorkflow(
       );
 
     case "MESSAGE_COLLECT":
-      return (
-        toolName === "record_current_field" ||
-        toolName === "get_business_answer" ||
-        toolName === "end_call"
-      );
+      return toolName === "record_current_field";
 
     case "MESSAGE_COMMIT":
       return (

@@ -67,6 +67,11 @@ assert.equal(
   "list_available_slots blocked during BOOKING_COLLECT",
 );
 assert.equal(
+  isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "get_business_answer"),
+  false,
+  "only record_current_field during BOOKING_COLLECT",
+);
+assert.equal(
   isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "record_current_field"),
   true,
 );

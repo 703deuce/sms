@@ -3,6 +3,7 @@ import { parseToolFeedbackFromModel, formatToolFeedbackForModel, toolFeedbackRec
 import type { FrontDeskUserData } from "../userdata";
 import { isBookingConfirmed } from "../userdata";
 import { waitForFrontDeskGoodbyePlayout } from "../end-frontdesk-call";
+import { executeScheduleAppointmentForSession } from "../runtime-schedule-appointment";
 import {
   activateBookingWorkflow,
   activateMessageWorkflow,
@@ -15,7 +16,11 @@ import {
   transitionFromToolFeedback,
 } from "./workflow-engine";
 import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow-tool-surface";
-import { askNextCollectionField, beginDeterministicFieldCollection } from "./deterministic-field-collection";
+import {
+  askNextCollectionField,
+  beginDeterministicFieldCollection,
+  forceRecordCurrentFieldTurn,
+} from "./deterministic-field-collection";
 
 function logOrchestrator(callId: string, event: string, extra?: Record<string, unknown>) {
   console.log(
@@ -133,6 +138,39 @@ async function runtimeFinalizeTerminalSuccess(session: AgentSession<FrontDeskUse
   session.shutdown({ reason: "workflow_terminal_success" });
 }
 
+/** Runtime-direct calendar write — no model decision turn after slot selection. */
+export async function runtimeCommitBooking(
+  session: AgentSession<FrontDeskUserData>,
+  slotId?: string,
+): Promise<void> {
+  const ud = session.userData;
+  const id = slotId || ud.pendingSlotId || ud.bookingOperation?.slotId;
+  if (!id || !bookingFieldsComplete(ud) || ud.bookingCommitInFlight) return;
+  if (isBookingConfirmed(ud)) return;
+
+  const slotsMap = ud.receptionistSlotsMap;
+  if (!slotsMap) {
+    logOrchestrator(ud.callId, "commit_missing_slots_map");
+    return;
+  }
+
+  ud.bookingCommitInFlight = true;
+  setWorkflowState(ud, "BOOKING_COMMIT");
+  await syncAgentToolSurface(session);
+
+  try {
+    logOrchestrator(ud.callId, "runtime_commit_started", { slotId: id });
+    const result = await executeScheduleAppointmentForSession(session, slotsMap, id);
+    await afterReceptionistToolExecuted(session, "schedule_appointment", result);
+  } catch (err) {
+    logOrchestrator(ud.callId, "runtime_commit_error", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    ud.bookingCommitInFlight = false;
+  }
+}
+
 async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>): Promise<void> {
   const ud = session.userData;
   const wf = ensureReceptionistWorkflow(ud);
@@ -140,6 +178,9 @@ async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>
   switch (wf.state) {
     case "BOOKING_CHECK_AVAILABILITY":
       await runtimeListAvailableSlots(session);
+      return;
+    case "BOOKING_COMMIT":
+      await runtimeCommitBooking(session);
       return;
     case "BOOKING_DONE":
       if (isBookingConfirmed(ud) && wf.speechLocked) {
@@ -153,7 +194,7 @@ async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>
           instructions:
             "Required callback details are complete. Call take_message now with the reason from the conversation. " +
             "Do not ask for information already collected.",
-          toolChoice: "required",
+          toolChoice: { type: "function", function: { name: "take_message" } },
         });
       }
       return;
@@ -177,8 +218,6 @@ export async function prepareWorkflowForTool(
       await beginDeterministicFieldCollection(session, "booking", { skipFirstQuestion: true });
       await syncAgentToolSurface(session);
       await askNextCollectionField(session, "booking");
-      const { forceRecordCurrentFieldTurn } = await import("./deterministic-field-collection");
-      await forceRecordCurrentFieldTurn(session);
       return;
     }
     if (toolName === "schedule_appointment" && ud.pendingSlotId) {
@@ -191,8 +230,6 @@ export async function prepareWorkflowForTool(
       await beginDeterministicFieldCollection(session, "message", { skipFirstQuestion: true });
       await syncAgentToolSurface(session);
       await askNextCollectionField(session, "message");
-      const { forceRecordCurrentFieldTurn } = await import("./deterministic-field-collection");
-      await forceRecordCurrentFieldTurn(session);
     } else {
       setWorkflowState(ud, "MESSAGE_COMMIT", { requiredTool: "take_message" });
     }
@@ -225,6 +262,11 @@ export async function afterReceptionistToolExecuted(
       await runProactiveWorkflowStep(session);
       return;
     }
+    if (wf.state === "BOOKING_COMMIT") {
+      await syncAgentToolSurface(session);
+      await runProactiveWorkflowStep(session);
+      return;
+    }
     if (wf.state === "MESSAGE_COMMIT") {
       await syncAgentToolSurface(session);
       await runProactiveWorkflowStep(session);
@@ -237,10 +279,6 @@ export async function afterReceptionistToolExecuted(
         feedback.field_id,
         typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined,
       );
-      if (asked) {
-        const { forceRecordCurrentFieldTurn } = await import("./deterministic-field-collection");
-        await forceRecordCurrentFieldTurn(session);
-      }
       if (!asked) {
         transitionAfterRecordField(ud, purpose);
         await syncAgentToolSurface(session);
@@ -255,6 +293,14 @@ export async function afterReceptionistToolExecuted(
   }
 
   if (toolName === "schedule_appointment" && feedback.outcome === "success") {
+    const deferredCommit = feedback.context?.deferred_commit === true;
+    if (deferredCommit && !isBookingConfirmed(ud)) {
+      const slotId =
+        typeof feedback.context?.slot_id === "string" ? feedback.context.slot_id : ud.pendingSlotId;
+      await runtimeCommitBooking(session, slotId);
+      return;
+    }
+
     const wf = transitionFromToolFeedback(ud, toolName, feedback);
     wf.speechLocked = true;
     wf.state = "BOOKING_DONE";
@@ -307,12 +353,40 @@ export function workflowToolBlockedResult(ud: FrontDeskUserData, toolName: strin
   );
 }
 
+function handleCollectionUtterance(
+  session: AgentSession<FrontDeskUserData>,
+  transcript: string,
+): void {
+  const ud = session.userData;
+  const wf = ensureReceptionistWorkflow(ud);
+  if (wf.state !== "BOOKING_COLLECT" && wf.state !== "MESSAGE_COLLECT") return;
+  if (!transcript.trim()) return;
+  if (session.agentState === "speaking") return;
+  if (ud.collectionFieldForcePending) return;
+
+  ud.collectionFieldForcePending = true;
+  void forceRecordCurrentFieldTurn(session)
+    .catch((err) => {
+      logOrchestrator(ud.callId, "collection_force_error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    })
+    .finally(() => {
+      ud.collectionFieldForcePending = false;
+    });
+}
+
 export function attachReceptionistWorkflowOrchestrator(
   session: AgentSession<FrontDeskUserData>,
 ): void {
   const ud = session.userData;
   ensureReceptionistWorkflow(ud);
   void syncReceptionistToolSurface(session);
+
+  session.on(AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+    if (!ev.isFinal) return;
+    handleCollectionUtterance(session, ev.transcript);
+  });
 
   session.on(AgentSessionEventTypes.FunctionToolsExecuted, async (ev) => {
     for (let i = 0; i < ev.functionCalls.length; i++) {

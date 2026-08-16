@@ -97,6 +97,10 @@ export type FrontDeskUserData = {
   receptionistToolNames?: string[];
   /** Full tool defs for runtime tool-surface filtering via updateTools. */
   receptionistToolDefs?: unknown[];
+  /** Prevents duplicate forced record_current_field turns per utterance. */
+  collectionFieldForcePending?: boolean;
+  /** Runtime-direct schedule_appointment in progress. */
+  bookingCommitInFlight?: boolean;
   /** Call is in closing phase — block duplicate end_call. */
   callClosing?: boolean;
   /** Field ids persisted via tools — chat backfill must not overwrite these values. */
