@@ -29,7 +29,9 @@ import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow
 import {
   askNextCollectionField,
   beginDeterministicFieldCollection,
+  promptCollectionField,
 } from "./deterministic-field-collection";
+import { hasIncompleteCollectionBuffer } from "./collection-fragment-buffer";
 import {
   bumpCollectionTurnSeq,
   controlledGenerateReply,
@@ -176,6 +178,15 @@ async function advanceCollectionAfterFieldSaved(
   savedValue?: string,
 ): Promise<void> {
   const ud = session.userData;
+  if (hasIncompleteCollectionBuffer(ud)) {
+    logOrchestrator(ud.callId, "collection_advance_suppressed", {
+      reason: "incomplete_fragment_buffer",
+      savedFieldId,
+      phoneBuffer: ud.collectionPhoneDigitsBuffer,
+      fragmentBuffers: ud.collectionFieldFragmentBuffers,
+    });
+    return;
+  }
   const wf = ensureReceptionistWorkflow(ud);
   transitionAfterRecordField(ud, purpose);
   await syncAgentToolSurface(session);
@@ -519,16 +530,15 @@ async function handleAvailabilityRequest(
     await controlledGenerateReply(session, "availability_need_fields", turnId, {
       instructions:
         `The caller asked about availability or booking: "${transcript}". ` +
-        `Briefly say you can check that as soon as you have their ${nextField?.label || "remaining details"}. ` +
-        `Ask exactly one question: ${nextField?.question || "for the next required detail."}`,
+        "Answer in one short sentence that you can check availability once you have their details. " +
+        "Do NOT ask any collection questions in this response.",
       toolChoice: "none",
     });
   } finally {
     if (isRuntimeCollectionState(ud)) {
       syncCollectionRealtimeMode(session, true);
-      const wf = ensureReceptionistWorkflow(ud);
-      if (wf.activeFieldId) {
-        finishCollectionPrompt(ud, wf.activeFieldId);
+      if (nextField?.question?.trim()) {
+        await promptCollectionField(session, nextField.id, nextField.question);
       }
     }
   }
@@ -541,7 +551,6 @@ async function handleCollectionClarification(
 ): Promise<void> {
   const ud = session.userData;
   const wf = ensureReceptionistWorkflow(ud);
-  const activeField = wf.activeFieldId || "the current question";
   trackNonFieldCollectionUtterance(ud, wf.activeFieldId);
   logOrchestrator(ud.callId, "collection_clarification", { transcript, turn_id: turnId });
 
@@ -555,16 +564,17 @@ async function handleCollectionClarification(
     await controlledGenerateReply(session, "collection_clarification", turnId, {
       instructions:
         `The caller said: "${transcript}". They are not answering the collection question yet. ` +
-        "Answer briefly and honestly. Do not claim an appointment is booked or confirmed unless the runtime already completed booking. " +
-        `Then ask the collection question again for ${activeField}.`,
+        "Answer briefly and honestly in one sentence. Do not claim an appointment is booked or confirmed unless the runtime already completed booking. " +
+        "Do NOT ask any collection questions in this response.",
       toolChoice: "none",
     });
   } finally {
     if (isRuntimeCollectionState(ud)) {
       syncCollectionRealtimeMode(session, true);
-      const wf = ensureReceptionistWorkflow(ud);
-      if (wf.activeFieldId) {
-        finishCollectionPrompt(ud, wf.activeFieldId);
+      const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
+      const field = manifest.find((f) => f.id === wf.activeFieldId);
+      if (field?.question?.trim()) {
+        await promptCollectionField(session, field.id, field.question);
       }
     }
   }

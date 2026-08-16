@@ -6,12 +6,21 @@ import {
   isPhoneField,
   looksLikeNameField,
 } from "@/lib/voice/receptionist/field-manifest-runtime";
+import {
+  asksToSpellField,
+  isFragmentAccumulationField,
+  isSpellingFragment,
+  looksLikeAddressFragment,
+  looksLikeEmailFragment,
+  mergeFragmentUtterance,
+} from "./collection-fragment-buffer";
 
 export type CollectionUtteranceKind =
   | "field_value"
   | "availability_request"
   | "clarification"
-  | "phone_partial";
+  | "phone_partial"
+  | "fragment_partial";
 
 const META_QUESTION_RE =
   /\b(can't|cannot|won't|why|what|how|hello|hey|wait|confirm|appointment|booked|booking|explain|hear me|are you there)\b/i;
@@ -46,7 +55,7 @@ function isPlausibleEmailUtterance(raw: string): boolean {
     .replace(/\s+dot\s+/gi, ".")
     .replace(/\s+/g, "")
     .toLowerCase();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || /\b(at|dot)\b/i.test(t);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
 function isPlausibleNameUtterance(raw: string): boolean {
@@ -60,17 +69,18 @@ function isPlausibleNameUtterance(raw: string): boolean {
 function isPlausibleAddressUtterance(raw: string): boolean {
   const t = raw.trim();
   if (looksLikeMetaQuestion(t)) return false;
-  if (/\d/.test(t)) return true;
-  if (/\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|way|blvd|boulevard)\b/i.test(t)) {
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length >= 3) return true;
+  if (/\d/.test(t) && /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|way|blvd|boulevard)\b/i.test(t)) {
     return true;
   }
-  return t.split(/\s+/).length >= 3;
+  return false;
 }
 
 export function classifyCollectionUtterance(
   transcript: string,
   activeField: AgentFieldDefinition | undefined,
-  priorPhoneDigits = "",
+  priorFragmentBuffer = "",
 ): CollectionUtteranceKind {
   const t = transcript.trim();
   if (!t) return "clarification";
@@ -81,11 +91,52 @@ export function classifyCollectionUtterance(
   if (!activeField) return "clarification";
 
   if (isPhoneField(activeField)) {
-    const capture = captureUsPhoneDigits(t, priorPhoneDigits);
+    const capture = captureUsPhoneDigits(t, priorFragmentBuffer);
     if (capture.status === "incomplete") {
       return capture.digits.length > 0 ? "phone_partial" : "clarification";
     }
     return "field_value";
+  }
+
+  if (isFragmentAccumulationField(activeField)) {
+    const merged = mergeFragmentUtterance(activeField, priorFragmentBuffer, t);
+
+    if (isEmailField(activeField)) {
+      if (isPlausibleEmailUtterance(merged)) return "field_value";
+      if (looksLikeEmailFragment(t) || priorFragmentBuffer) return "fragment_partial";
+      return "clarification";
+    }
+
+    if (isAddressField(activeField)) {
+      if (isPlausibleAddressUtterance(merged) && !priorFragmentBuffer) return "field_value";
+      if (priorFragmentBuffer && isPlausibleAddressUtterance(merged)) {
+        return merged.split(/\s+/).length >= 4 ? "field_value" : "fragment_partial";
+      }
+      if (looksLikeAddressFragment(t, priorFragmentBuffer) || priorFragmentBuffer) {
+        return "fragment_partial";
+      }
+      return "clarification";
+    }
+
+    if (looksLikeNameField(activeField) || asksToSpellField(activeField)) {
+      if (asksToSpellField(activeField)) {
+        if (isSpellingFragment(t) || (priorFragmentBuffer && isSpellingFragment(merged))) {
+          return "fragment_partial";
+        }
+        if (isPlausibleNameUtterance(merged) && merged.replace(/\s+/g, "").length >= 3) {
+          return "field_value";
+        }
+        return priorFragmentBuffer ? "fragment_partial" : "clarification";
+      }
+      if (isPlausibleNameUtterance(merged) && merged.replace(/\s+/g, "").length >= 3) {
+        return "field_value";
+      }
+      if (isSpellingFragment(t) || priorFragmentBuffer) {
+        return "fragment_partial";
+      }
+      if (isPlausibleNameUtterance(t)) return "field_value";
+      return "clarification";
+    }
   }
 
   if (isEmailField(activeField)) {

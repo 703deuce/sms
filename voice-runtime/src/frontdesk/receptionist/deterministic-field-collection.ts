@@ -12,6 +12,14 @@ import {
   firstMissingFieldForPurpose,
 } from "./workflow-engine";
 import { speakReceptionistCollectionLine } from "./field-collection-task";
+import {
+  assertSingleFieldCollectionPrompt,
+  otherMissingFieldQuestionsReferenced,
+} from "./collection-prompt-guard";
+import {
+  clearAllCollectionFragmentBuffers,
+  hasIncompleteCollectionBuffer,
+} from "./collection-fragment-buffer";
 
 /** Atomic: set active field + phase, speak prompt, enter LISTENING. */
 export async function promptCollectionField(
@@ -20,9 +28,34 @@ export async function promptCollectionField(
   line: string,
 ): Promise<void> {
   const ud = session.userData;
-  logCollectionState(ud.callId, "prompt_started", ud, {
+  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
+  const referenced = otherMissingFieldQuestionsReferenced(
+    line,
     fieldId,
-    promptLine: line.slice(0, 160),
+    manifest,
+    ud.receptionistFields || {},
+  );
+  if (referenced.length > 0) {
+    console.warn(
+      JSON.stringify({
+        source: "collection-prompt-guard",
+        event: "collection_prompt_bundled_fields",
+        callId: ud.callId,
+        activeFieldId: fieldId,
+        referencedOtherFields: referenced,
+        promptPreview: line.slice(0, 160),
+      }),
+    );
+    const field = manifest.find((f) => f.id === fieldId);
+    if (field?.question?.trim()) {
+      line = field.question.trim();
+    }
+  }
+  assertSingleFieldCollectionPrompt(line, fieldId, manifest, ud.receptionistFields || {});
+
+  logCollectionState(ud.callId, "collection_prompt_started", ud, {
+    activeFieldId: fieldId,
+    promptText: line.slice(0, 200),
   });
   beginCollectionPrompt(ud, fieldId);
   await speakReceptionistCollectionLine(session, line, { addToChatCtx: true });
@@ -39,6 +72,7 @@ export async function beginDeterministicFieldCollection(
   options?: { skipFirstQuestion?: boolean },
 ): Promise<void> {
   const ud = session.userData;
+  clearAllCollectionFragmentBuffers(ud);
   enterCollectionState(ud, purpose);
 
   const first = firstMissingFieldForPurpose(ud, purpose);
@@ -55,6 +89,20 @@ export async function askNextCollectionField(
   afterValue?: string,
 ): Promise<boolean> {
   const ud = session.userData;
+  if (hasIncompleteCollectionBuffer(ud)) {
+    console.log(
+      JSON.stringify({
+        source: "collection-state",
+        event: "collection_next_prompt_suppressed",
+        callId: ud.callId,
+        reason: "incomplete_fragment_buffer",
+        phoneBuffer: ud.collectionPhoneDigitsBuffer,
+        fragmentBuffers: ud.collectionFieldFragmentBuffers,
+      }),
+    );
+    return false;
+  }
+
   const next = firstMissingFieldForPurpose(ud, purpose);
   if (!next?.question?.trim()) return false;
 

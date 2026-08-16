@@ -114,6 +114,8 @@ export type FrontDeskUserData = {
   bookingTurnProcessing?: boolean;
   /** Partial US phone digits while activeField is phone — not persisted until 10 digits. */
   collectionPhoneDigitsBuffer?: string;
+  /** Partial fragments for spelled names, email, address, etc. keyed by field id. */
+  collectionFieldFragmentBuffers?: Record<string, string>;
   /** Runtime-direct schedule_appointment in progress. */
   bookingCommitInFlight?: boolean;
   /** Call is in closing phase — block duplicate end_call. */

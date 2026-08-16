@@ -146,9 +146,11 @@ async function llmSemanticFieldExtraction(input: {
   callerE164?: string;
   activeFieldId?: string;
 }): Promise<Record<string, string>> {
-  const scopedManifest = input.manifest.filter(
-    (f) => !input.currentFields[f.id]?.trim(),
-  );
+  const scopedManifest = input.activeFieldId
+    ? input.manifest.filter(
+        (f) => f.id === input.activeFieldId && !input.currentFields[f.id]?.trim(),
+      )
+    : input.manifest.filter((f) => !input.currentFields[f.id]?.trim());
   if (!scopedManifest.length) return {};
 
   const schemaExample = buildSemanticSchemaExample(scopedManifest);
@@ -162,7 +164,9 @@ async function llmSemanticFieldExtraction(input: {
     JSON.stringify(schemaExample),
     "Only include configured field ids with clear evidence. Use null for unknown fields. Do not invent values.",
     phoneNote,
-    "Extract all fields the caller provided in compound speech (vehicle make/model/year, address landmarks, issue descriptions, etc.).",
+    input.activeFieldId
+      ? `Only extract the active field "${input.activeFieldId}". Ignore other fields even if mentioned.`
+      : "Extract all fields the caller clearly provided in compound speech.",
   ].join(" ");
 
   const user = [

@@ -10,6 +10,7 @@ import {
 import { validateBookingNotesField } from "../booking-field-validation";
 import { persistConfirmedBookingEmail } from "../booking-email-state";
 import { afterReceptionistFieldPersisted } from "../booking-field-coherence";
+import { clearCollectionFragmentBuffer } from "./collection-fragment-buffer";
 import type { FrontDeskUserData } from "../userdata";
 
 export type ActiveFieldPersistResult =
@@ -49,6 +50,7 @@ export function persistActiveFieldAnswer(
       };
     }
     ud.collectionPhoneDigitsBuffer = undefined;
+    clearCollectionFragmentBuffer(ud, activeFieldId, field);
     return { status: "saved", fieldId: activeFieldId, normalized: persisted.email };
   }
 
@@ -77,6 +79,8 @@ export function persistActiveFieldAnswer(
     ud.collectionPhoneDigitsBuffer = undefined;
     normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
   }
+
+  clearCollectionFragmentBuffer(ud, activeFieldId, field);
 
   if (!ud.receptionistFields) ud.receptionistFields = {};
   const previous = ud.receptionistFields[activeFieldId];

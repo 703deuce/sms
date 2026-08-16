@@ -98,6 +98,7 @@ export function enterCollectionState(
   wf.speechLocked = false;
   wf.collectionLastSavedTranscript = undefined;
   ud.collectionPhoneDigitsBuffer = undefined;
+  ud.collectionFieldFragmentBuffers = undefined;
   ud.collectionFieldPhase = undefined;
   ud.collectionPromptedFieldId = undefined;
   ud.collectionFieldProcessing = false;

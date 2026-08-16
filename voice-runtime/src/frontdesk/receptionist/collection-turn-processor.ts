@@ -14,11 +14,15 @@ import {
   isPhoneField,
 } from "@/lib/voice/receptionist/field-manifest-runtime";
 import { extractFieldsFromUtterance } from "./collection-semantic-extractor";
-import {
-  classifyCollectionUtterance,
-} from "./collection-utterance-validation";
+import { classifyCollectionUtterance } from "./collection-utterance-validation";
 import { persistActiveFieldAnswer } from "./process-active-field-answer";
 import { repromptActiveCollectionField } from "./deterministic-field-collection";
+import {
+  getCollectionFragmentBuffer,
+  hasIncompleteCollectionBuffer,
+  mergeFragmentUtterance,
+  setCollectionFragmentBuffer,
+} from "./collection-fragment-buffer";
 
 type TurnLog = (event: string, extra?: Record<string, unknown>) => void;
 
@@ -49,6 +53,32 @@ type CollectionTurnDeps = {
   bumpTurnId: (ud: FrontDeskUserData) => number;
 };
 
+function logFieldTransition(
+  deps: CollectionTurnDeps,
+  ud: FrontDeskUserData,
+  input: {
+    activeFieldBefore: string | undefined;
+    transcript: string;
+    normalizedValue?: string;
+    validationResult: string;
+    fieldComplete: boolean;
+    activeFieldAfter: string | undefined;
+    nextPromptRequested?: boolean;
+  },
+): void {
+  deps.log("collection_field_transition", {
+    active_field_before: input.activeFieldBefore,
+    transcript: input.transcript.slice(0, 160),
+    normalized_value: input.normalizedValue?.slice(0, 80),
+    validation_result: input.validationResult,
+    field_complete: input.fieldComplete,
+    active_field_after: input.activeFieldAfter,
+    next_prompt_requested: input.nextPromptRequested ?? false,
+    fragment_buffer: ud.collectionPhoneDigitsBuffer || ud.collectionFieldFragmentBuffers,
+    ...collectionStateSnapshot(ud),
+  });
+}
+
 /**
  * One finalized caller turn during collection:
  * extract → validate → save → advance. No LLM tool calls for bookkeeping.
@@ -64,30 +94,60 @@ export async function processCollectionTurn(
   const normalizedTranscript = transcript.trim();
   const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
   const activeField = manifest.find((f) => f.id === wf.activeFieldId);
+  const activeFieldBefore = wf.activeFieldId;
+  const priorFragment = activeField ? getCollectionFragmentBuffer(ud, activeField) : "";
 
   markCollectionProcessing(ud);
   logCollectionState(ud.callId, "collection_turn_started", ud, {
     transcript: normalizedTranscript.slice(0, 160),
+    fragment_buffer: priorFragment || undefined,
   });
 
   const utteranceKind = classifyCollectionUtterance(
     normalizedTranscript,
     activeField,
-    ud.collectionPhoneDigitsBuffer ?? "",
+    priorFragment,
   );
 
-  if (utteranceKind === "phone_partial") {
-    const capture = captureUsPhoneDigits(
-      normalizedTranscript,
-      ud.collectionPhoneDigitsBuffer ?? "",
-    );
+  if (utteranceKind === "phone_partial" && activeField) {
+    const capture = captureUsPhoneDigits(normalizedTranscript, priorFragment);
     if (capture.status === "incomplete") {
-      ud.collectionPhoneDigitsBuffer = capture.digits;
+      setCollectionFragmentBuffer(ud, activeField, capture.digits);
     }
     deps.log("collection_phone_partial_buffered", {
       transcript: normalizedTranscript,
-      buffer: ud.collectionPhoneDigitsBuffer,
+      buffer: capture.digits,
       ...collectionStateSnapshot(ud),
+    });
+    logFieldTransition(deps, ud, {
+      activeFieldBefore,
+      transcript: normalizedTranscript,
+      validationResult: "incomplete_phone",
+      fieldComplete: false,
+      activeFieldAfter: wf.activeFieldId,
+      nextPromptRequested: false,
+    });
+    if (wf.activeFieldId) finishCollectionPrompt(ud, wf.activeFieldId);
+    return;
+  }
+
+  if (utteranceKind === "fragment_partial" && activeField) {
+    const merged = mergeFragmentUtterance(activeField, priorFragment, normalizedTranscript);
+    setCollectionFragmentBuffer(ud, activeField, merged);
+    deps.log("collection_fragment_buffered", {
+      transcript: normalizedTranscript,
+      buffer: merged.slice(0, 80),
+      fieldId: activeField.id,
+      ...collectionStateSnapshot(ud),
+    });
+    logFieldTransition(deps, ud, {
+      activeFieldBefore,
+      transcript: normalizedTranscript,
+      normalizedValue: merged,
+      validationResult: "incomplete_fragment",
+      fieldComplete: false,
+      activeFieldAfter: wf.activeFieldId,
+      nextPromptRequested: false,
     });
     if (wf.activeFieldId) finishCollectionPrompt(ud, wf.activeFieldId);
     return;
@@ -121,27 +181,57 @@ export async function processCollectionTurn(
   const extractedIds = Object.keys(extraction.fields);
   if (extractedIds.length > 0) {
     const saved: Array<{ fieldId: string; normalized: string }> = [];
-    const orderedIds = fieldIdsInManifestOrder(manifest, Object.keys(extraction.fields));
-    for (const fieldId of orderedIds) {
+    const orderedIds = fieldIdsInManifestOrder(manifest, extractedIds);
+    const persistIds = wf.activeFieldId
+      ? orderedIds.filter((id) => id === wf.activeFieldId)
+      : orderedIds;
+
+    if (wf.activeFieldId && orderedIds.some((id) => id !== wf.activeFieldId)) {
+      deps.log("collection_volunteered_fields_ignored", {
+        activeFieldId: wf.activeFieldId,
+        ignoredFieldIds: orderedIds.filter((id) => id !== wf.activeFieldId),
+      });
+    }
+
+    for (const fieldId of persistIds) {
       const raw = extraction.fields[fieldId];
       if (!raw?.trim()) continue;
       const field = manifest.find((f) => f.id === fieldId);
       if (!field) continue;
+      const fragmentBuffer = getCollectionFragmentBuffer(ud, field);
+      const mergedRaw = fragmentBuffer
+        ? mergeFragmentUtterance(field, fragmentBuffer, raw)
+        : raw;
       const result = persistActiveFieldAnswer(
         ud,
         fieldId,
-        raw,
+        mergedRaw,
         field,
-        isPhoneField(field) ? ud.collectionPhoneDigitsBuffer ?? "" : "",
+        isPhoneField(field) ? fragmentBuffer : "",
       );
       if (result.status === "saved") {
         saved.push({ fieldId: result.fieldId, normalized: result.normalized });
+        logFieldTransition(deps, ud, {
+          activeFieldBefore: activeFieldBefore,
+          transcript: normalizedTranscript,
+          normalizedValue: result.normalized,
+          validationResult: "saved",
+          fieldComplete: true,
+          activeFieldAfter: wf.activeFieldId,
+        });
       } else if (result.status === "incomplete_phone") {
-        ud.collectionPhoneDigitsBuffer = result.digits;
+        setCollectionFragmentBuffer(ud, field, result.digits);
         deps.log("collection_phone_partial_buffered", {
           transcript: normalizedTranscript,
           buffer: result.digits,
           fieldId,
+        });
+        logFieldTransition(deps, ud, {
+          activeFieldBefore,
+          transcript: normalizedTranscript,
+          validationResult: "incomplete_phone",
+          fieldComplete: false,
+          activeFieldAfter: wf.activeFieldId,
         });
       } else if (result.status === "invalid") {
         deps.log("collection_field_invalid", {
@@ -152,7 +242,7 @@ export async function processCollectionTurn(
       }
     }
 
-    if (saved.length > 0) {
+    if (saved.length > 0 && !hasIncompleteCollectionBuffer(ud)) {
       deps.log("collection_fields_extracted", {
         transcript: normalizedTranscript,
         correction: extraction.correction,
@@ -166,6 +256,15 @@ export async function processCollectionTurn(
       for (const item of saved) {
         deps.logFieldSaveProgress(ud, item.fieldId, item.normalized);
       }
+      logFieldTransition(deps, ud, {
+        activeFieldBefore,
+        transcript: normalizedTranscript,
+        normalizedValue: last.normalized,
+        validationResult: "saved",
+        fieldComplete: true,
+        activeFieldAfter: wf.activeFieldId,
+        nextPromptRequested: true,
+      });
       await deps.advanceCollectionAfterFieldSaved(
         session,
         purpose,
@@ -230,16 +329,28 @@ export async function processCollectionTurn(
     ...collectionStateSnapshot(ud),
   });
 
+  const fragmentBuffer = getCollectionFragmentBuffer(ud, field);
+  const mergedTranscript = fragmentBuffer
+    ? mergeFragmentUtterance(field, fragmentBuffer, normalizedTranscript)
+    : normalizedTranscript;
+
   const result = persistActiveFieldAnswer(
     ud,
     wf.activeFieldId,
-    normalizedTranscript,
+    mergedTranscript,
     field,
-    ud.collectionPhoneDigitsBuffer ?? "",
+    isPhoneField(field) ? fragmentBuffer : "",
   );
 
   if (result.status === "incomplete_phone") {
-    ud.collectionPhoneDigitsBuffer = result.digits;
+    setCollectionFragmentBuffer(ud, field, result.digits);
+    logFieldTransition(deps, ud, {
+      activeFieldBefore,
+      transcript: normalizedTranscript,
+      validationResult: "incomplete_phone",
+      fieldComplete: false,
+      activeFieldAfter: wf.activeFieldId,
+    });
     finishCollectionPrompt(ud, wf.activeFieldId);
     return;
   }
@@ -249,6 +360,13 @@ export async function processCollectionTurn(
       transcript: normalizedTranscript,
       fieldId: result.fieldId,
       message: result.message,
+    });
+    logFieldTransition(deps, ud, {
+      activeFieldBefore,
+      transcript: normalizedTranscript,
+      validationResult: "invalid",
+      fieldComplete: false,
+      activeFieldAfter: wf.activeFieldId,
     });
     await repromptActiveCollectionField(session, result.message);
     return;
@@ -262,5 +380,14 @@ export async function processCollectionTurn(
   wf.collectionLastSavedTranscript = normalizedTranscript;
   deps.clearCollectionStuckWatchdog(ud);
   deps.logFieldSaveProgress(ud, result.fieldId, result.normalized);
+  logFieldTransition(deps, ud, {
+    activeFieldBefore,
+    transcript: normalizedTranscript,
+    normalizedValue: result.normalized,
+    validationResult: "saved",
+    fieldComplete: true,
+    activeFieldAfter: wf.activeFieldId,
+    nextPromptRequested: true,
+  });
   await deps.advanceCollectionAfterFieldSaved(session, purpose, result.fieldId, result.normalized);
 }
