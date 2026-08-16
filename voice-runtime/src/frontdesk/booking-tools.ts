@@ -61,6 +61,7 @@ import { markAppointmentBooked, persistCallState } from "@/lib/voice/real-estate
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
 import { markVoiceCallBooked } from "@/lib/voice/runtime-provider/livekit-call-telemetry";
+import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 function prefillReceptionistFieldsForBooking(
   session: AgentSession<FrontDeskUserData>,

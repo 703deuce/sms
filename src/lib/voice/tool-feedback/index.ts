@@ -462,3 +462,9 @@ export function toolFeedbackFromBookingWriteError(
     callerAlreadyHeardFailure: input.callerAlreadyHeardFailure,
   });
 }
+
+export {
+  normalizeToolResultForModel,
+  TOOL_RESULT_COLLECT_ACTIVE_SILENT,
+  TOOL_RESULT_BOOKING_INTAKE_SILENT,
+} from "./normalize";

@@ -44,11 +44,18 @@ export async function withLiveKitToolTelemetry<T>(
   const { recordLiveKitBuiltinToolExecution } = await import(
     "@/lib/voice/runtime-provider/livekit-call-telemetry"
   );
+  const { normalizeToolResultForModel } = await import("@/lib/voice/tool-feedback/normalize");
   return recordLiveKitBuiltinToolExecution({
     workspaceId: ctx.workspaceId,
     callId: ctx.callId,
     toolType,
     args,
-    run,
+    run: async () => {
+      const output = await run();
+      if (typeof output === "string") {
+        return normalizeToolResultForModel(toolType, output) as T;
+      }
+      return output;
+    },
   });
 }
