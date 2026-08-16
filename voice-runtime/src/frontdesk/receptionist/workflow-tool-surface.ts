@@ -72,9 +72,6 @@ export function isToolAllowedInWorkflow(
       if (toolName === "transfer_to_human" || toolName === "send_sms") return true;
       return false;
 
-    case "BOOKING_COLLECT":
-      return toolName === "record_current_field";
-
     case "BOOKING_CHECK_AVAILABILITY":
     case "BOOKING_COMMIT":
       return false;
@@ -96,9 +93,6 @@ export function isToolAllowedInWorkflow(
         toolName === "get_business_answer" ||
         toolName === "end_call"
       );
-
-    case "MESSAGE_COLLECT":
-      return toolName === "record_current_field";
 
     case "MESSAGE_COMMIT":
       return (
