@@ -12,6 +12,7 @@ from livekit.agents.beta.workflows import (
     TaskGroup,
     TaskCompletedEvent,
 )
+from livekit.agents.llm import ChatContext
 from livekit.agents.voice.agent import AgentTask
 
 from transovo_voice.integrations.backend_client import TransovoBackend
@@ -27,20 +28,6 @@ from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import SessionUserData, WorkflowState
 
 logger = logging.getLogger("transovo-voice.booking-intake")
-
-_INTAKE_WORKFLOWS = frozenset({WorkflowState.BOOKING_INTAKE, WorkflowState.MESSAGE_INTAKE})
-
-
-def should_run_opportunistic_prefill(ud: SessionUserData) -> bool:
-    """Opportunistic extraction observes IDLE utterances only — never during active intake."""
-    if ud.intake_active:
-        return False
-    if ud.workflow in _INTAKE_WORKFLOWS:
-        return False
-    # Amy owns speech during booking flow after intake starts via tools.
-    if ud.workflow not in (WorkflowState.IDLE, WorkflowState.FAQ):
-        return False
-    return True
 
 
 def _missing_fields(ud: SessionUserData, purpose: str = "booking") -> list[dict[str, Any]]:
@@ -84,41 +71,6 @@ async def _persist_intake_fields_async(
         logger.exception("async persist_intake_fields failed callId=%s", ud.call_id)
 
 
-async def opportunistic_prefill(
-    backend: TransovoBackend,
-    ud: SessionUserData,
-    transcript: str,
-) -> None:
-    if not should_run_opportunistic_prefill(ud):
-        return
-    if not transcript.strip():
-        return
-    try:
-        result = await backend.call(
-            "extract_fields",
-            {
-                "transcript": transcript,
-                "manifest": ud.manifest_dicts(),
-                "currentFields": ud.collected_fields,
-                "callerE164": ud.caller_e164,
-            },
-        )
-    except RuntimeError as err:
-        if "client has been closed" in str(err):
-            return
-        raise
-    if not result.get("ok"):
-        return
-    fields = result.get("fields") or {}
-    if not fields:
-        return
-    for field_id, value in fields.items():
-        trimmed = str(value).strip()
-        if trimmed and not ud.collected_fields.get(field_id, "").strip():
-            ud.collected_fields[field_id] = trimmed
-    asyncio.create_task(_persist_intake_fields_async(backend, ud, fields, "booking"))
-
-
 def _wrap_task_with_started_log(task: AgentTask, field_id: str, ud: SessionUserData) -> AgentTask:
     original_on_enter = task.on_enter
 
@@ -148,16 +100,16 @@ def _task_factory(
     return factory
 
 
-async def run_booking_intake_task_group(
+async def run_manifest_intake_task_group(
     session,
     ud: SessionUserData,
     backend: TransovoBackend,
+    chat_ctx: ChatContext,
     purpose: str = "booking",
 ) -> BookingIntakeResult:
     ud.workflow = (
         WorkflowState.BOOKING_INTAKE if purpose == "booking" else WorkflowState.MESSAGE_INTAKE
     )
-    ud.intake_active = True
     log_event(
         "task_group_started",
         call_id=ud.call_id,
@@ -170,11 +122,7 @@ async def run_booking_intake_task_group(
     missing = _missing_fields(ud, purpose)
     missing = [f for f in missing if not ud.collected_fields.get(f["id"], "").strip()]
     if not missing:
-        ud.intake_active = False
         return BookingIntakeResult(fields=dict(ud.collected_fields), complete=True)
-
-    # AgentSession exposes conversation history via `.history` (not `.chat_ctx`).
-    chat_ctx = session.history
 
     async def on_completed(event: TaskCompletedEvent) -> None:
         result = event.result
@@ -218,7 +166,11 @@ async def run_booking_intake_task_group(
         if looks_like_name_field(field):
             group.add(
                 _task_factory(
-                    lambda: GetNameTask(last_name=True, chat_ctx=chat_ctx),
+                    lambda: GetNameTask(
+                        last_name=True,
+                        verify_spelling=True,
+                        chat_ctx=chat_ctx,
+                    ),
                     fid,
                     ud,
                 ),
@@ -265,7 +217,6 @@ async def run_booking_intake_task_group(
 
     await group
 
-    ud.intake_active = False
     still_missing = _missing_fields(ud, purpose)
     still_missing = [f for f in still_missing if not ud.collected_fields.get(f["id"], "").strip()]
     complete = len(still_missing) == 0

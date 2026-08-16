@@ -1,23 +1,75 @@
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from livekit.agents import llm
+from livekit.agents.beta.tools.end_call import EndCallTool
 from livekit.agents.llm.tool_context import function_tool
+from livekit.agents.voice.events import RunContext
 
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import SessionUserData, WorkflowState
-from transovo_voice.workflows.booking_intake import run_booking_intake_task_group
+from transovo_voice.workflows.booking_flow import fetch_availability_for_session
+from transovo_voice.workflows.booking_intake_task import BookingIntakeTask
 
 if TYPE_CHECKING:
-    from livekit.agents.voice.agent_session import AgentSession
+    from transovo_voice.agent.amy import AmyAgent
 
 
-def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: TransovoBackend) -> list:
-    @function_tool(name="start_booking", description="Start booking intake when the caller wants an appointment.")
-    async def start_booking() -> str:
+def _end_call_toolset() -> EndCallTool:
+    return EndCallTool(
+        delete_room=True,
+        end_instructions="Thank the caller warmly and say goodbye.",
+    )
+
+
+def _shared_conversation_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
+    ud = agent._ud
+
+    @function_tool(name="take_message", description="Start message intake for a callback.")
+    async def take_message(context: RunContext) -> str:
+        ud.workflow = WorkflowState.MESSAGE_INTAKE
+        result = await BookingIntakeTask(
+            backend=backend,
+            purpose="message",
+            chat_ctx=context.session.history,
+        )
+        if not result.complete:
+            return "Still need callback details for the message."
+        ud.workflow = WorkflowState.MESSAGE_COMMIT
+        return "Message details collected. Summarize the reason and acknowledge the message will be passed along."
+
+    @function_tool(
+        name="get_business_answer",
+        description="Look up business knowledge for FAQ questions.",
+    )
+    async def get_business_answer(topic: str) -> str:
+        ud.workflow = WorkflowState.FAQ
+        result = await backend.call(
+            "business_answer",
+            {
+                "workspaceId": ud.workspace_id,
+                "agentId": ud.agent_id,
+                "topic": topic,
+            },
+        )
+        if not result.get("ok"):
+            return result.get("error") or "I couldn't find that information."
+        return result.get("speak") or ""
+
+    return [take_message, get_business_answer, _end_call_toolset()]
+
+
+def build_idle_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
+    """Tools available before booking intake begins."""
+    ud = agent._ud
+
+    @function_tool(
+        name="start_booking",
+        description="Start booking intake when the caller wants an appointment.",
+    )
+    async def start_booking(context: RunContext) -> str:
         log_event(
             "intent_selected",
             call_id=ud.call_id,
@@ -26,70 +78,32 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
             workflow="BOOKING",
             extra={"intent": "booking"},
         )
-        result = await run_booking_intake_task_group(session, ud, backend, purpose="booking")
+        result = await BookingIntakeTask(
+            backend=backend,
+            purpose="booking",
+            chat_ctx=context.session.history,
+        )
         if not result.complete:
             return "Intake incomplete — continue collecting required fields."
-        ud.workflow = WorkflowState.BOOKING_AVAILABILITY
-        log_event(
-            "availability_started",
-            call_id=ud.call_id,
-            workspace_id=ud.workspace_id,
-            agent_id=ud.agent_id,
-            workflow=ud.workflow.value,
-        )
-        availability = await backend.call(
-            "get_availability",
-            {
-                "workspaceId": ud.workspace_id,
-                "agentId": ud.agent_id,
-                "callId": ud.call_id,
-                "timezone": ud.timezone,
-                "eventTypeUri": ud.event_type_uri,
-            },
-        )
-        if not availability.get("ok"):
-            log_event(
-                "availability_failed",
-                call_id=ud.call_id,
-                workspace_id=ud.workspace_id,
-                agent_id=ud.agent_id,
-                workflow=ud.workflow.value,
-                extra={"error": availability.get("error")},
-            )
-            return "I couldn't check the calendar right now. Offer to take a message."
-        from transovo_voice.userdata import OfferedSlot
-
-        ud.offered_slots = [
-            OfferedSlot(
-                slot_id=s["slotId"],
-                start_time_iso=s["startTimeIso"],
-                duration_min=s["durationMin"],
-                spoken_label=s.get("spokenLabel") or s["slotId"],
-            )
-            for s in availability.get("slots") or []
-        ]
-        ud.workflow = WorkflowState.BOOKING_SELECT
-        lines = availability.get("linesForModel") or "No slots available."
-        log_event(
-            "availability_succeeded",
-            call_id=ud.call_id,
-            workspace_id=ud.workspace_id,
-            agent_id=ud.agent_id,
-            workflow=ud.workflow.value,
-            extra={"count": len(ud.offered_slots)},
-        )
-        log_event(
-            "slots_offered",
-            call_id=ud.call_id,
-            workspace_id=ud.workspace_id,
-            agent_id=ud.agent_id,
-            workflow=ud.workflow.value,
-            extra={"count": len(ud.offered_slots)},
-        )
+        await agent.expose_booking_tools()
         return (
-            "Required details collected. Offer up to three of these times and ask which works:\n"
-            + lines
+            "Required details collected. Call check_availability to load open appointment times."
         )
+
+    return [start_booking, *_shared_conversation_tools(agent, backend)]
+
+
+def build_booking_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
+    """Tools after booking intake is complete."""
+    ud = agent._ud
+
+    @function_tool(
+        name="check_availability",
+        description="Load open appointment times after intake is complete.",
+    )
+    async def check_availability() -> str:
+        ok, message = await fetch_availability_for_session(backend, ud)
+        return message if ok else message
 
     @function_tool(name="select_slot", description="Record the caller's chosen appointment slot id.")
     async def select_slot(slot_id: str) -> str:
@@ -109,8 +123,11 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
         )
         return f"Confirm the exact time with the caller before booking: {label}"
 
-    @function_tool(name="confirm_booking", description="Commit booking after explicit caller confirmation.")
-    async def confirm_booking() -> str:
+    @function_tool(
+        name="confirm_booking",
+        description="Commit booking after explicit caller confirmation.",
+    )
+    async def confirm_booking(context: RunContext) -> str:
         if not ud.selected_slot_id:
             return "No slot selected yet."
         ud.workflow = WorkflowState.BOOKING_COMMIT
@@ -168,34 +185,21 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
                 workflow=ud.workflow.value,
                 extra={"slotId": ud.selected_slot_id},
             )
-        await session.say(speech)
+        context.disallow_interruptions()
+        await context.session.say(speech)
+        await agent.expose_idle_tools()
         return (
             "BOOKING_CONFIRMED_ALREADY_SPOKEN: Confirmation was played to the caller. "
             "Do not speak again or add commentary."
         )
 
-    @function_tool(name="get_business_answer", description="Look up business knowledge for FAQ questions.")
-    async def get_business_answer(topic: str) -> str:
-        ud.workflow = WorkflowState.FAQ
-        result = await backend.call(
-            "business_answer",
-            {
-                "workspaceId": ud.workspace_id,
-                "agentId": ud.agent_id,
-                "topic": topic,
-            },
-        )
-        if not result.get("ok"):
-            return result.get("error") or "I couldn't find that information."
-        return result.get("speak") or ""
+    return [
+        check_availability,
+        select_slot,
+        confirm_booking,
+        *_shared_conversation_tools(agent, backend),
+    ]
 
-    @function_tool(name="take_message", description="Start message intake when caller wants to leave a message.")
-    async def take_message() -> str:
-        ud.workflow = WorkflowState.MESSAGE_INTAKE
-        result = await run_booking_intake_task_group(session, ud, backend, purpose="message")
-        if not result.complete:
-            return "Still need callback details for the message."
-        ud.workflow = WorkflowState.MESSAGE_COMMIT
-        return "Message details collected. Summarize the reason and acknowledge the message will be passed along."
 
-    return [start_booking, select_slot, confirm_booking, get_business_answer, take_message]
+def build_amy_tools(agent: AmyAgent, backend: TransovoBackend) -> list[llm.FunctionTool | llm.Toolset]:
+    return build_idle_tools(agent, backend)

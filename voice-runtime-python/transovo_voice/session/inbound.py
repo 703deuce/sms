@@ -4,7 +4,6 @@ import logging
 from typing import Any
 
 from livekit.agents import AgentSession, JobContext, room_io
-from livekit.agents.voice.events import UserInputTranscribedEvent
 
 from transovo_voice.agent.amy import create_amy_agent
 from transovo_voice.integrations.backend_client import TransovoBackend
@@ -12,10 +11,6 @@ from transovo_voice.session.realtime_config import build_realtime_model
 from transovo_voice.tasks.protocols import is_phone_field
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData
-from transovo_voice.workflows.booking_intake import (
-    opportunistic_prefill,
-    should_run_opportunistic_prefill,
-)
 
 logger = logging.getLogger("transovo-voice.inbound")
 
@@ -174,17 +169,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
     )
 
     session = AgentSession(llm=realtime_llm, userdata=ud)
-    agent = create_amy_agent(ud, session, backend)
-
-    @session.on("user_input_transcribed")
-    def on_transcript(ev: UserInputTranscribedEvent) -> None:
-        if not ev.is_final:
-            return
-        if not should_run_opportunistic_prefill(ud):
-            return
-        import asyncio
-
-        asyncio.create_task(opportunistic_prefill(backend, ud, ev.transcript))
+    agent = create_amy_agent(ud, backend)
 
     await ctx.connect()
 
