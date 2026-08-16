@@ -41,10 +41,14 @@ async function ensurePersonal(page) {
 }
 
 const routes = [
-  { path: "/personal", name: "overview" },
   { path: "/personal/vault", name: "vault" },
   { path: "/personal/forwarding", name: "forwarding" },
   { path: "/personal/voicemail", name: "voicemail" },
+  { path: "/personal/activity", name: "activity" },
+  { path: "/personal/analytics", name: "analytics" },
+  { path: "/personal/blocked", name: "blocked" },
+  { path: "/personal/usage", name: "usage" },
+  { path: "/personal/porting", name: "porting" },
 ];
 
 const browser = await chromium.launch({ headless: true });
