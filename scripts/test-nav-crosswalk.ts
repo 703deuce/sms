@@ -81,18 +81,12 @@ assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
 assert.ok(solutionsHrefs.has("/smart-routing"), "Smart Routing required");
 assert.ok(solutionsHrefs.has("/smart-routing/new"), "Smart Routing create flow required");
 assert.ok(solutionsHrefs.has("/smart-routing/audio"), "Smart Routing audio required");
-assert.ok(solutionsHrefs.has("/solutions/missed-call-text-back/setup"), "MCTB required");
-assert.ok(solutionsHrefs.has("/inbox"), "Inbox required under SMS");
-assert.ok(solutionsHrefs.has("/send/quick"), "Broadcast required");
-assert.ok(solutionsHrefs.has("/campaigns"), "Campaigns required");
-assert.ok(solutionsHrefs.has("/templates"), "Templates required");
 assert.ok(solutionsHrefs.has("/automations"), "Automations required");
 assert.ok(solutionsHrefs.has("/integrations/native/appointments"), "Appointments required");
 assert.ok(solutionsHrefs.has("/voice/calendars"), "Calendars required");
 assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
 assert.ok(solutionsHrefs.has("/numbers/buy"), "Buy Number required");
 assert.ok(solutionsHrefs.has("/compliance"), "Compliance required");
-assert.ok(solutionsHrefs.has("/contacts"), "Contacts required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
 assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
 assert.ok(solutionsHrefs.has("/reports/usage"), "Usage & Billing required");
@@ -101,10 +95,7 @@ const expectedTopLevel = [
   "Dashboard",
   "AI Receptionist",
   "Calls",
-  "Missed Call Text Back",
   "Smart Routing",
-  "Messages",
-  "Contacts",
   "Automations",
   "Appointments",
   "Phone Numbers",
@@ -127,14 +118,8 @@ assert.deepEqual(
   "AI Receptionist submenu labels must match wizard shortcuts",
 );
 
-const smsNav = solutionsNav.find((item) => item.label === "Messages");
-assert.ok(smsNav?.children?.map((c) => c.label), "SMS submenu required");
-assert.deepEqual(smsNav?.children?.map((c) => c.label), [
-  "Inbox",
-  "Broadcast",
-  "Campaigns",
-  "Templates",
-]);
+const smartRoutingNav = solutionsNav.find((item) => item.label === "Smart Routing");
+assert.ok(smartRoutingNav?.children?.length, "Smart Routing submenu required");
 
 for (const slug of solutionsLaunchSlugs()) {
   const reachable = [...solutionsHrefs].some((href) => href.includes(`/outcomes/${slug}`));

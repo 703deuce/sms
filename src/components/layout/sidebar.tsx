@@ -352,13 +352,6 @@ export function Sidebar({
           const callsOwned =
             item.label === "Calls" &&
             (pathname === "/voice/calls" || pathname.startsWith("/voice/calls/"));
-          const smsOwned =
-            item.label === "SMS" &&
-            (pathname === "/inbox" ||
-              pathname.startsWith("/inbox/") ||
-              pathname.startsWith("/send") ||
-              pathname.startsWith("/campaigns") ||
-              pathname.startsWith("/templates"));
           const smartRoutingOwned =
             item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
           const expandKey = itemExpandKey(item);
@@ -369,7 +362,6 @@ export function Sidebar({
           const ownedOutcome =
             receptionistOwned ||
             callsOwned ||
-            smsOwned ||
             smartRoutingOwned ||
             (personalMode && item.href === "/personal"
               ? pathname === "/personal"

@@ -468,8 +468,6 @@ export const appNav: NavItem[] = [
 export const mobilePrimaryNav = [
   { label: "Home", href: "/outcomes", icon: LayoutDashboard },
   { label: "Receptionist", href: "/voice/agents", icon: AudioLines },
-  { label: "Messages", href: "/inbox", icon: Inbox },
-  { label: "Contacts", href: "/contacts", icon: Users },
 ];
 
 export const adminNav: NavItem[] = [

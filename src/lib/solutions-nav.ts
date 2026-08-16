@@ -4,13 +4,10 @@ import {
   GitBranch,
   Hash,
   LayoutDashboard,
-  MessageSquare,
   PhoneCall,
-  PhoneMissed,
   Puzzle,
   Settings,
   ShieldCheck,
-  Users,
   Workflow,
 } from "lucide-react";
 import type { NavChild, NavItem } from "@/lib/nav";
@@ -32,6 +29,7 @@ export type SolutionsNavOptions = {
   instancesBySolution?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
   primarySmartRoutingFlowId?: string | null;
+  /** Kept for shell compatibility (Messages nav removed in v1). */
   inboxBadge?: number;
 };
 
@@ -106,8 +104,6 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
     options.primarySmartRoutingFlowId != null && options.primarySmartRoutingFlowId !== ""
       ? options.primarySmartRoutingFlowId
       : null;
-  const inboxBadge = options.inboxBadge ?? 0;
-
   return [
     { label: "Dashboard", href: "/outcomes", icon: LayoutDashboard },
     {
@@ -118,29 +114,11 @@ export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
     },
     { label: "Calls", href: "/voice/calls", icon: PhoneCall, emphasize: true },
     {
-      label: "Missed Call Text Back",
-      href: "/solutions/missed-call-text-back/setup",
-      icon: PhoneMissed,
-    },
-    {
       label: "Smart Routing",
       href: "/smart-routing",
       icon: GitBranch,
       children: buildSmartRoutingNavChildren(smartRoutingFlowId),
     },
-    {
-      label: "Messages",
-      href: "/inbox",
-      icon: MessageSquare,
-      badge: inboxBadge > 0 ? inboxBadge : undefined,
-      children: [
-        { label: "Inbox", href: "/inbox" },
-        { label: "Broadcast", href: "/send/quick" },
-        { label: "Campaigns", href: "/campaigns" },
-        { label: "Templates", href: "/templates" },
-      ],
-    },
-    { label: "Contacts", href: "/contacts", icon: Users },
     {
       label: "Automations",
       href: "/automations",
@@ -210,5 +188,5 @@ export const appSolutionsNav = solutionsNav;
 
 /** Primary launch outcome slugs surfaced in the simplified sidebar. */
 export function solutionsLaunchSlugs(): string[] {
-  return ["missed-call-text-back", "smart-routing"];
+  return ["smart-routing"];
 }
