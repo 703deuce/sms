@@ -118,6 +118,8 @@ export type FrontDeskUserData = {
   collectionFieldFragmentBuffers?: Record<string, string>;
   /** Runtime-direct schedule_appointment in progress. */
   bookingCommitInFlight?: boolean;
+  /** LiveKit TaskGroup owns collection — disable main-session transcript handler. */
+  receptionistCollectionTaskGroupActive?: boolean;
   /** Call is in closing phase — block duplicate end_call. */
   callClosing?: boolean;
   /** Base inbound Realtime turn_detection (semantic/server) for runtime-owned toggles. */

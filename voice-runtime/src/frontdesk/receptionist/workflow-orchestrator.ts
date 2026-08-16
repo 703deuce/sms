@@ -26,11 +26,8 @@ import { processCollectionTurn } from "./collection-turn-processor";
 import { processBookingSlotTurn } from "./booking-slot-turn-processor";
 import type { ReceptionistCollectionPurpose } from "./workflow-types";
 import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow-tool-surface";
-import {
-  askNextCollectionField,
-  beginDeterministicFieldCollection,
-  promptCollectionField,
-} from "./deterministic-field-collection";
+import { askNextCollectionField, promptCollectionField } from "./deterministic-field-collection";
+import { beginReceptionistFieldCollection } from "./collection-entry";
 import { hasIncompleteCollectionBuffer } from "./collection-fragment-buffer";
 import {
   bumpCollectionTurnSeq,
@@ -104,7 +101,7 @@ async function syncAgentToolSurface(session: AgentSession<FrontDeskUserData>): P
   }
 }
 
-async function finishBookingCollectionAndListSlots(
+export async function finishBookingCollectionAndListSlots(
   session: AgentSession<FrontDeskUserData>,
   reason: string,
 ): Promise<void> {
@@ -372,6 +369,22 @@ async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>
   }
 }
 
+export async function beginReceptionistCollection(
+  session: AgentSession<FrontDeskUserData>,
+  purpose: ReceptionistCollectionPurpose,
+  options?: { skipFirstQuestion?: boolean },
+): Promise<void> {
+  await beginReceptionistFieldCollection(session, purpose, options, {
+    syncToolSurface: syncAgentToolSurface,
+    onBookingCollectionComplete: finishBookingCollectionAndListSlots,
+    onMessageCollectionComplete: async (s) => {
+      setWorkflowState(s.userData, "MESSAGE_COMMIT", { requiredTool: "take_message" });
+      await syncAgentToolSurface(s);
+      await runProactiveWorkflowStep(s);
+    },
+  });
+}
+
 export async function prepareWorkflowForTool(
   session: AgentSession<FrontDeskUserData>,
   toolName: string,
@@ -384,17 +397,13 @@ export async function prepareWorkflowForTool(
       (toolName === "list_available_slots" || toolName === "schedule_appointment") &&
       !bookingFieldsComplete(ud)
     ) {
-      await beginDeterministicFieldCollection(session, "booking", { skipFirstQuestion: true });
-      await syncAgentToolSurface(session);
-      await askNextCollectionField(session, "booking");
+      await beginReceptionistCollection(session, "booking", { skipFirstQuestion: true });
     }
   }
   if (intent === "message") {
     activateMessageWorkflow(ud);
     if (!messageFieldsComplete(ud)) {
-      await beginDeterministicFieldCollection(session, "message", { skipFirstQuestion: true });
-      await syncAgentToolSurface(session);
-      await askNextCollectionField(session, "message");
+      await beginReceptionistCollection(session, "message", { skipFirstQuestion: true });
     } else {
       setWorkflowState(ud, "MESSAGE_COMMIT", { requiredTool: "take_message" });
     }
@@ -618,6 +627,7 @@ function handleCollectionUtterance(
   transcript: string,
 ): void {
   const ud = session.userData;
+  if (ud.receptionistCollectionTaskGroupActive) return;
   const wf = ensureReceptionistWorkflow(ud);
   if (wf.state !== "BOOKING_COLLECT" && wf.state !== "MESSAGE_COLLECT") return;
 

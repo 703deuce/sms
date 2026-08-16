@@ -11,11 +11,7 @@ import {
 } from "./workflow-engine";
 import type { ReceptionistWorkflowIntent } from "./workflow-types";
 import { detectWorkflowIntentFromUtterance } from "./workflow-intent-detection";
-import {
-  askNextCollectionField,
-  beginDeterministicFieldCollection,
-} from "./deterministic-field-collection";
-import { syncReceptionistToolSurface } from "./workflow-orchestrator";
+import { beginReceptionistCollection, syncReceptionistToolSurface } from "./workflow-orchestrator";
 
 export type DeclaredWorkflowIntent =
   | "book_appointment"
@@ -53,8 +49,7 @@ export async function activateWorkflowIntent(
     case "booking":
       activateBookingWorkflow(ud);
       if (!bookingFieldsComplete(ud)) {
-        await beginDeterministicFieldCollection(session, "booking");
-        await syncReceptionistToolSurface(session);
+        await beginReceptionistCollection(session, "booking");
       } else {
         setWorkflowState(ud, "BOOKING_CHECK_AVAILABILITY");
         await syncReceptionistToolSurface(session);
@@ -63,8 +58,7 @@ export async function activateWorkflowIntent(
     case "message":
       activateMessageWorkflow(ud);
       if (!messageFieldsComplete(ud)) {
-        await beginDeterministicFieldCollection(session, "message");
-        await syncReceptionistToolSurface(session);
+        await beginReceptionistCollection(session, "message");
       } else {
         setWorkflowState(ud, "MESSAGE_COMMIT", { requiredTool: "take_message" });
         await syncReceptionistToolSurface(session);
