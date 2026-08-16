@@ -157,7 +157,7 @@ async function main() {
   log("enable-voicemail", vmOn.ok, vmOn.ok ? "on" : JSON.stringify(vmOn.json));
 
   const vmApi = await getJson("/api/phone/voicemail", cookies);
-  log("voicemail-api", vmApi.ok, `boxes=${vmApi.json.boxes?.length ?? 0}`);
+  log("voicemail-api", vmApi.ok, `boxes=${vmApi.json.data?.boxes?.length ?? 0}`);
 
   // Forwarding via numbers PATCH (UI path)
   const fwd = await patchJson(

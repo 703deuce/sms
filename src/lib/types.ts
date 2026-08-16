@@ -49,6 +49,9 @@ export type PhoneNumber = {
   type: "Local" | "Toll-free";
   areaCode: string;
   friendlyName: string;
+  provider?: "telnyx" | "twilio";
+  providerNumberId?: string | null;
+  twilioSid?: string | null;
   a2pStatus: StatusChip;
   messagingService: string;
   assignedUsers: string[];

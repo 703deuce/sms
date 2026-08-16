@@ -65,6 +65,9 @@ export function mapPhoneNumber(n: {
   type: string;
   areaCode: string | null;
   friendlyName: string | null;
+  provider?: string | null;
+  twilioSid?: string | null;
+  providerNumberId?: string | null;
   a2pStatus: string;
   messagingService: string | null;
   monthlyCostCents: number;
@@ -81,6 +84,9 @@ export function mapPhoneNumber(n: {
     type: n.type === "Toll-free" || n.type === "toll_free" ? "Toll-free" : "Local",
     areaCode: n.areaCode || n.e164.slice(2, 5) || "",
     friendlyName: n.friendlyName || n.e164,
+    provider: n.provider === "twilio" ? "twilio" : "telnyx",
+    providerNumberId: n.providerNumberId ?? null,
+    twilioSid: n.twilioSid ?? null,
     a2pStatus: titleCaseStatus(n.a2pStatus),
     messagingService: n.messagingService || "Default",
     assignedUsers: assignments
