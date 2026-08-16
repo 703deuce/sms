@@ -85,6 +85,25 @@
 
 ---
 
+## Prompt / wizard injection (SaaS → agent)
+
+At publish, `compileReceptionistConfig()` builds one `compiledPrompt` (same as TypeScript runtime):
+
+1. `TRANSOVO_RECEPTIONIST_CONSTITUTION` — Transovo guardrails (fixed)
+2. AGENT — About wizard (name, personality, style)
+3. BUSINESS — About wizard (description, hours, services, pricing)
+4. YOUR JOB — Capabilities wizard (what it should do)
+5. ADDITIONAL CUSTOMER INSTRUCTIONS — Advanced wizard
+6. CALL CONFIGURATION — capabilities, fields, transfer, booking, knowledge policies
+7. Tool feedback vocabulary
+8. GENERATED WORKFLOW RULES — compiler-derived (Python tool names when `VOICE_RUNTIME_IMPL=python`)
+
+Python loads this via `bootstrap_inbound.compiledPrompt` and `AmyAgent` uses `resolve_agent_instructions()` — no separate Amy template. Legacy publishes still referencing `schedule_appointment` get a small Python tool appendix at runtime.
+
+**Republish** agents after deploy so workflow rules name `start_booking` / `check_availability` / `confirm_booking`.
+
+---
+
 ## Tests added
 
 | File | Coverage |
@@ -93,6 +112,7 @@
 | `test_booking_flow.py` | Availability staging |
 | `test_tool_phases.py` | Phased tool surfaces, transfer gating |
 | `test_commit_resilient.py` | Pending commit drain, shutdown survival |
+| `test_prompt.py` | Full compiled prompt injection, legacy appendix |
 
 Run: `npm run build:voice-python`
 

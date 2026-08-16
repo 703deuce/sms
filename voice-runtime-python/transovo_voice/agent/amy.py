@@ -10,6 +10,7 @@ from transovo_voice.agent.tools import (
     build_slot_tools,
 )
 from transovo_voice.integrations.backend_client import TransovoBackend
+from transovo_voice.prompt import resolve_agent_instructions
 from transovo_voice.userdata import SessionUserData
 
 
@@ -23,12 +24,7 @@ class AmyAgent(Agent):
     ) -> None:
         self._ud = ud
         self._backend = backend
-        instructions = ud.compiled_prompt or (
-            f"You are Amy, receptionist for {ud.business_name}. "
-            "Help callers naturally. Use start_booking for appointments, take_message for callbacks, "
-            "transfer_to_human when appropriate, get_business_answer for business questions. "
-            "One thought at a time."
-        )
+        instructions = resolve_agent_instructions(ud)
         super().__init__(instructions=instructions, tools=build_amy_tools(self, backend))
 
     async def expose_idle_tools(self) -> None:
@@ -47,7 +43,7 @@ class AmyAgent(Agent):
         greeting = self._ud.greeting.strip()
         if greeting:
             await self.session.generate_reply(
-                instructions=f"Say this greeting warmly and naturally: {greeting}",
+                instructions=f"Say exactly this greeting to the caller (warm and natural): {greeting}",
             )
         else:
             await self.session.generate_reply(

@@ -1,10 +1,20 @@
 import type { ReceptionistCompiledSnapshot } from "./types";
 
+export type VoiceRuntimePromptImpl = "python" | "typescript";
+
+function defaultPromptRuntime(): VoiceRuntimePromptImpl {
+  const raw = (process.env.VOICE_RUNTIME_IMPL || "python").trim().toLowerCase();
+  return raw === "typescript" ? "typescript" : "python";
+}
+
 /**
  * Transovo-generated operational workflow rules from structured customer configuration.
  * Customers do not write these manually — the compiler produces them from capabilities + policies.
  */
-export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapshot): string {
+export function buildGeneratedWorkflowRules(
+  snapshot: ReceptionistCompiledSnapshot,
+  runtime: VoiceRuntimePromptImpl = defaultPromptRuntime(),
+): string {
   const lines: string[] = ["GENERATED WORKFLOW RULES"];
 
   if (snapshot.capabilities.includes("collect_info") && snapshot.fieldManifest.length > 0) {
@@ -19,9 +29,18 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
     }
     lines.push(
       "- Collect missing required fields before completing the caller's request when collection is enabled.",
-      "- Use collect_caller_fields only for service or booking — never for a simple callback message.",
-      "- Use runtime collected-field state and tools — do not re-ask for values already captured.",
     );
+    if (runtime === "python") {
+      lines.push(
+        "- Use start_booking for booking intake — never re-ask fields already captured in the conversation.",
+        "- Do not use legacy collect_caller_fields on the Python runtime.",
+      );
+    } else {
+      lines.push(
+        "- Use collect_caller_fields only for service or booking — never for a simple callback message.",
+        "- Use runtime collected-field state and tools — do not re-ask for values already captured.",
+      );
+    }
   }
 
   if (snapshot.capabilities.includes("take_messages")) {
@@ -63,7 +82,11 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
       lines.push("- Offer earliest available times when the caller has no preference.");
     }
     if (booking?.confirmDateTimeVerbally) {
-      lines.push("- Confirm date and time verbally before schedule_appointment.");
+      lines.push(
+        runtime === "python"
+          ? "- Confirm date and time verbally before confirm_booking."
+          : "- Confirm date and time verbally before schedule_appointment.",
+      );
     }
     if (booking?.slotsToOffer) {
       lines.push(`- Offer up to ${booking.slotsToOffer} slot options at a time.`);
@@ -72,13 +95,24 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
       lines.push(`- Do not book within ${booking.minimumNoticeHours} hours of the current time.`);
     }
     lines.push("- Collect all required booking fields before scheduling.");
-    lines.push(
-      "- For email during booking, use record_receptionist_field (field_id email) — do not also call record_booking_email.",
-      "- After schedule_appointment succeeds, answer outcome questions from booking state — do not call check_booking_status unless the write may still be in progress.",
-      "- Do not call schedule_appointment repeatedly while a calendar write is already running.",
-      "- FAQ or pricing questions do not erase collected booking fields — continue booking from what is already known.",
-      "- If the caller changes their preferred day or time after choosing a slot, call list_available_slots again.",
-    );
+    if (runtime === "python") {
+      lines.push(
+        "- Call start_booking to run intake for required fields, then check_availability.",
+        "- Offer times from check_availability only; record choice with select_slot (slot id from the list).",
+        "- Call confirm_booking only after the caller explicitly confirms the exact offered time.",
+        "- Do not call confirm_booking repeatedly while a calendar write is already in progress.",
+        "- FAQ or pricing questions do not erase collected booking fields — continue from what is known.",
+        "- If the caller changes their preferred day or time, call check_availability again.",
+      );
+    } else {
+      lines.push(
+        "- For email during booking, use record_receptionist_field (field_id email) — do not also call record_booking_email.",
+        "- After schedule_appointment succeeds, answer outcome questions from booking state — do not call check_booking_status unless the write may still be in progress.",
+        "- Do not call schedule_appointment repeatedly while a calendar write is already running.",
+        "- FAQ or pricing questions do not erase collected booking fields — continue booking from what is already known.",
+        "- If the caller changes their preferred day or time after choosing a slot, call list_available_slots again.",
+      );
+    }
     const fallback = snapshot.fallbackPolicy as { onBookingFail?: string } | undefined;
     if (fallback?.onBookingFail === "take_message") {
       lines.push("- If booking fails: apologize and take a message for follow-up.");
@@ -112,6 +146,9 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
       lines.push(`- Emergency transfer destination: ${transfer.emergencyDestinationE164}.`);
     }
     lines.push("- Confirm the caller wants a transfer before initiating when appropriate.");
+    if (runtime === "python") {
+      lines.push("- Use transfer_to_human after the caller confirms they want a person.");
+    }
     const fallback = snapshot.fallbackPolicy as { onTransferFail?: string } | undefined;
     if (fallback?.onTransferFail === "take_message") {
       lines.push("- If transfer fails: take a message instead of ending abruptly.");
@@ -120,12 +157,19 @@ export function buildGeneratedWorkflowRules(snapshot: ReceptionistCompiledSnapsh
 
   if (snapshot.capabilities.includes("send_text")) {
     lines.push("Text messages:");
-    lines.push(
-      "- After a successful booking, a confirmation text is sent automatically.",
-      "- When the caller asks for a text, use send_sms — never say you cannot send texts from here.",
-      "- If a confirmation text was already sent, tell them to check their phone or use send_sms again.",
-      "- Confirm SMS success via tool results before telling the caller a text was sent.",
-    );
+    if (runtime === "python") {
+      lines.push(
+        "- After a successful booking, a confirmation text is sent automatically by the backend.",
+        "- Text/SMS from the voice agent may not be available on the Python runtime — offer callback or message instead if asked.",
+      );
+    } else {
+      lines.push(
+        "- After a successful booking, a confirmation text is sent automatically.",
+        "- When the caller asks for a text, use send_sms — never say you cannot send texts from here.",
+        "- If a confirmation text was already sent, tell them to check their phone or use send_sms again.",
+        "- Confirm SMS success via tool results before telling the caller a text was sent.",
+      );
+    }
   }
 
   if (snapshot.capabilities.includes("answer_questions")) {
