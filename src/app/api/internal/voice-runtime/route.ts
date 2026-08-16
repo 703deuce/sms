@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridge/auth";
 import { bootstrapInboundForPython } from "@/lib/voice/python-runtime-bridge/bootstrap-inbound";
+import { persistIntakeFieldsForPython } from "@/lib/voice/python-runtime-bridge/persist-intake-fields";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,11 +91,9 @@ export async function POST(request: Request) {
         result = await bootstrapInboundForPython(payload as never);
         break;
 
-      case "persist_intake_fields": {
-        const { persistIntakeFieldsForPython } = await loadHandlers();
+      case "persist_intake_fields":
         result = await persistIntakeFieldsForPython(payload as never);
         break;
-      }
 
       case "extract_fields": {
         const { extractFieldsForPython } = await loadHandlers();

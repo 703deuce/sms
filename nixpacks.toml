@@ -6,7 +6,7 @@ HOSTNAME = "0.0.0.0"
 PORT = "3000"
 
 [phases.setup]
-aptPkgs = ["..."]
+aptPkgs = ["...", "libvips42"]
 
 [phases.install]
 cmds = [
