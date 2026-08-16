@@ -1,12 +1,3 @@
-/**
- * Start transovo-voice-runtime inside the Coolify web container so operators
- * don't need a second service. Spawns the same entrypoint as
- * `npm run voice-runtime:start`.
- *
- * Disable with DISABLE_INPROCESS_VOICE_RUNTIME=1 when running the worker
- * externally (second Coolify service or `lk agent deploy`).
- */
-
 import { existsSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
@@ -34,6 +25,12 @@ function hasVoiceRuntimeCredentials(): boolean {
   return true;
 }
 
+export function voiceRuntimeImpl(): "python" | "typescript" {
+  const raw = (process.env.VOICE_RUNTIME_IMPL || "python").trim().toLowerCase();
+  if (raw === "typescript" || raw === "ts") return "typescript";
+  return "python";
+}
+
 export function inProcessVoiceRuntimeEnabled(): boolean {
   if (!isLiveKitVoiceRuntime()) return false;
   if (process.env.DISABLE_INPROCESS_VOICE_RUNTIME === "1") return false;
@@ -41,7 +38,7 @@ export function inProcessVoiceRuntimeEnabled(): boolean {
   return true;
 }
 
-function resolveVoiceRuntimeSpawn(): { command: string; args: string[] } {
+function resolveTypescriptSpawn(): { command: string; args: string[] } {
   const entry = path.join(
     /* turbopackIgnore: true */ process.cwd(),
     "voice-runtime",
@@ -60,12 +57,34 @@ function resolveVoiceRuntimeSpawn(): { command: string; args: string[] } {
   return { command: "npx", args: ["tsx", entry, "start"] };
 }
 
-function attachChildLogging(child: ChildProcess) {
+function resolvePythonSpawn(): { command: string; args: string[] } {
+  const venvPython = path.join(
+    /* turbopackIgnore: true */ process.cwd(),
+    "voice-runtime-python",
+    ".venv",
+    "bin",
+    "python",
+  );
+  if (existsSync(venvPython)) {
+    return { command: venvPython, args: ["-m", "transovo_voice.main", "start"] };
+  }
+  return { command: "python3", args: ["-m", "transovo_voice.main", "start"] };
+}
+
+function resolveVoiceRuntimeSpawn(): { command: string; args: string[]; impl: "python" | "typescript" } {
+  const impl = voiceRuntimeImpl();
+  if (impl === "python") {
+    return { ...resolvePythonSpawn(), impl };
+  }
+  return { ...resolveTypescriptSpawn(), impl };
+}
+
+function attachChildLogging(child: ChildProcess, prefix: string) {
   child.stdout?.on("data", (chunk: Buffer) => {
-    process.stdout.write(`[voice-runtime] ${chunk}`);
+    process.stdout.write(`[${prefix}] ${chunk}`);
   });
   child.stderr?.on("data", (chunk: Buffer) => {
-    process.stderr.write(`[voice-runtime] ${chunk}`);
+    process.stderr.write(`[${prefix}] ${chunk}`);
   });
 }
 
@@ -101,35 +120,38 @@ export async function startInProcessVoiceRuntime(): Promise<void> {
   globalThis.__transovoInProcessVoiceRuntimeStarted = true;
 
   const { url } = requireLiveKitEnv();
-  const { command, args } = resolveVoiceRuntimeSpawn();
+  const { command, args, impl } = resolveVoiceRuntimeSpawn();
+  const logPrefix = impl === "python" ? "voice-python" : "voice-runtime";
 
   console.log(
-    `[voice-runtime] spawning ${TRANSOVO_LIVEKIT_AGENT_NAME} via ${path.basename(command)} (${url})`,
+    `[${logPrefix}] spawning ${TRANSOVO_LIVEKIT_AGENT_NAME} via ${path.basename(command)} impl=${impl} (${url})`,
   );
 
   const child = spawn(command, args, {
     env: {
       ...process.env,
       LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
+      PYTHONPATH: path.join(process.cwd(), "voice-runtime-python"),
     },
+    cwd: impl === "python" ? path.join(process.cwd(), "voice-runtime-python") : process.cwd(),
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });
 
   globalThis.__transovoVoiceRuntimeChild = child;
-  attachChildLogging(child);
+  attachChildLogging(child, logPrefix);
   attachGracefulShutdown(child);
 
   child.on("exit", (code, signal) => {
     console.error(
-      `[voice-runtime] child exited code=${code ?? "null"} signal=${signal ?? "null"} — redeploy to recover`,
+      `[${logPrefix}] child exited code=${code ?? "null"} signal=${signal ?? "null"} — redeploy to recover`,
     );
     globalThis.__transovoInProcessVoiceRuntimeStarted = false;
     globalThis.__transovoVoiceRuntimeChild = undefined;
   });
 
   child.on("error", (err) => {
-    console.error("[voice-runtime] failed to spawn child", err);
+    console.error(`[${logPrefix}] failed to spawn child`, err);
     globalThis.__transovoInProcessVoiceRuntimeStarted = false;
     globalThis.__transovoVoiceRuntimeChild = undefined;
   });

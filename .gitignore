@@ -41,3 +41,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 public/connection-greeting/sources/*.wav
+voice-runtime-python/.venv/
