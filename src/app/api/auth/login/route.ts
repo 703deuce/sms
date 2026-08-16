@@ -1,10 +1,13 @@
 import { compare } from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
 import { PHONE_VERIFIED_COOKIE, readVerifiedPhone } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
+import type { WorkspaceType } from "@/lib/workspace/types";
 
 export async function POST(request: Request) {
   try {
@@ -57,13 +60,21 @@ export async function POST(request: Request) {
       }
     }
 
-    const membership = await prisma.membership.findFirst({
+    const memberships = await prisma.membership.findMany({
       where: { userId: user.id },
       include: { workspace: true },
     });
-    if (!membership) {
+    if (!memberships.length) {
       return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
     }
+
+    const membership = isNumbersPlatformOnlyLaunch()
+      ? memberships.find((m: { workspace: { type: string } }) => m.workspace.type === "PERSONAL") ??
+        memberships[0]
+      : memberships[0];
+
+    const workspaceType: WorkspaceType =
+      membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
 
     // If the user verified a mobile number on the sign-in page, attach it.
     const store = await cookies();
@@ -96,11 +107,7 @@ export async function POST(request: Request) {
       path: "/",
       sameSite: "lax",
     });
-    res.cookies.set(WORKSPACE_COOKIE, membership.workspaceId, {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+    applyWorkspaceCookies(res, membership.workspaceId, workspaceType);
     return res;
   } catch (err) {
     console.error("[auth/login]", err);
