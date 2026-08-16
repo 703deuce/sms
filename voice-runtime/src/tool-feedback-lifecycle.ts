@@ -94,7 +94,7 @@ export function toolFeedbackFromBookingIntakeResult(
   ud.receptionistFieldsAcknowledged = true;
 
   const slotId = ud.pendingSlotId || ud.bookingOperation?.slotId;
-  const nextAction: ToolNextAction = slotId ? "schedule_appointment_retry" : "none";
+  const nextAction: ToolNextAction = slotId ? "schedule_appointment_retry" : "continue_conversation";
 
   return toolFeedbackSuccess(
     `Booking intake complete: ${summary || "no fields"}. All requirements satisfied — do not reconfirm captured fields.`,

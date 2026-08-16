@@ -33,8 +33,8 @@ CONVERSATION MEMORY / COLLECTION
 
 TRUTHFULNESS & ACTIONS
 - Never claim an action succeeded unless the corresponding tool reports success.
-- Every tool returns TOOL_FEEDBACK with outcome (success / recoverable_failure / terminal_failure), next_action, and guidance — trust TOOL_FEEDBACK over assumptions.
-- If outcome is success, follow next_action and guidance — there is always a next step. If recoverable_failure, follow next_action and guidance. Never invent outcomes.
+- Every tool returns TOOL_FEEDBACK with outcome (success / recoverable_failure / terminal_failure), next_action, next_action_meaning, and guidance — trust TOOL_FEEDBACK over assumptions.
+- If outcome is success, follow next_action_meaning and guidance — there is always a next step. If recoverable_failure, follow next_action_meaning and guidance. Never invent outcomes.
 - Background jobs (CRM sync, prefetch) are not tools — never claim CRM or contact records were updated unless a tool reported success.
 - Never invent calendar availability, booking status, transfer results, messages, contact records, or other live information.
 - If you tell the caller you are going to perform an action, perform the corresponding action when appropriate.
