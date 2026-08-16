@@ -52,9 +52,13 @@ export function PersonalForwardingUI({
       targets: string[];
     }>
   >([]);
+  const [announcementText, setAnnouncementText] = useState(
+    "This number is no longer in service. Please try again later.",
+  );
   const [outsideHandling, setOutsideHandling] = useState<"forward" | "voicemail_only" | "announcement_only">(
     "voicemail_only",
   );
+  const [outsideTargets, setOutsideTargets] = useState<string[]>([""]);
   const [busyNumber, setBusyNumber] = useState("");
   const [failedNumber, setFailedNumber] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -130,7 +134,20 @@ export function PersonalForwardingUI({
       ) {
         setOutsideHandling(s.outsideHandling);
       }
+      if (Array.isArray(s.outsideTargets)) {
+        const outs = (s.outsideTargets as string[]).filter((t) => typeof t === "string" && t.trim());
+        setOutsideTargets(outs.length > 0 ? outs : [""]);
+      } else {
+        setOutsideTargets([""]);
+      }
+    } else {
+      setOutsideTargets([""]);
     }
+    setAnnouncementText(
+      typeof settings.announcementText === "string" && settings.announcementText.trim()
+        ? settings.announcementText.trim()
+        : "This number is no longer in service. Please try again later.",
+    );
     setBusyNumber(typeof settings.forwardBusyNumber === "string" ? settings.forwardBusyNumber : "");
     setFailedNumber(
       typeof settings.forwardFailedNumber === "string" ? settings.forwardFailedNumber : "",
@@ -150,17 +167,77 @@ export function PersonalForwardingUI({
     setTargets((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function updateBlockTarget(blockId: string, index: number, value: string) {
+    setScheduleBlocks((prev) =>
+      prev.map((b) => {
+        if (b.id !== blockId) return b;
+        const base = b.targets.length > 0 ? b.targets : targets.filter(Boolean);
+        const next = base.length > 0 ? [...base] : [""];
+        return { ...b, targets: next.map((t, i) => (i === index ? value : t)) };
+      }),
+    );
+  }
+
+  function addBlockTarget(blockId: string) {
+    setScheduleBlocks((prev) =>
+      prev.map((b) => {
+        if (b.id !== blockId || b.targets.length >= 5) return b;
+        const base = b.targets.length > 0 ? b.targets : targets.filter(Boolean);
+        return { ...b, targets: [...base, ""] };
+      }),
+    );
+  }
+
+  function removeBlockTarget(blockId: string, index: number) {
+    setScheduleBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId ? { ...b, targets: b.targets.filter((_, i) => i !== index) } : b,
+      ),
+    );
+  }
+
+  function updateOutsideTarget(index: number, value: string) {
+    setOutsideTargets((prev) => {
+      const base = prev.some((t) => t.trim()) ? prev : targets.filter(Boolean);
+      const next = base.length > 0 ? [...base] : [""];
+      return next.map((t, i) => (i === index ? value : t));
+    });
+  }
+
+  function addOutsideTarget() {
+    if (outsideTargets.length >= 5) return;
+    setOutsideTargets((prev) => [...prev, ""]);
+  }
+
+  function removeOutsideTarget(index: number) {
+    setOutsideTargets((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function save() {
     setMessage(null);
     setSaving(true);
     try {
       const cleanedTargets = targets.map((t) => t.trim()).filter(Boolean);
+      const cleanedOutsideTargets = outsideTargets.map((t) => t.trim()).filter(Boolean);
+      const normalizedBlocks = scheduleBlocks.map((block) => {
+        const blockTargets = block.targets.map((t) => t.trim()).filter(Boolean);
+        return {
+          ...block,
+          targets:
+            block.handling === "forward"
+              ? blockTargets.length > 0
+                ? blockTargets
+                : cleanedTargets
+              : [],
+        };
+      });
       const res = await fetch(`/api/numbers/${editId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           personalCallSettings: {
             incomingCallHandling: incomingHandling,
+            announcementText: announcementText.trim(),
             forwardingEnabled: forwardingOn && incomingHandling === "forward",
             forwardTargets: cleanedTargets,
             forwardDestination: cleanedTargets[0] || null,
@@ -181,9 +258,14 @@ export function PersonalForwardingUI({
               scheduleMode === "custom"
                 ? {
                     timezone: scheduleTimezone,
-                    blocks: scheduleBlocks,
+                    blocks: normalizedBlocks,
                     outsideHandling,
-                    outsideTargets: outsideHandling === "forward" ? cleanedTargets : [],
+                    outsideTargets:
+                      outsideHandling === "forward"
+                        ? cleanedOutsideTargets.length > 0
+                          ? cleanedOutsideTargets
+                          : cleanedTargets
+                        : [],
                   }
                 : null,
           },
@@ -248,6 +330,19 @@ export function PersonalForwardingUI({
           ))}
         </div>
       </PersonalSection>
+
+      {incomingHandling === "announcement_only" ? (
+        <PersonalSection title="Announcement message">
+          <p className={pMuted}>
+            Callers hear this message when they reach your number, then the call ends.
+          </p>
+          <textarea
+            className="mt-2 min-h-[80px] w-full max-w-lg rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
+            value={announcementText}
+            onChange={(e) => setAnnouncementText(e.target.value)}
+          />
+        </PersonalSection>
+      ) : null}
 
       {incomingHandling === "forward" ? (
         <PersonalSection title="Your forwarding setup">
@@ -561,6 +656,12 @@ export function PersonalForwardingUI({
                                         ? {
                                             ...b,
                                             handling: e.target.value as typeof block.handling,
+                                            targets:
+                                              e.target.value === "forward"
+                                                ? b.targets.length
+                                                  ? b.targets
+                                                  : targets.filter(Boolean)
+                                                : [],
                                           }
                                         : b,
                                     ),
@@ -571,6 +672,28 @@ export function PersonalForwardingUI({
                                 <option value="voicemail_only">Voicemail only</option>
                                 <option value="announcement_only">Announcement only</option>
                               </select>
+                              {block.handling === "forward" ? (
+                                <ScheduleTargetList
+                                  targets={
+                                    block.targets.length > 0 ? block.targets : targets.filter(Boolean)
+                                  }
+                                  onChange={(index, value) => updateBlockTarget(block.id, index, value)}
+                                  onAdd={() => {
+                                    if (block.targets.length === 0) {
+                                      setScheduleBlocks((prev) =>
+                                        prev.map((b) =>
+                                          b.id === block.id
+                                            ? { ...b, targets: targets.filter(Boolean).length ? [...targets.filter(Boolean)] : [""] }
+                                            : b,
+                                        ),
+                                      );
+                                    } else {
+                                      addBlockTarget(block.id);
+                                    }
+                                  }}
+                                  onRemove={(index) => removeBlockTarget(block.id, index)}
+                                />
+                              ) : null}
                             </div>
                           ))}
                           <button
@@ -607,6 +730,18 @@ export function PersonalForwardingUI({
                               <option value="voicemail_only">Voicemail only</option>
                               <option value="announcement_only">Announcement only</option>
                             </select>
+                            {outsideHandling === "forward" ? (
+                              <ScheduleTargetList
+                                targets={
+                                  outsideTargets.some((t) => t.trim())
+                                    ? outsideTargets
+                                    : targets.filter(Boolean)
+                                }
+                                onChange={updateOutsideTarget}
+                                onAdd={addOutsideTarget}
+                                onRemove={removeOutsideTarget}
+                              />
+                            ) : null}
                           </div>
                         </div>
                       ) : null}
@@ -631,6 +766,51 @@ export function PersonalForwardingUI({
         </p>
       </PersonalSection>
     </PersonalPageWrap>
+  );
+}
+
+function ScheduleTargetList({
+  targets,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  targets: string[];
+  onChange: (index: number, value: string) => void;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+}) {
+  const list = targets.length > 0 ? targets : [""];
+  return (
+    <div className="mt-2 space-y-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+        Forward to
+      </p>
+      {list.map((target, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            className="h-9 flex-1 rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+            placeholder="Phone number"
+            value={target}
+            onChange={(e) => onChange(i, e.target.value)}
+          />
+          {i > 0 ? (
+            <button
+              type="button"
+              className="text-[12px] text-[#6b7280]"
+              onClick={() => onRemove(i)}
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      ))}
+      {list.length < 5 ? (
+        <button type="button" className="text-[12px] font-medium text-[#6366f1]" onClick={onAdd}>
+          + Add line
+        </button>
+      ) : null}
+    </div>
   );
 }
 

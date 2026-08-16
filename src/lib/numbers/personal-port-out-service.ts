@@ -91,10 +91,19 @@ export async function setPersonalPortOutPin(
       : {};
 
   if (row.providerNumberId && !row.providerNumberId.startsWith("ORDER:")) {
-    await telnyxRequest(`/phone_numbers/${encodeURIComponent(row.providerNumberId)}`, {
-      method: "PATCH",
-      body: { port_out_pin: normalizedPin },
-    }).catch(() => undefined);
+    const telnyxRes = await telnyxRequest(
+      `/phone_numbers/${encodeURIComponent(row.providerNumberId)}`,
+      {
+        method: "PATCH",
+        body: { port_out_pin: normalizedPin },
+      },
+    ).catch((err) => {
+      console.warn("[port-out] Telnyx PIN update failed:", err);
+      return null;
+    });
+    if (telnyxRes === null) {
+      // Keep local PIN so customer can still request port-out from new carrier.
+    }
   }
 
   settings.portOutPin = normalizedPin;

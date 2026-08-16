@@ -29,6 +29,7 @@ import {
   pCard,
   pMuted,
 } from "./personal-ui";
+import { PersonalGreetingControls } from "./personal-greeting-controls";
 
 export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
   const [messages, setMessages] = useState<PersonalVoicemailMessage[]>([]);
@@ -143,44 +144,34 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
     }
   }
 
-  async function saveGreetingText() {
-    const text = window.prompt(
-      "Greeting message callers will hear:",
-      box?.greetingText || "Please leave a message after the tone.",
-    );
-    if (!text?.trim()) return;
-
+  async function persistGreeting(patch: { greetingText?: string; greetingUrl?: string }) {
     const res = await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: box?.id ? "update_box" : "ensure_personal",
         boxId: box?.id,
-        greetingText: text.trim(),
         name: "Personal voicemail",
+        ...patch,
       }),
     });
-    if (res.ok) await loadVoicemail();
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json.error || "Could not save greeting.");
+    }
+    await loadVoicemail();
   }
 
-  async function uploadGreetingPrompt() {
-    const url = window.prompt(
-      "Paste a public URL to your greeting audio file (MP3):",
-      box?.greetingUrl || "",
-    );
-    if (!url?.trim()) return;
+  async function saveGreetingText(text: string) {
+    await persistGreeting({ greetingText: text });
+  }
 
-    const res = await fetch("/api/phone/voicemail", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: box?.id ? "update_box" : "ensure_personal",
-        boxId: box?.id,
-        greetingUrl: url.trim(),
-        name: "Personal voicemail",
-      }),
-    });
-    if (res.ok) await loadVoicemail();
+  async function saveGreetingUrl(url: string) {
+    await persistGreeting({ greetingUrl: url });
+  }
+
+  async function useDefaultGreeting() {
+    await persistGreeting({ greetingText: "Please leave a message after the tone." });
   }
 
   return (
@@ -425,35 +416,16 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
       <PersonalSection title="Greeting">
         <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
           <p className="text-[13px] font-semibold text-[#111827]">
-            {box?.greetingText ? "Personal Greeting" : "Default Greeting"}
+            {box?.greetingUrl ? "Custom audio greeting" : box?.greetingText ? "Personal greeting" : "Default greeting"}
           </p>
-          {box?.greetingUrl ? (
-            <audio className="mt-2 w-full max-w-md" controls src={box.greetingUrl} />
-          ) : (
-            <p className="mt-2 text-[12px] text-[#6b7280]">
-              {box?.greetingText || "Please leave a message after the tone."}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <PersonalOutlineButton onClick={saveGreetingText}>Record</PersonalOutlineButton>
-            <PersonalOutlineButton onClick={uploadGreetingPrompt}>Upload</PersonalOutlineButton>
-            <PersonalOutlineButton
-              onClick={async () => {
-                const res = await fetch("/api/phone/voicemail", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: box?.id ? "update_box" : "ensure_personal",
-                    boxId: box?.id,
-                    greetingText: "Please leave a message after the tone.",
-                    name: "Personal voicemail",
-                  }),
-                });
-                if (res.ok) await loadVoicemail();
-              }}
-            >
-              Use Default
-            </PersonalOutlineButton>
+          <PersonalGreetingControls
+            greetingText={box?.greetingText || "Please leave a message after the tone."}
+            greetingUrl={box?.greetingUrl}
+            onSaveText={saveGreetingText}
+            onSaveUrl={saveGreetingUrl}
+          />
+          <div className="mt-3">
+            <PersonalOutlineButton onClick={useDefaultGreeting}>Use default greeting</PersonalOutlineButton>
           </div>
         </div>
       </PersonalSection>
