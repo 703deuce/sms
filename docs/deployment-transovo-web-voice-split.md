@@ -23,6 +23,8 @@ Production uses **two independent Coolify Applications** from the same GitHub re
 | `PORT` | `3000` — must match Coolify **Ports Exposes** / proxy target |
 | `DATABASE_URL` | App DB |
 | `TRANSOVO_INTERNAL_API_KEY` | Validates voice → web internal API |
+| `LIVEKIT_OUTBOUND_TRUNK_ID` | Transfer + bootstrap | LiveKit SIP outbound trunk id (passed to voice in `sipOutboundTrunkId`) |
+| `LIVEKIT_SIP_OUTBOUND_TRUNK` | Transfer fallback | Same trunk id if `LIVEKIT_OUTBOUND_TRUNK_ID` unset |
 | `LIVEKIT_*` | Provisioning / dispatch rules (not worker) |
 | `OPENAI_API_KEY` | Only if web features need it |
 | All existing web/Telnyx/BullMQ vars | Unchanged |
@@ -54,6 +56,8 @@ Legacy fallbacks for internal auth: `VOICE_RUNTIME_INTERNAL_SECRET`, `INTEGRATIO
 | `LIVEKIT_AGENT_NAME` | Default `transovo-voice-runtime` | Explicit dispatch target |
 | `VOICE_REALTIME_MODEL` | Optional | Default `gpt-realtime-2` |
 | `VOICE_REALTIME_VOICE` | Optional | Default `marin` |
+| `LIVEKIT_SIP_OUTBOUND_TRUNK` | Yes for transfer | Outbound SIP trunk id (or rely on bootstrap `sipOutboundTrunkId` from web) |
+| `LIVEKIT_SIP_NUMBER` | Optional | Caller ID E164 for outbound transfer (or bootstrap `sipCallerIdE164`) |
 
 **Do not copy** full web env (Stripe, Telnyx webhooks, session secrets, etc.).
 

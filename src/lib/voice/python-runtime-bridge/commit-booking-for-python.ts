@@ -56,6 +56,9 @@ export async function commitBookingForPython(input: {
   attendeeEmail?: string;
   eventTypeUri?: string | null;
   offeredSlotIds?: string[];
+  /** When set with durationMin, skip a second Calendly availability fetch at commit. */
+  slotStartTimeIso?: string;
+  durationMin?: number;
 }): Promise<
   | {
       ok: true;
@@ -121,18 +124,40 @@ export async function commitBookingForPython(input: {
   }
 
   const userData = buildMinimalUserData(input);
-  const availability = await getAvailabilityForPython({
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    callId: input.callId,
-    timezone: input.timezone,
-    eventTypeUri: input.eventTypeUri,
-  });
-  if (!availability.ok) return availability;
 
-  const slot = availability.slots.find((s) => s.slotId === input.slotId);
-  if (!slot) {
-    return { ok: false, error: "Slot not found", code: "INVALID_SLOT" };
+  let calSlot: { slotId: string; startTime: Date; durationMin: number };
+  const trustedStart =
+    input.slotStartTimeIso?.trim() &&
+    typeof input.durationMin === "number" &&
+    input.durationMin > 0;
+  if (trustedStart) {
+    calSlot = {
+      slotId: input.slotId,
+      startTime: new Date(input.slotStartTimeIso!.trim()),
+      durationMin: input.durationMin!,
+    };
+    if (Number.isNaN(calSlot.startTime.getTime())) {
+      return { ok: false, error: "Invalid slot start time", code: "INVALID_SLOT" };
+    }
+  } else {
+    const availability = await getAvailabilityForPython({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      callId: input.callId,
+      timezone: input.timezone,
+      eventTypeUri: input.eventTypeUri,
+    });
+    if (!availability.ok) return availability;
+
+    const slot = availability.slots.find((s) => s.slotId === input.slotId);
+    if (!slot) {
+      return { ok: false, error: "Slot not found", code: "INVALID_SLOT" };
+    }
+    calSlot = {
+      slotId: slot.slotId,
+      startTime: new Date(slot.startTimeIso),
+      durationMin: slot.durationMin,
+    };
   }
 
   const emailField = Object.entries(input.fields).find(([id]) => id === "email" || id.endsWith("_email"));
@@ -140,12 +165,6 @@ export async function commitBookingForPython(input: {
   if (!attendeeEmail) {
     return { ok: false, error: "Email required for booking", code: "MISSING_EMAIL" };
   }
-
-  const calSlot = {
-    slotId: slot.slotId,
-    startTime: new Date(slot.startTimeIso),
-    durationMin: slot.durationMin,
-  };
 
   try {
     const booked = await scheduleAppointmentResilientForUserData({

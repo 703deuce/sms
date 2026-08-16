@@ -310,6 +310,13 @@ def build_confirm_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
             "eventTypeUri": ud.event_type_uri,
             "offeredSlotIds": [s.slot_id for s in ud.offered_slots],
         }
+        selected_slot = next(
+            (s for s in ud.offered_slots if s.slot_id == ud.selected_slot_id),
+            None,
+        )
+        if selected_slot:
+            commit_payload["slotStartTimeIso"] = selected_slot.start_time_iso
+            commit_payload["durationMin"] = selected_slot.duration_min
         commit = await commit_booking_resilient(backend, ud, commit_payload)
         if not commit.get("ok"):
             ud.workflow = WorkflowState.BOOKING_FAILED
