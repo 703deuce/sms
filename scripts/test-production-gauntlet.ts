@@ -34,9 +34,26 @@ async function toolContractTests() {
 }
 
 async function agentDecisionTests() {
-  record("AGENT_DECISION", "COLLECTING blocks book", !isToolAllowedForState("COLLECTING_FIELDS", "book_appointment"));
-  record("AGENT_DECISION", "READY allows book", isToolAllowedForState("READY_TO_BOOK", "book_appointment"));
-  record("AGENT_DECISION", "BOOKING blocks transfer", !isToolAllowedForState("BOOKING_IN_PROGRESS", "transfer"));
+  record(
+    "AGENT_DECISION",
+    "COLLECTING blocks direct book",
+    !isToolAllowedForState("COLLECTING_FIELDS", "book_appointment"),
+  );
+  record(
+    "AGENT_DECISION",
+    "READY blocks direct book",
+    !isToolAllowedForState("READY_TO_BOOK", "book_appointment"),
+  );
+  record(
+    "AGENT_DECISION",
+    "READY allows runtime_turn",
+    isToolAllowedForState("READY_TO_BOOK", "runtime_turn"),
+  );
+  record(
+    "AGENT_DECISION",
+    "BOOKING blocks direct transfer",
+    !isToolAllowedForState("BOOKING_IN_PROGRESS", "transfer"),
+  );
 
   const guard = await assertToolAllowed({
     workspaceId: "ws_test",
@@ -44,8 +61,10 @@ async function agentDecisionTests() {
   });
   record(
     "AGENT_DECISION",
-    "guard blocks scheduling without call context",
-    !guard.allowed && guard.state === "COLLECTING_FIELDS",
+    "guard blocks internal scheduling without call context",
+    !guard.allowed &&
+      guard.state === "INTENT_DISCOVERY" &&
+      guard.error_code === "TOOL_INTERNAL_ONLY",
     `allowed=${guard.allowed} state=${guard.state} code=${guard.error_code}`,
   );
 }
