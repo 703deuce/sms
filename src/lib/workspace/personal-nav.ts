@@ -4,6 +4,7 @@ import {
   BarChart3,
   Ban,
   CreditCard,
+  GitBranch,
   Hash,
   LayoutDashboard,
   Phone,
@@ -13,9 +14,17 @@ import {
   Gauge,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import { buildSmartRoutingNavChildren } from "@/lib/solutions-nav";
+import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
 
-/** Compact Personal sidebar — shared pages reuse business/premium infrastructure */
-export function buildPersonalNav(): NavItem[] {
+export type PersonalNavOptions = {
+  smartRoutingFlowId?: string | null;
+};
+
+/** Compact Personal sidebar — numbers platform + Smart Routing */
+export function buildPersonalNav(options?: PersonalNavOptions): NavItem[] {
+  const smartRoutingFlowId = options?.smartRoutingFlowId ?? null;
+
   return [
     { label: "Overview", href: "/personal", icon: LayoutDashboard },
     { label: "My Numbers", href: "/personal/numbers", icon: Phone },
@@ -24,6 +33,12 @@ export function buildPersonalNav(): NavItem[] {
     { label: "Forwarding", href: "/personal/forwarding", icon: PhoneForwarded },
     { label: "Voicemail", href: "/personal/voicemail", icon: Voicemail },
     { label: "Call Activity", href: "/personal/activity", icon: Activity },
+    {
+      label: "Smart Routing",
+      href: "/smart-routing",
+      icon: GitBranch,
+      children: buildSmartRoutingNavChildren(smartRoutingFlowId),
+    },
     { label: "Analytics", href: "/personal/analytics", icon: BarChart3 },
     { label: "Blocked", href: "/personal/blocked", icon: Ban },
     { label: "Usage", href: "/personal/usage", icon: Gauge },
@@ -45,5 +60,10 @@ export function getPersonalPageTitle(pathname: string): string {
   if (pathname === "/personal/blocked") return "Blocked Numbers";
   if (pathname === "/personal/usage") return "Usage";
   if (pathname === "/personal/porting") return "Porting";
+  if (isSmartRoutingSectionPath(pathname)) {
+    if (pathname === "/smart-routing/new") return "Create Flow";
+    if (pathname === "/smart-routing/audio") return "Audio Library";
+    return "";
+  }
   return "";
 }

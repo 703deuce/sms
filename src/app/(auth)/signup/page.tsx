@@ -3,11 +3,14 @@
 import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 type WorkspaceChoice = "PERSONAL" | "BUSINESS";
+
+const numbersPlatformOnly = isNumbersPlatformOnlyLaunch();
 
 export default function SignupPage() {
   const router = useRouter();
@@ -15,7 +18,9 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
-  const [workspaceType, setWorkspaceType] = useState<WorkspaceChoice>("BUSINESS");
+  const [workspaceType, setWorkspaceType] = useState<WorkspaceChoice>(
+    numbersPlatformOnly ? "PERSONAL" : "BUSINESS",
+  );
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,7 +50,9 @@ export default function SignupPage() {
       setError(json.error || "Unable to create account.");
       return;
     }
-    router.push(workspaceType === "PERSONAL" ? "/personal" : "/hire");
+    router.push(
+      numbersPlatformOnly || workspaceType === "PERSONAL" ? "/personal" : "/hire",
+    );
     router.refresh();
   }
 
@@ -57,40 +64,44 @@ export default function SignupPage() {
         </p>
         <h1 className="mt-3 font-display text-xl font-semibold">Create your account</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          One account for Personal numbers or full business communications.
+          {numbersPlatformOnly
+            ? "Buy numbers, forward calls, route with Smart Routing, and manage voicemail."
+            : "One account for Personal numbers or full business communications."}
         </p>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => setWorkspaceType("PERSONAL")}
-          className={`rounded-xl border p-4 text-left transition ${
-            workspaceType === "PERSONAL"
-              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-              : "border-border hover:border-primary/40"
-          }`}
-        >
-          <p className="font-semibold">Personal</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Buy, keep, forward, or transfer a phone number.
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setWorkspaceType("BUSINESS")}
-          className={`rounded-xl border p-4 text-left transition ${
-            workspaceType === "BUSINESS"
-              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-              : "border-border hover:border-primary/40"
-          }`}
-        >
-          <p className="font-semibold">Business</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            AI receptionist, Smart Routing, SMS, and automations.
-          </p>
-        </button>
-      </div>
+      {!numbersPlatformOnly ? (
+        <div className="mb-6 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setWorkspaceType("PERSONAL")}
+            className={`rounded-xl border p-4 text-left transition ${
+              workspaceType === "PERSONAL"
+                ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                : "border-border hover:border-primary/40"
+            }`}
+          >
+            <p className="font-semibold">Personal</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Buy, keep, forward, or transfer a phone number.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWorkspaceType("BUSINESS")}
+            className={`rounded-xl border p-4 text-left transition ${
+              workspaceType === "BUSINESS"
+                ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                : "border-border hover:border-primary/40"
+            }`}
+          >
+            <p className="font-semibold">Business</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              AI receptionist, Smart Routing, SMS, and automations.
+            </p>
+          </button>
+        </div>
+      ) : null}
 
       <form className="space-y-4" onSubmit={onSubmit}>
         <div>

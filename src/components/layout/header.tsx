@@ -4,6 +4,7 @@ import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { WorkspaceModeToggle } from "@/components/workspace/workspace-mode-toggle";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { formatNumber, formatPhone } from "@/lib/utils";
 import {
   Bell,
@@ -202,11 +203,13 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        <WorkspaceModeToggle
-          workspaceId={workspaceId}
-          workspaceType={workspaceType}
-          workspaces={workspaces}
-        />
+        {!isNumbersPlatformOnlyLaunch() ? (
+          <WorkspaceModeToggle
+            workspaceId={workspaceId}
+            workspaceType={workspaceType}
+            workspaces={workspaces}
+          />
+        ) : null}
 
         {!personalMode ? (
           <WorkspaceSwitcher

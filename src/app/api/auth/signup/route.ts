@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import type { WorkspaceType } from "@/lib/workspace/types";
 import {
   PHONE_VERIFIED_COOKIE,
@@ -71,8 +72,11 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hash(body.password, 10);
-    const workspaceType: WorkspaceType =
-      body.workspaceType === "PERSONAL" ? "PERSONAL" : "BUSINESS";
+    const workspaceType: WorkspaceType = isNumbersPlatformOnlyLaunch()
+      ? "PERSONAL"
+      : body.workspaceType === "PERSONAL"
+        ? "PERSONAL"
+        : "BUSINESS";
     const businessName =
       workspaceType === "PERSONAL"
         ? "Personal"

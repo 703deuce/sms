@@ -19,8 +19,11 @@ assert.ok(capabilities.includes("isPersonalOnlyPath"));
 
 const personalNav = read("src/lib/workspace/personal-nav.ts");
 assert.ok(personalNav.includes("/personal/numbers/premium"));
-assert.ok(personalNav.includes("/personal/numbers/premium"));
 assert.ok(personalNav.includes("/personal/vault"));
+assert.ok(personalNav.includes("/smart-routing"));
+assert.ok(personalNav.includes("buildSmartRoutingNavChildren"));
+
+assert.ok(capabilities.includes("smart_routing"));
 
 const schema = read("prisma/schema.prisma");
 assert.ok(schema.includes("enum WorkspaceType"));

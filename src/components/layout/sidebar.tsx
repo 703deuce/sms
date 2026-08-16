@@ -11,6 +11,7 @@ import {
 import { smartRoutingFlowIdFromPath } from "@/lib/smart-routing/display";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildPersonalNav } from "@/lib/workspace/personal-nav";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
@@ -270,7 +271,10 @@ export function Sidebar({
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
-    if (personalMode) return buildPersonalNav();
+    if (personalMode) {
+      const smartRoutingFlowId = smartRoutingFlowIdFromPath(pathname) ?? null;
+      return buildPersonalNav({ smartRoutingFlowId });
+    }
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
     const smartRoutingFlowId =
@@ -326,7 +330,11 @@ export function Sidebar({
               </span>
               {!realtorMode ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  {personalMode ? "Your phone numbers" : "AI receptionist + SMS"}
+                  {personalMode
+                    ? isNumbersPlatformOnlyLaunch()
+                      ? "Phone numbers + routing"
+                      : "Your phone numbers"
+                    : "AI receptionist + SMS"}
                 </span>
               ) : null}
             </span>

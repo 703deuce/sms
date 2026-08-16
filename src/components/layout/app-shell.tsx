@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { getPageTitle } from "@/lib/nav";
 import { getRealtorPageTitle } from "@/lib/realtor/nav";
 import { getPersonalPageTitle } from "@/lib/workspace/personal-nav";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
@@ -47,7 +48,11 @@ export function AppShell({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const personalMode = workspaceType === "PERSONAL" || pathname.startsWith("/personal");
+  const personalMode =
+    isNumbersPlatformOnlyLaunch() ||
+    workspaceType === "PERSONAL" ||
+    pathname.startsWith("/personal") ||
+    pathname.startsWith("/smart-routing");
   const hideChromeTitle =
     realtorMode &&
     (pathname.startsWith("/realtor/setup") ||

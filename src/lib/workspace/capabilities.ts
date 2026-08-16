@@ -10,11 +10,11 @@ const PERSONAL_FEATURES: ReadonlySet<WorkspaceFeature> = new Set([
   "port_in",
   "port_out",
   "call_logs",
+  "smart_routing",
 ]);
 
 const BUSINESS_BLOCKED_FOR_PERSONAL: ReadonlySet<WorkspaceFeature> = new Set([
   "ai_agent",
-  "smart_routing",
   "business_sms",
   "a2p",
   "campaigns",
@@ -71,6 +71,9 @@ export function isBusinessOnlyPath(pathname: string): boolean {
   if (pathname.startsWith("/settings")) return false;
   if (pathname.startsWith("/numbers")) return false;
   if (pathname.startsWith("/onboarding")) return false;
+  if (pathname === "/smart-routing" || pathname.startsWith("/smart-routing/")) {
+    return false;
+  }
   return BUSINESS_ONLY_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

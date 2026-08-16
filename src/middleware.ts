@@ -3,6 +3,7 @@ import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
 } from "@/lib/workspace/capabilities";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 
 const WORKSPACE_TYPE_COOKIE = "transovo_workspace_type";
 
@@ -121,18 +122,28 @@ export async function middleware(request: NextRequest) {
   if (session && authPages.has(pathname)) {
     const url = request.nextUrl.clone();
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
-    url.pathname = wsType === "PERSONAL" ? "/personal" : "/outcomes";
+    url.pathname =
+      isNumbersPlatformOnlyLaunch() || wsType === "PERSONAL" ? "/personal" : "/outcomes";
     return NextResponse.redirect(url);
   }
 
   if (session && !isPublic) {
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
+    if (isNumbersPlatformOnlyLaunch() && isBusinessOnlyPath(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/personal";
+      return NextResponse.redirect(url);
+    }
     if (wsType === "PERSONAL" && isBusinessOnlyPath(pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/personal";
       return NextResponse.redirect(url);
     }
-    if (wsType === "BUSINESS" && isPersonalOnlyPath(pathname)) {
+    if (
+      !isNumbersPlatformOnlyLaunch() &&
+      wsType === "BUSINESS" &&
+      isPersonalOnlyPath(pathname)
+    ) {
       const url = request.nextUrl.clone();
       url.pathname = "/outcomes";
       return NextResponse.redirect(url);
