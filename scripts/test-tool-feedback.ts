@@ -22,6 +22,7 @@ const formatted = formatToolFeedbackForModel(emailFb);
 assert.match(formatted, /^TOOL_FEEDBACK: recoverable_failure/);
 assert.match(formatted, /recovery_class: MISSING_INFORMATION/);
 assert.match(formatted, /next_action: collect_email_then_retry/);
+assert.match(formatted, /next_action_meaning:.*email/i);
 assert.match(formatted, /guidance:/);
 
 const rateLimit = toolFeedbackFromError(new Error("429 rate limit"), { tool: "schedule_appointment" });

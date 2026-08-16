@@ -10,6 +10,7 @@ import {
   isCalendlySlotError,
   missingFieldIdFromBookingError,
 } from "@/lib/voice/calendly-error-classification";
+import { describeNextAction } from "./next-action-vocabulary";
 
 export type ToolFeedbackOutcome = "success" | "recoverable_failure" | "terminal_failure";
 
@@ -35,9 +36,12 @@ export type ToolNextAction =
   | "record_field_then_retry"
   | "retry_same_tool"
   | "list_slots_then_retry"
+  | "offer_slots_and_confirm"
   | "schedule_appointment_retry"
   | "take_message"
   | "check_booking_status"
+  | "continue_conversation"
+  | "do_not_speak"
   | "end_call"
   | "none";
 
@@ -63,7 +67,7 @@ export function toolFeedbackSuccess(
 ): ToolFeedback {
   return {
     outcome: "success",
-    next_action: "none",
+    next_action: extra?.next_action ?? "continue_conversation",
     guidance,
     ...extra,
   };
@@ -89,6 +93,7 @@ export function formatToolFeedbackForModel(feedback: ToolFeedback): string {
   if (feedback.field_id) parts.push(`field_id: ${feedback.field_id}`);
   if (feedback.field_label) parts.push(`field_label: ${feedback.field_label}`);
   parts.push(`next_action: ${feedback.next_action}`);
+  parts.push(`next_action_meaning: ${describeNextAction(feedback.next_action)}`);
   if (feedback.retry_after_ms != null) {
     parts.push(`retry_after_ms: ${feedback.retry_after_ms}`);
   }
@@ -142,7 +147,7 @@ function nextActionFromGatewayCode(code: AgentToolErrorCode, toolName?: string):
     case "SLOT_UNAVAILABLE":
       return "list_slots_then_retry";
     case "ALREADY_COMPLETED":
-      return "none";
+      return "end_call";
     case "TEMPORARY_PROVIDER_ERROR":
       return "retry_same_tool";
     case "AUTH_REQUIRED":
@@ -209,6 +214,30 @@ export function toolFeedbackFromError(
   return recoverable ? toolFeedbackRecoverable(base) : toolFeedbackTerminal(base);
 }
 
+function nextActionFromGatewaySuccess(tool: string, row: Record<string, unknown>): ToolNextAction {
+  switch (tool) {
+    case "calendar_availability":
+    case "list_available_slots":
+      return "offer_slots_and_confirm";
+    case "book_appointment":
+    case "schedule_appointment":
+      return "end_call";
+    case "cancel_appointment":
+    case "reschedule_appointment":
+      return "continue_conversation";
+    case "find_appointments":
+      return "continue_conversation";
+    case "send_sms":
+      return "continue_conversation";
+    case "hold_appointment_slot":
+      return "schedule_appointment_retry";
+    case "release_appointment_hold":
+      return "continue_conversation";
+    default:
+      return "continue_conversation";
+  }
+}
+
 export function toolFeedbackFromGatewayResult(
   result: AgentToolResult | Record<string, unknown>,
   tool: string,
@@ -221,6 +250,7 @@ export function toolFeedbackFromGatewayResult(
     );
     return toolFeedbackSuccess(guidance, {
       tool,
+      next_action: nextActionFromGatewaySuccess(tool, row),
       context: typeof row.data === "object" && row.data ? (row.data as Record<string, unknown>) : undefined,
     });
   }
@@ -337,9 +367,11 @@ export function toolFeedbackBookingInProgress(toolName: string): ToolFeedback {
     tool: toolName,
     recovery_class: "OPERATION_IN_PROGRESS",
     reason: "booking_in_progress",
-    next_action: "none",
+    next_action: "check_booking_status",
+    runtime_handled_retry: true,
     guidance:
       "Calendar write is already in progress. Tell the caller you're finishing the booking. " +
+      "If they ask whether it worked, use check_booking_status. " +
       "Do NOT call schedule_appointment, record_booking_email, or record email again until it completes.",
   });
 }
@@ -399,7 +431,7 @@ export function toolFeedbackTransferFailure(input: {
     input.recoveryClass === "TRANSFER_BUSY" ||
     input.recoveryClass === "TRANSFER_NO_ANSWER" ||
     input.recoveryClass === "TEMPORARY_PROVIDER_ERROR";
-  const nextAction: ToolNextAction = input.takeMessage ? "take_message" : "none";
+  const nextAction: ToolNextAction = input.takeMessage ? "take_message" : "continue_conversation";
   const guidance = input.takeMessage
     ? "Transfer didn't connect — offer to take a message naturally."
     : "Transfer failed. Apologize briefly and ask if there's anything else.";
@@ -481,3 +513,9 @@ export {
   TOOL_RESULT_COLLECT_ACTIVE_SILENT,
   TOOL_RESULT_BOOKING_INTAKE_SILENT,
 } from "./normalize";
+
+export {
+  TOOL_NEXT_ACTION_DEFINITIONS,
+  buildToolFeedbackVocabularyForPrompt,
+  describeNextAction,
+} from "./next-action-vocabulary";

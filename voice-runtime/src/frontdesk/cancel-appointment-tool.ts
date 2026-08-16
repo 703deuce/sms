@@ -56,8 +56,8 @@ export function buildFrontDeskCancelAppointmentTool() {
             tool: "cancel_appointment",
             recovery_class: "MISSING_INFORMATION",
             reason: "confirmation_required",
-            next_action: "none",
-            guidance: "Ask the caller to confirm before cancelling.",
+            next_action: "continue_conversation",
+            guidance: "Ask the caller to confirm before cancelling — one short question only.",
           }),
         );
       }
@@ -120,6 +120,7 @@ export function buildFrontDeskCancelAppointmentTool() {
                   "Cancellation already spoken. Do not repeat. Ask if they need anything else or end_call.",
                   {
                     tool: "cancel_appointment",
+                    next_action: "continue_conversation",
                     caller_already_heard_success: true,
                     context: { appointment_id: appointment.id, when },
                   },
@@ -129,7 +130,11 @@ export function buildFrontDeskCancelAppointmentTool() {
             return formatToolFeedbackForModel(
               toolFeedbackSuccess(
                 `${line} That visit was from an earlier call, not the booking on this call.`,
-                { tool: "cancel_appointment", context: { appointment_id: appointment.id } },
+                {
+                  tool: "cancel_appointment",
+                  next_action: "continue_conversation",
+                  context: { appointment_id: appointment.id },
+                },
               ),
             );
           } catch (err) {

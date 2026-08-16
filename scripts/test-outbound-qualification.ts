@@ -202,11 +202,11 @@ const defaultTurnDetection = resolveOutboundRealtimeTurnDetection();
 assert.equal(defaultTurnDetection.mode, "semantic");
 assert.equal(defaultTurnDetection.turnDetection.type, "semantic_vad");
 if (defaultTurnDetection.turnDetection.type === "semantic_vad") {
-  assert.equal(defaultTurnDetection.turnDetection.eagerness, "high");
+  assert.equal(defaultTurnDetection.turnDetection.eagerness, "medium");
 }
 assert.deepEqual(describeOutboundRealtimeTurnDetection(defaultTurnDetection), {
   type: "semantic_vad",
-  eagerness: "high",
+  eagerness: "medium",
   interrupt_response: true,
 });
 
@@ -217,7 +217,7 @@ assert.equal(resolveOutboundRealtimeVadMode(), "server");
 assert.equal(serverVad.turnDetection.type, "server_vad");
 if (serverVad.turnDetection.type === "server_vad") {
   assert.equal(serverVad.turnDetection.silence_duration_ms, 400);
-  assert.equal(serverVad.turnDetection.threshold, 0.7);
+  assert.equal(serverVad.turnDetection.threshold, 0.75);
 }
 
 process.env.VOICE_REALTIME_VAD_MODE = prevVadMode;

@@ -100,7 +100,11 @@ export function buildFrontDeskCheckBookingStatusTool() {
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
               `Appointment is confirmed for ${when}. Tell the caller they're all set.`,
-              { tool: "check_booking_status", context: { appointment_id: row.id } },
+              {
+                tool: "check_booking_status",
+                next_action: "end_call",
+                context: { appointment_id: row.id },
+              },
             ),
           );
         }
@@ -125,7 +129,11 @@ export function buildFrontDeskCheckBookingStatusTool() {
             return formatToolFeedbackForModel(
               toolFeedbackSuccess(
                 `Appointment is confirmed for ${when}. Tell the caller they're all set.`,
-                { tool: "check_booking_status", context: { appointment_id: appt.id } },
+                {
+                  tool: "check_booking_status",
+                  next_action: "end_call",
+                  context: { appointment_id: appt.id },
+                },
               ),
             );
           }

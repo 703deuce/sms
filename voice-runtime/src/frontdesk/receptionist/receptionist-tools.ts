@@ -133,7 +133,15 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
               `${field.label} saved.${bookingTail}`,
-              { tool: "record_receptionist_field" },
+              {
+                tool: "record_receptionist_field",
+                next_action: pendingSlot
+                  ? "schedule_appointment_retry"
+                  : coherence.slotInvalidated
+                    ? "list_slots_then_retry"
+                    : "continue_conversation",
+                guidance: `${field.label} saved.${bookingTail}`,
+              },
             ),
           );
         } catch (err) {
@@ -243,7 +251,12 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
         return formatToolFeedbackForModel(
           toolFeedbackSuccess(
             "Message recorded. Tell the caller someone will follow up once — do not repeat the callback script.",
-            { tool: "take_message" },
+            {
+              tool: "take_message",
+              next_action: "continue_conversation",
+              guidance:
+                "Confirm the message was taken once. Ask if there is anything else — one question only.",
+            },
           ),
         );
       });
@@ -346,7 +359,11 @@ function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnaps
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
               "Booking intake is already running. Wait for it to finish — do not start a second intake.",
-              { tool: "collect_booking_requirements", next_action: "none" },
+              {
+                tool: "collect_booking_requirements",
+                next_action: "do_not_speak",
+                runtime_handled_retry: true,
+              },
             ),
           );
         }
@@ -357,7 +374,10 @@ function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnaps
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
               "All booking requirements are already satisfied. Call schedule_appointment with the chosen slot_id.",
-              { tool: "collect_booking_requirements" },
+              {
+                tool: "collect_booking_requirements",
+                next_action: "schedule_appointment_retry",
+              },
             ),
           );
         }

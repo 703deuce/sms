@@ -41,6 +41,7 @@ function check(name: string, cond: boolean, detail?: string) {
 
 /** Maps runtime-registry tool ids → builtin-actions switch cases (when applicable). */
 const RUNTIME_TO_BUILTIN: Record<string, string | "telnyx_native"> = {
+  runtime_turn: "runtime_turn",
   resolve_datetime: "resolve_datetime",
   calendar_availability: "calendar_availability",
   hold_appointment_slot: "hold_appointment_slot",

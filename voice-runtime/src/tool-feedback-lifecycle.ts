@@ -28,7 +28,7 @@ export function toolFeedbackFromCollectionResult(
       tool,
       recovery_class: "OPERATION_IN_PROGRESS",
       reason: "collection_active",
-      next_action: "none",
+      next_action: "do_not_speak",
       runtime_handled_retry: true,
       guidance,
       context: summary ? { fields_summary: summary } : undefined,
@@ -39,7 +39,7 @@ export function toolFeedbackFromCollectionResult(
   ud.receptionistFieldsAcknowledged = true;
 
   const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
-  const nextAction: ToolNextAction = pendingSlot ? "schedule_appointment_retry" : "none";
+  const nextAction: ToolNextAction = pendingSlot ? "schedule_appointment_retry" : "continue_conversation";
   const bookingTail = pendingSlot
     ? ` Call schedule_appointment immediately with slot_id ${pendingSlot}.`
     : "";
@@ -83,7 +83,7 @@ export function toolFeedbackFromBookingIntakeResult(
       tool,
       recovery_class: "OPERATION_IN_PROGRESS",
       reason: "intake_active",
-      next_action: "none",
+      next_action: "do_not_speak",
       runtime_handled_retry: true,
       guidance,
       context: { fields_summary: summary || null, missing },
@@ -94,7 +94,7 @@ export function toolFeedbackFromBookingIntakeResult(
   ud.receptionistFieldsAcknowledged = true;
 
   const slotId = ud.pendingSlotId || ud.bookingOperation?.slotId;
-  const nextAction: ToolNextAction = slotId ? "schedule_appointment_retry" : "none";
+  const nextAction: ToolNextAction = slotId ? "schedule_appointment_retry" : "continue_conversation";
 
   return toolFeedbackSuccess(
     `Booking intake complete: ${summary || "no fields"}. All requirements satisfied — do not reconfirm captured fields.`,
