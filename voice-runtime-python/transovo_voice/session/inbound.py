@@ -7,10 +7,11 @@ from livekit.agents import AgentSession, JobContext, room_io
 
 from transovo_voice.agent.amy import create_amy_agent
 from transovo_voice.integrations.backend_client import TransovoBackend
+from transovo_voice.integrations.commit_client import drain_pending_provider_tasks
 from transovo_voice.session.realtime_config import build_realtime_model
 from transovo_voice.tasks.protocols import is_phone_field
 from transovo_voice.telemetry import log_event
-from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData
+from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData, TransferPolicy
 
 logger = logging.getLogger("transovo-voice.inbound")
 
@@ -32,9 +33,32 @@ def _parse_manifest(raw_manifest: list[dict[str, Any]]) -> list[ManifestField]:
     return fields
 
 
+def _parse_transfer_policy(raw: dict[str, Any] | None) -> TransferPolicy | None:
+    if not raw:
+        return None
+    dest = str(raw.get("destinationE164") or raw.get("transferNumber") or "").strip() or None
+    emergency = str(raw.get("emergencyDestinationE164") or "").strip() or None
+    if not dest and not emergency:
+        return TransferPolicy(
+            warm_transfer=raw.get("warmTransfer") is not False,
+            take_message_on_failure=raw.get("takeMessageOnFailure") is not False,
+        )
+    return TransferPolicy(
+        destination_e164=dest,
+        emergency_destination_e164=emergency,
+        warm_transfer=raw.get("warmTransfer") is not False,
+        take_message_on_failure=raw.get("takeMessageOnFailure") is not False,
+    )
+
+
 def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
     compiled_raw = data.get("receptionistCompiled") or {}
     manifest_raw = compiled_raw.get("fieldManifest") or []
+    capabilities = list(compiled_raw.get("capabilities") or [])
+    transfer_raw = compiled_raw.get("transferPolicy")
+    transfer_policy = _parse_transfer_policy(
+        transfer_raw if isinstance(transfer_raw, dict) else None,
+    )
     receptionist = ReceptionistCompiled(
         business_name=str(compiled_raw.get("businessName") or data.get("businessName") or ""),
         agent_display_name=str(compiled_raw.get("agentDisplayName") or "Amy"),
@@ -42,7 +66,8 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         timezone=str(compiled_raw.get("timezone") or data.get("timezone") or "America/New_York"),
         compiled_prompt=str(compiled_raw.get("compiledPrompt") or data.get("compiledPrompt") or ""),
         field_manifest=_parse_manifest(manifest_raw if isinstance(manifest_raw, list) else []),
-        capabilities=list(compiled_raw.get("capabilities") or []),
+        capabilities=capabilities,
+        transfer_policy=transfer_policy,
     )
     return SessionUserData(
         workspace_id=str(data["workspaceId"]),
@@ -54,6 +79,8 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         to_e164=data.get("toE164"),
         agent_version_id=data.get("agentVersionId"),
         event_type_uri=data.get("eventTypeUri"),
+        capabilities=capabilities,
+        transfer_policy=transfer_policy,
         receptionist=receptionist,
         compiled_prompt=str(data.get("compiledPrompt") or receptionist.compiled_prompt),
         greeting=str(data.get("greeting") or receptionist.greeting),
@@ -83,6 +110,8 @@ async def run_inbound_session(ctx: JobContext) -> None:
     ud: SessionUserData | None = None
 
     async def shutdown_backend() -> None:
+        if ud is not None:
+            await drain_pending_provider_tasks(ud)
         await backend.close()
         log_event(
             "call_ended",
@@ -176,7 +205,9 @@ async def run_inbound_session(ctx: JobContext) -> None:
     await session.start(
         agent=agent,
         room=ctx.room,
-        room_options=room_io.RoomOptions(),
+        room_options=room_io.RoomOptions(
+            delete_room_on_close=not ud.can_transfer(),
+        ),
     )
 
     log_event(

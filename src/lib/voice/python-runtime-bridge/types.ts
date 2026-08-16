@@ -43,6 +43,22 @@ export type PersistIntakeFieldsInput = {
   purpose?: "booking" | "message" | "service";
 };
 
+export type PersistMessageInput = {
+  workspaceId: string;
+  agentId: string;
+  callId: string;
+  fields: Record<string, string>;
+  summary?: string;
+};
+
+export type ResolveTransferInput = {
+  workspaceId: string;
+  agentId: string;
+  callId: string;
+  reason?: string;
+  transferPolicy?: Record<string, unknown> | null;
+};
+
 export type AvailabilitySlot = {
   slotId: string;
   startTimeIso: string;

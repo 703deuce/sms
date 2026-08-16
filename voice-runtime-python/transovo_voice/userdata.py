@@ -38,6 +38,22 @@ class ManifestField:
 
 
 @dataclass
+class TransferPolicy:
+    destination_e164: str | None = None
+    emergency_destination_e164: str | None = None
+    warm_transfer: bool = True
+    take_message_on_failure: bool = True
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "destinationE164": self.destination_e164,
+            "emergencyDestinationE164": self.emergency_destination_e164,
+            "warmTransfer": self.warm_transfer,
+            "takeMessageOnFailure": self.take_message_on_failure,
+        }
+
+
+@dataclass
 class ReceptionistCompiled:
     business_name: str
     agent_display_name: str
@@ -46,6 +62,7 @@ class ReceptionistCompiled:
     compiled_prompt: str
     field_manifest: list[ManifestField]
     capabilities: list[str] = field(default_factory=list)
+    transfer_policy: TransferPolicy | None = None
 
 
 @dataclass
@@ -73,6 +90,8 @@ class SessionUserData:
     realtime_model: str = "gpt-realtime-2"
     realtime_voice: str = "marin"
     realtime_speed: float | None = None
+    capabilities: list[str] = field(default_factory=list)
+    transfer_policy: TransferPolicy | None = None
     workflow: WorkflowState = WorkflowState.IDLE
     collected_fields: dict[str, str] = field(default_factory=dict)
     offered_slots: list[OfferedSlot] = field(default_factory=list)
@@ -80,7 +99,9 @@ class SessionUserData:
     booking_confirmed: bool = False
     booked_time_label: str | None = None
     message_taken: bool = False
+    message_summary: str | None = None
     runtime_profile: str = "generic_receptionist"
+    pending_provider_tasks: list[Any] = field(default_factory=list)
 
     def manifest_dicts(self) -> list[dict[str, Any]]:
         if not self.receptionist:
@@ -97,3 +118,11 @@ class SessionUserData:
             }
             for f in self.receptionist.field_manifest
         ]
+
+    def can_transfer(self) -> bool:
+        return "transfer_calls" in self.capabilities
+
+    def transfer_policy_dict(self) -> dict[str, Any] | None:
+        if self.transfer_policy:
+            return self.transfer_policy.as_dict()
+        return None

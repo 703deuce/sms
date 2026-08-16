@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from livekit.agents import Agent
 
-from transovo_voice.agent.tools import build_amy_tools, build_booking_tools, build_idle_tools
+from transovo_voice.agent.tools import (
+    build_amy_tools,
+    build_availability_tools,
+    build_confirm_tools,
+    build_idle_tools,
+    build_slot_tools,
+)
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.userdata import SessionUserData
 
 
 class AmyAgent(Agent):
-    """Generic receptionist — LiveKit Agent with phased tool surface via update_tools."""
+    """Generic receptionist — phased tool surface via native update_tools()."""
 
     def __init__(
         self,
@@ -20,15 +26,22 @@ class AmyAgent(Agent):
         instructions = ud.compiled_prompt or (
             f"You are Amy, receptionist for {ud.business_name}. "
             "Help callers naturally. Use start_booking for appointments, take_message for callbacks, "
-            "get_business_answer for business questions. One thought at a time."
+            "transfer_to_human when appropriate, get_business_answer for business questions. "
+            "One thought at a time."
         )
         super().__init__(instructions=instructions, tools=build_amy_tools(self, backend))
 
-    async def expose_booking_tools(self) -> None:
-        await self.update_tools(build_booking_tools(self, self._backend))
-
     async def expose_idle_tools(self) -> None:
         await self.update_tools(build_idle_tools(self, self._backend))
+
+    async def expose_availability_tools(self) -> None:
+        await self.update_tools(build_availability_tools(self, self._backend))
+
+    async def expose_slot_tools(self) -> None:
+        await self.update_tools(build_slot_tools(self, self._backend))
+
+    async def expose_confirm_tools(self) -> None:
+        await self.update_tools(build_confirm_tools(self, self._backend))
 
     async def on_enter(self) -> None:
         greeting = self._ud.greeting.strip()

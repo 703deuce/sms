@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridge/auth";
 import { bootstrapInboundForPython } from "@/lib/voice/python-runtime-bridge/bootstrap-inbound";
 import { persistIntakeFieldsForPython } from "@/lib/voice/python-runtime-bridge/persist-intake-fields";
+import { persistMessageForPython } from "@/lib/voice/python-runtime-bridge/persist-message";
+import { resolveTransferForPython } from "@/lib/voice/python-runtime-bridge/resolve-transfer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +11,8 @@ export const dynamic = "force-dynamic";
 type VoiceRuntimeAction =
   | "bootstrap_inbound"
   | "persist_intake_fields"
+  | "persist_message"
+  | "resolve_transfer"
   | "extract_fields"
   | "get_availability"
   | "commit_booking"
@@ -93,6 +97,14 @@ export async function POST(request: Request) {
 
       case "persist_intake_fields":
         result = await persistIntakeFieldsForPython(payload as never);
+        break;
+
+      case "persist_message":
+        result = await persistMessageForPython(payload as never);
+        break;
+
+      case "resolve_transfer":
+        result = await resolveTransferForPython(payload as never);
         break;
 
       case "extract_fields": {

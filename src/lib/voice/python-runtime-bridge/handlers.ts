@@ -16,6 +16,8 @@ import type {
 } from "./types";
 
 export { persistIntakeFieldsForPython } from "./persist-intake-fields";
+export { persistMessageForPython } from "./persist-message";
+export { resolveTransferForPython } from "./resolve-transfer";
 
 export async function extractFieldsForPython(
   input: ExtractFieldsInput,
@@ -133,6 +135,55 @@ export async function commitBookingForPython(input: {
     !input.offeredSlotIds.includes(input.slotId)
   ) {
     return { ok: false, error: "Slot was not in the offered set", code: "INVALID_SLOT" };
+  }
+
+  const prisma = getPrisma();
+  const callRow = await prisma.voiceCall.findFirst({
+    where: { id: input.callId, workspaceId: input.workspaceId },
+    select: { metadata: true },
+  });
+  const priorMeta =
+    callRow?.metadata && typeof callRow.metadata === "object" && !Array.isArray(callRow.metadata)
+      ? (callRow.metadata as Record<string, unknown>)
+      : {};
+  const existingReceipt = priorMeta.pythonBookingReceipt as
+    | { bookedTimeLabel?: string; slotId?: string }
+    | undefined;
+  if (existingReceipt?.slotId) {
+    const label = existingReceipt.bookedTimeLabel || "your appointment";
+    return {
+      ok: true,
+      bookedTimeLabel: label,
+      confirmationSpeech: buildBookingSuccessLine(label),
+      alreadyBooked: true,
+      receiptPersisted: true,
+    };
+  }
+
+  const existingAppt = await prisma.voiceAppointment.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      status: { notIn: ["cancelled", "canceled"] },
+    },
+    select: { startsAt: true },
+  });
+  if (existingAppt?.startsAt) {
+    const label = existingAppt.startsAt.toLocaleString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: input.timezone,
+    });
+    return {
+      ok: true,
+      bookedTimeLabel: label,
+      confirmationSpeech: buildBookingSuccessLine(label),
+      alreadyBooked: true,
+      receiptPersisted: true,
+    };
   }
 
   const userData = buildMinimalUserData(input);
