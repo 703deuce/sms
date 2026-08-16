@@ -91,16 +91,20 @@ async function main() {
     !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("save_caller_info"),
   );
   check(
-    "publish filter includes record_current_field",
-    filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("record_current_field"),
+    "publish filter excludes record_current_field (internal)",
+    !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("record_current_field"),
   );
   check(
     "publish filter excludes calendar_availability",
     !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("calendar_availability"),
   );
   check(
-    "publish filter includes continue_workflow",
-    filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("continue_workflow"),
+    "publish filter excludes continue_workflow (internal)",
+    !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("continue_workflow"),
+  );
+  check(
+    "publish filter includes runtime_turn",
+    filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("runtime_turn"),
   );
 
   await dbIntegration();

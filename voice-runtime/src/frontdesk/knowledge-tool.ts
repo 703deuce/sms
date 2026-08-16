@@ -4,7 +4,11 @@ import type { AgentSession } from "@livekit/agents";
 import { resolveBusinessAnswer } from "@/lib/voice/knowledge/resolve-business-answer";
 import type { FrontDeskUserData } from "./userdata";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
-import { formatToolFeedbackForModel, toolFeedbackFromError } from "../tool-feedback";
+import {
+  formatToolFeedbackForModel,
+  toolFeedbackFromError,
+  toolFeedbackSuccess,
+} from "../tool-feedback";
 
 /**
  * Read-only business knowledge — wizard config + linked RAG corpus.
@@ -34,7 +38,13 @@ export function buildFrontDeskBusinessAnswerTool() {
             }),
           );
         }
-        return result.speak;
+        return formatToolFeedbackForModel(
+          toolFeedbackSuccess(result.speak, {
+            tool: "get_business_answer",
+            next_action: "continue_conversation",
+            guidance: "Answer the caller using this information — one concise thought.",
+          }),
+        );
       });
     },
   });

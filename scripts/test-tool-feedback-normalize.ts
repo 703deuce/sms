@@ -21,7 +21,13 @@ const collection = normalizeToolResultForModel(
   "COLLECTION_COMPLETE: name=Jane. Continue with booking.",
 );
 assert.match(collection, /^TOOL_FEEDBACK: success/);
-assert.match(collection, /next_action: schedule_appointment_retry|next_action: none/);
+assert.match(collection, /next_action: continue_conversation/);
+
+const collectionSchedule = normalizeToolResultForModel(
+  "collect_caller_fields",
+  "COLLECTION_COMPLETE: name=Jane. Call schedule_appointment with slot_id ST_abc.",
+);
+assert.match(collectionSchedule, /next_action: schedule_appointment_retry/);
 
 const intake = normalizeToolResultForModel(
   "collect_booking_requirements",
@@ -35,20 +41,20 @@ const silentCollect = normalizeToolResultForModel(
   TOOL_RESULT_COLLECT_ACTIVE_SILENT,
 );
 assert.match(silentCollect, /^TOOL_FEEDBACK: success/);
-assert.match(silentCollect, /runtime_handled_retry: true/);
+assert.match(silentCollect, /next_action: do_not_speak/);
 
 const silentIntake = normalizeToolResultForModel(
   "collect_booking_requirements",
   TOOL_RESULT_BOOKING_INTAKE_SILENT,
 );
-assert.match(silentIntake, /^TOOL_FEEDBACK: success/);
+assert.match(silentIntake, /next_action: do_not_speak/);
 
 const plain = normalizeToolResultForModel(
   "take_message",
   "Message recorded. Tell the caller someone will follow up.",
 );
 assert.match(plain, /^TOOL_FEEDBACK: success/);
-assert.match(plain, /guidance: Message recorded/);
+assert.match(plain, /next_action: continue_conversation/);
 
 const redirect = normalizeToolResultForModel(
   "collect_caller_fields",

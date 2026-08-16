@@ -69,8 +69,8 @@ export function buildFrontDeskRescheduleAppointmentTool(
             tool: "reschedule_appointment",
             recovery_class: "MISSING_INFORMATION",
             reason: "confirmation_required",
-            next_action: "none",
-            guidance: "Ask the caller to confirm the new time before rescheduling.",
+            next_action: "continue_conversation",
+            guidance: "Ask the caller to confirm the new time — one short question only.",
           }),
         );
       }
