@@ -44,6 +44,13 @@ if [[ ! -f .next/standalone/server.js ]]; then
   exit 1
 fi
 
+echo "[coolify-build] installing Python voice runtime (post-build — avoids Turbopack .venv symlink trace)"
+if bash scripts/install-voice-python-venv.sh; then
+  echo "[coolify-build] Python venv installed"
+else
+  echo "[coolify-build] WARN: Python venv install failed — worker will fall back to typescript if configured"
+fi
+
 bundle_voice_python_runtime() {
   local dest_root="$1"
   if [[ ! -d voice-runtime-python/.venv ]]; then
