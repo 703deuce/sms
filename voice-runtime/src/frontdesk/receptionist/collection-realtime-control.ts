@@ -1,4 +1,4 @@
-import type { AgentSession } from "@livekit/agents";
+import { AgentSessionEventTypes, type AgentSession } from "@livekit/agents";
 import { RealtimeModel } from "@livekit/agents";
 import type { FrontDeskUserData } from "../userdata";
 import {
@@ -132,11 +132,44 @@ export function isRuntimeCollectionState(ud: FrontDeskUserData): boolean {
   return wf?.state === "BOOKING_COLLECT" || wf?.state === "MESSAGE_COLLECT";
 }
 
+export function markCollectionAwaitingAnswer(ud: FrontDeskUserData): void {
+  ud.collectionAwaitingAnswer = true;
+}
+
+export function clearCollectionAwaitingAnswer(ud: FrontDeskUserData): void {
+  ud.collectionAwaitingAnswer = false;
+}
+
 type ControlledGenerateReplyOptions = {
   instructions?: string;
   toolChoice?: "auto" | "none" | "required";
   allowInterruptions?: boolean;
 };
+
+function waitForFunctionTool(
+  session: AgentSession<FrontDeskUserData>,
+  toolName: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      session.off(AgentSessionEventTypes.FunctionToolsExecuted, onTools);
+      resolve(false);
+    }, timeoutMs);
+
+    const onTools = (ev: {
+      functionCalls: Array<{ name: string }>;
+    }): void => {
+      if (ev.functionCalls.some((call) => call.name === toolName)) {
+        clearTimeout(timer);
+        session.off(AgentSessionEventTypes.FunctionToolsExecuted, onTools);
+        resolve(true);
+      }
+    };
+
+    session.on(AgentSessionEventTypes.FunctionToolsExecuted, onTools);
+  });
+}
 
 /**
  * One active Realtime generation per session — prevents competing speech handles.
@@ -182,6 +215,21 @@ export async function controlledGenerateReply(
       allowInterruptions: options.allowInterruptions,
     });
     ud.collectionActiveGenerationId = generationId;
+
+    if (source === "force_record_current_field") {
+      const toolRan = await waitForFunctionTool(session, "record_current_field", 8000);
+      if (session.agentState === "speaking") {
+        session.interrupt();
+      }
+      logCollectionRealtime(ud.callId, "generation_tool_phase_complete", {
+        generationId,
+        generation_source: source,
+        turn_id: turnId,
+        toolRan,
+      });
+      return;
+    }
+
     await handle.waitForPlayout();
     logCollectionRealtime(ud.callId, "generation_completed", {
       generationId,

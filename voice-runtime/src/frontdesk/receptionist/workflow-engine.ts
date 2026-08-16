@@ -102,6 +102,7 @@ export function enterCollectionState(
   wf.speechLocked = false;
   wf.collectionLastForcedTranscript = undefined;
   ud.collectionPhoneDigitsBuffer = undefined;
+  ud.collectionAwaitingAnswer = false;
   return wf;
 }
 

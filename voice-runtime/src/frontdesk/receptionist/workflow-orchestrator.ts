@@ -24,7 +24,10 @@ import {
 } from "./deterministic-field-collection";
 import {
   bumpCollectionTurnSeq,
+  clearCollectionAwaitingAnswer,
+  controlledGenerateReply,
   isRuntimeCollectionState,
+  markCollectionAwaitingAnswer,
   syncCollectionRealtimeMode,
 } from "./collection-realtime-control";
 
@@ -51,8 +54,9 @@ async function runtimeFinalizeBookingFailure(
 ): Promise<void> {
   const ud = session.userData;
   setWorkflowState(ud, "BOOKING_FAILED", { requiredTool: "list_available_slots" });
+  clearCollectionAwaitingAnswer(ud);
   await syncAgentToolSurface(session);
-  await session.generateReply({
+  await controlledGenerateReply(session, "booking_failure_recovery", bumpCollectionTurnSeq(ud), {
     instructions:
       `Booking did not complete. The caller already heard: ${guidance}. ` +
       "Do NOT say the appointment is booked or that they are all set. " +
@@ -118,14 +122,17 @@ async function runtimeListAvailableSlots(session: AgentSession<FrontDeskUserData
         ? `Read these available times and offer up to three options naturally. Ask exactly one question: which time works?\n${slotText}`
         : `Tell the caller briefly that there are no openings right now. Offer to take a message or check another day.\n${slotText}`;
 
-    await session.generateReply({ instructions, toolChoice: "none" });
+    await controlledGenerateReply(session, "availability_offered", bumpCollectionTurnSeq(ud), {
+      instructions,
+      toolChoice: "none",
+    });
     await syncAgentToolSurface(session);
     logOrchestrator(ud.callId, "availability_offered", { slotCount: slots.length });
   } catch (err) {
     logOrchestrator(ud.callId, "availability_failed", {
       error: err instanceof Error ? err.message : String(err),
     });
-    await session.generateReply({
+    await controlledGenerateReply(session, "availability_failed", bumpCollectionTurnSeq(ud), {
       instructions:
         "Apologize briefly — the calendar is not responding. Offer to take a message so staff can call back.",
       toolChoice: "none",
@@ -198,7 +205,7 @@ async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>
     case "MESSAGE_COMMIT":
       if (messageFieldsComplete(ud) && !ud.receptionistMessageTaken) {
         wf.requiredTool = "take_message";
-        await session.generateReply({
+        await controlledGenerateReply(session, "message_commit", bumpCollectionTurnSeq(ud), {
           instructions:
             "Required callback details are complete. Call take_message now with the reason from the conversation. " +
             "Do not ask for information already collected.",
@@ -368,6 +375,45 @@ function shouldDeferCollectionForce(ud: FrontDeskUserData, transcript: string): 
   return capture.status === "incomplete";
 }
 
+function looksLikeCollectionClarification(transcript: string): boolean {
+  const t = transcript.trim();
+  if (!t) return false;
+  if (/\?$/.test(t)) return true;
+  if (/^(hello|hi|hey|wait|um|oh)\b/i.test(t)) return true;
+  if (
+    /\b(can't|cannot|won't|why|what|how|confirm|appointment|booked|booking|explain)\b/i.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+async function handleCollectionClarification(
+  session: AgentSession<FrontDeskUserData>,
+  transcript: string,
+  turnId: number,
+): Promise<void> {
+  const ud = session.userData;
+  const wf = ensureReceptionistWorkflow(ud);
+  const activeField = wf.activeFieldId || "the current question";
+  logOrchestrator(ud.callId, "collection_clarification", { transcript, turn_id: turnId });
+  syncCollectionRealtimeMode(session, false);
+  try {
+    await controlledGenerateReply(session, "collection_clarification", turnId, {
+      instructions:
+        `The caller said: "${transcript}". They are not answering the collection question yet. ` +
+        "Answer briefly and honestly. If booking failed or is not confirmed, do not claim they are booked. " +
+        `Then ask the collection question again for ${activeField}.`,
+      toolChoice: "none",
+    });
+  } finally {
+    if (isRuntimeCollectionState(ud)) {
+      syncCollectionRealtimeMode(session, true);
+      markCollectionAwaitingAnswer(ud);
+    }
+  }
+}
+
 function handleCollectionUtterance(
   session: AgentSession<FrontDeskUserData>,
   transcript: string,
@@ -382,6 +428,24 @@ function handleCollectionUtterance(
   if (ud.collectionFieldForcePending) return;
   if (shouldDeferCollectionForce(ud, normalizedTranscript)) return;
 
+  const turnId = bumpCollectionTurnSeq(ud);
+
+  if (!ud.collectionAwaitingAnswer) {
+    if (looksLikeCollectionClarification(normalizedTranscript)) {
+      void handleCollectionClarification(session, normalizedTranscript, turnId).catch((err) => {
+        logOrchestrator(ud.callId, "collection_clarification_error", {
+          error: err instanceof Error ? err.message : String(err),
+          turn_id: turnId,
+        });
+      });
+    } else {
+      logOrchestrator(ud.callId, "collection_force_skipped_not_awaiting", {
+        transcript: normalizedTranscript,
+      });
+    }
+    return;
+  }
+
   if (wf.collectionLastForcedTranscript === normalizedTranscript) {
     logOrchestrator(ud.callId, "collection_force_skipped_duplicate", {
       transcript: normalizedTranscript,
@@ -389,7 +453,7 @@ function handleCollectionUtterance(
     return;
   }
 
-  const turnId = bumpCollectionTurnSeq(ud);
+  clearCollectionAwaitingAnswer(ud);
   wf.collectionLastForcedTranscript = normalizedTranscript;
   ud.collectionFieldForcePending = true;
   void forceRecordCurrentFieldTurn(session, turnId)

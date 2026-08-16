@@ -7,7 +7,7 @@ import {
   firstMissingFieldForPurpose,
 } from "./workflow-engine";
 import { speakReceptionistCollectionLine } from "./field-collection-task";
-import { controlledGenerateReply } from "./collection-realtime-control";
+import { controlledGenerateReply, markCollectionAwaitingAnswer } from "./collection-realtime-control";
 
 /** After runtime asks a collection question, force the model to call record_current_field. */
 export async function forceRecordCurrentFieldTurn(
@@ -41,6 +41,7 @@ export async function beginDeterministicFieldCollection(
   if (options?.skipFirstQuestion) return;
 
   await speakReceptionistCollectionLine(session, first.question, { addToChatCtx: true });
+  markCollectionAwaitingAnswer(ud);
 }
 
 export async function askNextCollectionField(
@@ -68,5 +69,6 @@ export async function askNextCollectionField(
   }
 
   await speakReceptionistCollectionLine(session, line, { addToChatCtx: true });
+  markCollectionAwaitingAnswer(ud);
   return true;
 }

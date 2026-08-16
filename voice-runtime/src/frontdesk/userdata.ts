@@ -112,6 +112,8 @@ export type FrontDeskUserData = {
   collectionRuntimeOwnedTurnDetection?: boolean;
   /** Active controlled generation id for diagnostics. */
   collectionActiveGenerationId?: string;
+  /** Runtime asked a collection question and is waiting for the caller's answer. */
+  collectionAwaitingAnswer?: boolean;
   /** Field ids persisted via tools — chat backfill must not overwrite these values. */
   authoritativeFieldIds?: string[];
 };
