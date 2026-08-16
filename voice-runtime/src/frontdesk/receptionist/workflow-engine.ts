@@ -100,6 +100,7 @@ export function enterCollectionState(
   wf.activeFieldId = first?.id;
   wf.requiredTool = "record_current_field";
   wf.speechLocked = false;
+  ud.collectionPhoneDigitsBuffer = undefined;
   return wf;
 }
 

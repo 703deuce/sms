@@ -17,16 +17,67 @@ export function isReceptionistFieldPlaceholder(value: string): boolean {
   return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
-function validatePhoneField(raw: string): string {
+export function extractPhoneDigits(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
+export type PhoneCaptureResult =
+  | { status: "complete"; normalized: string; digits: string }
+  | { status: "incomplete"; digits: string; message: string };
+
+/** Merge prior partial digits with a new utterance; US numbers need 10 digits before accept. */
+export function captureUsPhoneDigits(raw: string, priorDigits = ""): PhoneCaptureResult {
   const trimmed = raw.trim();
-  if (isReceptionistFieldPlaceholder(trimmed)) {
-    throw new Error("Please say your phone number, including the area code.");
+  if (isReceptionistFieldPlaceholder(trimmed) && !priorDigits) {
+    return {
+      status: "incomplete",
+      digits: "",
+      message: "Please say your phone number, including the area code.",
+    };
   }
-  const normalized = tryNormalizeE164(trimmed);
+
+  const combined = priorDigits + extractPhoneDigits(trimmed);
+  if (!combined.length) {
+    return {
+      status: "incomplete",
+      digits: "",
+      message: "Please say your phone number, including the area code.",
+    };
+  }
+
+  if (combined.length < 10) {
+    return {
+      status: "incomplete",
+      digits: combined,
+      message:
+        "I only heard part of the phone number so far. Please say the rest, digit by digit.",
+    };
+  }
+
+  if (combined.length > 11) {
+    throw new Error("That phone number seems too long. Could you say it again, digit by digit.");
+  }
+
+  const candidate =
+    combined.length === 10
+      ? combined
+      : combined.length === 11 && combined.startsWith("1")
+        ? `+${combined}`
+        : combined;
+  const normalized = tryNormalizeE164(candidate);
   if (!normalized) {
     throw new Error("I didn't catch a valid phone number. Please say it again, digit by digit.");
   }
-  return normalized;
+
+  return { status: "complete", normalized, digits: combined };
+}
+
+function validatePhoneField(raw: string): string {
+  const result = captureUsPhoneDigits(raw);
+  if (result.status === "incomplete") {
+    throw new Error(result.message);
+  }
+  return result.normalized;
 }
 
 function validateNameField(raw: string): string {

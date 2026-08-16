@@ -19,7 +19,8 @@ export async function forceRecordCurrentFieldTurn(
       `The caller is answering the question you just asked. ` +
       `Call record_current_field immediately with their answer for ${field}. ` +
       "Do not speak — only call the tool.",
-    toolChoice: { type: "function", function: { name: "record_current_field" } },
+    // Only record_current_field is exposed during collection — "required" forces that tool.
+    toolChoice: "required",
   });
 }
 
@@ -52,6 +53,9 @@ export async function askNextCollectionField(
   if (!next?.question?.trim()) return false;
 
   ud.receptionistWorkflow!.activeFieldId = next.id;
+  if (next.type !== "phone" && next.id !== "phone") {
+    ud.collectionPhoneDigitsBuffer = undefined;
+  }
 
   let line = next.question;
   if (afterFieldId && afterValue) {

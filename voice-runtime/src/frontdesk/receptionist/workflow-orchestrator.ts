@@ -1,5 +1,6 @@
 import { AgentSessionEventTypes, type AgentSession } from "@livekit/agents";
 import { parseToolFeedbackFromModel, formatToolFeedbackForModel, toolFeedbackRecoverable } from "@/lib/voice/tool-feedback";
+import { captureUsPhoneDigits } from "@/lib/voice/receptionist/field-validation";
 import type { FrontDeskUserData } from "../userdata";
 import { isBookingConfirmed } from "../userdata";
 import { waitForFrontDeskGoodbyePlayout } from "../end-frontdesk-call";
@@ -194,7 +195,7 @@ async function runProactiveWorkflowStep(session: AgentSession<FrontDeskUserData>
           instructions:
             "Required callback details are complete. Call take_message now with the reason from the conversation. " +
             "Do not ask for information already collected.",
-          toolChoice: { type: "function", function: { name: "take_message" } },
+          toolChoice: "required",
         });
       }
       return;
@@ -257,35 +258,29 @@ export async function afterReceptionistToolExecuted(
     const purpose = ud.receptionistWorkflow?.collectionPurpose || "booking";
     transitionAfterRecordField(ud, purpose);
     const wf = ensureReceptionistWorkflow(ud);
+    await syncAgentToolSurface(session);
+
     if (wf.state === "BOOKING_CHECK_AVAILABILITY") {
-      await syncAgentToolSurface(session);
       await runProactiveWorkflowStep(session);
       return;
     }
     if (wf.state === "BOOKING_COMMIT") {
-      await syncAgentToolSurface(session);
       await runProactiveWorkflowStep(session);
       return;
     }
     if (wf.state === "MESSAGE_COMMIT") {
-      await syncAgentToolSurface(session);
       await runProactiveWorkflowStep(session);
       return;
     }
     if (wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT") {
-      const asked = await askNextCollectionField(
+      await askNextCollectionField(
         session,
         purpose,
         feedback.field_id,
         typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined,
       );
-      if (!asked) {
-        transitionAfterRecordField(ud, purpose);
-        await syncAgentToolSurface(session);
-        await runProactiveWorkflowStep(session);
-      }
-      return;
     }
+    return;
   }
 
   if (toolName === "take_message" && feedback.outcome === "success") {
@@ -353,6 +348,18 @@ export function workflowToolBlockedResult(ud: FrontDeskUserData, toolName: strin
   );
 }
 
+function shouldDeferCollectionForce(ud: FrontDeskUserData, transcript: string): boolean {
+  const activeId = ud.receptionistWorkflow?.activeFieldId;
+  if (!activeId) return false;
+  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
+  const field = manifest.find((f) => f.id === activeId);
+  if (field?.type !== "phone" && activeId !== "phone") return false;
+
+  const prior = ud.collectionPhoneDigitsBuffer ?? "";
+  const capture = captureUsPhoneDigits(transcript, prior);
+  return capture.status === "incomplete";
+}
+
 function handleCollectionUtterance(
   session: AgentSession<FrontDeskUserData>,
   transcript: string,
@@ -363,6 +370,7 @@ function handleCollectionUtterance(
   if (!transcript.trim()) return;
   if (session.agentState === "speaking") return;
   if (ud.collectionFieldForcePending) return;
+  if (shouldDeferCollectionForce(ud, transcript)) return;
 
   ud.collectionFieldForcePending = true;
   void forceRecordCurrentFieldTurn(session)

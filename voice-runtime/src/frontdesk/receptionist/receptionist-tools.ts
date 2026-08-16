@@ -6,6 +6,7 @@ import { takeStructuredMessage } from "@/lib/voice/domain-actions/take-structure
 import {
   resolveReceptionistCallbackPhone,
   validateReceptionistFieldValue,
+  captureUsPhoneDigits,
 } from "@/lib/voice/receptionist/field-validation";
 import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
 import { formatReceptionistFieldsSummary } from "@/lib/voice/receptionist/conversation-recap";
@@ -101,18 +102,12 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
     name: "record_current_field",
     description:
       "Save the caller's answer for the active collection field. " +
-      "The runtime decides which field is active during booking or message collection — " +
-      "call this immediately when the caller answers. Do not use collect_booking_requirements or collect_caller_fields.",
+      "The runtime decides which field is active — provide only the value the caller said. " +
+      "Do not use collect_booking_requirements or collect_caller_fields.",
     parameters: z.object({
       value: z.string().describe("The value the caller provided for the active field"),
-      field_id: z
-        .string()
-        .optional()
-        .describe(
-          "Optional — only when the caller volunteers a different field than the active one",
-        ),
     }),
-    execute: async ({ value, field_id }, opts) => {
+    execute: async ({ value }, opts) => {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       const wf = ensureReceptionistWorkflow(ud);
@@ -120,20 +115,16 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
         wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT";
       const purpose = wf.collectionPurpose || "booking";
       const targetId = inCollection
-        ? field_id?.trim() ||
-          wf.activeFieldId ||
-          firstMissingFieldForPurpose(ud, purpose)?.id ||
-          ""
-        : field_id?.trim() || "";
+        ? wf.activeFieldId || firstMissingFieldForPurpose(ud, purpose)?.id || ""
+        : wf.activeFieldId || "";
       if (!targetId) {
         return formatToolFeedbackForModel(
           toolFeedbackRecoverable({
             tool: "record_current_field",
             recovery_class: "MISSING_INFORMATION",
-            reason: "field_id_required",
+            reason: "no_active_field",
             next_action: "collect_field_then_retry",
-            guidance:
-              "Specify field_id when saving volunteered information outside active collection.",
+            guidance: "No active field — wait for the runtime to ask the next question.",
           }),
         );
       }
@@ -154,6 +145,7 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
         try {
           if (targetId === "email" || field.type === "email") {
             const persisted = persistConfirmedBookingEmail(ud, trimmed);
+            ud.collectionPhoneDigitsBuffer = undefined;
             return formatBookingEmailSavedFeedback(ud, "record_current_field", persisted);
           }
 
@@ -172,7 +164,33 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
             );
           }
 
-          const normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
+          let normalized: string;
+          if (field.type === "phone" || targetId === "phone") {
+            const prior =
+              wf.activeFieldId === "phone" ? ud.collectionPhoneDigitsBuffer ?? "" : "";
+            const phoneCapture = captureUsPhoneDigits(notesCheck.normalized, prior);
+            if (phoneCapture.status === "incomplete") {
+              ud.collectionPhoneDigitsBuffer = phoneCapture.digits;
+              return formatToolFeedbackForModel(
+                toolFeedbackRecoverable({
+                  tool: "record_current_field",
+                  recovery_class: "MISSING_INFORMATION",
+                  reason: "incomplete_value",
+                  field_id: targetId,
+                  field_label: field.label,
+                  next_action: "collect_field_then_retry",
+                  runtime_handled_retry: true,
+                  guidance: phoneCapture.message,
+                }),
+              );
+            }
+            ud.collectionPhoneDigitsBuffer = undefined;
+            normalized = phoneCapture.normalized;
+          } else {
+            ud.collectionPhoneDigitsBuffer = undefined;
+            normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
+          }
+
           if (!ud.receptionistFields) ud.receptionistFields = {};
           const previous = ud.receptionistFields[targetId];
           ud.receptionistFields[targetId] = normalized;
