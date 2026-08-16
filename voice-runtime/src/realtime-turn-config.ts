@@ -53,40 +53,62 @@ export function resolveOutboundRealtimeTurnDetection(): OutboundRealtimeTurnDete
   return resolveOutboundRealtimeTurnDetectionWithOptions();
 }
 
-/** Inbound front desk — OpenAI Realtime server_vad tuned for phone line noise. */
+/** Inbound front desk — Semantic VAD by default; server_vad via env for A/B. */
 export function resolveFrontDeskInboundRealtimeTurnDetection(
   config?: Pick<{ advanced?: Record<string, unknown> }, "advanced">,
 ): OutboundRealtimeTurnDetectionConfig {
-  const vad = config?.advanced?.realtimeVad as
-    | {
-        threshold?: number;
-        silenceDurationMs?: number;
-        prefixPaddingMs?: number;
-      }
-    | undefined;
+  const mode = resolveOutboundRealtimeVadMode();
+  const interruptResponse = parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true);
 
-  const threshold =
-    typeof vad?.threshold === "number" && Number.isFinite(vad.threshold)
-      ? vad.threshold
-      : parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.65);
-  const silenceDurationMs =
-    typeof vad?.silenceDurationMs === "number" && Number.isFinite(vad.silenceDurationMs)
-      ? vad.silenceDurationMs
-      : parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 500);
-  const prefixPaddingMs =
-    typeof vad?.prefixPaddingMs === "number" && Number.isFinite(vad.prefixPaddingMs)
-      ? vad.prefixPaddingMs
-      : parseNumberEnv(process.env.VOICE_REALTIME_VAD_PREFIX_MS, 300);
+  if (mode === "server") {
+    const vad = config?.advanced?.realtimeVad as
+      | {
+          threshold?: number;
+          silenceDurationMs?: number;
+          prefixPaddingMs?: number;
+        }
+      | undefined;
+
+    const threshold =
+      typeof vad?.threshold === "number" && Number.isFinite(vad.threshold)
+        ? vad.threshold
+        : parseNumberEnv(process.env.VOICE_REALTIME_VAD_THRESHOLD, 0.65);
+    const silenceDurationMs =
+      typeof vad?.silenceDurationMs === "number" && Number.isFinite(vad.silenceDurationMs)
+        ? vad.silenceDurationMs
+        : parseNumberEnv(process.env.VOICE_REALTIME_VAD_SILENCE_MS, 700);
+    const prefixPaddingMs =
+      typeof vad?.prefixPaddingMs === "number" && Number.isFinite(vad.prefixPaddingMs)
+        ? vad.prefixPaddingMs
+        : parseNumberEnv(process.env.VOICE_REALTIME_VAD_PREFIX_MS, 300);
+
+    return {
+      mode: "server",
+      turnDetection: {
+        type: "server_vad",
+        threshold,
+        prefix_padding_ms: prefixPaddingMs,
+        silence_duration_ms: silenceDurationMs,
+        create_response: true,
+        interrupt_response: interruptResponse,
+      },
+    };
+  }
+
+  const eagernessRaw = (process.env.VOICE_REALTIME_VAD_EAGERNESS || "medium").trim().toLowerCase();
+  const eagerness: OutboundRealtimeVadEagerness = (
+    ["auto", "low", "medium", "high"] as const
+  ).includes(eagernessRaw as OutboundRealtimeVadEagerness)
+    ? (eagernessRaw as OutboundRealtimeVadEagerness)
+    : "medium";
 
   return {
-    mode: "server",
+    mode: "semantic",
     turnDetection: {
-      type: "server_vad",
-      threshold,
-      prefix_padding_ms: prefixPaddingMs,
-      silence_duration_ms: silenceDurationMs,
+      type: "semantic_vad",
+      eagerness,
       create_response: true,
-      interrupt_response: parseBoolEnv(process.env.VOICE_REALTIME_INTERRUPT_RESPONSE, true),
+      interrupt_response: interruptResponse,
     },
   };
 }
@@ -136,12 +158,14 @@ export function describeOutboundRealtimeTurnDetection(
       threshold: cfg.turnDetection.threshold,
       prefix_padding_ms: cfg.turnDetection.prefix_padding_ms,
       silence_duration_ms: cfg.turnDetection.silence_duration_ms,
+      create_response: cfg.turnDetection.create_response ?? true,
       interrupt_response: cfg.turnDetection.interrupt_response ?? true,
     };
   }
   return {
     type: "semantic_vad",
     eagerness: cfg.turnDetection.eagerness ?? "high",
+    create_response: cfg.turnDetection.create_response ?? true,
     interrupt_response: cfg.turnDetection.interrupt_response ?? true,
   };
 }

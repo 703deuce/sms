@@ -1,5 +1,11 @@
 import type { AgentSession } from "@livekit/agents";
 import { sessionUsesTtsSay } from "../scripted-speech-output-mode";
+import type { FrontDeskUserData } from "../frontdesk/userdata";
+import {
+  bumpCollectionTurnSeq,
+  controlledGenerateReply,
+  isRuntimeCollectionState,
+} from "../frontdesk/receptionist/collection-realtime-control";
 
 type ScriptedSpeechOptions = {
   allowInterruptions?: boolean;
@@ -24,12 +30,14 @@ export async function deliverScriptedSpeech<T>(
     const handle = session.say(text, { allowInterruptions, addToChatCtx });
     await handle.waitForPlayout();
   } else {
-    const handle = session.generateReply({
+    const frontDeskSession = session as unknown as AgentSession<FrontDeskUserData>;
+    const ud = frontDeskSession.userData;
+    const turnId = isRuntimeCollectionState(ud) ? bumpCollectionTurnSeq(ud) : "scripted";
+    await controlledGenerateReply(frontDeskSession, "scripted_speech", turnId, {
       instructions:
         `Say exactly the following, word for word, with no additions or changes:\n"${text}"`,
       allowInterruptions,
     });
-    await handle.waitForPlayout();
   }
 
   session.clearUserTurn();

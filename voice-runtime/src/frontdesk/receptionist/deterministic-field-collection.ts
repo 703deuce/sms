@@ -7,19 +7,20 @@ import {
   firstMissingFieldForPurpose,
 } from "./workflow-engine";
 import { speakReceptionistCollectionLine } from "./field-collection-task";
+import { controlledGenerateReply } from "./collection-realtime-control";
 
 /** After runtime asks a collection question, force the model to call record_current_field. */
 export async function forceRecordCurrentFieldTurn(
   session: AgentSession<FrontDeskUserData>,
+  turnId: number,
 ): Promise<void> {
   const ud = session.userData;
   const field = ud.receptionistWorkflow?.activeFieldId || "the active field";
-  await session.generateReply({
+  await controlledGenerateReply(session, "force_record_current_field", turnId, {
     instructions:
       `The caller is answering the question you just asked. ` +
       `Call record_current_field immediately with their answer for ${field}. ` +
       "Do not speak — only call the tool.",
-    // Only record_current_field is exposed during collection — "required" forces that tool.
     toolChoice: "required",
   });
 }

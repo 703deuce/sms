@@ -41,6 +41,10 @@ export type ReceptionistWorkflowSnapshot = {
   speechLocked?: boolean;
   /** Slots offered to the caller in the current booking attempt. */
   offeredSlotIds?: string[];
+  /** Monotonic turn counter for collection generation logging. */
+  collectionTurnSeq?: number;
+  /** Last transcript we forced record_current_field for — dedupe double finalization. */
+  collectionLastForcedTranscript?: string;
 };
 
 export const INITIAL_RECEPTIONIST_WORKFLOW: ReceptionistWorkflowSnapshot = {

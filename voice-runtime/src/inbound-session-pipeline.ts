@@ -28,6 +28,8 @@ import {
   resolveOutboundRealtimeOutputMode,
 } from "./pipeline";
 import { attachLatencyInstrumentation } from "./latency-instrumentation";
+import { initInboundRealtimeTurnDetection } from "./frontdesk/receptionist/collection-realtime-control";
+import { resolveFrontDeskInboundRealtimeTurnDetection } from "./realtime-turn-config";
 import { attachOperationSilenceWatchdog } from "./operation-silence-watchdog";
 import { buildFrontDeskRealtimeTurnHandling } from "./frontdesk-realtime-turn-handling";
 import { attachLiveKitTranscriptPersistence } from "./transcript-persistence";
@@ -436,6 +438,10 @@ export function createVoicePipeline(input: {
       turnHandling: buildFrontDeskRealtimeTurnHandling(),
       aecWarmupDuration: 3000,
     });
+    initInboundRealtimeTurnDetection(
+      input.userData,
+      resolveFrontDeskInboundRealtimeTurnDetection(input.agentConfig).turnDetection,
+    );
   } else {
     const { stt, llm, tts, config, sttConfig } = buildAmyVoicePipeline();
     latencyTtsConfig = {

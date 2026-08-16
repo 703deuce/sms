@@ -9,6 +9,7 @@ import type { RealEstateCallState } from "@/lib/voice/real-estate/types";
 import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
 import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 import type { ReceptionistWorkflowSnapshot } from "./receptionist/workflow-types";
+import type { OutboundRealtimeTurnDetection } from "../realtime-turn-config";
 
 export type BookingStatus = "pending" | "confirmed";
 
@@ -105,6 +106,12 @@ export type FrontDeskUserData = {
   bookingCommitInFlight?: boolean;
   /** Call is in closing phase — block duplicate end_call. */
   callClosing?: boolean;
+  /** Base inbound Realtime turn_detection (semantic/server) for runtime-owned toggles. */
+  inboundRealtimeTurnDetection?: OutboundRealtimeTurnDetection;
+  /** Whether create_response is currently false (runtime owns replies during collection). */
+  collectionRuntimeOwnedTurnDetection?: boolean;
+  /** Active controlled generation id for diagnostics. */
+  collectionActiveGenerationId?: string;
   /** Field ids persisted via tools — chat backfill must not overwrite these values. */
   authoritativeFieldIds?: string[];
 };

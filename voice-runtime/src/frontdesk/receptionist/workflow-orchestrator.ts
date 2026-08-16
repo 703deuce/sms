@@ -22,6 +22,11 @@ import {
   beginDeterministicFieldCollection,
   forceRecordCurrentFieldTurn,
 } from "./deterministic-field-collection";
+import {
+  bumpCollectionTurnSeq,
+  isRuntimeCollectionState,
+  syncCollectionRealtimeMode,
+} from "./collection-realtime-control";
 
 function logOrchestrator(callId: string, event: string, extra?: Record<string, unknown>) {
   console.log(
@@ -73,6 +78,8 @@ async function syncAgentToolSurface(session: AgentSession<FrontDeskUserData>): P
 
   try {
     await agent.updateTools(filtered as never);
+    const inCollection = isRuntimeCollectionState(ud);
+    syncCollectionRealtimeMode(session, inCollection);
     logOrchestrator(ud.callId, "tool_surface_synced", {
       state: ud.receptionistWorkflow?.state,
       allowed: [...allowed],
@@ -256,8 +263,9 @@ export async function afterReceptionistToolExecuted(
 
   if (toolName === "record_current_field" && feedback.outcome === "success") {
     const purpose = ud.receptionistWorkflow?.collectionPurpose || "booking";
-    transitionAfterRecordField(ud, purpose);
     const wf = ensureReceptionistWorkflow(ud);
+    wf.collectionLastForcedTranscript = undefined;
+    transitionAfterRecordField(ud, purpose);
     await syncAgentToolSurface(session);
 
     if (wf.state === "BOOKING_CHECK_AVAILABILITY") {
@@ -367,17 +375,30 @@ function handleCollectionUtterance(
   const ud = session.userData;
   const wf = ensureReceptionistWorkflow(ud);
   if (wf.state !== "BOOKING_COLLECT" && wf.state !== "MESSAGE_COLLECT") return;
-  if (!transcript.trim()) return;
+
+  const normalizedTranscript = transcript.trim();
+  if (!normalizedTranscript) return;
   if (session.agentState === "speaking") return;
   if (ud.collectionFieldForcePending) return;
-  if (shouldDeferCollectionForce(ud, transcript)) return;
+  if (shouldDeferCollectionForce(ud, normalizedTranscript)) return;
 
+  if (wf.collectionLastForcedTranscript === normalizedTranscript) {
+    logOrchestrator(ud.callId, "collection_force_skipped_duplicate", {
+      transcript: normalizedTranscript,
+    });
+    return;
+  }
+
+  const turnId = bumpCollectionTurnSeq(ud);
+  wf.collectionLastForcedTranscript = normalizedTranscript;
   ud.collectionFieldForcePending = true;
-  void forceRecordCurrentFieldTurn(session)
+  void forceRecordCurrentFieldTurn(session, turnId)
     .catch((err) => {
       logOrchestrator(ud.callId, "collection_force_error", {
         error: err instanceof Error ? err.message : String(err),
+        turn_id: turnId,
       });
+      wf.collectionLastForcedTranscript = undefined;
     })
     .finally(() => {
       ud.collectionFieldForcePending = false;
@@ -389,11 +410,18 @@ export function attachReceptionistWorkflowOrchestrator(
 ): void {
   const ud = session.userData;
   ensureReceptionistWorkflow(ud);
+  syncCollectionRealtimeMode(session, false);
   void syncReceptionistToolSurface(session);
 
   session.on(AgentSessionEventTypes.UserInputTranscribed, (ev) => {
     if (!ev.isFinal) return;
     handleCollectionUtterance(session, ev.transcript);
+  });
+
+  session.on(AgentSessionEventTypes.UserStateChanged, (ev) => {
+    if (ev.newState !== "speaking") return;
+    const wf = ensureReceptionistWorkflow(ud);
+    wf.collectionLastForcedTranscript = undefined;
   });
 
   session.on(AgentSessionEventTypes.FunctionToolsExecuted, async (ev) => {
