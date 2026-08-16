@@ -7,7 +7,11 @@ import {
   firstMissingFieldForPurpose,
 } from "./workflow-engine";
 import { speakReceptionistCollectionLine } from "./field-collection-task";
-import { controlledGenerateReply, markCollectionAwaitingAnswer } from "./collection-realtime-control";
+import {
+  awaitCollectionOrchestration,
+  controlledGenerateReply,
+  markCollectionAwaitingAnswer,
+} from "./collection-realtime-control";
 
 /** After runtime asks a collection question, force the model to call record_current_field. */
 export async function forceRecordCurrentFieldTurn(
@@ -23,6 +27,7 @@ export async function forceRecordCurrentFieldTurn(
       "Do not speak — only call the tool.",
     toolChoice: "required",
   });
+  await awaitCollectionOrchestration(session);
 }
 
 /**
@@ -40,8 +45,8 @@ export async function beginDeterministicFieldCollection(
   if (!first?.question?.trim()) return;
   if (options?.skipFirstQuestion) return;
 
-  await speakReceptionistCollectionLine(session, first.question, { addToChatCtx: true });
   markCollectionAwaitingAnswer(ud);
+  await speakReceptionistCollectionLine(session, first.question, { addToChatCtx: true });
 }
 
 export async function askNextCollectionField(
@@ -68,7 +73,7 @@ export async function askNextCollectionField(
     }
   }
 
-  await speakReceptionistCollectionLine(session, line, { addToChatCtx: true });
   markCollectionAwaitingAnswer(ud);
+  await speakReceptionistCollectionLine(session, line, { addToChatCtx: true });
   return true;
 }

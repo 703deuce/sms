@@ -21,6 +21,7 @@ type GenerationChain = {
 };
 
 const generationChains = new WeakMap<AgentSession<FrontDeskUserData>, GenerationChain>();
+const orchestrationChains = new WeakMap<AgentSession<FrontDeskUserData>, GenerationChain>();
 
 function nextEventId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -138,6 +139,32 @@ export function markCollectionAwaitingAnswer(ud: FrontDeskUserData): void {
 
 export function clearCollectionAwaitingAnswer(ud: FrontDeskUserData): void {
   ud.collectionAwaitingAnswer = false;
+}
+
+/** Serialize post-save orchestration (ask next field / list slots) after force_record tool phase. */
+export function enqueueCollectionOrchestration(
+  session: AgentSession<FrontDeskUserData>,
+  work: () => Promise<void>,
+): void {
+  let chain = orchestrationChains.get(session);
+  if (!chain) {
+    chain = { tail: Promise.resolve() };
+    orchestrationChains.set(session, chain);
+  }
+  chain.tail = chain.tail
+    .then(work)
+    .catch((err) => {
+      logCollectionRealtime(session.userData.callId, "orchestration_error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
+
+export async function awaitCollectionOrchestration(
+  session: AgentSession<FrontDeskUserData>,
+): Promise<void> {
+  const chain = orchestrationChains.get(session);
+  if (chain) await chain.tail;
 }
 
 type ControlledGenerateReplyOptions = {

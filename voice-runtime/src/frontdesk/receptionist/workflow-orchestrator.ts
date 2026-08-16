@@ -29,6 +29,7 @@ import {
   bumpCollectionTurnSeq,
   clearCollectionAwaitingAnswer,
   controlledGenerateReply,
+  enqueueCollectionOrchestration,
   isRuntimeCollectionState,
   markCollectionAwaitingAnswer,
   syncCollectionRealtimeMode,
@@ -361,7 +362,13 @@ export async function afterReceptionistToolExecuted(
 ): Promise<void> {
   const ud = session.userData;
   const feedback = parseToolFeedbackFromModel(rawResult);
-  if (!feedback) return;
+  if (!feedback) {
+    logOrchestrator(ud.callId, "tool_feedback_unparseable", {
+      tool: toolName,
+      rawPreview: rawResult.slice(0, 240),
+    });
+    return;
+  }
 
   if (toolName === "record_current_field" && feedback.outcome === "success") {
     const purpose = ud.receptionistWorkflow?.collectionPurpose || "booking";
@@ -370,6 +377,7 @@ export async function afterReceptionistToolExecuted(
       typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined;
     wf.collectionLastForcedTranscript = undefined;
     clearCollectionStuckWatchdog(ud);
+    clearCollectionAwaitingAnswer(ud);
 
     logFieldSaveProgress(ud, feedback.field_id, savedValue);
     transitionAfterRecordField(ud, purpose);
@@ -402,6 +410,16 @@ export async function afterReceptionistToolExecuted(
         typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined,
       );
     }
+    return;
+  }
+
+  if (toolName === "record_current_field" && feedback.outcome !== "success") {
+    logOrchestrator(ud.callId, "record_field_not_success", {
+      outcome: feedback.outcome,
+      reason: feedback.reason,
+      field_id: feedback.field_id,
+      recovery_class: feedback.recovery_class,
+    });
     return;
   }
 
@@ -594,10 +612,17 @@ function handleCollectionUtterance(
   }
 
   if (!ud.collectionAwaitingAnswer) {
-    logOrchestrator(ud.callId, "collection_force_skipped_not_awaiting", {
+    if (utteranceKind !== "field_value") {
+      logOrchestrator(ud.callId, "collection_force_skipped_not_awaiting", {
+        transcript: normalizedTranscript,
+        utteranceKind,
+      });
+      return;
+    }
+    logOrchestrator(ud.callId, "collection_late_field_answer", {
       transcript: normalizedTranscript,
+      activeFieldId: wf.activeFieldId,
     });
-    return;
   }
 
   if (wf.collectionLastForcedTranscript === normalizedTranscript) {
@@ -607,7 +632,6 @@ function handleCollectionUtterance(
     return;
   }
 
-  clearCollectionAwaitingAnswer(ud);
   wf.collectionLastForcedTranscript = normalizedTranscript;
   ud.collectionFieldForcePending = true;
   void forceRecordCurrentFieldTurn(session, turnId)
@@ -647,8 +671,22 @@ export function attachReceptionistWorkflowOrchestrator(
       const call = ev.functionCalls[i];
       const output = ev.functionCallOutputs[i];
       if (!output?.output) continue;
+      const rawResult = String(output.output);
+      if (call.name === "record_current_field") {
+        enqueueCollectionOrchestration(session, async () => {
+          try {
+            await afterReceptionistToolExecuted(session, call.name, rawResult);
+          } catch (err) {
+            logOrchestrator(ud.callId, "orchestrator_error", {
+              tool: call.name,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        });
+        continue;
+      }
       try {
-        await afterReceptionistToolExecuted(session, call.name, String(output.output));
+        await afterReceptionistToolExecuted(session, call.name, rawResult);
       } catch (err) {
         logOrchestrator(ud.callId, "orchestrator_error", {
           tool: call.name,
