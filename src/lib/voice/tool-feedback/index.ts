@@ -357,7 +357,10 @@ export function toolFeedbackInvalidSlot(toolName: string, slotId: string): ToolF
 
 export function toolFeedbackBookingCompleteSpoken(): ToolFeedback {
   return toolFeedbackSuccess(
-    "Confirmation already spoken. Do not repeat details. Call end_call if the caller is done.",
+    "BOOKING_COMPLETE_ALREADY_SPOKEN: Appointment IS confirmed on the calendar. " +
+      "Confirmation was already spoken to the caller and a text was sent. " +
+      "If they ask whether they are booked, say yes confidently — do NOT say you are still waiting or checking. " +
+      "Do not repeat booking details. Call end_call if the caller is done.",
     { tool: "schedule_appointment", caller_already_heard_success: true, next_action: "end_call" },
   );
 }
