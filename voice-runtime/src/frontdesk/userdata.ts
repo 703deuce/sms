@@ -100,6 +100,8 @@ export type FrontDeskUserData = {
   receptionistToolDefs?: unknown[];
   /** Prevents concurrent runtime field processing for the same transcript. */
   collectionFieldProcessing?: boolean;
+  /** Prevents concurrent runtime slot pick/confirm for the same transcript. */
+  bookingTurnProcessing?: boolean;
   /** Partial US phone digits while activeField is phone — not persisted until 10 digits. */
   collectionPhoneDigitsBuffer?: string;
   /** Runtime-direct schedule_appointment in progress. */

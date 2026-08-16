@@ -23,6 +23,7 @@ import {
   logCollectionState,
 } from "./collection-state-lifecycle";
 import { processCollectionTurn } from "./collection-turn-processor";
+import { processBookingSlotTurn } from "./booking-slot-turn-processor";
 import type { ReceptionistCollectionPurpose } from "./workflow-types";
 import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow-tool-surface";
 import {
@@ -248,7 +249,7 @@ async function runtimeListAvailableSlots(session: AgentSession<FrontDeskUserData
     const lines = cal.formatSlotsForModel(slots);
     const wf = ensureReceptionistWorkflow(ud);
     wf.offeredSlotIds = slots.map((s) => s.slotId);
-    setWorkflowState(ud, "BOOKING_OFFER_SLOTS", { offeredSlotIds: wf.offeredSlotIds });
+    setWorkflowState(ud, "BOOKING_AWAIT_SLOT", { offeredSlotIds: wf.offeredSlotIds });
 
     const slotText = lines || "No appointment slots are available right now.";
     const instructions =
@@ -574,6 +575,43 @@ async function handleCollectionClarification(
   }
 }
 
+function isRuntimeBookingSlotState(ud: FrontDeskUserData): boolean {
+  const state = ud.receptionistWorkflow?.state;
+  return (
+    state === "BOOKING_OFFER_SLOTS" ||
+    state === "BOOKING_AWAIT_SLOT" ||
+    state === "BOOKING_CONFIRM_SLOT"
+  );
+}
+
+function handleBookingUtterance(
+  session: AgentSession<FrontDeskUserData>,
+  transcript: string,
+): void {
+  const ud = session.userData;
+  if (!isRuntimeBookingSlotState(ud)) return;
+
+  const normalizedTranscript = transcript.trim();
+  if (!normalizedTranscript) return;
+  if (session.agentState === "speaking") return;
+  if (ud.collectionFieldProcessing || ud.bookingTurnProcessing) return;
+
+  ud.bookingTurnProcessing = true;
+  void processBookingSlotTurn(session, normalizedTranscript, {
+    log: (event, extra) => logOrchestrator(ud.callId, event, extra),
+    commitBooking: runtimeCommitBooking,
+  })
+    .catch((err) => {
+      logOrchestrator(ud.callId, "booking_slot_turn_error", {
+        error: err instanceof Error ? err.message : String(err),
+        transcript: normalizedTranscript,
+      });
+    })
+    .finally(() => {
+      ud.bookingTurnProcessing = false;
+    });
+}
+
 function handleCollectionUtterance(
   session: AgentSession<FrontDeskUserData>,
   transcript: string,
@@ -619,6 +657,7 @@ export function attachReceptionistWorkflowOrchestrator(
   session.on(AgentSessionEventTypes.UserInputTranscribed, (ev) => {
     if (!ev.isFinal) return;
     handleCollectionUtterance(session, ev.transcript);
+    handleBookingUtterance(session, ev.transcript);
   });
 
   session.on(AgentSessionEventTypes.UserStateChanged, (ev) => {
