@@ -1,6 +1,5 @@
 import { AgentSessionEventTypes, type AgentSession } from "@livekit/agents";
 import { parseToolFeedbackFromModel, formatToolFeedbackForModel, toolFeedbackRecoverable } from "@/lib/voice/tool-feedback";
-import { captureUsPhoneDigits } from "@/lib/voice/receptionist/field-validation";
 import type { FrontDeskUserData } from "../userdata";
 import { isBookingConfirmed } from "../userdata";
 import { waitForFrontDeskGoodbyePlayout } from "../end-frontdesk-call";
@@ -12,10 +11,14 @@ import {
   bookingToolsActivateIntent,
   ensureReceptionistWorkflow,
   messageFieldsComplete,
+  missingFieldsForPurpose,
   setWorkflowState,
   transitionAfterRecordField,
   transitionFromToolFeedback,
 } from "./workflow-engine";
+import {
+  classifyCollectionUtterance,
+} from "./collection-utterance-validation";
 import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow-tool-surface";
 import {
   askNextCollectionField,
@@ -94,6 +97,98 @@ async function syncAgentToolSurface(session: AgentSession<FrontDeskUserData>): P
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+async function finishBookingCollectionAndListSlots(
+  session: AgentSession<FrontDeskUserData>,
+  reason: string,
+): Promise<void> {
+  const ud = session.userData;
+  const wf = ensureReceptionistWorkflow(ud);
+  clearCollectionAwaitingAnswer(ud);
+  ud.collectionStuckNonFieldTurns = 0;
+  ud.collectionStuckFieldId = undefined;
+
+  if (!bookingFieldsComplete(ud)) {
+    logOrchestrator(ud.callId, "booking_collection_incomplete", {
+      reason,
+      missingRequiredFields: missingFieldsForPurpose(ud, "booking").map((f) => f.id),
+    });
+    return;
+  }
+
+  if (wf.state === "BOOKING_COLLECT") {
+    logOrchestrator(ud.callId, "collection_complete_escape", {
+      reason,
+      missingRequiredFields: [],
+      completedFields: Object.keys(ud.receptionistFields || {}).filter((id) =>
+        Boolean(ud.receptionistFields?.[id]?.trim()),
+      ),
+    });
+    wf.state = "BOOKING_CHECK_AVAILABILITY";
+    wf.activeFieldId = undefined;
+    wf.requiredTool = undefined;
+  }
+
+  await syncAgentToolSurface(session);
+  await runtimeListAvailableSlots(session);
+}
+
+function logFieldSaveProgress(
+  ud: FrontDeskUserData,
+  savedFieldId: string | undefined,
+  savedValue: string | undefined,
+): void {
+  const wf = ensureReceptionistWorkflow(ud);
+  const purpose = wf.collectionPurpose || "booking";
+  const missing = missingFieldsForPurpose(ud, purpose).map((f) => f.id);
+  const completed = Object.keys(ud.receptionistFields || {}).filter((id) =>
+    Boolean(ud.receptionistFields?.[id]?.trim()),
+  );
+  logOrchestrator(ud.callId, "field_save_progress", {
+    activeFieldId: wf.activeFieldId,
+    savedFieldId,
+    savedValue: savedValue?.slice(0, 80),
+    completedFields: completed,
+    missingRequiredFields: missing,
+    nextState: wf.state,
+    bookingFieldsComplete: purpose === "booking" ? bookingFieldsComplete(ud) : undefined,
+  });
+
+  if (purpose === "booking" && bookingFieldsComplete(ud) && wf.state === "BOOKING_COLLECT") {
+    logOrchestrator(ud.callId, "collection_complete_stuck_invariant", {
+      activeFieldId: wf.activeFieldId,
+      missingRequiredFields: missing,
+      completedFields: completed,
+    });
+  }
+}
+
+function trackNonFieldCollectionUtterance(ud: FrontDeskUserData, activeFieldId?: string): void {
+  const fieldId = activeFieldId || "none";
+  if (ud.collectionStuckFieldId !== fieldId) {
+    ud.collectionStuckFieldId = fieldId;
+    ud.collectionStuckNonFieldTurns = 1;
+  } else {
+    ud.collectionStuckNonFieldTurns = (ud.collectionStuckNonFieldTurns ?? 0) + 1;
+  }
+
+  if ((ud.collectionStuckNonFieldTurns ?? 0) >= 3) {
+    const purpose = ud.receptionistWorkflow?.collectionPurpose || "booking";
+    logOrchestrator(ud.callId, "collection_stuck", {
+      activeFieldId: fieldId,
+      nonFieldTurns: ud.collectionStuckNonFieldTurns,
+      missingRequiredFields: missingFieldsForPurpose(ud, purpose).map((f) => f.id),
+      completedFields: Object.keys(ud.receptionistFields || {}).filter((id) =>
+        Boolean(ud.receptionistFields?.[id]?.trim()),
+      ),
+    });
+  }
+}
+
+function clearCollectionStuckWatchdog(ud: FrontDeskUserData): void {
+  ud.collectionStuckFieldId = undefined;
+  ud.collectionStuckNonFieldTurns = 0;
 }
 
 async function runtimeListAvailableSlots(session: AgentSession<FrontDeskUserData>): Promise<void> {
@@ -271,9 +366,21 @@ export async function afterReceptionistToolExecuted(
   if (toolName === "record_current_field" && feedback.outcome === "success") {
     const purpose = ud.receptionistWorkflow?.collectionPurpose || "booking";
     const wf = ensureReceptionistWorkflow(ud);
+    const savedValue =
+      typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined;
     wf.collectionLastForcedTranscript = undefined;
+    clearCollectionStuckWatchdog(ud);
+
+    logFieldSaveProgress(ud, feedback.field_id, savedValue);
     transitionAfterRecordField(ud, purpose);
     await syncAgentToolSurface(session);
+
+    if (purpose === "booking" && bookingFieldsComplete(ud)) {
+      if (wf.state === "BOOKING_COLLECT" || wf.state === "BOOKING_CHECK_AVAILABILITY") {
+        await finishBookingCollectionAndListSlots(session, "all_required_fields_saved");
+        return;
+      }
+    }
 
     if (wf.state === "BOOKING_CHECK_AVAILABILITY") {
       await runProactiveWorkflowStep(session);
@@ -363,29 +470,43 @@ export function workflowToolBlockedResult(ud: FrontDeskUserData, toolName: strin
   );
 }
 
-function shouldDeferCollectionForce(ud: FrontDeskUserData, transcript: string): boolean {
-  const activeId = ud.receptionistWorkflow?.activeFieldId;
-  if (!activeId) return false;
-  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
-  const field = manifest.find((f) => f.id === activeId);
-  if (field?.type !== "phone" && activeId !== "phone") return false;
+async function handleAvailabilityRequest(
+  session: AgentSession<FrontDeskUserData>,
+  transcript: string,
+  turnId: number,
+): Promise<void> {
+  const ud = session.userData;
+  const wf = ensureReceptionistWorkflow(ud);
+  trackNonFieldCollectionUtterance(ud, wf.activeFieldId);
+  logOrchestrator(ud.callId, "availability_request_during_collection", {
+    transcript,
+    turn_id: turnId,
+    bookingFieldsComplete: bookingFieldsComplete(ud),
+  });
 
-  const prior = ud.collectionPhoneDigitsBuffer ?? "";
-  const capture = captureUsPhoneDigits(transcript, prior);
-  return capture.status === "incomplete";
-}
-
-function looksLikeCollectionClarification(transcript: string): boolean {
-  const t = transcript.trim();
-  if (!t) return false;
-  if (/\?$/.test(t)) return true;
-  if (/^(hello|hi|hey|wait|um|oh)\b/i.test(t)) return true;
-  if (
-    /\b(can't|cannot|won't|why|what|how|confirm|appointment|booked|booking|explain)\b/i.test(t)
-  ) {
-    return true;
+  if (bookingFieldsComplete(ud)) {
+    await finishBookingCollectionAndListSlots(session, "caller_availability_request");
+    return;
   }
-  return false;
+
+  const missing = missingFieldsForPurpose(ud, "booking");
+  const nextField = missing[0];
+  clearCollectionAwaitingAnswer(ud);
+  syncCollectionRealtimeMode(session, false);
+  try {
+    await controlledGenerateReply(session, "availability_need_fields", turnId, {
+      instructions:
+        `The caller asked about availability or booking: "${transcript}". ` +
+        `Briefly say you can check that as soon as you have their ${nextField?.label || "remaining details"}. ` +
+        `Ask exactly one question: ${nextField?.question || "for the next required detail."}`,
+      toolChoice: "none",
+    });
+  } finally {
+    if (isRuntimeCollectionState(ud)) {
+      syncCollectionRealtimeMode(session, true);
+      markCollectionAwaitingAnswer(ud);
+    }
+  }
 }
 
 async function handleCollectionClarification(
@@ -396,13 +517,20 @@ async function handleCollectionClarification(
   const ud = session.userData;
   const wf = ensureReceptionistWorkflow(ud);
   const activeField = wf.activeFieldId || "the current question";
+  trackNonFieldCollectionUtterance(ud, wf.activeFieldId);
   logOrchestrator(ud.callId, "collection_clarification", { transcript, turn_id: turnId });
+
+  if (bookingFieldsComplete(ud) && wf.state === "BOOKING_COLLECT") {
+    await finishBookingCollectionAndListSlots(session, "clarification_with_complete_fields");
+    return;
+  }
+
   syncCollectionRealtimeMode(session, false);
   try {
     await controlledGenerateReply(session, "collection_clarification", turnId, {
       instructions:
         `The caller said: "${transcript}". They are not answering the collection question yet. ` +
-        "Answer briefly and honestly. If booking failed or is not confirmed, do not claim they are booked. " +
+        "Answer briefly and honestly. Do not claim an appointment is booked or confirmed unless the runtime already completed booking. " +
         `Then ask the collection question again for ${activeField}.`,
       toolChoice: "none",
     });
@@ -426,23 +554,49 @@ function handleCollectionUtterance(
   if (!normalizedTranscript) return;
   if (session.agentState === "speaking") return;
   if (ud.collectionFieldForcePending) return;
-  if (shouldDeferCollectionForce(ud, normalizedTranscript)) return;
+
+  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
+  const activeField = manifest.find((f) => f.id === wf.activeFieldId);
+  const utteranceKind = classifyCollectionUtterance(
+    normalizedTranscript,
+    activeField,
+    ud.collectionPhoneDigitsBuffer ?? "",
+  );
+
+  if (utteranceKind === "phone_partial") {
+    logOrchestrator(ud.callId, "collection_phone_partial_deferred", {
+      transcript: normalizedTranscript,
+      buffer: ud.collectionPhoneDigitsBuffer,
+    });
+    return;
+  }
 
   const turnId = bumpCollectionTurnSeq(ud);
 
+  if (utteranceKind === "availability_request") {
+    void handleAvailabilityRequest(session, normalizedTranscript, turnId).catch((err) => {
+      logOrchestrator(ud.callId, "availability_request_error", {
+        error: err instanceof Error ? err.message : String(err),
+        turn_id: turnId,
+      });
+    });
+    return;
+  }
+
+  if (utteranceKind === "clarification") {
+    void handleCollectionClarification(session, normalizedTranscript, turnId).catch((err) => {
+      logOrchestrator(ud.callId, "collection_clarification_error", {
+        error: err instanceof Error ? err.message : String(err),
+        turn_id: turnId,
+      });
+    });
+    return;
+  }
+
   if (!ud.collectionAwaitingAnswer) {
-    if (looksLikeCollectionClarification(normalizedTranscript)) {
-      void handleCollectionClarification(session, normalizedTranscript, turnId).catch((err) => {
-        logOrchestrator(ud.callId, "collection_clarification_error", {
-          error: err instanceof Error ? err.message : String(err),
-          turn_id: turnId,
-        });
-      });
-    } else {
-      logOrchestrator(ud.callId, "collection_force_skipped_not_awaiting", {
-        transcript: normalizedTranscript,
-      });
-    }
+    logOrchestrator(ud.callId, "collection_force_skipped_not_awaiting", {
+      transcript: normalizedTranscript,
+    });
     return;
   }
 

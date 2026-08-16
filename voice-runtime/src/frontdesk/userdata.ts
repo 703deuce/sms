@@ -114,6 +114,9 @@ export type FrontDeskUserData = {
   collectionActiveGenerationId?: string;
   /** Runtime asked a collection question and is waiting for the caller's answer. */
   collectionAwaitingAnswer?: boolean;
+  /** Watchdog: active field receiving repeated non-field utterances. */
+  collectionStuckFieldId?: string;
+  collectionStuckNonFieldTurns?: number;
   /** Field ids persisted via tools — chat backfill must not overwrite these values. */
   authoritativeFieldIds?: string[];
 };
