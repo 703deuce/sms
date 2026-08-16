@@ -178,14 +178,15 @@ export function buildFrontDeskBookingTools(input: {
           }
           const lines = cal.formatSlotsForModel(slots);
           const slotText = lines || "No slots available at the moment.";
+          const offerGuidance = lines
+            ? "Offer up to two or three times from the list above. When the caller picks one, call schedule_appointment with that slot_id. Ask only one question — which time works?"
+            : "No openings right now. Tell the caller briefly, then offer to check again later or take a message.";
           return formatToolFeedbackForModel(
-            toolFeedbackSuccess(slotText, {
+            toolFeedbackSuccess(`${slotText}\n\n${offerGuidance}`, {
               tool: "list_available_slots",
               next_action: lines ? "offer_slots_and_confirm" : "continue_conversation",
               context: { slot_count: slots.length },
-              guidance: lines
-                ? "Offer up to two or three times from the list. When the caller picks one, call schedule_appointment with that slot_id. Ask only one question — which time works?"
-                : "No openings right now. Tell the caller briefly, then offer to check again later or take a message.",
+              guidance: `${slotText}\n\n${offerGuidance}`,
             }),
           );
         } catch (err) {

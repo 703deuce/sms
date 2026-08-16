@@ -26,7 +26,9 @@ From `transovo-receptionist-constitution.ts`:
 - **One complete thought per turn** — do not stack multiple ideas.
 - **Exactly one question per turn** — never combine birthday + time + phone + address in one breath.
 - Callers may volunteer multiple fields; capture immediately with `record_receptionist_field` / intake tools.
-- **Always follow `next_action` and `guidance`** from TOOL_FEEDBACK — there is always a next step.
+- **Always follow `next_action_meaning` and `guidance`** from TOOL_FEEDBACK — there is always a next step.
+
+**Prompt injection:** The full `next_action` vocabulary is compiled into every receptionist prompt via `buildToolFeedbackVocabularyForPrompt()`. Each tool result also echoes `next_action_meaning` on that specific feedback line.
 
 ---
 

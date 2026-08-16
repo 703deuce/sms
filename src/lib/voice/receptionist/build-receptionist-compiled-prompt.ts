@@ -1,5 +1,6 @@
 import type { ReceptionistCompiledSnapshot } from "./types";
 import { TRANSOVO_RECEPTIONIST_CONSTITUTION } from "./transovo-receptionist-constitution";
+import { buildToolFeedbackVocabularyForPrompt } from "@/lib/voice/tool-feedback";
 import { buildGeneratedWorkflowRules } from "./build-generated-workflow-rules";
 import {
   extractHoursFromDescription,
@@ -268,6 +269,8 @@ export function buildReceptionistCompiledPrompt(snapshot: ReceptionistCompiledSn
   sections.push(
     "",
     buildCallConfigurationSection(snapshot),
+    "",
+    buildToolFeedbackVocabularyForPrompt(),
     "",
     buildGeneratedWorkflowRules(snapshot),
   );

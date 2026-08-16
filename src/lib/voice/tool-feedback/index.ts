@@ -10,6 +10,7 @@ import {
   isCalendlySlotError,
   missingFieldIdFromBookingError,
 } from "@/lib/voice/calendly-error-classification";
+import { describeNextAction } from "./next-action-vocabulary";
 
 export type ToolFeedbackOutcome = "success" | "recoverable_failure" | "terminal_failure";
 
@@ -92,6 +93,7 @@ export function formatToolFeedbackForModel(feedback: ToolFeedback): string {
   if (feedback.field_id) parts.push(`field_id: ${feedback.field_id}`);
   if (feedback.field_label) parts.push(`field_label: ${feedback.field_label}`);
   parts.push(`next_action: ${feedback.next_action}`);
+  parts.push(`next_action_meaning: ${describeNextAction(feedback.next_action)}`);
   if (feedback.retry_after_ms != null) {
     parts.push(`retry_after_ms: ${feedback.retry_after_ms}`);
   }
@@ -511,3 +513,9 @@ export {
   TOOL_RESULT_COLLECT_ACTIVE_SILENT,
   TOOL_RESULT_BOOKING_INTAKE_SILENT,
 } from "./normalize";
+
+export {
+  TOOL_NEXT_ACTION_DEFINITIONS,
+  buildToolFeedbackVocabularyForPrompt,
+  describeNextAction,
+} from "./next-action-vocabulary";

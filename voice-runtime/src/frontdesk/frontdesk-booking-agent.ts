@@ -1,5 +1,6 @@
 import { llm, voice } from "@livekit/agents";
 import type { AgentSession } from "@livekit/agents";
+import { buildToolFeedbackVocabularyForPrompt } from "@/lib/voice/tool-feedback";
 import { buildFrontDeskBookingTools } from "./booking-tools";
 import { withHybridStreamingAgentOptions } from "../hybrid-streaming-tts-node";
 
@@ -37,7 +38,9 @@ function buildFrontDeskInstructions(businessLabel: string): string {
     "If cancel_appointment says no booking completed on this call, do not claim a cancellation succeeded. ",
     "To reach a human, confirm with the caller then call transfer_to_human. ",
     "Tool results use TOOL_FEEDBACK with outcome success, recoverable_failure, or terminal_failure. ",
-    "On recoverable_failure, follow next_action and guidance — ask naturally for what's missing without saying 'error'. ",
+    "Each result includes next_action, next_action_meaning, and guidance — follow all three. ",
+    buildToolFeedbackVocabularyForPrompt(),
+    "On recoverable_failure, follow next_action_meaning and guidance — ask naturally for what's missing without saying 'error'. ",
     "On terminal_failure with next_action take_message, offer to take a message. ",
     "runtime_handled_retry means the system already retried — do not loop retries yourself. ",
     "Booking: after the caller picks a slot, call schedule_appointment with that slot_id. ",
