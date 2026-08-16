@@ -44,4 +44,41 @@ if [[ ! -f .next/standalone/server.js ]]; then
   exit 1
 fi
 
+bundle_voice_python_runtime() {
+  local dest_root="$1"
+  if [[ ! -d voice-runtime-python/.venv ]]; then
+    echo "[coolify-build] voice-runtime-python/.venv missing — Python worker will not start"
+    return 0
+  fi
+  echo "[coolify-build] bundling Python voice runtime into ${dest_root}"
+  mkdir -p "${dest_root}/voice-runtime-python"
+  cp -a voice-runtime-python/.venv "${dest_root}/voice-runtime-python/.venv"
+  cp -a voice-runtime-python/transovo_voice "${dest_root}/voice-runtime-python/transovo_voice"
+  cp voice-runtime-python/pyproject.toml "${dest_root}/voice-runtime-python/pyproject.toml"
+}
+
+bundle_typescript_voice_runtime() {
+  local dest_root="$1"
+  if [[ ! -d voice-runtime/src ]]; then
+    return 0
+  fi
+  echo "[coolify-build] bundling TypeScript voice runtime into ${dest_root}"
+  mkdir -p "${dest_root}/voice-runtime"
+  cp -a voice-runtime/src "${dest_root}/voice-runtime/src"
+}
+
+# Standalone server runs from .next/standalone — copy assets + voice runtimes there.
+cp -a public .next/standalone/public 2>/dev/null || true
+mkdir -p .next/standalone/.next
+cp -a .next/static .next/standalone/.next/static 2>/dev/null || true
+bundle_voice_python_runtime ".next/standalone"
+bundle_typescript_voice_runtime ".next/standalone"
+
+# Full-repo starts (npm start / next start) still need the venv at repo root.
+if [[ ! -d voice-runtime-python/.venv ]]; then
+  echo "[coolify-build] WARN: rebuild install phase if Python worker is required"
+else
+  echo "[coolify-build] Python venv present at voice-runtime-python/.venv"
+fi
+
 echo "[coolify-build] complete"

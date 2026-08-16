@@ -57,26 +57,40 @@ function resolveTypescriptSpawn(): { command: string; args: string[] } {
   return { command: "npx", args: ["tsx", entry, "start"] };
 }
 
-function resolvePythonSpawn(): { command: string; args: string[] } {
-  const venvPython = path.join(
+function pythonVenvPath(): string {
+  return path.join(
     /* turbopackIgnore: true */ process.cwd(),
     "voice-runtime-python",
     ".venv",
     "bin",
     "python",
   );
+}
+
+function resolvePythonSpawn(): { command: string; args: string[] } | null {
+  const venvPython = pythonVenvPath();
   if (existsSync(venvPython)) {
     return { command: venvPython, args: ["-m", "transovo_voice.main", "start"] };
   }
-  return { command: "python3", args: ["-m", "transovo_voice.main", "start"] };
+  return null;
 }
 
-function resolveVoiceRuntimeSpawn(): { command: string; args: string[]; impl: "python" | "typescript" } {
-  const impl = voiceRuntimeImpl();
-  if (impl === "python") {
-    return { ...resolvePythonSpawn(), impl };
+function resolveVoiceRuntimeSpawn(): {
+  command: string;
+  args: string[];
+  impl: "python" | "typescript";
+} {
+  const requested = voiceRuntimeImpl();
+  if (requested === "python") {
+    const pythonSpawn = resolvePythonSpawn();
+    if (pythonSpawn) {
+      return { ...pythonSpawn, impl: "python" };
+    }
+    console.warn(
+      "[voice-python] falling back to typescript worker — Python venv not found (check coolify-install logs)",
+    );
   }
-  return { ...resolveTypescriptSpawn(), impl };
+  return { ...resolveTypescriptSpawn(), impl: "typescript" };
 }
 
 function attachChildLogging(child: ChildProcess, prefix: string) {
@@ -95,6 +109,27 @@ function attachGracefulShutdown(child: ChildProcess) {
   };
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);
+}
+
+function spawnVoiceRuntimeChild(
+  command: string,
+  args: string[],
+  impl: "python" | "typescript",
+  logPrefix: string,
+): ChildProcess {
+  return spawn(command, args, {
+    env: {
+      ...process.env,
+      LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
+      PYTHONPATH: path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python"),
+    },
+    cwd:
+      impl === "python"
+        ? path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python")
+        : /* turbopackIgnore: true */ process.cwd(),
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: false,
+  });
 }
 
 /**
@@ -120,26 +155,25 @@ export async function startInProcessVoiceRuntime(): Promise<void> {
   globalThis.__transovoInProcessVoiceRuntimeStarted = true;
 
   const { url } = requireLiveKitEnv();
-  const { command, args, impl } = resolveVoiceRuntimeSpawn();
+  let { command, args, impl } = resolveVoiceRuntimeSpawn();
   const logPrefix = impl === "python" ? "voice-python" : "voice-runtime";
 
   console.log(
     `[${logPrefix}] spawning ${TRANSOVO_LIVEKIT_AGENT_NAME} via ${path.basename(command)} impl=${impl} (${url})`,
   );
 
-  const child = spawn(command, args, {
-    env: {
-      ...process.env,
-      LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
-      PYTHONPATH: path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python"),
-    },
-    cwd:
-      impl === "python"
-        ? path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python")
-        : /* turbopackIgnore: true */ process.cwd(),
-    stdio: ["ignore", "pipe", "pipe"],
-    detached: false,
-  });
+  let child = spawnVoiceRuntimeChild(command, args, impl, logPrefix);
+
+  const tryTypescriptFallback = (reason: string) => {
+    if (impl !== "python") return false;
+    console.warn(`[voice-python] ${reason} — retrying with typescript worker`);
+    const tsSpawn = resolveTypescriptSpawn();
+    impl = "typescript";
+    child = spawnVoiceRuntimeChild(tsSpawn.command, tsSpawn.args, impl, "voice-runtime");
+    attachChildLogging(child, "voice-runtime");
+    attachGracefulShutdown(child);
+    return true;
+  };
 
   globalThis.__transovoVoiceRuntimeChild = child;
   attachChildLogging(child, logPrefix);
@@ -155,6 +189,22 @@ export async function startInProcessVoiceRuntime(): Promise<void> {
 
   child.on("error", (err) => {
     console.error(`[${logPrefix}] failed to spawn child`, err);
+    if (tryTypescriptFallback(err instanceof Error ? err.message : String(err))) {
+      globalThis.__transovoVoiceRuntimeChild = child;
+      child.on("exit", (code, signal) => {
+        console.error(
+          `[voice-runtime] child exited code=${code ?? "null"} signal=${signal ?? "null"} — redeploy to recover`,
+        );
+        globalThis.__transovoInProcessVoiceRuntimeStarted = false;
+        globalThis.__transovoVoiceRuntimeChild = undefined;
+      });
+      child.on("error", (fallbackErr) => {
+        console.error("[voice-runtime] failed to spawn typescript fallback", fallbackErr);
+        globalThis.__transovoInProcessVoiceRuntimeStarted = false;
+        globalThis.__transovoVoiceRuntimeChild = undefined;
+      });
+      return;
+    }
     globalThis.__transovoInProcessVoiceRuntimeStarted = false;
     globalThis.__transovoVoiceRuntimeChild = undefined;
   });

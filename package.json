@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "NODE_OPTIONS=--max-old-space-size=3072 next build",
-    "start": "next start",
+    "start": "node scripts/start-production.mjs",
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:push:force": "prisma db push --accept-data-loss",
