@@ -60,8 +60,8 @@ await smokeLogin(page);
 await ensurePersonal(page);
 
 for (const route of routes) {
-  await page.goto(`${BASE}${route.path}`, { waitUntil: "networkidle", timeout: 60000 });
-  await page.waitForTimeout(1000);
+  await page.goto(`${BASE}${route.path}`, { waitUntil: "domcontentloaded", timeout: 120000 });
+  await page.waitForTimeout(2500);
   await page.screenshot({ path: `${OUT}/${route.name}.png`, fullPage: true });
   console.log(`Saved ${OUT}/${route.name}.png`);
 }
