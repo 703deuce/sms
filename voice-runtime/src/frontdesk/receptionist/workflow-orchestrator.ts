@@ -28,6 +28,28 @@ function logOrchestrator(callId: string, event: string, extra?: Record<string, u
   );
 }
 
+export async function syncReceptionistToolSurface(
+  session: AgentSession<FrontDeskUserData>,
+): Promise<void> {
+  await syncAgentToolSurface(session);
+}
+
+async function runtimeFinalizeBookingFailure(
+  session: AgentSession<FrontDeskUserData>,
+  guidance: string,
+): Promise<void> {
+  const ud = session.userData;
+  setWorkflowState(ud, "BOOKING_FAILED", { requiredTool: "list_available_slots" });
+  await syncAgentToolSurface(session);
+  await session.generateReply({
+    instructions:
+      `Booking did not complete. The caller already heard: ${guidance}. ` +
+      "Do NOT say the appointment is booked or that they are all set. " +
+      "Offer to check other times or take a message.",
+    toolChoice: "none",
+  });
+}
+
 async function syncAgentToolSurface(session: AgentSession<FrontDeskUserData>): Promise<void> {
   const ud = session.userData;
   const allNames = ud.receptionistToolNames || [];
@@ -155,6 +177,8 @@ export async function prepareWorkflowForTool(
       await beginDeterministicFieldCollection(session, "booking", { skipFirstQuestion: true });
       await syncAgentToolSurface(session);
       await askNextCollectionField(session, "booking");
+      const { forceRecordCurrentFieldTurn } = await import("./deterministic-field-collection");
+      await forceRecordCurrentFieldTurn(session);
       return;
     }
     if (toolName === "schedule_appointment" && ud.pendingSlotId) {
@@ -167,9 +191,19 @@ export async function prepareWorkflowForTool(
       await beginDeterministicFieldCollection(session, "message", { skipFirstQuestion: true });
       await syncAgentToolSurface(session);
       await askNextCollectionField(session, "message");
+      const { forceRecordCurrentFieldTurn } = await import("./deterministic-field-collection");
+      await forceRecordCurrentFieldTurn(session);
     } else {
       setWorkflowState(ud, "MESSAGE_COMMIT", { requiredTool: "take_message" });
     }
+  }
+  if (intent === "transfer") {
+    setWorkflowState(ud, "TRANSFER_PREPARE", { requiredTool: "transfer_to_human" });
+    await syncAgentToolSurface(session);
+  }
+  if (intent === "faq") {
+    setWorkflowState(ud, "FAQ");
+    await syncAgentToolSurface(session);
   }
 }
 
@@ -203,6 +237,10 @@ export async function afterReceptionistToolExecuted(
         feedback.field_id,
         typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined,
       );
+      if (asked) {
+        const { forceRecordCurrentFieldTurn } = await import("./deterministic-field-collection");
+        await forceRecordCurrentFieldTurn(session);
+      }
       if (!asked) {
         transitionAfterRecordField(ud, purpose);
         await syncAgentToolSurface(session);
@@ -224,6 +262,26 @@ export async function afterReceptionistToolExecuted(
     await syncAgentToolSurface(session);
     if (feedback.caller_already_heard_success) {
       await runProactiveWorkflowStep(session);
+    }
+    return;
+  }
+
+  if (
+    toolName === "schedule_appointment" &&
+    feedback.outcome === "recoverable_failure" &&
+    feedback.caller_already_heard_failure
+  ) {
+    transitionFromToolFeedback(ud, toolName, feedback);
+    await runtimeFinalizeBookingFailure(session, feedback.guidance);
+    return;
+  }
+
+  if (toolName === "list_available_slots" && feedback.outcome === "success") {
+    transitionFromToolFeedback(ud, toolName, feedback);
+    await syncAgentToolSurface(session);
+    if (feedback.next_action === "offer_slots_and_confirm") {
+      setWorkflowState(ud, "BOOKING_OFFER_SLOTS", { requiredTool: "schedule_appointment" });
+      await syncAgentToolSurface(session);
     }
     return;
   }
@@ -254,6 +312,7 @@ export function attachReceptionistWorkflowOrchestrator(
 ): void {
   const ud = session.userData;
   ensureReceptionistWorkflow(ud);
+  void syncReceptionistToolSurface(session);
 
   session.on(AgentSessionEventTypes.FunctionToolsExecuted, async (ev) => {
     for (let i = 0; i < ev.functionCalls.length; i++) {

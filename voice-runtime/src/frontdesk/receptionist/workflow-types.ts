@@ -17,6 +17,7 @@ export type ReceptionistWorkflowState =
   | "BOOKING_CONFIRM_SLOT"
   | "BOOKING_COMMIT"
   | "BOOKING_DONE"
+  | "BOOKING_FAILED"
   | "MESSAGE_COLLECT"
   | "MESSAGE_COMMIT"
   | "MESSAGE_DONE"

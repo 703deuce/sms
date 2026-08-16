@@ -54,8 +54,12 @@ assert.ok(
   "receptionist must not route booking to autonomous BookingIntakeTask",
 );
 assert.ok(
-  receptionistTools.includes("record_receptionist_field"),
-  "supervisor must persist volunteered fields without task handoff",
+  !receptionistTools.includes("record_receptionist_field"),
+  "single collection path — record_current_field only",
+);
+assert.ok(
+  receptionistTools.includes("set_workflow_intent"),
+  "hard-route intent via set_workflow_intent",
 );
 
 const ud = {

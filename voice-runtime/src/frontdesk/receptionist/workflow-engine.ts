@@ -221,6 +221,7 @@ export function transitionAfterRecordField(
 }
 
 export function bookingToolsActivateIntent(toolName: string): ReceptionistWorkflowIntent | null {
+  if (toolName === "set_workflow_intent") return null;
   if (
     toolName === "list_available_slots" ||
     toolName === "schedule_appointment" ||

@@ -56,7 +56,7 @@ export function isToolAllowedInWorkflow(
 
   switch (wf.state) {
     case "IDLE":
-      if (toolName === "record_current_field" || toolName === "record_receptionist_field") {
+      if (toolName === "record_current_field" || toolName === "set_workflow_intent") {
         return true;
       }
       if (toolName === "take_message") {
@@ -92,6 +92,16 @@ export function isToolAllowedInWorkflow(
 
     case "BOOKING_DONE":
       return toolName === "end_call" || toolName === "get_business_answer";
+
+    case "BOOKING_FAILED":
+      return (
+        toolName === "list_available_slots" ||
+        toolName === "schedule_appointment" ||
+        toolName === "take_message" ||
+        toolName === "record_current_field" ||
+        toolName === "get_business_answer" ||
+        toolName === "end_call"
+      );
 
     case "MESSAGE_COLLECT":
       return (

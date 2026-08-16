@@ -8,7 +8,7 @@ import {
   validateReceptionistFieldValue,
 } from "@/lib/voice/receptionist/field-validation";
 import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
-import { buildReceptionistConversationRecap, formatReceptionistFieldsSummary } from "@/lib/voice/receptionist/conversation-recap";
+import { formatReceptionistFieldsSummary } from "@/lib/voice/receptionist/conversation-recap";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import { validateBookingNotesField } from "../booking-field-validation";
@@ -23,6 +23,7 @@ import {
   toolFeedbackRecoverable,
   toolFeedbackSuccess,
 } from "@/lib/voice/tool-feedback";
+import { activateWorkflowIntent, type DeclaredWorkflowIntent } from "./workflow-intent-activation";
 import { ensureReceptionistWorkflow, firstMissingFieldForPurpose } from "./workflow-engine";
 import { wrapReceptionistToolDefs } from "./workflow-tool-wrapper";
 
@@ -56,6 +57,40 @@ function backfillReceptionistFields(
   });
 }
 
+function buildSetWorkflowIntentTool(snapshot: ReceptionistCompiledSnapshot) {
+  return llm.tool({
+    name: "set_workflow_intent",
+    description:
+      "Declare what the caller wants so the runtime can start the correct workflow immediately. " +
+      "Call as soon as you understand intent — book_appointment, leave_message, speak_to_human, or business_question. " +
+      "Do not wait for collect_booking_requirements or collect_caller_fields.",
+    parameters: z.object({
+      intent: z
+        .enum(["book_appointment", "leave_message", "speak_to_human", "business_question"])
+        .describe("Caller intent the runtime should activate"),
+      summary: z.string().optional().describe("Brief summary of what the caller said"),
+    }),
+    execute: async ({ intent, summary }, opts) => {
+      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      const ud = session.userData;
+      return withLiveKitToolTelemetry(ud, "set_workflow_intent", { intent, summary }, async () => {
+        await activateWorkflowIntent(session, intent as DeclaredWorkflowIntent);
+        return formatToolFeedbackForModel(
+          toolFeedbackSuccess(
+            `Workflow activated: ${intent}. Runtime owns the next steps — follow collection or booking state.`,
+            {
+              tool: "set_workflow_intent",
+              next_action: "do_not_speak",
+              runtime_handled_retry: true,
+              context: { intent, summary: summary?.trim() || null },
+            },
+          ),
+        );
+      });
+    },
+  });
+}
+
 function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
   const manifest = snapshot.fieldManifest;
   if (!manifest.length) return null;
@@ -81,17 +116,24 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
       const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
       const ud = session.userData;
       const wf = ensureReceptionistWorkflow(ud);
+      const inCollection =
+        wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT";
       const purpose = wf.collectionPurpose || "booking";
-      const targetId =
-        field_id?.trim() ||
-        wf.activeFieldId ||
-        firstMissingFieldForPurpose(ud, purpose)?.id ||
-        "";
+      const targetId = inCollection
+        ? field_id?.trim() ||
+          wf.activeFieldId ||
+          firstMissingFieldForPurpose(ud, purpose)?.id ||
+          ""
+        : field_id?.trim() || "";
       if (!targetId) {
         return formatToolFeedbackForModel(
-          toolFeedbackSuccess("All required fields are already saved.", {
+          toolFeedbackRecoverable({
             tool: "record_current_field",
-            next_action: "continue_conversation",
+            recovery_class: "MISSING_INFORMATION",
+            reason: "field_id_required",
+            next_action: "collect_field_then_retry",
+            guidance:
+              "Specify field_id when saving volunteered information outside active collection.",
           }),
         );
       }
@@ -162,115 +204,6 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
               recovery_class: "INVALID_INFORMATION",
               reason: "validation_failed",
               field_id: targetId,
-              field_label: field.label,
-              next_action: "collect_field_then_retry",
-              guidance: message,
-            }),
-          );
-        }
-      });
-    },
-  });
-}
-
-function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot) {
-  const manifest = snapshot.fieldManifest;
-  if (!manifest.length) return null;
-  const fieldIds = manifest.map((f) => f.id);
-  if (!fieldIds.length) return null;
-
-  return llm.tool({
-    name: "record_receptionist_field",
-    description:
-      "Persist caller information they already stated (name, phone, email, address, reason, etc.). " +
-      "Call immediately when the caller volunteers a value — do not wait for collect_caller_fields. " +
-      "For email during booking, use this tool (field_id email) — do not also call record_booking_email.",
-    parameters: z.object({
-      field_id: z
-        .enum(fieldIds as [string, ...string[]])
-        .describe(`Field id from manifest: ${fieldIds.join(", ")}`),
-      value: z.string().describe("The value the caller provided"),
-    }),
-    execute: async ({ field_id, value }, opts) => {
-      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const ud = session.userData;
-      return withLiveKitToolTelemetry(ud, "record_receptionist_field", { field_id, value }, async () => {
-        const field = manifest.find((f) => f.id === field_id);
-        if (!field) return `Unknown field ${field_id}.`;
-        const trimmed = value?.trim() || "";
-        if (!trimmed) {
-          return formatToolFeedbackForModel(
-            toolFeedbackMissingCallerField({
-              tool: "record_receptionist_field",
-              fieldId: field_id,
-              fieldLabel: field.label,
-            }),
-          );
-        }
-        try {
-          if (field_id === "email" || field.type === "email") {
-            const persisted = persistConfirmedBookingEmail(ud, trimmed);
-            return formatBookingEmailSavedFeedback(ud, "record_receptionist_field", persisted);
-          }
-
-          const notesCheck = validateBookingNotesField(field_id, trimmed);
-          if (!notesCheck.ok) {
-            return formatToolFeedbackForModel(
-              toolFeedbackRecoverable({
-                tool: "record_receptionist_field",
-                recovery_class: "INVALID_INFORMATION",
-                reason: "needs_confirmation",
-                field_id,
-                field_label: field.label,
-                next_action: "collect_field_then_retry",
-                guidance: notesCheck.message,
-              }),
-            );
-          }
-
-          const normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
-          if (!ud.receptionistFields) ud.receptionistFields = {};
-          const previous = ud.receptionistFields[field_id];
-          ud.receptionistFields[field_id] = normalized;
-          const coherence = afterReceptionistFieldPersisted(ud, field_id, normalized, previous);
-          const pendingSlot = ud.pendingSlotId || ud.bookingOperation?.slotId;
-          const bookingTail = pendingSlot
-            ? ` Then call schedule_appointment with slot_id ${pendingSlot}.`
-            : coherence.slotInvalidated
-              ? " Time preference changed — call list_available_slots and let the caller pick a new time."
-              : "";
-          const conversationRecap = buildReceptionistConversationRecap({
-            chatCtx: session.chatCtx,
-            receptionistFields: ud.receptionistFields,
-            fieldManifest: manifest,
-            purpose: "booking",
-          });
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              `${field.label} saved.${bookingTail}`,
-              {
-                tool: "record_receptionist_field",
-                next_action: pendingSlot
-                  ? "schedule_appointment_retry"
-                  : coherence.slotInvalidated
-                    ? "list_slots_then_retry"
-                    : "continue_conversation",
-                guidance: `${field.label} saved.${bookingTail}`,
-                context: {
-                  fields_summary: formatReceptionistFieldsSummary(ud.receptionistFields),
-                  conversation_recap: conversationRecap,
-                },
-              },
-            ),
-          );
-        } catch (err) {
-          const message = err instanceof Error ? err.message : `Please provide your ${field.label}.`;
-          return formatToolFeedbackForModel(
-            toolFeedbackRecoverable({
-              tool: "record_receptionist_field",
-              recovery_class: "INVALID_INFORMATION",
-              reason: "validation_failed",
-              field_id,
               field_label: field.label,
               next_action: "collect_field_then_retry",
               guidance: message,
@@ -480,14 +413,13 @@ export function buildReceptionistTools(input: {
     push(tool);
   }
 
+  push(buildSetWorkflowIntentTool(snapshot));
+
   if (actionAllowed(snapshot, "takeMessages", "take_messages")) push(buildTakeMessageTool(snapshot));
   if (actionAllowed(snapshot, "sendSms", "send_text")) push(buildSendSmsTool());
 
   const recordCurrentFieldTool = buildRecordCurrentFieldTool(snapshot);
   if (recordCurrentFieldTool && capabilitySet.has("collect_info")) push(recordCurrentFieldTool);
-
-  const recordFieldTool = buildRecordReceptionistFieldTool(snapshot);
-  if (recordFieldTool && capabilitySet.has("collect_info")) push(recordFieldTool);
 
   const wrapped = wrapReceptionistToolDefs(toolDefs, { prepareWorkflow: true });
 

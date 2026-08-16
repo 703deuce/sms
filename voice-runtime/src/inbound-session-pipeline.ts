@@ -506,6 +506,12 @@ export function attachObservers(input: {
       if (ud.callState) {
         ud.callState = appendIntakeUtterance(ud.callState, text);
       }
+      if (ud.receptionistCompiled) {
+        void import("./frontdesk/receptionist/workflow-intent-activation").then(
+          ({ maybeActivateWorkflowFromUtterance }) =>
+            maybeActivateWorkflowFromUtterance(session, text),
+        );
+      }
     },
   });
 

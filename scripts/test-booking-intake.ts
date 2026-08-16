@@ -63,6 +63,10 @@ assert.ok(
   "BookingIntakeTask must support unordered multi-field collection",
 );
 assert.ok(
+  receptionistTools.includes("set_workflow_intent"),
+  "receptionist must expose set_workflow_intent for hard-routed workflow activation",
+);
+assert.ok(
   receptionistTools.includes("record_current_field"),
   "receptionist must expose runtime-owned record_current_field tool",
 );
@@ -85,6 +89,10 @@ assert.ok(
 assert.ok(
   receptionistTools.includes("persistConfirmedBookingEmail"),
   "record_receptionist_field uses canonical email persistence",
+);
+assert.ok(
+  !receptionistTools.includes("record_receptionist_field"),
+  "record_receptionist_field removed — single record_current_field path",
 );
 assert.ok(
   !receptionistTools.includes("runBookingIntakeTask"),
