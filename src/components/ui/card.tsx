@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { HTMLAttributes } from "react";
+import { HTMLAttributes, ReactNode } from "react";
 
 export function Card({
   className,
@@ -33,7 +33,7 @@ export function StatCard({
 }: {
   label: string;
   value: string | number;
-  hint?: string;
+  hint?: ReactNode;
   href?: string;
 }) {
   const content = (
@@ -44,7 +44,7 @@ export function StatCard({
       <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
         {value}
       </p>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
     </>
   );
 

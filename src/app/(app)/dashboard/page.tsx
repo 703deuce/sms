@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { loadSolutionDashboard } from "@/lib/solution-dashboard";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { cn, formatNumber } from "@/lib/utils";
+import { formatPhoneMinutes } from "@/lib/voice/phone-minutes";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -125,6 +126,57 @@ export default async function DashboardPage() {
           </Button>
         </Link>
       </div>
+
+      {/* AI Voice phone usage */}
+      <section className="rounded-xl border border-violet-200/80 bg-gradient-to-br from-violet-50/80 to-white p-5 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_4px_16px_rgb(15_23_42/0.04)]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-[15px] font-bold text-slate-900">AI Voice — phone minutes</h3>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Live talk time on inbound/outbound phone calls (Amy on the phone — not browser tests or TTS).
+            </p>
+          </div>
+          <Link
+            href="/voice/overview"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
+          >
+            Voice overview
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/80 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Today</p>
+            <p className="mt-1 text-[28px] font-bold tracking-tight text-slate-900">
+              {formatPhoneMinutes(data.voicePhoneUsage.minutesToday)}
+              <span className="ml-1 text-[14px] font-semibold text-slate-500">min</span>
+            </p>
+            <p className="mt-1 text-[12px] text-slate-500">
+              {formatNumber(data.voicePhoneUsage.callsToday)} calls
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/80 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Yesterday</p>
+            <p className="mt-1 text-[28px] font-bold tracking-tight text-slate-900">
+              {formatPhoneMinutes(data.voicePhoneUsage.minutesYesterday)}
+              <span className="ml-1 text-[14px] font-semibold text-slate-500">min</span>
+            </p>
+            <p className="mt-1 text-[12px] text-slate-500">
+              {formatNumber(data.voicePhoneUsage.callsYesterday)} calls
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/80 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">vs yesterday</p>
+            <div className="mt-2">
+              <Delta value={data.voicePhoneUsage.deltaPct} />
+            </div>
+            <div className="mt-3 flex items-end justify-between">
+              <p className="text-[12px] text-slate-500">Last 7 days</p>
+              <Sparkline points={data.voicePhoneUsage.sparklineMinutes} color="#7c3aed" />
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Solution KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

@@ -1,4 +1,8 @@
 import { getPrisma } from "@/lib/db";
+import {
+  loadVoicePhoneMinutesSummary,
+  sumVoicePhoneMinutesInRange,
+} from "./phone-minutes";
 
 export type VoiceOverviewStats = {
   activeAgents: number;
@@ -14,7 +18,11 @@ export type VoiceOverviewStats = {
   transfersCompleted: number;
   transferFailures: number;
   voicemailsDetected: number;
+  /** Phone talk minutes in the selected range (voice_calls duration, not TTS). */
   aiMinutesUsed: number;
+  phoneMinutesToday: number;
+  phoneMinutesYesterday: number;
+  phoneMinutesDeltaPct: number | null;
   monthlyCostCents: number;
   runningCampaigns: number;
   agentsWithErrors: number;
@@ -41,6 +49,11 @@ export async function loadVoiceOverview(
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(todayStart);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const phoneMinutesSummary = await loadVoicePhoneMinutesSummary(workspaceId);
+  const rangePhoneMinutes = await sumVoicePhoneMinutesInRange(workspaceId, since, tomorrow);
 
   const [
     activeAgents,
@@ -165,9 +178,6 @@ export async function loadVoiceOverview(
       : 0;
 
   const monthlyCostCents = usageAgg.reduce((s: number, u: { billedCostCents: number }) => s + (u.billedCostCents || 0), 0);
-  const aiMinutesUsed = usageAgg
-    .filter((u: { category: string }) => u.category === "ai_minutes")
-    .reduce((s: number, u: { quantity: number }) => s + u.quantity, 0);
 
   return {
     activeAgents,
@@ -183,7 +193,10 @@ export async function loadVoiceOverview(
     transfersCompleted: transferred,
     transferFailures: 0,
     voicemailsDetected: voicemails,
-    aiMinutesUsed,
+    aiMinutesUsed: rangePhoneMinutes,
+    phoneMinutesToday: phoneMinutesSummary.minutesToday,
+    phoneMinutesYesterday: phoneMinutesSummary.minutesYesterday,
+    phoneMinutesDeltaPct: phoneMinutesSummary.deltaPct,
     monthlyCostCents,
     runningCampaigns,
     agentsWithErrors,
