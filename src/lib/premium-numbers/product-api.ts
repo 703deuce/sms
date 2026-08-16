@@ -64,6 +64,11 @@ export type PremiumSearchProductResponse = {
   memorableAlternatives: PremiumNumberProductResult[];
   topPicks?: PremiumNumberProductResult[];
   searchLogId?: string;
+  /** Progressive search — UI shows partial results while providers still run. */
+  searchStatus?: "searching" | "complete" | "error";
+  pendingProviders?: string[];
+  completedProviders?: string[];
+  currentAreaCode?: string;
 };
 
 function businessMatchLabel(score: number, matchedWords: string[]): string {

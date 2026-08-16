@@ -11,17 +11,14 @@ import type {
 import { dedupeCandidatesByE164 } from "./normalize";
 import { logInventoryProviderSearch } from "@/lib/premium-numbers/search-observability";
 
-const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
-
-function providerSearchTimeoutMs(): number {
-  const raw = process.env.NUMBER_PROVIDER_SEARCH_TIMEOUT_MS?.trim();
-  if (!raw) return DEFAULT_PROVIDER_TIMEOUT_MS;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 5_000) return DEFAULT_PROVIDER_TIMEOUT_MS;
-  return Math.min(parsed, 120_000);
-}
-
-const PROVIDER_TIMEOUT_MS = providerSearchTimeoutMs();
+export type ProviderInventoryBatch = {
+  provider: NumberUpstreamProvider;
+  candidates: NormalizedNumberCandidate[];
+  attempts: ProviderSearchAttempt[];
+  latencyMs: number;
+  areaCode: string;
+  pendingProviders: NumberUpstreamProvider[];
+};
 
 function enabledProviders(): NumberProvider[] {
   const providers: NumberProvider[] = [];
@@ -30,54 +27,23 @@ function enabledProviders(): NumberProvider[] {
   return providers;
 }
 
-function withSearchTimeout(
-  provider: NumberProvider,
-  input: InventorySearchInput,
-): Promise<InventorySearchResult> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      resolve({
-        candidates: [],
-        attempts: [
-          {
-            provider: provider.id,
-            strategy: "inventory",
-            status: "timeout",
-            error: `Search timed out after ${PROVIDER_TIMEOUT_MS}ms (set NUMBER_PROVIDER_SEARCH_TIMEOUT_MS to adjust)`,
-          },
-        ],
-      });
-    }, PROVIDER_TIMEOUT_MS);
-
-    provider
-      .searchInventory(input)
-      .then((result) => {
-        clearTimeout(timer);
-        resolve(result);
-      })
-      .catch((err) => {
-        clearTimeout(timer);
-        resolve({
-          candidates: [],
-          attempts: [
-            {
-              provider: provider.id,
-              strategy: "inventory",
-              status: "error",
-              error: err instanceof Error ? err.message : String(err),
-            },
-          ],
-        });
-      });
-  });
-}
-
 export class NumberSearchService {
-  async searchInventory(input: InventorySearchInput): Promise<{
+  /**
+   * Query all configured providers in parallel with no artificial timeout.
+   * Telnyx inventory can take minutes; callers should stream partial UI updates.
+   */
+  async searchInventory(
+    input: InventorySearchInput,
+    options?: {
+      areaCode?: string;
+      onProviderBatch?: (batch: ProviderInventoryBatch) => void;
+    },
+  ): Promise<{
     candidates: NormalizedNumberCandidate[];
     attempts: ProviderSearchAttempt[];
   }> {
     const started = Date.now();
+    const areaCode = options?.areaCode ?? input.areaCode;
     const providers = enabledProviders();
     if (providers.length === 0) {
       return {
@@ -93,20 +59,63 @@ export class NumberSearchService {
       };
     }
 
-    const results = await Promise.all(
-      providers.map((provider) => withSearchTimeout(provider, input)),
-    );
-
+    const pending = new Set(providers.map((p) => p.id));
     const attempts: ProviderSearchAttempt[] = [];
     let candidates: NormalizedNumberCandidate[] = [];
-    for (const result of results) {
-      attempts.push(...result.attempts);
-      candidates.push(...result.candidates);
-    }
 
-    candidates = dedupeCandidatesByE164(candidates);
+    const runProvider = async (provider: NumberProvider): Promise<InventorySearchResult> => {
+      const providerStarted = Date.now();
+      try {
+        const result = await provider.searchInventory(input);
+        pending.delete(provider.id);
+        candidates = dedupeCandidatesByE164([...candidates, ...result.candidates]);
+        attempts.push(...result.attempts);
+        options?.onProviderBatch?.({
+          provider: provider.id,
+          candidates: result.candidates,
+          attempts: result.attempts,
+          latencyMs: Date.now() - providerStarted,
+          areaCode,
+          pendingProviders: [...pending],
+        });
+        logInventoryProviderSearch({
+          areaCode,
+          candidates: result.candidates,
+          attempts: result.attempts,
+          latencyMs: Date.now() - providerStarted,
+        });
+        return result;
+      } catch (err) {
+        pending.delete(provider.id);
+        const error = err instanceof Error ? err.message : String(err);
+        const failed: InventorySearchResult = {
+          candidates: [],
+          attempts: [
+            {
+              provider: provider.id,
+              strategy: "inventory",
+              status: "error",
+              error,
+            },
+          ],
+        };
+        attempts.push(...failed.attempts);
+        options?.onProviderBatch?.({
+          provider: provider.id,
+          candidates: [],
+          attempts: failed.attempts,
+          latencyMs: Date.now() - providerStarted,
+          areaCode,
+          pendingProviders: [...pending],
+        });
+        return failed;
+      }
+    };
+
+    await Promise.all(providers.map((provider) => runProvider(provider)));
+
     logInventoryProviderSearch({
-      areaCode: input.areaCode,
+      areaCode,
       candidates,
       attempts,
       latencyMs: Date.now() - started,

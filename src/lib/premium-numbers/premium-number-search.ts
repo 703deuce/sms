@@ -7,6 +7,7 @@ import { SCORING_WEIGHTS } from "./scoring-config";
 import { runCombinedInventorySearches } from "./combined-inventory-search";
 import type { InventoryCandidateForScoring } from "@/lib/numbers/providers/inventory-bridge";
 import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
+import type { NumberUpstreamProvider } from "@/lib/numbers/providers/types";
 import type {
   PremiumSearchInput,
   PremiumSearchResult,
@@ -102,12 +103,70 @@ function filterCandidatesForAreaCodes(
   });
 }
 
+export type PremiumSearchProgress = {
+  candidates: ReturnType<typeof attachScarcityObservations>;
+  status: PremiumSearchStatus;
+  pendingProviders: NumberUpstreamProvider[];
+  completedProviders: NumberUpstreamProvider[];
+  currentAreaCode: string;
+  providerAttempts: ProviderSearchAttempt[];
+  inventoryScannedCount: number;
+};
+
+function scoreRawInventory(
+  rawCandidates: InventoryCandidateForScoring[],
+  input: {
+    keywords: ReturnType<typeof buildKeywordEntries>;
+    areaCodes: string[];
+    inferredIndustry?: string;
+    customKeywords?: string[];
+    primaryKeywords?: string[];
+    limit: number;
+  },
+) {
+  const scored = rawCandidates
+    .map((raw) => {
+      const telnyxCost: TelnyxCost | undefined =
+        raw.monthlyCost || raw.upfrontCost
+          ? {
+              upfrontCost: raw.upfrontCost,
+              monthlyCost: raw.monthlyCost,
+              currency: raw.currency,
+            }
+          : undefined;
+      return scoreCandidate({
+        phoneNumber: raw.phoneNumber,
+        keywords: input.keywords,
+        telnyxCost,
+        rawTelnyx: raw.raw,
+        provider: raw.provider,
+        providerReference: raw.providerReference,
+        searchContext: {
+          requestedAreaCodes: input.areaCodes,
+          industry: input.inferredIndustry,
+          explicitKeywords: [
+            ...(input.customKeywords ?? []),
+            ...(input.primaryKeywords ?? []),
+          ],
+        },
+      });
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  const sorted = sortCandidates(scored);
+  const withScarcity = attachScarcityObservations(sorted);
+  return withScarcity.slice(0, input.limit);
+}
+
 /**
  * Read-only vanity / premium US number discovery against live Telnyx inventory.
  * Does not purchase, reserve, or assign numbers.
  */
 export async function searchPremiumNumbers(
   input: PremiumSearchInput,
+  options?: {
+    onProgress?: (progress: PremiumSearchProgress) => void;
+  },
 ): Promise<PremiumSearchResult> {
   const areaCodes =
     input.areaCodes?.length
@@ -145,29 +204,72 @@ export async function searchPremiumNumbers(
   let allCandidates: Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"] = [];
   const attempts: TelnyxSearchAttempt[] = [];
   const providerAttempts: ProviderSearchAttempt[] = [];
+  const completedProviders = new Set<NumberUpstreamProvider>();
+  const limit = input.limit ?? 100;
+
+  const emitProgress = (pendingProviders: NumberUpstreamProvider[], currentAreaCode: string) => {
+    if (!options?.onProgress) return;
+    const byPhone = new Map<string, InventoryCandidateForScoring>();
+    for (const c of allCandidates) {
+      if (!byPhone.has(c.phoneNumber)) byPhone.set(c.phoneNumber, c);
+    }
+    const filtered = filterCandidatesForAreaCodes([...byPhone.values()], areaCodes);
+    const ranked = scoreRawInventory(filtered, {
+      keywords,
+      areaCodes,
+      inferredIndustry,
+      customKeywords: input.customKeywords,
+      primaryKeywords: input.primaryKeywords,
+      limit,
+    });
+    const hadInventory = filtered.length > 0;
+    options.onProgress({
+      candidates: ranked,
+      status: resolveStatus(ranked, attempts, hadInventory),
+      pendingProviders,
+      completedProviders: [...completedProviders],
+      currentAreaCode,
+      providerAttempts: [...providerAttempts],
+      inventoryScannedCount: filtered.length,
+    });
+  };
 
   try {
     for (const areaCode of areaCodes) {
-      const inventory = await runCombinedInventorySearches({
-        areaCode,
-        keywordDigitStrings,
-        memorablePatterns: [...SCORING_WEIGHTS.memorablePatternSearchDigits],
-        baseLimit: areaCodes.length > 1 ? 30 : 50,
-        matchStyle,
-      });
-      providerAttempts.push(...inventory.attempts);
-      attempts.push(
-        ...inventory.attempts.map((a) => ({
-          provider: a.provider,
+      await runCombinedInventorySearches(
+        {
           areaCode,
-          strategy: a.strategy,
-          query: {},
-          status: mapProviderAttemptStatus(a.status),
-          error: a.error,
-          resultCount: a.resultCount ?? 0,
-        })),
+          keywordDigitStrings,
+          memorablePatterns: [...SCORING_WEIGHTS.memorablePatternSearchDigits],
+          baseLimit: areaCodes.length > 1 ? 30 : 50,
+          matchStyle,
+        },
+        {
+          onProgress: ({ batch, candidates, attempts: batchAttempts }) => {
+            completedProviders.add(batch.provider);
+            for (const attempt of batchAttempts) {
+              if (!providerAttempts.some(
+                (a) => a.provider === attempt.provider && a.strategy === attempt.strategy,
+              )) {
+                providerAttempts.push(attempt);
+              }
+            }
+            attempts.push(
+              ...batchAttempts.map((a) => ({
+                provider: a.provider,
+                areaCode: batch.areaCode,
+                strategy: a.strategy,
+                query: {},
+                status: mapProviderAttemptStatus(a.status),
+                error: a.error,
+                resultCount: a.resultCount ?? 0,
+              })),
+            );
+            allCandidates.push(...candidates);
+            emitProgress(batch.pendingProviders, batch.areaCode);
+          },
+        },
       );
-      allCandidates.push(...inventory.candidates);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -206,48 +308,23 @@ export async function searchPremiumNumbers(
   const telnyxSearchesFailed = attempts.filter((a) => a.status !== "ok").length;
   const hadInventory = allCandidates.length > 0;
 
-  const scored = allCandidates
-    .map((raw) => {
-      const telnyxCost: TelnyxCost | undefined =
-        raw.monthlyCost || raw.upfrontCost
-          ? {
-              upfrontCost: raw.upfrontCost,
-              monthlyCost: raw.monthlyCost,
-              currency: raw.currency,
-            }
-          : undefined;
-      return scoreCandidate({
-        phoneNumber: raw.phoneNumber,
-        keywords,
-        telnyxCost,
-        rawTelnyx: raw.raw,
-        provider: raw.provider,
-        providerReference: raw.providerReference,
-        searchContext: {
-          requestedAreaCodes: areaCodes,
-          industry: inferredIndustry,
-          explicitKeywords: [
-            ...(input.customKeywords ?? []),
-            ...(input.primaryKeywords ?? []),
-          ],
-        },
-      });
-    })
-    .filter((c): c is NonNullable<typeof c> => c !== null);
+  const candidates = scoreRawInventory(allCandidates, {
+    keywords,
+    areaCodes,
+    inferredIndustry,
+    customKeywords: input.customKeywords,
+    primaryKeywords: input.primaryKeywords,
+    limit,
+  });
 
-  const sorted = sortCandidates(scored);
-  const withScarcity = attachScarcityObservations(sorted);
-  const limit = input.limit ?? 100;
-  const candidates = withScarcity.slice(0, limit);
-
-  const statistics = buildStatistics(withScarcity);
+  const statistics = buildStatistics(candidates);
   statistics.telnyxSearchesAttempted = telnyxSearchesAttempted;
   statistics.telnyxSearchesSucceeded = telnyxSearchesSucceeded;
   statistics.telnyxSearchesFailed = telnyxSearchesFailed;
   statistics.rawCandidates = allCandidates.length;
-  statistics.uniqueCandidates = sorted.length;
+  statistics.uniqueCandidates = candidates.length;
 
-  const status = resolveStatus(withScarcity, attempts, hadInventory);
+  const status = resolveStatus(candidates, attempts, hadInventory);
 
   return {
     status,

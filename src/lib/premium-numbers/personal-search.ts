@@ -4,6 +4,7 @@ import { SCORING_WEIGHTS } from "./scoring-config";
 import { runCombinedInventorySearches } from "./combined-inventory-search";
 import { parsePhoneDigits } from "./keypad";
 import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
+import type { NumberUpstreamProvider } from "@/lib/numbers/providers/types";
 import type { PremiumSearchResult, ScoredCandidate, TelnyxSearchAttempt } from "./types";
 
 export type PersonalPreference =
@@ -75,6 +76,16 @@ export async function searchPremiumNumbersPersonal(input: {
   areaCodes?: string[];
   preferences?: PersonalPreference[];
   limit?: number;
+}, options?: {
+  onProgress?: (progress: {
+    candidates: ScoredCandidate[];
+    status: PremiumSearchResult["status"];
+    pendingProviders: NumberUpstreamProvider[];
+    completedProviders: NumberUpstreamProvider[];
+    currentAreaCode: string;
+    providerAttempts: ProviderSearchAttempt[];
+    inventoryScannedCount: number;
+  }) => void;
 }): Promise<PremiumSearchResult> {
   const areaCodes =
     input.areaCodes?.length
@@ -100,32 +111,90 @@ export async function searchPremiumNumbersPersonal(input: {
   let allCandidates: Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"] = [];
   const attempts: PremiumSearchResult["searchAttempts"] = [];
   const providerAttempts: ProviderSearchAttempt[] = [];
+  const completedProviders = new Set<NumberUpstreamProvider>();
+  const limit = input.limit ?? 100;
+
+  const emitProgress = (pendingProviders: NumberUpstreamProvider[], currentAreaCode: string) => {
+    if (!options?.onProgress) return;
+    const byPhone = new Map<string, Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"][0]>();
+    for (const c of allCandidates) {
+      if (!byPhone.has(c.phoneNumber)) byPhone.set(c.phoneNumber, c);
+    }
+    const merged = [...byPhone.values()];
+    const scored = merged
+      .map((raw) =>
+        scoreCandidate({
+          phoneNumber: raw.phoneNumber,
+          keywords,
+          telnyxCost:
+            raw.monthlyCost || raw.upfrontCost
+              ? {
+                  upfrontCost: raw.upfrontCost,
+                  monthlyCost: raw.monthlyCost,
+                  currency: raw.currency,
+                }
+              : undefined,
+          rawTelnyx: raw.raw,
+          provider: raw.provider,
+          providerReference: raw.providerReference,
+        }),
+      )
+      .filter((c): c is ScoredCandidate => c !== null);
+    const sorted = sortPersonalCandidates(scored);
+    const ranked = sorted.slice(0, limit);
+    const hadInventory = merged.length > 0;
+    const status =
+      !hadInventory
+        ? "NO_INVENTORY"
+        : ranked.some((c) => c.numberQualityScore >= 55)
+          ? "RESULTS_FOUND"
+          : ranked.length
+            ? "RESULTS_FOUND_BUT_NONE_PREMIUM"
+            : "NO_INVENTORY";
+    options.onProgress({
+      candidates: ranked,
+      status,
+      pendingProviders,
+      completedProviders: [...completedProviders],
+      currentAreaCode,
+      providerAttempts: [...providerAttempts],
+      inventoryScannedCount: merged.length,
+    });
+  };
 
   try {
     for (const areaCode of areaCodes) {
-      const inventory = await runCombinedInventorySearches({
-        areaCode,
-        keywordDigitStrings: [],
-        memorablePatterns,
-        baseLimit: areaCodes.length > 1 ? 30 : 50,
-      });
-      providerAttempts.push(...inventory.attempts);
-      attempts.push(
-        ...inventory.attempts.map((a) => ({
-          provider: a.provider,
+      await runCombinedInventorySearches(
+        {
           areaCode,
-          strategy: a.strategy,
-          query: {},
-          status: mapProviderAttemptStatus(a.status),
-          error: a.error,
-          resultCount: a.resultCount ?? 0,
-        })),
+          keywordDigitStrings: [],
+          memorablePatterns,
+          baseLimit: areaCodes.length > 1 ? 30 : 50,
+        },
+        {
+          onProgress: ({ batch, candidates, attempts: batchAttempts }) => {
+            completedProviders.add(batch.provider);
+            providerAttempts.push(...batchAttempts);
+            attempts.push(
+              ...batchAttempts.map((a) => ({
+                provider: a.provider,
+                areaCode: batch.areaCode,
+                strategy: a.strategy,
+                query: {},
+                status: mapProviderAttemptStatus(a.status),
+                error: a.error,
+                resultCount: a.resultCount ?? 0,
+              })),
+            );
+            const filtered = candidates.filter((c) => {
+              const digits = parsePhoneDigits(c.phoneNumber);
+              return digits.length === 10 && digits.startsWith(areaCode);
+            });
+            allCandidates.push(...filtered);
+            emitProgress(batch.pendingProviders, batch.areaCode);
+          },
+        },
       );
-      const filtered = inventory.candidates.filter((c) => {
-        const digits = parsePhoneDigits(c.phoneNumber);
-        return digits.length === 10 && digits.startsWith(areaCode);
-      });
-      allCandidates.push(...filtered);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -167,7 +236,6 @@ export async function searchPremiumNumbersPersonal(input: {
     .filter((c): c is ScoredCandidate => c !== null);
 
   const sorted = sortPersonalCandidates(scored);
-  const limit = input.limit ?? 100;
   const candidates = sorted.slice(0, limit);
 
   const hadInventory = allCandidates.length > 0;

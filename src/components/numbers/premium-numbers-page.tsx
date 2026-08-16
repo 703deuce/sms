@@ -87,6 +87,7 @@ export function PremiumNumbersPageClient({ workspaceId, initialMode = "business"
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(false);
+  const [searchingMore, setSearchingMore] = useState(false);
   const [searchDurationSec, setSearchDurationSec] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [searchResponse, setSearchResponse] = useState<PremiumSearchProductResponse | null>(null);
@@ -134,44 +135,97 @@ export function PremiumNumbersPageClient({ workspaceId, initialMode = "business"
 
   async function onSearch() {
     setLoading(true);
+    setSearchingMore(false);
     setError("");
     setSearchResponse(null);
     setSuccess(null);
     setSearchDurationSec(null);
     const started = performance.now();
-    try {
-      const body =
-        mode === "business"
-          ? {
-              workspaceId,
-              mode,
-              numberType,
-              areaCodes: parsedAreaCodes,
-              tollFreePrefix: numberType === "tollfree" ? tollFreePrefix : undefined,
-              industry: industry.trim(),
-              suggestedKeywords: splitKeywordInput(suggestedKeywords),
-              extraKeywords: splitKeywordInput(extraKeywords),
-            }
-          : {
-              workspaceId,
-              mode,
-              areaCodes: parsedAreaCodes,
-              preferences,
-            };
 
+    const body =
+      mode === "business"
+        ? {
+            workspaceId,
+            mode,
+            numberType,
+            areaCodes: parsedAreaCodes,
+            tollFreePrefix: numberType === "tollfree" ? tollFreePrefix : undefined,
+            industry: industry.trim(),
+            suggestedKeywords: splitKeywordInput(suggestedKeywords),
+            extraKeywords: splitKeywordInput(extraKeywords),
+          }
+        : {
+            workspaceId,
+            mode,
+            areaCodes: parsedAreaCodes,
+            preferences,
+          };
+
+    try {
       const res = await fetch("/api/numbers/premium/search", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          Accept: "application/x-ndjson",
+        },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as PremiumSearchProductResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error || "Search failed");
-      setSearchResponse(data);
-      setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
+
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "Search failed");
+      }
+
+      if (contentType.includes("application/x-ndjson") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let gotFirst = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const msg = JSON.parse(line) as {
+              type: string;
+              data?: PremiumSearchProductResponse;
+              error?: string;
+            };
+            if (msg.type === "error") throw new Error(msg.error || "Search failed");
+            if (!msg.data) continue;
+
+            setSearchResponse(msg.data);
+            setSearchingMore(msg.data.searchStatus === "searching");
+
+            if (!gotFirst) {
+              gotFirst = true;
+              setLoading(false);
+            }
+            if (msg.type === "complete" || msg.data.searchStatus === "complete") {
+              setSearchingMore(false);
+              setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
+            }
+          }
+        }
+
+        if (!gotFirst) {
+          setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
+        }
+      } else {
+        const data = (await res.json()) as PremiumSearchProductResponse & { error?: string };
+        setSearchResponse(data);
+        setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
       setLoading(false);
+      setSearchingMore(false);
     }
   }
 
@@ -449,6 +503,15 @@ export function PremiumNumbersPageClient({ workspaceId, initialMode = "business"
             )}
             {searchResponse && resultSummary && (
               <p className="mt-3 text-[13px] font-medium text-[#6366f1]">{resultSummary}</p>
+            )}
+            {searchingMore && (
+              <p className="mt-2 text-[13px] text-[#6b7280]">
+                Still searching
+                {searchResponse?.pendingProviders?.length
+                  ? ` ${searchResponse.pendingProviders.join(" and ")}`
+                  : " providers"}
+                for more numbers…
+              </p>
             )}
           </div>
 
