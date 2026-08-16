@@ -36,7 +36,7 @@ const PHONE_E164 = "+18663464256";
 /** OpenAI Realtime native voice — recommended warm professional (not ElevenLabs hybrid). */
 const REALTIME_VOICE = normalizeWizardVoiceToRealtime("marin");
 const REALTIME_MODEL = "gpt-realtime-2.1";
-const REALTIME_REASONING_EFFORT = "low";
+const REALTIME_REASONING_EFFORT = "high";
 const VOICE_SPEED = 1.08;
 
 async function publishWithoutLiveKitProvision(

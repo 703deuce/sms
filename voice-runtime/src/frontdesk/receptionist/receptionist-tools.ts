@@ -12,6 +12,7 @@ import {
   missingReceptionistFields,
   type ReceptionistCollectionPurpose,
 } from "@/lib/voice/receptionist/field-collection-scope";
+import { buildReceptionistConversationRecap, formatReceptionistFieldsSummary } from "@/lib/voice/receptionist/conversation-recap";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
 import { isBookingOperationActive } from "../booking-operation";
@@ -33,6 +34,7 @@ import { runBookingIntakeTask } from "../booking-intake-task";
 import { buildBookingIntakeToolResult } from "../booking-intake-lifecycle";
 import { markParentResumed } from "../../task-transition-instrumentation";
 import { resyncOpenAIRealtimeAgentChatCtx } from "../../realtime-openai-chat-context";
+import { injectReceptionistConversationState } from "./conversation-state";
 
 function caps(snapshot: ReceptionistCompiledSnapshot): Set<string> {
   return new Set(snapshot.capabilities);
@@ -130,6 +132,12 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
             : coherence.slotInvalidated
               ? " Time preference changed — call list_available_slots and let the caller pick a new time."
               : "";
+          const conversationRecap = buildReceptionistConversationRecap({
+            chatCtx: session.chatCtx,
+            receptionistFields: ud.receptionistFields,
+            fieldManifest: manifest,
+            purpose: "booking",
+          });
           return formatToolFeedbackForModel(
             toolFeedbackSuccess(
               `${field.label} saved.${bookingTail}`,
@@ -141,6 +149,10 @@ function buildRecordReceptionistFieldTool(snapshot: ReceptionistCompiledSnapshot
                     ? "list_slots_then_retry"
                     : "continue_conversation",
                 guidance: `${field.label} saved.${bookingTail}`,
+                context: {
+                  fields_summary: formatReceptionistFieldsSummary(ud.receptionistFields),
+                  conversation_recap: conversationRecap,
+                },
               },
             ),
           );
@@ -391,6 +403,7 @@ function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnaps
         const result = await runBookingIntakeTask(session);
         ud.receptionistFieldCollectionPrefaceSpoken = false;
         await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
+        await injectReceptionistConversationState(session, "booking");
         markParentResumed({
           callId: ud.callId,
           taskId: "booking_intake",
@@ -426,6 +439,7 @@ async function runBookingPurposeFieldCollection(
   const result = await runBookingIntakeTask(session);
   ud.receptionistFieldCollectionPrefaceSpoken = false;
   await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
+  await injectReceptionistConversationState(session, "booking");
   markParentResumed({
     callId: ud.callId,
     taskId: "booking_intake",
@@ -515,6 +529,7 @@ function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
         const result = await new ReceptionistFieldCollectionTask(session, missing).run();
         ud.receptionistFieldCollectionPrefaceSpoken = false;
         await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
+        await injectReceptionistConversationState(session, purpose);
         markParentResumed({
           callId: ud.callId,
           taskId: "receptionist_field_collection",

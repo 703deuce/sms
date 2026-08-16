@@ -1,9 +1,11 @@
-import { ChatMessage, type ChatContext } from "@livekit/agents";
+import type { ChatContext } from "@livekit/agents";
 import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { AgentFieldDefinition } from "./types";
 import { validateReceptionistFieldValue } from "./field-validation";
-
-const MAX_UTTERANCES = 24;
+import {
+  callerUtterancesFromChatCtx,
+  CONVERSATION_RECAP_MAX_UTTERANCES,
+} from "./conversation-recap";
 
 const PHONE_IN_TEXT =
   /\b(?:\+?1[-.\s]?)?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b/;
@@ -25,14 +27,7 @@ const LOCATION_ONLY =
   /^(?:i'm|i am|we're|we are)\s+(?:in|at|on|near|by)\s+[A-Za-z]/i;
 
 export function userUtterancesFromChatCtx(chatCtx: ChatContext): string[] {
-  const lines: string[] = [];
-  for (const item of chatCtx.items) {
-    if (item instanceof ChatMessage && item.role === "user") {
-      const text = item.textContent?.trim();
-      if (text) lines.push(text);
-    }
-  }
-  return lines.slice(-MAX_UTTERANCES);
+  return callerUtterancesFromChatCtx(chatCtx, CONVERSATION_RECAP_MAX_UTTERANCES);
 }
 
 function manifestIds(manifest: AgentFieldDefinition[]): Set<string> {
