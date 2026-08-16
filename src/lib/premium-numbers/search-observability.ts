@@ -195,6 +195,14 @@ export function logPremiumSearchCompleted(input: {
       provider_attempts: input.providerAttempts
         ? summarizeAttempts(input.providerAttempts)
         : [],
+      provider_warnings: (input.providerAttempts ?? [])
+        .filter((a) => a.status === "timeout" || a.status === "error" || a.status === "skipped")
+        .map((a) => ({
+          provider: a.provider,
+          strategy: a.strategy,
+          status: a.status,
+          error: a.error ?? null,
+        })),
       ui_breakdown: input.uiBreakdown ?? null,
       results: compactResults,
     }),

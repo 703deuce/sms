@@ -56,6 +56,8 @@ export type PremiumSearchProductResponse = {
   status: string;
   message?: string;
   resultCount: number;
+  /** Scored candidates before UI section filters (for ops/debug). */
+  inventoryScannedCount?: number;
   businessMatchCount: number;
   memorableCount: number;
   bestMatches: PremiumNumberProductResult[];
@@ -304,7 +306,8 @@ export function buildProductSearchResponse(input: {
       areaCode: input.areaCode,
       status: input.status,
       message: input.message,
-      resultCount: candidates.length,
+      resultCount: topPicks.length,
+      inventoryScannedCount: candidates.length,
       businessMatchCount: 0,
       memorableCount: topPicks.length,
       bestMatches: [],
@@ -341,13 +344,16 @@ export function buildProductSearchResponse(input: {
     .slice(0, 24)
     .map((c) => toProductResult(c, mode, keywords, "memorable_alternative", input.areaCode));
 
+  const displayedCount = businessMatches.length + memorableAlternatives.length;
+
   return {
     mode,
     areaCode: input.areaCode,
     industry: input.industry,
     status: input.status,
     message: input.message,
-    resultCount: candidates.length,
+    resultCount: displayedCount,
+    inventoryScannedCount: candidates.length,
     businessMatchCount: businessMatches.length,
     memorableCount: memorableAlternatives.length,
     bestMatches: businessMatches,

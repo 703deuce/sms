@@ -11,7 +11,17 @@ import type {
 import { dedupeCandidatesByE164 } from "./normalize";
 import { logInventoryProviderSearch } from "@/lib/premium-numbers/search-observability";
 
-const PROVIDER_TIMEOUT_MS = 15_000;
+const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
+
+function providerSearchTimeoutMs(): number {
+  const raw = process.env.NUMBER_PROVIDER_SEARCH_TIMEOUT_MS?.trim();
+  if (!raw) return DEFAULT_PROVIDER_TIMEOUT_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 5_000) return DEFAULT_PROVIDER_TIMEOUT_MS;
+  return Math.min(parsed, 120_000);
+}
+
+const PROVIDER_TIMEOUT_MS = providerSearchTimeoutMs();
 
 function enabledProviders(): NumberProvider[] {
   const providers: NumberProvider[] = [];
@@ -33,7 +43,7 @@ function withSearchTimeout(
             provider: provider.id,
             strategy: "inventory",
             status: "timeout",
-            error: `Search timed out after ${PROVIDER_TIMEOUT_MS}ms`,
+            error: `Search timed out after ${PROVIDER_TIMEOUT_MS}ms (set NUMBER_PROVIDER_SEARCH_TIMEOUT_MS to adjust)`,
           },
         ],
       });

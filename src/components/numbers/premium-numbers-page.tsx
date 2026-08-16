@@ -220,7 +220,13 @@ export function PremiumNumbersPageClient({ workspaceId, initialMode = "business"
             ? `area ${parsedAreaCodes[0]}`
             : `areas ${parsedAreaCodes.join(", ")}`;
       const ind = industry.trim();
-      return `${searchResponse.resultCount} numbers found in ${searchDurationSec}s for ${ind} · ${location}`;
+      const shown = searchResponse.resultCount;
+      const business = searchResponse.businessMatchCount;
+      const memorable = searchResponse.memorableCount;
+      const scanned = searchResponse.inventoryScannedCount;
+      const scannedNote =
+        scanned != null && scanned > shown ? ` · ${scanned} scanned` : "";
+      return `${shown} numbers shown (${business} business, ${memorable} memorable)${scannedNote} in ${searchDurationSec}s for ${ind} · ${location}`;
     }
     const areas =
       parsedAreaCodes.length === 1
