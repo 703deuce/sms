@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridge/auth";
 import { bootstrapInboundForPython } from "@/lib/voice/python-runtime-bridge/bootstrap-inbound";
+import { businessAnswerForPython } from "@/lib/voice/python-runtime-bridge/business-answer-for-python";
+import { cancelBookingForPython } from "@/lib/voice/python-runtime-bridge/cancel-booking-for-python";
+import { commitBookingForPython } from "@/lib/voice/python-runtime-bridge/commit-booking-for-python";
+import { emitVoiceRuntimeEvent } from "@/lib/voice/python-runtime-bridge/emit-voice-event-for-python";
+import { extractFieldsForPython } from "@/lib/voice/python-runtime-bridge/extract-fields-for-python";
+import { findAppointmentsForPython } from "@/lib/voice/python-runtime-bridge/find-appointments-for-python";
+import { getAvailabilityForPython } from "@/lib/voice/python-runtime-bridge/get-availability-for-python";
 import { persistIntakeFieldsForPython } from "@/lib/voice/python-runtime-bridge/persist-intake-fields";
 import { persistMessageForPython } from "@/lib/voice/python-runtime-bridge/persist-message";
-import { commitBookingForPython } from "@/lib/voice/python-runtime-bridge/commit-booking-for-python";
-import { getAvailabilityForPython } from "@/lib/voice/python-runtime-bridge/get-availability-for-python";
+import { rescheduleBookingForPython } from "@/lib/voice/python-runtime-bridge/reschedule-booking-for-python";
 import { resolveTransferForPython } from "@/lib/voice/python-runtime-bridge/resolve-transfer";
 
 export const runtime = "nodejs";
@@ -18,6 +24,9 @@ type VoiceRuntimeAction =
   | "extract_fields"
   | "get_availability"
   | "commit_booking"
+  | "cancel_booking"
+  | "reschedule_booking"
+  | "find_appointments"
   | "business_answer"
   | "emit_event";
 
@@ -33,10 +42,6 @@ function logInternalVoice(
       ...fields,
     }),
   );
-}
-
-async function loadHandlers() {
-  return import("@/lib/voice/python-runtime-bridge/handlers");
 }
 
 /** GET — connectivity probe (no auth). Voice worker should use POST for actions. */
@@ -109,11 +114,9 @@ export async function POST(request: Request) {
         result = await resolveTransferForPython(payload as never);
         break;
 
-      case "extract_fields": {
-        const { extractFieldsForPython } = await loadHandlers();
+      case "extract_fields":
         result = await extractFieldsForPython(payload as never);
         break;
-      }
 
       case "get_availability":
         result = await getAvailabilityForPython(payload as never);
@@ -123,17 +126,25 @@ export async function POST(request: Request) {
         result = await commitBookingForPython(payload as never);
         break;
 
-      case "business_answer": {
-        const { businessAnswerForPython } = await loadHandlers();
+      case "cancel_booking":
+        result = await cancelBookingForPython(payload as never);
+        break;
+
+      case "reschedule_booking":
+        result = await rescheduleBookingForPython(payload as never);
+        break;
+
+      case "find_appointments":
+        result = await findAppointmentsForPython(payload as never);
+        break;
+
+      case "business_answer":
         result = await businessAnswerForPython(payload as never);
         break;
-      }
 
-      case "emit_event": {
-        const { emitVoiceRuntimeEvent } = await loadHandlers();
+      case "emit_event":
         result = await emitVoiceRuntimeEvent(payload as never);
         break;
-      }
 
       default:
         logInternalVoice("internal_voice_response", {

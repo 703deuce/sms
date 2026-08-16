@@ -55,6 +55,7 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
     compiled_raw = data.get("receptionistCompiled") or {}
     manifest_raw = compiled_raw.get("fieldManifest") or []
     capabilities = list(compiled_raw.get("capabilities") or [])
+    enabled_builtin_tools = list(compiled_raw.get("enabledBuiltinTools") or [])
     transfer_raw = compiled_raw.get("transferPolicy")
     transfer_policy = _parse_transfer_policy(
         transfer_raw if isinstance(transfer_raw, dict) else None,
@@ -94,6 +95,7 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         realtime_voice=str(data.get("realtimeVoice") or "marin"),
         realtime_speed=data.get("realtimeSpeed"),
         runtime_profile=str(data.get("runtimeProfile") or "generic_receptionist"),
+        enabled_builtin_tools=enabled_builtin_tools,
     )
 
 

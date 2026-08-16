@@ -1,8 +1,10 @@
 import { getPrisma } from "@/lib/db";
 import { markVoiceCallBooked } from "@/lib/voice/runtime-provider/livekit-call-telemetry";
+import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { buildBookingSuccessLine } from "../../../../voice-runtime/src/booking-completion-messages";
 import {
   formatBookedTimeLabel,
+  lookupAppointmentIdForCallWithRetry,
   scheduleAppointmentResilientForUserData,
 } from "../../../../voice-runtime/src/frontdesk/booking-recovery";
 import { CalendlyCalendar } from "../../../../voice-runtime/src/frontdesk/calendly-calendar";
@@ -165,6 +167,22 @@ export async function commitBookingForPython(input: {
       callId: input.callId,
       appointmentId: booked.inviteeUri,
       externalId: booked.eventUri,
+    });
+
+    void lookupAppointmentIdForCallWithRetry({
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      eventUri: booked.eventUri,
+    }).then((appointmentId) => {
+      if (!appointmentId) return;
+      void syncFrontDeskBookingToCrm({
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        appointmentId,
+        callerE164: input.callerE164,
+        email: attendeeEmail,
+        businessName: input.businessName,
+      }).catch(() => undefined);
     });
 
     const { sendVoiceBookingConfirmationSms } = await import("@/lib/voice/booking-confirmation-sms");

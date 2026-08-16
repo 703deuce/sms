@@ -33,6 +33,114 @@ def _optional_transfer(agent: AmyAgent, backend: TransovoBackend) -> list:
 
 def _faq_and_end_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
     ud = agent._ud
+    tools: list = []
+
+    if ud.has_tool("cancel_appointment") or ud.has_tool("reschedule_appointment"):
+        @function_tool(
+            name="find_appointments",
+            description="List upcoming appointments for this caller when cancel or reschedule needs disambiguation.",
+        )
+        async def find_appointments() -> str:
+            result = await backend.call(
+                "find_appointments",
+                {
+                    "workspaceId": ud.workspace_id,
+                    "callId": ud.call_id,
+                    "timezone": ud.timezone,
+                    "callerE164": ud.caller_e164,
+                },
+            )
+            if not result.get("ok"):
+                return result.get("error") or "Could not look up appointments."
+            return result.get("linesForModel") or "No upcoming appointments found."
+
+        tools.append(find_appointments)
+
+    if ud.has_tool("cancel_appointment"):
+        @function_tool(
+            name="cancel_appointment",
+            description="Cancel an appointment after explicit caller confirmation.",
+        )
+        async def cancel_appointment(confirmed: bool, appointment_id: str = "") -> str:
+            ud.workflow = WorkflowState.CANCEL
+            result = await backend.call(
+                "cancel_booking",
+                {
+                    "workspaceId": ud.workspace_id,
+                    "agentId": ud.agent_id,
+                    "callId": ud.call_id,
+                    "timezone": ud.timezone,
+                    "callerE164": ud.caller_e164,
+                    "appointmentId": appointment_id.strip() or None,
+                    "confirmed": confirmed,
+                    "bookingConfirmedOnCall": ud.booking_confirmed,
+                    "pendingSlotId": ud.selected_slot_id,
+                },
+            )
+            if not result.get("ok"):
+                code = result.get("code") or ""
+                if code == "CONFIRMATION_REQUIRED":
+                    return "Ask the caller to confirm cancellation before calling cancel_appointment again."
+                if code == "AMBIGUOUS_APPOINTMENT":
+                    return (
+                        result.get("error") or "Multiple appointments found."
+                    ) + " Use find_appointments and ask which one."
+                return result.get("error") or "Cancellation failed."
+            speech = result.get("speech") or "Your appointment has been cancelled."
+            ud.workflow = WorkflowState.IDLE
+            return speech
+
+        tools.append(cancel_appointment)
+
+    if ud.has_tool("reschedule_appointment"):
+        @function_tool(
+            name="reschedule_appointment",
+            description=(
+                "Reschedule to a new slot id from check_availability after caller confirms the new time."
+            ),
+        )
+        async def reschedule_appointment(
+            slot_id: str,
+            confirmed: bool,
+            appointment_id: str = "",
+        ) -> str:
+            ud.workflow = WorkflowState.RESCHEDULE
+            offered = {s.slot_id for s in ud.offered_slots}
+            if slot_id not in offered:
+                return "That time wasn't in the offered list. Call check_availability first."
+            result = await backend.call(
+                "reschedule_booking",
+                {
+                    "workspaceId": ud.workspace_id,
+                    "agentId": ud.agent_id,
+                    "callId": ud.call_id,
+                    "slotId": slot_id,
+                    "timezone": ud.timezone,
+                    "businessName": ud.business_name,
+                    "callerE164": ud.caller_e164,
+                    "appointmentId": appointment_id.strip() or None,
+                    "eventTypeUri": ud.event_type_uri,
+                    "offeredSlotIds": [s.slot_id for s in ud.offered_slots],
+                    "confirmed": confirmed,
+                    "bookingConfirmedOnCall": ud.booking_confirmed,
+                    "pendingSlotId": ud.selected_slot_id,
+                },
+            )
+            if not result.get("ok"):
+                code = result.get("code") or ""
+                if code == "CONFIRMATION_REQUIRED":
+                    return "Confirm the new time with the caller before rescheduling."
+                if code == "AMBIGUOUS_APPOINTMENT":
+                    return (
+                        result.get("error") or "Multiple appointments found."
+                    ) + " Use find_appointments and ask which one."
+                return result.get("error") or "Reschedule failed."
+            ud.booking_confirmed = True
+            ud.booked_time_label = result.get("bookedTimeLabel")
+            ud.workflow = WorkflowState.BOOKING_DONE
+            return result.get("confirmationSpeech") or "Your appointment has been rescheduled."
+
+        tools.append(reschedule_appointment)
 
     @function_tool(
         name="get_business_answer",
@@ -52,7 +160,8 @@ def _faq_and_end_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
             return result.get("error") or "I couldn't find that information."
         return result.get("speak") or ""
 
-    return [get_business_answer, _end_call_toolset(), *_optional_transfer(agent, backend)]
+    tools.extend([get_business_answer, _end_call_toolset(), *_optional_transfer(agent, backend)])
+    return tools
 
 
 def build_idle_tools(agent: AmyAgent, backend: TransovoBackend) -> list:

@@ -119,6 +119,28 @@ export function buildGeneratedWorkflowRules(
     } else if (fallback?.onBookingFail === "follow_up") {
       lines.push("- If booking fails: tell the caller someone will follow up shortly.");
     }
+    if (snapshot.enabledBuiltinTools.includes("cancel_appointment")) {
+      lines.push("Cancel appointments:");
+      if (runtime === "python") {
+        lines.push(
+          "- Use cancel_appointment only after the caller explicitly confirms.",
+          "- If multiple visits exist, call find_appointments then cancel with appointment_id.",
+        );
+      } else {
+        lines.push("- Use cancel_appointment only after explicit caller confirmation.");
+      }
+    }
+    if (snapshot.enabledBuiltinTools.includes("reschedule_appointment")) {
+      lines.push("Reschedule appointments:");
+      if (runtime === "python") {
+        lines.push(
+          "- Call check_availability for new times, then reschedule_appointment with the slot id.",
+          "- Confirm the new time verbally before rescheduling.",
+        );
+      } else {
+        lines.push("- Use check_availability then reschedule_appointment with the new slot id.");
+      }
+    }
   }
 
   if (snapshot.capabilities.includes("transfer_calls")) {

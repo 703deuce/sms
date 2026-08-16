@@ -103,7 +103,11 @@ class SessionUserData:
     message_taken: bool = False
     message_summary: str | None = None
     runtime_profile: str = "generic_receptionist"
+    enabled_builtin_tools: list[str] = field(default_factory=list)
     pending_provider_tasks: list[Any] = field(default_factory=list)
+
+    def has_tool(self, tool_name: str) -> bool:
+        return tool_name in self.enabled_builtin_tools
 
     def manifest_dicts(self) -> list[dict[str, Any]]:
         if not self.receptionist:
