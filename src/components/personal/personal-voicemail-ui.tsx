@@ -47,7 +47,9 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
   const [savingSettings, setSavingSettings] = useState(false);
 
   const loadVoicemail = useCallback(async () => {
-    const res = await fetch("/api/phone/voicemail");
+    const params = new URLSearchParams();
+    if (numberId) params.set("phoneNumberId", numberId);
+    const res = await fetch(`/api/phone/voicemail?${params}`);
     const j = await res.json().catch(() => ({}));
     const { boxes, messages: rows } = parseVoicemailApiPayload(j.data);
     setMessages(rows);
@@ -364,6 +366,21 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
                               </p>
                             )}
                             <div className="mt-4 flex flex-wrap gap-2">
+                              <PersonalOutlineButton
+                                onClick={async () => {
+                                  await fetch("/api/phone/voicemail", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      action: "retranscribe",
+                                      messageId: m.id,
+                                    }),
+                                  });
+                                  await loadVoicemail();
+                                }}
+                              >
+                                Retranscribe
+                              </PersonalOutlineButton>
                               <a href={`tel:${m.callerNumber}`}>
                                 <PersonalOutlineButton>Call Back</PersonalOutlineButton>
                               </a>

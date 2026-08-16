@@ -24,14 +24,17 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    const body = (await request.json()) as { phone?: string; reason?: string };
+    const body = (await request.json()) as { phone?: string; reason?: string; numberId?: string };
     const phone = body.phone?.trim();
     if (!phone) {
       return NextResponse.json({ error: "Phone number required" }, { status: 400 });
     }
 
     const e164 = normalizeE164(phone);
-    const suppressionKey = `p:${e164}`;
+    const perNumberKey = body.numberId
+      ? `${auth.workspaceId}:${body.numberId}:p:${e164}`
+      : `p:${e164}`;
+    const suppressionKey = body.numberId ? perNumberKey : `p:${e164}`;
     const prisma = getPrisma();
 
     const existing = await prisma.suppression.findFirst({

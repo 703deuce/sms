@@ -32,6 +32,13 @@ export async function processSoftphoneInbound(input: {
     where: { workspaceId: input.workspaceId, e164: to },
   });
 
+  if (pn && input.telnyxCallControlId) {
+    const { isPhoneNumberProvider } = await import("@/lib/numbers/providers/provider-guard");
+    if (!isPhoneNumberProvider(pn, "telnyx")) {
+      return { wrongProvider: true as const, from };
+    }
+  }
+
   if (pn && input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
     const blocked = await prisma.suppression.findFirst({
       where: {
@@ -40,6 +47,7 @@ export async function processSoftphoneInbound(input: {
           { phone: from },
           { suppressionKey: `p:${from}` },
           { suppressionKey: `${input.workspaceId}:p:${from}` },
+          { suppressionKey: `${input.workspaceId}:${pn.id}:p:${from}` },
         ],
       },
     });

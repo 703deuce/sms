@@ -5,7 +5,8 @@ export type PersonalNumberAction =
   | "enable_voicemail"
   | "disable_voicemail"
   | "set_vault_voicemail"
-  | "set_vault_message_only";
+  | "set_vault_message_only"
+  | "start_port_away";
 
 export async function runPersonalNumberAction(numberId: string, action: PersonalNumberAction) {
   const res = await fetch(`/api/personal/numbers/${numberId}`, {

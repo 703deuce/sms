@@ -7,6 +7,7 @@ import {
   reactivatePersonalNumber,
   setPersonalVoicemailEnabled,
   setVaultIncomingMode,
+  startPortAwayWindow,
 } from "@/lib/workspace/personal-number-actions";
 
 type Action =
@@ -16,7 +17,8 @@ type Action =
   | "enable_voicemail"
   | "disable_voicemail"
   | "set_vault_voicemail"
-  | "set_vault_message_only";
+  | "set_vault_message_only"
+  | "start_port_away";
 
 export async function POST(
   request: Request,
@@ -67,6 +69,9 @@ export async function POST(
         break;
       case "set_vault_message_only":
         data = await setVaultIncomingMode(auth.workspaceId, numberId, "parked_message");
+        break;
+      case "start_port_away":
+        data = await startPortAwayWindow(auth.workspaceId, numberId);
         break;
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });

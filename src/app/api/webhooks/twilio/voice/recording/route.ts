@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { getPrisma } from "@/lib/db";
+import {
+  attachTwilioVoicemailRecording,
+  applyTwilioVoicemailTranscription,
+} from "@/lib/phone/twilio-voicemail-pipeline";
 import { verifyTwilioVoiceWebhookSignature } from "@/lib/numbers/providers/voice/twilio-voice-webhook-auth";
-import { attachVoicemailRecordingAndTranscribe } from "@/lib/phone/voicemail-service";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -12,13 +14,9 @@ async function parseTwilioForm(request: Request) {
   return params;
 }
 
-async function verifySignature(request: Request, params: Record<string, string>) {
-  return verifyTwilioVoiceWebhookSignature(request, params, params.To);
-}
-
 export async function POST(request: Request) {
   const params = await parseTwilioForm(request);
-  if (!(await verifySignature(request, params))) {
+  if (!(await verifyTwilioVoiceWebhookSignature(request, params, params.To))) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   }
 
@@ -32,46 +30,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
   const human = await prisma.humanCall.findUnique({ where: { id: humanCallId } });
   if (!human) return NextResponse.json({ ok: true });
 
-  let message = await prisma.voicemailMessage.findFirst({
-    where: { humanCallId: human.id, workspaceId: human.workspaceId },
+  const pn = await prisma.phoneNumber.findFirst({
+    where: { workspaceId: human.workspaceId, e164: human.to },
+    select: { id: true },
   });
 
-  if (!message) {
-    const box = await prisma.voicemailBox.findFirst({
-      where: { workspaceId: human.workspaceId, active: true },
-    });
-    if (!box) return NextResponse.json({ ok: true });
-    message = await prisma.voicemailMessage.create({
-      data: {
-        workspaceId: human.workspaceId,
-        boxId: box.id,
-        fromE164: human.from,
-        toE164: human.to,
-        humanCallId: human.id,
-        isRead: false,
-      },
-    });
-  }
-
-  await attachVoicemailRecordingAndTranscribe({
+  await attachTwilioVoicemailRecording({
     workspaceId: human.workspaceId,
-    messageId: message.id,
     humanCallId: human.id,
     recordingUrl,
+    recordingSid,
     durationSeconds: duration,
-  });
-
-  await prisma.humanCall.update({
-    where: { id: human.id },
-    data: {
-      status: "voicemail",
-      disposition: `voicemail:twilio:${recordingSid || "recording"}`,
-      recordingUrl,
-    },
+    phoneNumberId: pn?.id,
   });
 
   return NextResponse.json({ ok: true });

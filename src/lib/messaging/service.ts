@@ -386,6 +386,13 @@ export const messagingOnboarding = {
       },
     });
 
+    try {
+      const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+      await ensureNumberVoicemailBox(workspaceId, phoneRow.id);
+    } catch (err) {
+      console.warn("[purchaseNumber] voicemail box provisioning skipped", err);
+    }
+
     await appendRegistrationEvent({
       workspaceId,
       registrationId: reg.id,

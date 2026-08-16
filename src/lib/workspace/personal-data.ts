@@ -31,6 +31,7 @@ export type PersonalNumberRow = PhoneNumber & {
   callerIdDisplay: CallerIdDisplay;
   callScreeningEnabled: boolean;
   announcementText: string;
+  parkedMessageText: string;
   portOutAccountNumber: string | null;
   portOutPin: string | null;
   portOutLocked: boolean;
@@ -62,6 +63,7 @@ export function mapPersonalNumber(number: PhoneNumber): PersonalNumberRow {
     callerIdDisplay: callSettings.callerIdDisplay,
     callScreeningEnabled: callSettings.callScreeningEnabled,
     announcementText: callSettings.announcementText,
+    parkedMessageText: callSettings.parkedMessageText,
     portOutAccountNumber: callSettings.portOutAccountNumber,
     portOutPin: callSettings.portOutPin,
     portOutLocked: callSettings.portOutLocked,

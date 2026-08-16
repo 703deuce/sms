@@ -2,6 +2,35 @@ import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxPhoneConfigured } from "./human-call-service";
 
+export async function ensureNumberVoicemailBox(
+  workspaceId: string,
+  phoneNumberId: string,
+  ownerUserId?: string | null,
+) {
+  const prisma = getPrisma();
+  const existing = await prisma.voicemailBox.findFirst({
+    where: { workspaceId, phoneNumberId },
+  });
+  if (existing) return existing;
+
+  const pn = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId, workspaceId },
+    select: { e164: true, friendlyName: true },
+  });
+
+  return prisma.voicemailBox.create({
+    data: {
+      workspaceId,
+      phoneNumberId,
+      ownerUserId: ownerUserId ?? null,
+      name: pn?.friendlyName?.trim() || pn?.e164 || "Number voicemail",
+      greetingText: "Please leave a message after the tone.",
+      transcriptionEnabled: true,
+      active: true,
+    },
+  });
+}
+
 export async function ensureUserVoicemailBox(
   workspaceId: string,
   userId: string,
@@ -41,13 +70,22 @@ export async function leaveVoicemailOnCall(input: {
   telnyxCallControlId: string;
   queueId?: string | null;
   userId?: string | null;
+  phoneNumberId?: string | null;
 }) {
   const prisma = getPrisma();
-  let box = input.queueId
+  let box = input.phoneNumberId
     ? await prisma.voicemailBox.findFirst({
-        where: { workspaceId: input.workspaceId, queueId: input.queueId, active: true },
+        where: { workspaceId: input.workspaceId, phoneNumberId: input.phoneNumberId, active: true },
       })
     : null;
+  if (!box && input.phoneNumberId) {
+    box = await ensureNumberVoicemailBox(input.workspaceId, input.phoneNumberId, input.userId);
+  }
+  if (!box && input.queueId) {
+    box = await prisma.voicemailBox.findFirst({
+      where: { workspaceId: input.workspaceId, queueId: input.queueId, active: true },
+    });
+  }
   if (!box && input.userId) {
     box = await ensureUserVoicemailBox(input.workspaceId, input.userId);
   }
@@ -117,7 +155,8 @@ export async function listVoicemailMessages(workspaceId: string, boxId?: string)
 }
 
 /**
- * Attach recording to the voicemail row for a human call, then transcribe when enabled.
+ * Telnyx voicemail: attach recording then transcribe via Transovo Whisper path.
+ * Twilio numbers must use twilio-voicemail-pipeline (Twilio transcription).
  */
 export async function attachVoicemailRecordingAndTranscribe(input: {
   workspaceId: string;
@@ -125,7 +164,11 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
   messageId?: string | null;
   recordingUrl: string;
   durationSeconds?: number | null;
+  upstreamProvider?: "telnyx" | "twilio";
 }) {
+  if (input.upstreamProvider === "twilio") {
+    throw new Error("Twilio voicemails must use the Twilio transcription pipeline");
+  }
   const prisma = getPrisma();
   const msg = input.messageId
     ? await prisma.voicemailMessage.findFirst({
@@ -154,7 +197,6 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
     },
   });
 
-  // Optional email notify when the box has emailNotify configured (Brevo when keyed).
   const notifyTargets = [
     box?.emailNotify,
     box?.secondaryEmailNotify,
@@ -170,7 +212,7 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
       const recordingLink = appUrl
         ? `<p><a href="${appUrl}/api/phone/voicemail/${updated.id}/recording">Download recording</a></p>`
         : "";
-      const html = `<p>New voicemail on <strong>${box.name}</strong>.</p>
+      const html = `<p>New voicemail on <strong>${box?.name ?? "voicemail"}</strong>.</p>
 <p>From: ${updated.fromE164 || "unknown"}</p>
 <p>To: ${updated.toE164 || "—"}</p>
 <p>Duration: ${updated.durationSeconds ?? "—"}s</p>
@@ -182,7 +224,7 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
           to: String(to),
           subject: `New voicemail from ${updated.fromE164 || "unknown"}`,
           htmlContent: html,
-          textContent: `New voicemail on ${box.name} from ${updated.fromE164 || "unknown"}. ${updated.transcriptText || ""}`,
+          textContent: `New voicemail on ${box?.name ?? "voicemail"} from ${updated.fromE164 || "unknown"}. ${updated.transcriptText || ""}`,
         });
       }
     } catch (err) {
@@ -191,13 +233,12 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
   }
 
   if (!box?.transcriptionEnabled) return updated;
-  if (updated.transcriptText) return updated;
+  if (updated.transcriptText && !updated.transcriptText.startsWith("[Transcription")) return updated;
 
   try {
     const { transcribeAudioUrl } = await import("./voicemail-transcribe");
     const transcript = await transcribeAudioUrl(input.recordingUrl);
     if (!transcript) {
-      // No OpenAI key — leave recording playable; UI shows "transcription pending".
       return prisma.voicemailMessage.update({
         where: { id: msg.id },
         data: {
@@ -206,10 +247,27 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
         },
       });
     }
-    return prisma.voicemailMessage.update({
+    const withTranscript = await prisma.voicemailMessage.update({
       where: { id: msg.id },
       data: { transcriptText: transcript },
     });
+    if (notifyTargets.length > 0) {
+      try {
+        const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+        const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
+        for (const to of notifyTargets) {
+          await sendTransactionalEmail({
+            to: String(to),
+            subject: `Voicemail transcript from ${withTranscript.fromE164 || "unknown"}`,
+            htmlContent: `<p>Transcript: ${transcript}</p>${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open inbox</a></p>` : ""}`,
+            textContent: transcript,
+          });
+        }
+      } catch {
+        // ignore secondary email errors
+      }
+    }
+    return withTranscript;
   } catch (err) {
     console.warn("[voicemail] transcription failed", err);
     return prisma.voicemailMessage.update({

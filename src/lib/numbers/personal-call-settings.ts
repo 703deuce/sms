@@ -15,6 +15,7 @@ export type PersonalCallSettings = {
   vaultIncomingMode: VaultIncomingMode;
   parkedMessageText: string;
   announcementText: string;
+  announcementUrl: string | null;
   forwardingEnabled: boolean;
   forwardMode: ForwardMode;
   forwardTargets: string[];
@@ -114,6 +115,10 @@ export function readPersonalCallSettings(row: {
       typeof settings.announcementText === "string" && settings.announcementText.trim()
         ? settings.announcementText.trim()
         : DEFAULT_ANNOUNCEMENT,
+    announcementUrl:
+      typeof settings.announcementUrl === "string" && settings.announcementUrl.trim()
+        ? settings.announcementUrl.trim()
+        : null,
     forwardingEnabled:
       settings.forwardingEnabled === false
         ? false
@@ -196,6 +201,7 @@ export type PersonalCallSettingsPatch = Partial<{
   vaultIncomingMode: VaultIncomingMode;
   parkedMessageText: string;
   announcementText: string;
+  announcementUrl: string | null;
   forwardingEnabled: boolean;
   forwardMode: ForwardMode;
   forwardTargets: string[];
@@ -235,6 +241,9 @@ export function mergePersonalCallSettingsPatch(
   }
   if (patch.announcementText !== undefined) {
     next.announcementText = patch.announcementText.trim();
+  }
+  if (patch.announcementUrl !== undefined) {
+    next.announcementUrl = patch.announcementUrl?.trim() || null;
   }
   if (patch.forwardRingSeconds !== undefined) {
     next.forwardRingSeconds = patch.forwardRingSeconds;

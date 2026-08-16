@@ -48,6 +48,8 @@ export function PersonalVaultUI({
       ? initialNumberId
       : parked[0]?.id || "",
   );
+  const [parkedMessageDraft, setParkedMessageDraft] = useState("");
+  const [parkedMessageNumberId, setParkedMessageNumberId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,6 +157,59 @@ export function PersonalVaultUI({
               </>
             )}
           </div>
+          {parked.length > 0 ? (
+            <div className={pCard + " p-4 mt-3"}>
+              <h3 className="text-[13px] font-semibold text-[#111827]">Vault announcement</h3>
+              <p className="mt-1 text-[12px] text-[#6b7280]">
+                Custom message played when a vaulted number uses &quot;Play announcement&quot;.
+              </p>
+              <select
+                className="mt-3 h-9 w-full rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
+                value={parkedMessageNumberId || reactivateId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setParkedMessageNumberId(id);
+                  const row = parked.find((n) => n.id === id);
+                  setParkedMessageDraft(row?.parkedMessageText || "");
+                }}
+              >
+                {parked.map((n) => (
+                  <option key={n.id} value={n.id}>{formatPhone(n.number)}</option>
+                ))}
+              </select>
+              <textarea
+                className="mt-2 w-full rounded-lg border border-[#e5e7eb] p-2 text-[13px]"
+                rows={3}
+                value={parkedMessageDraft}
+                onChange={(e) => setParkedMessageDraft(e.target.value)}
+              />
+              <PersonalPrimaryButton
+                className="mt-2 w-full"
+                disabled={!parkedMessageNumberId && !reactivateId}
+                onClick={async () => {
+                  const id = parkedMessageNumberId || reactivateId;
+                  if (!id) return;
+                  setBusy("parked-msg");
+                  try {
+                    await fetch(`/api/numbers/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        personalCallSettings: { parkedMessageText: parkedMessageDraft },
+                      }),
+                    });
+                    router.refresh();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Could not save message.");
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+              >
+                Save vault message
+              </PersonalPrimaryButton>
+            </div>
+          ) : null}
           <PersonalAsideCard title="Need Help?">
             <p>Questions about vault pricing or reactivation?</p>
             <Link href="/contact" className="font-semibold text-[#6366f1]">Contact support</Link>

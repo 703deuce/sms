@@ -20,6 +20,28 @@ export async function reactivatePersonalNumber(workspaceId: string, numberId: st
   return transitionNumberService(workspaceId, numberId, "reactivate");
 }
 
+export async function startPortAwayWindow(workspaceId: string, numberId: string) {
+  const row = await getOwnedNumber(workspaceId, numberId);
+  const settings =
+    row.settingsJson && typeof row.settingsJson === "object"
+      ? { ...(row.settingsJson as Record<string, unknown>) }
+      : {};
+
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  const updated = await getPrisma().phoneNumber.update({
+    where: { id: numberId },
+    data: {
+      settingsJson: {
+        ...settings,
+        portAwayWindowExpiresAt: expiresAt.toISOString(),
+        personalServiceState: "PORT_AWAY_WINDOW",
+      },
+    },
+  });
+  return mapPhoneNumber(updated as Parameters<typeof mapPhoneNumber>[0]);
+}
+
 export async function clearPortAwayWindow(workspaceId: string, numberId: string) {
   const row = await getOwnedNumber(workspaceId, numberId);
   const settings =

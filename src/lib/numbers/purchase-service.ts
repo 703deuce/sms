@@ -194,6 +194,13 @@ export async function finalizeNumberOwnership(input: {
     update: {},
   });
 
+  try {
+    const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+    await ensureNumberVoicemailBox(input.workspaceId, phoneRow.id, input.userId);
+  } catch (err) {
+    console.warn("[finalizeNumberOwnership] voicemail box provisioning skipped", err);
+  }
+
   await prisma.premiumNumberReservation.update({
     where: { id: input.reservationId },
     data: {

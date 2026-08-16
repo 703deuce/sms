@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { ensureUserVoicemailBox, listVoicemailMessages } from "@/lib/phone/voicemail-service";
+import { ensureUserVoicemailBox, ensureNumberVoicemailBox, listVoicemailMessages } from "@/lib/phone/voicemail-service";
 import { getPrisma } from "@/lib/db";
 
 export async function GET(request: Request) {
@@ -9,11 +9,16 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
     const url = new URL(request.url);
     const boxId = url.searchParams.get("boxId") || undefined;
+    const phoneNumberId = url.searchParams.get("phoneNumberId") || undefined;
     const boxes = await getPrisma().voicemailBox.findMany({
-      where: { workspaceId: auth.workspaceId },
+      where: {
+        workspaceId: auth.workspaceId,
+        ...(phoneNumberId ? { phoneNumberId } : {}),
+      },
       orderBy: { createdAt: "desc" },
     });
-    const messages = await listVoicemailMessages(auth.workspaceId, boxId);
+    const resolvedBoxId = boxId ?? boxes[0]?.id;
+    const messages = await listVoicemailMessages(auth.workspaceId, resolvedBoxId);
     return NextResponse.json({ data: { boxes, messages } });
   } catch (err) {
     return jsonError(err, 500);
@@ -33,6 +38,16 @@ export async function POST(request: Request) {
       boxId?: string;
       messageId?: string;
     };
+
+    if (body.action === "ensure_number_box" && (body as { phoneNumberId?: string }).phoneNumberId) {
+      const phoneNumberId = (body as { phoneNumberId: string }).phoneNumberId;
+      const box = await ensureNumberVoicemailBox(
+        auth.workspaceId,
+        phoneNumberId,
+        auth.session.userId,
+      );
+      return NextResponse.json({ data: box });
+    }
 
     if (body.action === "ensure_personal") {
       const box = await ensureUserVoicemailBox(
@@ -112,12 +127,35 @@ export async function POST(request: Request) {
         where: { id: msg.id },
         data: { transcriptText: null },
       });
+      const pn = msg.humanCallId
+        ? await getPrisma().humanCall.findFirst({
+            where: { id: msg.humanCallId, workspaceId: auth.workspaceId },
+            select: { to: true },
+          })
+        : null;
+      const phoneRow = pn?.to
+        ? await getPrisma().phoneNumber.findFirst({
+            where: { workspaceId: auth.workspaceId, e164: pn.to },
+            select: { provider: true, twilioSid: true, providerNumberId: true },
+          })
+        : null;
+      const { resolvePhoneNumberProvider } = await import("@/lib/numbers/providers/normalize");
+      const upstream = phoneRow ? resolvePhoneNumberProvider(phoneRow) : "telnyx";
+
+      if (upstream === "twilio") {
+        return NextResponse.json(
+          { error: "Twilio numbers use carrier transcription; retranscribe is not available." },
+          { status: 400 },
+        );
+      }
+
       const updated = await attachVoicemailRecordingAndTranscribe({
         workspaceId: auth.workspaceId,
         messageId: msg.id,
         humanCallId: msg.humanCallId,
         recordingUrl: msg.recordingUrl,
         durationSeconds: msg.durationSeconds,
+        upstreamProvider: "telnyx",
       });
       return NextResponse.json({ data: updated });
     }

@@ -91,6 +91,23 @@ export function PersonalAnalyticsClient({
             </ul>
           </PersonalSection>
 
+          <PersonalSection title="Calls by hour">
+            {data.byHour.every((h) => h.calls === 0) ? (
+              <p className={pMuted}>No hourly breakdown for this period.</p>
+            ) : (
+              <ul className="space-y-1 text-[13px]">
+                {data.byHour
+                  .filter((h) => h.calls > 0)
+                  .map((h) => (
+                    <li key={h.hour} className="flex justify-between gap-4">
+                      <span>{h.hour}:00</span>
+                      <span className="font-semibold">{h.calls}</span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </PersonalSection>
+
           <PersonalSection title="Calls by day">
             {data.byDay.length === 0 ? (
               <p className={pMuted}>No data for this period.</p>

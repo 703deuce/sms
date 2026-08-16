@@ -21,6 +21,9 @@ export function PersonalNumberDetailClient({
   acquisition: string;
   businesses: Array<{ id: string; name: string }>;
 }) {
+  const [friendlyName, setFriendlyName] = useState(number.friendlyName || "");
+  const [savingName, setSavingName] = useState(false);
+  const [nameMessage, setNameMessage] = useState<string | null>(null);
   const router = useRouter();
   const [portMessage, setPortMessage] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
@@ -75,6 +78,48 @@ export function PersonalNumberDetailClient({
     }
   }
 
+  async function saveFriendlyName() {
+    setSavingName(true);
+    setNameMessage(null);
+    try {
+      const res = await fetch(`/api/numbers/${number.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendlyName: friendlyName.trim() || null }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Could not save name");
+      setNameMessage("Saved.");
+      router.refresh();
+    } catch (e) {
+      setNameMessage(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function startPortAway() {
+    setUnlocking(true);
+    setPortMessage(null);
+    try {
+      const res = await fetch(`/api/personal/numbers/${number.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start_port_away" }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Could not start port-away window");
+      setPortMessage(
+        "Port-away window started. You have 7 days to complete transfer with your new carrier.",
+      );
+      router.refresh();
+    } catch (e) {
+      setPortMessage(e instanceof Error ? e.message : "Could not start port-away window.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="surface rounded-xl p-5">
@@ -87,6 +132,20 @@ export function PersonalNumberDetailClient({
             <p className="mt-1 text-sm text-muted-foreground">
               Status: {number.serviceLabel} · {number.status}
             </p>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <label className="text-xs text-muted-foreground">
+                Friendly name
+                <input
+                  className="mt-1 block w-full max-w-xs rounded-md border px-2 py-1 text-sm"
+                  value={friendlyName}
+                  onChange={(e) => setFriendlyName(e.target.value)}
+                />
+              </label>
+              <Button size="sm" variant="outline" disabled={savingName} onClick={saveFriendlyName}>
+                {savingName ? "Saving…" : "Save name"}
+              </Button>
+            </div>
+            {nameMessage ? <p className="text-xs text-muted-foreground">{nameMessage}</p> : null}
             <p className="text-sm text-muted-foreground">Acquisition: {acquisition}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -159,6 +218,9 @@ export function PersonalNumberDetailClient({
               Lock number
             </Button>
           )}
+          <Button size="sm" variant="outline" onClick={startPortAway} disabled={unlocking}>
+            Start port-away window
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => portAction("sync")} disabled={unlocking}>
             Sync from Telnyx
           </Button>
