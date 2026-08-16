@@ -38,6 +38,8 @@ export function scoreCandidate(input: {
   telnyxCost?: TelnyxCost;
   rawTelnyx?: Record<string, unknown>;
   searchContext?: ScoringSearchContext;
+  provider?: "telnyx" | "twilio";
+  providerReference?: string | null;
 }): ScoredCandidate | null {
   const digits10 = parsePhoneDigits(input.phoneNumber);
   const parts = splitUsLocalNumber(digits10);
@@ -100,6 +102,8 @@ export function scoreCandidate(input: {
     rawDigits: digits10,
     subscriberDigits: subscriber,
     rawTelnyx: input.rawTelnyx,
+    provider: input.provider,
+    providerReference: input.providerReference ?? null,
   };
 }
 

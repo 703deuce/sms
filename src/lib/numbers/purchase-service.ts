@@ -1,14 +1,8 @@
 import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
-import type { MessagingRegistration } from "@/lib/domain";
-import { getMessagingProvider } from "@/lib/messaging/get-provider";
-import { getMessagingProviderName } from "@/lib/messaging/provider-config";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import {
-  ensureRegistrationRow,
-  getRegistrationByWorkspace,
-} from "@/lib/messaging/store";
+import { getNumberProvider } from "@/lib/numbers/providers/number-search-service";
 import {
   getNumberPaymentProvider,
   type NumberPaymentConfirmResult,
@@ -125,7 +119,9 @@ export async function finalizeNumberOwnership(input: {
   workspaceId: string;
   userId: string;
   e164: string;
+  provider: "telnyx" | "twilio";
   providerNumberId: string;
+  providerOrderId?: string | null;
   telnyxOrderId?: string | null;
   reservationId: string;
   searchMode: string;
@@ -141,7 +137,7 @@ export async function finalizeNumberOwnership(input: {
   const digits = e164.replace(/\D/g, "");
   const npa = digits.slice(1, 4);
   const isTollFree = /^(800|833|844|855|866|877|888)$/.test(npa);
-  const providerName = getMessagingProviderName();
+  const upstreamProvider = input.provider;
 
   const settingsJson = defaultParkedSettings({
     searchMode: input.searchMode,
@@ -161,8 +157,10 @@ export async function finalizeNumberOwnership(input: {
       type: isTollFree ? "TollFree" : "Local",
       areaCode: npa || null,
       friendlyName: input.vanityDisplay || input.displayNumber || e164,
-      twilioSid: providerName === "twilio" ? input.providerNumberId : null,
+      provider: upstreamProvider,
+      twilioSid: upstreamProvider === "twilio" ? input.providerNumberId : null,
       providerNumberId: input.providerNumberId,
+      providerOrderId: input.providerOrderId ?? input.telnyxOrderId ?? null,
       status: "Active",
       purchasedAt: new Date(),
       a2pStatus: "PENDING",
@@ -175,7 +173,10 @@ export async function finalizeNumberOwnership(input: {
       },
     },
     update: {
+      provider: upstreamProvider,
       providerNumberId: input.providerNumberId,
+      providerOrderId: input.providerOrderId ?? input.telnyxOrderId ?? null,
+      twilioSid: upstreamProvider === "twilio" ? input.providerNumberId : null,
       status: "Active",
       releasedAt: null,
       purchasedAt: new Date(),
@@ -218,7 +219,7 @@ export async function finalizeNumberOwnership(input: {
   }
 
   if (
-    providerName === "telnyx" &&
+    upstreamProvider === "telnyx" &&
     !input.providerNumberId.startsWith("ORDER:") &&
     !input.providerNumberId.startsWith("DRY_RUN:")
   ) {
@@ -235,13 +236,33 @@ export async function finalizeNumberOwnership(input: {
         workspaceId: input.workspaceId,
         userId: input.userId,
         phoneNumberId: phoneRow.id,
-        provider: providerName,
+        provider: upstreamProvider,
         action: "dual_provision",
         status: "recoverable_failure",
         startedAt: new Date().toISOString(),
         normalizedError: normalized,
         reservationId: input.reservationId,
       });
+    }
+  }
+
+  if (upstreamProvider === "twilio" && !input.providerNumberId.startsWith("DRY_RUN:")) {
+    try {
+      const { twilioNumberProvider } = await import("@/lib/numbers/providers/twilio-number-provider");
+      await twilioNumberProvider.configureVoiceWebhook(input.providerNumberId, input.workspaceId);
+    } catch (err) {
+      logPurchaseEvent({
+        operationId: input.operationId,
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        phoneNumberId: phoneRow.id,
+        provider: upstreamProvider,
+        action: "twilio_voice_configure",
+        status: "recoverable_failure",
+        startedAt: new Date().toISOString(),
+        reservationId: input.reservationId,
+      });
+      console.warn("[purchase] Twilio voice webhook configure failed", err);
     }
   }
 
@@ -397,6 +418,7 @@ export async function completePremiumPurchase(
       workspaceId: input.workspaceId,
       userId: input.userId,
       e164: reservation.phoneNumber,
+      provider: reservation.provider === "twilio" ? "twilio" : "telnyx",
       providerNumberId: mockProviderId,
       telnyxOrderId: null,
       reservationId: reservation.id,
@@ -436,50 +458,92 @@ export async function completePremiumPurchase(
 
   const e164 = normalizeE164(reservation.phoneNumber);
   let providerNumberId: string | null = null;
+  let providerOrderId: string | null = null;
   let telnyxOrderId: string | null = null;
-  const providerName = getMessagingProviderName();
+  const upstreamProvider = reservation.provider === "twilio" ? "twilio" : "telnyx";
+  const numberProvider = getNumberProvider(upstreamProvider);
 
   try {
-    const reconciled = await reconcileTelnyxOwnedNumber(e164);
-    if (reconciled) {
-      providerNumberId = reconciled.providerNumberId;
-      telnyxOrderId = reconciled.orderId ?? null;
-      logPurchaseEvent({
-        operationId,
-        workspaceId: input.workspaceId,
-        userId: input.userId,
-        provider: providerName,
-        action: "reconcile_existing",
-        status: "success",
-        startedAt,
-        completedAt: new Date().toISOString(),
-        reservationId: reservation.id,
-      });
+    if (upstreamProvider === "telnyx") {
+      const reconciled = await reconcileTelnyxOwnedNumber(e164);
+      if (reconciled) {
+        providerNumberId = reconciled.providerNumberId;
+        telnyxOrderId = reconciled.orderId ?? null;
+        providerOrderId = telnyxOrderId;
+        logPurchaseEvent({
+          operationId,
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          provider: upstreamProvider,
+          action: "reconcile_existing",
+          status: "success",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          reservationId: reservation.id,
+        });
+      } else {
+        const bought = await numberProvider.purchaseNumber({
+          workspaceId: input.workspaceId,
+          e164,
+          customerReference: `premium:${reservation.id}`,
+        });
+        providerNumberId = bought.providerNumberId;
+        providerOrderId = bought.providerOrderId ?? null;
+        telnyxOrderId = bought.providerOrderId ?? null;
+        logPurchaseEvent({
+          operationId,
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          provider: upstreamProvider,
+          action: "telnyx_order",
+          status: bought.pending ? "pending_activation" : "success",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          reservationId: reservation.id,
+        });
+      }
     } else {
-      await ensureRegistrationRow(input.workspaceId);
-      const reg = (await getRegistrationByWorkspace(input.workspaceId)) as MessagingRegistration;
-      const bought = await getMessagingProvider().buyPhoneNumber(reg, e164);
-      providerNumberId = bought.id;
-      telnyxOrderId = bought.orderId ?? null;
-
+      const stillAvailable = await numberProvider.checkAvailability(e164);
+      if (!stillAvailable) {
+        await prisma.premiumNumberReservation.updateMany({
+          where: { id: reservation.id, paymentStatus: "processing" },
+          data: { paymentStatus: "failed", orderStatus: "sold" },
+        });
+        return {
+          ok: false,
+          status: "sold",
+          error: "This number is no longer available. Search again for similar options.",
+          paymentId: payment.paymentId,
+          operationId,
+        };
+      }
+      const bought = await numberProvider.purchaseNumber({
+        workspaceId: input.workspaceId,
+        e164,
+        customerReference: `premium:${reservation.id}`,
+      });
+      providerNumberId = bought.providerNumberId;
+      providerOrderId = bought.providerOrderId ?? null;
       logPurchaseEvent({
         operationId,
         workspaceId: input.workspaceId,
         userId: input.userId,
-        provider: providerName,
-        action: "telnyx_order",
-        status: bought.pending ? "pending_activation" : "success",
+        provider: upstreamProvider,
+        action: "twilio_purchase",
+        status: "success",
         startedAt,
         completedAt: new Date().toISOString(),
         reservationId: reservation.id,
       });
     }
   } catch (err) {
-    const normalized = normalizeTelnyxError(err);
+    const normalized =
+      upstreamProvider === "telnyx" ? normalizeTelnyxError(err) : undefined;
     await prisma.premiumNumberReservation.updateMany({
       where: { id: reservation.id, paymentStatus: "processing" },
       data: {
-        paymentStatus: normalized.outcome === "RECOVERABLE_FAILURE" ? "processing" : "failed",
+        paymentStatus:
+          normalized?.outcome === "RECOVERABLE_FAILURE" ? "processing" : "failed",
         orderStatus: "failed",
       },
     });
@@ -487,8 +551,8 @@ export async function completePremiumPurchase(
       operationId,
       workspaceId: input.workspaceId,
       userId: input.userId,
-      provider: providerName,
-      action: "telnyx_order",
+      provider: upstreamProvider,
+      action: upstreamProvider === "telnyx" ? "telnyx_order" : "twilio_purchase",
       status: "failure",
       startedAt,
       completedAt: new Date().toISOString(),
@@ -498,7 +562,8 @@ export async function completePremiumPurchase(
     return {
       ok: false,
       status: "provider_failed",
-      error: normalized.message,
+      error:
+        normalized?.message ?? (err instanceof Error ? err.message : "Provider purchase failed"),
       normalizedError: normalized,
       paymentId: payment.paymentId,
       operationId,
@@ -513,7 +578,7 @@ export async function completePremiumPurchase(
     return {
       ok: false,
       status: "provider_failed",
-      error: "Telnyx did not return a number id",
+      error: "Provider did not return a number id",
       paymentId: payment.paymentId,
       operationId,
     };
@@ -523,7 +588,9 @@ export async function completePremiumPurchase(
     workspaceId: input.workspaceId,
     userId: input.userId,
     e164,
+    provider: upstreamProvider,
     providerNumberId,
+    providerOrderId,
     telnyxOrderId: telnyxOrderId ?? undefined,
     reservationId: reservation.id,
     searchMode: reservation.searchMode,
@@ -540,7 +607,7 @@ export async function completePremiumPurchase(
     workspaceId: input.workspaceId,
     userId: input.userId,
     phoneNumberId: phoneRow.id,
-    provider: providerName,
+    provider: upstreamProvider,
     action: "complete_purchase",
     status: "success",
     startedAt,

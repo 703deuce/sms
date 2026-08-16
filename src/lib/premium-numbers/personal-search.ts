@@ -1,9 +1,10 @@
 import { buildKeywordEntries } from "./industry-keywords";
 import { scoreCandidate, sortCandidates } from "./scoring";
 import { SCORING_WEIGHTS } from "./scoring-config";
-import { runTelnyxInventorySearches } from "./telnyx-inventory-search";
+import { runCombinedInventorySearches } from "./combined-inventory-search";
 import { parsePhoneDigits } from "./keypad";
-import type { PremiumSearchResult, ScoredCandidate } from "./types";
+import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
+import type { PremiumSearchResult, ScoredCandidate, TelnyxSearchAttempt } from "./types";
 
 export type PersonalPreference =
   | "repeating_digits"
@@ -35,6 +36,14 @@ const PREFERENCE_PATTERNS: Record<PersonalPreference, string[]> = {
   ],
   surprise_me: [...SCORING_WEIGHTS.memorablePatternSearchDigits],
 };
+
+function mapProviderAttemptStatus(
+  status: ProviderSearchAttempt["status"],
+): TelnyxSearchAttempt["status"] {
+  if (status === "ok") return "ok";
+  if (status === "unsupported") return "unsupported";
+  return "error";
+}
 
 function patternsForPreferences(preferences: PersonalPreference[]): string[] {
   if (!preferences.length || preferences.includes("surprise_me")) {
@@ -88,18 +97,26 @@ export async function searchPremiumNumbersPersonal(input: {
   const keywords = buildKeywordEntries({});
   const memorablePatterns = patternsForPreferences(input.preferences ?? ["surprise_me"]);
 
-  let allCandidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"] = [];
+  let allCandidates: Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"] = [];
   const attempts: PremiumSearchResult["searchAttempts"] = [];
 
   try {
     for (const areaCode of areaCodes) {
-      const inventory = await runTelnyxInventorySearches({
+      const inventory = await runCombinedInventorySearches({
         areaCode,
         keywordDigitStrings: [],
         memorablePatterns,
         baseLimit: areaCodes.length > 1 ? 30 : 50,
       });
-      attempts.push(...inventory.attempts);
+      attempts.push(
+        ...inventory.attempts.map((a) => ({
+          strategy: a.strategy,
+          query: {},
+          status: mapProviderAttemptStatus(a.status),
+          error: a.error,
+          resultCount: a.resultCount ?? 0,
+        })),
+      );
       const filtered = inventory.candidates.filter((c) => {
         const digits = parsePhoneDigits(c.phoneNumber);
         return digits.length === 10 && digits.startsWith(areaCode);
@@ -119,7 +136,7 @@ export async function searchPremiumNumbersPersonal(input: {
     };
   }
 
-  const byPhone = new Map<string, Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"][0]>();
+  const byPhone = new Map<string, Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"][0]>();
   for (const c of allCandidates) {
     if (!byPhone.has(c.phoneNumber)) byPhone.set(c.phoneNumber, c);
   }
@@ -139,6 +156,8 @@ export async function searchPremiumNumbersPersonal(input: {
               }
             : undefined,
         rawTelnyx: raw.raw,
+        provider: raw.provider,
+        providerReference: raw.providerReference,
       }),
     )
     .filter((c): c is ScoredCandidate => c !== null);

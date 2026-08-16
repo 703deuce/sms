@@ -116,6 +116,9 @@ export type ScoredCandidate = {
   rawDigits: string;
   subscriberDigits: string;
   rawTelnyx?: Record<string, unknown>;
+  /** Upstream inventory provider for purchase routing. */
+  provider?: "telnyx" | "twilio";
+  providerReference?: string | null;
 };
 
 export type TelnyxSearchAttempt = {

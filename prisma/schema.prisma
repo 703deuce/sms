@@ -327,8 +327,11 @@ model PhoneNumber {
   type             String
   areaCode         String?
   friendlyName     String?
+  /// Upstream telephony provider that owns this DID (telnyx | twilio).
+  provider         String   @default("telnyx")
   twilioSid        String?
   providerNumberId String?
+  providerOrderId  String?
   a2pStatus        ComplianceStatus @default(PENDING)
   messagingService String?
   monthlyCostCents Int      @default(115)
@@ -361,6 +364,9 @@ model PremiumNumberReservation {
   premiumPriceCents    Int
   premiumPriceBand     String?
   telnyxReservationId  String?
+  /// telnyx | twilio — which upstream API must provision/release this number.
+  provider             String   @default("telnyx")
+  providerReference      String?
   reservationExpiresAt DateTime?
   reservationStatus    String    @default("reserving")
   paymentStatus        String    @default("none")

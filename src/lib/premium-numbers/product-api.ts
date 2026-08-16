@@ -42,6 +42,9 @@ export type PremiumNumberProductResult = {
   tags: string[];
   whyReasons: string[];
   providerPremium: boolean;
+  /** Internal — drives purchase API selection (not shown as separate UI sections). */
+  provider: "telnyx" | "twilio";
+  providerReference?: string | null;
   availabilityStatus: PremiumNumberAvailabilityStatus;
   listSection: "business_match" | "memorable_alternative" | "top_pick" | "other";
 };
@@ -255,6 +258,8 @@ export function toProductResult(
     tags: buildTags(candidate, mode, displayWord),
     whyReasons: whyReasons(candidate),
     providerPremium,
+    provider: candidate.provider ?? "telnyx",
+    providerReference: candidate.providerReference ?? null,
     availabilityStatus: "available",
     listSection,
   };

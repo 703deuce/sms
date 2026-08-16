@@ -1,8 +1,8 @@
 import { getPrisma } from "@/lib/db";
-import { getMessagingProvider } from "@/lib/messaging/get-provider";
-import { getMessagingProviderName } from "@/lib/messaging/provider-config";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
+import { getNumberProvider } from "@/lib/numbers/providers/number-search-service";
+import { resolvePhoneNumberProvider } from "@/lib/numbers/providers/normalize";
 import { normalizeTelnyxError } from "./telnyx-errors";
 
 export type ReleaseNumberResult = {
@@ -70,26 +70,29 @@ export async function releaseWorkspaceNumber(
     reg?.phoneE164 === row.e164 || reg?.phoneSid === row.providerNumberId;
 
   let providerReleased = false;
-  const providerName = getMessagingProviderName();
+  const upstream = resolvePhoneNumberProvider(row);
+  const upstreamNumberId =
+    row.providerNumberId ||
+    (upstream === "twilio" ? row.twilioSid : row.providerNumberId) ||
+    null;
 
-  if (row.providerNumberId && !row.providerNumberId.startsWith("DRY_RUN:")) {
+  if (upstreamNumberId && !upstreamNumberId.startsWith("DRY_RUN:")) {
     try {
       if (isRegistrationPrimary) {
         await messagingOnboarding.releaseNumber(workspaceId);
         providerReleased = true;
-      } else if (reg && providerName === "telnyx") {
-        await getMessagingProvider().releasePhoneNumber(reg, row.providerNumberId);
-        providerReleased = true;
-      } else if (reg && providerName === "twilio" && row.twilioSid) {
-        const { twilioAdapter } = await import("@/lib/messaging/twilio-adapter");
-        await twilioAdapter.releaseNumber(reg, row.twilioSid);
+      } else {
+        const provider = getNumberProvider(upstream);
+        await provider.releaseNumber(upstreamNumberId, workspaceId);
         providerReleased = true;
       }
     } catch (err) {
-      const normalized = normalizeTelnyxError(err);
+      const normalized = upstream === "telnyx" ? normalizeTelnyxError(err) : undefined;
       return {
         ok: false,
-        error: normalized.message || "Provider release failed",
+        error:
+          normalized?.message ??
+          (err instanceof Error ? err.message : "Provider release failed"),
       };
     }
   } else if (isRegistrationPrimary) {

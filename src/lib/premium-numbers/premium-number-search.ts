@@ -4,7 +4,9 @@ import { parsePhoneDigits } from "./keypad";
 import { scoreCandidate, sortCandidates } from "./scoring";
 import { attachScarcityObservations } from "./scarcity";
 import { SCORING_WEIGHTS } from "./scoring-config";
-import { runTelnyxInventorySearches } from "./telnyx-inventory-search";
+import { runCombinedInventorySearches } from "./combined-inventory-search";
+import type { InventoryCandidateForScoring } from "@/lib/numbers/providers/inventory-bridge";
+import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
 import type {
   PremiumSearchInput,
   PremiumSearchResult,
@@ -79,10 +81,18 @@ function resolveStatus(
   return "RESULTS_FOUND";
 }
 
+function mapProviderAttemptStatus(
+  status: ProviderSearchAttempt["status"],
+): TelnyxSearchAttempt["status"] {
+  if (status === "ok") return "ok";
+  if (status === "unsupported") return "unsupported";
+  return "error";
+}
+
 function filterCandidatesForAreaCodes(
-  candidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"],
+  candidates: InventoryCandidateForScoring[],
   areaCodes: string[],
-): typeof candidates {
+): InventoryCandidateForScoring[] {
   const allowed = new Set(areaCodes);
   return candidates.filter((c) => {
     const digits = parsePhoneDigits(c.phoneNumber);
@@ -132,19 +142,27 @@ export async function searchPremiumNumbers(
   const keywordDigitStrings = [...new Set(keywords.map((k) => k.digits))];
   const matchStyle = input.matchStyle ?? "both";
 
-  let allCandidates: Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"] = [];
+  let allCandidates: Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"] = [];
   const attempts: TelnyxSearchAttempt[] = [];
 
   try {
     for (const areaCode of areaCodes) {
-      const inventory = await runTelnyxInventorySearches({
+      const inventory = await runCombinedInventorySearches({
         areaCode,
         keywordDigitStrings,
         memorablePatterns: [...SCORING_WEIGHTS.memorablePatternSearchDigits],
         baseLimit: areaCodes.length > 1 ? 30 : 50,
         matchStyle,
       });
-      attempts.push(...inventory.attempts);
+      attempts.push(
+        ...inventory.attempts.map((a) => ({
+          strategy: a.strategy,
+          query: {},
+          status: mapProviderAttemptStatus(a.status),
+          error: a.error,
+          resultCount: a.resultCount ?? 0,
+        })),
+      );
       allCandidates.push(...inventory.candidates);
     }
   } catch (err) {
@@ -173,7 +191,7 @@ export async function searchPremiumNumbers(
     };
   }
 
-  const byPhone = new Map<string, Awaited<ReturnType<typeof runTelnyxInventorySearches>>["candidates"][0]>();
+  const byPhone = new Map<string, Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"][0]>();
   for (const c of allCandidates) {
     if (!byPhone.has(c.phoneNumber)) byPhone.set(c.phoneNumber, c);
   }
@@ -199,6 +217,8 @@ export async function searchPremiumNumbers(
         keywords,
         telnyxCost,
         rawTelnyx: raw.raw,
+        provider: raw.provider,
+        providerReference: raw.providerReference,
         searchContext: {
           requestedAreaCodes: areaCodes,
           industry: inferredIndustry,

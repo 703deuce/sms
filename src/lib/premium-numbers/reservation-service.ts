@@ -30,6 +30,8 @@ type StoredResultRow = {
   displayNumber?: string;
   businessMatchScore?: number;
   numberQualityScore?: number;
+  provider?: "telnyx" | "twilio";
+  providerReference?: string | null;
 };
 
 export async function reservePremiumNumber(
@@ -81,6 +83,8 @@ export async function reservePremiumNumber(
       vanityDisplay: match.vanityDisplay,
       displayNumber: match.displayNumber,
       searchMode: input.searchMode,
+      provider: match.provider ?? "telnyx",
+      providerReference: match.providerReference ?? null,
       searchContextJson: {
         searchLogId: input.searchLogId,
         areaCode: log.areaCode,
@@ -100,35 +104,59 @@ export async function reservePremiumNumber(
     data: { selectedNumber: input.phoneNumber, checkoutStarted: true },
   });
 
-  const telnyx = await createTelnyxNumberReservation({
-    phoneNumber: input.phoneNumber,
-    customerReference: `workspace:${input.workspaceId}:${record.id}`,
-  });
+  const upstreamProvider = match.provider ?? "telnyx";
 
-  if (!telnyx.phoneStatus || telnyx.error) {
-    const status = telnyx.error?.toLowerCase().includes("hold")
-      ? "non_reservable"
-      : "failed";
+  if (upstreamProvider === "telnyx") {
+    const telnyx = await createTelnyxNumberReservation({
+      phoneNumber: input.phoneNumber,
+      customerReference: `workspace:${input.workspaceId}:${record.id}`,
+    });
+
+    if (!telnyx.phoneStatus || telnyx.error) {
+      const status = telnyx.error?.toLowerCase().includes("hold")
+        ? "non_reservable"
+        : "failed";
+      await prisma.premiumNumberReservation.update({
+        where: { id: record.id },
+        data: { reservationStatus: status },
+      });
+      return {
+        ok: false,
+        reservationId: record.id,
+        reservationStatus: status,
+        error: telnyx.error || "Could not reserve this number",
+      };
+    }
+
+    const expiresAt = telnyx.phoneStatus.expired_at
+      ? new Date(telnyx.phoneStatus.expired_at)
+      : new Date(Date.now() + 30 * 60 * 1000);
+
     await prisma.premiumNumberReservation.update({
       where: { id: record.id },
-      data: { reservationStatus: status },
+      data: {
+        telnyxReservationId: telnyx.reservation?.id,
+        reservationExpiresAt: expiresAt,
+        reservationStatus: "reserved",
+      },
     });
+
     return {
-      ok: false,
+      ok: true,
       reservationId: record.id,
-      reservationStatus: status,
-      error: telnyx.error || "Could not reserve this number",
+      reservationStatus: "reserved",
+      expiresAt: expiresAt.toISOString(),
+      vanityDisplay: match.vanityDisplay,
+      displayNumber: match.displayNumber,
+      premiumPriceCents: match.premiumPriceCents,
     };
   }
 
-  const expiresAt = telnyx.phoneStatus.expired_at
-    ? new Date(telnyx.phoneStatus.expired_at)
-    : new Date(Date.now() + 30 * 60 * 1000);
-
+  // Twilio has no Telnyx-style hold API — workspace DB reservation only.
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   await prisma.premiumNumberReservation.update({
     where: { id: record.id },
     data: {
-      telnyxReservationId: telnyx.reservation?.id,
       reservationExpiresAt: expiresAt,
       reservationStatus: "reserved",
     },
@@ -156,6 +184,8 @@ export function serializeResultsForLog(
     displayNumber: r.displayNumber,
     businessMatchScore: r.businessMatchScore,
     numberQualityScore: r.numberQualityScore,
+    provider: r.provider,
+    providerReference: r.providerReference,
   }));
 }
 
