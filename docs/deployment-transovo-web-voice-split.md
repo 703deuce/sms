@@ -19,6 +19,8 @@ Production uses **two independent Coolify Applications** from the same GitHub re
 
 | Variable | Purpose |
 |----------|---------|
+| `HOSTNAME` | `0.0.0.0` in Docker (Traefik must reach the container — set in `nixpacks.toml`) |
+| `PORT` | `3000` — must match Coolify **Ports Exposes** / proxy target |
 | `DATABASE_URL` | App DB |
 | `TRANSOVO_INTERNAL_API_KEY` | Validates voice → web internal API |
 | `LIVEKIT_*` | Provisioning / dispatch rules (not worker) |
@@ -145,6 +147,21 @@ Must return `200` with JSON `service=transovo-web`. If you get `502`, fix **tran
 4. Run: `TRANSOVO_BACKEND_URL=https://your-domain node scripts/probe-transovo-backend-url.mjs`
 
 Voice boot now logs `backend_health_probe_ok` or `backend_health_probe_failed` before registering with LiveKit.
+
+### If `/api/health` and `/api/internal/voice-runtime` return **502 Bad Gateway**
+
+Plain `Bad Gateway` (11 bytes) is almost always **Traefik/Caddy cannot connect to the Node process**, not a missing Next route.
+
+Checklist:
+
+1. **Domain on the right app** — `transovo.ai` must be on **transovo-web**, not **transovo-voice**. Voice has no HTTP on port 3000; attaching the public domain to voice causes 502 for every path.
+2. **Redeploy transovo-web** from latest `master` (needs `/api/health` route from commit `368e794+`).
+3. **Coolify port** — container exposes **3000**; proxy forwards to **3000** (not 80 inside the container).
+4. **`HOSTNAME=0.0.0.0`** — set on transovo-web (included in `nixpacks.toml` and `start-production.mjs`).
+5. **Web logs on boot** — should show `[start] using Next standalone server ... HOSTNAME=0.0.0.0 PORT=3000` and `service=transovo-web`.
+6. If homepage loads but `/api/*` is 502, you may be hitting a **cached** landing page or a **different** origin — retest `/api/health` in a private Safari tab.
+
+After fix, Safari should show JSON on both probe URLs before redeploying voice.
 
 ---
 

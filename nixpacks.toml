@@ -1,6 +1,10 @@
 # Coolify/Nixpacks: transovo-web only (Next.js + BullMQ). Voice worker is a separate image.
 # NODE_OPTIONS heap is applied only during next build (see coolify-build script).
 
+[variables]
+HOSTNAME = "0.0.0.0"
+PORT = "3000"
+
 [phases.setup]
 aptPkgs = ["..."]
 

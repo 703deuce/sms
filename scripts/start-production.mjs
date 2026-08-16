@@ -16,16 +16,30 @@ function attachExitForwarding(child) {
   });
 }
 
+function productionEnv() {
+  const hostname = process.env.HOSTNAME?.trim() || "0.0.0.0";
+  const port = process.env.PORT?.trim() || "3000";
+  return {
+    ...process.env,
+    HOSTNAME: hostname,
+    PORT: port,
+  };
+}
+
+const env = productionEnv();
+
 if (existsSync(standaloneServer)) {
-  console.log("[start] using Next standalone server at .next/standalone/server.js");
+  console.log(
+    `[start] using Next standalone server at .next/standalone/server.js (HOSTNAME=${env.HOSTNAME} PORT=${env.PORT})`,
+  );
   const child = spawn(process.execPath, [standaloneServer], {
     stdio: "inherit",
-    env: process.env,
+    env,
     cwd: path.join(process.cwd(), ".next", "standalone"),
   });
   attachExitForwarding(child);
 } else {
   console.warn("[start] standalone server missing — falling back to next start");
-  const child = spawn("npx", ["next", "start"], { stdio: "inherit", env: process.env });
+  const child = spawn("npx", ["next", "start"], { stdio: "inherit", env });
   attachExitForwarding(child);
 }
