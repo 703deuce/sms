@@ -1,4 +1,4 @@
-import type { CalendlyCalendar } from "./calendly-calendar";
+import type { CalendlyCalendar, AvailableSlot } from "./calendly-calendar";
 import type { ReceptionistBookingCalendar } from "./receptionist-booking-calendar";
 import type { BookingOperation } from "./booking-operation";
 import {

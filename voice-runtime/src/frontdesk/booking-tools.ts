@@ -12,6 +12,7 @@ import {
 } from "./booking-email-inline";
 import { findBookingPrerequisiteGaps } from "./booking-prerequisites";
 import { prefillReceptionistFieldsForBooking } from "./booking-prefill";
+import { canStartScheduleAppointment } from "./booking-operation";
 import { executeScheduleAppointmentForSession } from "./runtime-schedule-appointment";
 import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { buildFrontDeskEndCallToolset } from "./end-frontdesk-call";

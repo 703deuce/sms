@@ -231,7 +231,7 @@ export async function extractFieldsFromUtterance(
 
     return {
       fields: merged,
-      correction: Boolean(deterministic.correction || payload.correction),
+      correction: Boolean(deterministic.correction),
       extractionSource: Object.keys(semantic).length > 0 ? "semantic_llm" : "deterministic",
     };
   } catch (err) {
