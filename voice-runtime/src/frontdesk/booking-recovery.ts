@@ -1,4 +1,3 @@
-import type { AgentSession } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
 import type { AvailableSlot, BookedAppointment } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
@@ -138,19 +137,6 @@ export async function scheduleAppointmentResilientForUserData(input: {
   }
 
   throw lastError;
-}
-
-/** Session wrapper — provider write uses userData only (no AgentSession lifecycle). */
-export async function scheduleAppointmentResilient(input: {
-  session: AgentSession<FrontDeskUserData>;
-  slot: AvailableSlot;
-  attendeeEmail: string;
-}): Promise<BookedAppointment> {
-  return scheduleAppointmentResilientForUserData({
-    userData: input.session.userData,
-    slot: input.slot,
-    attendeeEmail: input.attendeeEmail,
-  });
 }
 
 export async function lookupAppointmentIdForCall(input: {
@@ -333,25 +319,6 @@ export async function rescheduleAppointmentResilientForUserData(input: {
     .catch(() => undefined);
 
   return booked;
-}
-
-/** Session wrapper — provider mutation uses userData only. */
-export async function rescheduleAppointmentResilient(input: {
-  session: AgentSession<FrontDeskUserData>;
-  appointmentId: string;
-  oldEventUri: string | null;
-  slot: AvailableSlot;
-  attendeeEmail: string;
-  existingMetadata?: unknown;
-}): Promise<BookedAppointment> {
-  return rescheduleAppointmentResilientForUserData({
-    userData: input.session.userData,
-    appointmentId: input.appointmentId,
-    oldEventUri: input.oldEventUri,
-    slot: input.slot,
-    attendeeEmail: input.attendeeEmail,
-    existingMetadata: input.existingMetadata,
-  });
 }
 
 /** Cancel on Calendly with timeout, retries, and idempotent already-cancelled handling. */

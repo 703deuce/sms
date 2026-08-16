@@ -1,9 +1,19 @@
-import { ChatMessage, type ChatContext } from "@livekit/agents";
+import type { ChatContext } from "@livekit/agents";
 import type { AgentFieldDefinition } from "./types";
 import { missingReceptionistFields, type ReceptionistCollectionPurpose } from "./field-collection-scope";
 
 /** Keep enough caller turns for a full booking call (not just the last few seconds). */
 export const CONVERSATION_RECAP_MAX_UTTERANCES = 64;
+
+function userTextFromChatItem(item: unknown): string | null {
+  if (!item || typeof item !== "object") return null;
+  const role = (item as { role?: unknown }).role;
+  if (role !== "user") return null;
+  const text = (item as { textContent?: unknown }).textContent;
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim();
+  return trimmed || null;
+}
 
 export function callerUtterancesFromChatCtx(
   chatCtx: ChatContext,
@@ -11,10 +21,8 @@ export function callerUtterancesFromChatCtx(
 ): string[] {
   const lines: string[] = [];
   for (const item of chatCtx.items) {
-    if (item instanceof ChatMessage && item.role === "user") {
-      const text = item.textContent?.trim();
-      if (text) lines.push(text);
-    }
+    const text = userTextFromChatItem(item);
+    if (text) lines.push(text);
   }
   return lines.slice(-max);
 }

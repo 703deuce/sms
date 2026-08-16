@@ -1,17 +1,5 @@
 import { NextResponse } from "next/server";
 import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridge/auth";
-import { bootstrapInboundForPython } from "@/lib/voice/python-runtime-bridge/bootstrap-inbound";
-import { businessAnswerForPython } from "@/lib/voice/python-runtime-bridge/business-answer-for-python";
-import { cancelBookingForPython } from "@/lib/voice/python-runtime-bridge/cancel-booking-for-python";
-import { commitBookingForPython } from "@/lib/voice/python-runtime-bridge/commit-booking-for-python";
-import { emitVoiceRuntimeEvent } from "@/lib/voice/python-runtime-bridge/emit-voice-event-for-python";
-import { extractFieldsForPython } from "@/lib/voice/python-runtime-bridge/extract-fields-for-python";
-import { findAppointmentsForPython } from "@/lib/voice/python-runtime-bridge/find-appointments-for-python";
-import { getAvailabilityForPython } from "@/lib/voice/python-runtime-bridge/get-availability-for-python";
-import { persistIntakeFieldsForPython } from "@/lib/voice/python-runtime-bridge/persist-intake-fields";
-import { persistMessageForPython } from "@/lib/voice/python-runtime-bridge/persist-message";
-import { rescheduleBookingForPython } from "@/lib/voice/python-runtime-bridge/reschedule-booking-for-python";
-import { resolveTransferForPython } from "@/lib/voice/python-runtime-bridge/resolve-transfer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -98,53 +86,101 @@ export async function POST(request: Request) {
     let result: unknown;
 
     switch (action) {
-      case "bootstrap_inbound":
+      case "bootstrap_inbound": {
+        const { bootstrapInboundForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/bootstrap-inbound"
+        );
         result = await bootstrapInboundForPython(payload as never);
         break;
+      }
 
-      case "persist_intake_fields":
+      case "persist_intake_fields": {
+        const { persistIntakeFieldsForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/persist-intake-fields"
+        );
         result = await persistIntakeFieldsForPython(payload as never);
         break;
+      }
 
-      case "persist_message":
+      case "persist_message": {
+        const { persistMessageForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/persist-message"
+        );
         result = await persistMessageForPython(payload as never);
         break;
+      }
 
-      case "resolve_transfer":
+      case "resolve_transfer": {
+        const { resolveTransferForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/resolve-transfer"
+        );
         result = await resolveTransferForPython(payload as never);
         break;
+      }
 
-      case "extract_fields":
+      case "extract_fields": {
+        const { extractFieldsForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/extract-fields-for-python"
+        );
         result = await extractFieldsForPython(payload as never);
         break;
+      }
 
-      case "get_availability":
+      case "get_availability": {
+        const { getAvailabilityForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/get-availability-for-python"
+        );
         result = await getAvailabilityForPython(payload as never);
         break;
+      }
 
-      case "commit_booking":
+      case "commit_booking": {
+        const { commitBookingForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/commit-booking-for-python"
+        );
         result = await commitBookingForPython(payload as never);
         break;
+      }
 
-      case "cancel_booking":
+      case "cancel_booking": {
+        const { cancelBookingForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/cancel-booking-for-python"
+        );
         result = await cancelBookingForPython(payload as never);
         break;
+      }
 
-      case "reschedule_booking":
+      case "reschedule_booking": {
+        const { rescheduleBookingForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/reschedule-booking-for-python"
+        );
         result = await rescheduleBookingForPython(payload as never);
         break;
+      }
 
-      case "find_appointments":
+      case "find_appointments": {
+        const { findAppointmentsForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/find-appointments-for-python"
+        );
         result = await findAppointmentsForPython(payload as never);
         break;
+      }
 
-      case "business_answer":
+      case "business_answer": {
+        const { businessAnswerForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/business-answer-for-python"
+        );
         result = await businessAnswerForPython(payload as never);
         break;
+      }
 
-      case "emit_event":
+      case "emit_event": {
+        const { emitVoiceRuntimeEvent } = await import(
+          "@/lib/voice/python-runtime-bridge/emit-voice-event-for-python"
+        );
         result = await emitVoiceRuntimeEvent(payload as never);
         break;
+      }
 
       default:
         logInternalVoice("internal_voice_response", {
