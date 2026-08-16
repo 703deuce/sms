@@ -221,7 +221,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     businessProfile,
     compiledPrompt: "",
     businessContext: "",
-    realtimeModel: "gpt-realtime-2.1" as const,
+    realtimeModel: "gpt-realtime-2.1-mini" as const,
     realtimeOutputMode: "elevenlabs" as const,
     ttsModel: RECEPTIONIST_TTS_MODEL as "eleven_flash_v2_5",
     voiceId: elevenLabsVoice,

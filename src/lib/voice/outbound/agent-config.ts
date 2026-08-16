@@ -101,7 +101,7 @@ export function resolveOutboundRealtimePipelineConfig(
   const compiled = advanced.receptionistCompiled as ReceptionistCompiledSnapshot | undefined;
 
   if (isGenericReceptionistRealtimeProfile(config) && compiled) {
-    const model = String(compiled.realtimeModel || advanced.realtimeModel || "gpt-realtime-2.1").trim();
+    const model = String(compiled.realtimeModel || advanced.realtimeModel || "gpt-realtime-2.1-mini").trim();
     const speedRaw = config.voiceLanguage?.speed ?? compiled.voiceSpeed;
     const speed =
       typeof speedRaw === "number" && Number.isFinite(speedRaw)

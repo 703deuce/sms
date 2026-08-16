@@ -62,7 +62,7 @@ export type ReceptionistCompiledSnapshot = {
   /** Alias kept for retrieval guardrails and backward compatibility */
   businessContext: string;
   /** OpenAI Realtime intelligence model */
-  realtimeModel: "gpt-realtime-2.1";
+  realtimeModel: "gpt-realtime-2.1-mini";
   /** Hybrid output: OpenAI text + ElevenLabs TTS */
   realtimeOutputMode: "elevenlabs";
   /** ElevenLabs TTS model — Flash v2.5 for all receptionist voices */

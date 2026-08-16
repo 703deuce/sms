@@ -18,7 +18,7 @@ const snapshot = compileReceptionistConfig({
 
 assert.equal(snapshot.livekitProfile, "frontdesk_realtime");
 assert.equal(snapshot.businessName, "John's Plumbing");
-assert.equal(snapshot.realtimeModel, "gpt-realtime-2.1");
+assert.equal(snapshot.realtimeModel, "gpt-realtime-2.1-mini");
 assert.equal(snapshot.realtimeOutputMode, "elevenlabs");
 assert.ok(snapshot.businessContext.includes("TRANSOVO SYSTEM"));
 assert.ok(snapshot.businessContext.includes("YOUR JOB"));
