@@ -43,10 +43,5 @@ if [[ ! -d node_modules ]]; then
   exit 1
 fi
 
-echo "[coolify-install] ensuring sharp linux native bindings (Next image + LiveKit externals)"
-npm install --no-save --include=optional sharp @img/sharp-linux-x64 >/dev/null 2>&1 || \
-  npm install --no-save --include=optional sharp >/dev/null 2>&1 || \
-  echo "[coolify-install] WARN: sharp optional install failed — image routes may 500"
-
-echo "[coolify-install] complete"
+echo "[coolify-install] complete (libvips42 from nixpacks setup — no extra sharp npm install)"
 echo "[coolify-install] transovo-web only — voice worker builds from voice-runtime-python/Dockerfile"
