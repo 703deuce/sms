@@ -15,6 +15,7 @@ import {
   PersonalStatusBadge,
   pMuted,
 } from "./personal-ui";
+import { PersonalGreetingControls } from "./personal-greeting-controls";
 
 type FallbackAction = "voicemail" | "another_number" | "announcement" | "end";
 
@@ -55,6 +56,7 @@ export function PersonalForwardingUI({
   const [announcementText, setAnnouncementText] = useState(
     "This number is no longer in service. Please try again later.",
   );
+  const [announcementUrl, setAnnouncementUrl] = useState<string | null>(null);
   const [outsideHandling, setOutsideHandling] = useState<"forward" | "voicemail_only" | "announcement_only">(
     "voicemail_only",
   );
@@ -148,6 +150,11 @@ export function PersonalForwardingUI({
         ? settings.announcementText.trim()
         : "This number is no longer in service. Please try again later.",
     );
+    setAnnouncementUrl(
+      typeof settings.announcementUrl === "string" && settings.announcementUrl.trim()
+        ? settings.announcementUrl.trim()
+        : null,
+    );
     setBusyNumber(typeof settings.forwardBusyNumber === "string" ? settings.forwardBusyNumber : "");
     setFailedNumber(
       typeof settings.forwardFailedNumber === "string" ? settings.forwardFailedNumber : "",
@@ -238,6 +245,7 @@ export function PersonalForwardingUI({
           personalCallSettings: {
             incomingCallHandling: incomingHandling,
             announcementText: announcementText.trim(),
+            announcementUrl: announcementUrl?.trim() || null,
             forwardingEnabled: forwardingOn && incomingHandling === "forward",
             forwardTargets: cleanedTargets,
             forwardDestination: cleanedTargets[0] || null,
@@ -283,6 +291,24 @@ export function PersonalForwardingUI({
       setSaving(false);
     }
   }
+
+  async function patchAnnouncement(partial: { announcementText?: string; announcementUrl?: string }) {
+    const res = await fetch(`/api/numbers/${editId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personalCallSettings: partial }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(typeof json.error === "string" ? json.error : "Could not save announcement.");
+    }
+    router.refresh();
+  }
+
+  const showAnnouncementAudio =
+    incomingHandling === "announcement_only" ||
+    busyAction === "announcement" ||
+    failedAction === "announcement";
 
   if (numbers.length === 0) {
     return (
@@ -340,6 +366,52 @@ export function PersonalForwardingUI({
             className="mt-2 min-h-[80px] w-full max-w-lg rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
             value={announcementText}
             onChange={(e) => setAnnouncementText(e.target.value)}
+          />
+          <div className="mt-4">
+            <p className="text-[12px] font-semibold text-[#374151]">Announcement audio (optional)</p>
+            <p className={pMuted}>
+              Upload or record custom audio. When set, callers hear the recording instead of the text above.
+            </p>
+            <PersonalGreetingControls
+              greetingText={announcementText}
+              greetingUrl={announcementUrl}
+              assetName="Call announcement"
+              emptyHint="No announcement audio yet — text above is spoken when callers reach this number."
+              scriptPlaceholder="This number is no longer in service. Please try again later."
+              createButtonLabel="Create announcement"
+              onSaveText={async (text) => {
+                setAnnouncementText(text);
+                await patchAnnouncement({ announcementText: text });
+              }}
+              onSaveUrl={async (url) => {
+                setAnnouncementUrl(url);
+                await patchAnnouncement({ announcementUrl: url });
+              }}
+            />
+          </div>
+        </PersonalSection>
+      ) : null}
+
+      {incomingHandling !== "announcement_only" && showAnnouncementAudio ? (
+        <PersonalSection title="Announcement audio">
+          <p className={pMuted}>
+            Used when forwarding falls back to &quot;Play announcement&quot; (busy, failed, or scheduled announcement windows).
+          </p>
+          <PersonalGreetingControls
+            greetingText={announcementText}
+            greetingUrl={announcementUrl}
+            assetName="Call announcement"
+            emptyHint="No announcement audio — spoken text is used for announcement fallbacks."
+            scriptPlaceholder="This number is no longer in service. Please try again later."
+            createButtonLabel="Create announcement"
+            onSaveText={async (text) => {
+              setAnnouncementText(text);
+              await patchAnnouncement({ announcementText: text });
+            }}
+            onSaveUrl={async (url) => {
+              setAnnouncementUrl(url);
+              await patchAnnouncement({ announcementUrl: url });
+            }}
           />
         </PersonalSection>
       ) : null}

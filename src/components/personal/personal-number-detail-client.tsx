@@ -34,6 +34,7 @@ export function PersonalNumberDetailClient({
     number.portOutLocked ? null : number.portOutPin,
   );
   const [locked, setLocked] = useState(number.portOutLocked);
+  const [provider, setProvider] = useState<string>("telnyx");
 
   useEffect(() => {
     fetch(`/api/personal/numbers/${number.id}/port-out`)
@@ -42,6 +43,7 @@ export function PersonalNumberDetailClient({
         if (j.data?.accountNumber) setAccountNumber(j.data.accountNumber);
         if (!j.data?.locked && j.data?.pin) setPortPin(j.data.pin);
         setLocked(j.data?.locked ?? number.portOutLocked);
+        if (j.data?.provider) setProvider(j.data.provider);
       })
       .catch(() => undefined);
   }, [number.id, number.portOutLocked]);
@@ -68,7 +70,8 @@ export function PersonalNumberDetailClient({
         setPortPin(j.data?.pin || j.pin);
         setPortMessage("Port-out credentials revealed. Share with your new carrier.");
       } else {
-        setPortMessage("Synced with Telnyx.");
+        setPortMessage(`Synced from ${provider === "twilio" ? "Twilio" : "Telnyx"}.`);
+        if (j.data?.provider) setProvider(j.data.provider);
       }
       router.refresh();
     } catch (e) {
@@ -222,12 +225,19 @@ export function PersonalNumberDetailClient({
             Start port-away window
           </Button>
           <Button size="sm" variant="ghost" onClick={() => portAction("sync")} disabled={unlocking}>
-            Sync from Telnyx
+            Sync from {provider === "twilio" ? "Twilio" : "Telnyx"}
           </Button>
         </div>
         {portMessage ? <p className="text-xs text-muted-foreground">{portMessage}</p> : null}
         <p className="text-xs text-muted-foreground">
-          <Link href="/personal/porting?tab=out" className="text-primary">Porting center</Link>
+          <Link
+            href={`/personal/porting?tab=out&numberId=${number.id}`}
+            className="text-primary"
+          >
+            Porting center
+          </Link>
+          {" · "}
+          Carrier: {provider === "twilio" ? "Twilio" : "Telnyx"}
         </p>
       </section>
 

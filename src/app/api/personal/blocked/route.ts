@@ -7,12 +7,14 @@ import {
   type PersonalBlockedRow,
 } from "@/lib/workspace/personal-data";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    const rows = await loadPersonalBlockedNumbers(auth.workspaceId);
+    const url = new URL(request.url);
+    const numberId = url.searchParams.get("numberId")?.trim() || undefined;
+    const rows = await loadPersonalBlockedNumbers(auth.workspaceId, numberId);
     return NextResponse.json({ data: rows });
   } catch (err) {
     return jsonError(err, 500);

@@ -461,6 +461,16 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       return { ok: true, action: "voicemail_or_missed" };
     }
+    case "phone_announcement_hangup": {
+      const controlId = String(payload.telnyxCallControlId || "");
+      const humanCallId = payload.humanCallId ? String(payload.humanCallId) : null;
+      if (!controlId) return { skipped: true };
+      const { hangupTelnyxAnnouncementCall } = await import(
+        "@/lib/numbers/personal-announcement-playback"
+      );
+      await hangupTelnyxAnnouncementCall(controlId, humanCallId);
+      return { ok: true, action: "announcement_hangup" };
+    }
     case "voice_human_first_timeout": {
       const { handleHumanFirstTimeoutJob } = await import("@/lib/voice/inbound");
       return handleHumanFirstTimeoutJob({

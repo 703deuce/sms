@@ -16,10 +16,12 @@ export default async function PersonalPortingPage() {
       <PageHeader title="Porting" description="Bring your number in or move it to another carrier." />
       <PersonalPortingClient
         numbers={numbers}
-        portRequests={portRequests.map((p: { id: string; phone?: string; status?: string }) => ({
+        portRequests={portRequests.map((p: { id: string; phone?: string; status?: string; notes?: string }) => ({
           id: String(p.id),
           phoneNumber: String(p.phone ?? ""),
           status: String(p.status ?? ""),
+          notes: typeof p.notes === "string" ? p.notes : undefined,
+          direction: typeof p.notes === "string" && p.notes.includes("direction:out") ? "out" : "in",
         }))}
       />
     </div>

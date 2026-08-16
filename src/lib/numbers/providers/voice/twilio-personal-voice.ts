@@ -331,8 +331,18 @@ export async function buildTwilioDialStatusTwiml(params: {
     (callSettings.forwardBusyAction === "announcement" ||
       callSettings.forwardFailedAction === "announcement")
   ) {
-    const msg = callSettings.announcementText;
-    return twiml(`<Say>${xmlEscape(msg)}</Say><Hangup/>`);
+    const useAnnouncement =
+      overflowReason === "busy"
+        ? callSettings.forwardBusyAction === "announcement"
+        : callSettings.forwardFailedAction === "announcement";
+    if (useAnnouncement) {
+      if (callSettings.announcementUrl?.trim()) {
+        return twiml(
+          `<Play>${xmlEscape(callSettings.announcementUrl.trim())}</Play><Hangup/>`,
+        );
+      }
+      return twiml(`<Say>${xmlEscape(callSettings.announcementText)}</Say><Hangup/>`);
+    }
   }
 
   if (

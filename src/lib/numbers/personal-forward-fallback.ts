@@ -88,24 +88,24 @@ export async function applyPersonalForwardOverflow(input: {
   }
 
   if (action === "announcement") {
-    const message = callSettings.announcementText;
-    await telnyxRequest(`/calls/${controlId}/actions/speak`, {
-      method: "POST",
-      body: { payload: message, voice: "female", language: "en-US" },
-    }).catch(() => undefined);
-    await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
-      method: "POST",
-      body: {},
-    }).catch(() => undefined);
-    await prisma.humanCall.update({
-      where: { id: call.id },
-      data: {
-        status: "missed",
-        disposition: `personal_${input.reason}_announcement`,
-        endedAt: new Date(),
-        onHold: false,
-      },
+    const { playPersonalAnnouncementOnTelnyx } = await import(
+      "@/lib/numbers/personal-announcement-playback"
+    );
+    await playPersonalAnnouncementOnTelnyx(controlId, callSettings, {
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
     });
+    if (!callSettings.announcementUrl?.trim()) {
+      await prisma.humanCall.update({
+        where: { id: call.id },
+        data: {
+          status: "missed",
+          disposition: `personal_${input.reason}_announcement`,
+          endedAt: new Date(),
+          onHold: false,
+        },
+      });
+    }
     return { ok: true, action: "announcement" };
   }
 

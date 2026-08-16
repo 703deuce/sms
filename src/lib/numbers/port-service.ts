@@ -107,7 +107,70 @@ export async function createPortRequest(input: {
   return hydratePort(portRequest);
 }
 
-export function hydratePort(row: Record<string, unknown>) {
+export async function createPortOutRequest(input: {
+  workspaceId: string;
+  userId: string;
+  phone: string;
+  phoneNumberId: string;
+  provider: string;
+  accountNumber?: string | null;
+  accountPin?: string | null;
+  gainingCarrier?: string | null;
+  gainingAccountNumber?: string | null;
+  notes?: string | null;
+}) {
+  const prisma = getPrisma();
+  const phone = normalizeE164(input.phone);
+  const now = new Date().toISOString();
+  const gainingCarrier = input.gainingCarrier?.trim() || "New carrier";
+  const history: PortHistoryEntry[] = [
+    {
+      status: "submitted",
+      at: now,
+      note: `Port-out initiated — transfer to ${gainingCarrier}`,
+      byUserId: input.userId,
+    },
+  ];
+
+  const noteParts = [
+    `direction:out`,
+    `phoneNumberId:${input.phoneNumberId}`,
+    `provider:${input.provider}`,
+    input.gainingCarrier?.trim() ? `gainingCarrier:${input.gainingCarrier.trim()}` : null,
+    input.gainingAccountNumber?.trim()
+      ? `gainingAccount:${input.gainingAccountNumber.trim()}`
+      : null,
+    input.notes?.trim() ? input.notes.trim() : null,
+  ].filter(Boolean);
+
+  const portRequest = await prisma.portRequest.create({
+    data: {
+      workspaceId: input.workspaceId,
+      phone,
+      currentCarrier: input.provider === "twilio" ? "Twilio (Transovo)" : "Telnyx (Transovo)",
+      accountNumber: input.accountNumber?.trim() || null,
+      accountPin: input.accountPin?.trim() || null,
+      notes: noteParts.join(" | "),
+      requestedByUserId: input.userId,
+      status: "submitted",
+      statusHistoryJson: history,
+      documentsJson: [],
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      event: "number.port_out_initiated",
+      detail: `${phone}:${input.phoneNumberId}`,
+    },
+  });
+
+  return hydratePort(portRequest);
+}
+
+export function hydratePort<T extends Record<string, unknown>>(row: T) {
   return {
     ...row,
     statusLabel: portStatusLabel(String(row.status || "")),

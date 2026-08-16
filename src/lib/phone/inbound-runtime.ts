@@ -120,18 +120,13 @@ export async function processSoftphoneInbound(input: {
       return { ...human, voicemail: true, vault: true };
     }
     if (numberRoute.kind === "announcement") {
-      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
-        method: "POST",
-        body: {
-          payload: numberRoute.message,
-          voice: "female",
-          language: "en-US",
-        },
-      }).catch(() => undefined);
-      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/hangup`, {
-        method: "POST",
-        body: {},
-      }).catch(() => undefined);
+      const callSettings = readPersonalCallSettings(pn);
+      const { playPersonalAnnouncementOnTelnyx } = await import(
+        "@/lib/numbers/personal-announcement-playback"
+      );
+      await playPersonalAnnouncementOnTelnyx(input.telnyxCallControlId, callSettings, {
+        workspaceId: input.workspaceId,
+      });
       return { announcement: true as const, from };
     }
     if (numberRoute.kind === "forward") {

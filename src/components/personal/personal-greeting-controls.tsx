@@ -13,6 +13,10 @@ type GreetingControlsProps = {
   greetingUrl: string | null | undefined;
   onSaveText: (text: string) => Promise<void>;
   onSaveUrl: (url: string) => Promise<void>;
+  assetName?: string;
+  emptyHint?: string;
+  scriptPlaceholder?: string;
+  createButtonLabel?: string;
 };
 
 export function PersonalGreetingControls({
@@ -20,6 +24,10 @@ export function PersonalGreetingControls({
   greetingUrl,
   onSaveText,
   onSaveUrl,
+  assetName = "Voicemail greeting",
+  emptyHint = "No custom audio yet — choose how to create your greeting below.",
+  scriptPlaceholder = "Please leave a message after the tone.",
+  createButtonLabel = "Create greeting",
 }: GreetingControlsProps) {
   const [voiceSource, setVoiceSource] = useState<VoiceSource>("create");
   const [text, setText] = useState(greetingText || "Please leave a message after the tone.");
@@ -74,7 +82,7 @@ export function PersonalGreetingControls({
     try {
       const form = new FormData();
       form.append("file", blob, filename);
-      form.append("name", "Voicemail greeting");
+      form.append("name", assetName);
       const res = await fetch("/api/smart-routing/audio/upload", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -119,7 +127,7 @@ export function PersonalGreetingControls({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: "Voicemail greeting",
+          name: assetName,
           text: script,
           voiceId,
           speed: 1,
@@ -148,9 +156,7 @@ export function PersonalGreetingControls({
       {activeAudioUrl ? (
         <audio className="w-full max-w-md" controls src={activeAudioUrl} />
       ) : (
-        <p className="text-[12px] text-[#6b7280]">
-          No custom audio yet — choose how to create your greeting below.
-        </p>
+        <p className="text-[12px] text-[#6b7280]">{emptyHint}</p>
       )}
 
       <div>
@@ -189,7 +195,7 @@ export function PersonalGreetingControls({
             className="min-h-[80px] w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-[13px]"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Please leave a message after the tone."
+            placeholder={scriptPlaceholder}
           />
           <div>
             <p className="mb-2 text-[12px] font-semibold text-[#374151]">Choose a voice</p>
@@ -205,7 +211,7 @@ export function PersonalGreetingControls({
             onClick={generateVoiceGreeting}
             disabled={generating || !text.trim()}
           >
-            {generating ? "Creating greeting…" : "Create greeting"}
+            {generating ? "Creating…" : createButtonLabel}
           </PersonalPrimaryButton>
         </div>
       ) : null}

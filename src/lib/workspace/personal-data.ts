@@ -404,11 +404,14 @@ export type PersonalBlockedRow = {
 
 export async function loadPersonalBlockedNumbers(
   workspaceId: string,
+  numberId?: string,
 ): Promise<PersonalBlockedRow[]> {
   const rows = await getPrisma().suppression.findMany({
     where: {
       workspaceId,
-      OR: [{ phone: { not: null } }, { suppressionKey: { startsWith: "p:" } }],
+      OR: numberId
+        ? [{ suppressionKey: { startsWith: `${workspaceId}:${numberId}:p:` } }]
+        : [{ phone: { not: null } }, { suppressionKey: { startsWith: "p:" } }],
     },
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -423,7 +426,7 @@ export async function loadPersonalBlockedNumbers(
     createdAt: Date;
   }) => ({
     id: r.id,
-    phone: r.phone || r.suppressionKey.replace(/^p:/, ""),
+    phone: r.phone || r.suppressionKey.replace(/^.*:p:/, "").replace(/^p:/, ""),
     reason: r.reason,
     source: r.source,
     createdAt: r.createdAt.toISOString(),

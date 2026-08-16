@@ -3,7 +3,8 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   revealPersonalPortOutCredentials,
   setPersonalPortOutPin,
-  syncPersonalPortOutFromTelnyx,
+  syncPersonalPortOutFromProvider,
+  initiatePersonalPortOut,
 } from "@/lib/numbers/personal-port-out-service";
 
 export async function GET(
@@ -30,12 +31,27 @@ export async function POST(
     if ("error" in auth) return auth.error;
     const { numberId } = await params;
     const body = (await request.json()) as {
-      action?: "sync" | "unlock" | "lock" | "set_pin";
+      action?: "sync" | "unlock" | "lock" | "set_pin" | "initiate";
       pin?: string;
+      gainingCarrier?: string;
+      gainingAccountNumber?: string;
+      notes?: string;
     };
 
     if (body.action === "sync") {
-      const data = await syncPersonalPortOutFromTelnyx(auth.workspaceId, numberId);
+      const data = await syncPersonalPortOutFromProvider(auth.workspaceId, numberId);
+      return NextResponse.json({ data });
+    }
+
+    if (body.action === "initiate") {
+      const data = await initiatePersonalPortOut({
+        workspaceId: auth.workspaceId,
+        userId: auth.session.userId,
+        numberId,
+        gainingCarrier: body.gainingCarrier,
+        gainingAccountNumber: body.gainingAccountNumber,
+        notes: body.notes,
+      });
       return NextResponse.json({ data });
     }
 
