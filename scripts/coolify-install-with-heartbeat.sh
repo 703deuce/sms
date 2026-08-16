@@ -49,9 +49,9 @@ if [[ -f voice-runtime-python/pyproject.toml ]]; then
   echo "[coolify-install] installing Python voice runtime (minimal venv)"
   PYTHON_BIN="${PYTHON_BIN:-python3}"
   if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-    echo "[coolify-install] python3 not found — skip voice-runtime-python (set VOICE_RUNTIME_IMPL=typescript)"
+    echo "[coolify-install] ERROR: python3 not found — voice worker cannot start (install python3 or set VOICE_RUNTIME_IMPL=typescript)"
   elif ! "$PYTHON_BIN" -m venv --help >/dev/null 2>&1; then
-    echo "[coolify-install] python3-venv missing — install python3-venv on build image or set VOICE_RUNTIME_IMPL=typescript"
+    echo "[coolify-install] ERROR: python3-venv missing — voice worker cannot start"
   else
     "$PYTHON_BIN" -m venv voice-runtime-python/.venv
     voice-runtime-python/.venv/bin/pip install --no-cache-dir --upgrade pip
