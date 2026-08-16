@@ -17,15 +17,42 @@ export type SemanticFieldPayload = {
   correction?: boolean;
 };
 
-const COMPOUND_CUE_RE =
-  /\b(and|my name is|i'?m |i am |i live|we'?re at|calling from|use (my |the )?number|this number|same number|upstairs|downstairs|since last|hasn't been|has not been)\b/i;
+function isTrivialUnambiguousUtterance(
+  transcript: string,
+  deterministic: FieldExtractionResult,
+  missingIds: string[],
+): boolean {
+  if (deterministic.skippedReason) return false;
 
-function isCompoundUtterance(transcript: string): boolean {
   const trimmed = transcript.trim();
-  if (trimmed.length < 48) return false;
-  const commas = trimmed.match(/,/g)?.length ?? 0;
-  if (commas >= 2) return true;
-  return COMPOUND_CUE_RE.test(trimmed) && trimmed.split(/\s+/).length >= 8;
+  const words = trimmed.split(/\s+/).filter(Boolean).length;
+  const deterministicIds = Object.keys(deterministic.fields);
+
+  const digitsOnly = trimmed.replace(/\D/g, "");
+  if (
+    digitsOnly.length >= 10 &&
+    digitsOnly.length <= 11 &&
+    deterministicIds.length <= 1 &&
+    (deterministicIds.length === 0 || deterministicIds[0] === "phone")
+  ) {
+    return true;
+  }
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(trimmed) && deterministicIds.includes("email")) {
+    return true;
+  }
+
+  if (
+    missingIds.length === 1 &&
+    deterministicIds.length === 1 &&
+    missingIds[0] === deterministicIds[0] &&
+    words <= 4 &&
+    !deterministic.correction
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function shouldRunSemanticExtraction(
@@ -41,20 +68,12 @@ function shouldRunSemanticExtraction(
     .map((f) => f.id);
   if (!missingIds.length) return false;
 
-  const deterministicIds = Object.keys(deterministic.fields);
-  const unresolved = missingIds.filter((id) => !deterministic.fields[id]?.trim());
-  if (!unresolved.length) return false;
-
-  if (isCompoundUtterance(transcript) || deterministic.correction) return true;
-
-  // One clear deterministic field on a short utterance — skip LLM round-trip.
-  if (deterministicIds.length === 1 && transcript.trim().split(/\s+/).length <= 6) {
+  if (isTrivialUnambiguousUtterance(transcript, deterministic, missingIds)) {
     return false;
   }
 
-  if (deterministicIds.length >= 2) return false;
-
-  return unresolved.length > 0 && transcript.trim().split(/\s+/).length >= 6;
+  const unresolved = missingIds.filter((id) => !deterministic.fields[id]?.trim());
+  return unresolved.length > 0;
 }
 
 function parseSemanticJson(raw: string): SemanticFieldPayload | null {
@@ -135,7 +154,9 @@ async function llmSemanticFieldExtraction(input: {
     '{"name":null,"phone":null,"address":null,"reason":null,"email":null,"correction":false}',
     "phone may be a string OR {\"source\":\"caller_id\"} when they want to use the number they are calling from.",
     "Only include fields with clear evidence. Use null for unknown fields. Do not invent values.",
-    "reason = service issue / problem description. address = service location even if partial (highway, landmark).",
+    "reason = service issue / problem description (include upstairs/downstairs, since last night, quit cooling).",
+    "address = service location even if partial (highway, route, near landmark, city area).",
+    "Compound utterances often include name + phone intent + address + reason in one breath — extract all supported fields.",
   ].join(" ");
 
   const user = [

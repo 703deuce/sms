@@ -1,13 +1,16 @@
 import type { AgentSession } from "@livekit/agents";
+import type { AvailableSlot } from "../calendly-calendar";
 import type { FrontDeskUserData } from "../userdata";
 import { ensureReceptionistWorkflow, setWorkflowState } from "./workflow-engine";
 import {
   formatSlotSpokenLabel,
-  matchOfferedSlotFromUtterance,
+} from "./booking-slot-turn";
+import {
+  resolveOfferedSlotFromUtterance,
   utteranceIndicatesBookingConfirmation,
   utteranceIndicatesBookingRejection,
   utteranceLooksLikeSlotSelection,
-} from "./booking-slot-turn";
+} from "./booking-slot-semantic";
 import {
   bumpCollectionTurnSeq,
   controlledGenerateReply,
@@ -28,6 +31,21 @@ function applySelectedSlot(ud: FrontDeskUserData, slotId: string): void {
   ud.pendingSlotId = slotId;
   const wf = ensureReceptionistWorkflow(ud);
   wf.selectedSlotId = slotId;
+}
+
+async function resolveSlot(
+  ud: FrontDeskUserData,
+  transcript: string,
+  offered: string[],
+  slotsMap: Map<string, AvailableSlot>,
+) {
+  return resolveOfferedSlotFromUtterance(
+    transcript,
+    offered,
+    slotsMap,
+    ud.timezone,
+    { callId: ud.callId },
+  );
 }
 
 /**
@@ -76,11 +94,15 @@ export async function processBookingSlotTurn(
       return;
     }
 
-    const rematch = matchOfferedSlotFromUtterance(normalized, offered, slotsMap, ud.timezone);
-    if (rematch && offered.includes(rematch.slotId)) {
-      applySelectedSlot(ud, rematch.slotId);
-      const label = formatSlotSpokenLabel(rematch, ud.timezone);
-      log("booking_slot_rematched", { slotId: rematch.slotId, label });
+    const rematch = await resolveSlot(ud, normalized, offered, slotsMap);
+    if (rematch.slot && offered.includes(rematch.slot.slotId)) {
+      applySelectedSlot(ud, rematch.slot.slotId);
+      const label = formatSlotSpokenLabel(rematch.slot, ud.timezone);
+      log("booking_slot_rematched", {
+        slotId: rematch.slot.slotId,
+        label,
+        source: rematch.source,
+      });
       await controlledGenerateReply(session, "booking_confirm_reprompt", bumpCollectionTurnSeq(ud), {
         instructions: `Confirm the new time in one short sentence: ${label}. Ask exactly one yes-or-no question to book it.`,
         toolChoice: "none",
@@ -102,12 +124,17 @@ export async function processBookingSlotTurn(
 
   if (wf.state !== "BOOKING_SELECT_SLOT") return;
 
-  const matched = matchOfferedSlotFromUtterance(normalized, offered, slotsMap, ud.timezone);
-  if (matched && offered.includes(matched.slotId)) {
-    applySelectedSlot(ud, matched.slotId);
-    setWorkflowState(ud, "BOOKING_CONFIRM_SLOT", { selectedSlotId: matched.slotId });
-    const label = formatSlotSpokenLabel(matched, ud.timezone);
-    log("booking_slot_selected", { slotId: matched.slotId, label, transcript: normalized });
+  const resolution = await resolveSlot(ud, normalized, offered, slotsMap);
+  if (resolution.slot && offered.includes(resolution.slot.slotId)) {
+    applySelectedSlot(ud, resolution.slot.slotId);
+    setWorkflowState(ud, "BOOKING_CONFIRM_SLOT", { selectedSlotId: resolution.slot.slotId });
+    const label = formatSlotSpokenLabel(resolution.slot, ud.timezone);
+    log("booking_slot_matched", {
+      slotId: resolution.slot.slotId,
+      label,
+      transcript: normalized,
+      source: resolution.source,
+    });
     await controlledGenerateReply(session, "booking_confirm_prompt", bumpCollectionTurnSeq(ud), {
       instructions:
         `The caller chose ${label}. Confirm in one short sentence and ask exactly one yes-or-no question to book it.`,
@@ -117,7 +144,11 @@ export async function processBookingSlotTurn(
   }
 
   if (utteranceLooksLikeSlotSelection(normalized)) {
-    log("booking_slot_unmatched", { transcript: normalized, offeredCount: offered.length });
+    log("booking_slot_unmatched", {
+      transcript: normalized,
+      offeredCount: offered.length,
+      resolutionSource: resolution.source,
+    });
     await controlledGenerateReply(session, "booking_slot_clarify", bumpCollectionTurnSeq(ud), {
       instructions:
         `The caller said "${normalized}" but it did not match an offered time. ` +

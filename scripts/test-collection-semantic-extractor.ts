@@ -16,27 +16,30 @@ const manifest = [
   { id: "reason", label: "issue", required: true, question: "Issue?" },
 ];
 
+const anthonyUtterance =
+  "I'm Anthony, use the number I'm calling from, I'm over in Arlington near Route 1, and the upstairs unit quit cooling last night.";
+
 const anthonyPayload = parseSemanticFieldPayloadForTest(
   JSON.stringify({
     name: "Anthony",
     phone: { source: "caller_id" },
-    address: "Jefferson Davis Highway near Walmart",
-    reason: "Upstairs AC has not been cooling since last night",
+    address: "Arlington near Route 1",
+    reason: "Upstairs unit quit cooling last night",
     correction: false,
   }),
 );
 assert.ok(anthonyPayload?.name === "Anthony");
 
-const merged = mergeSemanticFieldsForTest(
+const anthonyMerged = mergeSemanticFieldsForTest(
   anthonyPayload!,
   manifest,
   {},
   "+15714776175",
 );
-assert.equal(merged.name, "Anthony");
-assert.equal(merged.phone, "+15714776175");
-assert.ok(merged.address?.includes("Jefferson Davis Highway"));
-assert.ok(merged.reason?.includes("cooling"));
+assert.equal(anthonyMerged.name, "Anthony");
+assert.equal(anthonyMerged.phone, "+15714776175");
+assert.ok(anthonyMerged.address?.includes("Arlington"));
+assert.ok(anthonyMerged.reason?.includes("cooling"));
 
 const deterministicOnly = extractDeterministicFieldsFromUtterance(
   "571-477-6175",
@@ -45,5 +48,16 @@ const deterministicOnly = extractDeterministicFieldsFromUtterance(
 );
 assert.equal(deterministicOnly.fields.phone, "+15714776175");
 assert.equal(Object.keys(deterministicOnly.fields).length, 1);
+
+const compoundPartial = extractDeterministicFieldsFromUtterance(
+  anthonyUtterance,
+  manifest,
+  {},
+  "+15714776175",
+);
+assert.ok(
+  Object.keys(compoundPartial.fields).length < 4,
+  "compound utterance should not be fully resolved by deterministic alone",
+);
 
 console.log("✓ collection semantic extractor tests passed");

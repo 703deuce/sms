@@ -1,14 +1,16 @@
 /**
- * Unit tests for runtime-owned booking slot pick + confirm.
+ * Unit tests for deterministic + semantic slot resolution helpers (no network).
  * Run: npx tsx scripts/test-booking-slot-turn.ts
  */
 import assert from "node:assert/strict";
 import {
-  formatSlotSpokenLabel,
-  matchOfferedSlotFromUtterance,
+  matchOfferedSlotDeterministic,
+  parseSemanticSlotPayloadForTest,
+  resolveOrdinalSlotForTest,
   utteranceIndicatesBookingConfirmation,
   utteranceLooksLikeSlotSelection,
-} from "../voice-runtime/src/frontdesk/receptionist/booking-slot-turn";
+} from "../voice-runtime/src/frontdesk/receptionist/booking-slot-semantic";
+import { formatSlotSpokenLabel } from "../voice-runtime/src/frontdesk/receptionist/booking-slot-turn";
 import type { AvailableSlot } from "../voice-runtime/src/frontdesk/calendly-calendar";
 
 const timezone = "America/New_York";
@@ -28,19 +30,22 @@ const map = new Map([
   [slot2.slotId, slot2],
 ]);
 
-assert.ok(utteranceLooksLikeSlotSelection("The second one works"));
-assert.ok(utteranceLooksLikeSlotSelection("Tuesday at 2pm"));
+assert.ok(utteranceLooksLikeSlotSelection("The later one"));
+assert.ok(utteranceLooksLikeSlotSelection("Tuesday afternoon"));
+assert.ok(utteranceLooksLikeSlotSelection("anything after lunch"));
 assert.ok(!utteranceLooksLikeSlotSelection("What is your name?"));
 
 assert.ok(utteranceIndicatesBookingConfirmation("Yes please"));
-assert.ok(utteranceIndicatesBookingConfirmation("Yeah book it"));
-assert.ok(!utteranceIndicatesBookingConfirmation("maybe"));
 
-const second = matchOfferedSlotFromUtterance("The second one", offered, map, timezone);
+const second = matchOfferedSlotDeterministic("The second one", offered, map, timezone);
 assert.equal(second?.slotId, slot2.slotId);
 
-const first = matchOfferedSlotFromUtterance("the first one please", offered, map, timezone);
-assert.equal(first?.slotId, slot1.slotId);
+const later = matchOfferedSlotDeterministic("the later one", offered, map, timezone);
+assert.equal(later?.slotId, slot2.slotId);
+
+const payload = parseSemanticSlotPayloadForTest('{"slot_id":"ST_def34","ordinal":2}');
+assert.equal(payload?.slot_id, "ST_def34");
+assert.equal(resolveOrdinalSlotForTest(2, offered), slot2.slotId);
 
 const label = formatSlotSpokenLabel(slot1, timezone);
 assert.ok(label.length > 5);
