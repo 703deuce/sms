@@ -16,6 +16,20 @@ export async function register() {
   const { startInProcessWorker } = await import("@/lib/jobs/inprocess-worker");
   await startInProcessWorker();
 
+  const { voiceRuntimeInternalSecret } = await import(
+    "@/lib/voice/python-runtime-bridge/auth"
+  );
+  if (!voiceRuntimeInternalSecret()) {
+    console.warn(
+      JSON.stringify({
+        service: "transovo-web",
+        event: "internal_voice_api_secret_missing",
+        timestamp: new Date().toISOString(),
+        hint: "Set TRANSOVO_INTERNAL_API_KEY so transovo-voice can call /api/internal/voice-runtime",
+      }),
+    );
+  }
+
   // Voice worker runs as separate transovo-voice service (not spawned from web).
   // Local dev: npm run voice-python:start or ENABLE_INPROCESS_VOICE_RUNTIME=1
   if (process.env.ENABLE_INPROCESS_VOICE_RUNTIME === "1") {

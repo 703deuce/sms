@@ -137,8 +137,14 @@ class TransovoBackend:
 
         if resp.status_code >= 400:
             error_msg = parsed.get("error") or f"HTTP {resp.status_code}"
+            hint = ""
+            if resp.status_code == 502:
+                hint = (
+                    f" Proxy returned 502 — verify GET {self._base_url}/api/health returns 200 "
+                    "and TRANSOVO_BACKEND_URL matches the live transovo-web Coolify domain."
+                )
             raise RuntimeError(
-                f"Backend error for action={action} (HTTP {resp.status_code}): {error_msg}",
+                f"Backend error for action={action} (HTTP {resp.status_code}): {error_msg}{hint}",
             )
 
         return parsed

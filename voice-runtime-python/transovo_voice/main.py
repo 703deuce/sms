@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from livekit.agents import AgentServer, JobContext, cli
 
+from transovo_voice.boot_probe import probe_backend_health
 from transovo_voice.constants import VOICE_RUNTIME_API_VERSION
 from transovo_voice.session.inbound import run_inbound_session
 from transovo_voice.telemetry import log_boot_versions, log_event
@@ -47,6 +48,7 @@ def main() -> None:
         },
     )
     log_boot_versions()
+    probe_backend_health()
     # LiveKit cli.run_app handles SIGTERM/SIGINT and drains active jobs when possible.
     cli.run_app(server)
 
