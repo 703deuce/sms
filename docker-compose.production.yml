@@ -1,0 +1,28 @@
+# Reference Compose — prefer two separate Coolify Applications (see docs).
+# Web is built via Nixpacks (nixpacks.toml); only voice is docker-built here.
+
+services:
+  voice:
+    build:
+      context: .
+      dockerfile: voice-runtime-python/Dockerfile
+    environment:
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TRANSOVO_BACKEND_URL: ${TRANSOVO_BACKEND_URL:-http://host.docker.internal:3000}
+      TRANSOVO_INTERNAL_API_KEY: ${TRANSOVO_INTERNAL_API_KEY}
+      LIVEKIT_AGENT_NAME: transovo-voice-runtime
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s

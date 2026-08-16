@@ -44,54 +44,20 @@ if [[ ! -f .next/standalone/server.js ]]; then
   exit 1
 fi
 
-echo "[coolify-build] installing Python voice runtime (post-build — avoids Turbopack .venv symlink trace)"
-if bash scripts/install-voice-python-venv.sh; then
-  echo "[coolify-build] Python venv installed"
-  if bash scripts/check-voice-python.sh; then
-    echo "[coolify-build] Python voice runtime checks passed"
-  else
-    echo "[coolify-build] ERROR: Python voice runtime checks failed"
-    exit 1
-  fi
-else
-  echo "[coolify-build] WARN: Python venv install failed — worker will fall back to typescript if configured"
-fi
-
-bundle_voice_python_runtime() {
-  local dest_root="$1"
-  if [[ ! -d voice-runtime-python/.venv ]]; then
-    echo "[coolify-build] voice-runtime-python/.venv missing — Python worker will not start"
-    return 0
-  fi
-  echo "[coolify-build] bundling Python voice runtime into ${dest_root}"
-  mkdir -p "${dest_root}/voice-runtime-python"
-  cp -a voice-runtime-python/.venv "${dest_root}/voice-runtime-python/.venv"
-  cp -a voice-runtime-python/transovo_voice "${dest_root}/voice-runtime-python/transovo_voice"
-  cp voice-runtime-python/pyproject.toml "${dest_root}/voice-runtime-python/pyproject.toml"
-}
-
 bundle_typescript_voice_runtime() {
   local dest_root="$1"
   if [[ ! -d voice-runtime/src ]]; then
     return 0
   fi
-  echo "[coolify-build] bundling TypeScript voice runtime into ${dest_root}"
+  echo "[coolify-build] bundling TypeScript voice runtime fallback into ${dest_root}"
   mkdir -p "${dest_root}/voice-runtime"
   cp -a voice-runtime/src "${dest_root}/voice-runtime/src"
 }
 
-# Standalone server runs from .next/standalone — copy assets + voice runtimes there.
+# Standalone server runs from .next/standalone — copy assets only (no Python bundle).
 cp -a public .next/standalone/public 2>/dev/null || true
 mkdir -p .next/standalone/.next
 cp -a .next/static .next/standalone/.next/static 2>/dev/null || true
-bundle_voice_python_runtime ".next/standalone"
 bundle_typescript_voice_runtime ".next/standalone"
 
-# Full-repo starts (npm start / next start) still need the venv at repo root.
-if [[ ! -d voice-runtime-python/.venv ]]; then
-  echo "[coolify-build] WARN: rebuild install phase if Python worker is required"
-else
-  echo "[coolify-build] Python venv present at voice-runtime-python/.venv"
-fi
-
-echo "[coolify-build] complete"
+echo "[coolify-build] complete (transovo-web only — voice worker uses voice-runtime-python/Dockerfile)"

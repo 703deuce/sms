@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger("transovo-voice.telemetry")
+
+SERVICE_NAME = "transovo-voice"
 
 
 def log_event(
@@ -15,12 +17,14 @@ def log_event(
     workspace_id: str | None = None,
     agent_id: str | None = None,
     workflow: str | None = None,
+    room: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {
+        "service": SERVICE_NAME,
         "source": "voice-python",
         "event": event,
-        "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     if call_id:
         payload["callId"] = call_id
@@ -30,6 +34,8 @@ def log_event(
         payload["agentId"] = agent_id
     if workflow:
         payload["workflow"] = workflow
+    if room:
+        payload["room"] = room
     if extra:
         payload.update(extra)
     print(json.dumps(payload), flush=True)

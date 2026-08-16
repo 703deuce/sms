@@ -1,12 +1,8 @@
-# Coolify/Nixpacks: install + build tuned for ~4GB build VMs.
+# Coolify/Nixpacks: transovo-web only (Next.js + BullMQ). Voice worker is a separate image.
 # NODE_OPTIONS heap is applied only during next build (see coolify-build script).
 
 [phases.setup]
-# Python voice worker needs a system interpreter at runtime (venv symlinks to it).
-aptPkgs = ["...", "python3", "python3-venv", "python3-pip"]
-
-[variables]
-NIXPACKS_PYTHON_VERSION = "3.12"
+aptPkgs = ["..."]
 
 [phases.install]
 cmds = [

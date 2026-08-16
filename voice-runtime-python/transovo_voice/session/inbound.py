@@ -88,12 +88,26 @@ async def run_inbound_session(ctx: JobContext) -> None:
             logger.error("bootstrap failed: %s", bootstrap.get("error"))
             return
 
+        api_version = bootstrap.get("apiVersion")
+        if api_version != 1:
+            log_event(
+                "bootstrap_api_version_mismatch",
+                room=ctx.room.name,
+                extra={"apiVersion": api_version, "expected": 1},
+            )
+            logger.error(
+                "Unsupported bootstrap apiVersion=%s (expected 1) — redeploy voice worker",
+                api_version,
+            )
+            return
+
         ud = _userdata_from_bootstrap(bootstrap)
         log_event(
             "call_started",
             call_id=ud.call_id,
             workspace_id=ud.workspace_id,
             agent_id=ud.agent_id,
+            room=ctx.room.name,
             extra={"runtimeProfile": ud.runtime_profile},
         )
 
@@ -155,6 +169,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
             call_id=ud.call_id,
             workspace_id=ud.workspace_id,
             agent_id=ud.agent_id,
+            room=ctx.room.name,
         )
 
         greeting = ud.greeting.strip()

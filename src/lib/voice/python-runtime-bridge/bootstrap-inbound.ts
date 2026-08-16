@@ -142,6 +142,7 @@ export async function bootstrapInboundForPython(
 
   return {
     ok: true,
+    apiVersion: 1,
     callId,
     workspaceId: routing.workspaceId,
     agentId: routing.agentId,

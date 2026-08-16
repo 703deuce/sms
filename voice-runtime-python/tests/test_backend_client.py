@@ -2,18 +2,18 @@
 
 import os
 
-from transovo_voice.integrations.backend_client import resolve_internal_base_url
+import pytest
+
+from transovo_voice.integrations.backend_client import resolve_backend_base_url
 
 
-def test_resolve_internal_base_url_prefers_explicit() -> None:
-    os.environ["VOICE_RUNTIME_INTERNAL_URL"] = "http://10.0.0.1:4000"
-    os.environ["PORT"] = "3000"
-    assert resolve_internal_base_url() == "http://10.0.0.1:4000"
-    del os.environ["VOICE_RUNTIME_INTERNAL_URL"]
+def test_resolve_backend_base_url_requires_explicit() -> None:
+    os.environ.pop("TRANSOVO_BACKEND_URL", None)
+    with pytest.raises(RuntimeError, match="TRANSOVO_BACKEND_URL"):
+        resolve_backend_base_url()
 
 
-def test_resolve_internal_base_url_defaults_to_loopback() -> None:
-    os.environ.pop("VOICE_RUNTIME_INTERNAL_URL", None)
-    os.environ["APP_URL"] = "https://public.example.com"
-    os.environ["PORT"] = "3000"
-    assert resolve_internal_base_url() == "http://127.0.0.1:3000"
+def test_resolve_backend_base_url_uses_env() -> None:
+    os.environ["TRANSOVO_BACKEND_URL"] = "https://app.example.com/"
+    assert resolve_backend_base_url() == "https://app.example.com"
+    del os.environ["TRANSOVO_BACKEND_URL"]

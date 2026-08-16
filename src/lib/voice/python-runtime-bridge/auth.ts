@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 
 export function voiceRuntimeInternalSecret(): string | null {
+  const primary = process.env.TRANSOVO_INTERNAL_API_KEY?.trim();
+  if (primary) return primary;
   const explicit = process.env.VOICE_RUNTIME_INTERNAL_SECRET?.trim();
   if (explicit) return explicit;
   const integration = process.env.INTEGRATION_SECRET_KEY?.trim();
@@ -22,7 +24,7 @@ export function verifyVoiceRuntimeInternalAuth(header: string | null): boolean {
 }
 
 export function internalVoiceRuntimeBaseUrl(): string {
-  const explicit = process.env.VOICE_RUNTIME_INTERNAL_URL?.trim();
+  const explicit = process.env.TRANSOVO_BACKEND_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
   const port = process.env.PORT?.trim() || "3000";
   return `http://127.0.0.1:${port}`;

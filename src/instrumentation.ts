@@ -4,12 +4,26 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  console.log(
+    JSON.stringify({
+      service: "transovo-web",
+      event: "web_boot_started",
+      timestamp: new Date().toISOString(),
+    }),
+  );
+
   const { startInProcessWorker } = await import("@/lib/jobs/inprocess-worker");
   await startInProcessWorker();
-  const { startInProcessVoiceRuntime } = await import(
-    "@/lib/voice/inprocess-voice-runtime"
-  );
-  await startInProcessVoiceRuntime();
+
+  // Voice worker runs as separate transovo-voice service (not spawned from web).
+  // Local dev: npm run voice-python:start or ENABLE_INPROCESS_VOICE_RUNTIME=1
+  if (process.env.ENABLE_INPROCESS_VOICE_RUNTIME === "1") {
+    const { startInProcessVoiceRuntime } = await import(
+      "@/lib/voice/inprocess-voice-runtime"
+    );
+    await startInProcessVoiceRuntime();
+  }
   const { bootstrapOutboundRealtimeTest } = await import(
     "@/lib/voice/outbound/outbound-boot"
   );

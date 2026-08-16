@@ -26,6 +26,8 @@ function isPublicPath(pathname: string) {
   // Provider webhooks + cron/job drains must not require a browser session.
   if (pathname.startsWith("/api/twilio/")) return true;
   if (pathname.startsWith("/api/telnyx/")) return true;
+  if (pathname === "/api/health") return true;
+  if (pathname === "/api/internal/voice-runtime") return true;
   // Covered by /api/telnyx/ prefix — dynamic-variables + voice tools included.
   if (pathname.startsWith("/api/jobs/")) return true;
   if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;

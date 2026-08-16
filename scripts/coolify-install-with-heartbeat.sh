@@ -44,4 +44,4 @@ if [[ ! -d node_modules ]]; then
 fi
 
 echo "[coolify-install] complete"
-echo "[coolify-install] Python venv is installed after next build (see coolify-build-with-heartbeat.sh)"
+echo "[coolify-install] transovo-web only — voice worker builds from voice-runtime-python/Dockerfile"

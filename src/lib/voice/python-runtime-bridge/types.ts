@@ -10,6 +10,7 @@ export type PythonRuntimeBootstrapInput = {
 
 export type PythonRuntimeBootstrapResult = {
   ok: true;
+  apiVersion: 1;
   callId: string;
   workspaceId: string;
   agentId: string;

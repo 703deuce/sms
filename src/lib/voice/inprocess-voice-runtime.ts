@@ -32,6 +32,7 @@ export function voiceRuntimeImpl(): "python" | "typescript" {
 
 export function inProcessVoiceRuntimeEnabled(): boolean {
   if (!isLiveKitVoiceRuntime()) return false;
+  if (process.env.ENABLE_INPROCESS_VOICE_RUNTIME !== "1") return false;
   if (process.env.DISABLE_INPROCESS_VOICE_RUNTIME === "1") return false;
   if (process.env.NEXT_PHASE === "phase-production-build") return false;
   return true;
@@ -110,7 +111,7 @@ function attachGracefulShutdown(child: ChildProcess) {
 }
 
 function voiceRuntimeInternalUrl(): string {
-  const explicit = process.env.VOICE_RUNTIME_INTERNAL_URL?.trim();
+  const explicit = process.env.TRANSOVO_BACKEND_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
   const port = process.env.PORT?.trim() || "3000";
   return `http://127.0.0.1:${port}`;
@@ -121,11 +122,17 @@ function spawnVoiceRuntimeChild(
   args: string[],
   impl: "python" | "typescript",
 ): ChildProcess {
+  const internalKey =
+    process.env.TRANSOVO_INTERNAL_API_KEY?.trim() ||
+    process.env.VOICE_RUNTIME_INTERNAL_SECRET?.trim() ||
+    process.env.INTEGRATION_SECRET_KEY?.trim();
+
   return spawn(command, args, {
     env: {
       ...process.env,
       LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
-      VOICE_RUNTIME_INTERNAL_URL: voiceRuntimeInternalUrl(),
+      TRANSOVO_BACKEND_URL: voiceRuntimeInternalUrl(),
+      ...(internalKey ? { TRANSOVO_INTERNAL_API_KEY: internalKey } : {}),
       PYTHONPATH: path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python"),
     },
     cwd:

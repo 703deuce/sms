@@ -10,9 +10,13 @@ const originalImpl = process.env.VOICE_RUNTIME_IMPL;
 const originalSecret = process.env.VOICE_RUNTIME_INTERNAL_SECRET;
 
 try {
-  process.env.VOICE_RUNTIME_INTERNAL_SECRET = "test-secret-bridge";
-  assert.equal(verifyVoiceRuntimeInternalAuth("Bearer test-secret-bridge"), true);
+  process.env.TRANSOVO_INTERNAL_API_KEY = "test-internal-key";
+  assert.equal(verifyVoiceRuntimeInternalAuth("Bearer test-internal-key"), true);
   assert.equal(verifyVoiceRuntimeInternalAuth("Bearer wrong"), false);
+
+  process.env.VOICE_RUNTIME_INTERNAL_SECRET = "legacy-secret";
+  delete process.env.TRANSOVO_INTERNAL_API_KEY;
+  assert.equal(verifyVoiceRuntimeInternalAuth("Bearer legacy-secret"), true);
 
   process.env.VOICE_RUNTIME_IMPL = "typescript";
   assert.equal(voiceRuntimeImpl(), "typescript");
@@ -27,6 +31,7 @@ try {
 } finally {
   if (originalImpl === undefined) delete process.env.VOICE_RUNTIME_IMPL;
   else process.env.VOICE_RUNTIME_IMPL = originalImpl;
+  delete process.env.TRANSOVO_INTERNAL_API_KEY;
   if (originalSecret === undefined) delete process.env.VOICE_RUNTIME_INTERNAL_SECRET;
   else process.env.VOICE_RUNTIME_INTERNAL_SECRET = originalSecret;
 }
