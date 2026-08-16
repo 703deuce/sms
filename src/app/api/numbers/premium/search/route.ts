@@ -14,7 +14,7 @@ import {
 } from "@/lib/premium-numbers/product-api";
 import type { PremiumSearchMode } from "@/lib/premium-numbers/premium-pricing";
 import { serializeResultsForLog } from "@/lib/premium-numbers/reservation-service";
-import { logPremiumSearchCompleted } from "@/lib/premium-numbers/search-observability";
+import { logPremiumSearchCompleted, buildSearchUiBreakdown } from "@/lib/premium-numbers/search-observability";
 import {
   type NumberType,
   type TollFreePrefix,
@@ -169,6 +169,11 @@ export async function POST(request: Request) {
 
     product.searchLogId = log.id;
 
+    const uiBreakdown = buildSearchUiBreakdown({
+      product,
+      rankedCandidates: searchResult.candidates,
+    });
+
     logPremiumSearchCompleted({
       searchLogId: log.id,
       workspaceId,
@@ -188,6 +193,7 @@ export async function POST(request: Request) {
       totalResults: product.resultCount,
       results: allResults,
       providerAttempts: searchResult.providerAttempts,
+      uiBreakdown,
     });
 
     return NextResponse.json(product);

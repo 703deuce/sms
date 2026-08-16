@@ -1,6 +1,9 @@
 import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
-import type { PremiumNumberProductResult } from "./product-api";
+import type { PremiumNumberProductResult, PremiumSearchProductResponse } from "./product-api";
+import { BUSINESS_MATCH_LIST_THRESHOLD } from "./scoring-config";
 import { parsePhoneDigits } from "./keypad";
+import { resolveVanityPresentation } from "./vanity-display";
+import type { ScoredCandidate } from "./types";
 
 function npaFromPhone(phone: string): string {
   const digits = parsePhoneDigits(phone);
@@ -15,6 +18,92 @@ function summarizeAttempts(attempts: ProviderSearchAttempt[]) {
     result_count: a.resultCount ?? 0,
     error: a.error ?? null,
   }));
+}
+
+export function buildSearchUiBreakdown(input: {
+  product: PremiumSearchProductResponse;
+  rankedCandidates?: ScoredCandidate[];
+}) {
+  let exactMatchBadges = 0;
+  let strongMatchBadges = 0;
+  let keywordMatchBadges = 0;
+
+  for (const r of input.product.bestMatches) {
+    if (
+      r.displayWord &&
+      r.wordPlacement === "ending" &&
+      r.businessMatchScore >= 75
+    ) {
+      exactMatchBadges += 1;
+    } else if (r.displayWord && r.wordPlacement === "ending") {
+      strongMatchBadges += 1;
+    } else if (r.displayWord && r.wordPlacement === "embedded") {
+      keywordMatchBadges += 1;
+    }
+  }
+
+  const bestMatchPhones = new Set(input.product.bestMatches.map((r) => r.phoneNumber));
+  const excludedWordMatches: Array<{
+    phone: string;
+    display: string;
+    words: string[];
+    display_word: string | null;
+    business_match_score: number;
+    reasons: string[];
+  }> = [];
+
+  if (input.rankedCandidates) {
+    for (const c of input.rankedCandidates) {
+      if (!c.matchedWords.length || bestMatchPhones.has(c.phoneNumber)) continue;
+      const vanity = resolveVanityPresentation(
+        c.phoneNumber,
+        c.matchedWords,
+        c.rawTelnyx?.vanity_format as string | undefined,
+      );
+      const reasons: string[] = [];
+      if (c.businessMatchScore < BUSINESS_MATCH_LIST_THRESHOLD) {
+        reasons.push(`business_match_score_below_${BUSINESS_MATCH_LIST_THRESHOLD}`);
+      }
+      if (!vanity.displayWord) reasons.push("no_display_word");
+      excludedWordMatches.push({
+        phone: c.phoneNumber,
+        display: c.formattedNumber,
+        words: c.matchedWords,
+        display_word: vanity.displayWord ?? null,
+        business_match_score: c.businessMatchScore,
+        reasons,
+      });
+    }
+  }
+
+  return {
+    best_matches_cards: input.product.bestMatches.length,
+    memorable_cards: input.product.memorableAlternatives.length,
+    exact_match_badges: exactMatchBadges,
+    strong_match_badges: strongMatchBadges,
+    keyword_match_badges: keywordMatchBadges,
+    business_match_count_api: input.product.businessMatchCount,
+    memorable_count_api: input.product.memorableCount,
+    excluded_word_matches: excludedWordMatches.length,
+    excluded_word_match_samples: excludedWordMatches.slice(0, 12),
+    best_match_numbers: input.product.bestMatches.map((r) => ({
+      phone: r.phoneNumber,
+      display: r.displayNumber,
+      vanity: r.vanityDisplay ?? null,
+      word: r.displayWord ?? null,
+      placement: r.wordPlacement ?? null,
+      provider: r.provider,
+      business_match_score: r.businessMatchScore,
+      badge:
+        r.displayWord && r.wordPlacement === "ending" && r.businessMatchScore >= 75
+          ? "EXACT_MATCH"
+          : r.displayWord && r.wordPlacement === "ending"
+            ? "STRONG_MATCH"
+            : r.displayWord && r.wordPlacement === "embedded"
+              ? "KEYWORD_MATCH"
+              : "BUSINESS_SECTION_NO_BADGE",
+    })),
+  };
 }
 
 /** Per area-code inventory fetch — emitted from NumberSearchService (Coolify / stdout). */
@@ -61,6 +150,7 @@ export function logPremiumSearchCompleted(input: {
   totalResults: number;
   results: PremiumNumberProductResult[];
   providerAttempts?: ProviderSearchAttempt[];
+  uiBreakdown?: ReturnType<typeof buildSearchUiBreakdown>;
 }) {
   const resultsByProvider = { telnyx: 0, twilio: 0 };
   const resultsByNpa: Record<string, number> = {};
@@ -105,6 +195,7 @@ export function logPremiumSearchCompleted(input: {
       provider_attempts: input.providerAttempts
         ? summarizeAttempts(input.providerAttempts)
         : [],
+      ui_breakdown: input.uiBreakdown ?? null,
       results: compactResults,
     }),
   );
