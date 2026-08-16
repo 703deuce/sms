@@ -109,6 +109,13 @@ function attachGracefulShutdown(child: ChildProcess) {
   process.once("SIGINT", shutdown);
 }
 
+function voiceRuntimeInternalUrl(): string {
+  const explicit = process.env.VOICE_RUNTIME_INTERNAL_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const port = process.env.PORT?.trim() || "3000";
+  return `http://127.0.0.1:${port}`;
+}
+
 function spawnVoiceRuntimeChild(
   command: string,
   args: string[],
@@ -118,6 +125,7 @@ function spawnVoiceRuntimeChild(
     env: {
       ...process.env,
       LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
+      VOICE_RUNTIME_INTERNAL_URL: voiceRuntimeInternalUrl(),
       PYTHONPATH: path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python"),
     },
     cwd:

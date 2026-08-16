@@ -22,8 +22,8 @@ export function verifyVoiceRuntimeInternalAuth(header: string | null): boolean {
 }
 
 export function internalVoiceRuntimeBaseUrl(): string {
-  const app = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (app) return app.replace(/\/$/, "");
+  const explicit = process.env.VOICE_RUNTIME_INTERNAL_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
   const port = process.env.PORT?.trim() || "3000";
   return `http://127.0.0.1:${port}`;
 }

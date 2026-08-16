@@ -93,7 +93,7 @@ Auth: `Authorization: Bearer $VOICE_RUNTIME_INTERNAL_SECRET`
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Worker registration |
 | `LIVEKIT_AGENT_NAME` | Dispatch name |
 | `OPENAI_API_KEY` | Realtime |
-| `APP_URL` / `PORT` | Internal API base |
+| `VOICE_RUNTIME_INTERNAL_URL` / `PORT` | Loopback internal API base (defaults `http://127.0.0.1:$PORT`) |
 | `VOICE_RUNTIME_INTERNAL_SECRET` | API auth |
 | `VOICE_REALTIME_MODEL`, `VOICE_REALTIME_VOICE` | Default gpt-realtime-2 + marin |
 | `VOICE_REALTIME_VAD_EAGERNESS` | semantic_vad (default medium) |
