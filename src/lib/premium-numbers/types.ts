@@ -1,3 +1,5 @@
+import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
+
 export type PremiumSearchStatus =
   | "RESULTS_FOUND"
   | "RESULTS_FOUND_BUT_NONE_PREMIUM"
@@ -122,6 +124,8 @@ export type ScoredCandidate = {
 };
 
 export type TelnyxSearchAttempt = {
+  provider?: "telnyx" | "twilio";
+  areaCode?: string;
   strategy: string;
   query: Record<string, string | number>;
   resultCount: number;
@@ -165,5 +169,7 @@ export type PremiumSearchResult = {
   candidates: ScoredCandidate[];
   statistics: PremiumSearchStatistics;
   searchAttempts: TelnyxSearchAttempt[];
+  /** Raw upstream attempts (Telnyx + Twilio) for ops logs / DB audit. */
+  providerAttempts?: ProviderSearchAttempt[];
   message?: string;
 };

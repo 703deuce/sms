@@ -99,6 +99,7 @@ export async function searchPremiumNumbersPersonal(input: {
 
   let allCandidates: Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"] = [];
   const attempts: PremiumSearchResult["searchAttempts"] = [];
+  const providerAttempts: ProviderSearchAttempt[] = [];
 
   try {
     for (const areaCode of areaCodes) {
@@ -108,8 +109,11 @@ export async function searchPremiumNumbersPersonal(input: {
         memorablePatterns,
         baseLimit: areaCodes.length > 1 ? 30 : 50,
       });
+      providerAttempts.push(...inventory.attempts);
       attempts.push(
         ...inventory.attempts.map((a) => ({
+          provider: a.provider,
+          areaCode,
           strategy: a.strategy,
           query: {},
           status: mapProviderAttemptStatus(a.status),
@@ -185,6 +189,7 @@ export async function searchPremiumNumbersPersonal(input: {
     candidates,
     statistics,
     searchAttempts: attempts,
+    providerAttempts,
   };
 }
 

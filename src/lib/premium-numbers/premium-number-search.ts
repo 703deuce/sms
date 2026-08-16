@@ -144,6 +144,7 @@ export async function searchPremiumNumbers(
 
   let allCandidates: Awaited<ReturnType<typeof runCombinedInventorySearches>>["candidates"] = [];
   const attempts: TelnyxSearchAttempt[] = [];
+  const providerAttempts: ProviderSearchAttempt[] = [];
 
   try {
     for (const areaCode of areaCodes) {
@@ -154,8 +155,11 @@ export async function searchPremiumNumbers(
         baseLimit: areaCodes.length > 1 ? 30 : 50,
         matchStyle,
       });
+      providerAttempts.push(...inventory.attempts);
       attempts.push(
         ...inventory.attempts.map((a) => ({
+          provider: a.provider,
+          areaCode,
           strategy: a.strategy,
           query: {},
           status: mapProviderAttemptStatus(a.status),
@@ -253,5 +257,6 @@ export async function searchPremiumNumbers(
     candidates,
     statistics,
     searchAttempts: attempts,
+    providerAttempts,
   };
 }

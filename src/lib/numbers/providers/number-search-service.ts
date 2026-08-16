@@ -9,6 +9,7 @@ import type {
   ProviderSearchAttempt,
 } from "./types";
 import { dedupeCandidatesByE164 } from "./normalize";
+import { logInventoryProviderSearch } from "@/lib/premium-numbers/search-observability";
 
 const PROVIDER_TIMEOUT_MS = 15_000;
 
@@ -66,6 +67,7 @@ export class NumberSearchService {
     candidates: NormalizedNumberCandidate[];
     attempts: ProviderSearchAttempt[];
   }> {
+    const started = Date.now();
     const providers = enabledProviders();
     if (providers.length === 0) {
       return {
@@ -93,6 +95,12 @@ export class NumberSearchService {
     }
 
     candidates = dedupeCandidatesByE164(candidates);
+    logInventoryProviderSearch({
+      areaCode: input.areaCode,
+      candidates,
+      attempts,
+      latencyMs: Date.now() - started,
+    });
     return { candidates, attempts };
   }
 

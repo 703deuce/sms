@@ -14,6 +14,7 @@ import {
 } from "@/lib/premium-numbers/product-api";
 import type { PremiumSearchMode } from "@/lib/premium-numbers/premium-pricing";
 import { serializeResultsForLog } from "@/lib/premium-numbers/reservation-service";
+import { logPremiumSearchCompleted } from "@/lib/premium-numbers/search-observability";
 import {
   type NumberType,
   type TollFreePrefix,
@@ -42,10 +43,13 @@ export async function POST(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId(auth.session, body?.workspaceId);
     const mode: PremiumSearchMode = body?.mode === "personal" ? "personal" : "business";
+    const searchStarted = Date.now();
 
     let searchResult;
     let areaCode = "";
     let areaCodes: string[] = [];
+    let keywordList: string[] = [];
+    let keywordSource: string | null = null;
 
     if (mode === "personal") {
       areaCodes = (body?.areaCodes ?? [])
@@ -96,11 +100,13 @@ export async function POST(request: Request) {
       areaCode = areaCodes[0];
 
       const llm = await suggestIndustryVanityKeywords(industryText);
+      keywordSource = llm.source;
       const userSuggested = body?.suggestedKeywords ?? [];
       const customKeywords = mergeCustomerKeywords({
         suggestedKeywords: [...llm.keywords, ...userSuggested],
         extraKeywords: body?.extraKeywords ?? body?.customKeywords,
       });
+      keywordList = customKeywords;
 
       const industry =
         inferIndustryFromText(industryText) ||
@@ -150,6 +156,9 @@ export async function POST(request: Request) {
           suggestedKeywords: body?.suggestedKeywords ?? [],
           extraKeywords: body?.extraKeywords ?? body?.customKeywords ?? [],
           preferences: body?.preferences ?? [],
+          keywordSource,
+          keywords: keywordList.length ? keywordList : searchResult.keywords.map((k) => k.word),
+          providerAttempts: searchResult.providerAttempts ?? [],
         },
         businessMatchCount: product.businessMatchCount,
         memorableMatchCount: product.memorableCount,
@@ -159,6 +168,27 @@ export async function POST(request: Request) {
     });
 
     product.searchLogId = log.id;
+
+    logPremiumSearchCompleted({
+      searchLogId: log.id,
+      workspaceId,
+      userId: auth.session.userId,
+      mode,
+      areaCodes,
+      industry: searchResult.industry ?? body?.industry ?? null,
+      keywords: keywordList.length
+        ? keywordList
+        : searchResult.keywords.map((k) => k.word),
+      keywordSource,
+      status: searchResult.status,
+      message: searchResult.message ?? null,
+      elapsedMs: Date.now() - searchStarted,
+      businessMatchCount: product.businessMatchCount,
+      memorableCount: product.memorableCount,
+      totalResults: product.resultCount,
+      results: allResults,
+      providerAttempts: searchResult.providerAttempts,
+    });
 
     return NextResponse.json(product);
   } catch (err) {
