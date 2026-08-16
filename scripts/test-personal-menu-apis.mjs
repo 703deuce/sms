@@ -92,7 +92,7 @@ async function main() {
     record("forwarding-number-get", fwdPage.ok, fwdPage.ok ? "ok" : String(fwdPage.status));
 
     const vm = await getJson("/api/phone/voicemail", cookies);
-    record("voicemail-api", vm.ok, `boxes=${vm.json.boxes?.length ?? 0}`);
+    record("voicemail-api", vm.ok, `boxes=${vm.json.data?.boxes?.length ?? 0}`);
   } else {
     record("vault-park", false, "no number");
   }

@@ -26,7 +26,7 @@ export function getTwilioParentCredentials() {
     process.env.TWILIO_WEBHOOK_AUTH_TOKEN?.trim() ||
     process.env.TWILIO_AUTH_TOKEN?.trim();
   const apiKeySid = process.env.TWILIO_API_KEY_SID?.trim();
-  const apiKeySecret = process.env.TWILIO_API_KEY_SECRET?.trim() || process.env.TWILIO_AUTH_TOKEN?.trim();
+  const apiKeySecret = process.env.TWILIO_API_KEY_SECRET?.trim();
   const primaryProfileSid = process.env.TWILIO_PRIMARY_PROFILE_SID?.trim();
 
   return { accountSid, authToken, apiKeySid, apiKeySecret, primaryProfileSid };
