@@ -9,6 +9,10 @@ import {
   rebuildInboundTrunkForNumber,
 } from "./livekit/trunk";
 import {
+  ensureLiveKitOutboundTrunk,
+  resolvePlatformOutboundTrunkId,
+} from "./livekit/outbound-trunk";
+import {
   diagnoseLiveKitSipIssues,
   inspectLiveKitSipRouting,
   isWildcardTelnyxTrunk,
@@ -55,6 +59,9 @@ function readProvision(settingsJson: unknown): TelephonyProvisionRecord {
       : undefined,
     livekitDispatchRuleId: prov.livekitDispatchRuleId
       ? String(prov.livekitDispatchRuleId)
+      : undefined,
+    livekitOutboundTrunkId: prov.livekitOutboundTrunkId
+      ? String(prov.livekitOutboundTrunkId)
       : undefined,
     lastProvisionedAt: prov.lastProvisionedAt ? String(prov.lastProvisionedAt) : undefined,
     lastVerifiedAt: prov.lastVerifiedAt ? String(prov.lastVerifiedAt) : undefined,
@@ -184,6 +191,17 @@ export async function ensureNumberProvisioned(
     });
     actions.push(...dispatchActions);
 
+    let livekitOutboundTrunkId: string | undefined;
+    try {
+      const { trunk: outboundTrunk, actions: outboundActions } =
+        await ensureLiveKitOutboundTrunk({ callerIdE164: phone.e164 });
+      actions.push(...outboundActions);
+      livekitOutboundTrunkId = outboundTrunk.sipTrunkId || undefined;
+    } catch (outboundErr) {
+      const msg = outboundErr instanceof Error ? outboundErr.message : String(outboundErr);
+      actions.push(`outbound_trunk_skipped:${msg}`);
+    }
+
     const provision = await writeProvision(phone.id, {
       routingMode,
       state: "active",
@@ -191,6 +209,7 @@ export async function ensureNumberProvisioned(
       telnyxFqdnId: fqdnId,
       livekitInboundTrunkId: trunkId,
       livekitDispatchRuleId: rule.sipDispatchRuleId,
+      livekitOutboundTrunkId,
       lastError: null,
       ...(input.agentId
         ? explicitDispatchPatchForPhoneSettings(
@@ -351,6 +370,29 @@ export async function verifyNumberRouting(input: {
       }
       if (inspect.sipHost && provision.telnyxFqdnId) {
         // FQDN host is validated during provision; surface mismatch in issues only when empty.
+      }
+
+      try {
+        const outboundTrunkId =
+          provision.livekitOutboundTrunkId ||
+          (await resolvePlatformOutboundTrunkId({ callerIdE164: phone.e164 }));
+        if (!outboundTrunkId) {
+          issues.push("livekit_outbound_trunk_missing");
+        } else {
+          livekitDetails.livekitOutboundTrunkId = outboundTrunkId;
+          const { getLiveKitSipClient } = await import("./livekit/client");
+          const listed = await getLiveKitSipClient().listSipOutboundTrunk({
+            trunkIds: [outboundTrunkId],
+          });
+          const outbound = listed[0];
+          if (!outbound) {
+            issues.push("livekit_outbound_trunk_not_found");
+          } else if (!trunkNumbersIncludeDid(outbound.numbers || [], phone.e164)) {
+            issues.push("livekit_outbound_trunk_missing_caller_id");
+          }
+        }
+      } catch {
+        issues.push("livekit_outbound_trunk_lookup_failed");
       }
     } catch {
       issues.push("livekit_trunk_lookup_failed");

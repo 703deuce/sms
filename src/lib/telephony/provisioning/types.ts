@@ -14,6 +14,8 @@ export type TelephonyProvisionRecord = {
   telnyxFqdnId?: string;
   livekitInboundTrunkId?: string;
   livekitDispatchRuleId?: string;
+  /** Shared platform outbound trunk id (same for all tenants; caller ID varies per call). */
+  livekitOutboundTrunkId?: string;
   explicitDispatch?: {
     workspaceId?: string;
     agentId?: string;
@@ -78,6 +80,7 @@ export type VerifyRoutingResult = {
   livekitTrunkId?: string;
   livekitTrunkNumbers?: string[];
   livekitDispatchRuleId?: string;
+  livekitOutboundTrunkId?: string;
   livekitDispatchTrunkIds?: string[];
   livekitSipHost?: string;
   dbAgentId?: string | null;

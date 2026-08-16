@@ -56,4 +56,12 @@ export { inspectLiveKitSipRouting, diagnoseLiveKitSipIssues } from "./livekit/in
 
 export { ensureSharedDispatchRule } from "./livekit/dispatch";
 export { ensureSharedInboundTrunk } from "./livekit/trunk";
+export {
+  ensureLiveKitOutboundTrunk,
+  findOutboundTrunkByName,
+  getStoredLiveKitOutboundTrunkId,
+  resolvePlatformOutboundTrunkId,
+  resolvePlatformOutboundTrunkIdFromEnv,
+  TRANSOVO_LIVEKIT_OUTBOUND_TRUNK_NAME,
+} from "./livekit/outbound-trunk";
 export { ensureTelnyxLiveKitFqdnConnection } from "./telnyx/sip-connection";

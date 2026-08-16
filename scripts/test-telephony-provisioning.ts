@@ -13,8 +13,10 @@ import {
   trunkNumbersIncludeDid,
 } from "../src/lib/telephony/provisioning/livekit/did";
 import {
-  getVoicePipelineConfig,
-} from "../src/lib/voice/runtime-provider/config";
+  resolvePlatformOutboundTrunkIdFromEnv,
+  TRANSOVO_LIVEKIT_OUTBOUND_TRUNK_NAME,
+} from "../src/lib/telephony/provisioning/livekit/outbound-trunk";
+import { getVoicePipelineConfig } from "../src/lib/voice/runtime-provider/config";
 import {
   parseDispatchAttributes,
   parseRoomMetadata,
@@ -72,6 +74,20 @@ assert.equal(
   })?.toE164,
   "+18663464256",
 );
+
+assert.equal(TRANSOVO_LIVEKIT_OUTBOUND_TRUNK_NAME, "transovo-telnyx-outbound");
+
+const prevDefaultTrunk = process.env.LIVEKIT_DEFAULT_OUTBOUND_TRUNK_ID;
+const prevLegacyTrunk = process.env.LIVEKIT_OUTBOUND_TRUNK_ID;
+process.env.LIVEKIT_DEFAULT_OUTBOUND_TRUNK_ID = "ST_default";
+process.env.LIVEKIT_OUTBOUND_TRUNK_ID = "ST_legacy";
+assert.equal(resolvePlatformOutboundTrunkIdFromEnv(), "ST_default");
+delete process.env.LIVEKIT_DEFAULT_OUTBOUND_TRUNK_ID;
+assert.equal(resolvePlatformOutboundTrunkIdFromEnv(), "ST_legacy");
+if (prevDefaultTrunk) process.env.LIVEKIT_DEFAULT_OUTBOUND_TRUNK_ID = prevDefaultTrunk;
+else delete process.env.LIVEKIT_DEFAULT_OUTBOUND_TRUNK_ID;
+if (prevLegacyTrunk) process.env.LIVEKIT_OUTBOUND_TRUNK_ID = prevLegacyTrunk;
+else delete process.env.LIVEKIT_OUTBOUND_TRUNK_ID;
 
 const partial = roomMetadataSchema.safeParse({ toE164: "+15715551234" });
 assert.equal(partial.success, true);

@@ -11,7 +11,7 @@ import {
   parseRoomMetadata,
   type RoomMetadata,
 } from "@/lib/telephony/provisioning/metadata";
-import { getStoredLiveKitOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
+import { resolvePlatformOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { loadExplicitDispatchForDid, mergeExplicitDispatchMetadata } from "@/lib/telephony/provisioning";
 import type { PythonRuntimeBootstrapInput, PythonRuntimeBootstrapResult, PythonRuntimeError } from "./types";
 
@@ -174,10 +174,9 @@ export async function bootstrapInboundForPython(
       typeof realtimeAdvanced?.speed === "number" ? realtimeAdvanced.speed : undefined,
     eventTypeUri:
       typeof calendarAdvanced?.eventTypeUri === "string" ? calendarAdvanced.eventTypeUri : null,
-    sipOutboundTrunkId:
-      getStoredLiveKitOutboundTrunkId() ||
-      process.env.LIVEKIT_SIP_OUTBOUND_TRUNK?.trim() ||
-      null,
+    sipOutboundTrunkId: await resolvePlatformOutboundTrunkId({
+      callerIdE164: normalizedTo || routing.e164 || null,
+    }),
     sipCallerIdE164: normalizedTo || routing.e164 || null,
   };
 }
