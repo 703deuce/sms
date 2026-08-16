@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapPhoneNumber } from "@/lib/mappers";
 import { validateForwardingDestination } from "@/lib/numbers/forwarding-validation";
+import { applyPersonalCallSettingsToRow } from "@/lib/numbers/state-service";
 import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
 
 const assignmentsInclude = {
@@ -43,6 +44,16 @@ export async function PATCH(
       webhookUrl?: string | null;
       settingsJson?: Record<string, unknown> | null;
       assignedUserIds?: string[];
+      personalCallSettings?: {
+        forwardingEnabled?: boolean;
+        forwardDestination?: string | null;
+        forwardRingSeconds?: number;
+        forwardUnansweredAction?: "voicemail" | "end";
+        voicemailEnabled?: boolean;
+        directVoicemail?: boolean;
+        vaultIncomingMode?: "parked_message" | "voicemail";
+        parkedMessageText?: string;
+      };
     };
     const prisma = getPrisma();
     const existing = await prisma.phoneNumber.findFirst({
@@ -57,10 +68,20 @@ export async function PATCH(
       );
     }
 
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: auth.workspaceId },
+      select: { type: true },
+    });
+
     const data: Record<string, unknown> = {
       friendlyName: body.friendlyName ?? undefined,
     };
-    if (body.voiceForwardTo !== undefined) {
+
+    if (body.personalCallSettings && workspace?.type === "PERSONAL") {
+      const applied = applyPersonalCallSettingsToRow(existing, body.personalCallSettings);
+      data.voiceForwardTo = applied.voiceForwardTo;
+      data.settingsJson = applied.settingsJson;
+    } else if (body.voiceForwardTo !== undefined) {
       const nextForward = body.voiceForwardTo?.trim() || null;
       if (nextForward) {
         const validated = validateForwardingDestination({

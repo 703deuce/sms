@@ -5,11 +5,23 @@
  */
 
 import type { PhoneNumber } from "@prisma/client";
+import {
+  isPersonalNumberParked,
+  readPersonalCallSettings,
+  type ForwardUnansweredAction,
+} from "./personal-call-settings";
 
 export type NumberInboundRoute =
-  | { kind: "parked" }
-  | { kind: "forward"; destination: string }
+  | { kind: "vault_message"; message: string }
+  | { kind: "vault_voicemail" }
+  | {
+      kind: "forward";
+      destination: string;
+      ringSeconds: number;
+      unansweredAction: ForwardUnansweredAction;
+    }
   | { kind: "voicemail" }
+  | { kind: "unavailable" }
   | { kind: "default" };
 
 function readSettings(row: PhoneNumber): Record<string, unknown> {
@@ -26,22 +38,27 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
     return { kind: "default" };
   }
 
-  const parked =
-    settings.parked === true ||
-    settings.personalParked === true ||
-    settings.personalServiceState === "PARKED";
+  const callSettings = readPersonalCallSettings(row);
 
-  if (parked) {
-    return { kind: "parked" };
+  if (isPersonalNumberParked(row)) {
+    if (callSettings.vaultIncomingMode === "voicemail" && callSettings.voicemailEnabled) {
+      return { kind: "vault_voicemail" };
+    }
+    return { kind: "vault_message", message: callSettings.parkedMessageText };
   }
 
-  if (row.voiceForwardTo?.trim()) {
-    return { kind: "forward", destination: row.voiceForwardTo.trim() };
+  if (callSettings.forwardingEnabled && row.voiceForwardTo?.trim()) {
+    return {
+      kind: "forward",
+      destination: row.voiceForwardTo.trim(),
+      ringSeconds: callSettings.forwardRingSeconds,
+      unansweredAction: callSettings.forwardUnansweredAction,
+    };
   }
 
-  if (settings.voicemailEnabled === true) {
+  if (callSettings.voicemailEnabled || callSettings.directVoicemail) {
     return { kind: "voicemail" };
   }
 
-  return { kind: "default" };
+  return { kind: "unavailable" };
 }

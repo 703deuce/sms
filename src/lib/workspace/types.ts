@@ -22,6 +22,7 @@ export type WorkspaceFeature =
 
 export type PersonalServiceState =
   | "PARKED"
+  | "PARKED_VOICEMAIL"
   | "FORWARDING"
   | "VOICEMAIL"
   | "PORTING_IN"

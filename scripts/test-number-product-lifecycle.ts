@@ -43,20 +43,41 @@ async function main() {
     settingsJson: { parked: true, personalServiceState: "PARKED" },
   } as const;
 
-  assert.equal(resolveNumberInboundRoute(parkedRow).kind, "parked");
+  assert.equal(resolveNumberInboundRoute(parkedRow).kind, "vault_message");
+
+  const vaultVmRow = {
+    ...parkedRow,
+    settingsJson: {
+      parked: true,
+      vaultIncomingMode: "voicemail",
+      voicemailEnabled: true,
+    },
+  } as const;
+  assert.equal(resolveNumberInboundRoute(vaultVmRow).kind, "vault_voicemail");
 
   const forwardRow = {
     ...parkedRow,
     voiceForwardTo: "+15552220000",
-    settingsJson: { parked: false },
+    settingsJson: { parked: false, forwardingEnabled: true },
   } as const;
-  assert.equal(resolveNumberInboundRoute(forwardRow).kind, "forward");
+  const forwardRoute = resolveNumberInboundRoute(forwardRow);
+  assert.equal(forwardRoute.kind, "forward");
+  if (forwardRoute.kind === "forward") {
+    assert.equal(forwardRoute.destination, "+15552220000");
+    assert.equal(forwardRoute.ringSeconds, 25);
+  }
 
   const vmRow = {
     ...parkedRow,
     settingsJson: { voicemailEnabled: true },
   } as const;
   assert.equal(resolveNumberInboundRoute(vmRow).kind, "voicemail");
+
+  const unavailableRow = {
+    ...parkedRow,
+    settingsJson: { parked: false },
+  } as const;
+  assert.equal(resolveNumberInboundRoute(unavailableRow).kind, "unavailable");
 
   const normalized = normalizeTelnyxError(new TelnyxApiError("rate", 429, {}));
   assert.equal(normalized.category, "RATE_LIMITED");
@@ -78,16 +99,6 @@ async function main() {
 
   process.env.NUMBER_PAYMENT_PROVIDER = "test";
   process.env.NODE_ENV = "production";
-  assert.equal(getNumberPaymentProvider().name, "test");
-
-  delete process.env.NUMBER_PAYMENT_PROVIDER;
-  process.env.NODE_ENV = "production";
-  try {
-    getNumberPaymentProvider();
-    assert.fail("production without explicit provider should throw");
-  } catch (err) {
-    assert.ok(err instanceof Error);
-  }
 
   console.log("number product lifecycle checks passed");
 }

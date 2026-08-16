@@ -215,19 +215,7 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
     >
       <PersonalPageHeader
         title="Voicemail"
-        description="Manage your voicemails, greetings, and transcriptions for your numbers."
-        actions={
-          <>
-            <PersonalOutlineButton className="gap-1.5" onClick={uploadGreetingPrompt}>
-              <Upload className="h-4 w-4" />
-              Upload Greeting
-            </PersonalOutlineButton>
-            <PersonalPrimaryButton className="gap-1.5" onClick={saveGreetingText}>
-              <Mic className="h-4 w-4" />
-              Create Greeting
-            </PersonalPrimaryButton>
-          </>
-        }
+        description="Your call destination when you can't answer — inside Transovo, not your carrier."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -386,24 +374,50 @@ export function PersonalVoicemailUI({ numberId }: { numberId?: string }) {
         )}
       </PersonalSection>
 
+      <PersonalSection title="Greeting">
+        <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+          <p className="text-[13px] font-semibold text-[#111827]">
+            {box?.greetingText ? "Personal Greeting" : "Default Greeting"}
+          </p>
+          {box?.greetingUrl ? (
+            <audio className="mt-2 w-full max-w-md" controls src={box.greetingUrl} />
+          ) : (
+            <p className="mt-2 text-[12px] text-[#6b7280]">
+              {box?.greetingText || "Please leave a message after the tone."}
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <PersonalOutlineButton onClick={saveGreetingText}>Record</PersonalOutlineButton>
+            <PersonalOutlineButton onClick={uploadGreetingPrompt}>Upload</PersonalOutlineButton>
+            <PersonalOutlineButton
+              onClick={async () => {
+                const res = await fetch("/api/phone/voicemail", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: box?.id ? "update_box" : "ensure_personal",
+                    boxId: box?.id,
+                    greetingText: "Please leave a message after the tone.",
+                    name: "Personal voicemail",
+                  }),
+                });
+                if (res.ok) await loadVoicemail();
+              }}
+            >
+              Use Default
+            </PersonalOutlineButton>
+          </div>
+        </div>
+      </PersonalSection>
+
       <div className={pCard + " p-5"}>
         <h2 className="text-[15px] font-semibold text-[#111827]">Voicemail Settings</h2>
         <div className="mt-4 grid gap-6 lg:grid-cols-2">
-          <div>
-            <label className="text-[12px] font-medium text-[#6b7280]">Greeting to play</label>
-            <select
-              className="mt-1 h-10 w-full rounded-lg border border-[#e5e7eb] px-3 text-[13px]"
-              value={box?.id || "default"}
-              onChange={() => undefined}
-            >
-              <option value={box?.id || "default"}>
-                {box?.greetingText ? "Personal Greeting" : "Default Greeting"}
-              </option>
-            </select>
-            <div className="mt-2 flex gap-2">
-              <PersonalOutlineButton onClick={uploadGreetingPrompt}>Upload New</PersonalOutlineButton>
-              <PersonalOutlineButton onClick={saveGreetingText}>Record New</PersonalOutlineButton>
-            </div>
+          <div className="space-y-3">
+            <p className="text-[12px] font-medium text-[#6b7280]">
+              When forwarding is on, voicemail answers after your ring timeout if you don&apos;t
+              pick up. Turn forwarding off and enable direct voicemail to skip ringing your phone.
+            </p>
           </div>
           <div className="space-y-3">
             <label className="flex items-center justify-between text-[13px]">

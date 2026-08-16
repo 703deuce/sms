@@ -2,41 +2,18 @@
 
 import type { PhoneNumber } from "@/lib/types";
 import { formatPhone } from "@/lib/utils";
-import {
-  ArrowRight,
-  Clock,
-  Cloud,
-  HelpCircle,
-  Phone,
-  PhoneForwarded,
-  Plus,
-  Search,
-  Shield,
-  Trash2,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  PersonalAsideCard,
-  PersonalOutlineButton,
   PersonalPageHeader,
   PersonalPageWrap,
   PersonalPrimaryButton,
   PersonalSection,
-  PersonalStatCard,
   PersonalStatusBadge,
   pMuted,
 } from "./personal-ui";
-
-type ForwardingRule = {
-  id: string;
-  phoneNumberId: string | null;
-  targetValue: string;
-  active: boolean;
-};
-
-type ActivityRow = { id: string; from: string; to: string; at: string };
 
 export function PersonalForwardingUI({
   numbers,
@@ -46,321 +23,191 @@ export function PersonalForwardingUI({
   initialNumberId?: string;
 }) {
   const router = useRouter();
-  const [_rules, setRules] = useState<ForwardingRule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [ruleTab, setRuleTab] = useState<"private" | "duo">("private");
   const [editId, setEditId] = useState(initialNumberId || numbers[0]?.id || "");
   const [destination, setDestination] = useState("");
-  const [enabled, setEnabled] = useState(true);
+  const [forwardingOn, setForwardingOn] = useState(false);
+  const [ringSeconds, setRingSeconds] = useState(25);
+  const [unansweredAction, setUnansweredAction] = useState<"voicemail" | "end">("voicemail");
   const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/phone/forwarding")
-      .then((r) => r.json())
-      .then((j) => setRules(j.data || []))
-      .finally(() => setLoading(false));
-  }, []);
+  const [saving, setSaving] = useState(false);
 
   const selected = numbers.find((n) => n.id === editId);
+
   useEffect(() => {
-    if (selected?.voiceForwardTo) setDestination(selected.voiceForwardTo);
+    if (!selected) return;
+    setDestination(selected.voiceForwardTo || "");
+    setForwardingOn(Boolean(selected.voiceForwardTo));
+    const settings =
+      selected.settingsJson && typeof selected.settingsJson === "object"
+        ? (selected.settingsJson as Record<string, unknown>)
+        : {};
+    const ring = settings.forwardRingSeconds;
+    setRingSeconds(typeof ring === "number" ? ring : 25);
+    setUnansweredAction(settings.forwardUnansweredAction === "end" ? "end" : "voicemail");
   }, [selected]);
 
-  const activeRules = numbers.filter((n) => n.voiceForwardTo).length;
-  const primaryDest = numbers.find((n) => n.voiceForwardTo)?.voiceForwardTo;
-
-  const rows = numbers.filter((n) => {
-    const q = search.toLowerCase();
-    if (!q) return true;
-    return formatPhone(n.number).toLowerCase().includes(q) || n.friendlyName?.toLowerCase().includes(q);
-  });
-
-  const activity: ActivityRow[] = numbers
+  const activity = numbers
     .filter((n) => n.voiceForwardTo)
     .slice(0, 3)
     .map((n) => ({
       id: n.id,
       from: formatPhone(n.number),
       to: formatPhone(n.voiceForwardTo!),
-      at: "Today",
     }));
 
   async function save() {
     setMessage(null);
+    setSaving(true);
     try {
-      const fwdRes = await fetch("/api/phone/forwarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phoneNumberId: editId,
-          targetType: "external",
-          targetValue: destination,
-          mode: "always",
-          active: enabled,
-          ringSeconds: 25,
-        }),
-      });
-      const fwdJson = await fwdRes.json().catch(() => ({}));
-      if (!fwdRes.ok) {
-        throw new Error(
-          typeof fwdJson.error === "string" ? fwdJson.error : "Could not save forwarding rule.",
-        );
-      }
-
-      const patchRes = await fetch(`/api/numbers/${editId}`, {
+      const res = await fetch(`/api/numbers/${editId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voiceForwardTo: enabled ? destination : null }),
+        body: JSON.stringify({
+          personalCallSettings: {
+            forwardingEnabled: forwardingOn,
+            forwardDestination: forwardingOn ? destination : null,
+            forwardRingSeconds: ringSeconds,
+            forwardUnansweredAction: unansweredAction,
+            voicemailEnabled: unansweredAction === "voicemail",
+          },
+        }),
       });
-      const patchJson = await patchRes.json().catch(() => ({}));
-      if (!patchRes.ok) {
-        throw new Error(
-          typeof patchJson.error === "string" ? patchJson.error : "Could not update number.",
-        );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Could not save forwarding.");
       }
-
       setMessage("Forwarding saved.");
       router.refresh();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not save forwarding.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function scrollToEditForm() {
-    document.getElementById("forwarding-edit-form")?.scrollIntoView({ behavior: "smooth" });
+  if (numbers.length === 0) {
+    return (
+      <PersonalPageWrap>
+        <p className={pMuted}>
+          No numbers yet.{" "}
+          <Link href="/personal/numbers/premium" className="text-[#6366f1]">Find a number</Link>
+        </p>
+      </PersonalPageWrap>
+    );
   }
 
   return (
-    <PersonalPageWrap
-      aside={
-        <>
-          <PersonalAsideCard title="Forwarding Quick Tips">
-            <ul className="space-y-4">
-              {[
-                {
-                  icon: PhoneForwarded,
-                  title: "Universal Forward",
-                  text: "Set one primary number to receive all calls from your Transovo lines.",
-                },
-                {
-                  icon: Clock,
-                  title: "Smart Business Routing",
-                  text: "During work hours, forward to your office. After hours, send to voicemail.",
-                },
-                {
-                  icon: Shield,
-                  title: "Safe and Secure",
-                  text: "Your private numbers are never exposed to callers.",
-                },
-              ].map((tip) => (
-                <li key={tip.title} className="flex gap-2">
-                  <tip.icon className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
-                  <div>
-                    <p className="font-semibold text-[#111827]">{tip.title}</p>
-                    <p>{tip.text}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </PersonalAsideCard>
-          <PersonalAsideCard title="Quick Help">
-            <ul className="space-y-2">
-              <li><Link href="/personal/forwarding" className="text-[#6366f1]">How it works</Link></li>
-              <li><Link href="/personal/porting" className="text-[#6366f1]">Port a Number</Link></li>
-              <li><Link href="/contact" className="text-[#6366f1]">Get Help</Link></li>
-              <li><Link href="/contact" className="text-[#6366f1]">Feedback</Link></li>
-            </ul>
-          </PersonalAsideCard>
-        </>
-      }
-    >
+    <PersonalPageWrap>
       <PersonalPageHeader
         title="Call Forwarding"
-        description="Manage how and where you receive incoming calls for your phone numbers."
-        actions={
-          <>
-            <PersonalPrimaryButton className="gap-1.5" onClick={scrollToEditForm}>
-              <Plus className="h-4 w-4" />
-              Add New Rule
-            </PersonalPrimaryButton>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-              <input
-                className="h-9 w-52 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] pl-9 pr-3 text-[13px] outline-none focus:border-[#6366f1]"
-                placeholder="Search Forwarding Rules"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </>
-        }
+        description="Ring your phone first. If you don't answer, Transovo can take the voicemail — not your carrier."
       />
 
-      <div className="flex gap-1 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] p-0.5">
-        {[
-          { id: "private" as const, label: "Private" },
-          { id: "duo" as const, label: "My Duo" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setRuleTab(tab.id)}
-            className={`rounded-md px-4 py-1.5 text-[12px] font-semibold transition ${
-              ruleTab === tab.id
-                ? "bg-white text-[#6366f1] shadow-sm"
-                : "text-[#6b7280] hover:text-[#374151]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <PersonalSection title="Your forwarding setup">
+        <div className="space-y-4">
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+              Your number
+            </p>
+            <select
+              className="mt-1 h-10 w-full max-w-md rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold"
+              value={editId}
+              onChange={(e) => setEditId(e.target.value)}
+            >
+              {numbers.map((n) => (
+                <option key={n.id} value={n.id}>{formatPhone(n.number)}</option>
+              ))}
+            </select>
+          </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <PersonalStatCard
-          label="Active Forwarding"
-          value={activeRules}
-          icon={Phone}
-        />
-        <PersonalStatCard
-          label="Primary Destination"
-          value={primaryDest ? formatPhone(primaryDest) : "—"}
-          sub="Mobile Phone"
-          icon={PhoneForwarded}
-          iconClass="bg-[#ecfdf5] text-[#059669]"
-        />
-        <PersonalStatCard
-          label="Total Forwarded This Month"
-          value={activity.length}
-          sub="Calls forwarded"
-          icon={Cloud}
-          iconClass="bg-[#eff6ff] text-[#2563eb]"
-        />
-        <PersonalStatCard
-          label="Next Scheduled Forward"
-          value="Always"
-          sub="No schedule set"
-          icon={Clock}
-          iconClass="bg-[#fff7ed] text-[#ea580c]"
-        />
-      </div>
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+              Forward calls to
+            </p>
+            <input
+              className="mt-1 h-10 w-full max-w-md rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
+              placeholder="(571) 477-6175"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              disabled={!forwardingOn}
+            />
+          </div>
 
-      <PersonalSection
-        title="Forwarding Numbers"
-        description="Choose where calls should be forwarded and how they are handled."
-      >
-        {loading ? (
-          <p className={pMuted}>Loading…</p>
-        ) : numbers.length === 0 ? (
-          <p className={pMuted}>
-            No numbers yet.{" "}
-            <Link href="/personal/numbers/premium" className="text-[#6366f1]">Find a number</Link>
-          </p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                    <th className="pb-3 pr-3">Phone number</th>
-                    <th className="pb-3 pr-3">Type</th>
-                    <th className="pb-3 pr-3">Forward to</th>
-                    <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3 pr-3">Schedule</th>
-                    <th className="pb-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f3f4f6]">
-                  {rows.map((n) => (
-                    <tr key={n.id}>
-                      <td className="py-3 pr-3">
-                        <p className="font-semibold">{formatPhone(n.number)}</p>
-                        <p className="text-[11px] text-[#9ca3af]">{n.friendlyName || "Personal"}</p>
-                      </td>
-                      <td className="py-3 pr-3 text-[#6b7280]">
-                        {n.voiceForwardTo ? "Forwarding" : "Ring"}
-                      </td>
-                      <td className="py-3 pr-3">
-                        {n.voiceForwardTo ? formatPhone(n.voiceForwardTo) : "None"}
-                      </td>
-                      <td className="py-3 pr-3">
-                        <PersonalStatusBadge
-                          status={n.voiceForwardTo ? "active" : "inactive"}
-                        />
-                      </td>
-                      <td className="py-3 pr-3 text-[#6b7280] flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> Always
-                      </td>
-                      <td className="py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setEditId(n.id)}
-                          className="text-[12px] font-semibold text-[#6366f1]"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-semibold text-[#374151]">Forwarding</span>
+            <button
+              type="button"
+              onClick={() => setForwardingOn((v) => !v)}
+              className={`rounded-full px-3 py-1 text-[12px] font-bold ${
+                forwardingOn
+                  ? "bg-[#ecfdf5] text-[#059669]"
+                  : "bg-[#f3f4f6] text-[#6b7280]"
+              }`}
+            >
+              {forwardingOn ? "ON" : "OFF"}
+            </button>
+            <PersonalStatusBadge status={forwardingOn ? "active" : "inactive"} />
+          </div>
 
-            <div id="forwarding-edit-form" className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
-              <p className="text-[13px] font-semibold text-[#111827]">Edit forwarding rule</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <select
-                  className="h-10 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[13px]"
-                  value={editId}
-                  onChange={(e) => setEditId(e.target.value)}
-                >
-                  {numbers.map((n) => (
-                    <option key={n.id} value={n.id}>{formatPhone(n.number)}</option>
-                  ))}
-                </select>
+          {forwardingOn ? (
+            <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
+              <p className="text-[13px] font-semibold text-[#111827]">If unanswered</p>
+              <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                <span>After</span>
                 <input
-                  className="h-10 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[13px]"
-                  placeholder="Forward to number"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
+                  type="number"
+                  min={10}
+                  max={60}
+                  className="h-9 w-16 rounded-lg border border-[#e5e7eb] bg-white px-2 text-center"
+                  value={ringSeconds}
+                  onChange={(e) => setRingSeconds(Number(e.target.value) || 25)}
                 />
+                <span>seconds</span>
               </div>
-              <label className="mt-3 flex items-center gap-2 text-[13px]">
-                <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-                Active forwarding
-              </label>
-              <div className="mt-4 flex gap-2">
-                <PersonalPrimaryButton onClick={save}>Save Changes</PersonalPrimaryButton>
-                <Link href="/personal/numbers/premium">
-                  <PersonalOutlineButton type="button">Add another line</PersonalOutlineButton>
-                </Link>
+              <div className="space-y-2 text-[13px]">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="unanswered"
+                    checked={unansweredAction === "voicemail"}
+                    onChange={() => setUnansweredAction("voicemail")}
+                  />
+                  Send to Transovo Voicemail
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="unanswered"
+                    checked={unansweredAction === "end"}
+                    onChange={() => setUnansweredAction("end")}
+                  />
+                  End the call
+                </label>
               </div>
-              {message ? <p className="mt-2 text-[12px] text-[#6b7280]">{message}</p> : null}
             </div>
-          </>
-        )}
+          ) : null}
+
+          <PersonalPrimaryButton onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </PersonalPrimaryButton>
+          {message ? <p className="text-[12px] text-[#6b7280]">{message}</p> : null}
+        </div>
       </PersonalSection>
 
-      <PersonalSection title="Recent Forwarding Activity">
+      <PersonalSection title="Recent forwarding activity">
         {activity.length === 0 ? (
           <p className={pMuted}>No forwarding activity yet.</p>
         ) : (
           <ul className="space-y-3">
             {activity.map((a) => (
               <li key={a.id} className="flex items-center gap-3 text-[13px]">
-                <ArrowRight className="h-4 w-4 text-[#6366f1]" />
-                <span className="text-[#111827]">{a.from}</span>
+                <span className="font-medium">{a.from}</span>
                 <ArrowRight className="h-3 w-3 text-[#9ca3af]" />
                 <span className="text-[#6b7280]">{a.to}</span>
-                <span className="ml-auto text-[11px] text-[#9ca3af]">{a.at}</span>
               </li>
             ))}
           </ul>
         )}
-        <Link href="/personal/numbers" className="mt-3 text-[13px] font-semibold text-[#6366f1]">
-          View All Activity
-        </Link>
       </PersonalSection>
     </PersonalPageWrap>
   );

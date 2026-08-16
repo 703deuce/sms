@@ -235,6 +235,7 @@ export function PersonalVaultUI({
                   <th className="pb-3 pr-3">Plan</th>
                   <th className="pb-3 pr-3">Monthly Fee</th>
                   <th className="pb-3 pr-3">Renewal Date</th>
+                  <th className="pb-3 pr-3">Incoming calls</th>
                   <th className="pb-3 pr-3">Status</th>
                   <th className="pb-3 pr-3">Last Activity</th>
                   <th className="pb-3 pr-3">Usage</th>
@@ -258,7 +259,38 @@ export function PersonalVaultUI({
                       {n.parkedSince ? new Date(n.parkedSince).toLocaleDateString() : "—"}
                     </td>
                     <td className="py-3 pr-3">
+                      <select
+                        className="h-8 rounded-md border border-[#e5e7eb] bg-white px-2 text-[12px]"
+                        value={n.vaultIncomingMode}
+                        disabled={busy === n.id}
+                        onChange={async (e) => {
+                          const mode = e.target.value as "parked_message" | "voicemail";
+                          setBusy(n.id);
+                          setError(null);
+                          try {
+                            await runPersonalNumberAction(
+                              n.id,
+                              mode === "voicemail"
+                                ? "set_vault_voicemail"
+                                : "set_vault_message_only",
+                            );
+                            router.refresh();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error ? err.message : "Could not update vault mode.",
+                            );
+                          } finally {
+                            setBusy(null);
+                          }
+                        }}
+                      >
+                        <option value="parked_message">Parked message</option>
+                        <option value="voicemail">Voicemail</option>
+                      </select>
+                    </td>
+                    <td className="py-3 pr-3">
                       <PersonalStatusBadge status="protected" />
+                      <p className="mt-1 text-[11px] text-[#9ca3af]">Vaulted</p>
                     </td>
                     <td className="py-3 pr-3 text-[#6b7280]">Vaulted</td>
                     <td className="py-3 pr-3 text-[#6b7280]">Low</td>

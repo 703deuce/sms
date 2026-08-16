@@ -378,6 +378,72 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
           }).catch(() => undefined);
         }
       }
+
+      const personalForward =
+        Boolean(payload.personalForward) || (call.notes || "").includes("[personal_forward:1]");
+      if (personalForward && controlId) {
+        const unansweredAction =
+          String(payload.forwardUnansweredAction || "").trim() === "end"
+            ? "end"
+            : (call.notes || "").includes("[forward_unanswered:end]")
+              ? "end"
+              : "voicemail";
+        const voicemailEnabled =
+          payload.voicemailEnabled === true ||
+          (call.notes || "").includes("[voicemail_enabled:1]");
+
+        await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+
+        if (unansweredAction === "voicemail" && voicemailEnabled) {
+          await leaveVoicemailOnCall({
+            workspaceId,
+            humanCallId: call.id,
+            telnyxCallControlId: controlId,
+            userId: call.agentUserId,
+          }).catch(async () => {
+            await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+              method: "POST",
+              body: {},
+            }).catch(() => undefined);
+            await prisma.humanCall.update({
+              where: { id: call.id },
+              data: {
+                status: "missed",
+                disposition: "missed:forward_no_voicemail",
+                endedAt: new Date(),
+              },
+            });
+          });
+          return { ok: true, action: "personal_forward_voicemail" };
+        }
+
+        await telnyxRequest(`/calls/${controlId}/actions/speak`, {
+          method: "POST",
+          body: {
+            payload: "The person you are trying to reach is not available.",
+            voice: "female",
+            language: "en-US",
+          },
+        }).catch(() => undefined);
+        await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+          method: "POST",
+          body: {},
+        }).catch(() => undefined);
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "missed",
+            disposition: "personal_forward_no_answer",
+            endedAt: new Date(),
+            onHold: false,
+          },
+        });
+        return { ok: true, action: "personal_forward_end" };
+      }
+
       const pn = toE164
         ? await prisma.phoneNumber.findFirst({ where: { workspaceId, e164: toE164 } })
         : null;

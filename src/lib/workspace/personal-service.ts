@@ -1,4 +1,5 @@
 import type { PhoneNumber } from "@/lib/types";
+import { derivePersonalDisplayState } from "@/lib/numbers/personal-call-settings";
 import type {
   PersonalAcquisitionType,
   PersonalServiceState,
@@ -15,13 +16,14 @@ export function derivePersonalServiceState(number: PhoneNumber): PersonalService
   const explicit = settings.personalServiceState as string | undefined;
   if (
     explicit === "PARKED" ||
+    explicit === "PARKED_VOICEMAIL" ||
     explicit === "FORWARDING" ||
     explicit === "VOICEMAIL" ||
     explicit === "PORTING_IN" ||
     explicit === "PORTING_OUT" ||
     explicit === "PORT_AWAY_WINDOW"
   ) {
-    return explicit;
+    return explicit as PersonalServiceState;
   }
 
   const portStatus = settings.portStatus as string | undefined;
@@ -33,9 +35,12 @@ export function derivePersonalServiceState(number: PhoneNumber): PersonalService
     return "PORT_AWAY_WINDOW";
   }
 
-  if (number.voiceForwardTo) return "FORWARDING";
-  if (settings.voicemailEnabled === true) return "VOICEMAIL";
-  if (settings.parked === true || settings.personalParked === true) return "PARKED";
+  const derived = derivePersonalDisplayState(number);
+  if (derived === "PARKED_VOICEMAIL") return "PARKED_VOICEMAIL";
+  if (derived === "PARKED") return "PARKED";
+  if (derived === "FORWARDING") return "FORWARDING";
+  if (derived === "VOICEMAIL") return "VOICEMAIL";
+  if (derived === "SMART_ROUTING") return "ACTIVE";
 
   return "ACTIVE";
 }
@@ -55,6 +60,8 @@ export function personalServiceLabel(state: PersonalServiceState): string {
   switch (state) {
     case "PARKED":
       return "Parked in Number Vault";
+    case "PARKED_VOICEMAIL":
+      return "Vaulted — voicemail on";
     case "FORWARDING":
       return "Call forwarding";
     case "VOICEMAIL":

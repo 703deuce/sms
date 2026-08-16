@@ -53,6 +53,19 @@ export async function setPersonalVoicemailEnabled(
   );
 }
 
+export async function setVaultIncomingMode(
+  workspaceId: string,
+  numberId: string,
+  mode: "parked_message" | "voicemail",
+) {
+  await getOwnedNumber(workspaceId, numberId);
+  return transitionNumberService(
+    workspaceId,
+    numberId,
+    mode === "voicemail" ? "set_vault_voicemail" : "set_vault_message_only",
+  );
+}
+
 export async function loadPremiumCartCount(workspaceId: string): Promise<number> {
   const count = await getPrisma().premiumNumberReservation.count({
     where: {

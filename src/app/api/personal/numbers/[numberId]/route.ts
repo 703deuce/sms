@@ -6,6 +6,7 @@ import {
   parkPersonalNumber,
   reactivatePersonalNumber,
   setPersonalVoicemailEnabled,
+  setVaultIncomingMode,
 } from "@/lib/workspace/personal-number-actions";
 
 type Action =
@@ -13,7 +14,9 @@ type Action =
   | "reactivate"
   | "keep"
   | "enable_voicemail"
-  | "disable_voicemail";
+  | "disable_voicemail"
+  | "set_vault_voicemail"
+  | "set_vault_message_only";
 
 export async function POST(
   request: Request,
@@ -58,6 +61,12 @@ export async function POST(
         break;
       case "disable_voicemail":
         data = await setPersonalVoicemailEnabled(auth.workspaceId, numberId, false);
+        break;
+      case "set_vault_voicemail":
+        data = await setVaultIncomingMode(auth.workspaceId, numberId, "voicemail");
+        break;
+      case "set_vault_message_only":
+        data = await setVaultIncomingMode(auth.workspaceId, numberId, "parked_message");
         break;
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });

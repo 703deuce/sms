@@ -1,5 +1,6 @@
 import type { PhoneNumber } from "@/lib/types";
 import { getPrisma } from "@/lib/db";
+import { readPersonalCallSettings } from "@/lib/numbers/personal-call-settings";
 import {
   derivePersonalServiceState,
   personalServiceLabel,
@@ -13,18 +14,29 @@ export type PersonalNumberRow = PhoneNumber & {
   voicemailEnabled: boolean;
   parkedSince: string | null;
   portAwayExpiresAt: string | null;
+  forwardingEnabled: boolean;
+  forwardRingSeconds: number;
+  forwardUnansweredAction: "voicemail" | "end";
+  directVoicemail: boolean;
+  vaultIncomingMode: "parked_message" | "voicemail";
 };
 
 export function mapPersonalNumber(number: PhoneNumber): PersonalNumberRow {
   const settings = readPersonalSettings(number);
   const state = derivePersonalServiceState(number);
+  const callSettings = readPersonalCallSettings(number);
   return {
     ...number,
     serviceState: state,
-    serviceLabel: personalServiceLabel(state),
-    voicemailEnabled: settings.voicemailEnabled === true,
+    serviceLabel: personalServiceLabel(state as import("@/lib/workspace/types").PersonalServiceState),
+    voicemailEnabled: callSettings.voicemailEnabled,
     parkedSince: (settings.parkedSince as string) || null,
     portAwayExpiresAt: (settings.portAwayWindowExpiresAt as string) || null,
+    forwardingEnabled: callSettings.forwardingEnabled,
+    forwardRingSeconds: callSettings.forwardRingSeconds,
+    forwardUnansweredAction: callSettings.forwardUnansweredAction,
+    directVoicemail: callSettings.directVoicemail,
+    vaultIncomingMode: callSettings.vaultIncomingMode,
   };
 }
 
