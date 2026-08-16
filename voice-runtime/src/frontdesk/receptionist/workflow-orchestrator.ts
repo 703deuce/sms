@@ -16,22 +16,18 @@ import {
   transitionAfterRecordField,
   transitionFromToolFeedback,
 } from "./workflow-engine";
-import { classifyCollectionUtterance } from "./collection-utterance-validation";
-import { captureUsPhoneDigits } from "@/lib/voice/receptionist/field-validation";
 import {
   collectionStateSnapshot,
   clearCollectionPromptState,
   finishCollectionPrompt,
   logCollectionState,
-  markCollectionProcessing,
 } from "./collection-state-lifecycle";
-import { persistActiveFieldAnswer } from "./process-active-field-answer";
+import { processCollectionTurn } from "./collection-turn-processor";
 import type { ReceptionistCollectionPurpose } from "./workflow-types";
 import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow-tool-surface";
 import {
   askNextCollectionField,
   beginDeterministicFieldCollection,
-  repromptActiveCollectionField,
 } from "./deterministic-field-collection";
 import {
   bumpCollectionTurnSeq,
@@ -205,85 +201,6 @@ async function advanceCollectionAfterFieldSaved(
   if (wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT") {
     await askNextCollectionField(session, purpose, savedFieldId, savedValue);
   }
-}
-
-export async function processActiveFieldAnswer(
-  session: AgentSession<FrontDeskUserData>,
-  transcript: string,
-): Promise<void> {
-  const ud = session.userData;
-  const wf = ensureReceptionistWorkflow(ud);
-  const purpose = wf.collectionPurpose || "booking";
-  const activeFieldId = wf.activeFieldId;
-
-  if (!activeFieldId) {
-    logOrchestrator(ud.callId, "collection_utterance_rejected", {
-      transcript,
-      reason: "no_active_field",
-      ...collectionStateSnapshot(ud),
-    });
-    return;
-  }
-
-  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
-  const field = manifest.find((f) => f.id === activeFieldId);
-  if (!field) {
-    logOrchestrator(ud.callId, "collection_utterance_rejected", {
-      transcript,
-      reason: "unknown_active_field",
-      activeFieldId,
-      ...collectionStateSnapshot(ud),
-    });
-    return;
-  }
-
-  markCollectionProcessing(ud);
-  logCollectionState(ud.callId, "field_processing", ud, { transcript: transcript.slice(0, 120) });
-
-  const result = persistActiveFieldAnswer(
-    ud,
-    activeFieldId,
-    transcript,
-    field,
-    ud.collectionPhoneDigitsBuffer ?? "",
-  );
-
-  if (result.status === "incomplete_phone") {
-    ud.collectionPhoneDigitsBuffer = result.digits;
-    logOrchestrator(ud.callId, "collection_phone_partial_buffered", {
-      transcript,
-      buffer: result.digits,
-      ...collectionStateSnapshot(ud),
-    });
-    finishCollectionPrompt(ud, activeFieldId);
-    return;
-  }
-
-  if (result.status === "invalid") {
-    logOrchestrator(ud.callId, "collection_field_invalid", {
-      transcript,
-      fieldId: result.fieldId,
-      message: result.message,
-      ...collectionStateSnapshot(ud),
-    });
-    await repromptActiveCollectionField(session, result.message);
-    return;
-  }
-
-  if (result.status !== "saved") {
-    logOrchestrator(ud.callId, "collection_utterance_rejected", {
-      transcript,
-      reason: result.status,
-      ...collectionStateSnapshot(ud),
-    });
-    finishCollectionPrompt(ud, activeFieldId);
-    return;
-  }
-
-  wf.collectionLastSavedTranscript = transcript.trim();
-  clearCollectionStuckWatchdog(ud);
-  logFieldSaveProgress(ud, result.fieldId, result.normalized);
-  await advanceCollectionAfterFieldSaved(session, purpose, result.fieldId, result.normalized);
 }
 
 function trackNonFieldCollectionUtterance(ud: FrontDeskUserData, activeFieldId?: string): void {
@@ -670,91 +587,18 @@ function handleCollectionUtterance(
   if (session.agentState === "speaking") return;
   if (ud.collectionFieldProcessing) return;
 
-  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
-  const activeField = manifest.find((f) => f.id === wf.activeFieldId);
-  const utteranceKind = classifyCollectionUtterance(
-    normalizedTranscript,
-    activeField,
-    ud.collectionPhoneDigitsBuffer ?? "",
-  );
-
-  if (utteranceKind === "phone_partial") {
-    const capture = captureUsPhoneDigits(
-      normalizedTranscript,
-      ud.collectionPhoneDigitsBuffer ?? "",
-    );
-    if (capture.status === "incomplete") {
-      ud.collectionPhoneDigitsBuffer = capture.digits;
-    }
-    logOrchestrator(ud.callId, "collection_phone_partial_deferred", {
-      transcript: normalizedTranscript,
-      buffer: ud.collectionPhoneDigitsBuffer,
-      ...collectionStateSnapshot(ud),
-    });
-    return;
-  }
-
-  const turnId = bumpCollectionTurnSeq(ud);
-
-  if (utteranceKind === "availability_request") {
-    void handleAvailabilityRequest(session, normalizedTranscript, turnId).catch((err) => {
-      logOrchestrator(ud.callId, "availability_request_error", {
-        error: err instanceof Error ? err.message : String(err),
-        turn_id: turnId,
-      });
-    });
-    return;
-  }
-
-  if (utteranceKind === "clarification") {
-    void handleCollectionClarification(session, normalizedTranscript, turnId).catch((err) => {
-      logOrchestrator(ud.callId, "collection_clarification_error", {
-        error: err instanceof Error ? err.message : String(err),
-        turn_id: turnId,
-      });
-    });
-    return;
-  }
-
-  if (!wf.activeFieldId) {
-    logOrchestrator(ud.callId, "collection_utterance_rejected", {
-      transcript: normalizedTranscript,
-      utteranceKind,
-      reason: "no_active_field",
-      ...collectionStateSnapshot(ud),
-    });
-    return;
-  }
-
-  if (utteranceKind !== "field_value") {
-    logOrchestrator(ud.callId, "collection_utterance_rejected", {
-      transcript: normalizedTranscript,
-      utteranceKind,
-      reason: "not_field_value",
-      ...collectionStateSnapshot(ud),
-    });
-    return;
-  }
-
-  if (wf.collectionLastSavedTranscript === normalizedTranscript) {
-    logOrchestrator(ud.callId, "collection_utterance_skipped_duplicate", {
-      transcript: normalizedTranscript,
-      ...collectionStateSnapshot(ud),
-    });
-    return;
-  }
-
-  logOrchestrator(ud.callId, "collection_utterance_accepted", {
-    transcript: normalizedTranscript,
-    utteranceKind,
-    activeFieldId: wf.activeFieldId,
-    ...collectionStateSnapshot(ud),
-  });
-
   ud.collectionFieldProcessing = true;
-  void processActiveFieldAnswer(session, normalizedTranscript)
+  void processCollectionTurn(session, normalizedTranscript, {
+    log: (event, extra) => logOrchestrator(ud.callId, event, extra),
+    logFieldSaveProgress,
+    clearCollectionStuckWatchdog,
+    advanceCollectionAfterFieldSaved,
+    handleAvailabilityRequest,
+    handleCollectionClarification,
+    bumpTurnId: bumpCollectionTurnSeq,
+  })
     .catch((err) => {
-      logOrchestrator(ud.callId, "collection_process_error", {
+      logOrchestrator(ud.callId, "collection_turn_error", {
         error: err instanceof Error ? err.message : String(err),
         transcript: normalizedTranscript,
       });

@@ -120,7 +120,7 @@ function resolveGptRealtime2Reasoning(
   const effort =
     parseRealtimeReasoningEffort(advanced.realtimeReasoningEffort) ||
     parseRealtimeReasoningEffort(process.env.VOICE_REALTIME_REASONING_EFFORT?.trim()) ||
-    (isMini ? "medium" : "low");
+    (isMini ? "low" : "low");
   return { effort };
 }
 

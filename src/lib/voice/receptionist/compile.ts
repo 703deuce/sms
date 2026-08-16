@@ -323,6 +323,7 @@ export function applyCompiledToVoiceConfig(
       realtimeOutputMode: snapshot.realtimeOutputMode,
       realtimeVoice:
         snapshot.realtimeOutputMode === "native" ? snapshot.voiceId : undefined,
+      realtimeReasoningEffort: "low",
       elevenLabsVoiceId:
         snapshot.realtimeOutputMode === "elevenlabs" ? snapshot.voiceId : undefined,
       ttsModel: snapshot.ttsModel,

@@ -16,6 +16,7 @@ import {
   looksLikeAvailabilityRequest,
 } from "../voice-runtime/src/frontdesk/receptionist/collection-utterance-validation";
 import { persistActiveFieldAnswer } from "../voice-runtime/src/frontdesk/receptionist/process-active-field-answer";
+import { extractFieldsFromUtterance } from "../voice-runtime/src/frontdesk/receptionist/collection-field-extractor";
 import type { FrontDeskUserData } from "../voice-runtime/src/frontdesk/userdata";
 
 function baseUserData(): FrontDeskUserData {
@@ -100,6 +101,17 @@ if (phoneSave.status === "saved") {
   assert.equal(phoneSave.normalized, "+15714776175");
   assert.equal(ud.receptionistFields?.phone, "+15714776175");
 }
+
+const multiManifest = ud.receptionistCompiled!.fieldManifest;
+const multi = extractFieldsFromUtterance(
+  "Yeah I'm Anthony Johnson, my number is 571-477-6175, I'm at 123 Main Street in Arlington, and my AC stopped cooling.",
+  multiManifest,
+  {},
+);
+assert.ok(multi.fields.name?.includes("Anthony"));
+assert.equal(multi.fields.phone, "+15714776175");
+assert.ok(multi.fields.address?.includes("123 Main Street"));
+assert.ok(multi.fields.reason);
 
 ud.receptionistFields = {
   name: "Anthony Johnson",

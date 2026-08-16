@@ -85,3 +85,19 @@ export function persistActiveFieldAnswer(
 
   return { status: "saved", fieldId: activeFieldId, normalized };
 }
+
+/** Write an already-validated normalized value into authoritative state. */
+export function commitFieldValue(
+  ud: FrontDeskUserData,
+  fieldId: string,
+  normalized: string,
+): void {
+  if (!ud.receptionistFields) ud.receptionistFields = {};
+  const previous = ud.receptionistFields[fieldId];
+  ud.receptionistFields[fieldId] = normalized;
+  afterReceptionistFieldPersisted(ud, fieldId, normalized, previous);
+  if (!ud.authoritativeFieldIds) ud.authoritativeFieldIds = [];
+  if (!ud.authoritativeFieldIds.includes(fieldId)) {
+    ud.authoritativeFieldIds.push(fieldId);
+  }
+}
