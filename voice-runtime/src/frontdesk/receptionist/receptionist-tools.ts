@@ -8,18 +8,13 @@ import {
   validateReceptionistFieldValue,
 } from "@/lib/voice/receptionist/field-validation";
 import { applyReceptionistFieldBackfill } from "@/lib/voice/receptionist/field-backfill";
-import {
-  missingReceptionistFields,
-  type ReceptionistCollectionPurpose,
-} from "@/lib/voice/receptionist/field-collection-scope";
 import { buildReceptionistConversationRecap, formatReceptionistFieldsSummary } from "@/lib/voice/receptionist/conversation-recap";
 import { executeAgentTool } from "@/lib/voice/agent-tool-gateway/gateway";
 import { buildFrontDeskBookingTools } from "../booking-tools";
-import { isBookingOperationActive } from "../booking-operation";
 import { validateBookingNotesField } from "../booking-field-validation";
 import { afterReceptionistFieldPersisted } from "../booking-field-coherence";
 import { formatBookingEmailSavedFeedback, persistConfirmedBookingEmail } from "../booking-email-state";
-import { isBookingConfirmed, type FrontDeskUserData } from "../userdata";
+import { type FrontDeskUserData } from "../userdata";
 import { withLiveKitToolTelemetry } from "../../livekit-tool-telemetry";
 import {
   formatToolFeedbackForModel,
@@ -28,13 +23,8 @@ import {
   toolFeedbackRecoverable,
   toolFeedbackSuccess,
 } from "@/lib/voice/tool-feedback";
-import { ReceptionistFieldCollectionTask, speakReceptionistCollectionLine } from "./field-collection-task";
-import { buildReceptionistCollectionToolResult } from "./field-collection-lifecycle";
-import { runBookingIntakeTask } from "../booking-intake-task";
-import { buildBookingIntakeToolResult } from "../booking-intake-lifecycle";
-import { markParentResumed } from "../../task-transition-instrumentation";
-import { resyncOpenAIRealtimeAgentChatCtx } from "../../realtime-openai-chat-context";
-import { injectReceptionistConversationState } from "./conversation-state";
+import { ensureReceptionistWorkflow, firstMissingFieldForPurpose } from "./workflow-engine";
+import { wrapReceptionistToolDefs } from "./workflow-tool-wrapper";
 
 function caps(snapshot: ReceptionistCompiledSnapshot): Set<string> {
   return new Set(snapshot.capabilities);
@@ -63,6 +53,123 @@ function backfillReceptionistFields(
     manifest,
     receptionistFields: ud.receptionistFields,
     authoritativeFieldIds: ud.authoritativeFieldIds,
+  });
+}
+
+function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
+  const manifest = snapshot.fieldManifest;
+  if (!manifest.length) return null;
+  const fieldIds = manifest.map((f) => f.id);
+  if (!fieldIds.length) return null;
+
+  return llm.tool({
+    name: "record_current_field",
+    description:
+      "Save the caller's answer for the active collection field. " +
+      "The runtime decides which field is active during booking or message collection — " +
+      "call this immediately when the caller answers. Do not use collect_booking_requirements or collect_caller_fields.",
+    parameters: z.object({
+      value: z.string().describe("The value the caller provided for the active field"),
+      field_id: z
+        .string()
+        .optional()
+        .describe(
+          "Optional — only when the caller volunteers a different field than the active one",
+        ),
+    }),
+    execute: async ({ value, field_id }, opts) => {
+      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
+      const ud = session.userData;
+      const wf = ensureReceptionistWorkflow(ud);
+      const purpose = wf.collectionPurpose || "booking";
+      const targetId =
+        field_id?.trim() ||
+        wf.activeFieldId ||
+        firstMissingFieldForPurpose(ud, purpose)?.id ||
+        "";
+      if (!targetId) {
+        return formatToolFeedbackForModel(
+          toolFeedbackSuccess("All required fields are already saved.", {
+            tool: "record_current_field",
+            next_action: "continue_conversation",
+          }),
+        );
+      }
+
+      return withLiveKitToolTelemetry(ud, "record_current_field", { field_id: targetId, value }, async () => {
+        const field = manifest.find((f) => f.id === targetId);
+        if (!field) return `Unknown field ${targetId}.`;
+        const trimmed = value?.trim() || "";
+        if (!trimmed) {
+          return formatToolFeedbackForModel(
+            toolFeedbackMissingCallerField({
+              tool: "record_current_field",
+              fieldId: targetId,
+              fieldLabel: field.label,
+            }),
+          );
+        }
+        try {
+          if (targetId === "email" || field.type === "email") {
+            const persisted = persistConfirmedBookingEmail(ud, trimmed);
+            return formatBookingEmailSavedFeedback(ud, "record_current_field", persisted);
+          }
+
+          const notesCheck = validateBookingNotesField(targetId, trimmed);
+          if (!notesCheck.ok) {
+            return formatToolFeedbackForModel(
+              toolFeedbackRecoverable({
+                tool: "record_current_field",
+                recovery_class: "INVALID_INFORMATION",
+                reason: "needs_confirmation",
+                field_id: targetId,
+                field_label: field.label,
+                next_action: "collect_field_then_retry",
+                guidance: notesCheck.message,
+              }),
+            );
+          }
+
+          const normalized = validateReceptionistFieldValue(field, notesCheck.normalized);
+          if (!ud.receptionistFields) ud.receptionistFields = {};
+          const previous = ud.receptionistFields[targetId];
+          ud.receptionistFields[targetId] = normalized;
+          afterReceptionistFieldPersisted(ud, targetId, normalized, previous);
+          if (!ud.authoritativeFieldIds) ud.authoritativeFieldIds = [];
+          if (!ud.authoritativeFieldIds.includes(targetId)) {
+            ud.authoritativeFieldIds.push(targetId);
+          }
+
+          return formatToolFeedbackForModel(
+            toolFeedbackSuccess(`${field.label} saved.`, {
+              tool: "record_current_field",
+              field_id: targetId,
+              field_label: field.label,
+              next_action: "collect_field_then_retry",
+              runtime_handled_retry: true,
+              guidance: `${field.label} saved. Runtime will ask for the next missing field or advance booking.`,
+              context: {
+                saved_value: normalized,
+                fields_summary: formatReceptionistFieldsSummary(ud.receptionistFields),
+              },
+            }),
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : `Please provide your ${field.label}.`;
+          return formatToolFeedbackForModel(
+            toolFeedbackRecoverable({
+              tool: "record_current_field",
+              recovery_class: "INVALID_INFORMATION",
+              reason: "validation_failed",
+              field_id: targetId,
+              field_label: field.label,
+              next_action: "collect_field_then_retry",
+              guidance: message,
+            }),
+          );
+        }
+      });
+    },
   });
 }
 
@@ -181,7 +288,7 @@ function buildTakeMessageTool(snapshot: ReceptionistCompiledSnapshot) {
     description:
       "Record a callback message for staff. Use when the caller wants someone to follow up. " +
       "Put the caller's issue in reason — use what they already said, do not ask again. " +
-      "Do NOT call collect_caller_fields before this tool. " +
+      "Do NOT call record_current_field before this tool when message fields are incomplete — runtime collects first. " +
       "Callback number may come from caller ID when they confirm.",
     parameters: z.object({
       reason: z.string().describe("Main message or reason for callback"),
@@ -325,228 +432,6 @@ function buildSendSmsTool() {
   });
 }
 
-function buildCollectBookingRequirementsTool(snapshot: ReceptionistCompiledSnapshot) {
-  const manifest = snapshot.fieldManifest;
-  if (!manifest.length) return null;
-
-  return llm.tool({
-    name: "collect_booking_requirements",
-    description:
-      "Collect all missing booking requirements (name, phone, email, address, custom fields, preferred time). " +
-      "Use when schedule_appointment reports missing information or before booking when profile fields are incomplete. " +
-      "Caller may provide multiple details in one answer — the intake task persists each immediately. " +
-      "Do NOT use collect_caller_fields for booking.",
-    parameters: z.object({
-      reason: z.string().optional().describe("Why booking intake is needed"),
-    }),
-    execute: async (args, opts) => {
-      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const ud = session.userData;
-      return withLiveKitToolTelemetry(ud, "collect_booking_requirements", args, async () => {
-        if (isBookingConfirmed(ud)) {
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              "Appointment is already confirmed on this call. Do not collect booking fields again. " +
-                "If the caller is done, use end_call.",
-              {
-                tool: "collect_booking_requirements",
-                next_action: "end_call",
-                caller_already_heard_success: true,
-              },
-            ),
-          );
-        }
-
-        if (isBookingOperationActive(ud)) {
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              "Booking is already in progress. Tell the caller you're finishing the appointment. " +
-                "If they ask whether it worked, use check_booking_status.",
-              { tool: "collect_booking_requirements", next_action: "check_booking_status" },
-            ),
-          );
-        }
-
-        if (ud.bookingIntakeActive) {
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              "Booking intake is already running. Wait for it to finish — do not start a second intake.",
-              {
-                tool: "collect_booking_requirements",
-                next_action: "do_not_speak",
-                runtime_handled_retry: true,
-              },
-            ),
-          );
-        }
-
-        backfillReceptionistFields(session, manifest);
-        const missing = missingReceptionistFields(manifest, ud.receptionistFields, "booking");
-        if (!missing.length) {
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              "All booking requirements are already satisfied. Call schedule_appointment with the chosen slot_id.",
-              {
-                tool: "collect_booking_requirements",
-                next_action: "schedule_appointment_retry",
-              },
-            ),
-          );
-        }
-
-        const firstMissing = missing[0];
-        if (firstMissing?.question?.trim()) {
-          ud.receptionistFieldCollectionPrefaceSpoken = true;
-          await speakReceptionistCollectionLine(session, firstMissing.question);
-        }
-
-        const result = await runBookingIntakeTask(session);
-        ud.receptionistFieldCollectionPrefaceSpoken = false;
-        await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
-        await injectReceptionistConversationState(session, "booking");
-        markParentResumed({
-          callId: ud.callId,
-          taskId: "booking_intake",
-          taskType: "BookingIntakeTask",
-          parentTaskType: "GenericReceptionistAgent",
-          collectionComplete: result.complete,
-        });
-        ud.activeTaskInstrumentation = {
-          taskId: "parent_after_booking_intake",
-          taskType: "GenericReceptionistAgent",
-        };
-        return buildBookingIntakeToolResult(ud, result);
-      });
-    },
-  });
-}
-
-async function runBookingPurposeFieldCollection(
-  session: AgentSession<FrontDeskUserData>,
-  manifest: ReceptionistCompiledSnapshot["fieldManifest"],
-): Promise<string> {
-  const ud = session.userData;
-  backfillReceptionistFields(session, manifest);
-  const missing = missingReceptionistFields(manifest, ud.receptionistFields, "booking");
-  if (!missing.length) {
-    return "Caller information is already complete. Continue with booking.";
-  }
-  const firstMissing = missing[0];
-  if (firstMissing?.question?.trim()) {
-    ud.receptionistFieldCollectionPrefaceSpoken = true;
-    await speakReceptionistCollectionLine(session, firstMissing.question);
-  }
-  const result = await runBookingIntakeTask(session);
-  ud.receptionistFieldCollectionPrefaceSpoken = false;
-  await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
-  await injectReceptionistConversationState(session, "booking");
-  markParentResumed({
-    callId: ud.callId,
-    taskId: "booking_intake",
-    taskType: "BookingIntakeTask",
-    parentTaskType: "GenericReceptionistAgent",
-    collectionComplete: result.complete,
-  });
-  ud.activeTaskInstrumentation = {
-    taskId: "parent_after_booking_intake",
-    taskType: "GenericReceptionistAgent",
-  };
-  return buildBookingIntakeToolResult(ud, result);
-}
-
-function buildCollectCallerFieldsTool(snapshot: ReceptionistCompiledSnapshot) {
-  const manifest = snapshot.fieldManifest;
-  if (!manifest.length) return null;
-
-  return llm.tool({
-    name: "collect_caller_fields",
-    description:
-      "Collect missing required caller profile fields (name, phone) for service requests. " +
-      "Do NOT use for booking — use collect_booking_requirements instead. " +
-      "Do NOT use when the caller is leaving a message — use take_message instead. " +
-      "Do NOT use when the caller already gave the issue; backfill handles that.",
-    parameters: z.object({
-      reason: z.string().optional().describe("Why collection is needed"),
-      purpose: z
-        .enum(["message", "service", "booking", "general"])
-        .optional()
-        .describe("message = never use; service = field collection for a service request; booking = scheduling"),
-    }),
-    execute: async (args, opts) => {
-      const session = opts.ctx.session as AgentSession<FrontDeskUserData>;
-      const ud = session.userData;
-      return withLiveKitToolTelemetry(ud, "collect_caller_fields", args, async () => {
-        const purpose = (args.purpose as ReceptionistCollectionPurpose | undefined) || "service";
-        if (purpose === "message") {
-          return "Use take_message for callback requests — do not run field collection.";
-        }
-        if (purpose === "booking" && isBookingOperationActive(ud)) {
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(
-              "Booking is already in progress. Tell the caller you're finishing the appointment. " +
-                "If they ask whether it worked, use check_booking_status.",
-              { tool: "collect_caller_fields", next_action: "check_booking_status" },
-            ),
-          );
-        }
-        if (purpose === "booking" && ud.pendingSlotId) {
-          return formatToolFeedbackForModel(
-            toolFeedbackRecoverable({
-              tool: "collect_caller_fields",
-              recovery_class: "OPERATION_IN_PROGRESS",
-              reason: "booking_slot_pending",
-              next_action: "collect_booking_requirements",
-              guidance:
-                `A time slot is already chosen (${ud.pendingSlotId}). Use collect_booking_requirements for any missing fields, ` +
-                "then call schedule_appointment with that slot_id.",
-            }),
-          );
-        }
-        if (purpose === "booking") {
-          return runBookingPurposeFieldCollection(session, manifest);
-        }
-        if (ud.receptionistMessageTaken) {
-          return (
-            "A callback message was already recorded. If the caller wants to book instead, " +
-            "call collect_booking_requirements. Otherwise continue their request."
-          );
-        }
-
-        backfillReceptionistFields(session, manifest);
-        const missing = missingReceptionistFields(
-          manifest,
-          ud.receptionistFields,
-          purpose,
-        );
-        if (!missing.length) {
-          return "Caller information is already complete. Continue with take_message, booking, or answering.";
-        }
-        const firstMissing = missing[0];
-        if (firstMissing?.question?.trim()) {
-          ud.receptionistFieldCollectionPrefaceSpoken = true;
-          await speakReceptionistCollectionLine(session, firstMissing.question);
-        }
-        const result = await new ReceptionistFieldCollectionTask(session, missing).run();
-        ud.receptionistFieldCollectionPrefaceSpoken = false;
-        await resyncOpenAIRealtimeAgentChatCtx(session.currentAgent);
-        await injectReceptionistConversationState(session, purpose);
-        markParentResumed({
-          callId: ud.callId,
-          taskId: "receptionist_field_collection",
-          taskType: "ReceptionistFieldCollectionTask",
-          parentTaskType: "GenericReceptionistAgent",
-          collectionComplete: result.complete,
-        });
-        ud.activeTaskInstrumentation = {
-          taskId: "parent_after_collection",
-          taskType: "GenericReceptionistAgent",
-        };
-        return buildReceptionistCollectionToolResult(ud, result);
-      });
-    },
-  });
-}
-
 function toolName(tool: unknown): string | undefined {
   if (tool && typeof tool === "object" && "name" in tool) {
     return String((tool as { name?: string }).name || "");
@@ -598,16 +483,17 @@ export function buildReceptionistTools(input: {
   if (actionAllowed(snapshot, "takeMessages", "take_messages")) push(buildTakeMessageTool(snapshot));
   if (actionAllowed(snapshot, "sendSms", "send_text")) push(buildSendSmsTool());
 
+  const recordCurrentFieldTool = buildRecordCurrentFieldTool(snapshot);
+  if (recordCurrentFieldTool && capabilitySet.has("collect_info")) push(recordCurrentFieldTool);
+
   const recordFieldTool = buildRecordReceptionistFieldTool(snapshot);
   if (recordFieldTool && capabilitySet.has("collect_info")) push(recordFieldTool);
 
-  const collectBookingTool = buildCollectBookingRequirementsTool(snapshot);
-  if (collectBookingTool && capabilitySet.has("collect_info") && capabilitySet.has("book_appointments")) {
-    push(collectBookingTool);
-  }
+  const wrapped = wrapReceptionistToolDefs(toolDefs, { prepareWorkflow: true });
 
-  const collectTool = buildCollectCallerFieldsTool(snapshot);
-  if (collectTool && capabilitySet.has("collect_info")) push(collectTool);
-
-  return { toolDefs, slotsMap: booking.slotsMap };
+  return {
+    toolDefs: wrapped,
+    slotsMap: booking.slotsMap,
+    toolNames: [...names],
+  };
 }

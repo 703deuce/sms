@@ -263,9 +263,9 @@ export function buildFrontDeskBookingTools(input: {
             fieldId: first.fieldId,
             fieldLabel: first.label,
             hint:
-              `Ask for their ${first.label} in one short question, or call collect_booking_requirements to collect all missing fields. ` +
-              "When they answer, call record_receptionist_field or schedule_appointment again with the same slot_id. " +
-              "Do NOT call collect_caller_fields during booking — it blocks the calendar write.",
+              `Ask for their ${first.label} in one short question, then save with record_current_field. ` +
+              "When saved, call schedule_appointment again with the same slot_id. " +
+              "Do NOT use collect_booking_requirements or collect_caller_fields — runtime owns collection."
           }),
         );
       }

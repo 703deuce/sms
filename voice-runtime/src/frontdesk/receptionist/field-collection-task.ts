@@ -32,16 +32,17 @@ export type ReceptionistFieldCollectionResult = {
 const TASK_ID = "receptionist_field_collection";
 const TASK_TYPE = "ReceptionistFieldCollectionTask";
 
-/** Scripted lines stay out of chat_ctx so handoff does not replay child speech into Realtime. */
+/** Scripted collection line — default adds to chat_ctx so one parent brain sees what Amy asked. */
 export async function speakReceptionistCollectionLine(
   session: AgentSession<FrontDeskUserData>,
   line: string,
+  options?: { addToChatCtx?: boolean },
 ): Promise<void> {
   const trimmed = line.trim();
   if (!trimmed) return;
   await deliverScriptedSpeech(session, trimmed, {
     allowInterruptions: true,
-    addToChatCtx: false,
+    addToChatCtx: options?.addToChatCtx ?? true,
   });
 }
 

@@ -63,16 +63,20 @@ assert.ok(
   "BookingIntakeTask must support unordered multi-field collection",
 );
 assert.ok(
-  receptionistTools.includes("collect_booking_requirements"),
-  "receptionist must expose collect_booking_requirements tool",
+  receptionistTools.includes("record_current_field"),
+  "receptionist must expose runtime-owned record_current_field tool",
 );
 assert.ok(
-  receptionistTools.includes("runBookingIntakeTask"),
-  "booking purpose must route to BookingIntakeTask",
+  read("voice-runtime/src/frontdesk/receptionist/generic-receptionist-agent.ts").includes(
+    "workflow-orchestrator",
+  ),
+  "generic receptionist agent must wire runtime workflow orchestrator",
 );
 assert.ok(
-  receptionistTools.includes("BookingIntakeTask"),
-  "booking intake task type must be referenced in handoff telemetry",
+  read("voice-runtime/src/frontdesk/receptionist/workflow-orchestrator.ts").includes(
+    "deterministic-field-collection",
+  ),
+  "workflow orchestrator must use deterministic runtime field collection",
 );
 assert.ok(
   fieldTask.includes("receptionistOperationalTaskOptionsFromSession"),
@@ -83,8 +87,8 @@ assert.ok(
   "record_receptionist_field uses canonical email persistence",
 );
 assert.ok(
-  receptionistTools.includes("isBookingConfirmed(ud)"),
-  "collect_booking_requirements guards confirmed bookings",
+  !receptionistTools.includes("runBookingIntakeTask"),
+  "booking must not hand off to autonomous BookingIntakeTask",
 );
 
 // --- Fixtures ---

@@ -5,6 +5,8 @@ import { buildReceptionistCompiledPrompt } from "@/lib/voice/receptionist/build-
 import { withHybridStreamingAgentOptions } from "../../hybrid-streaming-tts-node";
 import type { FrontDeskUserData } from "../userdata";
 import { buildReceptionistTools } from "./receptionist-tools";
+import { attachReceptionistWorkflowOrchestrator } from "./workflow-orchestrator";
+import { ensureReceptionistWorkflow } from "./workflow-engine";
 
 export function createGenericReceptionistAgent(input: {
   snapshot: ReceptionistCompiledSnapshot;
@@ -15,18 +17,26 @@ export function createGenericReceptionistAgent(input: {
   const instructions =
     input.snapshot.compiledPrompt?.trim() || buildReceptionistCompiledPrompt(input.snapshot);
 
+  const builtTools = buildReceptionistTools({
+    snapshot: input.snapshot,
+    timezone: input.timezone,
+  });
+
   const agent = voice.Agent.create<FrontDeskUserData>(
     withHybridStreamingAgentOptions(
       {
         instructions,
-        tools: llm.toToolContext(
-          buildReceptionistTools({
-            snapshot: input.snapshot,
-            timezone: input.timezone,
-          }).toolDefs as never,
-        ),
+        tools: llm.toToolContext(builtTools.toolDefs as never),
         onEnter: async (agentCtx) => {
           const session = agentCtx.session as AgentSession<FrontDeskUserData>;
+          const ud = session.userData;
+          ensureReceptionistWorkflow(ud);
+          ud.receptionistSlotsMap = builtTools.slotsMap;
+          ud.receptionistToolNames = builtTools.toolNames;
+          ud.receptionistToolDefs = builtTools.toolDefs;
+
+          attachReceptionistWorkflowOrchestrator(session);
+
           const greeting = input.snapshot.greeting.trim();
           if (greeting) {
             await session.generateReply({

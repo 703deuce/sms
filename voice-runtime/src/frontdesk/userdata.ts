@@ -1,4 +1,5 @@
 import type { CalendlyCalendar } from "./calendly-calendar";
+import type { AvailableSlot } from "./calendly-calendar";
 import type { BookingOperation } from "./booking-operation";
 import {
   isFrontDeskProfile as isFrontDeskProfileFromConfig,
@@ -7,6 +8,7 @@ import {
 import type { RealEstateCallState } from "@/lib/voice/real-estate/types";
 import type { CompiledRealEstateFrontDesk } from "@/lib/voice/real-estate/compile/types";
 import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
+import type { ReceptionistWorkflowSnapshot } from "./receptionist/workflow-types";
 
 export type BookingStatus = "pending" | "confirmed";
 
@@ -87,6 +89,14 @@ export type FrontDeskUserData = {
     taskType: string;
     firstAudioLogged?: boolean;
   };
+  /** Runtime-owned receptionist workflow conductor state. */
+  receptionistWorkflow?: ReceptionistWorkflowSnapshot;
+  /** Slot cache for booking tools + runtime orchestrator (shared reference). */
+  receptionistSlotsMap?: Map<string, AvailableSlot>;
+  /** All receptionist tool names registered for this session. */
+  receptionistToolNames?: string[];
+  /** Full tool defs for runtime tool-surface filtering via updateTools. */
+  receptionistToolDefs?: unknown[];
   /** Call is in closing phase — block duplicate end_call. */
   callClosing?: boolean;
   /** Field ids persisted via tools — chat backfill must not overwrite these values. */

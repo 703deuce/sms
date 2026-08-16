@@ -113,6 +113,54 @@ export function formatToolFeedbackForModel(feedback: ToolFeedback): string {
   return parts.join("\n");
 }
 
+/** Parse model-facing TOOL_FEEDBACK strings back into structured feedback for the runtime conductor. */
+export function parseToolFeedbackFromModel(raw: string): ToolFeedback | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("TOOL_FEEDBACK:")) return null;
+
+  const outcomeMatch = trimmed.match(/^TOOL_FEEDBACK:\s*(\w+)/);
+  const outcome = (outcomeMatch?.[1] || "success") as ToolFeedbackOutcome;
+
+  const nextActionMatch = trimmed.match(/^next_action:\s*(\S+)/m);
+  const next_action = (nextActionMatch?.[1] || "continue_conversation") as ToolNextAction;
+
+  const guidanceMatch = trimmed.match(/^guidance:\s*(.+)$/ms);
+  const guidance = guidanceMatch?.[1]?.trim() || "";
+
+  const toolMatch = trimmed.match(/^tool:\s*(.+)$/m);
+  const tool = toolMatch?.[1]?.trim();
+
+  const fieldIdMatch = trimmed.match(/^field_id:\s*(.+)$/m);
+  const field_id = fieldIdMatch?.[1]?.trim();
+
+  const fieldLabelMatch = trimmed.match(/^field_label:\s*(.+)$/m);
+  const field_label = fieldLabelMatch?.[1]?.trim();
+
+  const recoveryMatch = trimmed.match(/^recovery_class:\s*(\S+)/m);
+  const recovery_class = recoveryMatch?.[1] as ToolFeedback["recovery_class"];
+
+  const reasonMatch = trimmed.match(/^reason:\s*(.+)$/m);
+  const reason = reasonMatch?.[1]?.trim();
+
+  const callerSuccess = /caller_already_heard_success:\s*true/.test(trimmed);
+  const callerFailure = /caller_already_heard_failure:\s*true/.test(trimmed);
+  const runtimeHandled = /runtime_handled_retry:\s*true/.test(trimmed);
+
+  return {
+    outcome,
+    tool,
+    recovery_class,
+    reason,
+    field_id,
+    field_label,
+    next_action,
+    runtime_handled_retry: runtimeHandled,
+    caller_already_heard_success: callerSuccess,
+    caller_already_heard_failure: callerFailure,
+    guidance,
+  };
+}
+
 function recoveryClassFromGatewayCode(code: AgentToolErrorCode): RecoveryClass {
   switch (code) {
     case "MISSING_REQUIRED_FIELD":
