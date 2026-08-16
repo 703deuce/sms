@@ -200,20 +200,20 @@ function buildRecordCurrentFieldTool(snapshot: ReceptionistCompiledSnapshot) {
             ud.authoritativeFieldIds.push(targetId);
           }
 
-          return formatToolFeedbackForModel(
-            toolFeedbackSuccess(`${field.label} saved.`, {
-              tool: "record_current_field",
-              field_id: targetId,
-              field_label: field.label,
-              next_action: "collect_field_then_retry",
-              runtime_handled_retry: true,
-              guidance: `${field.label} saved. Runtime will ask for the next missing field or advance booking.`,
-              context: {
-                saved_value: normalized,
-                fields_summary: formatReceptionistFieldsSummary(ud.receptionistFields),
-              },
-            }),
-          );
+          const feedback = toolFeedbackSuccess(`${field.label} saved.`, {
+            tool: "record_current_field",
+            field_id: targetId,
+            field_label: field.label,
+            next_action: "collect_field_then_retry",
+            runtime_handled_retry: true,
+            guidance: `${field.label} saved. Runtime will ask for the next missing field or advance booking.`,
+            context: {
+              saved_value: normalized,
+              fields_summary: formatReceptionistFieldsSummary(ud.receptionistFields),
+            },
+          });
+          const feedbackStr = formatToolFeedbackForModel(feedback);
+          return feedbackStr;
         } catch (err) {
           const message = err instanceof Error ? err.message : `Please provide your ${field.label}.`;
           return formatToolFeedbackForModel(

@@ -15,6 +15,7 @@ import {
   classifyCollectionUtterance,
   looksLikeAvailabilityRequest,
 } from "../voice-runtime/src/frontdesk/receptionist/collection-utterance-validation";
+import { persistActiveFieldAnswer } from "../voice-runtime/src/frontdesk/receptionist/process-active-field-answer";
 import type { FrontDeskUserData } from "../voice-runtime/src/frontdesk/userdata";
 
 function baseUserData(): FrontDeskUserData {
@@ -91,6 +92,14 @@ assert.equal(
   ),
   "field_value",
 );
+
+const phoneField = { id: "phone", label: "phone", required: true, type: "phone" as const, question: "Phone?" };
+const phoneSave = persistActiveFieldAnswer(ud, "phone", "571-477-6175", phoneField);
+assert.equal(phoneSave.status, "saved");
+if (phoneSave.status === "saved") {
+  assert.equal(phoneSave.normalized, "+15714776175");
+  assert.equal(ud.receptionistFields?.phone, "+15714776175");
+}
 
 ud.receptionistFields = {
   name: "Anthony Johnson",

@@ -43,8 +43,8 @@ export type ReceptionistWorkflowSnapshot = {
   offeredSlotIds?: string[];
   /** Monotonic turn counter for collection generation logging. */
   collectionTurnSeq?: number;
-  /** Last transcript we forced record_current_field for — dedupe double finalization. */
-  collectionLastForcedTranscript?: string;
+  /** Last transcript saved for the active field — dedupe double STT finalization. */
+  collectionLastSavedTranscript?: string;
 };
 
 export const INITIAL_RECEPTIONIST_WORKFLOW: ReceptionistWorkflowSnapshot = {

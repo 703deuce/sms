@@ -98,11 +98,13 @@ export function enterCollectionState(
   wf.state = state;
   wf.collectionPurpose = purpose;
   wf.activeFieldId = first?.id;
-  wf.requiredTool = "record_current_field";
+  wf.requiredTool = undefined;
   wf.speechLocked = false;
-  wf.collectionLastForcedTranscript = undefined;
+  wf.collectionLastSavedTranscript = undefined;
   ud.collectionPhoneDigitsBuffer = undefined;
-  ud.collectionAwaitingAnswer = false;
+  ud.collectionFieldPhase = undefined;
+  ud.collectionPromptedFieldId = undefined;
+  ud.collectionFieldProcessing = false;
   ud.collectionStuckFieldId = undefined;
   ud.collectionStuckNonFieldTurns = 0;
   return wf;
@@ -154,14 +156,14 @@ export function transitionFromToolFeedback(
       wf.activeFieldId =
         feedback.field_id ||
         firstMissingFieldForPurpose(ud, wf.collectionPurpose || "booking")?.id;
-      wf.requiredTool = "record_current_field";
+      wf.requiredTool = undefined;
       return wf;
     case "collect_booking_requirements":
       wf.intent = "booking";
       wf.state = "BOOKING_COLLECT";
       wf.collectionPurpose = "booking";
       wf.activeFieldId = firstMissingFieldForPurpose(ud, "booking")?.id;
-      wf.requiredTool = "record_current_field";
+      wf.requiredTool = undefined;
       return wf;
     case "take_message":
       wf.intent = "message";
@@ -172,7 +174,7 @@ export function transitionFromToolFeedback(
         wf.state = "MESSAGE_COLLECT";
         wf.collectionPurpose = "message";
         wf.activeFieldId = firstMissingFieldForPurpose(ud, "message")?.id;
-        wf.requiredTool = "record_current_field";
+        wf.requiredTool = undefined;
       }
       return wf;
     case "end_call":
@@ -203,7 +205,7 @@ export function transitionAfterRecordField(
   const next = firstMissingFieldForPurpose(ud, purpose);
   if (next) {
     wf.activeFieldId = next.id;
-    wf.requiredTool = "record_current_field";
+    wf.requiredTool = undefined;
     if (purpose === "message") {
       wf.state = "MESSAGE_COLLECT";
     } else {

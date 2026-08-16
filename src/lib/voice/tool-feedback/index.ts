@@ -146,6 +146,20 @@ export function parseToolFeedbackFromModel(raw: string): ToolFeedback | null {
   const callerFailure = /caller_already_heard_failure:\s*true/.test(trimmed);
   const runtimeHandled = /runtime_handled_retry:\s*true/.test(trimmed);
 
+  const contextLine = trimmed
+    .split("\n")
+    .find((line) => line.startsWith("context:"));
+  let context: Record<string, unknown> | undefined;
+  if (contextLine) {
+    const jsonPart = contextLine.slice("context:".length).trim();
+    try {
+      const parsed = JSON.parse(jsonPart) as Record<string, unknown>;
+      context = parsed;
+    } catch {
+      context = undefined;
+    }
+  }
+
   return {
     outcome,
     tool,
@@ -158,6 +172,7 @@ export function parseToolFeedbackFromModel(raw: string): ToolFeedback | null {
     caller_already_heard_success: callerSuccess,
     caller_already_heard_failure: callerFailure,
     guidance,
+    context,
   };
 }
 

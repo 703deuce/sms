@@ -47,7 +47,7 @@ export function isToolAllowedInWorkflow(
   }
 
   if (wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT") {
-    return toolName === "record_current_field";
+    return toolName === "end_call";
   }
 
   if (ALWAYS_AVAILABLE.has(toolName)) {
@@ -130,7 +130,7 @@ export function workflowBlockedGuidance(
     const field = wf.activeFieldId || "the active field";
     return (
       `Workflow state ${wf.state}: ${toolName} is not allowed. ` +
-      `Save the caller's answer with record_current_field for ${field}, then the runtime advances.`
+      `The runtime is collecting ${field} from the caller transcript — do not call tools for field capture.`
     );
   }
   if (wf.speechLocked && isBookingConfirmed(ud)) {

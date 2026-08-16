@@ -98,8 +98,8 @@ export type FrontDeskUserData = {
   receptionistToolNames?: string[];
   /** Full tool defs for runtime tool-surface filtering via updateTools. */
   receptionistToolDefs?: unknown[];
-  /** Prevents duplicate forced record_current_field turns per utterance. */
-  collectionFieldForcePending?: boolean;
+  /** Prevents concurrent runtime field processing for the same transcript. */
+  collectionFieldProcessing?: boolean;
   /** Partial US phone digits while activeField is phone — not persisted until 10 digits. */
   collectionPhoneDigitsBuffer?: string;
   /** Runtime-direct schedule_appointment in progress. */
@@ -112,8 +112,10 @@ export type FrontDeskUserData = {
   collectionRuntimeOwnedTurnDetection?: boolean;
   /** Active controlled generation id for diagnostics. */
   collectionActiveGenerationId?: string;
-  /** Runtime asked a collection question and is waiting for the caller's answer. */
-  collectionAwaitingAnswer?: boolean;
+  /** Runtime collection substate: PROMPTING | LISTENING | PROCESSING. */
+  collectionFieldPhase?: "PROMPTING" | "LISTENING" | "PROCESSING";
+  /** Field id whose question was last emitted to the caller. */
+  collectionPromptedFieldId?: string;
   /** Watchdog: active field receiving repeated non-field utterances. */
   collectionStuckFieldId?: string;
   collectionStuckNonFieldTurns?: number;

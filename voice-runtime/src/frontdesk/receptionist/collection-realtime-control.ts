@@ -1,4 +1,4 @@
-import { AgentSessionEventTypes, type AgentSession } from "@livekit/agents";
+import type { AgentSession } from "@livekit/agents";
 import { RealtimeModel } from "@livekit/agents";
 import type { FrontDeskUserData } from "../userdata";
 import {
@@ -21,7 +21,6 @@ type GenerationChain = {
 };
 
 const generationChains = new WeakMap<AgentSession<FrontDeskUserData>, GenerationChain>();
-const orchestrationChains = new WeakMap<AgentSession<FrontDeskUserData>, GenerationChain>();
 
 function nextEventId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -133,73 +132,14 @@ export function isRuntimeCollectionState(ud: FrontDeskUserData): boolean {
   return wf?.state === "BOOKING_COLLECT" || wf?.state === "MESSAGE_COLLECT";
 }
 
-export function markCollectionAwaitingAnswer(ud: FrontDeskUserData): void {
-  ud.collectionAwaitingAnswer = true;
-}
-
-export function clearCollectionAwaitingAnswer(ud: FrontDeskUserData): void {
-  ud.collectionAwaitingAnswer = false;
-}
-
-/** Serialize post-save orchestration (ask next field / list slots) after force_record tool phase. */
-export function enqueueCollectionOrchestration(
-  session: AgentSession<FrontDeskUserData>,
-  work: () => Promise<void>,
-): void {
-  let chain = orchestrationChains.get(session);
-  if (!chain) {
-    chain = { tail: Promise.resolve() };
-    orchestrationChains.set(session, chain);
-  }
-  chain.tail = chain.tail
-    .then(work)
-    .catch((err) => {
-      logCollectionRealtime(session.userData.callId, "orchestration_error", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
-}
-
-export async function awaitCollectionOrchestration(
-  session: AgentSession<FrontDeskUserData>,
-): Promise<void> {
-  const chain = orchestrationChains.get(session);
-  if (chain) await chain.tail;
-}
-
 type ControlledGenerateReplyOptions = {
   instructions?: string;
   toolChoice?: "auto" | "none" | "required";
   allowInterruptions?: boolean;
 };
 
-function waitForFunctionTool(
-  session: AgentSession<FrontDeskUserData>,
-  toolName: string,
-  timeoutMs: number,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      session.off(AgentSessionEventTypes.FunctionToolsExecuted, onTools);
-      resolve(false);
-    }, timeoutMs);
-
-    const onTools = (ev: {
-      functionCalls: Array<{ name: string }>;
-    }): void => {
-      if (ev.functionCalls.some((call) => call.name === toolName)) {
-        clearTimeout(timer);
-        session.off(AgentSessionEventTypes.FunctionToolsExecuted, onTools);
-        resolve(true);
-      }
-    };
-
-    session.on(AgentSessionEventTypes.FunctionToolsExecuted, onTools);
-  });
-}
-
 /**
- * One active Realtime generation per session — prevents competing speech handles.
+ * One active Realtime generation per session — used for clarification / availability recovery only.
  */
 export async function controlledGenerateReply(
   session: AgentSession<FrontDeskUserData>,
@@ -232,31 +172,12 @@ export async function controlledGenerateReply(
   await prior;
 
   try {
-    if (session.agentState === "speaking" && source.startsWith("force_record")) {
-      session.interrupt();
-    }
-
     const handle = session.generateReply({
       instructions: options.instructions,
       toolChoice: options.toolChoice,
       allowInterruptions: options.allowInterruptions,
     });
     ud.collectionActiveGenerationId = generationId;
-
-    if (source === "force_record_current_field") {
-      const toolRan = await waitForFunctionTool(session, "record_current_field", 8000);
-      if (session.agentState === "speaking") {
-        session.interrupt();
-      }
-      logCollectionRealtime(ud.callId, "generation_tool_phase_complete", {
-        generationId,
-        generation_source: source,
-        turn_id: turnId,
-        toolRan,
-      });
-      return;
-    }
-
     await handle.waitForPlayout();
     logCollectionRealtime(ud.callId, "generation_completed", {
       generationId,

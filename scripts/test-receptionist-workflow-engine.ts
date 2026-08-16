@@ -69,11 +69,17 @@ assert.equal(
 assert.equal(
   isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "get_business_answer"),
   false,
-  "only record_current_field during BOOKING_COLLECT",
+  "no business tools during BOOKING_COLLECT",
 );
 assert.equal(
   isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "record_current_field"),
+  false,
+  "record_current_field blocked — runtime saves transcripts directly",
+);
+assert.equal(
+  isToolAllowedInWorkflow(ud, ensureReceptionistWorkflow(ud), "end_call"),
   true,
+  "end_call allowed during BOOKING_COLLECT",
 );
 
 ud.receptionistFields = { name: "Jane", phone: "4045551212", address: "1 Main St", reason: "AC" };

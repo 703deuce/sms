@@ -16,22 +16,27 @@ import {
   transitionAfterRecordField,
   transitionFromToolFeedback,
 } from "./workflow-engine";
+import { classifyCollectionUtterance } from "./collection-utterance-validation";
+import { captureUsPhoneDigits } from "@/lib/voice/receptionist/field-validation";
 import {
-  classifyCollectionUtterance,
-} from "./collection-utterance-validation";
+  collectionStateSnapshot,
+  clearCollectionPromptState,
+  finishCollectionPrompt,
+  logCollectionState,
+  markCollectionProcessing,
+} from "./collection-state-lifecycle";
+import { persistActiveFieldAnswer } from "./process-active-field-answer";
+import type { ReceptionistCollectionPurpose } from "./workflow-types";
 import { allowedToolNamesForWorkflow, workflowBlockedGuidance } from "./workflow-tool-surface";
 import {
   askNextCollectionField,
   beginDeterministicFieldCollection,
-  forceRecordCurrentFieldTurn,
+  repromptActiveCollectionField,
 } from "./deterministic-field-collection";
 import {
   bumpCollectionTurnSeq,
-  clearCollectionAwaitingAnswer,
   controlledGenerateReply,
-  enqueueCollectionOrchestration,
   isRuntimeCollectionState,
-  markCollectionAwaitingAnswer,
   syncCollectionRealtimeMode,
 } from "./collection-realtime-control";
 
@@ -58,7 +63,7 @@ async function runtimeFinalizeBookingFailure(
 ): Promise<void> {
   const ud = session.userData;
   setWorkflowState(ud, "BOOKING_FAILED", { requiredTool: "list_available_slots" });
-  clearCollectionAwaitingAnswer(ud);
+  clearCollectionPromptState(ud);
   await syncAgentToolSurface(session);
   await controlledGenerateReply(session, "booking_failure_recovery", bumpCollectionTurnSeq(ud), {
     instructions:
@@ -106,7 +111,7 @@ async function finishBookingCollectionAndListSlots(
 ): Promise<void> {
   const ud = session.userData;
   const wf = ensureReceptionistWorkflow(ud);
-  clearCollectionAwaitingAnswer(ud);
+  clearCollectionPromptState(ud);
   ud.collectionStuckNonFieldTurns = 0;
   ud.collectionStuckFieldId = undefined;
 
@@ -143,26 +148,142 @@ function logFieldSaveProgress(
   const wf = ensureReceptionistWorkflow(ud);
   const purpose = wf.collectionPurpose || "booking";
   const missing = missingFieldsForPurpose(ud, purpose).map((f) => f.id);
-  const completed = Object.keys(ud.receptionistFields || {}).filter((id) =>
-    Boolean(ud.receptionistFields?.[id]?.trim()),
-  );
   logOrchestrator(ud.callId, "field_save_progress", {
     activeFieldId: wf.activeFieldId,
     savedFieldId,
     savedValue: savedValue?.slice(0, 80),
-    completedFields: completed,
+    completedFields: Object.keys(ud.receptionistFields || {}).filter((id) =>
+      Boolean(ud.receptionistFields?.[id]?.trim()),
+    ),
     missingRequiredFields: missing,
     nextState: wf.state,
     bookingFieldsComplete: purpose === "booking" ? bookingFieldsComplete(ud) : undefined,
   });
+  logCollectionState(ud.callId, "field_saved", ud, { savedFieldId, savedValue: savedValue?.slice(0, 80) });
 
   if (purpose === "booking" && bookingFieldsComplete(ud) && wf.state === "BOOKING_COLLECT") {
     logOrchestrator(ud.callId, "collection_complete_stuck_invariant", {
       activeFieldId: wf.activeFieldId,
       missingRequiredFields: missing,
-      completedFields: completed,
+      completedFields: Object.keys(ud.receptionistFields || {}).filter((id) =>
+        Boolean(ud.receptionistFields?.[id]?.trim()),
+      ),
     });
   }
+}
+
+async function advanceCollectionAfterFieldSaved(
+  session: AgentSession<FrontDeskUserData>,
+  purpose: ReceptionistCollectionPurpose,
+  savedFieldId?: string,
+  savedValue?: string,
+): Promise<void> {
+  const ud = session.userData;
+  const wf = ensureReceptionistWorkflow(ud);
+  transitionAfterRecordField(ud, purpose);
+  await syncAgentToolSurface(session);
+
+  if (purpose === "booking" && bookingFieldsComplete(ud)) {
+    if (wf.state === "BOOKING_COLLECT" || wf.state === "BOOKING_CHECK_AVAILABILITY") {
+      await finishBookingCollectionAndListSlots(session, "all_required_fields_saved");
+      return;
+    }
+  }
+
+  if (wf.state === "BOOKING_CHECK_AVAILABILITY") {
+    await runProactiveWorkflowStep(session);
+    return;
+  }
+  if (wf.state === "BOOKING_COMMIT") {
+    await runProactiveWorkflowStep(session);
+    return;
+  }
+  if (wf.state === "MESSAGE_COMMIT") {
+    await runProactiveWorkflowStep(session);
+    return;
+  }
+  if (wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT") {
+    await askNextCollectionField(session, purpose, savedFieldId, savedValue);
+  }
+}
+
+export async function processActiveFieldAnswer(
+  session: AgentSession<FrontDeskUserData>,
+  transcript: string,
+): Promise<void> {
+  const ud = session.userData;
+  const wf = ensureReceptionistWorkflow(ud);
+  const purpose = wf.collectionPurpose || "booking";
+  const activeFieldId = wf.activeFieldId;
+
+  if (!activeFieldId) {
+    logOrchestrator(ud.callId, "collection_utterance_rejected", {
+      transcript,
+      reason: "no_active_field",
+      ...collectionStateSnapshot(ud),
+    });
+    return;
+  }
+
+  const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
+  const field = manifest.find((f) => f.id === activeFieldId);
+  if (!field) {
+    logOrchestrator(ud.callId, "collection_utterance_rejected", {
+      transcript,
+      reason: "unknown_active_field",
+      activeFieldId,
+      ...collectionStateSnapshot(ud),
+    });
+    return;
+  }
+
+  markCollectionProcessing(ud);
+  logCollectionState(ud.callId, "field_processing", ud, { transcript: transcript.slice(0, 120) });
+
+  const result = persistActiveFieldAnswer(
+    ud,
+    activeFieldId,
+    transcript,
+    field,
+    ud.collectionPhoneDigitsBuffer ?? "",
+  );
+
+  if (result.status === "incomplete_phone") {
+    ud.collectionPhoneDigitsBuffer = result.digits;
+    logOrchestrator(ud.callId, "collection_phone_partial_buffered", {
+      transcript,
+      buffer: result.digits,
+      ...collectionStateSnapshot(ud),
+    });
+    finishCollectionPrompt(ud, activeFieldId);
+    return;
+  }
+
+  if (result.status === "invalid") {
+    logOrchestrator(ud.callId, "collection_field_invalid", {
+      transcript,
+      fieldId: result.fieldId,
+      message: result.message,
+      ...collectionStateSnapshot(ud),
+    });
+    await repromptActiveCollectionField(session, result.message);
+    return;
+  }
+
+  if (result.status !== "saved") {
+    logOrchestrator(ud.callId, "collection_utterance_rejected", {
+      transcript,
+      reason: result.status,
+      ...collectionStateSnapshot(ud),
+    });
+    finishCollectionPrompt(ud, activeFieldId);
+    return;
+  }
+
+  wf.collectionLastSavedTranscript = transcript.trim();
+  clearCollectionStuckWatchdog(ud);
+  logFieldSaveProgress(ud, result.fieldId, result.normalized);
+  await advanceCollectionAfterFieldSaved(session, purpose, result.fieldId, result.normalized);
 }
 
 function trackNonFieldCollectionUtterance(ud: FrontDeskUserData, activeFieldId?: string): void {
@@ -375,41 +496,14 @@ export async function afterReceptionistToolExecuted(
     const wf = ensureReceptionistWorkflow(ud);
     const savedValue =
       typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined;
-    wf.collectionLastForcedTranscript = undefined;
+    wf.collectionLastSavedTranscript = undefined;
     clearCollectionStuckWatchdog(ud);
-    clearCollectionAwaitingAnswer(ud);
-
+    logOrchestrator(ud.callId, "record_field_tool_fallback", {
+      field_id: feedback.field_id,
+      note: "model_called_record_current_field_outside_runtime_path",
+    });
     logFieldSaveProgress(ud, feedback.field_id, savedValue);
-    transitionAfterRecordField(ud, purpose);
-    await syncAgentToolSurface(session);
-
-    if (purpose === "booking" && bookingFieldsComplete(ud)) {
-      if (wf.state === "BOOKING_COLLECT" || wf.state === "BOOKING_CHECK_AVAILABILITY") {
-        await finishBookingCollectionAndListSlots(session, "all_required_fields_saved");
-        return;
-      }
-    }
-
-    if (wf.state === "BOOKING_CHECK_AVAILABILITY") {
-      await runProactiveWorkflowStep(session);
-      return;
-    }
-    if (wf.state === "BOOKING_COMMIT") {
-      await runProactiveWorkflowStep(session);
-      return;
-    }
-    if (wf.state === "MESSAGE_COMMIT") {
-      await runProactiveWorkflowStep(session);
-      return;
-    }
-    if (wf.state === "BOOKING_COLLECT" || wf.state === "MESSAGE_COLLECT") {
-      await askNextCollectionField(
-        session,
-        purpose,
-        feedback.field_id,
-        typeof feedback.context?.saved_value === "string" ? feedback.context.saved_value : undefined,
-      );
-    }
+    await advanceCollectionAfterFieldSaved(session, purpose, feedback.field_id, savedValue);
     return;
   }
 
@@ -478,10 +572,7 @@ export function workflowToolBlockedResult(ud: FrontDeskUserData, toolName: strin
       tool: toolName,
       recovery_class: "OPERATION_IN_PROGRESS",
       reason: "workflow_blocked",
-      next_action:
-        ud.receptionistWorkflow?.requiredTool === "record_current_field"
-          ? "collect_field_then_retry"
-          : "continue_conversation",
+      next_action: "continue_conversation",
       runtime_handled_retry: true,
       guidance: workflowBlockedGuidance(ud, toolName),
     }),
@@ -509,7 +600,7 @@ async function handleAvailabilityRequest(
 
   const missing = missingFieldsForPurpose(ud, "booking");
   const nextField = missing[0];
-  clearCollectionAwaitingAnswer(ud);
+  clearCollectionPromptState(ud);
   syncCollectionRealtimeMode(session, false);
   try {
     await controlledGenerateReply(session, "availability_need_fields", turnId, {
@@ -522,7 +613,10 @@ async function handleAvailabilityRequest(
   } finally {
     if (isRuntimeCollectionState(ud)) {
       syncCollectionRealtimeMode(session, true);
-      markCollectionAwaitingAnswer(ud);
+      const wf = ensureReceptionistWorkflow(ud);
+      if (wf.activeFieldId) {
+        finishCollectionPrompt(ud, wf.activeFieldId);
+      }
     }
   }
 }
@@ -555,7 +649,10 @@ async function handleCollectionClarification(
   } finally {
     if (isRuntimeCollectionState(ud)) {
       syncCollectionRealtimeMode(session, true);
-      markCollectionAwaitingAnswer(ud);
+      const wf = ensureReceptionistWorkflow(ud);
+      if (wf.activeFieldId) {
+        finishCollectionPrompt(ud, wf.activeFieldId);
+      }
     }
   }
 }
@@ -571,7 +668,7 @@ function handleCollectionUtterance(
   const normalizedTranscript = transcript.trim();
   if (!normalizedTranscript) return;
   if (session.agentState === "speaking") return;
-  if (ud.collectionFieldForcePending) return;
+  if (ud.collectionFieldProcessing) return;
 
   const manifest = ud.receptionistCompiled?.fieldManifest ?? [];
   const activeField = manifest.find((f) => f.id === wf.activeFieldId);
@@ -582,9 +679,17 @@ function handleCollectionUtterance(
   );
 
   if (utteranceKind === "phone_partial") {
+    const capture = captureUsPhoneDigits(
+      normalizedTranscript,
+      ud.collectionPhoneDigitsBuffer ?? "",
+    );
+    if (capture.status === "incomplete") {
+      ud.collectionPhoneDigitsBuffer = capture.digits;
+    }
     logOrchestrator(ud.callId, "collection_phone_partial_deferred", {
       transcript: normalizedTranscript,
       buffer: ud.collectionPhoneDigitsBuffer,
+      ...collectionStateSnapshot(ud),
     });
     return;
   }
@@ -611,39 +716,51 @@ function handleCollectionUtterance(
     return;
   }
 
-  if (!ud.collectionAwaitingAnswer) {
-    if (utteranceKind !== "field_value") {
-      logOrchestrator(ud.callId, "collection_force_skipped_not_awaiting", {
-        transcript: normalizedTranscript,
-        utteranceKind,
-      });
-      return;
-    }
-    logOrchestrator(ud.callId, "collection_late_field_answer", {
+  if (!wf.activeFieldId) {
+    logOrchestrator(ud.callId, "collection_utterance_rejected", {
       transcript: normalizedTranscript,
-      activeFieldId: wf.activeFieldId,
-    });
-  }
-
-  if (wf.collectionLastForcedTranscript === normalizedTranscript) {
-    logOrchestrator(ud.callId, "collection_force_skipped_duplicate", {
-      transcript: normalizedTranscript,
+      utteranceKind,
+      reason: "no_active_field",
+      ...collectionStateSnapshot(ud),
     });
     return;
   }
 
-  wf.collectionLastForcedTranscript = normalizedTranscript;
-  ud.collectionFieldForcePending = true;
-  void forceRecordCurrentFieldTurn(session, turnId)
+  if (utteranceKind !== "field_value") {
+    logOrchestrator(ud.callId, "collection_utterance_rejected", {
+      transcript: normalizedTranscript,
+      utteranceKind,
+      reason: "not_field_value",
+      ...collectionStateSnapshot(ud),
+    });
+    return;
+  }
+
+  if (wf.collectionLastSavedTranscript === normalizedTranscript) {
+    logOrchestrator(ud.callId, "collection_utterance_skipped_duplicate", {
+      transcript: normalizedTranscript,
+      ...collectionStateSnapshot(ud),
+    });
+    return;
+  }
+
+  logOrchestrator(ud.callId, "collection_utterance_accepted", {
+    transcript: normalizedTranscript,
+    utteranceKind,
+    activeFieldId: wf.activeFieldId,
+    ...collectionStateSnapshot(ud),
+  });
+
+  ud.collectionFieldProcessing = true;
+  void processActiveFieldAnswer(session, normalizedTranscript)
     .catch((err) => {
-      logOrchestrator(ud.callId, "collection_force_error", {
+      logOrchestrator(ud.callId, "collection_process_error", {
         error: err instanceof Error ? err.message : String(err),
-        turn_id: turnId,
+        transcript: normalizedTranscript,
       });
-      wf.collectionLastForcedTranscript = undefined;
     })
     .finally(() => {
-      ud.collectionFieldForcePending = false;
+      ud.collectionFieldProcessing = false;
     });
 }
 
@@ -663,7 +780,7 @@ export function attachReceptionistWorkflowOrchestrator(
   session.on(AgentSessionEventTypes.UserStateChanged, (ev) => {
     if (ev.newState !== "speaking") return;
     const wf = ensureReceptionistWorkflow(ud);
-    wf.collectionLastForcedTranscript = undefined;
+    wf.collectionLastSavedTranscript = undefined;
   });
 
   session.on(AgentSessionEventTypes.FunctionToolsExecuted, async (ev) => {
@@ -672,19 +789,6 @@ export function attachReceptionistWorkflowOrchestrator(
       const output = ev.functionCallOutputs[i];
       if (!output?.output) continue;
       const rawResult = String(output.output);
-      if (call.name === "record_current_field") {
-        enqueueCollectionOrchestration(session, async () => {
-          try {
-            await afterReceptionistToolExecuted(session, call.name, rawResult);
-          } catch (err) {
-            logOrchestrator(ud.callId, "orchestrator_error", {
-              tool: call.name,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-        });
-        continue;
-      }
       try {
         await afterReceptionistToolExecuted(session, call.name, rawResult);
       } catch (err) {
