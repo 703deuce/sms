@@ -121,6 +121,31 @@ npx tsc --noEmit
 | Voice deploy | Only `transovo-voice` rebuilds |
 | Web deploy | Only `transovo-web` rebuilds |
 
+## Troubleshooting 502 from voice worker
+
+If voice logs show:
+
+```text
+backend_response_received status=502 body="Bad Gateway"
+```
+
+**This is almost always transovo-web unreachable at `TRANSOVO_BACKEND_URL`, not a Python bug.**
+
+Verify from any machine:
+
+```bash
+curl -sS -o /dev/null -w "%{http_code}" https://YOUR-BACKEND-URL/api/health
+```
+
+Must return `200` with JSON `service=transovo-web`. If you get `502`, fix **transovo-web** first:
+
+1. Open transovo-web Coolify logs — is Next.js running?
+2. Confirm the Coolify **domain** on transovo-web matches `TRANSOVO_BACKEND_URL` on voice.
+3. Your public web domain must route to transovo-web — if health is 502 there, fix the domain or web container.
+4. Run: `TRANSOVO_BACKEND_URL=https://your-domain node scripts/probe-transovo-backend-url.mjs`
+
+Voice boot now logs `backend_health_probe_ok` or `backend_health_probe_failed` before registering with LiveKit.
+
 ---
 
 ## Coolify setup steps
