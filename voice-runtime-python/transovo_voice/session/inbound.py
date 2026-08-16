@@ -12,7 +12,10 @@ from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.realtime_config import build_realtime_model
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData
-from transovo_voice.workflows.booking_intake import opportunistic_prefill
+from transovo_voice.workflows.booking_intake import (
+    opportunistic_prefill,
+    should_run_opportunistic_prefill,
+)
 
 logger = logging.getLogger("transovo-voice.inbound")
 
@@ -134,6 +137,8 @@ async def run_inbound_session(ctx: JobContext) -> None:
         def on_transcript(ev: UserInputTranscribedEvent) -> None:
             if not ev.is_final:
                 return
+            if not should_run_opportunistic_prefill(ud):
+                return
             import asyncio
 
             asyncio.create_task(opportunistic_prefill(backend, ud, ev.transcript))
@@ -146,7 +151,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
         await ctx.connect()
 
         log_event(
-            "python_voice_ready",
+            "worker_ready",
             call_id=ud.call_id,
             workspace_id=ud.workspace_id,
             agent_id=ud.agent_id,

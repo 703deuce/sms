@@ -1,10 +1,11 @@
 # Python LiveKit Voice Runtime — Migration Map
 
 **Status:** Phase 1–3 implemented (Python worker, TaskGroup intake, backend bridge, spawn flag).  
+**Audit:** See `docs/voice-runtime-python-audit-pr206.md` — single-ownership + HTTP bridge review before smoke deploy.  
 **Default worker:** `VOICE_RUNTIME_IMPL=python`  
 **Rollback:** `VOICE_RUNTIME_IMPL=typescript`
 
-This is a **clean-room** Python voice layer — not a line-by-line port of TypeScript collection hacks.
+This is **not** “the rewrite is finished.” Next milestone: one boring, repeatable real booking call through Python (5–10 calls).
 
 ---
 

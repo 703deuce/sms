@@ -81,6 +81,7 @@ class SessionUserData:
     booked_time_label: str | None = None
     message_taken: bool = False
     runtime_profile: str = "generic_receptionist"
+    intake_active: bool = False
 
     def manifest_dicts(self) -> list[dict[str, Any]]:
         if not self.receptionist:

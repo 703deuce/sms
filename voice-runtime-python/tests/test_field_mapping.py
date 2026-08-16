@@ -15,6 +15,31 @@ def test_field_type_detection() -> None:
     assert looks_like_name_field({"id": "full_name", "label": "name", "type": "text"})
 
 
+def test_opportunistic_prefill_gating() -> None:
+    from transovo_voice.workflows.booking_intake import should_run_opportunistic_prefill
+    from transovo_voice.userdata import SessionUserData, WorkflowState
+
+    ud = SessionUserData(
+        workspace_id="w",
+        agent_id="a",
+        call_id="c",
+        business_name="Test",
+        timezone="America/New_York",
+    )
+    assert should_run_opportunistic_prefill(ud)
+
+    ud.workflow = WorkflowState.BOOKING_INTAKE
+    ud.intake_active = True
+    assert not should_run_opportunistic_prefill(ud)
+
+    ud.workflow = WorkflowState.BOOKING_SELECT
+    ud.intake_active = False
+    assert not should_run_opportunistic_prefill(ud)
+
+    ud.workflow = WorkflowState.FAQ
+    assert should_run_opportunistic_prefill(ud)
+
+
 def test_multi_field_volunteer_skip_logic() -> None:
     """Fields already collected should not appear in missing list."""
     from transovo_voice.workflows.booking_intake import _missing_fields

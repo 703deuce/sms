@@ -24,11 +24,19 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
             workspace_id=ud.workspace_id,
             agent_id=ud.agent_id,
             workflow="BOOKING",
+            extra={"intent": "booking"},
         )
         result = await run_booking_intake_task_group(session, ud, backend, purpose="booking")
         if not result.complete:
             return "Intake incomplete — continue collecting required fields."
         ud.workflow = WorkflowState.BOOKING_AVAILABILITY
+        log_event(
+            "availability_started",
+            call_id=ud.call_id,
+            workspace_id=ud.workspace_id,
+            agent_id=ud.agent_id,
+            workflow=ud.workflow.value,
+        )
         availability = await backend.call(
             "get_availability",
             {
@@ -40,6 +48,14 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
             },
         )
         if not availability.get("ok"):
+            log_event(
+                "availability_failed",
+                call_id=ud.call_id,
+                workspace_id=ud.workspace_id,
+                agent_id=ud.agent_id,
+                workflow=ud.workflow.value,
+                extra={"error": availability.get("error")},
+            )
             return "I couldn't check the calendar right now. Offer to take a message."
         from transovo_voice.userdata import OfferedSlot
 
@@ -54,6 +70,14 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
         ]
         ud.workflow = WorkflowState.BOOKING_SELECT
         lines = availability.get("linesForModel") or "No slots available."
+        log_event(
+            "availability_succeeded",
+            call_id=ud.call_id,
+            workspace_id=ud.workspace_id,
+            agent_id=ud.agent_id,
+            workflow=ud.workflow.value,
+            extra={"count": len(ud.offered_slots)},
+        )
         log_event(
             "slots_offered",
             call_id=ud.call_id,
@@ -75,6 +99,14 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
         ud.selected_slot_id = slot_id
         ud.workflow = WorkflowState.BOOKING_CONFIRM
         label = next((s.spoken_label for s in ud.offered_slots if s.slot_id == slot_id), slot_id)
+        log_event(
+            "slot_selected",
+            call_id=ud.call_id,
+            workspace_id=ud.workspace_id,
+            agent_id=ud.agent_id,
+            workflow=ud.workflow.value,
+            extra={"slotId": slot_id},
+        )
         return f"Confirm the exact time with the caller before booking: {label}"
 
     @function_tool(name="confirm_booking", description="Commit booking after explicit caller confirmation.")
@@ -127,8 +159,20 @@ def build_amy_tools(session: AgentSession, ud: SessionUserData, backend: Transov
             agent_id=ud.agent_id,
             workflow=ud.workflow.value,
         )
+        if commit.get("receiptPersisted"):
+            log_event(
+                "receipt_persisted",
+                call_id=ud.call_id,
+                workspace_id=ud.workspace_id,
+                agent_id=ud.agent_id,
+                workflow=ud.workflow.value,
+                extra={"slotId": ud.selected_slot_id},
+            )
         await session.say(speech)
-        return "Booking complete."
+        return (
+            "BOOKING_CONFIRMED_ALREADY_SPOKEN: Confirmation was played to the caller. "
+            "Do not speak again or add commentary."
+        )
 
     @function_tool(name="get_business_answer", description="Look up business knowledge for FAQ questions.")
     async def get_business_answer(topic: str) -> str:

@@ -284,11 +284,24 @@ export async function commitBookingForPython(input: {
       },
     });
 
+    console.log(
+      JSON.stringify({
+        source: "voice-python",
+        event: "receipt_persisted",
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        slotId: input.slotId,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
     return {
       ok: true,
       bookedTimeLabel,
       confirmationSpeech,
       providerEventId: booked.eventUri,
+      receiptPersisted: true,
     };
   } catch (err) {
     return {
