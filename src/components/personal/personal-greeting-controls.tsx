@@ -1,7 +1,12 @@
 "use client";
 
+import { GreetingVoicePicker } from "@/components/smart-routing/greeting-voice-picker";
+import { DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 import { PersonalOutlineButton, PersonalPrimaryButton } from "./personal-ui";
+
+type VoiceSource = "create" | "record" | "upload";
 
 type GreetingControlsProps = {
   greetingText: string;
@@ -16,7 +21,11 @@ export function PersonalGreetingControls({
   onSaveText,
   onSaveUrl,
 }: GreetingControlsProps) {
+  const [voiceSource, setVoiceSource] = useState<VoiceSource>("create");
   const [text, setText] = useState(greetingText || "Please leave a message after the tone.");
+  const [voiceId, setVoiceId] = useState(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
+  const [generating, setGenerating] = useState(false);
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -26,6 +35,8 @@ export function PersonalGreetingControls({
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const activeAudioUrl = greetingUrl || generatedUrl;
 
   async function startRecording() {
     setMessage(null);
@@ -72,6 +83,7 @@ export function PersonalGreetingControls({
       const url = json.data?.processedUrl as string | undefined;
       if (!url) throw new Error("Upload did not return a playable URL.");
       await onSaveUrl(url);
+      setGeneratedUrl(url);
       setPreviewUrl(null);
       chunksRef.current = [];
       setMessage("Greeting audio saved.");
@@ -94,69 +106,148 @@ export function PersonalGreetingControls({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  async function saveTextGreeting() {
+  async function generateVoiceGreeting() {
+    const script = text.trim();
+    if (!script) {
+      setMessage("Enter what callers should hear before generating.");
+      return;
+    }
+    setGenerating(true);
     setMessage(null);
     try {
-      await onSaveText(text.trim());
-      setMessage("Text greeting saved.");
+      const res = await fetch("/api/smart-routing/audio/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Voicemail greeting",
+          text: script,
+          voiceId,
+          speed: 1,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.data?.processedUrl) {
+        throw new Error(json.error || "Could not generate greeting audio.");
+      }
+      const url = json.data.processedUrl as string;
+      setGeneratedUrl(url);
+      await onSaveUrl(url);
+      await onSaveText(script);
+      setMessage("Greeting saved — callers will hear this recording.");
+      const audio = new Audio(url);
+      audio.play().catch(() => undefined);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not save greeting.");
+      setMessage(e instanceof Error ? e.message : "Could not generate greeting.");
+    } finally {
+      setGenerating(false);
     }
   }
 
   return (
     <div className="space-y-4">
-      {greetingUrl ? (
-        <audio className="w-full max-w-md" controls src={greetingUrl} />
+      {activeAudioUrl ? (
+        <audio className="w-full max-w-md" controls src={activeAudioUrl} />
       ) : (
         <p className="text-[12px] text-[#6b7280]">
-          {text || "Please leave a message after the tone."}
+          No custom audio yet — choose how to create your greeting below.
         </p>
       )}
 
-      <div className="space-y-2">
-        <p className="text-[12px] font-semibold text-[#374151]">Spoken text greeting</p>
-        <textarea
-          className="min-h-[72px] w-full max-w-md rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <PersonalOutlineButton onClick={saveTextGreeting}>Save text greeting</PersonalOutlineButton>
-      </div>
-
-      <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3 space-y-2">
-        <p className="text-[12px] font-semibold text-[#374151]">Record your voice</p>
-        <div className="flex flex-wrap items-center gap-2">
-          {!recording ? (
-            <PersonalOutlineButton onClick={startRecording}>Start recording</PersonalOutlineButton>
-          ) : (
-            <PersonalOutlineButton onClick={stopRecording}>
-              Stop ({elapsed}s)
-            </PersonalOutlineButton>
-          )}
-          {previewUrl ? (
-            <>
-              <audio controls src={previewUrl} className="h-8 max-w-[200px]" />
-              <PersonalPrimaryButton onClick={saveRecording} disabled={uploading}>
-                {uploading ? "Saving…" : "Save recording"}
-              </PersonalPrimaryButton>
-            </>
-          ) : null}
+      <div>
+        <p className="text-[12px] font-semibold text-[#374151]">Greeting source</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(
+            [
+              ["create", "Create a voice"],
+              ["record", "Record your own"],
+              ["upload", "Upload your own"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setVoiceSource(id)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-[12px] font-semibold",
+                voiceSource === id
+                  ? "border-[#6366f1] bg-[#eef2ff] text-[#4338ca]"
+                  : "border-[#e5e7eb] bg-white text-[#6b7280]",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[12px] font-semibold text-[#374151]">Upload audio file</p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="audio/*,.mp3,.wav,.m4a,.webm"
-          className="text-[13px]"
-          disabled={uploading}
-          onChange={(e) => onFileSelected(e.target.files?.[0] ?? null)}
-        />
-        {uploading ? <p className="text-[12px] text-[#6b7280]">Uploading…</p> : null}
-      </div>
+      {voiceSource === "create" ? (
+        <div className="space-y-3 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+          <p className="text-[12px] text-[#6b7280]">
+            Type what callers should hear, pick a voice, and we&apos;ll create the recording for you.
+          </p>
+          <textarea
+            className="min-h-[80px] w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-[13px]"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Please leave a message after the tone."
+          />
+          <div>
+            <p className="mb-2 text-[12px] font-semibold text-[#374151]">Choose a voice</p>
+            <GreetingVoicePicker
+              value={voiceId}
+              previewText={text}
+              speed={1}
+              onChange={setVoiceId}
+              onVoiceChange={() => setGeneratedUrl(null)}
+            />
+          </div>
+          <PersonalPrimaryButton
+            onClick={generateVoiceGreeting}
+            disabled={generating || !text.trim()}
+          >
+            {generating ? "Creating greeting…" : "Create greeting"}
+          </PersonalPrimaryButton>
+        </div>
+      ) : null}
+
+      {voiceSource === "record" ? (
+        <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3 space-y-2">
+          <p className="text-[12px] font-semibold text-[#374151]">Record your voice</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {!recording ? (
+              <PersonalOutlineButton onClick={startRecording}>Start recording</PersonalOutlineButton>
+            ) : (
+              <PersonalOutlineButton onClick={stopRecording}>
+                Stop ({elapsed}s)
+              </PersonalOutlineButton>
+            )}
+            {previewUrl ? (
+              <>
+                <audio controls src={previewUrl} className="h-8 max-w-[200px]" />
+                <PersonalPrimaryButton onClick={saveRecording} disabled={uploading}>
+                  {uploading ? "Saving…" : "Save recording"}
+                </PersonalPrimaryButton>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {voiceSource === "upload" ? (
+        <div className="space-y-2">
+          <p className="text-[12px] font-semibold text-[#374151]">Upload an audio file</p>
+          <p className="text-[12px] text-[#6b7280]">MP3, WAV, M4A, or WebM from your computer.</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,.mp3,.wav,.m4a,.webm"
+            className="text-[13px]"
+            disabled={uploading}
+            onChange={(e) => onFileSelected(e.target.files?.[0] ?? null)}
+          />
+          {uploading ? <p className="text-[12px] text-[#6b7280]">Uploading…</p> : null}
+        </div>
+      ) : null}
 
       {message ? <p className="text-[12px] text-[#6b7280]">{message}</p> : null}
     </div>
