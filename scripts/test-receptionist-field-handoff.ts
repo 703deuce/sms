@@ -89,7 +89,7 @@ const result: ReceptionistFieldCollectionResult = {
 };
 
 const toolResult = buildReceptionistCollectionToolResult(ud, result);
-assert.ok(toolResult.startsWith("COLLECTION_COMPLETE:"), toolResult);
+assert.ok(toolResult.startsWith("TOOL_FEEDBACK: success"), toolResult);
 assert.ok(toolResult.includes("name=Anthony Johnson"), toolResult);
 assert.ok(toolResult.includes("address=13327"), toolResult);
 assert.ok(toolResult.includes("Do not thank again"), toolResult);

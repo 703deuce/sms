@@ -190,7 +190,7 @@ check("receptionist field collection uses silent handoff", () => {
   assert.ok(fieldTask.includes("FIELD_TRANSITION_BRIDGE_RULES"));
   assert.ok(fieldTask.includes("addToChatCtx: false"));
   assert.ok(fieldTask.includes("receptionistOperationalTaskOptionsFromSession"));
-  assert.ok(lifecycle.includes("COLLECTION_COMPLETE"));
+  assert.ok(lifecycle.startsWith("TOOL_FEEDBACK: success"));
   assert.ok(tools.includes("buildReceptionistCollectionToolResult"));
   assert.ok(tools.includes("markParentResumed"));
   assert.ok(taskCtx.includes("receptionistOperationalTaskOptionsFromSession"));

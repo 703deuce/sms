@@ -56,10 +56,12 @@ import { buildFrontDeskTransferTool } from "./transfer-tool";
 import { buildFrontDeskCheckBookingStatusTool } from "./check-booking-status-tool";
 import { speakBookingLine } from "./booking-speech";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
+import { injectBookingConfirmedChatContext } from "./booking-chat-context";
 import { sendBookingSmsAsync } from "./booking-sms";
 import { markAppointmentBooked, persistCallState } from "@/lib/voice/real-estate/state";
 import { notifyRealEstateStaff } from "@/lib/voice/real-estate/notifications";
 import { syncRealEstateLeadToCrm } from "@/lib/voice/real-estate/crm-sync";
+import { markVoiceCallBooked } from "@/lib/voice/runtime-provider/livekit-call-telemetry";
 import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 function prefillReceptionistFieldsForBooking(
@@ -291,6 +293,23 @@ export function buildFrontDeskBookingTools(input: {
               });
               markBookingOperationConfirmed(userData);
               void onRealEstateBookingConfirmed(userData);
+
+              void markVoiceCallBooked({
+                workspaceId: userData.workspaceId,
+                callId: userData.callId,
+                externalId: booked.eventUri,
+              }).catch(() => undefined);
+
+              await injectBookingConfirmedChatContext(session, local).catch((err) => {
+                console.warn(
+                  JSON.stringify({
+                    source: "frontdesk-booking-tools",
+                    event: "booking_chat_context_inject_failed",
+                    callId: userData.callId,
+                    error: err instanceof Error ? err.message : String(err),
+                  }),
+                );
+              });
 
               const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
               console.log(

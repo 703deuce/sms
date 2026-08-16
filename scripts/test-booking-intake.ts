@@ -334,7 +334,8 @@ const intakeResult = buildBookingIntakeToolResult(completeUd, {
   complete: true,
   fields: completeUd.receptionistFields!,
 });
-assert.ok(intakeResult.includes("BOOKING_INTAKE_COMPLETE"), intakeResult);
+assert.ok(intakeResult.startsWith("TOOL_FEEDBACK: success"), intakeResult);
+assert.match(intakeResult, /schedule_appointment/);
 assert.ok(intakeResult.includes("schedule_appointment"), intakeResult);
 assert.ok(intakeResult.includes("ST_final"), intakeResult);
 
