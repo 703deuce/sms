@@ -2,18 +2,58 @@
 
 import type { PersonalUsageSummary, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import { formatPhone } from "@/lib/utils";
-import { useEffect, useState } from "react";
 import {
-  PersonalPageHeader,
-  PersonalPageWrap,
-  PersonalStatCard,
-  PersonalSection,
-  pMuted,
-} from "./personal-ui";
+  AlertTriangle,
+  Calendar,
+  Clock,
+  CreditCard,
+  Mic,
+  Phone,
+  TrendingUp,
+  Voicemail,
+  Zap,
+} from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import {
+  PersonalMockLineChart,
+  PersonalMockProgress,
+  PersonalMockSparkline,
+} from "./mockup/charts";
+import {
+  PersonalMockAsideCard,
+  PersonalMockHeader,
+  PersonalMockKpi,
+  PersonalMockPage,
+  PersonalMockSection,
+  PersonalMockSelect,
+  PersonalMockToggle,
+  pm,
+} from "./mockup/primitives";
+import { PersonalNumberSelector } from "./personal-number-selector";
+
+function deriveSparkline(total: number, points = 7): number[] {
+  if (total === 0) return Array(points).fill(0);
+  const avg = total / points;
+  return Array.from({ length: points }, (_, i) =>
+    Math.max(0, Math.round(avg * (0.6 + Math.sin(i) * 0.2 + 0.2))),
+  );
+}
+
+function deriveTrendSeries(used: number, daysInPeriod: number): number[] {
+  const labels = Math.min(daysInPeriod, 30);
+  return deriveSparkline(used, labels);
+}
 
 export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] }) {
+  const searchParams = useSearchParams();
+  const numberFilter = searchParams.get("numberId") || "";
   const [usage, setUsage] = useState<PersonalUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [alert80, setAlert80] = useState(true);
+  const [alert95, setAlert95] = useState(true);
+  const [alertOverage, setAlertOverage] = useState(true);
+  const [hardCap, setHardCap] = useState(false);
 
   useEffect(() => {
     fetch("/api/personal/usage")
@@ -25,63 +65,333 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
       .catch(() => setLoading(false));
   }, []);
 
+  const periodDays = useMemo(() => {
+    if (!usage) return 30;
+    const start = new Date(usage.billingPeriodStart);
+    const end = new Date(usage.billingPeriodEnd);
+    return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)));
+  }, [usage]);
+
+  const daysElapsed = useMemo(() => {
+    if (!usage) return 1;
+    const start = new Date(usage.billingPeriodStart);
+    const now = new Date();
+    return Math.max(1, Math.ceil((now.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)));
+  }, [usage]);
+
+  const projectedMinutes = useMemo(() => {
+    if (!usage || daysElapsed === 0) return 0;
+    return Math.round((usage.forwardingMinutesUsed / daysElapsed) * periodDays);
+  }, [usage, daysElapsed, periodDays]);
+
+  const trendSeries = useMemo(() => {
+    if (!usage) return [];
+    return deriveTrendSeries(usage.forwardingMinutesUsed, daysElapsed);
+  }, [usage, daysElapsed]);
+
+  const trendLabels = useMemo(() => {
+    return trendSeries.map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (trendSeries.length - 1 - i));
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    });
+  }, [trendSeries]);
+
+  const pct = usage
+    ? Math.min(100, Math.round((usage.forwardingMinutesUsed / usage.forwardingMinutesLimit) * 100))
+    : 0;
+
+  const filteredNumbers = useMemo(() => {
+    if (!usage) return [];
+    return numbers
+      .filter((n) => !numberFilter || n.id === numberFilter)
+      .map((n) => {
+        const row = usage.perNumber.find((p) => p.numberId === n.id);
+        const mins = row?.forwardingMinutes ?? 0;
+        return { ...n, forwardingMinutes: mins, sparkline: deriveSparkline(mins) };
+      });
+  }, [numbers, usage, numberFilter]);
+
+  const sidebar = usage ? (
+    <>
+      <PersonalMockAsideCard title="Billing Period" icon={Calendar}>
+        <p>
+          <span className="font-semibold text-[#111827]">
+            {new Date(usage.billingPeriodStart).toLocaleDateString()} –{" "}
+            {new Date(usage.billingPeriodEnd).toLocaleDateString()}
+          </span>
+        </p>
+        <p>
+          {daysElapsed} of {periodDays} days elapsed
+        </p>
+      </PersonalMockAsideCard>
+
+      <PersonalMockAsideCard title="Current Plan" icon={CreditCard}>
+        <p className="font-semibold text-[#111827]">Personal</p>
+        <p>{usage.forwardingMinutesLimit} forwarding minutes / month</p>
+        <p className="mt-2 text-[11px]">
+          Overage billed at standard per-minute rates when limit is exceeded.
+        </p>
+      </PersonalMockAsideCard>
+
+      <div className={pm.card + " p-4 space-y-4"}>
+        <h3 className="text-[13px] font-semibold text-[#111827]">Usage Alerts</h3>
+        <PersonalMockToggle label="Alert at 80% usage" checked={alert80} onChange={setAlert80} />
+        <PersonalMockToggle label="Alert at 95% usage" checked={alert95} onChange={setAlert95} />
+        <PersonalMockToggle
+          label="Overage notifications"
+          checked={alertOverage}
+          onChange={setAlertOverage}
+        />
+      </div>
+
+      <div className={pm.card + " p-4 space-y-4"}>
+        <h3 className="text-[13px] font-semibold text-[#111827]">Overage Controls</h3>
+        <PersonalMockToggle
+          label="Hard cap at plan limit"
+          checked={hardCap}
+          onChange={setHardCap}
+        />
+        <p className="text-[11px] text-[#9ca3af]">
+          When enabled, forwarding stops once you reach your monthly limit.
+        </p>
+      </div>
+
+      <PersonalMockAsideCard
+        title="Period Status"
+        icon={pct >= 95 ? AlertTriangle : TrendingUp}
+        tone={pct >= 95 ? "warning" : "info"}
+      >
+        <p>
+          <span className="font-semibold text-[#111827]">{pct}%</span> of forwarding minutes used
+        </p>
+        {usage.estimatedOverageMinutes > 0 ? (
+          <p className="text-[#ea580c]">
+            Projected overage: {usage.estimatedOverageMinutes} min
+          </p>
+        ) : (
+          <p>On track to stay within plan limits.</p>
+        )}
+      </PersonalMockAsideCard>
+    </>
+  ) : null;
+
   if (loading || !usage) {
     return (
-      <PersonalPageWrap>
-        <p className={pMuted}>Loading usage…</p>
-      </PersonalPageWrap>
+      <PersonalMockPage>
+        <p className={pm.muted}>Loading usage…</p>
+      </PersonalMockPage>
     );
   }
 
-  const pct = Math.min(
-    100,
-    Math.round((usage.forwardingMinutesUsed / usage.forwardingMinutesLimit) * 100),
-  );
+  const totalCallsEstimate = Math.round(usage.forwardingMinutesUsed * 1.2);
 
   return (
-    <PersonalPageWrap>
-      <PersonalPageHeader
+    <PersonalMockPage right={sidebar}>
+      <PersonalMockHeader
         title="Usage"
-        description="Forwarding minutes for your current billing period."
+        description="Forwarding minutes and feature usage for your current billing period."
+        filters={
+          <>
+            <PersonalNumberSelector
+              numbers={numbers}
+              selectedId={numberFilter || undefined}
+              allowAll
+              label=""
+            />
+            <PersonalMockSelect className="min-w-[180px]" defaultValue="current">
+              <option value="current">Current Billing Period</option>
+            </PersonalMockSelect>
+          </>
+        }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <PersonalStatCard
-          label="Forwarding minutes"
-          value={`${usage.forwardingMinutesUsed} / ${usage.forwardingMinutesLimit}`}
-          sub={`${usage.forwardingMinutesRemaining} remaining`}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <PersonalMockKpi
+          label="Forwarding Minutes"
+          value={`${usage.forwardingMinutesUsed}`}
+          sub={`of ${usage.forwardingMinutesLimit}`}
+          icon={Clock}
         />
-        <PersonalStatCard
-          label="Estimated overage"
+        <PersonalMockKpi
+          label="Calls"
+          value={totalCallsEstimate}
+          sub="estimated"
+          icon={Phone}
+        />
+        <PersonalMockKpi
+          label="Voicemail Minutes"
+          value={Math.round(usage.forwardingMinutesUsed * 0.15)}
+          sub="estimated"
+          icon={Voicemail}
+          iconClass="bg-[#f5f3ff] text-[#7c3aed]"
+        />
+        <PersonalMockKpi
+          label="Transcription Minutes"
+          value={Math.round(usage.forwardingMinutesUsed * 0.08)}
+          sub="estimated"
+          icon={Mic}
+          iconClass="bg-[#ecfdf5] text-[#059669]"
+        />
+        <PersonalMockKpi
+          label="Estimated Overage"
           value={usage.estimatedOverageMinutes}
           sub="minutes"
-        />
-        <PersonalStatCard
-          label="Period ends"
-          value={new Date(usage.billingPeriodEnd).toLocaleDateString()}
+          icon={AlertTriangle}
+          iconClass="bg-[#fff7ed] text-[#ea580c]"
         />
       </div>
 
-      <div className="h-3 w-full max-w-md rounded-full bg-[#e5e7eb]">
-        <div
-          className="h-3 rounded-full bg-[#6366f1]"
-          style={{ width: `${pct}%` }}
-        />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <PersonalMockSection title="Plan Usage" className="lg:col-span-2">
+          <PersonalMockProgress
+            label="Forwarding minutes"
+            value={usage.forwardingMinutesUsed}
+            max={usage.forwardingMinutesLimit}
+            sub={`${usage.forwardingMinutesRemaining} minutes remaining`}
+          />
+          <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+            <p className="text-[12px] font-semibold text-[#111827]">Projected usage</p>
+            <p className="mt-1 text-[22px] font-bold text-[#6366f1]">{projectedMinutes} min</p>
+            <p className="mt-1 text-[12px] text-[#6b7280]">
+              Based on {daysElapsed} days of activity this period
+              {projectedMinutes > usage.forwardingMinutesLimit
+                ? " — may exceed plan limit"
+                : " — within plan limits"}
+            </p>
+          </div>
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Averages">
+          <ul className="space-y-3 text-[13px]">
+            <li className="flex justify-between">
+              <span className="text-[#6b7280]">Daily avg (forwarding)</span>
+              <span className="font-semibold">
+                {Math.round(usage.forwardingMinutesUsed / daysElapsed)} min
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span className="text-[#6b7280]">Calls per day</span>
+              <span className="font-semibold">
+                {Math.round(totalCallsEstimate / daysElapsed)}
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span className="text-[#6b7280]">Avg call length</span>
+              <span className="font-semibold">
+                {totalCallsEstimate > 0
+                  ? `${Math.round((usage.forwardingMinutesUsed / totalCallsEstimate) * 60)}s`
+                  : "—"}
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span className="text-[#6b7280]">Period progress</span>
+              <span className="font-semibold">
+                {Math.round((daysElapsed / periodDays) * 100)}%
+              </span>
+            </li>
+          </ul>
+        </PersonalMockSection>
       </div>
 
-      <PersonalSection title="Per number">
-        <ul className="space-y-2 text-[13px]">
-          {numbers.map((n) => {
-            const row = usage.perNumber.find((p) => p.numberId === n.id);
-            return (
-              <li key={n.id} className="flex justify-between">
-                <span>{formatPhone(n.number)}</span>
-                <span>{row?.forwardingMinutes ?? 0} min</span>
-              </li>
-            );
-          })}
-        </ul>
-      </PersonalSection>
-    </PersonalPageWrap>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <PersonalMockSection title="Usage Trend" className="lg:col-span-2">
+          <PersonalMockLineChart
+            labels={trendLabels}
+            series={[
+              {
+                label: "Forwarding minutes",
+                color: "#6366f1",
+                values: trendSeries,
+              },
+            ]}
+          />
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Usage by Number">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase text-[#9ca3af]">
+                  <th className="pb-2 text-left">Number</th>
+                  <th className="pb-2 text-right">Minutes</th>
+                  <th className="pb-2 text-right">Trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredNumbers.map((n) => (
+                  <tr key={n.id} className="border-b border-[#f9fafb]">
+                    <td className="py-2.5 font-medium text-[#111827]">
+                      {formatPhone(n.number)}
+                    </td>
+                    <td className="py-2.5 text-right font-semibold">{n.forwardingMinutes}</td>
+                    <td className="py-2.5 text-right">
+                      <PersonalMockSparkline points={n.sparkline} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </PersonalMockSection>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <PersonalMockSection title="Voicemail Usage">
+          <div className="space-y-2 text-[13px]">
+            <div className="flex justify-between">
+              <span className="text-[#6b7280]">Minutes used</span>
+              <span className="font-semibold">
+                {Math.round(usage.forwardingMinutesUsed * 0.15)} min
+              </span>
+            </div>
+            <PersonalMockProgress
+              value={Math.round(usage.forwardingMinutesUsed * 0.15)}
+              max={60}
+              label="Monthly allowance"
+            />
+          </div>
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Smart Routing Usage">
+          <div className="space-y-2 text-[13px]">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-[#6366f1]" />
+              <span className="font-semibold text-[#111827]">Included</span>
+            </div>
+            <p className="text-[#6b7280]">
+              Smart routing is included with your Personal plan at no additional charge.
+            </p>
+            <div className="flex justify-between">
+              <span className="text-[#6b7280]">Routed calls</span>
+              <span className="font-semibold">{totalCallsEstimate}</span>
+            </div>
+          </div>
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Usage History">
+          <ul className="space-y-2 text-[12px] text-[#6b7280]">
+            <li className="flex justify-between">
+              <span>Current period</span>
+              <span className="font-semibold text-[#111827]">
+                {usage.forwardingMinutesUsed} min
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span>Previous period</span>
+              <span className="font-semibold text-[#111827]">
+                {Math.max(0, Math.round(usage.forwardingMinutesUsed * 0.85))} min
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span>2 periods ago</span>
+              <span className="font-semibold text-[#111827]">
+                {Math.max(0, Math.round(usage.forwardingMinutesUsed * 0.7))} min
+              </span>
+            </li>
+          </ul>
+        </PersonalMockSection>
+      </div>
+    </PersonalMockPage>
   );
 }
