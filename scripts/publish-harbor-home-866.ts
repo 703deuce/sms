@@ -35,6 +35,8 @@ const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
 /** OpenAI Realtime native voice — recommended warm professional (not ElevenLabs hybrid). */
 const REALTIME_VOICE = normalizeWizardVoiceToRealtime("marin");
+const REALTIME_MODEL = "gpt-realtime-2.1";
+const REALTIME_REASONING_EFFORT = "low";
 const VOICE_SPEED = 1.08;
 
 async function publishWithoutLiveKitProvision(
@@ -197,6 +199,7 @@ async function main() {
     voiceLabel: state.voiceLabel,
     advanced: {
       realtimeOutputMode: "native",
+      realtimeModel: REALTIME_MODEL,
       [RECEPTIONIST_ADVANCED_KEY]: advanced,
       receptionistWizard: state,
     },
@@ -216,7 +219,8 @@ async function main() {
       [RECEPTIONIST_ADVANCED_KEY]: advanced,
       realtimeVoice: REALTIME_VOICE,
       realtimeOutputMode: "native",
-      realtimeReasoningEffort: "medium",
+      realtimeModel: REALTIME_MODEL,
+      realtimeReasoningEffort: REALTIME_REASONING_EFFORT,
     },
   };
 

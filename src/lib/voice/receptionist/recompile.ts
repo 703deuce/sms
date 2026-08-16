@@ -50,6 +50,10 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
       actionPermissions: storedAdvanced?.actionPermissions ?? advanced?.actionPermissions,
       fallbackPolicy: storedAdvanced?.fallbackPolicy ?? advanced?.fallbackPolicy,
       notifications: storedAdvanced?.notifications ?? advanced?.notifications,
+      realtimeOutputMode: advanced?.realtimeOutputMode,
+      realtimeModel: advanced?.realtimeModel,
+      realtimeReasoningEffort: advanced?.realtimeReasoningEffort,
+      realtimeVoice: advanced?.realtimeVoice,
       [RECEPTIONIST_ADVANCED_KEY]: storedAdvanced ?? advanced?.[RECEPTIONIST_ADVANCED_KEY],
       receptionistWizard: wizard,
     },
@@ -71,6 +75,12 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
       actionPermissions: storedAdvanced?.actionPermissions ?? advanced?.actionPermissions,
       fallbackPolicy: storedAdvanced?.fallbackPolicy ?? advanced?.fallbackPolicy,
       notifications: storedAdvanced?.notifications ?? advanced?.notifications,
+      realtimeOutputMode: advanced?.realtimeOutputMode ?? (merged.advanced as Record<string, unknown>)?.realtimeOutputMode,
+      realtimeModel: advanced?.realtimeModel ?? (merged.advanced as Record<string, unknown>)?.realtimeModel,
+      realtimeReasoningEffort:
+        advanced?.realtimeReasoningEffort ??
+        (merged.advanced as Record<string, unknown>)?.realtimeReasoningEffort,
+      realtimeVoice: advanced?.realtimeVoice ?? (merged.advanced as Record<string, unknown>)?.realtimeVoice,
     },
   };
 }

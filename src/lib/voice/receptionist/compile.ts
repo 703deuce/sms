@@ -207,6 +207,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
 
   const voiceSpeed = voiceTuning.speed;
 
+  const modelRaw = String(input.advanced?.realtimeModel || "gpt-realtime-2.1-mini").trim();
+  const realtimeModel =
+    modelRaw === "gpt-realtime-2.1" ? ("gpt-realtime-2.1" as const) : ("gpt-realtime-2.1-mini" as const);
+
   const partialSnapshot = {
     livekitProfile: "frontdesk_realtime" as const,
     businessName: input.businessName.trim(),
@@ -226,7 +230,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     businessProfile,
     compiledPrompt: "",
     businessContext: "",
-    realtimeModel: "gpt-realtime-2.1-mini" as const,
+    realtimeModel,
     realtimeOutputMode,
     ttsModel: RECEPTIONIST_TTS_MODEL as "eleven_flash_v2_5",
     voiceId: realtimeOutputMode === "elevenlabs" ? elevenLabsVoice : realtimeVoice,
