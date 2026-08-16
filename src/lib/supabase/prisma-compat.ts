@@ -10,6 +10,41 @@ export class DbError extends Error {
   }
 }
 
+/** PostgREST PGRST002 — schema cache unavailable (often transient during deploy or Supabase blips). */
+function isTransientPostgrestError(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const code = error.code ? String(error.code) : "";
+  const msg = error.message || "";
+  return code === "PGRST002" || msg.includes("Could not query the database for the schema cache");
+}
+
+const POSTGREST_TRANSIENT_RETRY_DELAYS_MS = [400, 800, 1600, 2400, 3200];
+
+async function sleepMs(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTransientPostgrestRetry<T>(run: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= POSTGREST_TRANSIENT_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      lastError = err;
+      if (
+        err instanceof DbError &&
+        isTransientPostgrestError({ message: err.message, code: err.code }) &&
+        attempt < POSTGREST_TRANSIENT_RETRY_DELAYS_MS.length
+      ) {
+        await sleepMs(POSTGREST_TRANSIENT_RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 type Row = Record<string, any>;
 type Args = Record<string, any>;
 
@@ -1050,49 +1085,62 @@ function modelApi(model: string): ModelApi {
     },
 
     async findMany(args: Args = {}) {
-      const db = getSupabaseAdmin();
-      const where = await resolveNestedWhere(model, args.where);
-      let q: any = db.from(t).select("*");
-      q = applyWhereSync(q, where);
+      return withTransientPostgrestRetry(async () => {
+        const db = getSupabaseAdmin();
+        const where = await resolveNestedWhere(model, args.where);
+        let q: any = db.from(t).select("*");
+        q = applyWhereSync(q, where);
 
-      if (args.orderBy) {
-        const orders = Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy];
-        for (const o of orders) {
-          if (!isObject(o)) continue;
-          for (const [col, dir] of Object.entries(o)) {
-            q = q.order(col, { ascending: dir !== "desc", nullsFirst: dir === "desc" ? false : undefined });
+        if (args.orderBy) {
+          const orders = Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy];
+          for (const o of orders) {
+            if (!isObject(o)) continue;
+            for (const [col, dir] of Object.entries(o)) {
+              q = q.order(col, { ascending: dir !== "desc", nullsFirst: dir === "desc" ? false : undefined });
+            }
           }
         }
-      }
-      if (typeof args.skip === "number") {
-        const take = typeof args.take === "number" ? args.take : 1000;
-        q = q.range(args.skip, args.skip + take - 1);
-      } else if (typeof args.take === "number") {
-        q = q.limit(args.take);
-      }
+        if (typeof args.skip === "number") {
+          const take = typeof args.take === "number" ? args.take : 1000;
+          q = q.range(args.skip, args.skip + take - 1);
+        } else if (typeof args.take === "number") {
+          q = q.limit(args.take);
+        }
 
-      const { data, error } = await q;
-      if (error) throw new DbError(error.message, error.code);
-      const rows = ((data ?? []) as Row[]).map(reviveRow);
-      return applyInclude(rows, args.include, model);
+        const { data, error } = await q;
+        if (error) throw new DbError(error.message, error.code);
+        const rows = ((data ?? []) as Row[]).map(reviveRow);
+        return applyInclude(rows, args.include, model);
+      });
     },
 
     async create({ data, include }: Args) {
-      const db = getSupabaseAdmin();
-      const row = prepareData(data, { isCreate: true });
-      for (let attempt = 0; ; attempt++) {
-        const { data: created, error } = await db.from(t).insert(row).select("*").single();
-        if (!error) {
-          const hydrated = await applyInclude([reviveRow(created as Row)], include, model);
-          return hydrated[0];
+      return withTransientPostgrestRetry(async () => {
+        const db = getSupabaseAdmin();
+        const row = prepareData(data, { isCreate: true });
+        let transientRetries = 0;
+        for (let attempt = 0; ; attempt++) {
+          const { data: created, error } = await db.from(t).insert(row).select("*").single();
+          if (!error) {
+            const hydrated = await applyInclude([reviveRow(created as Row)], include, model);
+            return hydrated[0];
+          }
+          const col = missingColumnFromError(error);
+          if (col && col in row && attempt < 8) {
+            delete row[col];
+            continue;
+          }
+          if (
+            isTransientPostgrestError(error) &&
+            transientRetries < POSTGREST_TRANSIENT_RETRY_DELAYS_MS.length
+          ) {
+            await sleepMs(POSTGREST_TRANSIENT_RETRY_DELAYS_MS[transientRetries]);
+            transientRetries++;
+            continue;
+          }
+          throw new DbError(error.message, error.code);
         }
-        const col = missingColumnFromError(error);
-        if (col && col in row && attempt < 8) {
-          delete row[col];
-          continue;
-        }
-        throw new DbError(error.message, error.code);
-      }
+      });
     },
 
     async createMany({ data, skipDuplicates }: Args) {
@@ -1112,26 +1160,37 @@ function modelApi(model: string): ModelApi {
     },
 
     async update({ where, data, include }: Args) {
-      const db = getSupabaseAdmin();
-      const resolved = await resolveNestedWhere(model, where);
-      let patch = prepareData(data, { isCreate: false });
-      patch = await applyIncrements(model, resolved ?? {}, patch);
-      for (let attempt = 0; ; attempt++) {
-        let q: any = db.from(t).update(patch).select("*");
-        q = applyWhereSync(q, resolved);
-        const { data: updated, error } = await q.maybeSingle();
-        if (!error) {
-          if (!updated) throw new DbError(`Update failed: no row matched on ${t}`, "P2025");
-          const hydrated = await applyInclude([reviveRow(updated as Row)], include, model);
-          return hydrated[0];
+      return withTransientPostgrestRetry(async () => {
+        const db = getSupabaseAdmin();
+        const resolved = await resolveNestedWhere(model, where);
+        let patch = prepareData(data, { isCreate: false });
+        patch = await applyIncrements(model, resolved ?? {}, patch);
+        let transientRetries = 0;
+        for (let attempt = 0; ; attempt++) {
+          let q: any = db.from(t).update(patch).select("*");
+          q = applyWhereSync(q, resolved);
+          const { data: updated, error } = await q.maybeSingle();
+          if (!error) {
+            if (!updated) throw new DbError(`Update failed: no row matched on ${t}`, "P2025");
+            const hydrated = await applyInclude([reviveRow(updated as Row)], include, model);
+            return hydrated[0];
+          }
+          const col = missingColumnFromError(error);
+          if (col && col in patch && attempt < 8) {
+            delete patch[col];
+            continue;
+          }
+          if (
+            isTransientPostgrestError(error) &&
+            transientRetries < POSTGREST_TRANSIENT_RETRY_DELAYS_MS.length
+          ) {
+            await sleepMs(POSTGREST_TRANSIENT_RETRY_DELAYS_MS[transientRetries]);
+            transientRetries++;
+            continue;
+          }
+          throw new DbError(error.message, error.code);
         }
-        const col = missingColumnFromError(error);
-        if (col && col in patch && attempt < 8) {
-          delete patch[col];
-          continue;
-        }
-        throw new DbError(error.message, error.code);
-      }
+      });
     },
 
     async updateMany({ where, data }: Args) {
