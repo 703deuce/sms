@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 voice-runtime-python/.venv/
+voice-runtime-python/**/__pycache__/
 *.pem
 
 # debug
@@ -42,4 +43,3 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 public/connection-greeting/sources/*.wav
-voice-runtime-python/.venv/
