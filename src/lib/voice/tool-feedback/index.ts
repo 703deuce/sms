@@ -124,7 +124,7 @@ export function parseToolFeedbackFromModel(raw: string): ToolFeedback | null {
   const nextActionMatch = trimmed.match(/^next_action:\s*(\S+)/m);
   const next_action = (nextActionMatch?.[1] || "continue_conversation") as ToolNextAction;
 
-  const guidanceMatch = trimmed.match(/^guidance:\s*(.+)$/ms);
+  const guidanceMatch = trimmed.match(/^guidance:\s*([\s\S]+)$/m);
   const guidance = guidanceMatch?.[1]?.trim() || "";
 
   const toolMatch = trimmed.match(/^tool:\s*(.+)$/m);
