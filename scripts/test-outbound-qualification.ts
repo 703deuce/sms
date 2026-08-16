@@ -126,6 +126,11 @@ assert.equal(
   "gpt-realtime-2.1-mini",
 );
 assert.equal(resolveOutboundRealtimePipelineConfig(realtimeConfig).voice, "marin");
+assert.equal(
+  resolveOutboundRealtimePipelineConfig(realtimeConfig).reasoning?.effort,
+  "low",
+  "mini gets default low reasoning for tool discipline",
+);
 const fullRealtime = resolveOutboundRealtimePipelineConfig({
   advanced: {
     livekitProfile: OUTBOUND_LEAD_QUALIFICATION_REALTIME_PROFILE,

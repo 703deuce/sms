@@ -26,7 +26,7 @@ export type VoiceAgentAdvancedConfig = {
   realtimeModel?: string;
   /** OpenAI Realtime voice — defaults to marin */
   realtimeVoice?: string;
-  /** Optional reasoning effort for gpt-realtime-2 family (full model) */
+  /** Reasoning effort override for gpt-realtime-2 family (full and mini). */
   realtimeReasoningEffort?: OutboundRealtimeReasoningEffort;
   [key: string]: unknown;
 };
@@ -93,6 +93,38 @@ export function isGenericReceptionistRealtimeProfile(
   );
 }
 
+const GPT_REALTIME2_REASONING_EFFORTS: OutboundRealtimeReasoningEffort[] = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+];
+
+function parseRealtimeReasoningEffort(raw: string | undefined): OutboundRealtimeReasoningEffort | undefined {
+  if (!raw) return undefined;
+  const lower = raw.trim().toLowerCase();
+  return GPT_REALTIME2_REASONING_EFFORTS.includes(lower as OutboundRealtimeReasoningEffort)
+    ? (lower as OutboundRealtimeReasoningEffort)
+    : undefined;
+}
+
+/**
+ * gpt-realtime-2.1-mini defaults to `low` (middle tier: minimal → low → medium).
+ * Full gpt-realtime-2.1 also defaults to `low`. Override via advanced.realtimeReasoningEffort
+ * or VOICE_REALTIME_REASONING_EFFORT (e.g. minimal, medium).
+ */
+function resolveGptRealtime2Reasoning(
+  advanced: VoiceAgentAdvancedConfig,
+  isMini: boolean,
+): { effort: OutboundRealtimeReasoningEffort } | undefined {
+  const effort =
+    parseRealtimeReasoningEffort(advanced.realtimeReasoningEffort) ||
+    parseRealtimeReasoningEffort(process.env.VOICE_REALTIME_REASONING_EFFORT?.trim()) ||
+    (isMini ? "low" : "low");
+  return { effort };
+}
+
 export function resolveOutboundRealtimePipelineConfig(
   config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
   overrides?: OutboundRealtimePipelineOverrides,
@@ -109,15 +141,9 @@ export function resolveOutboundRealtimePipelineConfig(
         : undefined;
 
     const isMini = model.includes("mini");
-    let reasoning: OutboundRealtimePipelineConfig["reasoning"];
-    if (model.startsWith("gpt-realtime-2") && !isMini) {
-      const effortRaw =
-        advanced.realtimeReasoningEffort ||
-        (process.env.VOICE_REALTIME_REASONING_EFFORT?.trim().toLowerCase() as
-          | OutboundRealtimeReasoningEffort
-          | undefined);
-      reasoning = { effort: effortRaw || "low" };
-    }
+    const reasoning = model.startsWith("gpt-realtime-2")
+      ? resolveGptRealtime2Reasoning(advanced, isMini)
+      : undefined;
 
     const elevenVoice = resolveConfiguredElevenLabsVoice(config) || compiled.voiceId;
     return { model, voice: elevenVoice, speed, reasoning };
@@ -134,17 +160,12 @@ export function resolveOutboundRealtimePipelineConfig(
     String(advanced.realtimeVoice || "marin").trim();
   const voice = normalizeRealtimeNativeVoice(voiceRaw, "realtimeVoice");
 
-  const envEffort = process.env.VOICE_REALTIME_REASONING_EFFORT?.trim().toLowerCase();
-  const configEffort = advanced.realtimeReasoningEffort;
-  const effortRaw = envEffort || configEffort;
   const isGptRealtime2Family = model.startsWith("gpt-realtime-2");
   const isMini = model.includes("mini");
 
-  let reasoning: OutboundRealtimePipelineConfig["reasoning"];
-  if (isGptRealtime2Family && !isMini) {
-    const effort = (effortRaw || "low") as OutboundRealtimeReasoningEffort;
-    reasoning = { effort };
-  }
+  const reasoning = isGptRealtime2Family
+    ? resolveGptRealtime2Reasoning(advanced, isMini)
+    : undefined;
 
   const speedRaw = config.voiceLanguage?.speed;
   const speedCandidate = speedRaw ?? compiled?.voiceSpeed;
