@@ -11,7 +11,6 @@ import {
   transactionContextFromUserData,
   tryConfirmationSpeech,
 } from "./runtime-transaction";
-import { speakBookingLine } from "./booking-speech";
 
 const SOURCE = "booking-provider-write";
 

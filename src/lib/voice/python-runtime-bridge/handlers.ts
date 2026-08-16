@@ -6,13 +6,13 @@ import {
   missingReceptionistFields,
   type ReceptionistCollectionPurpose,
 } from "@/lib/voice/receptionist/field-collection-scope";
-import { extractDeterministicFieldsFromUtterance } from "../../../voice-runtime/src/frontdesk/receptionist/collection-field-extractor";
-import { CalendlyCalendar } from "../../../voice-runtime/src/frontdesk/calendly-calendar";
-import { writeBookingToProvider } from "../../../voice-runtime/src/frontdesk/booking-provider-write";
-import { markBookingConfirmed, type FrontDeskUserData } from "../../../voice-runtime/src/frontdesk/userdata";
-import { buildBookingSuccessLine } from "../../../voice-runtime/src/booking-completion-messages";
+import { extractDeterministicFieldsFromUtterance } from "../../../../voice-runtime/src/frontdesk/receptionist/collection-field-extractor";
+import { CalendlyCalendar } from "../../../../voice-runtime/src/frontdesk/calendly-calendar";
+import { writeBookingToProvider } from "../../../../voice-runtime/src/frontdesk/booking-provider-write";
+import { markBookingConfirmed, type FrontDeskUserData } from "../../../../voice-runtime/src/frontdesk/userdata";
+import { buildBookingSuccessLine } from "../../../../voice-runtime/src/booking-completion-messages";
 import { markVoiceCallBooked } from "@/lib/voice/runtime-provider/livekit-call-telemetry";
-import { sendBookingSmsAsync } from "../../../voice-runtime/src/frontdesk/booking-sms";
+import { sendBookingSmsAsync } from "../../../../voice-runtime/src/frontdesk/booking-sms";
 import type {
   AvailabilitySlot,
   ExtractFieldsInput,
@@ -64,9 +64,11 @@ export async function persistIntakeFieldsForPython(
     if (!field) continue;
     const trimmed = value.trim();
     if (!trimmed) continue;
-    const validation = validateReceptionistFieldValue(field, trimmed);
-    if (!validation.ok) continue;
-    merged[fieldId] = validation.normalized;
+    try {
+      merged[fieldId] = validateReceptionistFieldValue(field, trimmed);
+    } catch {
+      continue;
+    }
   }
 
   await prisma.voiceCall.update({
@@ -99,8 +101,11 @@ export async function extractFieldsForPython(
   for (const [fieldId, value] of Object.entries(result.fields)) {
     const field = input.manifest.find((f) => f.id === fieldId);
     if (!field) continue;
-    const validation = validateReceptionistFieldValue(field, value);
-    if (validation.ok) validated[fieldId] = validation.normalized;
+    try {
+      validated[fieldId] = validateReceptionistFieldValue(field, value);
+    } catch {
+      continue;
+    }
   }
   return { ok: true, fields: validated, correction: result.correction };
 }
@@ -190,6 +195,7 @@ export async function commitBookingForPython(input: {
       confirmationSpeech: string;
       providerEventId?: string;
       alreadyBooked?: boolean;
+      receiptPersisted?: boolean;
     }
   | PythonRuntimeError
 > {
@@ -201,7 +207,7 @@ export async function commitBookingForPython(input: {
   }
 
   const userData = buildMinimalUserData(input);
-  const slotsMap = new Map<string, import("../../../voice-runtime/src/frontdesk/calendly-calendar").AvailableSlot>();
+  const slotsMap = new Map<string, import("../../../../voice-runtime/src/frontdesk/calendly-calendar").AvailableSlot>();
 
   const availability = await getAvailabilityForPython({
     workspaceId: input.workspaceId,
@@ -249,11 +255,11 @@ export async function commitBookingForPython(input: {
     void markVoiceCallBooked({
       workspaceId: input.workspaceId,
       callId: input.callId,
-      slotId: input.slotId,
-      bookedTimeLabel,
-    }).catch(() => undefined);
+      appointmentId: booked.inviteeUri,
+      externalId: booked.eventUri,
+    });
 
-    void sendBookingSmsAsync(userData, bookedTimeLabel).catch(() => undefined);
+    sendBookingSmsAsync(userData, slot.startTime);
 
     const confirmationSpeech = buildBookingSuccessLine(bookedTimeLabel);
 

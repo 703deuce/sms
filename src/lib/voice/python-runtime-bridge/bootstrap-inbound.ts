@@ -64,7 +64,13 @@ export async function bootstrapInboundForPython(
         : null;
   const jobMetaRaw = parseJobMetadata(input.jobMetadata);
   const jobMeta = jobMetaRaw
-    ? parseDispatchAttributes(JSON.stringify(jobMetaRaw))
+    ? parseDispatchAttributes(
+        Object.fromEntries(
+          Object.entries(jobMetaRaw).flatMap(([key, value]) =>
+            value === undefined || value === null ? [] : [[key, String(value)]],
+          ),
+        ),
+      )
     : null;
 
   const { fromE164, toE164 } = extractCallNumbers(attrs, roomMeta, input.participantIdentity);
@@ -142,10 +148,13 @@ export async function bootstrapInboundForPython(
     agentVersionId: pinnedVersionId,
     callerE164: fromE164,
     toE164: normalizedTo || routing.e164,
-    timezone: receptionistCompiled?.timezone || agentConfig.timezone || "America/New_York",
+    timezone:
+      receptionistCompiled?.timezone ||
+      (typeof calendarAdvanced?.timezone === "string" ? calendarAdvanced.timezone : undefined) ||
+      "America/New_York",
     businessName:
       receptionistCompiled?.businessName?.trim() ||
-      agentConfig.businessName?.trim() ||
+      agentConfig.identity?.displayName?.trim() ||
       routing.agentName ||
       "our office",
     runtimeProfile,

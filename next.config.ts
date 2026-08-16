@@ -3,7 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   // BullMQ pulls Node builtins (net, child_process) — keep external when webpack is used.
-  serverExternalPackages: ["bullmq", "ioredis"],
+  serverExternalPackages: [
+    "bullmq",
+    "ioredis",
+    "@livekit/agents",
+    "@livekit/rtc-node",
+    "@livekit/protocol",
+  ],
   // Coolify build VMs: limit parallel compile workers to reduce Turbopack peak RAM.
   experimental: {
     cpus: 1,

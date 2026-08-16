@@ -131,9 +131,12 @@ export async function startInProcessVoiceRuntime(): Promise<void> {
     env: {
       ...process.env,
       LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
-      PYTHONPATH: path.join(process.cwd(), "voice-runtime-python"),
+      PYTHONPATH: path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python"),
     },
-    cwd: impl === "python" ? path.join(process.cwd(), "voice-runtime-python") : process.cwd(),
+    cwd:
+      impl === "python"
+        ? path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python")
+        : /* turbopackIgnore: true */ process.cwd(),
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });

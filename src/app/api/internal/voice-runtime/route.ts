@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridge/auth";
 import { bootstrapInboundForPython } from "@/lib/voice/python-runtime-bridge/bootstrap-inbound";
-import {
-  businessAnswerForPython,
-  commitBookingForPython,
-  emitVoiceRuntimeEvent,
-  extractFieldsForPython,
-  getAvailabilityForPython,
-  persistIntakeFieldsForPython,
-} from "@/lib/voice/python-runtime-bridge/handlers";
 
 export const runtime = "nodejs";
 
@@ -20,6 +12,10 @@ type VoiceRuntimeAction =
   | "commit_booking"
   | "business_answer"
   | "emit_event";
+
+async function loadHandlers() {
+  return import("@/lib/voice/python-runtime-bridge/handlers");
+}
 
 export async function POST(request: Request) {
   if (!verifyVoiceRuntimeInternalAuth(request.headers.get("authorization"))) {
@@ -41,23 +37,35 @@ export async function POST(request: Request) {
       case "bootstrap_inbound":
         return NextResponse.json(await bootstrapInboundForPython(payload as never));
 
-      case "persist_intake_fields":
+      case "persist_intake_fields": {
+        const { persistIntakeFieldsForPython } = await loadHandlers();
         return NextResponse.json(await persistIntakeFieldsForPython(payload as never));
+      }
 
-      case "extract_fields":
+      case "extract_fields": {
+        const { extractFieldsForPython } = await loadHandlers();
         return NextResponse.json(await extractFieldsForPython(payload as never));
+      }
 
-      case "get_availability":
+      case "get_availability": {
+        const { getAvailabilityForPython } = await loadHandlers();
         return NextResponse.json(await getAvailabilityForPython(payload as never));
+      }
 
-      case "commit_booking":
+      case "commit_booking": {
+        const { commitBookingForPython } = await loadHandlers();
         return NextResponse.json(await commitBookingForPython(payload as never));
+      }
 
-      case "business_answer":
+      case "business_answer": {
+        const { businessAnswerForPython } = await loadHandlers();
         return NextResponse.json(await businessAnswerForPython(payload as never));
+      }
 
-      case "emit_event":
+      case "emit_event": {
+        const { emitVoiceRuntimeEvent } = await loadHandlers();
         return NextResponse.json(await emitVoiceRuntimeEvent(payload as never));
+      }
 
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
