@@ -10,8 +10,9 @@ import {
   markCollectionProcessing,
 } from "./collection-state-lifecycle";
 import {
-  COLLECTION_FIELD_SAVE_ORDER,
-} from "./collection-field-extractor";
+  fieldIdsInManifestOrder,
+  isPhoneField,
+} from "@/lib/voice/receptionist/field-manifest-runtime";
 import { extractFieldsFromUtterance } from "./collection-semantic-extractor";
 import {
   classifyCollectionUtterance,
@@ -120,7 +121,8 @@ export async function processCollectionTurn(
   const extractedIds = Object.keys(extraction.fields);
   if (extractedIds.length > 0) {
     const saved: Array<{ fieldId: string; normalized: string }> = [];
-    for (const fieldId of COLLECTION_FIELD_SAVE_ORDER) {
+    const orderedIds = fieldIdsInManifestOrder(manifest, Object.keys(extraction.fields));
+    for (const fieldId of orderedIds) {
       const raw = extraction.fields[fieldId];
       if (!raw?.trim()) continue;
       const field = manifest.find((f) => f.id === fieldId);
@@ -130,7 +132,7 @@ export async function processCollectionTurn(
         fieldId,
         raw,
         field,
-        fieldId === "phone" ? ud.collectionPhoneDigitsBuffer ?? "" : "",
+        isPhoneField(field) ? ud.collectionPhoneDigitsBuffer ?? "" : "",
       );
       if (result.status === "saved") {
         saved.push({ fieldId: result.fieldId, normalized: result.normalized });

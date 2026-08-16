@@ -17,6 +17,10 @@ import {
 } from "../voice-runtime/src/frontdesk/receptionist/collection-utterance-validation";
 import { persistActiveFieldAnswer } from "../voice-runtime/src/frontdesk/receptionist/process-active-field-answer";
 import { extractDeterministicFieldsFromUtterance } from "../voice-runtime/src/frontdesk/receptionist/collection-field-extractor";
+import {
+  mergeSemanticFieldsForTest,
+  parseSemanticFieldPayloadForTest,
+} from "../voice-runtime/src/frontdesk/receptionist/collection-semantic-extractor";
 import type { FrontDeskUserData } from "../voice-runtime/src/frontdesk/userdata";
 
 function baseUserData(): FrontDeskUserData {
@@ -62,7 +66,7 @@ function baseUserData(): FrontDeskUserData {
 
 const ud = baseUserData();
 enterCollectionState(ud, "booking");
-assert.equal(ud.receptionistWorkflow?.activeFieldId, "reason");
+assert.equal(ud.receptionistWorkflow?.activeFieldId, "name");
 
 assert.equal(
   classifyCollectionUtterance(
@@ -108,10 +112,22 @@ const multi = extractDeterministicFieldsFromUtterance(
   multiManifest,
   {},
 );
-assert.ok(multi.fields.name?.includes("Anthony"));
 assert.equal(multi.fields.phone, "+15714776175");
-assert.ok(multi.fields.address?.includes("123 Main Street"));
-assert.ok(multi.fields.reason);
+
+const multiSemantic = mergeSemanticFieldsForTest(
+  parseSemanticFieldPayloadForTest(
+    JSON.stringify({
+      name: "Anthony Johnson",
+      address: "123 Main Street in Arlington",
+      reason: "AC stopped cooling",
+    }),
+  )!,
+  multiManifest,
+  multi.fields,
+);
+assert.ok(multiSemantic.name?.includes("Anthony"));
+assert.ok(multiSemantic.address?.includes("123 Main Street"));
+assert.ok(multiSemantic.reason);
 
 ud.receptionistFields = {
   name: "Anthony Johnson",

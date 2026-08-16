@@ -1,5 +1,9 @@
 import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
 import {
+  fieldsToClearOnCorrection,
+  utteranceReferencesCallerIdPhone,
+} from "@/lib/voice/receptionist/field-manifest-runtime";
+import {
   heuristicReceptionistFieldBackfill,
   looksLikeFreeformCallerStatement,
 } from "@/lib/voice/receptionist/field-backfill";
@@ -10,14 +14,8 @@ import {
   looksLikeMetaQuestion,
 } from "./collection-utterance-validation";
 
-const CORRECTION_RE =
-  /\b(actually|instead|correction|not that|wait no|i meant|i said|use my|change my)\b/i;
-
 const BUSINESS_QUESTION_RE =
   /\b(how much|what do you charge|cost of|price of|service call cost|diagnostic fee)\b/i;
-
-const CALLER_ID_PHONE_RE =
-  /\b(calling from|number i'?m calling from|number i am calling from|use (my |the )?number|this number|same number|number i'?m on)\b/i;
 
 export type FieldExtractionResult = {
   fields: Record<string, string>;
@@ -26,7 +24,7 @@ export type FieldExtractionResult = {
   extractionSource?: "deterministic" | "semantic_llm";
 };
 
-/** Fast deterministic extraction — phone digits, email, obvious patterns. No LLM. */
+/** Fast deterministic extraction — uses manifest field types, not industry-specific ids. */
 export function extractDeterministicFieldsFromUtterance(
   transcript: string,
   manifest: AgentFieldDefinition[],
@@ -46,15 +44,11 @@ export function extractDeterministicFieldsFromUtterance(
     return { fields: {}, correction: false, skippedReason: "business_question" };
   }
 
-  const correction = CORRECTION_RE.test(trimmed);
+  const correctionFields = fieldsToClearOnCorrection(trimmed, manifest);
+  const correction = correctionFields.length > 0;
   const baseFields = { ...currentFields };
-
-  if (correction) {
-    if (/\b(phone|number|cell|callback)\b/i.test(trimmed)) delete baseFields.phone;
-    if (/\b(address|street|live at|located)\b/i.test(trimmed)) delete baseFields.address;
-    if (/\b(name)\b/i.test(trimmed)) delete baseFields.name;
-    if (/\b(email)\b/i.test(trimmed)) delete baseFields.email;
-    if (/\b(reason|issue|problem|ac|hvac)\b/i.test(trimmed)) delete baseFields.reason;
+  for (const fieldId of correctionFields) {
+    delete baseFields[fieldId];
   }
 
   if (
@@ -67,68 +61,16 @@ export function extractDeterministicFieldsFromUtterance(
 
   const fields = heuristicReceptionistFieldBackfill([trimmed], manifest, baseFields);
 
-  if (fields.address && (fields.address.length > 72 || /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(fields.address))) {
-    delete fields.address;
-  }
-
-  const nameField = manifest.find((f) => f.id === "name");
-  if (!fields.name && !baseFields.name?.trim() && nameField) {
-    const nameMatch = trimmed.match(
-      /\b(?:i'?m|i am|my name is|this is)\s+([A-Za-z][A-Za-z' -]{1,40}?)(?=\s*,|\s+my\s+(?:number|phone|cell)|\s+and\s+)/i,
-    );
-    if (nameMatch?.[1]) {
-      try {
-        fields.name = validateReceptionistFieldValue(nameField, nameMatch[1].trim());
-      } catch {
-        // skip invalid name fragment
-      }
-    }
-  }
-
-  const addressField = manifest.find((f) => f.id === "address");
-  if (!fields.address && !baseFields.address?.trim() && addressField) {
-    const addressMatch = trimmed.match(
-      /\b(?:i'?m at|i am at|i live at|we'?re at|at|over on)\s+([^,]+(?:,\s*[A-Za-z .]+)?)(?=\s*,\s*and|\s+and\s+)/i,
-    );
-    if (addressMatch?.[1]) {
-      try {
-        fields.address = validateReceptionistFieldValue(addressField, addressMatch[1].trim());
-      } catch {
-        // skip invalid address fragment
-      }
-    }
-  }
-
-  if (!fields.reason && !baseFields.reason?.trim()) {
-    const reasonField = manifest.find((f) => f.id === "reason");
-    const tail = trimmed.match(/\band\s+my\s+(.+?)[.!?]?\s*$/i);
-    if (reasonField && tail?.[1] && looksLikeFreeformCallerStatement(tail[1])) {
-      try {
-        fields.reason = validateReceptionistFieldValue(reasonField, tail[1].trim());
-      } catch {
-        // leave reason missing — runtime will ask
-      }
-    }
-  }
-
+  const phoneField = manifest.find((f) => f.type === "phone");
   if (
-    !fields.phone &&
-    !baseFields.phone?.trim() &&
-    CALLER_ID_PHONE_RE.test(trimmed) &&
+    phoneField &&
+    !fields[phoneField.id]?.trim() &&
+    !baseFields[phoneField.id]?.trim() &&
+    utteranceReferencesCallerIdPhone(trimmed) &&
     callerE164
   ) {
-    const normalized = tryNormalizeE164(callerE164) || callerE164;
-    fields.phone = normalized;
+    fields[phoneField.id] = tryNormalizeE164(callerE164) || callerE164;
   }
 
   return { fields, correction, extractionSource: "deterministic" };
 }
-
-/** Stable save order when multiple fields arrive in one utterance. */
-export const COLLECTION_FIELD_SAVE_ORDER = [
-  "reason",
-  "name",
-  "phone",
-  "address",
-  "email",
-] as const;

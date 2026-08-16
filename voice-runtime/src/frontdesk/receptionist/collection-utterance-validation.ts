@@ -1,5 +1,11 @@
 import type { AgentFieldDefinition } from "@/lib/voice/receptionist/types";
 import { captureUsPhoneDigits } from "@/lib/voice/receptionist/field-validation";
+import {
+  isAddressField,
+  isEmailField,
+  isPhoneField,
+  looksLikeNameField,
+} from "@/lib/voice/receptionist/field-manifest-runtime";
 
 export type CollectionUtteranceKind =
   | "field_value"
@@ -74,7 +80,7 @@ export function classifyCollectionUtterance(
 
   if (!activeField) return "clarification";
 
-  if (activeField.type === "phone" || activeField.id === "phone") {
+  if (isPhoneField(activeField)) {
     const capture = captureUsPhoneDigits(t, priorPhoneDigits);
     if (capture.status === "incomplete") {
       return capture.digits.length > 0 ? "phone_partial" : "clarification";
@@ -82,18 +88,18 @@ export function classifyCollectionUtterance(
     return "field_value";
   }
 
-  if (activeField.type === "email" || activeField.id === "email") {
+  if (isEmailField(activeField)) {
     return isPlausibleEmailUtterance(t) ? "field_value" : "clarification";
   }
 
-  if (activeField.id === "name") {
-    return isPlausibleNameUtterance(t) ? "field_value" : "clarification";
-  }
-
-  if (activeField.id === "address") {
+  if (isAddressField(activeField)) {
     return isPlausibleAddressUtterance(t) ? "field_value" : "clarification";
   }
 
-  if (activeField.id === "reason" && looksLikeMetaQuestion(t)) return "clarification";
+  if (looksLikeNameField(activeField)) {
+    return isPlausibleNameUtterance(t) ? "field_value" : "clarification";
+  }
+
+  if (looksLikeMetaQuestion(t)) return "clarification";
   return "field_value";
 }

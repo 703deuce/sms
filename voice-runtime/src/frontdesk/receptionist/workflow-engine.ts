@@ -76,11 +76,7 @@ export function missingFieldsForPurpose(
 }
 
 export function messageFieldsComplete(ud: FrontDeskUserData): boolean {
-  const fields = ud.receptionistFields || {};
-  const hasName = Boolean(fields.name?.trim());
-  const hasPhone = Boolean(fields.phone?.trim());
-  const hasReason = Boolean(fields.reason?.trim());
-  return hasName && hasPhone && hasReason;
+  return missingFieldsForPurpose(ud, "message").length === 0;
 }
 
 export function bookingFieldsComplete(ud: FrontDeskUserData): boolean {

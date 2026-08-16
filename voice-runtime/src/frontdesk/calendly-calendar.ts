@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { ReceptionistBookingCalendar } from "./receptionist-booking-calendar";
 import { buildAdapterContext } from "@/lib/integrations/framework/context";
 import { listEventTypeAvailableTimes } from "@/lib/integrations/adapters/calendly-actions";
 import {
@@ -60,7 +61,7 @@ function formatRelativeTime(start: Date, now: Date): string {
   return `in ${Math.floor(days / 7)} weeks`;
 }
 
-export class CalendlyCalendar {
+export class CalendlyCalendar implements ReceptionistBookingCalendar {
   readonly scheduledAppointments: BookedAppointment[] = [];
   private eventTypeUri: string | null = null;
   private initPromise: Promise<void> | null = null;

@@ -3,6 +3,12 @@ import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { AgentFieldDefinition } from "./types";
 import { validateReceptionistFieldValue } from "./field-validation";
 import {
+  isAddressField,
+  isEmailField,
+  isPhoneField,
+  looksLikeNameField,
+} from "./field-manifest-runtime";
+import {
   callerUtterancesFromChatCtx,
   CONVERSATION_RECAP_MAX_UTTERANCES,
 } from "./conversation-recap";
@@ -76,8 +82,7 @@ function looksLikeAddressUtterance(line: string): boolean {
 }
 
 /**
- * Fast heuristic extraction from caller utterances — no LLM round-trip.
- * Uses field types and generic speech patterns only (no industry vocabulary).
+ * Fast heuristic extraction — driven by manifest field types, not fixed field ids.
  */
 export function heuristicReceptionistFieldBackfill(
   utterances: string[],
@@ -99,61 +104,60 @@ export function heuristicReceptionistFieldBackfill(
     }
   };
 
-  if (allowed.has("phone") && !alreadyCollected.phone?.trim()) {
-    for (const line of utterances) {
-      const match = line.match(PHONE_IN_TEXT);
-      if (!match) continue;
-      const raw = match[0];
-      if (tryNormalizeE164(raw)) {
-        push("phone", raw);
-        break;
-      }
-    }
-  }
+  for (const field of manifest) {
+    if (alreadyCollected[field.id]?.trim()) continue;
 
-  if (allowed.has("email") && !alreadyCollected.email?.trim()) {
-    for (const line of utterances) {
-      const match = line.match(EMAIL_IN_TEXT);
-      if (match) {
-        push("email", match[0]);
-        break;
-      }
-    }
-  }
-
-  if (allowed.has("name") && !alreadyCollected.name?.trim()) {
-    for (const line of utterances) {
-      const trimmed = line.trim().replace(/[.,!?]+$/, "");
-      if (PHONE_IN_TEXT.test(trimmed) || EMAIL_IN_TEXT.test(trimmed)) continue;
-      if (looksLikeFreeformCallerStatement(trimmed) && trimmed.length > 24) continue;
-      const named = trimmed.match(NAME_LINE);
-      if (named?.[1]) {
-        const candidate = named[1].trim();
-        if (!/^\b(in|at|near|from|on)\b/i.test(candidate)) {
-          push("name", candidate);
+    if (isPhoneField(field)) {
+      for (const line of utterances) {
+        const match = line.match(PHONE_IN_TEXT);
+        if (!match) continue;
+        const raw = match[0];
+        if (tryNormalizeE164(raw)) {
+          push(field.id, raw);
           break;
         }
       }
-      if (looksLikeCollectedName(trimmed)) {
-        push("name", trimmed);
+      continue;
+    }
+
+    if (isEmailField(field)) {
+      for (const line of utterances) {
+        const match = line.match(EMAIL_IN_TEXT);
+        if (match) {
+          push(field.id, match[0]);
+          break;
+        }
+      }
+      continue;
+    }
+
+    if (isAddressField(field)) {
+      for (const line of utterances) {
+        if (!looksLikeAddressUtterance(line)) continue;
+        push(field.id, line.trim());
         break;
       }
+      continue;
     }
-  }
 
-  if (allowed.has("reason") && !alreadyCollected.reason?.trim()) {
-    for (const line of utterances) {
-      if (!looksLikeFreeformCallerStatement(line)) continue;
-      push("reason", line.trim());
-      break;
-    }
-  }
-
-  if (allowed.has("address") && !alreadyCollected.address?.trim()) {
-    for (const line of utterances) {
-      if (!looksLikeAddressUtterance(line)) continue;
-      push("address", line.trim());
-      break;
+    if (looksLikeNameField(field)) {
+      for (const line of utterances) {
+        const trimmed = line.trim().replace(/[.,!?]+$/, "");
+        if (PHONE_IN_TEXT.test(trimmed) || EMAIL_IN_TEXT.test(trimmed)) continue;
+        if (looksLikeFreeformCallerStatement(trimmed) && trimmed.length > 24) continue;
+        const named = trimmed.match(NAME_LINE);
+        if (named?.[1]) {
+          const candidate = named[1].trim();
+          if (!/^\b(in|at|near|from|on)\b/i.test(candidate)) {
+            push(field.id, candidate);
+            break;
+          }
+        }
+        if (looksLikeCollectedName(trimmed)) {
+          push(field.id, trimmed);
+          break;
+        }
+      }
     }
   }
 

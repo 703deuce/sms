@@ -1,5 +1,5 @@
 import type { CalendlyCalendar } from "./calendly-calendar";
-import type { AvailableSlot } from "./calendly-calendar";
+import type { ReceptionistBookingCalendar } from "./receptionist-booking-calendar";
 import type { BookingOperation } from "./booking-operation";
 import {
   isFrontDeskProfile as isFrontDeskProfileFromConfig,
@@ -34,7 +34,8 @@ export type FrontDeskUserData = {
   callId: string;
   businessName: string;
   timezone: string;
-  cal: CalendlyCalendar;
+  /** Configured booking provider calendar adapter (Calendly today; others via same interface). */
+  cal: ReceptionistBookingCalendar & CalendlyCalendar;
   slotUnavailableCount: number;
   /** Email captured but not yet confirmed by caller. */
   draftEmail?: string;

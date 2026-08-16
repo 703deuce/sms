@@ -3,6 +3,10 @@ import {
   captureUsPhoneDigits,
   validateReceptionistFieldValue,
 } from "@/lib/voice/receptionist/field-validation";
+import {
+  isEmailField,
+  isPhoneField,
+} from "@/lib/voice/receptionist/field-manifest-runtime";
 import { validateBookingNotesField } from "../booking-field-validation";
 import { persistConfirmedBookingEmail } from "../booking-email-state";
 import { afterReceptionistFieldPersisted } from "../booking-field-coherence";
@@ -35,7 +39,7 @@ export function persistActiveFieldAnswer(
     };
   }
 
-  if (activeFieldId === "email" || field.type === "email") {
+  if (isEmailField(field)) {
     const persisted = persistConfirmedBookingEmail(ud, trimmed);
     if (!persisted.ok) {
       return {
@@ -58,7 +62,7 @@ export function persistActiveFieldAnswer(
   }
 
   let normalized: string;
-  if (field.type === "phone" || activeFieldId === "phone") {
+  if (isPhoneField(field)) {
     const phoneCapture = captureUsPhoneDigits(notesCheck.normalized, priorPhoneDigits);
     if (phoneCapture.status === "incomplete") {
       return {
