@@ -12,7 +12,7 @@ import {
   type RoomMetadata,
 } from "@/lib/telephony/provisioning/metadata";
 import { getStoredLiveKitOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
-import { loadExplicitDispatchForDid } from "@/lib/telephony/provisioning";
+import { loadExplicitDispatchForDid, mergeExplicitDispatchMetadata } from "@/lib/telephony/provisioning";
 import type { PythonRuntimeBootstrapInput, PythonRuntimeBootstrapResult, PythonRuntimeError } from "./types";
 
 function parseJobMetadata(raw: PythonRuntimeBootstrapInput["jobMetadata"]): Record<string, unknown> | null {

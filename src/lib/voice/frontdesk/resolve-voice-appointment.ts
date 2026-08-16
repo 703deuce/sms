@@ -29,7 +29,7 @@ async function activeFutureAppointmentsForCaller(
     take: 20,
     select: { id: true },
   });
-  const callIds = calls.map((c) => c.id);
+  const callIds = calls.map((c: { id: string }) => c.id);
   if (!callIds.length) return [];
 
   return prisma.voiceAppointment.findMany({
