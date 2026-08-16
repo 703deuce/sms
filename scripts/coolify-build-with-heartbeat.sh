@@ -5,6 +5,8 @@ set -euo pipefail
 
 heartbeat_interval="${COOLIFY_BUILD_HEARTBEAT_SECS:-20}"
 
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
+
 echo "[coolify-build] starting next production build (turbopack default)"
 echo "[coolify-build] node=$(node -v) heap_limit=${NODE_OPTIONS:-unset}"
 

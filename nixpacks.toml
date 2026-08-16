@@ -1,7 +1,10 @@
-# Coolify/Nixpacks: Turbopack builds need headroom on smaller build VMs.
-# Leave ~1GB for Turbopack/native outside the V8 heap on 4GB builders.
-[variables]
-NODE_OPTIONS = "--max-old-space-size=3072"
+# Coolify/Nixpacks: install + build tuned for ~4GB build VMs.
+# NODE_OPTIONS heap is applied only during next build (see coolify-build script).
+
+[phases.install]
+cmds = [
+  "bash scripts/coolify-install-with-heartbeat.sh",
+]
 
 [phases.build]
 cmds = [
