@@ -79,6 +79,12 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         to_e164=data.get("toE164"),
         agent_version_id=data.get("agentVersionId"),
         event_type_uri=data.get("eventTypeUri"),
+        sip_outbound_trunk_id=(
+            str(data.get("sipOutboundTrunkId") or "").strip() or None
+        ),
+        sip_caller_id_e164=(
+            str(data.get("sipCallerIdE164") or "").strip() or None
+        ),
         capabilities=capabilities,
         transfer_policy=transfer_policy,
         receptionist=receptionist,

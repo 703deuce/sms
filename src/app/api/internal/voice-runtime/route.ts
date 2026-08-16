@@ -3,6 +3,8 @@ import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridg
 import { bootstrapInboundForPython } from "@/lib/voice/python-runtime-bridge/bootstrap-inbound";
 import { persistIntakeFieldsForPython } from "@/lib/voice/python-runtime-bridge/persist-intake-fields";
 import { persistMessageForPython } from "@/lib/voice/python-runtime-bridge/persist-message";
+import { commitBookingForPython } from "@/lib/voice/python-runtime-bridge/commit-booking-for-python";
+import { getAvailabilityForPython } from "@/lib/voice/python-runtime-bridge/get-availability-for-python";
 import { resolveTransferForPython } from "@/lib/voice/python-runtime-bridge/resolve-transfer";
 
 export const runtime = "nodejs";
@@ -113,17 +115,13 @@ export async function POST(request: Request) {
         break;
       }
 
-      case "get_availability": {
-        const { getAvailabilityForPython } = await loadHandlers();
+      case "get_availability":
         result = await getAvailabilityForPython(payload as never);
         break;
-      }
 
-      case "commit_booking": {
-        const { commitBookingForPython } = await loadHandlers();
+      case "commit_booking":
         result = await commitBookingForPython(payload as never);
         break;
-      }
 
       case "business_answer": {
         const { businessAnswerForPython } = await loadHandlers();

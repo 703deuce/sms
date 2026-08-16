@@ -69,8 +69,15 @@ def build_transfer_tool(
                 "Offer to take a message or try again later."
             )
 
-        sip_trunk_id = os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK", "").strip()
-        sip_number = os.getenv("LIVEKIT_SIP_NUMBER", "").strip() or None
+        sip_trunk_id = (
+            (ud.sip_outbound_trunk_id or "").strip()
+            or os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK", "").strip()
+        )
+        sip_number = (
+            (ud.sip_caller_id_e164 or "").strip()
+            or os.getenv("LIVEKIT_SIP_NUMBER", "").strip()
+            or None
+        )
         if not sip_trunk_id:
             log_event(
                 "transfer_failed",
@@ -80,7 +87,10 @@ def build_transfer_tool(
                 workflow=ud.workflow.value,
                 extra={"reason": "missing_sip_trunk"},
             )
-            return "Transfer is not configured on the voice worker (missing LIVEKIT_SIP_OUTBOUND_TRUNK)."
+            return (
+                "Transfer is not configured (missing SIP outbound trunk). "
+                "Offer to take a message for the team."
+            )
 
         destination = str(resolution["destinationE164"])
         log_event(

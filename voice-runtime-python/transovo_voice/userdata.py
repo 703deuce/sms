@@ -84,6 +84,8 @@ class SessionUserData:
     to_e164: str | None = None
     agent_version_id: str | None = None
     event_type_uri: str | None = None
+    sip_outbound_trunk_id: str | None = None
+    sip_caller_id_e164: str | None = None
     receptionist: ReceptionistCompiled | None = None
     compiled_prompt: str = ""
     greeting: str = ""

@@ -27,6 +27,8 @@ export type PythonRuntimeBootstrapResult = {
   realtimeVoice?: string;
   realtimeSpeed?: number;
   eventTypeUri?: string | null;
+  sipOutboundTrunkId?: string | null;
+  sipCallerIdE164?: string | null;
 };
 
 export type PythonRuntimeError = {
