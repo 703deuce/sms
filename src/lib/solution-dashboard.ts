@@ -16,6 +16,10 @@ import {
   loadTemplates,
   loadWorkspace,
 } from "@/lib/workspace-data";
+import {
+  formatPhoneMinutes,
+  loadVoicePhoneMinutesSummary,
+} from "@/lib/voice/phone-minutes";
 
 export type SolutionKpiCard = {
   id: string;
@@ -201,6 +205,8 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
   const now = new Date();
   const periodStart = daysAgo(30);
   const priorStart = daysAgo(60);
+
+  const voicePhoneUsage = await loadVoicePhoneMinutesSummary(workspaceId);
 
   const [
     metrics,
@@ -471,6 +477,12 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       : metrics.replyRate;
 
   const snapshot: SnapshotMetric[] = [
+    {
+      label: "AI Phone Min (today)",
+      value: `${formatPhoneMinutes(voicePhoneUsage.minutesToday)} min`,
+      sparkline: voicePhoneUsage.sparklineMinutes,
+      href: "/voice/overview",
+    },
     {
       label: "Total Leads",
       value: String(totalLeadsPeriod || contacts.length),
@@ -779,6 +791,7 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
     userName: displayFirstName(userName),
     workspaceName: workspace?.name || "your workspace",
     todayLabel,
+    voicePhoneUsage,
     solutionKpis,
     snapshot,
     solutionPerformance,
