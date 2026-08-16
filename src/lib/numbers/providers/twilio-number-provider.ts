@@ -9,6 +9,7 @@ import { decryptSecret } from "@/lib/messaging/crypto";
 import { getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
 import { ensureRegistrationRow, getRegistrationByWorkspace } from "@/lib/messaging/store";
 import type { MessagingRegistration } from "@/lib/domain";
+import { isTollFreeAreaCode } from "@/lib/premium-numbers/toll-free";
 import { runTwilioInventorySearches } from "./twilio-inventory-search";
 import type {
   InventorySearchInput,
@@ -108,11 +109,16 @@ export class TwilioNumberProvider implements NumberProvider {
       const national =
         digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
       if (national.length !== 10) return false;
-      const list = await client.availablePhoneNumbers("US").local.list({
-        areaCode: Number(national.slice(0, 3)),
+      const ndc = national.slice(0, 3);
+      const useTollFree = isTollFreeAreaCode(ndc);
+      const listParams = {
+        areaCode: Number(ndc),
         contains: national.slice(3),
         limit: 20,
-      });
+      };
+      const list = useTollFree
+        ? await client.availablePhoneNumbers("US").tollFree.list(listParams)
+        : await client.availablePhoneNumbers("US").local.list(listParams);
       return list.some((n) => n.phoneNumber === e164);
     } catch {
       return false;

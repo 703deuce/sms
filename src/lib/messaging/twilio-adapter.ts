@@ -1,8 +1,9 @@
 import type { MessagingRegistration } from "@/lib/domain";
+import { isTollFreeAreaCode } from "@/lib/premium-numbers/toll-free";
 import { getLiveParentClient, getSubaccountTwilioClient } from "./twilio-client";
 import { assertLiveTwilioConfigured, getStatusEmail, getWebhookUrls, TRUSTHUB_POLICIES } from "./twilio-config";
 import { mapBusinessType, mapIndustry, mapUseCase, mapA2pCompanyType } from "./twilio-mappings";
-import type { NumberSearchResult } from "./types";
+import type { NumberSearchOptions, NumberSearchResult } from "./types";
 import { decryptSecret } from "./crypto";
 
 function requireSubaccount(reg: MessagingRegistration) {
@@ -25,14 +26,21 @@ export const twilioAdapter = {
     };
   },
 
-  async searchNumbers(areaCode?: string): Promise<NumberSearchResult[]> {
+  async searchNumbers(areaCode?: string, options?: NumberSearchOptions): Promise<NumberSearchResult[]> {
     assertLiveTwilioConfigured();
     const client = getLiveParentClient();
-    const list = await client.availablePhoneNumbers("US").local.list({
-      areaCode: areaCode ? Number(areaCode) : undefined,
+    const ndc = areaCode?.replace(/\D/g, "").slice(0, 3);
+    const useTollFree = ndc ? isTollFreeAreaCode(ndc) : false;
+    const listParams = {
+      areaCode: ndc ? Number(ndc) : undefined,
+      contains: options?.contains?.replace(/\D/g, "") || undefined,
       smsEnabled: true,
+      voiceEnabled: true,
       limit: 20,
-    });
+    };
+    const list = useTollFree
+      ? await client.availablePhoneNumbers("US").tollFree.list(listParams)
+      : await client.availablePhoneNumbers("US").local.list(listParams);
     return list.map((n) => ({
       phoneNumber: n.phoneNumber,
       friendlyName: n.friendlyName,

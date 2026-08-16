@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { getPrisma } from "@/lib/db";
+import { searchCombinedMessagingNumbers } from "@/lib/numbers/combined-messaging-search";
+import type { NumberUpstreamProvider } from "@/lib/numbers/providers/types";
 import { enqueueMessagingRegistrationAdvance } from "./enqueue-advance";
 import { mockAdapter } from "./mock-adapter";
 import { advanceMessagingRegistration, ensureSubaccount, sendViaRegistration } from "./registration-processor";
@@ -89,7 +91,11 @@ export const messagingOnboarding = {
       case "save_use_case":
         return this.saveUseCase(workspaceId, body as UseCaseInput);
       case "purchase_number":
-        return this.purchaseNumber(workspaceId, String(body.phoneNumber || ""));
+        const upstream =
+          body.upstreamProvider === "twilio" || body.upstreamProvider === "telnyx"
+            ? body.upstreamProvider
+            : undefined;
+        return this.purchaseNumber(workspaceId, String(body.phoneNumber || ""), upstream);
       case "release_number":
         return this.releaseNumber(workspaceId);
       case "submit":
@@ -234,24 +240,17 @@ export const messagingOnboarding = {
   ) {
     await ensureRegistrationRow(workspaceId);
     const provider = getMessagingProvider();
-    const results =
-      provider.name === "mock"
-        ? await mockAdapter.searchNumbers(areaCode)
-        : await provider.searchNumbers(areaCode, options);
-
-    // Post-filter as a safety net for providers that ignore native filters.
-    if (!options) return results;
-    const contains = options.contains?.replace(/\D/g, "");
-    const locality = options.locality?.trim().toLowerCase();
-    return results.filter((r) => {
-      if (options.mms && !r.capabilities?.mms) return false;
-      if (contains && !r.phoneNumber.replace(/\D/g, "").includes(contains)) return false;
-      if (locality && !(r.locality || "").toLowerCase().includes(locality)) return false;
-      return true;
-    });
+    if (provider.name === "mock") {
+      return mockAdapter.searchNumbers(areaCode);
+    }
+    return searchCombinedMessagingNumbers(areaCode, options);
   },
 
-  async purchaseNumber(workspaceId: string, phoneNumber: string) {
+  async purchaseNumber(
+    workspaceId: string,
+    phoneNumber: string,
+    upstreamProvider?: NumberUpstreamProvider,
+  ) {
     const { assertCanPurchaseNumber } = await import("@/lib/numbers/acquire-guard");
     const guard = await assertCanPurchaseNumber(workspaceId, { source: "standard" });
     if (!guard.ok) {
@@ -296,13 +295,18 @@ export const messagingOnboarding = {
     reg = (await getRegistrationByWorkspace(workspaceId))!;
 
     let purchased: { sid: string; phoneNumber: string };
-    const providerName = getMessagingProviderName();
+    const globalProvider = getMessagingProviderName();
+    const effectiveProvider: NumberUpstreamProvider | "mock" =
+      upstreamProvider ??
+      (globalProvider === "twilio" ? "twilio" : globalProvider === "telnyx" ? "telnyx" : "mock");
     try {
-      if (providerName === "telnyx") {
+      if (effectiveProvider === "telnyx") {
         const bought = await getMessagingProvider().buyPhoneNumber(reg, e164);
         purchased = { sid: bought.id, phoneNumber: bought.phoneNumber };
-      } else if (isLiveMessagingAdapter()) {
+      } else if (effectiveProvider === "twilio" && isLiveMessagingAdapter()) {
         purchased = await twilioAdapter.purchaseNumber(reg, e164);
+        const { twilioNumberProvider } = await import("@/lib/numbers/providers/twilio-number-provider");
+        await twilioNumberProvider.configureVoiceWebhook(purchased.sid, workspaceId);
       } else {
         purchased = await mockAdapter.purchaseNumber(reg.subaccountSid!, e164);
       }
@@ -323,15 +327,15 @@ export const messagingOnboarding = {
         phonePurchasedAt: new Date(),
         phoneAttached: false,
         numberStatus: "submitted",
-        messagingProvider: providerName === "mock" ? "mock" : providerName,
+        messagingProvider: effectiveProvider === "mock" ? "mock" : effectiveProvider,
       },
     });
     if (committed.count !== 1) {
       // Best-effort release so we don't leave a billable orphaned number.
       try {
-        if (providerName === "telnyx") {
+        if (effectiveProvider === "telnyx") {
           await getMessagingProvider().releasePhoneNumber(reg, purchased.sid);
-        } else if (isLiveMessagingAdapter()) {
+        } else if (effectiveProvider === "twilio" && isLiveMessagingAdapter()) {
           await twilioAdapter.releaseNumber(reg, purchased.sid);
         }
       } catch (err) {
@@ -351,7 +355,8 @@ export const messagingOnboarding = {
         e164: purchased.phoneNumber,
         type: isTollFree ? "TollFree" : "Local",
         areaCode: npa || null,
-        twilioSid: providerName === "twilio" ? purchased.sid : null,
+        provider: effectiveProvider === "mock" ? "telnyx" : effectiveProvider,
+        twilioSid: effectiveProvider === "twilio" ? purchased.sid : null,
         providerNumberId: purchased.sid,
         status: "Active",
         purchasedAt: new Date(),
@@ -370,7 +375,8 @@ export const messagingOnboarding = {
         },
       },
       update: {
-        twilioSid: providerName === "twilio" ? purchased.sid : undefined,
+        provider: effectiveProvider === "mock" ? "telnyx" : effectiveProvider,
+        twilioSid: effectiveProvider === "twilio" ? purchased.sid : undefined,
         providerNumberId: purchased.sid,
         status: "Active",
         purchasedAt: new Date(),
@@ -388,7 +394,7 @@ export const messagingOnboarding = {
     });
 
     // Dual SMS + voice attach (idempotent). Messaging advance still handles 10DLC.
-    if (providerName === "telnyx" && !purchased.sid.startsWith("ORDER:")) {
+    if (effectiveProvider === "telnyx" && !purchased.sid.startsWith("ORDER:")) {
       try {
         const { provisionPurchasedNumber } = await import(
           "@/lib/phone/telnyx-dual-provision"

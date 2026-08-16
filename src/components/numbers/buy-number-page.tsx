@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { numberTabs } from "@/lib/number-tabs";
-import type { NumberSearchResult } from "@/lib/messaging/types";
 import { formatCurrency, formatPhone } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -51,9 +50,16 @@ type SearchRow = {
   sms: boolean;
   mms: boolean;
   monthlyCost: number;
+  upstreamProvider: "telnyx" | "twilio";
 };
 
-function mapResult(result: NumberSearchResult): SearchRow {
+function mapResult(result: {
+  phoneNumber: string;
+  locality?: string;
+  region?: string;
+  capabilities?: { sms?: boolean; mms?: boolean };
+  upstreamProvider?: "telnyx" | "twilio";
+}): SearchRow {
   const digits = result.phoneNumber.replace(/\D/g, "");
   const areaCode = digits.length >= 4 ? digits.slice(1, 4) : "";
   const isTollFree = ["800", "888", "877", "866", "855", "844", "833"].includes(areaCode);
@@ -66,6 +72,7 @@ function mapResult(result: NumberSearchResult): SearchRow {
     sms: Boolean(result.capabilities?.sms),
     mms: Boolean(result.capabilities?.mms),
     monthlyCost: isTollFree ? 2.15 : 1.15,
+    upstreamProvider: result.upstreamProvider ?? "telnyx",
   };
 }
 
@@ -123,6 +130,7 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
   async function purchaseNumber(e164: string) {
     setPurchasing(e164);
     setPurchaseError("");
+    const row = results.find((r) => r.number === e164);
     try {
       const res = await fetch("/api/messaging/registration", {
         method: "POST",
@@ -131,6 +139,7 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
           action: "purchase_number",
           workspaceId,
           phoneNumber: e164,
+          upstreamProvider: row?.upstreamProvider,
         }),
       });
       const json = await res.json();

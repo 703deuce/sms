@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
-import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
-import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
+import { verifyTwilioVoiceWebhookSignature } from "@/lib/numbers/providers/voice/twilio-voice-webhook-auth";
 import { attachVoicemailRecordingAndTranscribe } from "@/lib/phone/voicemail-service";
 
 async function parseTwilioForm(request: Request) {
@@ -14,11 +13,7 @@ async function parseTwilioForm(request: Request) {
 }
 
 async function verifySignature(request: Request, params: Record<string, string>) {
-  const signature = request.headers.get("x-twilio-signature") || "";
-  if (!signature) return process.env.NODE_ENV !== "production";
-  const parent = getTwilioParentCredentials().authToken;
-  if (!parent) return process.env.NODE_ENV !== "production";
-  return validateTwilioSignature(parent, signature, request.url, params);
+  return verifyTwilioVoiceWebhookSignature(request, params, params.To);
 }
 
 export async function POST(request: Request) {

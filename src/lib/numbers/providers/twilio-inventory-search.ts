@@ -1,5 +1,6 @@
 import { getLiveParentClient } from "@/lib/messaging/twilio-client";
 import { assertLiveTwilioConfigured } from "@/lib/messaging/twilio-config";
+import { isTollFreeAreaCode } from "@/lib/premium-numbers/toll-free";
 import type { ProviderSearchAttempt } from "./types";
 
 const DEFAULT_PER_SEARCH_LIMIT = 20;
@@ -28,13 +29,17 @@ async function searchTwilioOnce(opts: TwilioInventorySearchOptions): Promise<{
   const limit = opts.limit ?? DEFAULT_PER_SEARCH_LIMIT;
   try {
     const client = getLiveParentClient();
-    const list = await client.availablePhoneNumbers("US").local.list({
+    const useTollFree = isTollFreeAreaCode(opts.areaCode);
+    const listParams = {
       areaCode: Number(opts.areaCode),
       contains: opts.contains || opts.endsWith || undefined,
       smsEnabled: true,
       voiceEnabled: true,
       limit,
-    });
+    };
+    const list = useTollFree
+      ? await client.availablePhoneNumbers("US").tollFree.list(listParams)
+      : await client.availablePhoneNumbers("US").local.list(listParams);
     const candidates = list.map((n) => ({
       phoneNumber: n.phoneNumber,
       friendlyName: n.friendlyName,

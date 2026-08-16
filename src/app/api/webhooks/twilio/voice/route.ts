@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { decryptSecret } from "@/lib/messaging/crypto";
-import { getTwilioParentCredentials, isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
-import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
 import {
   buildTwilioDialStatusTwiml,
   buildTwilioInboundTwiml,
 } from "@/lib/numbers/providers/voice/twilio-personal-voice";
+import { verifyTwilioVoiceWebhookSignature } from "@/lib/numbers/providers/voice/twilio-voice-webhook-auth";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -14,20 +12,6 @@ async function parseTwilioForm(request: Request) {
     params[key] = String(value);
   });
   return params;
-}
-
-async function verifySignature(request: Request, params: Record<string, string>) {
-  const signature = request.headers.get("x-twilio-signature") || "";
-  if (!signature) {
-    if (process.env.NODE_ENV === "production") return false;
-    if (isLiveMessagingAdapter()) return false;
-    return true;
-  }
-  const tokens: string[] = [];
-  const parent = getTwilioParentCredentials().authToken;
-  if (parent) tokens.push(parent);
-  if (!tokens.length) return process.env.NODE_ENV !== "production";
-  return tokens.some((token) => validateTwilioSignature(token, signature, request.url, params));
 }
 
 function twimlResponse(xml: string) {
@@ -39,7 +23,7 @@ function twimlResponse(xml: string) {
 
 export async function POST(request: Request) {
   const params = await parseTwilioForm(request);
-  if (!(await verifySignature(request, params))) {
+  if (!(await verifyTwilioVoiceWebhookSignature(request, params, params.To))) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   }
 
