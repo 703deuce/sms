@@ -1,7 +1,7 @@
 import type { AgentSession } from "@livekit/agents";
 import { appendLiveKitTranscriptLine } from "@/lib/voice/runtime-provider/livekit-call-telemetry";
 import { deliverScriptedSpeech } from "../outbound/scripted-speech";
-import { safeInterruptSession } from "../session-utils";
+import { isAgentSessionAlive, safeInterruptSession } from "../session-utils";
 
 /**
  * Speak a deterministic booking line on OpenAI Realtime without runCtx.update().
@@ -17,6 +17,19 @@ export async function speakBookingLine<T extends { workspaceId: string; callId: 
   const maxWaitMs = options?.maxWaitMs ?? 30_000;
   const trimmed = text.trim();
   if (!trimmed) return false;
+
+  if (!isAgentSessionAlive(session)) {
+    console.warn(
+      JSON.stringify({
+        source: "booking-speech",
+        event: "speak_booking_line_skipped",
+        callId: session.userData.callId,
+        reason: "session_not_alive",
+        preview: trimmed.slice(0, 80),
+      }),
+    );
+    return false;
+  }
 
   try {
     await safeInterruptSession(session);

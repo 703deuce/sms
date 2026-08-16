@@ -84,21 +84,18 @@ async function findExistingBookingForCall(
  * Book through Calendly without coupling success to LiveKit speech-handle state.
  * Verifies DB after failures so a succeeded-but-interrupted attempt still counts.
  */
-export async function scheduleAppointmentResilient(input: {
-  session: AgentSession<FrontDeskUserData>;
+export async function scheduleAppointmentResilientForUserData(input: {
+  userData: FrontDeskUserData;
   slot: AvailableSlot;
   attendeeEmail: string;
 }): Promise<BookedAppointment> {
-  const { session, slot, attendeeEmail } = input;
-  const { workspaceId, callId, cal } = session.userData;
+  const { userData, slot, attendeeEmail } = input;
+  const { workspaceId, callId, cal } = userData;
 
   const markBookedOnUserData = (booked: BookedAppointment, slotId?: string) => {
-    const bookedTimeLabel = formatBookedTimeLabel(
-      booked.slot.startTime,
-      session.userData.timezone,
-    );
-    markBookingConfirmed(session.userData, {
-      slotId: slotId || session.userData.pendingSlotId,
+    const bookedTimeLabel = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
+    markBookingConfirmed(userData, {
+      slotId: slotId || userData.pendingSlotId,
       providerEventId: booked.eventUri,
       bookedTimeLabel,
     });
@@ -141,6 +138,19 @@ export async function scheduleAppointmentResilient(input: {
   }
 
   throw lastError;
+}
+
+/** Session wrapper — provider write uses userData only (no AgentSession lifecycle). */
+export async function scheduleAppointmentResilient(input: {
+  session: AgentSession<FrontDeskUserData>;
+  slot: AvailableSlot;
+  attendeeEmail: string;
+}): Promise<BookedAppointment> {
+  return scheduleAppointmentResilientForUserData({
+    userData: input.session.userData,
+    slot: input.slot,
+    attendeeEmail: input.attendeeEmail,
+  });
 }
 
 export async function lookupAppointmentIdForCall(input: {

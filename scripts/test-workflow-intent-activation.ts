@@ -22,10 +22,11 @@ assert.ok(!receptionistTools.includes("record_receptionist_field"), "no duplicat
 
 const orchestrator = read("voice-runtime/src/frontdesk/receptionist/workflow-orchestrator.ts");
 assert.ok(orchestrator.includes("runtimeCommitBooking"), "runtime-direct booking commit");
-assert.ok(orchestrator.includes("UserInputTranscribed"), "force record_current_field on caller speech");
-assert.ok(orchestrator.includes("deferred_commit"), "schedule tool defers to runtime commit");
+assert.ok(orchestrator.includes("executeScheduleAppointmentForSession"), "orchestrator uses shared commit executor");
+assert.ok(orchestrator.includes("runtime_commit_started"), "orchestrator logs runtime_commit_started");
 
 const scheduleRuntime = read("voice-runtime/src/frontdesk/runtime-schedule-appointment.ts");
 assert.ok(scheduleRuntime.includes("executeScheduleAppointmentForSession"), "shared commit executor");
+assert.ok(scheduleRuntime.includes("writeBookingToProvider"), "commit path uses decoupled provider write");
 
 console.log("✓ workflow intent activation tests passed");

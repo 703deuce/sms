@@ -272,13 +272,15 @@ check("RE intake uses single IntakeSequenceCollectionTask", () => {
 
 check("booking uses inline email gate and LiveKit end call", () => {
   const booking = readProjectFile("voice-runtime/src/frontdesk/booking-tools.ts");
+  const scheduleRuntime = readProjectFile("voice-runtime/src/frontdesk/runtime-schedule-appointment.ts");
   const emailInline = readProjectFile("voice-runtime/src/frontdesk/booking-email-inline.ts");
   const bridge = readProjectFile("voice-runtime/src/task-async-work-bridge.ts");
   assert.ok(booking.includes("formatToolFeedbackForModel"));
   assert.ok(booking.includes("findBookingPrerequisiteGaps"));
   assert.ok(booking.includes("buildRecordBookingEmailTool"));
   assert.ok(booking.includes("buildFrontDeskEndCallToolset"));
-  assert.ok(booking.includes("runAsyncWorkWithBridge"));
+  assert.ok(scheduleRuntime.includes("writeBookingToProvider"));
+  assert.ok(!scheduleRuntime.includes("runAsyncWorkWithBridge"));
   assert.ok(emailInline.includes("record_booking_email"));
   assert.ok(bridge.includes("runAsyncWorkWithBridge"));
   assert.ok(bridge.includes("speakBeforeTaskHandoff"));

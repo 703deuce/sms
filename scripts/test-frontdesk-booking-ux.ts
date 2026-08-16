@@ -20,6 +20,14 @@ const bookingToolsSource = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/frontdesk/booking-tools.ts"),
   "utf8",
 );
+const scheduleRuntimeSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/frontdesk/runtime-schedule-appointment.ts"),
+  "utf8",
+);
+const providerWriteSource = fs.readFileSync(
+  path.join(process.cwd(), "voice-runtime/src/frontdesk/booking-provider-write.ts"),
+  "utf8",
+);
 const emailTaskSource = fs.readFileSync(
   path.join(process.cwd(), "voice-runtime/src/frontdesk/email-collection-task.ts"),
   "utf8",
@@ -33,7 +41,7 @@ const amySource = fs.readFileSync(
   "utf8",
 );
 
-// --- 1. Async work bridge during Calendly writes (LiveKit say-before-transfer pattern) ---
+// --- 1. Provider write decoupled from AgentSession; optional speech after success ---
 
 assert.ok(
   bridgeSource.includes("runAsyncWorkWithBridge"),
@@ -44,12 +52,24 @@ assert.ok(
   "AgentTask handoff bridge exists",
 );
 assert.ok(
-  bookingToolsSource.includes("runAsyncWorkWithBridge"),
-  "schedule_appointment uses async-work bridge",
+  scheduleRuntimeSource.includes("writeBookingToProvider"),
+  "schedule commit uses direct provider write (no session bridge)",
 );
 assert.ok(
-  bookingToolsSource.includes("POST_EMAIL_BOOKING_FILLER"),
-  "booking bridge line is passed to runAsyncWorkWithBridge",
+  !scheduleRuntimeSource.includes("runAsyncWorkWithBridge"),
+  "schedule commit must not wrap Calendly write in async-work bridge",
+);
+assert.ok(
+  providerWriteSource.includes("booking_provider_write_started"),
+  "provider write logs booking_provider_write_started",
+);
+assert.ok(
+  providerWriteSource.includes("booking_provider_write_succeeded"),
+  "provider write logs booking_provider_write_succeeded",
+);
+assert.ok(
+  scheduleRuntimeSource.includes("trySpeakAfterProviderWrite"),
+  "spoken confirmation runs after provider write via trySpeakAfterProviderWrite",
 );
 assert.ok(
   bookingToolsSource.includes("formatToolFeedbackForModel"),
@@ -78,24 +98,31 @@ assert.ok(
 );
 
 assert.ok(
-  bookingToolsSource.includes("sendBookingSmsAsync"),
+  scheduleRuntimeSource.includes("sendBookingSmsAsync"),
   "confirmation SMS is queued async after speak (LiveKit say-before-slow-IO)",
 );
 assert.ok(
-  !bookingToolsSource.includes("await sendBookingConfirmationSms"),
+  !scheduleRuntimeSource.includes("await sendBookingConfirmationSms"),
   "must not await SMS before speaking confirmation",
 );
-const postWriteBlock = bookingToolsSource.match(
+const postWriteBlock = scheduleRuntimeSource.match(
   /markBookingOperationConfirmed\(userData\)[\s\S]*?toolFeedbackBookingCompleteSpeakNow/,
 );
 assert.ok(postWriteBlock, "post-write success block exists");
 assert.ok(
-  postWriteBlock![0].indexOf("speakBookingLine") < postWriteBlock![0].indexOf("sendBookingSmsAsync"),
+  postWriteBlock![0].indexOf("trySpeakAfterProviderWrite") <
+    postWriteBlock![0].indexOf("sendBookingSmsAsync"),
   "speak confirmation before async SMS",
 );
 assert.ok(
-  postWriteBlock![0].indexOf("speakBookingLine") < postWriteBlock![0].indexOf("lookupAppointmentIdForCallWithRetry"),
+  postWriteBlock![0].indexOf("trySpeakAfterProviderWrite") <
+    postWriteBlock![0].indexOf("lookupAppointmentIdForCallWithRetry"),
   "speak confirmation before deferred CRM lookup",
+);
+assert.ok(
+  postWriteBlock![0].indexOf("writeBookingToProvider") <
+    postWriteBlock![0].indexOf("trySpeakAfterProviderWrite"),
+  "provider write completes before spoken confirmation",
 );
 
 assert.ok(
@@ -114,18 +141,18 @@ assert.doesNotMatch(
 
 // --- 2. Provider booking still occurs once inside telemetry wrapper ---
 
-const scheduleTelemetryBlocks = bookingToolsSource.match(
-  /withLiveKitToolTelemetry\([\s\S]*?scheduleAppointmentResilient/g,
+const scheduleTelemetryBlocks = scheduleRuntimeSource.match(
+  /withLiveKitToolTelemetry\([\s\S]*?writeBookingToProvider/g,
 );
-assert.ok(scheduleTelemetryBlocks, "schedule_appointment still calls scheduleAppointmentResilient");
+assert.ok(scheduleTelemetryBlocks, "schedule_appointment still calls writeBookingToProvider inside telemetry");
 
 assert.ok(
-  bookingToolsSource.includes("markBookingConfirmed"),
+  scheduleRuntimeSource.includes("markBookingConfirmed"),
   "booking receipt is still persisted after provider write",
 );
 
 assert.ok(
-  bookingToolsSource.includes("lookupAppointmentIdForCallWithRetry"),
+  scheduleRuntimeSource.includes("lookupAppointmentIdForCallWithRetry"),
   "CRM sync waits for product persist with retry",
 );
 
@@ -136,19 +163,19 @@ assert.match(successLine, /confirmed for Monday at 3 PM/);
 assert.match(successLine, /confirmation text/i);
 
 assert.ok(
-  bookingToolsSource.includes("speakBookingLine(session, buildBookingSuccessLine(local)"),
-  "final confirmation is spoken via Realtime-safe speakBookingLine",
+  scheduleRuntimeSource.includes("trySpeakAfterProviderWrite"),
+  "final confirmation is spoken after provider write via trySpeakAfterProviderWrite",
 );
 
 assert.ok(
-  bookingToolsSource.includes("toolFeedbackBookingCompleteSpoken") ||
-    bookingToolsSource.includes("toolFeedbackBookingCompleteSpeakNow"),
+  scheduleRuntimeSource.includes("toolFeedbackBookingCompleteSpoken") ||
+    scheduleRuntimeSource.includes("toolFeedbackBookingCompleteSpeakNow"),
   "tool result tells model confirmation state after booking",
 );
 
 assert.ok(
-  bookingToolsSource.includes("formatToolFeedbackForModel"),
-  "booking tools return TOOL_FEEDBACK envelopes",
+  scheduleRuntimeSource.includes("formatToolFeedbackForModel"),
+  "schedule commit returns TOOL_FEEDBACK envelopes",
 );
 assert.match(buildBookingFailureLine(), /didn't go through/i);
 assert.ok(
@@ -161,12 +188,12 @@ assert.match(
 );
 
 assert.ok(
-  bookingToolsSource.includes("toolFeedbackFromBookingWriteError"),
+  scheduleRuntimeSource.includes("toolFeedbackFromBookingWriteError"),
   "failed booking returns structured recoverable/terminal feedback",
 );
 assert.ok(
-  bookingToolsSource.includes("buildBookingFailureLine"),
-  "failed booking speaks caller-facing failure via speakBookingLine",
+  scheduleRuntimeSource.includes("buildBookingFailureLine"),
+  "failed booking attempts caller-facing failure speech after provider failure",
 );
 
 // --- 4. No duplicate goodbye sequence — end_call on frontdesk ---

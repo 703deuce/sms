@@ -3,10 +3,9 @@ import type { AvailableSlot } from "./calendly-calendar";
 import { SlotUnavailableError } from "./calendly-calendar";
 import {
   alreadyBookedToolMessage,
-  formatBookedTimeLabel,
   lookupAppointmentIdForCallWithRetry,
-  scheduleAppointmentResilient,
 } from "./booking-recovery";
+import { writeBookingToProvider, trySpeakAfterProviderWrite } from "./booking-provider-write";
 import { resolveConfirmedEmail } from "./email-collection-tools";
 import { clearBookingEmailWaiter } from "./booking-email-inline";
 import { findBookingPrerequisiteGaps } from "./booking-prerequisites";
@@ -22,12 +21,7 @@ import {
 import { calendarToolGuardFeedback } from "./booking-operation-guard";
 import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import { withLiveKitToolTelemetry } from "../livekit-tool-telemetry";
-import {
-  buildBookingFailureLine,
-  buildBookingSuccessLine,
-  POST_EMAIL_BOOKING_FILLER,
-} from "../booking-completion-messages";
-import { runAsyncWorkWithBridge } from "../task-async-work-bridge";
+import { buildBookingFailureLine, buildBookingSuccessLine } from "../booking-completion-messages";
 import {
   formatToolFeedbackForModel,
   toolFeedbackBookingCompleteSpeakNow,
@@ -39,7 +33,7 @@ import {
   toolFeedbackMissingField,
   toolFeedbackSuccess,
 } from "../tool-feedback";
-import { safeInterruptSession } from "../session-utils";
+import { isAgentSessionAlive } from "../session-utils";
 import { speakBookingLine } from "./booking-speech";
 import { markBookingConfirmed, type FrontDeskUserData } from "./userdata";
 import { injectBookingConfirmedChatContext } from "./booking-chat-context";
@@ -79,6 +73,7 @@ async function onRealEstateBookingConfirmed(userData: FrontDeskUserData): Promis
 
 /**
  * Runtime-owned Calendly write — shared by orchestrator BOOKING_COMMIT and the model-facing tool stub.
+ * Provider write is decoupled from AgentSession / TTS; speech runs only after a successful calendar write.
  */
 export async function executeScheduleAppointmentForSession(
   session: AgentSession<FrontDeskUserData>,
@@ -147,22 +142,18 @@ export async function executeScheduleAppointmentForSession(
   userData.bookingInProgress = true;
 
   try {
-    await safeInterruptSession(session);
     const confirmedEmail = userData.confirmedEmail!;
     markBookingOperationState(userData, "writing_calendar");
 
     return await withLiveKitToolTelemetry(userData, "schedule_appointment", { slot_id }, async () => {
       try {
-        await safeInterruptSession(session);
+        const { booked, bookedTimeLabel: local } = await writeBookingToProvider({
+          userData,
+          slot,
+          slotId: slot_id,
+          attendeeEmail: confirmedEmail,
+        });
 
-        const booked = await runAsyncWorkWithBridge(session, POST_EMAIL_BOOKING_FILLER, () =>
-          scheduleAppointmentResilient({
-            session,
-            slot,
-            attendeeEmail: confirmedEmail,
-          }),
-        );
-        const local = formatBookedTimeLabel(booked.slot.startTime, userData.timezone);
         markBookingConfirmed(userData, {
           slotId: slot_id,
           providerEventId: booked.eventUri,
@@ -177,9 +168,15 @@ export async function executeScheduleAppointmentForSession(
           externalId: booked.eventUri,
         }).catch(() => undefined);
 
-        await injectBookingConfirmedChatContext(session, local).catch(() => undefined);
+        if (isAgentSessionAlive(session)) {
+          await injectBookingConfirmedChatContext(session, local).catch(() => undefined);
+        }
 
-        const spoken = await speakBookingLine(session, buildBookingSuccessLine(local));
+        const spoken = await trySpeakAfterProviderWrite(
+          session,
+          buildBookingSuccessLine(local),
+          speakBookingLine,
+        );
 
         const smsEnabled =
           userData.receptionistCompiled?.bookingPolicy?.sendSmsConfirmation !== false;
@@ -212,17 +209,19 @@ export async function executeScheduleAppointmentForSession(
         if (err instanceof SlotUnavailableError) {
           userData.slotUnavailableCount += 1;
           markBookingOperationFailed(userData, "slot_unavailable");
-          await speakBookingLine(
+          const failureLine = buildBookingFailureLine(
+            "That time slot isn't available anymore — I can check what else is open.",
+          );
+          const heardFailure = await trySpeakAfterProviderWrite(
             session,
-            buildBookingFailureLine(
-              "That time slot isn't available anymore — I can check what else is open.",
-            ),
+            failureLine,
+            speakBookingLine,
           );
           return formatToolFeedbackForModel(
             toolFeedbackFromBookingWriteError(err, {
               tool: "schedule_appointment",
               slotId: slot_id,
-              callerAlreadyHeardFailure: true,
+              callerAlreadyHeardFailure: heardFailure,
             }),
           );
         }
@@ -239,12 +238,16 @@ export async function executeScheduleAppointmentForSession(
         }
 
         markBookingOperationFailed(userData, err instanceof Error ? err.message : String(err));
-        await speakBookingLine(session, buildBookingFailureLine());
+        const heardFailure = await trySpeakAfterProviderWrite(
+          session,
+          buildBookingFailureLine(),
+          speakBookingLine,
+        );
         return formatToolFeedbackForModel(
           toolFeedbackFromBookingWriteError(err, {
             tool: "schedule_appointment",
             slotId: slot_id,
-            callerAlreadyHeardFailure: true,
+            callerAlreadyHeardFailure: heardFailure,
           }),
         );
       }
