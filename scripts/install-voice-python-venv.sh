@@ -24,6 +24,7 @@ rm -rf voice-runtime-python/.venv
 voice-runtime-python/.venv/bin/pip install --no-cache-dir --upgrade pip
 voice-runtime-python/.venv/bin/pip install --no-cache-dir \
   "livekit-agents[openai]>=1.2.0,<2" \
+  "livekit-plugins-noise-cancellation>=0.2,<0.4" \
   "httpx>=0.27,<0.29" \
   "pydantic>=2.7,<3" \
   "python-dotenv>=1.0,<2"

@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from livekit.agents import AgentSession, JobContext, room_io
+from livekit.agents import AgentSession, JobContext
 
 from transovo_voice.agent.amy import create_amy_agent
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.integrations.commit_client import drain_pending_provider_tasks
 from transovo_voice.session.realtime_config import build_realtime_model
+from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.tasks.protocols import is_phone_field
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData, TransferPolicy
@@ -214,9 +215,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
     await session.start(
         agent=agent,
         room=ctx.room,
-        room_options=room_io.RoomOptions(
-            delete_room_on_close=not ud.can_transfer(),
-        ),
+        room_options=build_telephony_room_options(delete_room_on_close=not ud.can_transfer()),
     )
 
     log_event(

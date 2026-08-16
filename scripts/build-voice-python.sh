@@ -23,7 +23,7 @@ echo "[build-voice-python] compileall transovo_voice"
 "$PYTHON" -m compileall -q transovo_voice
 
 echo "[build-voice-python] import smoke test"
-"$PYTHON" -c "import transovo_voice.main; import transovo_voice.integrations.backend_client"
+"$PYTHON" -c "import transovo_voice.main; import transovo_voice.integrations.backend_client; from livekit.plugins import noise_cancellation; noise_cancellation.BVCTelephony()"
 
 if ! "$PYTHON" -m pytest --version >/dev/null 2>&1; then
   echo "[build-voice-python] installing pytest"

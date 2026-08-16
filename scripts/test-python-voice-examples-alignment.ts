@@ -86,6 +86,13 @@ assert.ok(tools.includes("EndCallTool"), "tools include EndCallTool");
 // Frontdesk: disallow_interruptions on confirmation speech
 assert.ok(tools.includes("disallow_interruptions"), "confirm_booking uses disallow_interruptions before speech");
 
+const telephonyAudio = readSms("voice-runtime-python/transovo_voice/session/telephony_audio.py");
+assert.ok(telephonyAudio.includes("BVCTelephony"), "telephony audio uses BVCTelephony noise cancellation");
+assert.ok(
+  inbound.includes("build_telephony_room_options"),
+  "inbound wires telephony room options",
+);
+
 // No TS legacy collection orchestration in Python
 assert.ok(!intake.includes("responseOwner"), "no TS responseOwner port");
 assert.ok(!intake.includes("awaitingFieldAnswer"), "no TS awaitingFieldAnswer port");
