@@ -183,8 +183,7 @@ export function buildFrontDeskBookingTools(input: {
             fieldId: first.fieldId,
             fieldLabel: first.label,
             hint:
-              `Ask for their ${first.label} in one short question, then save with record_current_field. ` +
-              "When saved, runtime will commit the booking with the same slot_id.",
+              `Ask for their ${first.label} in one short question — runtime will save from the caller transcript.`,
           }),
         );
       }
