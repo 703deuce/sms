@@ -128,8 +128,8 @@ assert.equal(
 assert.equal(resolveOutboundRealtimePipelineConfig(realtimeConfig).voice, "marin");
 assert.equal(
   resolveOutboundRealtimePipelineConfig(realtimeConfig).reasoning?.effort,
-  "low",
-  "mini gets default low reasoning for tool discipline",
+  "medium",
+  "mini gets default medium reasoning",
 );
 const fullRealtime = resolveOutboundRealtimePipelineConfig({
   advanced: {

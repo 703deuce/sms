@@ -12,6 +12,7 @@ import {
   RECEPTIONIST_TTS_MODEL,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { resolveReceptionistElevenLabsTuning } from "@/lib/voice/elevenlabs/receptionist-voice-tuning";
+import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 import { buildReceptionistCompiledPrompt } from "./build-receptionist-compiled-prompt";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
 
@@ -145,6 +146,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   };
 
   const elevenLabsVoice = normalizeWizardVoiceToElevenLabs(input.voiceId);
+  const realtimeVoice = normalizeWizardVoiceToRealtime(input.voiceId);
+  const outputModeRaw = input.advanced?.realtimeOutputMode as string | undefined;
+  const realtimeOutputMode =
+    outputModeRaw === "elevenlabs" ? ("elevenlabs" as const) : ("native" as const);
   const voiceMeta = input.voiceLabel?.trim();
   const wiz = input.advanced?.receptionistWizard as
     | {
@@ -222,9 +227,9 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     compiledPrompt: "",
     businessContext: "",
     realtimeModel: "gpt-realtime-2.1-mini" as const,
-    realtimeOutputMode: "elevenlabs" as const,
+    realtimeOutputMode,
     ttsModel: RECEPTIONIST_TTS_MODEL as "eleven_flash_v2_5",
-    voiceId: elevenLabsVoice,
+    voiceId: realtimeOutputMode === "elevenlabs" ? elevenLabsVoice : realtimeVoice,
     voiceLabel: voiceMeta || undefined,
     voiceSpeed,
     elevenLabsStability: voiceTuning.stability,
@@ -312,7 +317,10 @@ export function applyCompiledToVoiceConfig(
       livekitProfile: snapshot.livekitProfile,
       realtimeModel: snapshot.realtimeModel,
       realtimeOutputMode: snapshot.realtimeOutputMode,
-      elevenLabsVoiceId: snapshot.voiceId,
+      realtimeVoice:
+        snapshot.realtimeOutputMode === "native" ? snapshot.voiceId : undefined,
+      elevenLabsVoiceId:
+        snapshot.realtimeOutputMode === "elevenlabs" ? snapshot.voiceId : undefined,
       ttsModel: snapshot.ttsModel,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
       receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,

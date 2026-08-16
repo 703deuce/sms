@@ -26,23 +26,16 @@ import {
   buildExplicitDispatchMetadata,
   explicitDispatchPatchForPhoneSettings,
 } from "../src/lib/telephony/provisioning/dispatch-metadata";
-import {
-  DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
-  getReceptionistElevenLabsVoice,
-  normalizeWizardVoiceToElevenLabs,
-} from "../src/lib/voice/elevenlabs/receptionist-voice-catalog";
-import { DEFAULT_RECEPTIONIST_VOICE_TUNING } from "../src/lib/voice/elevenlabs/receptionist-voice-tuning";
+import { normalizeWizardVoiceToRealtime, RECEPTIONIST_REALTIME_VOICES } from "../src/lib/voice/realtime-voice-picker";
 import { collectFieldIdsFromRows } from "../src/lib/voice/receptionist/field-manifest";
 
 const WORKSPACE_ID = "ws_1";
 const AGENT_ID = "cmsrk6b775h0m3n6o6z693i2l";
 const PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 const PHONE_E164 = "+18663464256";
-const VOICE_ID = normalizeWizardVoiceToElevenLabs(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
-const VOICE_SPEED = DEFAULT_RECEPTIONIST_VOICE_TUNING.speed;
-const ELEVENLABS_STABILITY = DEFAULT_RECEPTIONIST_VOICE_TUNING.stability;
-const ELEVENLABS_SIMILARITY = DEFAULT_RECEPTIONIST_VOICE_TUNING.similarityBoost;
-const ELEVENLABS_STYLE = DEFAULT_RECEPTIONIST_VOICE_TUNING.style;
+/** OpenAI Realtime native voice — recommended warm professional (not ElevenLabs hybrid). */
+const REALTIME_VOICE = normalizeWizardVoiceToRealtime("marin");
+const VOICE_SPEED = 1.08;
 
 async function publishWithoutLiveKitProvision(
   workspaceId: string,
@@ -170,8 +163,9 @@ async function main() {
 
   const content = HARBOR_HOME_WIZARD_CONTENT;
   const advanced = buildHarborHomeAdvancedSettings();
-  const voiceId = VOICE_ID;
+  const voiceId = REALTIME_VOICE;
   const collectFields = collectFieldIdsFromRows(advanced.callerFields);
+  const voiceMeta = RECEPTIONIST_REALTIME_VOICES.find((v) => v.id === voiceId);
 
   const state = {
     ...wizardStateFromDraftConfig(agent.draftConfig, AGENT_ID, agent.name),
@@ -179,12 +173,8 @@ async function main() {
     capabilities: [...HARBOR_HOME_CAPABILITIES],
     collectFields,
     voiceId,
-    voiceLabel: getReceptionistElevenLabsVoice(voiceId)?.label || "Jessica",
+    voiceLabel: voiceMeta?.label || "Marin",
     voiceSpeed: VOICE_SPEED,
-    elevenLabsStability: ELEVENLABS_STABILITY,
-    elevenLabsClarity: ELEVENLABS_SIMILARITY,
-    elevenLabsStyle: ELEVENLABS_STYLE,
-    elevenLabsSpeakerBoost: false,
   };
 
   const prev = parseVoiceAgentConfig(agent.draftConfig);
@@ -206,6 +196,7 @@ async function main() {
     voiceId,
     voiceLabel: state.voiceLabel,
     advanced: {
+      realtimeOutputMode: "native",
       [RECEPTIONIST_ADVANCED_KEY]: advanced,
       receptionistWizard: state,
     },
@@ -216,20 +207,16 @@ async function main() {
     ...merged,
     voiceLanguage: {
       ...(merged.voiceLanguage || {}),
+      voiceId: REALTIME_VOICE,
       speed: VOICE_SPEED,
-      elevenLabsTuning: true,
-      elevenLabsStability: ELEVENLABS_STABILITY,
-      elevenLabsSimilarityBoost: ELEVENLABS_SIMILARITY,
-      elevenLabsStyle: ELEVENLABS_STYLE,
-      elevenLabsSpeakerBoost: false,
     },
     advanced: {
       ...(merged.advanced as object),
       receptionistWizard: state,
       [RECEPTIONIST_ADVANCED_KEY]: advanced,
-      realtimeVoice: voiceId,
-      elevenLabsVoiceId: voiceId,
-      realtimeOutputMode: "elevenlabs",
+      realtimeVoice: REALTIME_VOICE,
+      realtimeOutputMode: "native",
+      realtimeReasoningEffort: "medium",
     },
   };
 
@@ -262,10 +249,13 @@ async function main() {
       agentId: AGENT_ID,
       agentName: published.agent.name,
       phoneE164: PHONE_E164,
+      realtimeModel: compiled?.realtimeModel,
+      realtimeOutputMode: compiled?.realtimeOutputMode,
+      realtimeVoice: adv.realtimeVoice,
+      realtimeReasoningEffort: adv.realtimeReasoningEffort,
       voiceId,
       voiceLabel: state.voiceLabel,
       publishedVersionId: published.version.id,
-      explicitDispatch: dispatch,
       inboundJoins: joins.map((j) => j.agentId),
       fieldManifestIds: manifest.map((f) => f.id),
       customFieldCount: manifest.filter((f) => f.id.startsWith("custom_")).length,

@@ -266,10 +266,6 @@ export type OutboundRealtimeOutputMode = "native" | "elevenlabs";
 export function resolveOutboundRealtimeOutputMode(
   config?: Pick<VoiceAgentConfig, "advanced">,
 ): OutboundRealtimeOutputMode {
-  if (config && isGenericReceptionistRealtimeProfile(config)) {
-    return "elevenlabs";
-  }
-
   const advanced = (config?.advanced || {}) as Record<string, unknown>;
   const compiled = advanced.receptionistCompiled as { realtimeOutputMode?: string } | undefined;
   if (
@@ -277,6 +273,12 @@ export function resolveOutboundRealtimeOutputMode(
     advanced.realtimeOutputMode === "elevenlabs"
   ) {
     return "elevenlabs";
+  }
+  if (
+    compiled?.realtimeOutputMode === "native" ||
+    advanced.realtimeOutputMode === "native"
+  ) {
+    return "native";
   }
 
   const raw = (process.env.VOICE_REALTIME_OUTPUT_MODE || "native").trim().toLowerCase();

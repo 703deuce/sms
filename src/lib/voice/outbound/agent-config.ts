@@ -2,7 +2,7 @@ import type { VoiceAgentConfig } from "@/lib/voice/types";
 import type { ReceptionistCompiledSnapshot } from "@/lib/voice/receptionist/types";
 import { createDefaultQualificationDefinition } from "./default-qualification-definition";
 import { normalizeRealtimeNativeVoice } from "./realtime-native-voices";
-import { resolveConfiguredRealtimeVoice } from "@/lib/voice/realtime-voice-picker";
+import { resolveConfiguredRealtimeVoice, normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 import {
   resolveConfiguredElevenLabsVoice,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
@@ -110,9 +110,8 @@ function parseRealtimeReasoningEffort(raw: string | undefined): OutboundRealtime
 }
 
 /**
- * gpt-realtime-2.1-mini defaults to `low` (middle tier: minimal → low → medium).
- * Full gpt-realtime-2.1 also defaults to `low`. Override via advanced.realtimeReasoningEffort
- * or VOICE_REALTIME_REASONING_EFFORT (e.g. minimal, medium).
+ * Mini defaults to `medium`; full gpt-realtime-2.1 defaults to `low`.
+ * Override via advanced.realtimeReasoningEffort or VOICE_REALTIME_REASONING_EFFORT.
  */
 function resolveGptRealtime2Reasoning(
   advanced: VoiceAgentAdvancedConfig,
@@ -121,8 +120,32 @@ function resolveGptRealtime2Reasoning(
   const effort =
     parseRealtimeReasoningEffort(advanced.realtimeReasoningEffort) ||
     parseRealtimeReasoningEffort(process.env.VOICE_REALTIME_REASONING_EFFORT?.trim()) ||
-    (isMini ? "low" : "low");
+    (isMini ? "medium" : "low");
   return { effort };
+}
+
+function receptionistUsesElevenLabsOutput(
+  advanced: VoiceAgentAdvancedConfig,
+  compiled?: ReceptionistCompiledSnapshot,
+): boolean {
+  return (
+    compiled?.realtimeOutputMode === "elevenlabs" || advanced.realtimeOutputMode === "elevenlabs"
+  );
+}
+
+function resolveReceptionistRealtimeVoice(
+  config: Pick<VoiceAgentConfig, "advanced" | "voiceLanguage">,
+  advanced: VoiceAgentAdvancedConfig,
+  compiled: ReceptionistCompiledSnapshot,
+): string {
+  if (receptionistUsesElevenLabsOutput(advanced, compiled)) {
+    return resolveConfiguredElevenLabsVoice(config) || compiled.voiceId;
+  }
+  const native =
+    resolveConfiguredRealtimeVoice(config) ||
+    (compiled.voiceId ? normalizeWizardVoiceToRealtime(compiled.voiceId) : undefined) ||
+    "marin";
+  return normalizeRealtimeNativeVoice(native, "realtimeVoice");
 }
 
 export function resolveOutboundRealtimePipelineConfig(
@@ -145,7 +168,7 @@ export function resolveOutboundRealtimePipelineConfig(
       ? resolveGptRealtime2Reasoning(advanced, isMini)
       : undefined;
 
-    const elevenVoice = resolveConfiguredElevenLabsVoice(config) || compiled.voiceId;
+    const elevenVoice = resolveReceptionistRealtimeVoice(config, advanced, compiled);
     return { model, voice: elevenVoice, speed, reasoning };
   }
 
