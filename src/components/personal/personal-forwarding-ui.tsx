@@ -8,15 +8,24 @@ import {
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
 import { FORWARD_RING_PRESETS } from "@/lib/numbers/personal-call-settings";
-import { formatPhone } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import {
   ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  ChevronRight,
+  Clock,
   GripVertical,
+  Info,
+  Phone,
   PhoneForwarded,
   Pencil,
   Plus,
   Route,
+  Save,
+  Shield,
   Trash2,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,7 +34,6 @@ import { PersonalMockProgress } from "./mockup/charts";
 import { PersonalGreetingControls } from "./personal-greeting-controls";
 import { PersonalNumberSelector } from "./personal-number-selector";
 import {
-  PersonalMockAsideCard,
   PersonalMockBtn,
   PersonalMockHeader,
   PersonalMockInput,
@@ -34,7 +42,6 @@ import {
   PersonalMockPill,
   PersonalMockSection,
   PersonalMockSelect,
-  PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
 
@@ -55,6 +62,40 @@ type ActivityRow = {
   date: string;
   time: string;
 };
+
+type ActivityDisplayRow = {
+  id: string;
+  caller: string;
+  forwardedTo: string;
+  outcome: string;
+  outcomeTone: "green" | "purple" | "orange" | "gray";
+  time: string;
+};
+
+type OutcomeTone = ActivityDisplayRow["outcomeTone"];
+
+function fallbackActionLabel(action: FallbackAction | "voicemail" | "end"): string {
+  if (action === "voicemail") return "Send to Transovo Voicemail";
+  if (action === "end") return "End call";
+  if (action === "another_number") return "Forward to another number";
+  if (action === "announcement") return "Play announcement";
+  return action;
+}
+
+function outcomeToneFromLabel(outcome: string): OutcomeTone {
+  const o = outcome.toLowerCase();
+  if (o.includes("answer")) return "green";
+  if (o.includes("voicemail") || o.includes("no answer")) return "purple";
+  if (o.includes("busy") || o.includes("backup") || o.includes("fail")) return "orange";
+  return "gray";
+}
+
+function outcomeToneClass(tone: OutcomeTone): string {
+  if (tone === "green") return "text-[#059669]";
+  if (tone === "purple") return "text-[#7c3aed]";
+  if (tone === "orange") return "text-[#ea580c]";
+  return "text-[#6b7280]";
+}
 
 export function PersonalForwardingUI({
   numbers,
@@ -78,6 +119,7 @@ export function PersonalForwardingUI({
   >("forward");
   const [callerIdDisplay, setCallerIdDisplay] = useState<"original" | "transovo_number">("original");
   const [callScreening, setCallScreening] = useState(false);
+  const [screeningPrompt, setScreeningPrompt] = useState("press_1");
   const [scheduleMode, setScheduleMode] = useState<"always" | "custom">("always");
   const [scheduleTimezone, setScheduleTimezone] = useState("America/New_York");
   const [scheduleBlocks, setScheduleBlocks] = useState<
@@ -158,9 +200,11 @@ export function PersonalForwardingUI({
         : "forward",
     );
     setForwardMode(
-      settings.forwardMode === "sequential" || settings.forwardMode === "simultaneous"
-        ? settings.forwardMode
-        : "single",
+      settings.forwardMode === "sequential"
+        ? "sequential"
+        : settings.forwardMode === "simultaneous"
+          ? "simultaneous"
+          : "single",
     );
     setCallerIdDisplay(
       settings.callerIdDisplay === "transovo_number" ? "transovo_number" : "original",
@@ -225,13 +269,12 @@ export function PersonalForwardingUI({
   const forwardingMinutes =
     usage?.perNumber.find((p) => p.numberId === editId)?.forwardingMinutes ?? 0;
   const minutesLimit = usage?.forwardingMinutesLimit ?? 500;
-  const minutesPct = Math.min(100, Math.round((forwardingMinutes / minutesLimit) * 100));
+  const minutesRemaining =
+    usage?.forwardingMinutesRemaining ?? Math.max(0, minutesLimit - forwardingMinutes);
   const useWireframe = usePersonalWireframe(activity.length + forwardingMinutes, 10);
   const displayMinutes = useWireframe ? WIREFRAME_FORWARDING_USAGE.minutesUsed : forwardingMinutes;
   const displayLimit = useWireframe ? WIREFRAME_FORWARDING_USAGE.minutesLimit : minutesLimit;
-  const displayMinutesPct = Math.min(100, Math.round((displayMinutes / displayLimit) * 100));
-  const displayActivity =
-    useWireframe && activity.length < 3 ? WIREFRAME_FORWARDING_ACTIVITY : activity;
+  const displayCalls = useWireframe ? WIREFRAME_FORWARDING_USAGE.callsForwarded : activity.length;
   const displayDestinations = useMemo(() => {
     if (useWireframe && cleanedTargets.length <= 1) {
       return WIREFRAME_FORWARDING_DESTINATIONS.map((d) => ({ ...d, isDemo: true as const }));
@@ -244,11 +287,64 @@ export function PersonalForwardingUI({
       index: i,
     }));
   }, [useWireframe, cleanedTargets.length, targets, ringSeconds]);
+
+  const displayActivityRows = useMemo((): ActivityDisplayRow[] => {
+    if (useWireframe && activity.length < 3) {
+      return WIREFRAME_FORWARDING_ACTIVITY.map((r) => ({
+        id: r.id,
+        caller: r.caller,
+        forwardedTo: formatPhone(r.forwardedTo) || r.forwardedTo,
+        outcome: r.outcome,
+        outcomeTone: r.outcomeTone,
+        time: r.time,
+      }));
+    }
+    return activity.map((r) => ({
+      id: r.id,
+      caller: r.caller,
+      forwardedTo: cleanedTargets[0]
+        ? formatPhone(cleanedTargets[0])
+        : formatPhone(r.calledNumber),
+      outcome: r.outcome,
+      outcomeTone: outcomeToneFromLabel(r.outcome),
+      time: `${r.date} ${r.time}`,
+    }));
+  }, [useWireframe, activity, cleanedTargets]);
+
   const forwardingHealthy =
     incomingHandling === "forward" &&
     forwardingOn &&
     cleanedTargets.length > 0 &&
     cleanedTargets.every((t) => t.length >= 10);
+
+  const isForwardingActive = incomingHandling === "forward" && forwardingOn;
+  const statusLabel =
+    incomingHandling !== "forward"
+      ? incomingHandling === "voicemail_only"
+        ? "Voicemail"
+        : "Announcement"
+      : forwardingOn
+        ? forwardMode === "sequential"
+          ? "Sequential"
+          : forwardMode === "simultaneous"
+            ? "Simultaneous"
+            : "Active"
+        : "Inactive";
+  const statusSub = useWireframe
+    ? WIREFRAME_FORWARDING_USAGE.statusSub
+    : forwardMode === "sequential"
+      ? "Sequential Mode"
+      : forwardMode === "simultaneous"
+        ? "Simultaneous Mode"
+        : "Single Destination";
+  const primaryDestination = useWireframe
+    ? formatPhone(WIREFRAME_FORWARDING_DESTINATIONS[0].number)
+    : cleanedTargets[0]
+      ? formatPhone(cleanedTargets[0])
+      : "—";
+  const greetingLabel = selected?.friendlyName
+    ? `${selected.friendlyName} Greeting`
+    : "Main Line Greeting";
 
   function discardChanges() {
     setMessage(null);
@@ -318,7 +414,7 @@ export function PersonalForwardingUI({
     setMessage(null);
     setSaving(true);
     try {
-      const cleanedTargets = targets.map((t) => t.trim()).filter(Boolean);
+      const cleanedTargetsSave = targets.map((t) => t.trim()).filter(Boolean);
       const cleanedOutsideTargets = outsideTargets.map((t) => t.trim()).filter(Boolean);
       const normalizedBlocks = scheduleBlocks.map((block) => {
         const blockTargets = block.targets.map((t) => t.trim()).filter(Boolean);
@@ -328,7 +424,7 @@ export function PersonalForwardingUI({
             block.handling === "forward"
               ? blockTargets.length > 0
                 ? blockTargets
-                : cleanedTargets
+                : cleanedTargetsSave
               : [],
         };
       });
@@ -341,8 +437,8 @@ export function PersonalForwardingUI({
             announcementText: announcementText.trim(),
             announcementUrl: announcementUrl?.trim() || null,
             forwardingEnabled: forwardingOn && incomingHandling === "forward",
-            forwardTargets: cleanedTargets,
-            forwardDestination: cleanedTargets[0] || null,
+            forwardTargets: cleanedTargetsSave,
+            forwardDestination: cleanedTargetsSave[0] || null,
             forwardMode: forwardMode,
             forwardRingSeconds: ringSeconds,
             forwardUnansweredAction: unansweredAction,
@@ -366,7 +462,7 @@ export function PersonalForwardingUI({
                       outsideHandling === "forward"
                         ? cleanedOutsideTargets.length > 0
                           ? cleanedOutsideTargets
-                          : cleanedTargets
+                          : cleanedTargetsSave
                         : [],
                   }
                 : null,
@@ -404,12 +500,15 @@ export function PersonalForwardingUI({
     busyAction === "announcement" ||
     failedAction === "announcement";
 
+  const effectiveForwardMode = useWireframe ? "sequential" : forwardMode;
+  const effectiveScheduleMode = useWireframe ? "custom" : scheduleMode;
+
   if (numbers.length === 0) {
     return (
       <PersonalMockPage>
         <p className={pm.muted}>
           No numbers yet.{" "}
-          <Link href="/personal/numbers/premium" className="text-[#2563eb]">
+          <Link href="/personal/numbers/premium" className="text-[#6366f1]">
             Find a number
           </Link>
         </p>
@@ -417,108 +516,133 @@ export function PersonalForwardingUI({
     );
   }
 
-  const statusLabel =
-    incomingHandling !== "forward"
-      ? incomingHandling === "voicemail_only"
-        ? "Voicemail"
-        : "Announcement"
-      : forwardingOn
-        ? forwardMode === "sequential"
-          ? "Sequential"
-          : forwardMode === "simultaneous"
-            ? "Simultaneous"
-            : "Active"
-        : "Inactive";
-
   const sidebar = (
-    <>
-      <PersonalMockAsideCard title="Forwarding Status" icon={PhoneForwarded}>
-        <div className="flex items-center gap-2">
-          <PersonalMockPill tone={forwardingOn && incomingHandling === "forward" ? "green" : "gray"}>
-            {statusLabel}
-          </PersonalMockPill>
-        </div>
-        <p className="mt-2">
-          {incomingHandling === "forward"
-            ? forwardingOn
-              ? `Calls ring ${forwardMode === "simultaneous" ? "all destinations" : forwardMode === "sequential" ? "in order" : "one destination"} for ${ringSeconds}s.`
-              : "Forwarding is off — callers follow your fallback rules."
-            : incomingHandling === "voicemail_only"
-              ? "All calls go straight to voicemail."
-              : "Callers hear your announcement."}
-        </p>
-      </PersonalMockAsideCard>
-
-      <div className={pm.card + " space-y-4 p-4"}>
-        <div>
-          <p className="text-[12px] font-semibold text-[#374151]">Caller ID</p>
-          <PersonalMockSelect
-            className="mt-2 w-full"
-            value={callerIdDisplay}
-            onChange={(e) =>
-              setCallerIdDisplay(e.target.value as "original" | "transovo_number")
-            }
-          >
-            <option value="original">Show original caller</option>
-            <option value="transovo_number">Show my Transovo number</option>
-          </PersonalMockSelect>
-        </div>
-        <PersonalMockToggle
-          label="Call screening"
-          checked={callScreening}
-          onChange={setCallScreening}
-        />
+  <>
+    <div className={pm.card + " p-4"}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[13px] font-semibold text-[#111827]">Forwarding Status</p>
+        <PersonalMockPill tone={isForwardingActive ? "green" : "gray"}>{statusLabel}</PersonalMockPill>
       </div>
-
-      <div className={pm.card + " p-4"}>
-        <p className="text-[13px] font-semibold text-[#111827]">Usage This Month</p>
-        <div className="mt-3">
-          <PersonalMockProgress
-            value={displayMinutes}
-            max={displayLimit}
-            label="Forwarding minutes"
-            sub={`${useWireframe ? displayLimit - displayMinutes : usage?.forwardingMinutesRemaining ?? Math.max(0, minutesLimit - forwardingMinutes)} remaining`}
-          />
+      <dl className="mt-3 space-y-2 text-[12px]">
+        <div className="flex justify-between gap-2">
+          <dt className="text-[#6b7280]">Mode</dt>
+          <dd className="font-medium text-[#111827]">{statusSub}</dd>
         </div>
-      </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-[#6b7280]">Primary Destination</dt>
+          <dd className="font-medium text-[#111827]">{primaryDestination}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-[#6b7280]">Destinations</dt>
+          <dd className="font-medium text-[#111827]">{displayDestinations.length}</dd>
+        </div>
+      </dl>
+      <button type="button" className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#6366f1]">
+        View Routing Order <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
 
-      <PersonalMockAsideCard
-        title="Forwarding Health"
-        tone={forwardingHealthy ? "default" : "warning"}
+    <div className={pm.card + " p-4"}>
+      <div className="flex items-center gap-2">
+        <User className="h-4 w-4 text-[#6366f1]" />
+        <p className="text-[13px] font-semibold text-[#111827]">Caller ID</p>
+      </div>
+      <PersonalMockSelect
+        className="mt-3 w-full text-[12px]"
+        value={callerIdDisplay}
+        onChange={(e) => setCallerIdDisplay(e.target.value as "original" | "transovo_number")}
       >
-        <p>
-          {forwardingHealthy
-            ? "Destinations look good. Forwarding should work as configured."
-            : "Add at least one valid destination and turn forwarding on."}
-        </p>
-      </PersonalMockAsideCard>
+        <option value="original">Show original caller</option>
+        <option value="transovo_number">Show my Transovo number</option>
+      </PersonalMockSelect>
+    </div>
 
-      <div className="flex flex-col gap-2">
-        <PersonalMockBtn className="w-full" disabled={saving} onClick={save}>
-          {saving ? "Saving…" : "Save Changes"}
-        </PersonalMockBtn>
-        <PersonalMockBtn variant="outline" className="w-full" onClick={discardChanges}>
-          Discard
-        </PersonalMockBtn>
-        {message ? <p className="text-center text-[12px] text-[#6b7280]">{message}</p> : null}
-      </div>
-
-      <div className={pm.card + " border-[#c7d2fe] bg-[#eef2ff] p-4"}>
+    <div className={pm.card + " p-4"}>
+      <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Route className="h-4 w-4 text-[#2563eb]" />
-          <p className="text-[13px] font-semibold text-[#111827]">Smart Routing</p>
+          <Shield className="h-4 w-4 text-[#6366f1]" />
+          <p className="text-[13px] font-semibold text-[#111827]">Call Screening</p>
         </div>
-        <p className="mt-2 text-[12px] text-[#6b7280]">
-          Build advanced call flows with menus, time rules, and AI handoff.
-        </p>
-        <Link
-          href="/smart-routing"
-          className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
-        >
-          Explore Smart Routing <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <MockToggle checked={callScreening} onChange={setCallScreening} />
       </div>
-    </>
+      <PersonalMockSelect
+        className="mt-3 w-full text-[12px]"
+        value={screeningPrompt}
+        onChange={(e) => setScreeningPrompt(e.target.value)}
+      >
+        <option value="press_1">Press 1 to accept</option>
+        <option value="name">Announce caller name</option>
+      </PersonalMockSelect>
+    </div>
+
+    <div className={pm.card + " p-4"}>
+      <div className="flex items-center gap-2">
+        <Clock className="h-4 w-4 text-[#6366f1]" />
+        <p className="text-[13px] font-semibold text-[#111827]">Usage This Month</p>
+      </div>
+      <p className="mt-3 text-[22px] font-bold text-[#111827]">
+        {displayMinutes} / {displayLimit}{" "}
+        <span className="text-[14px] font-medium text-[#6b7280]">minutes</span>
+      </p>
+      <PersonalMockProgress
+        value={displayMinutes}
+        max={displayLimit}
+        label=""
+        sub=""
+        className="mt-2"
+      />
+      <div className="mt-3 flex justify-between text-[12px]">
+        <span className="text-[#6b7280]">Estimated Overage</span>
+        <span className="font-semibold text-[#111827]">$0.00</span>
+      </div>
+    </div>
+
+    <div className={pm.card + " p-4"}>
+      <div className="flex items-start gap-2">
+        <Shield className="h-4 w-4 shrink-0 text-[#059669]" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-semibold text-[#059669]">Forwarding Health</p>
+          <p className="mt-1 text-[12px] text-[#6b7280]">
+            {forwardingHealthy
+              ? "Destinations look good. Forwarding should work as configured."
+              : "Add at least one valid destination and turn forwarding on."}
+          </p>
+          <p className="mt-2 text-[11px] text-[#9ca3af]">
+            Last successful forward: {displayActivityRows[0]?.time ?? "—"}
+          </p>
+          <p className="text-[11px] text-[#9ca3af]">Recent failures: 0</p>
+          <button type="button" className="mt-2 text-[12px] font-semibold text-[#6366f1]">
+            View Health Details
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <PersonalMockBtn className="w-full" disabled={saving} onClick={save}>
+      <Save className="h-4 w-4" />
+      {saving ? "Saving…" : "Save Changes"}
+    </PersonalMockBtn>
+    <PersonalMockBtn variant="outline" className="w-full" onClick={discardChanges}>
+      Discard
+    </PersonalMockBtn>
+    {message ? <p className="text-center text-[12px] text-[#6b7280]">{message}</p> : null}
+
+    <div className={pm.card + " border-[#c7d2fe] bg-[#eef2ff] p-4"}>
+      <div className="flex items-center gap-2">
+        <Route className="h-4 w-4 text-[#6366f1]" />
+        <p className="text-[13px] font-semibold text-[#111827]">Call Menus</p>
+      </div>
+      <p className="mt-2 text-[12px] text-[#6b7280]">
+        Build advanced call flows with menus, time rules, and AI handoff.
+      </p>
+      <Link
+        href="/smart-routing"
+        className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#6366f1]"
+      >
+        Set Up Smart Routing <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </div>
+  </>
   );
 
   return (
@@ -537,96 +661,84 @@ export function PersonalForwardingUI({
         }
       />
 
-      <div className={pm.card + " flex flex-wrap items-center justify-between gap-3 p-4"}>
-        <div>
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-            Managing Number
-          </p>
-          <p className="mt-1 text-[13px] text-[#6b7280]">
-            Settings apply to the selected Transovo number.
-          </p>
+      <div className={pm.card + " p-4"}>
+        <p className="text-[12px] font-semibold text-[#6b7280]">Managing Number</p>
+        <div className="mt-2">
+          <PersonalNumberSelector
+            numbers={numbers}
+            selectedId={editId}
+            label=""
+            selectClassName="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
+          />
         </div>
-        <PersonalNumberSelector numbers={numbers} selectedId={editId} label="" />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <PersonalMockKpi
           label="Forwarding Status"
           value={useWireframe ? "Active" : statusLabel}
-          sub={useWireframe ? WIREFRAME_FORWARDING_USAGE.statusSub : undefined}
+          sub={statusSub}
           icon={PhoneForwarded}
-          iconClass={
-            forwardingOn && incomingHandling === "forward"
-              ? "bg-[#ecfdf5] text-[#059669]"
-              : "bg-[#f3f4f6] text-[#6b7280]"
-          }
+          iconClass="bg-[#ecfdf5] text-[#059669]"
+          valueClassName={isForwardingActive ? "text-[#059669]" : undefined}
         />
         <PersonalMockKpi
           label="Current Destination"
-          value={
-            useWireframe
-              ? formatPhone(WIREFRAME_FORWARDING_DESTINATIONS[0].number)
-              : cleanedTargets[0]
-                ? formatPhone(cleanedTargets[0])
-                : "—"
-          }
-          sub={
-            useWireframe
-              ? "Primary Destination"
-              : cleanedTargets.length > 1
-                ? `+${cleanedTargets.length - 1} more`
-                : undefined
-          }
+          value={primaryDestination}
+          sub="Primary Destination"
+          icon={ArrowUpRight}
+          iconClass="bg-[#f3e8ff] text-[#9333ea]"
         />
         <PersonalMockKpi
           label="Calls Forwarded"
-          value={useWireframe ? WIREFRAME_FORWARDING_USAGE.callsForwarded : activity.length}
-          sub={useWireframe ? "Total Calls" : "recent on this number"}
+          value={displayCalls}
+          sub="Total Calls"
+          icon={BarChart3}
+          iconClass="bg-[#eef2ff] text-[#6366f1]"
         />
         <div className={pm.card + " p-4"}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[12px] font-medium text-[#6b7280]">Forwarding Minutes</p>
-              <p className="mt-1 text-[26px] font-bold leading-none text-[#111827]">
-                {displayMinutes}
-              </p>
-              <p className="mt-1 text-[11px] text-[#9ca3af]">of {displayLimit} min</p>
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#fff7ed] text-[#ea580c]">
+              <Clock className="h-5 w-5" strokeWidth={2} />
             </div>
-            <RingProgress pct={displayMinutesPct} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-medium text-[#6b7280]">Forwarding Minutes</p>
+              <p className="mt-0.5 text-[28px] font-bold leading-none text-[#111827]">
+                {displayMinutes} / {displayLimit}
+              </p>
+              <PersonalMockProgress
+                value={displayMinutes}
+                max={displayLimit}
+                label=""
+                sub=""
+                className="mt-2"
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      <PersonalMockSection title="Incoming Call Handling">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <PersonalMockToggle
-              label="Forward incoming calls"
-              checked={forwardingOn && incomingHandling === "forward"}
-              onChange={(on) => {
-                if (on) {
-                  setIncomingHandling("forward");
-                  setForwardingOn(true);
-                } else {
-                  setForwardingOn(false);
-                }
-              }}
-            />
-            <PersonalMockSelect
-              className="min-w-[180px]"
-              value={incomingHandling}
-              onChange={(e) =>
-                setIncomingHandling(
-                  e.target.value as "forward" | "voicemail_only" | "announcement_only",
-                )
-              }
-            >
-              <option value="forward">Forward calls</option>
-              <option value="voicemail_only">Voicemail only</option>
-              <option value="announcement_only">Announcement only</option>
-            </PersonalMockSelect>
+      <div className={pm.card + " overflow-hidden"}>
+        <div className="flex items-start justify-between gap-4 border-b border-[#f3f4f6] px-5 py-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-[#111827]">Incoming Call Handling</h2>
+            <p className="mt-0.5 text-[12px] font-medium text-[#374151]">Forward Incoming Calls</p>
+            <p className="text-[11px] text-[#6b7280]">Enable call forwarding for this number</p>
           </div>
+          <MockToggle
+            checked={isForwardingActive}
+            onChange={(on) => {
+              if (on) {
+                setIncomingHandling("forward");
+                setForwardingOn(true);
+              } else {
+                setForwardingOn(false);
+              }
+            }}
+          />
+        </div>
 
+        <div className="p-5 space-y-5">
           {incomingHandling === "forward" && forwardingOn ? (
             <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
               {(
@@ -640,67 +752,129 @@ export function PersonalForwardingUI({
                   key={mode}
                   type="button"
                   onClick={() => setForwardMode(mode)}
-                  className={`rounded-md px-4 py-1.5 text-[13px] font-semibold transition ${
-                    forwardMode === mode
-                      ? "bg-white text-[#2563eb] shadow-sm"
-                      : "text-[#6b7280] hover:text-[#111827]"
-                  }`}
+                  className={cn(
+                    "rounded-md px-4 py-1.5 text-[13px] font-semibold transition",
+                    effectiveForwardMode === mode
+                      ? "bg-[#6366f1] text-white shadow-sm"
+                      : "text-[#6b7280] hover:text-[#111827]",
+                  )}
                 >
                   {label}
                 </button>
               ))}
             </div>
+          ) : (
+            <PersonalMockSelect
+              className="max-w-xs"
+              value={incomingHandling}
+              onChange={(e) =>
+                setIncomingHandling(
+                  e.target.value as "forward" | "voicemail_only" | "announcement_only",
+                )
+              }
+            >
+              <option value="forward">Forward calls</option>
+              <option value="voicemail_only">Voicemail only</option>
+              <option value="announcement_only">Announcement only</option>
+            </PersonalMockSelect>
+          )}
+
+          {incomingHandling === "forward" ? (
+            <div>
+              <p className="mb-3 text-[13px] font-semibold text-[#111827]">Forward To</p>
+              <div className="space-y-2">
+                {displayDestinations.map((dest, i) => (
+                  <div
+                    key={dest.isDemo ? dest.number : `target-${dest.index}`}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white p-3"
+                  >
+                    <GripVertical className="h-4 w-4 shrink-0 text-[#d1d5db]" aria-hidden />
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#eef2ff] text-[12px] font-bold text-[#6366f1]"
+                    >
+                      {i + 1}
+                    </span>
+                    {dest.isDemo ? (
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-semibold text-[#111827]">
+                          {formatPhone(dest.number)}
+                        </span>
+                        <PersonalMockPill tone="gray">{dest.label}</PersonalMockPill>
+                      </div>
+                    ) : (
+                      <PersonalMockInput
+                        className="min-w-[160px] flex-1"
+                        placeholder={dest.index === 0 ? "(571) 477-6175" : "Add another line"}
+                        value={dest.number}
+                        onChange={(e) => updateTarget(dest.index!, e.target.value)}
+                      />
+                    )}
+                    <span className="text-[11px] text-[#9ca3af]">Ring for</span>
+                    <PersonalMockSelect
+                      className="w-[88px] text-[12px]"
+                      value={String(dest.ringSeconds)}
+                      disabled={dest.isDemo}
+                      onChange={(e) => setRingSeconds(Number(e.target.value) || 25)}
+                    >
+                      {[15, 20, 25, 30, 45].map((s) => (
+                        <option key={s} value={s}>{s} sec</option>
+                      ))}
+                    </PersonalMockSelect>
+                    <button
+                      type="button"
+                      className="rounded-lg p-2 text-[#6366f1] hover:bg-[#eef2ff]"
+                      aria-label="Edit destination"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg p-2 text-[#dc2626] hover:bg-[#fef2f2]"
+                      onClick={() => {
+                        if (!dest.isDemo) removeTarget(dest.index!);
+                      }}
+                      aria-label="Remove destination"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {!useWireframe && targets.length < 5 ? (
+                <button
+                  type="button"
+                  className="mt-4 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-[#c7d2fe] py-2.5 text-[13px] font-semibold text-[#6366f1] hover:bg-[#eef2ff]"
+                  onClick={addTarget}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Destination
+                </button>
+              ) : useWireframe ? (
+                <button
+                  type="button"
+                  className="mt-4 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-[#c7d2fe] py-2.5 text-[13px] font-semibold text-[#6366f1]"
+                  onClick={addTarget}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Destination
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
-      </PersonalMockSection>
+      </div>
 
       {incomingHandling === "announcement_only" ? (
         <PersonalMockSection title="Announcement message">
-          <p className={pm.muted}>
-            Callers hear this message when they reach your number, then the call ends.
-          </p>
           <textarea
-            className="mt-3 min-h-[80px] w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
+            className="min-h-[80px] w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
             value={announcementText}
             onChange={(e) => setAnnouncementText(e.target.value)}
           />
-          <div className="mt-4">
-            <p className="text-[12px] font-semibold text-[#374151]">Announcement audio (optional)</p>
-            <p className={pm.muted}>
-              Upload or record custom audio. When set, callers hear the recording instead of the text above.
-            </p>
-            <PersonalGreetingControls
-              greetingText={announcementText}
-              greetingUrl={announcementUrl}
-              assetName="Call announcement"
-              emptyHint="No announcement audio yet — text above is spoken when callers reach this number."
-              scriptPlaceholder="This number is no longer in service. Please try again later."
-              createButtonLabel="Create announcement"
-              onSaveText={async (text) => {
-                setAnnouncementText(text);
-                await patchAnnouncement({ announcementText: text });
-              }}
-              onSaveUrl={async (url) => {
-                setAnnouncementUrl(url);
-                await patchAnnouncement({ announcementUrl: url });
-              }}
-            />
-          </div>
-        </PersonalMockSection>
-      ) : null}
-
-      {incomingHandling !== "announcement_only" && showAnnouncementAudio ? (
-        <PersonalMockSection title="Announcement audio">
-          <p className={pm.muted}>
-            Used when forwarding falls back to &quot;Play announcement&quot; (busy, failed, or scheduled announcement windows).
-          </p>
           <PersonalGreetingControls
             greetingText={announcementText}
             greetingUrl={announcementUrl}
             assetName="Call announcement"
-            emptyHint="No announcement audio — spoken text is used for announcement fallbacks."
-            scriptPlaceholder="This number is no longer in service. Please try again later."
-            createButtonLabel="Create announcement"
             onSaveText={async (text) => {
               setAnnouncementText(text);
               await patchAnnouncement({ announcementText: text });
@@ -714,185 +888,177 @@ export function PersonalForwardingUI({
       ) : null}
 
       {incomingHandling === "forward" ? (
-        <>
-          <PersonalMockSection
-            title="Forward To"
-            description="Destinations ring in the order shown for sequential mode."
-          >
-            <div className="space-y-3">
-              {displayDestinations.map((dest, i) => (
-                <div
-                  key={dest.isDemo ? dest.number : `target-${dest.index}`}
-                  className="flex flex-wrap items-center gap-2 rounded-lg border border-[#f3f4f6] bg-[#fafafa] p-3"
-                >
-                  <GripVertical className="h-4 w-4 shrink-0 text-[#d1d5db]" aria-hidden />
-                  <span className="w-6 text-[12px] font-semibold text-[#9ca3af]">{i + 1}</span>
-                  {dest.isDemo ? (
-                    <div className="min-w-[180px] flex-1">
-                      <p className="text-[13px] font-semibold text-[#111827]">
-                        {formatPhone(dest.number)}
-                      </p>
-                      <p className="text-[11px] text-[#6b7280]">{dest.label}</p>
-                    </div>
-                  ) : (
-                    <PersonalMockInput
-                      className="min-w-[180px] flex-1"
-                      placeholder={dest.index === 0 ? "(571) 477-6175" : "Add another line"}
-                      value={dest.number}
-                      onChange={(e) => updateTarget(dest.index!, e.target.value)}
-                    />
-                  )}
-                  <PersonalMockSelect className="w-[100px]" value={String(dest.ringSeconds)} disabled={dest.isDemo}>
-                    <option value={dest.ringSeconds}>{dest.ringSeconds}s</option>
-                  </PersonalMockSelect>
-                  <button
-                    type="button"
-                    className="rounded-lg p-2 text-[#6b7280] hover:bg-white"
-                    aria-label="Edit destination"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  {!dest.isDemo && dest.index! > 0 ? (
-                    <button
-                      type="button"
-                      className="rounded-lg p-2 text-[#dc2626] hover:bg-[#fef2f2]"
-                      onClick={() => removeTarget(dest.index!)}
-                      aria-label="Remove destination"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-              {!useWireframe && targets.length < 5 ? (
-                <button
-                  type="button"
-                  className="text-[13px] font-semibold text-[#2563eb]"
-                  onClick={addTarget}
-                >
-                  + Add Destination
-                </button>
-              ) : null}
-              <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
-                <p className="text-[12px] font-semibold text-[#374151]">Custom ring time</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setUseCustomRing(true)}
-                    className={`rounded-lg px-3 py-1 text-[12px] ${
-                      useCustomRing ? "bg-[#2563eb] text-white" : "border border-[#e5e7eb] bg-white"
-                    }`}
-                  >
-                    Custom
-                  </button>
-                  {useCustomRing ? (
-                    <input
-                      type="number"
-                      min={10}
-                      max={60}
-                      className="h-9 w-20 rounded-lg border border-[#e5e7eb] bg-white px-2 text-center text-[13px]"
-                      value={ringSeconds}
-                      onChange={(e) => setRingSeconds(Number(e.target.value) || 25)}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Fallback & Failover">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <FallbackSelect
-                label="If No One Answers"
-                value={unansweredAction}
-                onChange={(v) => setUnansweredAction(v as "voicemail" | "end")}
-                options={[
-                  ["voicemail", "Voicemail"],
-                  ["end", "End call"],
-                ]}
-              />
-              <FallbackSelect
-                label="If Busy"
-                value={busyAction}
-                onChange={(v) => setBusyAction(v as FallbackAction)}
-              />
-              <FallbackSelect
-                label="If Cannot Be Reached"
-                value={failedAction}
-                onChange={(v) => setFailedAction(v as FallbackAction)}
-              />
-            </div>
-            {busyAction === "another_number" ? (
-              <PersonalMockInput
-                className="mt-3 max-w-md"
-                placeholder="Alternate number if busy"
-                value={busyNumber}
-                onChange={(e) => setBusyNumber(e.target.value)}
-              />
-            ) : null}
-            {failedAction === "another_number" ? (
-              <PersonalMockInput
-                className="mt-3 max-w-md"
-                placeholder="Alternate number if forwarding fails"
-                value={failedNumber}
-                onChange={(e) => setFailedNumber(e.target.value)}
-              />
-            ) : null}
-          </PersonalMockSection>
-        </>
+        <PersonalMockSection title="Fallback & Failover">
+          <div className="divide-y divide-[#f3f4f6]">
+            <FallbackRow
+              condition="If No One Answers"
+              action={fallbackActionLabel(unansweredAction)}
+              pills={[
+                `Greeting: ${greetingLabel}`,
+                "Transcription: On",
+              ]}
+            />
+            <FallbackRow
+              condition="If Busy"
+              action={fallbackActionLabel(busyAction)}
+            />
+            <FallbackRow
+              condition="If Cannot Be Reached"
+              action={fallbackActionLabel(failedAction)}
+            />
+          </div>
+          {busyAction === "another_number" ? (
+            <PersonalMockInput
+              className="mt-3 max-w-md"
+              placeholder="Alternate number if busy"
+              value={busyNumber}
+              onChange={(e) => setBusyNumber(e.target.value)}
+            />
+          ) : null}
+          {failedAction === "another_number" ? (
+            <PersonalMockInput
+              className="mt-3 max-w-md"
+              placeholder="Alternate number if forwarding fails"
+              value={failedNumber}
+              onChange={(e) => setFailedNumber(e.target.value)}
+            />
+          ) : null}
+        </PersonalMockSection>
       ) : null}
 
-      <ScheduleAndActivitySection
-        scheduleMode={scheduleMode}
-        setScheduleMode={setScheduleMode}
-        scheduleBlocks={scheduleBlocks}
-        setScheduleBlocks={setScheduleBlocks}
-        scheduleTimezone={scheduleTimezone}
-        setScheduleTimezone={setScheduleTimezone}
-        outsideHandling={outsideHandling}
-        setOutsideHandling={setOutsideHandling}
-        targets={targets}
-        updateBlockTarget={updateBlockTarget}
-        addBlockTarget={addBlockTarget}
-        removeBlockTarget={removeBlockTarget}
-        outsideTargets={outsideTargets}
-        updateOutsideTarget={updateOutsideTarget}
-        addOutsideTarget={addOutsideTarget}
-        removeOutsideTarget={removeOutsideTarget}
-        activity={displayActivity}
-        useWireframe={useWireframe}
-      />
+      {incomingHandling !== "announcement_only" && showAnnouncementAudio ? (
+        <PersonalMockSection title="Announcement audio">
+          <PersonalGreetingControls
+            greetingText={announcementText}
+            greetingUrl={announcementUrl}
+            assetName="Call announcement"
+            onSaveText={async (text) => {
+              setAnnouncementText(text);
+              await patchAnnouncement({ announcementText: text });
+            }}
+            onSaveUrl={async (url) => {
+              setAnnouncementUrl(url);
+              await patchAnnouncement({ announcementUrl: url });
+            }}
+          />
+        </PersonalMockSection>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <PersonalMockSection title="Forwarding Schedule">
+          <SchedulePanel
+            scheduleMode={effectiveScheduleMode}
+            setScheduleMode={setScheduleMode}
+            scheduleBlocks={scheduleBlocks}
+            setScheduleBlocks={setScheduleBlocks}
+            scheduleTimezone={scheduleTimezone}
+            setScheduleTimezone={setScheduleTimezone}
+            outsideHandling={outsideHandling}
+            setOutsideHandling={setOutsideHandling}
+            targets={targets}
+            updateBlockTarget={updateBlockTarget}
+            addBlockTarget={addBlockTarget}
+            removeBlockTarget={removeBlockTarget}
+            outsideTargets={outsideTargets}
+            updateOutsideTarget={updateOutsideTarget}
+            addOutsideTarget={addOutsideTarget}
+            removeOutsideTarget={removeOutsideTarget}
+            useWireframe={useWireframe}
+          />
+        </PersonalMockSection>
+
+        <PersonalMockSection
+          title="Recent Forwarding Activity"
+          action={
+            <Link href="/personal/activity" className="text-[12px] font-semibold text-[#6366f1]">
+              View All
+            </Link>
+          }
+        >
+          {displayActivityRows.length === 0 ? (
+            <p className={pm.muted}>No recent forwarding activity.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                    <th className="pb-2 pr-3">Caller</th>
+                    <th className="pb-2 pr-3">Forwarded To</th>
+                    <th className="pb-2 pr-3">Outcome</th>
+                    <th className="pb-2">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f3f4f6]">
+                  {displayActivityRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="py-2.5 pr-3">
+                        <span className="inline-flex items-center gap-2 font-medium text-[#111827]">
+                          <Phone className="h-3.5 w-3.5 text-[#9ca3af]" />
+                          {formatPhone(row.caller)}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-[#6b7280]">{row.forwardedTo}</td>
+                      <td className={cn("py-2.5 pr-3 font-medium", outcomeToneClass(row.outcomeTone))}>
+                        {row.outcome}
+                      </td>
+                      <td className="py-2.5 text-[#6b7280]">{row.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </PersonalMockSection>
+      </div>
     </PersonalMockPage>
   );
 }
 
-function RingProgress({ pct }: { pct: number }) {
-  const r = 18;
-  const c = 2 * Math.PI * r;
-  const dash = (pct / 100) * c;
+function MockToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="relative h-11 w-11 shrink-0">
-      <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90">
-        <circle cx="22" cy="22" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
-        <circle
-          cx="22"
-          cy="22"
-          r={r}
-          fill="none"
-          stroke="#2563eb"
-          strokeWidth="4"
-          strokeDasharray={`${dash} ${c - dash}`}
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#2563eb]">
-        {pct}%
-      </span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative h-6 w-11 shrink-0 rounded-full transition",
+        checked ? "bg-[#6366f1]" : "bg-[#d1d5db]",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition",
+          checked ? "left-[22px]" : "left-0.5",
+        )}
+      />
+    </button>
+  );
+}
+
+function FallbackRow({
+  condition,
+  action,
+  pills,
+}: {
+  condition: string;
+  action: string;
+  pills?: string[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 py-3 text-[13px]">
+      <span className="font-medium text-[#111827]">{condition}</span>
+      <ArrowRight className="h-4 w-4 text-[#9ca3af]" />
+      <span className="text-[#374151]">{action}</span>
+      {pills?.map((pill) => (
+        <PersonalMockPill key={pill} tone="gray">{pill}</PersonalMockPill>
+      ))}
+      <ChevronRight className="ml-auto h-4 w-4 text-[#9ca3af]" />
     </div>
   );
 }
 
-function ScheduleAndActivitySection({
+function SchedulePanel({
   scheduleMode,
   setScheduleMode,
   scheduleBlocks,
@@ -909,8 +1075,7 @@ function ScheduleAndActivitySection({
   updateOutsideTarget,
   addOutsideTarget,
   removeOutsideTarget,
-  activity,
-  useWireframe = false,
+  useWireframe,
 }: {
   scheduleMode: "always" | "custom";
   setScheduleMode: (v: "always" | "custom") => void;
@@ -946,293 +1111,135 @@ function ScheduleAndActivitySection({
   updateOutsideTarget: (index: number, value: string) => void;
   addOutsideTarget: () => void;
   removeOutsideTarget: (index: number) => void;
-  activity: ActivityRow[];
-  useWireframe?: boolean;
+  useWireframe: boolean;
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <PersonalMockSection title="Forwarding Schedule">
-        <div className="space-y-3">
-          <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
-            {(
-              [
-                ["always", "Always"],
-                ["custom", "Custom"],
-              ] as const
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setScheduleMode(mode);
-                  if (mode === "custom" && scheduleBlocks.length === 0) {
-                    setScheduleBlocks([
-                      {
-                        id: "weekdays",
-                        days: [1, 2, 3, 4, 5],
-                        startTime: "08:00",
-                        endTime: "17:00",
-                        handling: "forward",
-                        targets: targets.filter(Boolean),
-                      },
-                    ]);
-                  }
-                }}
-                className={`rounded-md px-4 py-1.5 text-[13px] font-semibold ${
-                  scheduleMode === mode ? "bg-white text-[#6366f1] shadow-sm" : "text-[#6b7280]"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+    <div className="space-y-3">
+      <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
+        {(["always", "custom"] as const).map((mode) => {
+          const isActive = scheduleMode === mode || (useWireframe && mode === "custom");
+          return (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => {
+              setScheduleMode(mode);
+              if (mode === "custom" && scheduleBlocks.length === 0) {
+                setScheduleBlocks([
+                  {
+                    id: "weekdays",
+                    days: [1, 2, 3, 4, 5],
+                    startTime: "08:00",
+                    endTime: "17:00",
+                    handling: "forward",
+                    targets: targets.filter(Boolean),
+                  },
+                ]);
+              }
+            }}
+            className={cn(
+              "rounded-md px-4 py-1.5 text-[13px] font-semibold",
+              isActive
+                ? mode === "custom"
+                  ? "bg-[#6366f1] text-white shadow-sm"
+                  : "bg-white text-[#6b7280] shadow-sm"
+                : "text-[#6b7280]",
+            )}
+          >
+            {mode === "always" ? "Always" : "Custom Schedule"}
+          </button>
+          );
+        })}
+      </div>
 
-          {useWireframe ? (
-            <div className="space-y-3">
-              <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
-                <span className="rounded-md px-4 py-1.5 text-[13px] font-semibold text-[#6b7280]">
-                  Always
+      {useWireframe ? (
+        <div className="space-y-3">
+          <PersonalMockSelect className="w-full text-[12px]" value={scheduleTimezone} onChange={(e) => setScheduleTimezone(e.target.value)}>
+            <option value="America/New_York">America/New_York</option>
+            <option value="America/Los_Angeles">America/Los_Angeles</option>
+          </PersonalMockSelect>
+          <ul className="space-y-2 text-[13px]">
+            {[
+              { label: "Mon–Fri 9:00 AM – 5:00 PM", dest: "Forward to destinations" },
+              { label: "Evenings", dest: "Voicemail" },
+              { label: "Weekends", dest: "Announcement" },
+            ].map((row) => (
+              <li
+                key={row.label}
+                className="flex items-center justify-between rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2"
+              >
+                <span className="text-[#374151]">{row.label}</span>
+                <span className="flex items-center gap-1 text-[#6b7280]">
+                  {row.dest} <ArrowRight className="h-3.5 w-3.5" />
                 </span>
-                <span className="rounded-md bg-white px-4 py-1.5 text-[13px] font-semibold text-[#2563eb] shadow-sm">
-                  Custom Schedule
-                </span>
-              </div>
-              <p className="text-[12px] text-[#6b7280]">America/New_York</p>
-              <ul className="space-y-2 text-[13px]">
-                {[
-                  "Mon–Fri 9:00 AM – 5:00 PM · Forward to destinations",
-                  "Evenings · Voicemail",
-                  "Weekends · Announcement",
-                ].map((row) => (
-                  <li
-                    key={row}
-                    className="rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2 text-[#374151]"
-                  >
-                    {row}
-                  </li>
-                ))}
-              </ul>
-              <div className="rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[12px] text-[#1d4ed8]">
-                Outside scheduled hours, callers are sent to voicemail.
-              </div>
-            </div>
-          ) : scheduleMode === "custom" ? (
-            <div className="space-y-3 rounded-lg border border-[#f3f4f6] p-3">
-              <label className="block text-[12px] text-[#6b7280]">
-                Timezone
-                <PersonalMockInput
-                  className="mt-1"
-                  value={scheduleTimezone}
-                  onChange={(e) => setScheduleTimezone(e.target.value)}
-                />
-              </label>
-              {scheduleBlocks.map((block, idx) => (
-                <div key={block.id} className="space-y-2 border-t border-[#f3f4f6] pt-3">
-                  <p className="text-[12px] font-semibold">Window {idx + 1}</p>
-                  <div className="flex flex-wrap gap-2 text-[12px]">
-                    {[
-                      ["0", "Sun"],
-                      ["1", "Mon"],
-                      ["2", "Tue"],
-                      ["3", "Wed"],
-                      ["4", "Thu"],
-                      ["5", "Fri"],
-                      ["6", "Sat"],
-                    ].map(([d, label]) => (
-                      <label key={d} className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={block.days.includes(Number(d))}
-                          onChange={(e) => {
-                            const day = Number(d);
-                            setScheduleBlocks((prev) =>
-                              prev.map((b) =>
-                                b.id === block.id
-                                  ? {
-                                      ...b,
-                                      days: e.target.checked
-                                        ? [...b.days, day]
-                                        : b.days.filter((x) => x !== day),
-                                    }
-                                  : b,
-                              ),
-                            );
-                          }}
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="time"
-                      className="h-9 rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
-                      value={block.startTime}
-                      onChange={(e) =>
-                        setScheduleBlocks((prev) =>
-                          prev.map((b) =>
-                            b.id === block.id ? { ...b, startTime: e.target.value } : b,
-                          ),
-                        )
-                      }
-                    />
-                    <span className="text-[13px]">to</span>
-                    <input
-                      type="time"
-                      className="h-9 rounded-lg border border-[#e5e7eb] px-2 text-[13px]"
-                      value={block.endTime}
-                      onChange={(e) =>
-                        setScheduleBlocks((prev) =>
-                          prev.map((b) =>
-                            b.id === block.id ? { ...b, endTime: e.target.value } : b,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-                  <PersonalMockSelect
-                    className="w-full"
-                    value={block.handling}
-                    onChange={(e) =>
-                      setScheduleBlocks((prev) =>
-                        prev.map((b) =>
-                          b.id === block.id
-                            ? {
-                                ...b,
-                                handling: e.target.value as typeof block.handling,
-                                targets:
-                                  e.target.value === "forward"
-                                    ? b.targets.length
-                                      ? b.targets
-                                      : targets.filter(Boolean)
-                                    : [],
-                              }
-                            : b,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="forward">Forward calls</option>
-                    <option value="voicemail_only">Voicemail only</option>
-                    <option value="announcement_only">Announcement only</option>
-                  </PersonalMockSelect>
-                  {block.handling === "forward" ? (
-                    <ScheduleTargetList
-                      targets={block.targets.length > 0 ? block.targets : targets.filter(Boolean)}
-                      onChange={(index, value) => updateBlockTarget(block.id, index, value)}
-                      onAdd={() => {
-                        if (block.targets.length === 0) {
-                          setScheduleBlocks((prev) =>
-                            prev.map((b) =>
-                              b.id === block.id
-                                ? {
-                                    ...b,
-                                    targets: targets.filter(Boolean).length
-                                      ? [...targets.filter(Boolean)]
-                                      : [""],
-                                  }
-                                : b,
-                            ),
-                          );
-                        } else {
-                          addBlockTarget(block.id);
-                        }
-                      }}
-                      onRemove={(index) => removeBlockTarget(block.id, index)}
-                    />
-                  ) : null}
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-[12px] font-semibold text-[#2563eb]"
-                onClick={() =>
-                  setScheduleBlocks((prev) => [
-                    ...prev,
-                    {
-                      id: `block-${Date.now()}`,
-                      days: [6],
-                      startTime: "00:00",
-                      endTime: "23:59",
-                      handling: "voicemail_only",
-                      targets: [],
-                    },
-                  ])
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[12px] text-[#1d4ed8]">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>Outside scheduled hours, callers are sent to voicemail. Holiday and weekend rules apply.</p>
+          </div>
+        </div>
+      ) : scheduleMode === "custom" ? (
+        <div className="space-y-3 rounded-lg border border-[#f3f4f6] p-3">
+          <label className="block text-[12px] text-[#6b7280]">
+            Timezone
+            <PersonalMockInput
+              className="mt-1"
+              value={scheduleTimezone}
+              onChange={(e) => setScheduleTimezone(e.target.value)}
+            />
+          </label>
+          {scheduleBlocks.map((block, idx) => (
+            <div key={block.id} className="space-y-2 border-t border-[#f3f4f6] pt-3">
+              <p className="text-[12px] font-semibold">Window {idx + 1}</p>
+              <PersonalMockSelect
+                className="w-full"
+                value={block.handling}
+                onChange={(e) =>
+                  setScheduleBlocks((prev) =>
+                    prev.map((b) =>
+                      b.id === block.id
+                        ? { ...b, handling: e.target.value as typeof block.handling }
+                        : b,
+                    ),
+                  )
                 }
               >
-                + Add window
-              </button>
-              <div>
-                <p className="mb-1 text-[12px] font-semibold">Outside schedule</p>
-                <PersonalMockSelect
-                  className="w-full"
-                  value={outsideHandling}
-                  onChange={(e) =>
-                    setOutsideHandling(
-                      e.target.value as "forward" | "voicemail_only" | "announcement_only",
-                    )
-                  }
-                >
-                  <option value="forward">Forward calls</option>
-                  <option value="voicemail_only">Voicemail only</option>
-                  <option value="announcement_only">Announcement only</option>
-                </PersonalMockSelect>
-                {outsideHandling === "forward" ? (
-                  <ScheduleTargetList
-                    targets={
-                      outsideTargets.some((t) => t.trim())
-                        ? outsideTargets
-                        : targets.filter(Boolean)
-                    }
-                    onChange={updateOutsideTarget}
-                    onAdd={addOutsideTarget}
-                    onRemove={removeOutsideTarget}
-                  />
-                ) : null}
-              </div>
+                <option value="forward">Forward calls</option>
+                <option value="voicemail_only">Voicemail only</option>
+                <option value="announcement_only">Announcement only</option>
+              </PersonalMockSelect>
+              {block.handling === "forward" ? (
+                <ScheduleTargetList
+                  targets={block.targets.length > 0 ? block.targets : targets.filter(Boolean)}
+                  onChange={(index, value) => updateBlockTarget(block.id, index, value)}
+                  onAdd={() => addBlockTarget(block.id)}
+                  onRemove={(index) => removeBlockTarget(block.id, index)}
+                />
+              ) : null}
             </div>
-          ) : (
-            <p className={pm.muted}>Forwarding rules apply 24/7.</p>
-          )}
-        </div>
-      </PersonalMockSection>
-
-      <PersonalMockSection title="Recent Forwarding Activity">
-        {activity.length === 0 ? (
-          <p className={pm.muted}>
-            No recent calls. View full history on{" "}
-            <Link href="/personal/activity" className="font-semibold text-[#2563eb]">
-              Call Activity
-            </Link>
-            .
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                  <th className="pb-2 pr-3">Caller</th>
-                  <th className="pb-2 pr-3">Outcome</th>
-                  <th className="pb-2">When</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f3f4f6]">
-                {activity.map((row) => (
-                  <tr key={row.id}>
-                    <td className="py-2.5 pr-3 font-medium text-[#111827]">
-                      {formatPhone(row.caller)}
-                    </td>
-                    <td className="py-2.5 pr-3 text-[#6b7280]">{row.outcome}</td>
-                    <td className="py-2.5 text-[#6b7280]">
-                      {row.date} {row.time}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          ))}
+          <div>
+            <p className="mb-1 text-[12px] font-semibold">Outside schedule</p>
+            <PersonalMockSelect
+              className="w-full"
+              value={outsideHandling}
+              onChange={(e) =>
+                setOutsideHandling(
+                  e.target.value as "forward" | "voicemail_only" | "announcement_only",
+                )
+              }
+            >
+              <option value="forward">Forward calls</option>
+              <option value="voicemail_only">Voicemail only</option>
+              <option value="announcement_only">Announcement only</option>
+            </PersonalMockSelect>
           </div>
-        )}
-      </PersonalMockSection>
+        </div>
+      ) : (
+        <p className={pm.muted}>Forwarding rules apply 24/7.</p>
+      )}
     </div>
   );
 }
@@ -1251,9 +1258,6 @@ function ScheduleTargetList({
   const list = targets.length > 0 ? targets : [""];
   return (
     <div className="mt-2 space-y-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-        Forward to
-      </p>
       {list.map((target, i) => (
         <div key={i} className="flex items-center gap-2">
           <PersonalMockInput
@@ -1262,11 +1266,7 @@ function ScheduleTargetList({
             onChange={(e) => onChange(i, e.target.value)}
           />
           {i > 0 ? (
-            <button
-              type="button"
-              className="text-[12px] text-[#6b7280]"
-              onClick={() => onRemove(i)}
-            >
+            <button type="button" className="text-[12px] text-[#6b7280]" onClick={() => onRemove(i)}>
               Remove
             </button>
           ) : null}
@@ -1277,38 +1277,6 @@ function ScheduleTargetList({
           + Add line
         </button>
       ) : null}
-    </div>
-  );
-}
-
-function FallbackSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options?: Array<[string, string]>;
-}) {
-  const defaultOptions: Array<[string, string]> = [
-    ["voicemail", "Voicemail"],
-    ["another_number", "Another number"],
-    ["announcement", "Play announcement"],
-    ["end", "End call"],
-  ];
-  const list = options ?? defaultOptions;
-  return (
-    <div>
-      <p className="text-[12px] font-semibold text-[#374151]">{label}</p>
-      <PersonalMockSelect className="mt-2 w-full" value={value} onChange={(e) => onChange(e.target.value)}>
-        {list.map(([v, l]) => (
-          <option key={v} value={v}>
-            {l}
-          </option>
-        ))}
-      </PersonalMockSelect>
     </div>
   );
 }

@@ -231,9 +231,36 @@ export const WIREFRAME_FORWARDING_DESTINATIONS = [
 ];
 
 export const WIREFRAME_FORWARDING_ACTIVITY = [
-  { id: "demo-f1", caller: "+17035559191", calledNumber: "+15714073615", outcome: "Answered", date: "May 15, 2026", time: "3:42 PM" },
-  { id: "demo-f2", caller: "+12025550199", calledNumber: "+15714073615", outcome: "Voicemail", date: "May 14, 2026", time: "11:18 AM" },
-  { id: "demo-f3", caller: "+15714776175", calledNumber: "+15714073615", outcome: "Office Busy", date: "May 14, 2026", time: "9:05 AM" },
+  {
+    id: "demo-f1",
+    caller: "+17035559191",
+    calledNumber: "+15714073615",
+    forwardedTo: "+15714776175",
+    outcome: "Answered",
+    outcomeTone: "green" as const,
+    date: "May 15, 2026",
+    time: "3:42 PM",
+  },
+  {
+    id: "demo-f2",
+    caller: "+12025550199",
+    calledNumber: "+15714073615",
+    forwardedTo: "Voicemail",
+    outcome: "No Answer",
+    outcomeTone: "purple" as const,
+    date: "May 14, 2026",
+    time: "11:18 AM",
+  },
+  {
+    id: "demo-f3",
+    caller: "+15714776175",
+    calledNumber: "+15714073615",
+    forwardedTo: "+17035552408",
+    outcome: "Backup Route",
+    outcomeTone: "orange" as const,
+    date: "May 14, 2026",
+    time: "9:05 AM",
+  },
 ];
 
 export const WIREFRAME_FORWARDING_USAGE = {

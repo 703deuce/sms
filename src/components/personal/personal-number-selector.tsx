@@ -9,11 +9,13 @@ export function PersonalNumberSelector({
   selectedId,
   label = "Managing",
   allowAll = false,
+  selectClassName,
 }: {
   numbers: PersonalNumberRow[];
   selectedId?: string;
   label?: string;
   allowAll?: boolean;
+  selectClassName?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,7 +42,10 @@ export function PersonalNumberSelector({
         {label}
       </span>
       <select
-        className="h-10 min-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
+        className={
+          selectClassName ??
+          "h-10 min-w-[200px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
+        }
         value={current}
         onChange={(e) => onChange(e.target.value)}
       >

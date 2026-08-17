@@ -220,15 +220,17 @@ export function PersonalMockProgress({
   max,
   label,
   sub,
+  className,
 }: {
   value: number;
   max: number;
   label?: string;
   sub?: string;
+  className?: string;
 }) {
   const pct = Math.min(100, Math.round((value / max) * 100));
   return (
-    <div>
+    <div className={className}>
       {label ? (
         <div className="flex justify-between text-[12px]">
           <span className="text-[#6b7280]">{label}</span>

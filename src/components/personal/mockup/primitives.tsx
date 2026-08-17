@@ -67,6 +67,7 @@ export function PersonalMockKpi({
   iconClass = "bg-[#eef2ff] text-[#6366f1]",
   trend,
   trendLabel,
+  valueClassName,
 }: {
   label: string;
   value: string | number;
@@ -75,6 +76,7 @@ export function PersonalMockKpi({
   iconClass?: string;
   trend?: number;
   trendLabel?: string;
+  valueClassName?: string;
 }) {
   return (
     <div className={cn(pm.card, "p-4")}>
@@ -91,7 +93,12 @@ export function PersonalMockKpi({
         ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-[12px] font-medium leading-snug text-[#6b7280]">{label}</p>
-          <p className="mt-0.5 text-[28px] font-bold leading-none tracking-tight text-[#111827]">
+          <p
+            className={cn(
+              "mt-0.5 text-[28px] font-bold leading-none tracking-tight text-[#111827]",
+              valueClassName,
+            )}
+          >
             {value}
           </p>
           {sub ? <p className="mt-1 text-[12px] leading-snug text-[#6b7280]">{sub}</p> : null}
