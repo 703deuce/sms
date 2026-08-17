@@ -688,123 +688,114 @@ export const WIREFRAME_VOICEMAIL_KPIS = {
 };
 
 export const WIREFRAME_OVERVIEW_KPIS = {
-  totalNumbers: 3,
-  totalNumbersDelta: "+1 from last week",
-  voicemails: 0,
-  voicemailsTrendPct: 0,
-  transcriptions: 0,
-  transcriptionsTrendPct: 0,
-  calls30d: 0,
-  callsTrendPct: 0,
-  walletBalance: "$112.42",
-  walletTrendPct: 23.23,
-  blockedNumbers: 0,
-  blockedDelta: "+0 from last week",
-  walletAutoTopup: true,
+  phoneNumbers: 0,
+  totalExtensions: 0,
+  forwardedNumbers: 0,
+  agents: 0,
+  monthlySpend: "$12.45",
+  activeConversations: 0,
 };
 
-export const WIREFRAME_OVERVIEW_TOP_NUMBERS = [
+export const WIREFRAME_OVERVIEW_CALL_ACTIVITY = [
   {
-    id: "demo-on1",
-    label: "Sales",
-    phone: "+12134214467",
-    type: "Local",
-    forwarding: "+14153214567",
-    status: "Active",
-    statusTone: "green" as const,
-    activitySparkline: [2, 4, 3, 6, 5, 8, 7],
-  },
-  {
-    id: "demo-on2",
-    label: "Support",
-    phone: "+18005551234",
-    type: "Toll Free",
-    forwarding: "+14153214567",
-    status: "Active",
-    statusTone: "green" as const,
-    activitySparkline: [1, 2, 4, 3, 5, 4, 6],
-  },
-  {
-    id: "demo-on3",
-    label: "Personal",
-    phone: "+13105559876",
-    type: "Local",
-    forwarding: "—",
-    status: "Inactive",
-    statusTone: "yellow" as const,
-    activitySparkline: [0, 1, 0, 0, 1, 0, 0],
-  },
-  {
-    id: "demo-on4",
-    label: "Marketing",
-    phone: "+12135557890",
-    type: "Local",
-    forwarding: "+14153214567",
-    status: "Active",
-    statusTone: "green" as const,
-    activitySparkline: [3, 5, 4, 7, 6, 8, 9],
-  },
-];
-
-export const WIREFRAME_OVERVIEW_TIMELINE = [
-  { id: "demo-tl1", date: "Oct 24th", label: "Wallet topped up $25.00" },
-  { id: "demo-tl2", date: "Oct 23rd", label: "Number (213) 421-4467 activated" },
-  { id: "demo-tl3", date: "Oct 22nd", label: "Port request submitted" },
-  { id: "demo-tl4", date: "Oct 21st", label: "Voicemail greeting updated" },
-];
-
-export const WIREFRAME_OVERVIEW_TOP_DESTINATIONS = [
-  { phone: "+14153214567", date: "Oct 24", duration: "2:34" },
-  { phone: "+13105559876", date: "Oct 23", duration: "1:12" },
-  { phone: "+18005551234", date: "Oct 22", duration: "0:45" },
-];
-
-export const WIREFRAME_OVERVIEW_PENDING_TRANSFERS = [
-  {
-    id: "demo-pt1",
-    toFrom: "(213) 421-4467 → Carrier",
-    started: "Oct 22",
-    status: "In progress",
-    statusTone: "blue" as const,
-  },
-];
-
-export const WIREFRAME_OVERVIEW_RECENT_NUMBERS = [
-  {
-    phone: "+12134214467",
-    forwarding: "+14153214567",
+    id: "demo-ca1",
+    date: "Jul 12, 2023",
+    extensionAgent: "Samantha Reed",
+    type: "Cell",
+    duration: "4:32",
+    outcome: "Completed",
+    direction: "Inbound",
     status: "Active",
     statusTone: "green" as const,
   },
   {
-    phone: "+18005551234",
-    forwarding: "+14153214567",
+    id: "demo-ca2",
+    date: "Jul 11, 2023",
+    extensionAgent: "Jerome Bell",
+    type: "Landline",
+    duration: "2:18",
+    outcome: "Completed",
+    direction: "Outbound",
     status: "Active",
     statusTone: "green" as const,
   },
   {
-    phone: "+13105559876",
-    forwarding: "—",
-    status: "Inactive",
-    statusTone: "yellow" as const,
+    id: "demo-ca3",
+    date: "Jul 10, 2023",
+    extensionAgent: "Albert Flores",
+    type: "VoIP",
+    duration: "6:05",
+    outcome: "Missed",
+    direction: "Inbound",
+    status: "Pending",
+    statusTone: "orange" as const,
+  },
+  {
+    id: "demo-ca4",
+    date: "Jul 09, 2023",
+    extensionAgent: "Katherine Moss",
+    type: "Cell",
+    duration: "1:47",
+    outcome: "Completed",
+    direction: "Inbound",
+    status: "Active",
+    statusTone: "green" as const,
   },
 ];
 
-export const WIREFRAME_OVERVIEW_BILLING_HISTORY = [
-  { date: "Oct 23rd 2023", amount: "$10.00" },
-  { date: "Sep 23rd 2023", amount: "$10.00" },
-  { date: "Aug 23rd 2023", amount: "$25.00" },
+export const WIREFRAME_OVERVIEW_TOP_EXTENSIONS = [
+  { id: "demo-ext1", label: "Extension 101" },
+  { id: "demo-ext2", label: "Extension 202" },
+  { id: "demo-ext3", label: "Extension 303" },
 ];
 
-export const WIREFRAME_OVERVIEW_RECENT_VOICEMAIL = [
-  { id: "demo-vm1", name: "John Smith", phone: "+13104124235", at: "3m ago" },
-  { id: "demo-vm2", name: "Unknown", phone: "+12135557890", at: "1h ago" },
+export const WIREFRAME_OVERVIEW_ACTIVE_DEVICES = [
+  { id: "demo-dev1", label: "Office Desk Phone", sub: "San Francisco, CA" },
+  { id: "demo-dev2", label: "Mobile — Anthony", sub: "iOS Device" },
 ];
 
-export const WIREFRAME_OVERVIEW_TOP_CALL_NUMBERS = [
-  { label: "Sales", value: 12 },
-  { label: "Support", value: 8 },
-  { label: "Marketing", value: 5 },
-  { label: "Personal", value: 2 },
+export const WIREFRAME_OVERVIEW_QUICK_NOTES = [
+  { id: "demo-qn1", text: "Follow up on port request" },
+  { id: "demo-qn2", text: "Update voicemail greeting" },
+];
+
+export const WIREFRAME_OVERVIEW_INVOICES_LIST = [
+  { label: "May 2023", amount: "$12.45" },
+  { label: "Apr 2023", amount: "$12.45" },
+];
+
+export const WIREFRAME_OVERVIEW_PENDING_DEPLOYMENTS = [
+  { id: "demo-dep1", label: "SMS routing update", progress: 65 },
+  { id: "demo-dep2", label: "Number provisioning", progress: 30 },
+];
+
+export const WIREFRAME_OVERVIEW_ACTIVE_NUMBERS_LIST = [
+  {
+    id: "demo-an1",
+    phone: "+14555455555",
+    label: "New Line Number",
+  },
+];
+
+export const WIREFRAME_OVERVIEW_SERVICES = [
+  { label: "Cloud Connect", online: true },
+  { label: "SMS Messaging", online: true },
+  { label: "Voice Analytics", online: true },
+];
+
+export const WIREFRAME_OVERVIEW_COMMUNICATIONS = [
+  { phone: "+1 (415) 555-0199", at: "Jul 12, 2023 · 10:15 AM" },
+  { phone: "+1 (703) 555-9202", at: "Jul 11, 2023 · 4:42 PM" },
+  { phone: "+1 (571) 407-3615", at: "Jul 10, 2023 · 9:30 AM" },
+];
+
+export const WIREFRAME_OVERVIEW_RECENT_REPORTS = [
+  { name: "Call Summary Report.pdf", size: "5.2 MB" },
+  { name: "Usage Analytics Q2.pdf", size: "3.8 MB" },
+];
+
+export const WIREFRAME_OVERVIEW_CALL_STATUS = [
+  { label: "Call Time", value: 72 },
+  { label: "Average Wait Time", value: 28 },
 ];
 
