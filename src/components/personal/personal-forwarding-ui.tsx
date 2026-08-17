@@ -552,7 +552,8 @@ export function PersonalForwardingUI({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <PersonalMockKpi
           label="Forwarding Status"
-          value={statusLabel}
+          value={useWireframe ? "Active" : statusLabel}
+          sub={useWireframe ? WIREFRAME_FORWARDING_USAGE.statusSub : undefined}
           icon={PhoneForwarded}
           iconClass={
             forwardingOn && incomingHandling === "forward"
