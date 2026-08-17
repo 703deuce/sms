@@ -52,7 +52,7 @@ export function PersonalMockHeader({
           <h1 className={pm.title}>{title}</h1>
           {description ? <p className={pm.subtitle}>{description}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
       {filters ? <div className="flex flex-wrap items-center gap-2">{filters}</div> : null}
     </div>

@@ -270,6 +270,29 @@ export const WIREFRAME_FORWARDING_USAGE = {
   statusSub: "Sequential Mode",
 };
 
+export const WIREFRAME_FORWARDING_FALLBACK = [
+  {
+    condition: "If No One Answers",
+    action: "Send to Transovo Voicemail",
+    pills: ["Greeting: Main Line Greeting", "Transcription: On"],
+  },
+  {
+    condition: "If Destination Is Busy",
+    action: "Try Another Number",
+  },
+  {
+    condition: "If Destination Cannot Be Reached",
+    action: "Play Announcement",
+    pills: ["This number is no longer in service. Please try again later."],
+  },
+];
+
+export const WIREFRAME_FORWARDING_SCHEDULE = [
+  { label: "Mon–Fri 9:00 AM – 5:00 PM", dest: "Forward to destinations", icon: "calendar" as const },
+  { label: "Evenings", dest: "Voicemail", icon: "clock" as const },
+  { label: "Weekends", dest: "Announcement", icon: "weekend" as const },
+];
+
 export const WIREFRAME_VOICEMAIL_MESSAGES = [
   {
     id: "demo-vm1",
