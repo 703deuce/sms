@@ -58,6 +58,7 @@ export function PersonalVoicemailUI({
   const [searchQuery, setSearchQuery] = useState("");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [showGreetingEditor, setShowGreetingEditor] = useState(false);
   const greetingRef = useRef<HTMLDivElement>(null);
 
   const loadVoicemail = useCallback(async () => {
@@ -291,16 +292,13 @@ export function PersonalVoicemailUI({
     <PersonalMockPage>
       <PersonalMockHeader
         title="Voicemail"
-        description="Your call destination when you can't answer — inside Transovo, not your carrier."
+        description="Manage messages, greetings, transcription, and voicemail delivery for each of your numbers."
         actions={
           <>
-            <PersonalMockBtn onClick={() => greetingRef.current?.scrollIntoView({ behavior: "smooth" })}>
+            <PersonalMockBtn onClick={() => setShowGreetingEditor(true)}>
               Create Greeting
             </PersonalMockBtn>
-            <PersonalMockBtn
-              variant="outline"
-              onClick={() => greetingRef.current?.scrollIntoView({ behavior: "smooth" })}
-            >
+            <PersonalMockBtn variant="outline" onClick={() => setShowGreetingEditor(true)}>
               Record Greeting
             </PersonalMockBtn>
           </>
@@ -534,17 +532,28 @@ export function PersonalVoicemailUI({
               </li>
             ))}
           </ul>
-          <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
-            <PersonalGreetingControls
-              greetingText={box?.greetingText || "Please leave a message after the tone."}
-              greetingUrl={box?.greetingUrl}
-              onSaveText={saveGreetingText}
-              onSaveUrl={saveGreetingUrl}
-            />
-            <PersonalMockBtn variant="outline" className="mt-3" onClick={useDefaultGreeting}>
-              Use default greeting
-            </PersonalMockBtn>
-          </div>
+          {showGreetingEditor ? (
+            <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+              <PersonalGreetingControls
+                greetingText={box?.greetingText || "Please leave a message after the tone."}
+                greetingUrl={box?.greetingUrl}
+                onSaveText={saveGreetingText}
+                onSaveUrl={saveGreetingUrl}
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <PersonalMockBtn variant="outline" onClick={useDefaultGreeting}>
+                  Use default greeting
+                </PersonalMockBtn>
+                <PersonalMockBtn variant="ghost" onClick={() => setShowGreetingEditor(false)}>
+                  Close
+                </PersonalMockBtn>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-[12px] text-[#6b7280]">
+              Use Create Greeting or Record Greeting above to customize your message.
+            </p>
+          )}
         </PersonalMockSection>
 
         <PersonalMockSection title="Recent Voicemail Activity">

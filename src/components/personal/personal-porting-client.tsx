@@ -175,6 +175,7 @@ export function PersonalPortingClient({
     message: string;
   } | null>(null);
   const [checking, setChecking] = useState(false);
+  const [portInStep, setPortInStep] = useState(1);
 
   const selected = numbers.find((n) => n.id === selectedId);
   const portOutRequests = portRequests.filter(
@@ -342,7 +343,7 @@ export function PersonalPortingClient({
     <PersonalMockPage right={sidebar}>
       <PersonalMockHeader
         title="Porting"
-        description="Bring your number in or move it to another carrier."
+        description="Bring your existing numbers to Transovo or transfer your Transovo numbers elsewhere."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -383,44 +384,58 @@ export function PersonalPortingClient({
 
       {tab === "in" ? (
         <div className="space-y-6">
-          <StepAccordion steps={PORT_IN_STEPS} activeStep={1}>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[13px] font-semibold text-[#374151]">
-                  Phone numbers to port
-                </label>
-                <textarea
-                  className="mt-2 w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px] outline-none focus:border-[#6366f1]"
-                  rows={4}
-                  placeholder="Enter one number per line, e.g.&#10;+1 (555) 123-4567&#10;+1 (555) 987-6543"
-                  value={phoneInput}
-                  onChange={(e) => {
-                    setPhoneInput(e.target.value);
-                    setEligibility(null);
-                  }}
-                />
-              </div>
-              <PersonalMockBtn onClick={checkPortability} disabled={checking}>
-                {checking ? "Checking…" : "Check Portability"}
-              </PersonalMockBtn>
-              {eligibility?.checked ? (
-                <div
-                  className={cn(
-                    "rounded-lg border p-3 text-[13px]",
-                    eligibility.eligible
-                      ? "border-[#bbf7d0] bg-[#ecfdf5] text-[#059669]"
-                      : "border-[#fecaca] bg-[#fef2f2] text-[#dc2626]",
-                  )}
-                >
-                  {eligibility.message}
+          <StepAccordion steps={PORT_IN_STEPS} activeStep={portInStep}>
+            {portInStep === 1 ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[13px] font-semibold text-[#374151]">
+                    Phone numbers to port
+                  </label>
+                  <textarea
+                    className="mt-2 w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px] outline-none focus:border-[#6366f1]"
+                    rows={4}
+                    placeholder="Enter one number per line, e.g.&#10;+1 (555) 123-4567&#10;+1 (555) 987-6543"
+                    value={phoneInput}
+                    onChange={(e) => {
+                      setPhoneInput(e.target.value);
+                      setEligibility(null);
+                      setPortInStep(1);
+                    }}
+                  />
                 </div>
-              ) : null}
-            </div>
+                <PersonalMockBtn onClick={checkPortability} disabled={checking}>
+                  {checking ? "Checking…" : "Check Portability"}
+                </PersonalMockBtn>
+                {eligibility?.checked ? (
+                  <div
+                    className={cn(
+                      "rounded-lg border p-3 text-[13px]",
+                      eligibility.eligible
+                        ? "border-[#bbf7d0] bg-[#ecfdf5] text-[#059669]"
+                        : "border-[#fecaca] bg-[#fef2f2] text-[#dc2626]",
+                    )}
+                  >
+                    {eligibility.message}
+                    {eligibility.eligible ? (
+                      <PersonalMockBtn
+                        className="mt-3"
+                        onClick={() => setPortInStep(3)}
+                      >
+                        Continue to account details
+                      </PersonalMockBtn>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : portInStep === 3 ? (
+              <div className="space-y-3">
+                <p className={pm.muted}>
+                  Complete carrier account details to submit your port-in request.
+                </p>
+                <PortNumberForm />
+              </div>
+            ) : null}
           </StepAccordion>
-
-          <div className="rounded-xl border border-[#e5e7eb] bg-white p-4">
-            <PortNumberForm />
-          </div>
 
           <PersonalMockSection title="Existing Port Requests">
             {portInRequests.length > 0 ? (
