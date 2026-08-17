@@ -700,7 +700,7 @@ export function PersonalVaultUI({
                                 <button
                                   type="button"
                                   className="rounded-lg p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
-                                  aria-label="More actions"
+                                  aria-label="Row menu"
                                   onClick={() =>
                                     setMenuOpenId((cur) => (cur === n.id ? null : n.id))
                                   }
