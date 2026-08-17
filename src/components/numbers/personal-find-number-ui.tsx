@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { srCard } from "@/components/smart-routing/shared";
 import {
   type PremiumNumberProductResult,
   type PremiumSearchProductResponse,
@@ -18,26 +17,25 @@ import {
 } from "@/lib/premium-numbers/toll-free";
 import { cn } from "@/lib/utils";
 import {
-  ArrowRight,
-  Briefcase,
+  ArrowRightLeft,
+  Check,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
+  Download,
   Filter,
+  Globe,
   Grid3x3,
   Heart,
   LayoutList,
-  Lightbulb,
+  ListOrdered,
   MapPin,
   Phone,
   RefreshCw,
+  Share2,
   Sparkles,
-  Trophy,
+  Users,
   Wand2,
-  Zap,
 } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   PremiumCheckoutModal,
@@ -50,19 +48,43 @@ const TOLL_FREE_OPTIONS: { value: TollFreePrefix; label: string }[] = [
   ...TOLL_FREE_AREA_CODES.map((code) => ({ value: code as TollFreePrefix, label: code })),
 ];
 
-const STANDARD_MONTHLY_SERVICE_CENTS = 115;
+const PRIMARY = "#4338ca";
+const DISPLAY_MONTHLY_CENTS = 1500;
 
+type SearchType = "contains" | "starts_with" | "ends_with";
 type SearchIntent = "business_keyword" | "number_pattern" | "surprise_me";
+type SearchPrefId =
+  | "direct_dial"
+  | "vanity"
+  | "sequential"
+  | "shared_use"
+  | "port_ready"
+  | "multi_region";
 
 type PatternChipId = PersonalPreference | "word_pattern";
 
-const PATTERN_CHIPS: { id: PatternChipId; label: string }[] = [
-  { id: "repeating_digits", label: "Repeating Digits" },
-  { id: "ends_0000", label: "Ends in 0000" },
-  { id: "easy_sequence", label: "Easy Sequence" },
-  { id: "repeating_pair", label: "Repeating Pair" },
-  { id: "very_memorable", label: "Very Memorable" },
-  { id: "word_pattern", label: "Word + Pattern" },
+const SEARCH_PREFS: {
+  id: SearchPrefId;
+  label: string;
+  icon: typeof Phone;
+}[] = [
+  { id: "direct_dial", label: "Direct Dial", icon: Phone },
+  { id: "vanity", label: "Vanity", icon: Sparkles },
+  { id: "sequential", label: "Sequential", icon: ListOrdered },
+  { id: "shared_use", label: "Shared Use", icon: Users },
+  { id: "port_ready", label: "Port-Ready", icon: ArrowRightLeft },
+  { id: "multi_region", label: "Multi-Region", icon: Globe },
+];
+
+const SERVICE_TAGS = ["SMS", "MMS", "Voice", "Fax"] as const;
+
+const PROVINCES = [
+  "Vermont",
+  "Virginia",
+  "California",
+  "Texas",
+  "New York",
+  "Florida",
 ];
 
 const pm = {
@@ -76,24 +98,44 @@ function splitKeywordInput(text: string): string[] {
     .filter(Boolean);
 }
 
-function toApiPreferences(selected: PatternChipId[]): PersonalPreference[] {
-  const withoutWord = selected.filter((p) => p !== "word_pattern");
-  if (selected.includes("word_pattern")) {
-    const set = new Set<PersonalPreference>([
-      ...withoutWord,
-      "very_memorable",
-      "repeating_pair",
-    ] as PersonalPreference[]);
-    return [...set];
-  }
-  return withoutWord as PersonalPreference[];
+function maskToKeywords(mask: string): string[] {
+  const letters = mask.match(/[A-Za-z]+/g) ?? [];
+  return letters.map((w) => w.toUpperCase()).filter((w) => w.length >= 2);
 }
 
-function formatMonthlyService(cents: number): string {
+function deriveIndustry(mask: string, tags: string[]): string {
+  if (tags[0] && tags[0].length >= 2) return tags[0].toLowerCase();
+  const words = mask.match(/[A-Za-z]{2,}/g);
+  if (words?.[0]) return words[0].toLowerCase();
+  return "local services";
+}
+
+function toApiPreferences(
+  searchPrefs: SearchPrefId[],
+  searchType: SearchType,
+): PersonalPreference[] {
+  const prefs: PersonalPreference[] = [];
+  if (searchPrefs.includes("sequential") || searchType === "ends_with") {
+    prefs.push("easy_sequence", "repeating_pair", "ends_0000");
+  }
+  if (searchPrefs.includes("direct_dial")) {
+    prefs.push("very_memorable");
+  }
+  if (searchPrefs.includes("vanity")) {
+    prefs.push("very_memorable", "repeating_digits");
+  }
+  if (!prefs.length) {
+    return searchType === "ends_with" ? ["ends_0000"] : ["surprise_me"];
+  }
+  return [...new Set(prefs)];
+}
+
+function formatMonthlyDisplay(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(cents / 100);
 }
 
@@ -101,19 +143,20 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   const [numberType, setNumberType] = useState<NumberType>("local");
   const [areaCodesInput, setAreaCodesInput] = useState("");
   const [tollFreePrefix, setTollFreePrefix] = useState<TollFreePrefix>("all");
-  const [searchIntent, setSearchIntent] = useState<SearchIntent>("business_keyword");
-  const [industry, setIndustry] = useState("");
+  const [searchType, setSearchType] = useState<SearchType>("contains");
+  const [countryProvince, setCountryProvince] = useState("Vermont");
+  const [serviceTags, setServiceTags] = useState<Set<string>>(
+    new Set(["SMS", "MMS", "Voice", "Fax"]),
+  );
+  const [numberMask, setNumberMask] = useState("");
+  const [searchPrefs, setSearchPrefs] = useState<SearchPrefId[]>(["direct_dial", "vanity"]);
   const [suggestedKeywords, setSuggestedKeywords] = useState("");
-  const [extraKeywords, setExtraKeywords] = useState("");
-  const [patternPrefs, setPatternPrefs] = useState<PatternChipId[]>(["repeating_digits"]);
   const [suggestingKeywords, setSuggestingKeywords] = useState(false);
   const [suggestError, setSuggestError] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [compare, setCompare] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<"best" | "price" | "score">("best");
+  const [sortBy, setSortBy] = useState<"default" | "price" | "score">("default");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [morePage, setMorePage] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [searchingMore, setSearchingMore] = useState(false);
@@ -129,18 +172,37 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
   const keywordTags = useMemo(() => splitKeywordInput(suggestedKeywords), [suggestedKeywords]);
 
+  const apiIntent: SearchIntent = useMemo(() => {
+    if (searchType === "ends_with" || searchPrefs.includes("sequential")) {
+      return "number_pattern";
+    }
+    if (
+      searchPrefs.includes("vanity") ||
+      searchType === "contains" ||
+      searchType === "starts_with"
+    ) {
+      return "business_keyword";
+    }
+    return "surprise_me";
+  }, [searchType, searchPrefs]);
+
+  const industryForSearch = useMemo(
+    () => deriveIndustry(numberMask, keywordTags),
+    [numberMask, keywordTags],
+  );
+
   const canSearch =
     parsedAreaCodes.length > 0 &&
-    (searchIntent === "business_keyword"
-      ? industry.trim().length >= 2
-      : searchIntent === "number_pattern"
-        ? patternPrefs.length > 0
-        : true);
+    (apiIntent === "business_keyword"
+      ? industryForSearch.length >= 2 ||
+        keywordTags.length > 0 ||
+        numberMask.replace(/\D/g, "").length >= 4
+      : true);
 
   async function onSuggestKeywords() {
-    const industryText = industry.trim();
+    const industryText = industryForSearch;
     if (industryText.length < 2) {
-      setSuggestError("Enter your industry first");
+      setSuggestError("Enter a number mask with letters first");
       return;
     }
     setSuggestingKeywords(true);
@@ -165,17 +227,26 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     }
   }
 
-  function removeKeywordTag(tag: string) {
-    const next = keywordTags.filter((k) => k !== tag);
-    setSuggestedKeywords(next.join(", "));
-  }
-
   function resetSearch() {
     setSearchResponse(null);
     setSearchDurationSec(null);
     setSearchCompletedAt(null);
     setError("");
-    setMorePage(0);
+  }
+
+  function toggleServiceTag(tag: string) {
+    setServiceTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
+
+  function toggleSearchPref(id: SearchPrefId) {
+    setSearchPrefs((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+    );
   }
 
   async function onSearch() {
@@ -186,22 +257,25 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     setSuccess(null);
     setSearchDurationSec(null);
     setSearchCompletedAt(null);
-    setMorePage(0);
     const started = performance.now();
 
+    const maskKeywords = maskToKeywords(numberMask);
+    const extraFromMask = splitKeywordInput(numberMask.replace(/[A-Za-z-]/g, " ").trim());
+    const allExtra = [...new Set([...maskKeywords, ...splitKeywordInput(numberMask), ...extraFromMask])];
+
     const body =
-      searchIntent === "business_keyword"
+      apiIntent === "business_keyword"
         ? {
             workspaceId,
             mode: "business" as const,
             numberType,
             areaCodes: parsedAreaCodes,
             tollFreePrefix: numberType === "tollfree" ? tollFreePrefix : undefined,
-            industry: industry.trim(),
-            suggestedKeywords: keywordTags,
-            extraKeywords: splitKeywordInput(extraKeywords),
+            industry: industryForSearch,
+            suggestedKeywords: keywordTags.length ? keywordTags : maskKeywords,
+            extraKeywords: allExtra,
           }
-        : searchIntent === "surprise_me"
+        : apiIntent === "surprise_me"
           ? {
               workspaceId,
               mode: "personal" as const,
@@ -212,7 +286,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
               workspaceId,
               mode: "personal" as const,
               areaCodes: parsedAreaCodes,
-              preferences: toApiPreferences(patternPrefs),
+              preferences: toApiPreferences(searchPrefs, searchType),
             };
 
     try {
@@ -288,7 +362,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
 
   async function onGetNumber(result: PremiumNumberProductResult) {
     if (!searchResponse?.searchLogId) return;
-    const searchMode = searchIntent === "business_keyword" ? "business" : "personal";
+    const searchMode = apiIntent === "business_keyword" ? "business" : "personal";
     setReserving(result.phoneNumber);
     setReserveError("");
     try {
@@ -329,62 +403,60 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     });
   }
 
-  function toggleCompare(phone: string) {
-    setCompare((prev) => {
-      const next = new Set(prev);
-      if (next.has(phone)) next.delete(phone);
-      else if (next.size < 4) next.add(phone);
-      return next;
+  const allResults = useMemo(() => {
+    if (!searchResponse) return [];
+    const pool = [
+      ...(searchResponse.bestMatches ?? []),
+      ...(searchResponse.topPicks ?? []),
+      ...(searchResponse.memorableAlternatives ?? []),
+    ];
+    const seen = new Set<string>();
+    return pool.filter((r) => {
+      if (seen.has(r.phoneNumber)) return false;
+      seen.add(r.phoneNumber);
+      return true;
     });
-  }
+  }, [searchResponse]);
 
   const bestMatches = useMemo(() => {
-    if (!searchResponse) return [];
-    const fromBusiness = searchResponse.bestMatches ?? [];
-    const fromPersonal = searchResponse.topPicks ?? [];
-    const base = fromBusiness.length ? fromBusiness : fromPersonal;
-    const sorted = [...base];
+    const sorted = [...allResults];
     if (sortBy === "price") {
       sorted.sort((a, b) => a.premiumPriceCents - b.premiumPriceCents);
     } else if (sortBy === "score") {
       sorted.sort((a, b) => b.numberQualityScore - a.numberQualityScore);
     }
-    return sorted.slice(0, 3);
-  }, [searchResponse, sortBy]);
+    return sorted.slice(0, 10);
+  }, [allResults, sortBy]);
 
   const moreMatches = useMemo(() => {
-    if (!searchResponse) return [];
-    const pool =
-      searchResponse.memorableAlternatives?.length
-        ? searchResponse.memorableAlternatives
-        : (searchResponse.topPicks ?? []).slice(3);
-    const sorted = [...pool];
+    const bestPhones = new Set(bestMatches.map((r) => r.phoneNumber));
+    const sorted = allResults.filter((r) => !bestPhones.has(r.phoneNumber));
     if (sortBy === "price") {
       sorted.sort((a, b) => a.premiumPriceCents - b.premiumPriceCents);
     } else if (sortBy === "score") {
       sorted.sort((a, b) => b.numberQualityScore - a.numberQualityScore);
     }
     return sorted;
-  }, [searchResponse, sortBy]);
+  }, [allResults, bestMatches, sortBy]);
 
-  const morePageSize = 6;
-  const morePaged = moreMatches.slice(morePage * morePageSize, (morePage + 1) * morePageSize);
-  const morePages = Math.max(1, Math.ceil(moreMatches.length / morePageSize));
-
-  const strongMatches =
-    searchResponse?.businessMatchCount ??
-    bestMatches.filter((r) => r.numberQualityScore >= 75).length;
-
+  const resultCount = searchResponse?.resultCount ?? bestMatches.length;
   const bestScore = bestMatches[0]?.numberQualityScore ?? 0;
+
+  const searchTypeLabel =
+    searchType === "contains"
+      ? "Contains"
+      : searchType === "starts_with"
+        ? "Starts With"
+        : "Ends With";
 
   return (
     <div className="mx-auto max-w-[1320px]">
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        <div className="min-w-0 flex-1 space-y-5">
+        <div className="min-w-0 flex-1 space-y-4">
           <header>
             <h1 className="text-[22px] font-bold tracking-tight text-[#111827]">Find a Number</h1>
             <p className="mt-1 text-[14px] text-[#6b7280]">
-              Search memorable local and toll-free numbers that help your business stand out.
+              Search and select numbers from various countries for your business needs.
             </p>
           </header>
 
@@ -393,161 +465,165 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
               <div>
                 <p className="mb-2 text-[12px] font-semibold text-[#374151]">Number Type</p>
                 <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
-                  <IntentToggle
-                    active={numberType === "local"}
-                    onClick={() => setNumberType("local")}
-                    icon={MapPin}
-                  >
+                  <TypeToggle active={numberType === "local"} onClick={() => setNumberType("local")}>
+                    {numberType === "local" ? <Check className="h-3.5 w-3.5" /> : null}
                     Local
-                  </IntentToggle>
-                  <IntentToggle
+                  </TypeToggle>
+                  <TypeToggle
                     active={numberType === "tollfree"}
                     onClick={() => setNumberType("tollfree")}
-                    icon={Phone}
                   >
-                    Toll-Free
-                  </IntentToggle>
+                    Toll Free
+                  </TypeToggle>
                 </div>
               </div>
 
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Area Codes</p>
+                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Area Code</p>
                 <Input
                   value={areaCodesInput}
                   onChange={(e) =>
                     setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
                   }
-                  placeholder="571"
+                  placeholder="551"
                   className="h-10 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                 />
               </div>
 
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Search Intent</p>
+                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Search Type</p>
                 <div className="inline-flex flex-wrap rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
-                  <IntentToggle
-                    active={searchIntent === "business_keyword"}
-                    onClick={() => setSearchIntent("business_keyword")}
-                    icon={Briefcase}
-                  >
-                    Business / Keyword
-                  </IntentToggle>
-                  <IntentToggle
-                    active={searchIntent === "number_pattern"}
-                    onClick={() => setSearchIntent("number_pattern")}
-                    icon={Grid3x3}
-                  >
-                    Number Pattern
-                  </IntentToggle>
-                  <IntentToggle
-                    active={searchIntent === "surprise_me"}
-                    onClick={() => setSearchIntent("surprise_me")}
-                    icon={Sparkles}
-                  >
-                    Surprise Me
-                  </IntentToggle>
+                  {(
+                    [
+                      ["contains", "Contains Pattern"],
+                      ["starts_with", "Starts With"],
+                      ["ends_with", "Ends With"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <TypeToggle
+                      key={id}
+                      active={searchType === id}
+                      onClick={() => setSearchType(id)}
+                    >
+                      {label}
+                    </TypeToggle>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {searchIntent === "business_keyword" ? (
-              <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                <div>
-                  <p className="mb-2 text-[12px] font-semibold text-[#374151]">
-                    Industry or What You Do
-                  </p>
-                  <div className="relative">
-                    <Input
-                      value={industry}
-                      onChange={(e) => setIndustry(e.target.value)}
-                      placeholder="electrician"
-                      className="h-10 rounded-lg border-[#e5e7eb] bg-white pr-10 text-[14px]"
-                    />
-                    <Zap className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6366f1]" />
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-[12px] font-semibold text-[#374151]">Suggested Keywords</p>
-                  <div className="flex min-h-[40px] flex-wrap items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5">
-                    {keywordTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-md bg-[#f3f4f6] px-2 py-0.5 text-[11px] font-semibold uppercase text-[#374151]"
-                      >
-                        {tag}
-                        <button
-                          type="button"
-                          className="text-[#9ca3af] hover:text-[#111827]"
-                          onClick={() => removeKeywordTag(tag)}
-                          aria-label={`Remove ${tag}`}
-                        >
-                          ×
-                        </button>
-                      </span>
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Country or Province</p>
+                <div className="relative">
+                  <select
+                    className="h-10 w-full appearance-none rounded-lg border border-[#e5e7eb] bg-white px-3 pr-8 text-[14px] text-[#111827]"
+                    value={countryProvince}
+                    onChange={(e) => setCountryProvince(e.target.value)}
+                  >
+                    {PROVINCES.map((p) => (
+                      <option key={p} value={p}>{p}</option>
                     ))}
-                    <button
-                      type="button"
-                      className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-[#9ca3af] hover:bg-[#f3f4f6]"
-                      onClick={onSuggestKeywords}
-                      disabled={suggestingKeywords}
-                      aria-label="Suggest keywords"
-                    >
-                      <Wand2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {suggestError ? (
-                    <p className="mt-1 text-[11px] text-red-600">{suggestError}</p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <p className="mb-2 text-[12px] font-semibold text-[#374151]">
-                    Business Name or Custom Words
-                  </p>
-                  <Input
-                    value={extraKeywords}
-                    onChange={(e) => setExtraKeywords(e.target.value)}
-                    placeholder="e.g. MIKE for Mike's Plumbing"
-                    className="h-10 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
-                  />
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
                 </div>
               </div>
-            ) : null}
 
-            {searchIntent !== "surprise_me" ? (
-              <div className="mt-5">
-                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Pattern Preferences</p>
-                <div className="flex flex-wrap gap-2">
-                  {PATTERN_CHIPS.map((chip) => {
-                    const active = patternPrefs.includes(chip.id);
+              <div>
+                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Supports / Service</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {SERVICE_TAGS.map((tag) => {
+                    const active = serviceTags.has(tag);
                     return (
                       <button
-                        key={chip.id}
+                        key={tag}
                         type="button"
-                        onClick={() => {
-                          setPatternPrefs((prev) => {
-                            if (active) {
-                              const next = prev.filter((p) => p !== chip.id);
-                              return next.length ? next : ["repeating_digits"];
-                            }
-                            return [...prev, chip.id];
-                          });
-                        }}
+                        onClick={() => toggleServiceTag(tag)}
                         className={cn(
-                          "rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition",
+                          "rounded-md border px-2.5 py-1 text-[11px] font-semibold transition",
                           active
-                            ? "border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
-                            : "border-[#e5e7eb] bg-white text-[#374151] hover:border-[#c7d2fe]",
+                            ? "border-[#4338ca] bg-[#eef2ff] text-[#4338ca]"
+                            : "border-[#e5e7eb] bg-white text-[#6b7280]",
                         )}
                       >
-                        {chip.label}
+                        {tag}
                       </button>
                     );
                   })}
+                  <ChevronDown className="h-4 w-4 self-center text-[#9ca3af]" aria-hidden />
                 </div>
               </div>
-            ) : null}
+
+              <div>
+                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Number Mask or Sequence</p>
+                <Input
+                  value={numberMask}
+                  onChange={(e) => setNumberMask(e.target.value)}
+                  placeholder="e.g. 555-GET-HELP"
+                  className="h-10 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="mb-2 text-[12px] font-semibold text-[#374151]">Search Preferences</p>
+              <div className="flex flex-wrap gap-2">
+                {SEARCH_PREFS.map((pref) => {
+                  const Icon = pref.icon;
+                  const active = searchPrefs.includes(pref.id);
+                  return (
+                    <button
+                      key={pref.id}
+                      type="button"
+                      onClick={() => toggleSearchPref(pref.id)}
+                      className={cn(
+                        "flex min-w-[100px] flex-col items-center gap-1 rounded-lg border px-3 py-2.5 text-[11px] font-semibold transition",
+                        active
+                          ? "border-[#4338ca] bg-[#eef2ff] text-[#4338ca]"
+                          : "border-[#e5e7eb] bg-white text-[#374151] hover:border-[#c7d2fe]",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {pref.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {keywordTags.length > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-medium text-[#6b7280]">Keywords:</span>
+                {keywordTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-md bg-[#f3f4f6] px-2 py-0.5 text-[11px] font-semibold uppercase text-[#374151]"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  className="ml-1 text-[#9ca3af] hover:text-[#4338ca]"
+                  onClick={onSuggestKeywords}
+                  disabled={suggestingKeywords}
+                  aria-label="Refresh keywords"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="mt-4 inline-flex items-center gap-1 text-[12px] font-medium text-[#4338ca]"
+                onClick={onSuggestKeywords}
+                disabled={suggestingKeywords}
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                {suggestingKeywords ? "Suggesting keywords…" : "Suggest keywords from mask"}
+              </button>
+            )}
+            {suggestError ? <p className="mt-1 text-[11px] text-red-600">{suggestError}</p> : null}
 
             {showAdvanced && numberType === "tollfree" ? (
               <div className="mt-4">
@@ -567,20 +643,46 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#6b7280] hover:text-[#111827]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px] font-medium text-[#374151] hover:bg-[#f9fafb]"
                 onClick={() => setShowAdvanced((v) => !v)}
               >
-                Advanced Filters
+                Advanced Filter
                 <ChevronDown className={cn("h-4 w-4 transition", showAdvanced && "rotate-180")} />
               </button>
               <Button
                 onClick={onSearch}
                 disabled={loading || !canSearch}
-                className="h-11 min-w-[200px] rounded-lg bg-[#6366f1] px-6 text-[14px] font-semibold shadow-[0_4px_14px_rgba(99,102,241,0.35)] hover:bg-[#5558e3]"
+                className="h-11 min-w-[200px] rounded-lg px-6 text-[14px] font-semibold text-white shadow-[0_4px_14px_rgba(67,56,202,0.35)] hover:opacity-95"
+                style={{ backgroundColor: PRIMARY }}
               >
-                {loading ? "Searching…" : "Find My Numbers"}
-                <ArrowRight className="h-4 w-4" />
+                {loading ? "Searching…" : "Call for Numbers"}
               </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-[12px] text-[#6b7280]">
+            <div className="flex items-center gap-3">
+              <button type="button" className="hover:text-[#111827]" aria-label="Download results">
+                <Download className="h-4 w-4" />
+              </button>
+              <button type="button" className="hover:text-[#111827]" aria-label="Share search">
+                <Share2 className="h-4 w-4" />
+              </button>
+              <button type="button" className="hover:text-[#111827]" aria-label="Save search">
+                <Heart className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <span>{loading ? "Results may take up to 30 sec" : "Results may take up to 30 sec"}</span>
+              <select
+                className="h-8 rounded-lg border border-[#e5e7eb] bg-white px-2 text-[12px]"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              >
+                <option value="default">Sort by: Default</option>
+                <option value="score">Highest Score</option>
+                <option value="price">Lowest Price</option>
+              </select>
             </div>
           </div>
 
@@ -588,25 +690,19 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#bbf7d0] bg-[#ecfdf5] px-4 py-3 text-[13px]">
               <span className="flex items-center gap-2 font-medium text-[#047857]">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {searchResponse.inventoryScannedCount ?? searchResponse.resultCount} numbers scanned
-                • {strongMatches} strong matches • Search completed in {searchDurationSec} sec
+                {searchResponse.inventoryScannedCount ?? resultCount} numbers scanned • Search
+                completed in {searchDurationSec} sec
               </span>
-              <span className="flex items-center gap-3 text-[12px] text-[#6b7280]">
-                {searchCompletedAt
-                  ? `Searched: Today at ${searchCompletedAt.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}`
-                  : null}
+              {searchCompletedAt ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 font-semibold text-[#6366f1]"
+                  className="inline-flex items-center gap-1 font-semibold text-[#4338ca]"
                   onClick={resetSearch}
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   New Search
                 </button>
-              </span>
+              ) : null}
             </div>
           ) : null}
 
@@ -622,33 +718,33 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             <section className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-[#6366f1]" />
+                  <MapPin className="h-4 w-4 text-[#4338ca]" />
                   <h2 className="text-[16px] font-bold text-[#111827]">Best Matches</h2>
-                  <span className="text-[12px] text-[#6b7280]">{bestMatches.length} top results</span>
+                  <span className="text-[12px] text-[#6b7280]">{resultCount} numbers found</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    className="h-9 rounded-lg border border-[#e5e7eb] bg-white px-2 text-[12px]"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                  >
-                    <option value="best">Sort by: Best Match</option>
-                    <option value="score">Highest Score</option>
-                    <option value="price">Lowest Price</option>
-                  </select>
+                  <span className="rounded-lg border border-[#e5e7eb] px-3 py-1.5 text-[12px] font-semibold text-[#374151]">
+                    All ({resultCount})
+                  </span>
                   <button
                     type="button"
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#e5e7eb] px-3 text-[12px] font-medium text-[#374151]"
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e5e7eb] px-3 text-[12px] font-medium text-[#374151]"
+                  >
+                    Sort By
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e5e7eb] px-3 text-[12px] font-medium text-[#374151]"
                   >
                     <Filter className="h-3.5 w-3.5" />
-                    Filters
+                    Filter
                   </button>
                   <div className="inline-flex rounded-lg border border-[#e5e7eb] p-0.5">
                     <button
                       type="button"
                       className={cn(
                         "rounded-md p-1.5",
-                        viewMode === "grid" ? "bg-[#eef2ff] text-[#6366f1]" : "text-[#9ca3af]",
+                        viewMode === "grid" ? "bg-[#eef2ff] text-[#4338ca]" : "text-[#9ca3af]",
                       )}
                       onClick={() => setViewMode("grid")}
                       aria-label="Grid view"
@@ -659,7 +755,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                       type="button"
                       className={cn(
                         "rounded-md p-1.5",
-                        viewMode === "list" ? "bg-[#eef2ff] text-[#6366f1]" : "text-[#9ca3af]",
+                        viewMode === "list" ? "bg-[#eef2ff] text-[#4338ca]" : "text-[#9ca3af]",
                       )}
                       onClick={() => setViewMode("list")}
                       aria-label="List view"
@@ -667,12 +763,6 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                       <LayoutList className="h-4 w-4" />
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="h-9 rounded-lg border border-[#e5e7eb] px-3 text-[12px] font-semibold text-[#374151]"
-                  >
-                    Compare ({compare.size})
-                  </button>
                 </div>
               </div>
 
@@ -683,18 +773,15 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                     : "space-y-3",
                 )}
               >
-                {bestMatches.map((result, i) => (
+                {bestMatches.slice(0, 3).map((result) => (
                   <FindNumberCard
                     key={result.phoneNumber}
                     result={result}
-                    variant={i === 0 ? "best" : "featured"}
+                    numberType={numberType}
                     loading={reserving === result.phoneNumber}
                     favorited={favorites.has(result.phoneNumber)}
-                    compared={compare.has(result.phoneNumber)}
                     onToggleFavorite={() => toggleFavorite(result.phoneNumber)}
-                    onToggleCompare={() => toggleCompare(result.phoneNumber)}
                     onGetNumber={() => onGetNumber(result)}
-                    layout={viewMode}
                   />
                 ))}
               </div>
@@ -702,43 +789,15 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
           ) : null}
 
           {searchResponse && !success && moreMatches.length > 0 ? (
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-[16px] font-bold text-[#111827]">More Great Matches</h2>
-                  <p className="text-[12px] text-[#6b7280]">
-                    {moreMatches.length} additional numbers
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={morePage === 0}
-                    className="rounded-lg border border-[#e5e7eb] p-2 disabled:opacity-40"
-                    onClick={() => setMorePage((p) => Math.max(0, p - 1))}
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={morePage >= morePages - 1}
-                    className="rounded-lg border border-[#e5e7eb] p-2 disabled:opacity-40"
-                    onClick={() => setMorePage((p) => Math.min(morePages - 1, p + 1))}
-                    aria-label="Next page"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {morePaged.map((result) => (
+            <section className="space-y-3">
+              <h2 className="text-[16px] font-bold text-[#111827]">Even More Matches</h2>
+              <div className="space-y-2">
+                {moreMatches.slice(0, 8).map((result) => (
                   <MoreMatchRow
                     key={result.phoneNumber}
                     result={result}
-                    favorited={favorites.has(result.phoneNumber)}
-                    onToggleFavorite={() => toggleFavorite(result.phoneNumber)}
-                    onClick={() => onGetNumber(result)}
+                    loading={reserving === result.phoneNumber}
+                    onGetNumber={() => onGetNumber(result)}
                   />
                 ))}
               </div>
@@ -749,7 +808,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             <div className={cn(pm.card, "border-dashed p-6 text-center")}>
               <p className="text-[15px] font-semibold text-[#111827]">No matches in this search</p>
               <p className="mt-1 text-[13px] text-[#6b7280]">
-                Try another area code, keyword, or pattern preference.
+                Try another area code, mask, or search preference.
               </p>
             </div>
           ) : null}
@@ -758,15 +817,17 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
         <aside className="w-full shrink-0 space-y-4 xl:w-[300px]">
           <SearchSummaryCard
             areaCodes={parsedAreaCodes}
-            industry={industry}
-            searchIntent={searchIntent}
+            searchType={searchTypeLabel}
+            countryProvince={countryProvince}
+            numberMask={numberMask}
             numberType={numberType}
+            serviceTags={serviceTags}
             bestScore={bestScore}
             hasResults={Boolean(searchResponse)}
           />
-          <SavedCompareCard favorites={favorites.size} compared={compare.size} />
-          <HowItWorksCard />
-          <WhyTransovoCard />
+          <SearchHistoryCard />
+          <NewNumbersCard results={bestMatches.slice(0, 4)} />
+          <KeyFeaturesCard />
         </aside>
       </div>
 
@@ -785,15 +846,13 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   );
 }
 
-function IntentToggle({
+function TypeToggle({
   active,
   onClick,
-  icon: Icon,
   children,
 }: {
   active: boolean;
   onClick: () => void;
-  icon?: typeof MapPin;
   children: ReactNode;
 }) {
   return (
@@ -803,84 +862,29 @@ function IntentToggle({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-semibold transition",
         active
-          ? "bg-white text-[#6366f1] shadow-sm ring-1 ring-[#c7d2fe]"
+          ? "bg-white text-[#4338ca] shadow-sm ring-1 ring-[#c7d2fe]"
           : "text-[#6b7280] hover:text-[#111827]",
       )}
     >
-      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
       {children}
     </button>
   );
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const r = 18;
-  const c = 2 * Math.PI * r;
-  const offset = c - (pct / 100) * c;
-  return (
-    <div className="relative h-12 w-12 shrink-0">
-      <svg className="h-12 w-12 -rotate-90" viewBox="0 0 44 44" aria-hidden>
-        <circle cx="22" cy="22" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
-        <circle
-          cx="22"
-          cy="22"
-          r={r}
-          fill="none"
-          stroke="#059669"
-          strokeWidth="4"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#111827]">
-        {score}/100
-      </span>
-    </div>
-  );
-}
-
-function resolveBadge(result: PremiumNumberProductResult): string | null {
-  if (
-    result.displayWord &&
-    result.wordPlacement === "ending" &&
-    result.businessMatchScore >= 75
-  ) {
-    return "EXACT WORD";
-  }
-  if (result.displayWord && result.wordPlacement === "embedded") {
-    return "WORD + PATTERN";
-  }
-  if (result.premiumPriceBand === "exceptional" || result.numberQualityScore >= 80) {
-    return "BEST MATCH";
-  }
-  if (result.businessMatchScore >= 55) {
-    return "STRONG MATCH";
-  }
-  return null;
-}
-
 function FindNumberCard({
   result,
-  variant,
+  numberType,
   loading,
   favorited,
-  compared,
   onToggleFavorite,
-  onToggleCompare,
   onGetNumber,
-  layout,
 }: {
   result: PremiumNumberProductResult;
-  variant: "best" | "featured";
+  numberType: NumberType;
   loading: boolean;
   favorited: boolean;
-  compared: boolean;
   onToggleFavorite: () => void;
-  onToggleCompare: () => void;
   onGetNumber: () => void;
-  layout: "grid" | "list";
 }) {
   const vanityTitle =
     result.vanityDisplay ??
@@ -889,18 +893,11 @@ function FindNumberCard({
       : undefined);
   const heroTitle = vanityTitle ?? result.displayNumber;
   const subNumber = vanityTitle ? result.displayNumber : null;
-  const badge = resolveBadge(result);
   const bullets = result.cardBullets.length ? result.cardBullets : result.whyReasons.slice(0, 3);
+  const topRated = result.numberQualityScore >= 90;
 
   return (
-    <div
-      className={cn(
-        pm.card,
-        "relative flex flex-col p-5 transition hover:shadow-md",
-        layout === "list" && "flex-row gap-4",
-        variant === "best" && "ring-1 ring-[#c7d2fe]",
-      )}
-    >
+    <div className={cn(pm.card, "relative flex flex-col p-5 transition hover:shadow-md")}>
       <button
         type="button"
         onClick={onToggleFavorite}
@@ -913,85 +910,65 @@ function FindNumberCard({
         <Heart className={cn("h-4 w-4", favorited && "fill-current")} />
       </button>
 
-      {badge ? (
-        <span
-          className={cn(
-            "absolute left-4 top-4 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white",
-            badge === "BEST MATCH" ? "bg-[#6366f1]" : "bg-[#4f46e5]",
-          )}
-        >
-          {badge}
-        </span>
+      <div className="flex flex-wrap gap-2">
+        {numberType === "local" ? (
+          <span className="rounded-md bg-[#eef2ff] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#4338ca]">
+            LOCAL
+          </span>
+        ) : null}
+        {topRated ? (
+          <span className="rounded-md bg-[#ecfdf5] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#059669]">
+            TOP RATED
+          </span>
+        ) : null}
+      </div>
+
+      <p className="mt-3 text-[26px] font-bold leading-tight tracking-tight text-[#4338ca]">
+        {heroTitle}
+      </p>
+      {subNumber ? <p className="mt-0.5 text-[13px] font-medium text-[#9ca3af]">{subNumber}</p> : null}
+
+      {bullets.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {bullets.map((b) => (
+            <li key={b} className="flex items-start gap-2 text-[12px] text-[#6b7280]">
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#059669]" />
+              {b}
+            </li>
+          ))}
+        </ul>
       ) : null}
 
-      <div className={cn("min-w-0 flex-1", badge && "pt-6")}>
-        <p className="text-[26px] font-bold leading-tight tracking-tight text-[#111827]">
-          {heroTitle}
+      <div className="mt-4 space-y-0.5">
+        <p className="text-[18px] font-bold text-[#111827]">
+          {formatMonthlyDisplay(DISPLAY_MONTHLY_CENTS)}
+          <span className="text-[12px] font-medium text-[#6b7280]"> Monthly</span>
         </p>
-        {subNumber ? (
-          <p className="mt-0.5 text-[13px] font-medium text-[#9ca3af]">{subNumber}</p>
-        ) : null}
-
-        <div className="mt-3 flex items-center gap-3">
-          <p className="text-[12px] font-semibold text-[#6b7280]">TransOvo Score</p>
-          <ScoreRing score={result.numberQualityScore} />
-        </div>
-
-        {bullets.length > 0 ? (
-          <ul className="mt-3 space-y-1.5">
-            {bullets.map((b) => (
-              <li key={b} className="flex items-start gap-2 text-[12px] text-[#6b7280]">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#059669]" />
-                {b}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="mt-4 space-y-0.5">
-          <p className="text-[20px] font-bold text-[#111827]">
-            {formatPremiumPrice(result.premiumPriceCents)}
-            <span className="text-[12px] font-medium text-[#6b7280]"> One-time price</span>
-          </p>
-          <p className="text-[12px] text-[#6b7280]">
-            {formatMonthlyService(STANDARD_MONTHLY_SERVICE_CENTS)}/mo Monthly service
-          </p>
-        </div>
+        <p className="text-[12px] text-[#6b7280]">
+          Set-up fee {formatPremiumPrice(result.premiumPriceCents)}
+        </p>
       </div>
 
-      <div className={cn("mt-4 space-y-2", layout === "list" && "mt-0 w-[200px] shrink-0")}>
-        <Button
-          className="h-11 w-full rounded-lg bg-[#6366f1] text-[14px] font-semibold hover:bg-[#5558e3]"
-          disabled={loading}
-          onClick={onGetNumber}
-        >
-          {loading ? "Reserving…" : "Get This Number"}
-        </Button>
-        <button
-          type="button"
-          onClick={onToggleCompare}
-          className={cn(
-            "w-full text-center text-[11px] font-medium",
-            compared ? "text-[#6366f1]" : "text-[#9ca3af] hover:text-[#6366f1]",
-          )}
-        >
-          {compared ? "Added to compare" : "Add to compare"}
-        </button>
-      </div>
+      <Button
+        className="mt-4 h-11 w-full rounded-lg text-[14px] font-semibold text-white hover:opacity-95"
+        style={{ backgroundColor: PRIMARY }}
+        disabled={loading}
+        onClick={onGetNumber}
+      >
+        {loading ? "Reserving…" : "Get This Number"}
+      </Button>
     </div>
   );
 }
 
 function MoreMatchRow({
   result,
-  favorited,
-  onToggleFavorite,
-  onClick,
+  loading,
+  onGetNumber,
 }: {
   result: PremiumNumberProductResult;
-  favorited: boolean;
-  onToggleFavorite: () => void;
-  onClick: () => void;
+  loading: boolean;
+  onGetNumber: () => void;
 }) {
   const vanityTitle =
     result.vanityDisplay ??
@@ -999,82 +976,86 @@ function MoreMatchRow({
       ? buildVanityDisplay(result.phoneNumber, [result.displayWord])
       : undefined);
   const heroTitle = vanityTitle ?? result.displayNumber;
+  const price =
+    result.premiumPriceCents > 0
+      ? formatPremiumPrice(result.premiumPriceCents)
+      : formatMonthlyDisplay(85);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
         pm.card,
-        "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:border-[#c7d2fe]",
+        "flex flex-wrap items-center justify-between gap-3 px-4 py-3",
       )}
     >
       <div className="min-w-0">
         <p className="text-[14px] font-bold text-[#111827]">{heroTitle}</p>
         <p className="text-[12px] text-[#9ca3af]">{result.displayNumber}</p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[12px] font-bold text-[#059669]">
-          {result.numberQualityScore}/100
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite();
-          }}
-          className={cn("text-[#9ca3af]", favorited && "text-rose-500")}
-          aria-label="Favorite"
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-[14px] font-bold text-[#111827]">{price}</span>
+        <Button
+          variant="outline"
+          className="h-9 rounded-lg border-[#4338ca] px-4 text-[13px] font-semibold text-[#4338ca] hover:bg-[#eef2ff]"
+          disabled={loading}
+          onClick={onGetNumber}
         >
-          <Heart className={cn("h-4 w-4", favorited && "fill-current")} />
-        </button>
+          {loading ? "…" : "Get"}
+        </Button>
       </div>
-    </button>
+    </div>
   );
 }
 
 function SearchSummaryCard({
   areaCodes,
-  industry,
-  searchIntent,
+  searchType,
+  countryProvince,
+  numberMask,
   numberType,
+  serviceTags,
   bestScore,
   hasResults,
 }: {
   areaCodes: string[];
-  industry: string;
-  searchIntent: SearchIntent;
+  searchType: string;
+  countryProvince: string;
+  numberMask: string;
   numberType: NumberType;
+  serviceTags: Set<string>;
   bestScore: number;
   hasResults: boolean;
 }) {
-  const intentLabel =
-    searchIntent === "business_keyword"
-      ? "Business / Keyword"
-      : searchIntent === "number_pattern"
-        ? "Number Pattern"
-        : "Surprise Me";
-
   return (
     <div className={cn(pm.card, "p-4")}>
       <h3 className="text-[13px] font-bold text-[#111827]">Search Summary</h3>
       <dl className="mt-3 space-y-2 text-[12px]">
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Area Code</dt>
+          <dt className="text-[#6b7280]">Area code</dt>
           <dd className="font-medium text-[#111827]">{areaCodes.join(", ") || "—"}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Industry</dt>
-          <dd className="font-medium capitalize text-[#111827]">{industry.trim() || "—"}</dd>
+          <dt className="text-[#6b7280]">Pattern</dt>
+          <dd className="font-medium text-[#111827]">{searchType}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Search Intent</dt>
-          <dd className="font-medium text-[#111827]">{intentLabel}</dd>
+          <dt className="text-[#6b7280]">Region</dt>
+          <dd className="font-medium text-[#111827]">{countryProvince}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Number Type</dt>
+          <dt className="text-[#6b7280]">Mask</dt>
+          <dd className="font-medium text-[#111827]">{numberMask.trim() || "—"}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-[#6b7280]">Type</dt>
           <dd className="font-medium text-[#111827]">
-            {numberType === "tollfree" ? "Toll-Free" : "Local"}
+            {numberType === "tollfree" ? "Toll Free" : "Local"}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-[#6b7280]">Services</dt>
+          <dd className="font-medium text-[#111827]">
+            {[...serviceTags].join(", ") || "—"}
           </dd>
         </div>
       </dl>
@@ -1088,69 +1069,63 @@ function SearchSummaryCard({
   );
 }
 
-function SavedCompareCard({ favorites, compared }: { favorites: number; compared: number }) {
+function SearchHistoryCard() {
+  const items = ["New Numbers", "Vanity", "Sequential", "Toll Free"];
   return (
     <div className={cn(pm.card, "p-4")}>
-      <div className="flex items-center gap-2">
-        <Heart className="h-4 w-4 text-[#6366f1]" />
-        <h3 className="text-[13px] font-bold text-[#111827]">Saved & Compare</h3>
-      </div>
-      <p className="mt-3 text-[12px] text-[#6b7280]">Saved Numbers: {favorites}</p>
-      <p className="text-[12px] text-[#6b7280]">Compared: {compared} / 4</p>
-      <Link
-        href="/personal/vault"
-        className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-[#e5e7eb] py-2 text-[12px] font-semibold text-[#374151] hover:bg-[#f9fafb]"
-      >
-        View Saved Numbers
-      </Link>
-    </div>
-  );
-}
-
-function HowItWorksCard() {
-  const steps = [
-    { n: 1, title: "Search", desc: "Enter area code and what you do" },
-    { n: 2, title: "We scan millions", desc: "Live inventory across carriers" },
-    { n: 3, title: "You choose", desc: "Compare scores and reserve" },
-    { n: 4, title: "Activate", desc: "Complete purchase and go live" },
-  ];
-  return (
-    <div className={cn(pm.card, "p-4")}>
-      <h3 className="text-[13px] font-bold text-[#111827]">How it works</h3>
-      <ol className="mt-3 space-y-3">
-        {steps.map((step) => (
-          <li key={step.n} className="flex gap-2.5">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[11px] font-bold text-[#6366f1]">
-              {step.n}
-            </span>
-            <div>
-              <p className="text-[12px] font-semibold text-[#111827]">{step.title}</p>
-              <p className="text-[11px] text-[#6b7280]">{step.desc}</p>
-            </div>
+      <h3 className="text-[13px] font-bold text-[#111827]">Search History</h3>
+      <ul className="mt-3 space-y-2">
+        {items.map((item) => (
+          <li key={item}>
+            <button
+              type="button"
+              className="text-[12px] font-medium text-[#4338ca] hover:underline"
+            >
+              {item}
+            </button>
           </li>
         ))}
-      </ol>
+      </ul>
     </div>
   );
 }
 
-function WhyTransovoCard() {
+function NewNumbersCard({ results }: { results: PremiumNumberProductResult[] }) {
+  return (
+    <div className={cn(pm.card, "p-4")}>
+      <h3 className="text-[13px] font-bold text-[#111827]">New Numbers</h3>
+      {results.length === 0 ? (
+        <p className="mt-2 text-[12px] text-[#6b7280]">Run a search to see new matches.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {results.map((r) => (
+            <li key={r.phoneNumber} className="text-[12px]">
+              <span className="font-semibold text-[#111827]">
+                {r.vanityDisplay ?? r.displayNumber}
+              </span>
+              <span className="text-[#9ca3af]"> · {r.numberQualityScore}/100</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function KeyFeaturesCard() {
   const items = [
-    "Enterprise-grade reliability",
     "Instant activation",
-    "No hidden fees",
     "24/7 expert support",
+    "Enterprise-grade reliability",
+    "No hidden fees",
   ];
   return (
     <div className={cn(pm.card, "p-4")}>
-      <div className="flex items-center gap-2">
-        <Lightbulb className="h-4 w-4 text-[#6366f1]" />
-        <h3 className="text-[13px] font-bold text-[#111827]">Why TransOvo?</h3>
-      </div>
+      <h3 className="text-[13px] font-bold text-[#111827]">Key Features</h3>
       <ul className="mt-3 space-y-2">
         {items.map((item) => (
           <li key={item} className="flex items-center gap-2 text-[12px] text-[#374151]">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#6366f1]" />
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#4338ca]" />
             {item}
           </li>
         ))}
