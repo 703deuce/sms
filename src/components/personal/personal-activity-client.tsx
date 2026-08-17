@@ -22,6 +22,8 @@ import {
   PhoneIncoming,
   PhoneMissed,
   PhoneOff,
+  Shield,
+  SlidersHorizontal,
   Voicemail,
   X,
 } from "lucide-react";
@@ -390,7 +392,7 @@ export function PersonalActivityClient({
                 ? `${Math.round((totals.failed / totals.total) * 100)}% of total`
                 : "—"
           }
-          icon={Ban}
+          icon={Shield}
           iconClass="bg-[#fef2f2] text-[#dc2626]"
         />
       </div>
@@ -441,15 +443,18 @@ export function PersonalActivityClient({
                   className="w-[130px]"
                 >
                   <option value="All">Handling Type</option>
-                  <option value="All">Handling Type</option>
                   <option>Forward</option>
                   <option>Voicemail</option>
                   <option>Smart Routed</option>
                 </PersonalMockSelect>
                 <PersonalMockSelect className="w-[120px]">
                   <option>Newest First</option>
+                  <option>Oldest First</option>
                 </PersonalMockSelect>
-                <PersonalMockBtn variant="outline" className="h-8 text-[12px]">Filters</PersonalMockBtn>
+                <PersonalMockBtn variant="outline" className="h-8 gap-1 text-[12px] text-[#6366f1]">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Filters
+                </PersonalMockBtn>
               </div>
             }
           >
@@ -468,7 +473,7 @@ export function PersonalActivityClient({
                         <th className="pb-3 pr-3">Route / Destination</th>
                         <th className="pb-3 pr-3">Outcome</th>
                         <th className="pb-3 pr-3">Ring Time</th>
-                        <th className="pb-3 pr-3">Duration</th>
+                        <th className="pb-3 pr-3">Call Duration</th>
                         <th className="pb-3 pr-3">Date / Time</th>
                         <th className="pb-3 text-right">Actions</th>
                       </tr>
@@ -652,9 +657,6 @@ export function PersonalActivityClient({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-2">
-              <PersonalMockPill tone={outcomeTone(selected.outcome)}>{selected.outcome}</PersonalMockPill>
-            </div>
             <div className="mt-4 flex items-center gap-3">
               <div
                 className={cn(
@@ -667,7 +669,12 @@ export function PersonalActivityClient({
                 {callerInitials(selected)}
               </div>
               <div>
-                <p className="text-[16px] font-semibold text-[#111827]">{callerName(selected)}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[16px] font-semibold text-[#111827]">{callerName(selected)}</p>
+                  <PersonalMockPill tone={outcomeTone(selected.outcome)}>
+                    {selected.outcome}
+                  </PersonalMockPill>
+                </div>
                 <p className="text-[12px] text-[#6b7280]">{formatPhone(selected.caller)}</p>
               </div>
               <a
@@ -780,14 +787,14 @@ export function PersonalActivityClient({
                   Block Caller
                 </PersonalMockBtn>
               ) : null}
-              {selected.voicemail ? (
+              <Link href="/personal/voicemail" className="col-span-1">
                 <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
                   <Voicemail className="h-3.5 w-3.5 text-[#7c3aed]" />
                   View Voicemail
                 </PersonalMockBtn>
-              ) : null}
+              </Link>
               {selected.forwardDestination ? (
-                <Link href="/personal/forwarding" className="col-span-2">
+                <Link href="/personal/forwarding">
                   <PersonalMockBtn variant="outline" className="w-full text-[12px]">
                     View Forwarding Rule
                   </PersonalMockBtn>
@@ -795,14 +802,14 @@ export function PersonalActivityClient({
               ) : null}
             </div>
             {selected.callId ? (
-              <button
-                type="button"
-                className="mt-3 flex w-full items-center justify-center gap-1 text-[12px] font-semibold text-[#6366f1]"
+              <PersonalMockBtn
+                variant="outline"
+                className="mt-3 w-full gap-1 text-[12px]"
                 onClick={() => copyText(selected.callId || "")}
               >
                 <Copy className="h-3.5 w-3.5" />
                 Copy Call ID
-              </button>
+              </PersonalMockBtn>
             ) : null}
 
             {(selected.handlingType || selected.forwardDestination) ? (

@@ -322,9 +322,138 @@ export const WIREFRAME_ANALYTICS_KPIS = {
   answered: 876,
   missed: 256,
   voicemails: 112,
+  failed: 40,
+  blocked: 0,
   forwardedMinutes: 542,
   avgDurationSec: 154,
   trends: { total: 12.4, answered: 68.2, missed: -6.8, voicemails: 8.7, forwarded: 15.6, avgDuration: 7.3 },
+  periodLabel: "Apr 28 – May 27, 2026",
+};
+
+export const WIREFRAME_ANALYTICS_CHART_LABELS = [
+  "Apr 28",
+  "May 2",
+  "May 6",
+  "May 10",
+  "May 14",
+  "May 18",
+  "May 22",
+  "May 26",
+];
+
+export const WIREFRAME_ANALYTICS_BY_NUMBER = [
+  {
+    number: "+15714073615",
+    friendlyName: "Main Line",
+    calls: 312,
+    answered: 210,
+    missed: 58,
+    voicemail: 12,
+    minutes: 342,
+    answerRate: 67.3,
+    trend: [20, 35, 28, 42, 38, 45, 50],
+  },
+  {
+    number: "+18663464256",
+    friendlyName: "Sales Line",
+    calls: 198,
+    answered: 142,
+    missed: 32,
+    voicemail: 8,
+    minutes: 112,
+    answerRate: 71.7,
+    trend: [8, 12, 10, 14, 11, 9, 15],
+  },
+  {
+    number: "+18665779653",
+    friendlyName: "Support Line",
+    calls: 164,
+    answered: 98,
+    missed: 28,
+    voicemail: 6,
+    minutes: 88,
+    answerRate: 59.8,
+    trend: [5, 7, 6, 8, 7, 9, 10],
+  },
+  {
+    number: "+14155550198",
+    friendlyName: "After Hours",
+    calls: 84,
+    answered: 52,
+    missed: 18,
+    voicemail: 4,
+    minutes: 24,
+    answerRate: 61.9,
+    trend: [2, 1, 3, 2, 1, 2, 1],
+  },
+];
+
+export const WIREFRAME_ANALYTICS_TOP_NUMBERS = [
+  { rank: 1, number: "+18663464256", name: "Sales Line", rate: 71.7, trend: "up" as const },
+  { rank: 2, number: "+14155550198", name: "After Hours", rate: 61.9, trend: "up" as const },
+  { rank: 3, number: "+15714073615", name: "Main Line", rate: 67.3, trend: "flat" as const },
+  { rank: 4, number: "+18665779653", name: "Support Line", rate: 59.8, trend: "down" as const },
+  { rank: 5, number: "+17035552408", name: "Office Forward", rate: 58.2, trend: "up" as const },
+];
+
+export const WIREFRAME_ANALYTICS_INSIGHTS = [
+  {
+    id: "i1",
+    title: "Answer rate improved",
+    detail: "+4.2% vs previous period",
+    tone: "green" as const,
+  },
+  {
+    id: "i2",
+    title: "Peak hour detected",
+    detail: "2–4 PM weekdays",
+    tone: "orange" as const,
+  },
+  {
+    id: "i3",
+    title: "Voicemails up",
+    detail: "+8.7% vs previous period",
+    tone: "purple" as const,
+  },
+];
+
+export const WIREFRAME_ANALYTICS_MISSED = [
+  { reason: "No Answer", count: 142, pct: 55.5 },
+  { reason: "Busy", count: 48, pct: 18.8 },
+  { reason: "Destination Failed", count: 32, pct: 12.5 },
+  { reason: "Rejected", count: 24, pct: 9.4 },
+  { reason: "Timed Out", count: 18, pct: 7.0 },
+];
+
+export const WIREFRAME_ANALYTICS_FORWARDING = {
+  forwardedCalls: 428,
+  forwardedMinutes: 542,
+  avgRingSeconds: 18,
+  connections: 376,
+  destinations: [
+    { label: "Anthony's Cell", pct: 45 },
+    { label: "Office", pct: 32 },
+    { label: "Support Queue", pct: 23 },
+  ],
+};
+
+export const WIREFRAME_ANALYTICS_SMART_ROUTING = {
+  routesEvaluated: 156,
+  efficiencyPct: 94,
+  menuSelections: [
+    { label: "Press 1 — Sales", pct: 52 },
+    { label: "Press 2 — Support", pct: 31 },
+    { label: "Press 3 — Billing", pct: 17 },
+  ],
+};
+
+export const WIREFRAME_ANALYTICS_USAGE = {
+  totalNumbers: 128,
+  activeNumbers: 116,
+  minutesUsed: 542,
+  minutesLimit: 1000,
+  voicemailStorageGb: 2.4,
+  voicemailStorageLimitGb: 10,
 };
 
 export const WIREFRAME_FORWARDING_DESTINATIONS = [
