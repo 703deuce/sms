@@ -16,7 +16,6 @@ import {
 import { cn, formatPhone } from "@/lib/utils";
 import {
   Bell,
-  Calendar,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -27,7 +26,6 @@ import {
   Settings,
   TrendingUp,
   Voicemail,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
