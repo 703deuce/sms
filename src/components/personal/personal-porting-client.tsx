@@ -26,11 +26,11 @@ import {
   Headphones,
   HelpCircle,
   Lightbulb,
+  Mail,
   MoreHorizontal,
   RefreshCw,
   Shield,
 } from "lucide-react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -238,7 +238,7 @@ export function PersonalPortingClient({
       <PersonalMockAsideCard title="What You'll Need" icon={CheckCircle}>
         <ul className="space-y-2">
           {[
-            "Recent bill or CSR",
+            "Recent bill or invoice",
             "Account number",
             "Porting PIN / passcode",
             "Service / billing address",
@@ -261,17 +261,32 @@ export function PersonalPortingClient({
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Porting Tips" icon={Lightbulb}>
         <ul className="space-y-2 text-[12px]">
-          <li>Keep your account active until the port finishes</li>
-          <li>PINs can expire — request a fresh one if needed</li>
-          <li>Double-check account holder name matches your bill</li>
+          <li className="flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />
+            Keep your account active until the port finishes
+          </li>
+          <li className="flex items-center gap-2">
+            <RefreshCw className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />
+            PINs can expire — request a fresh one if needed
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle className="h-3.5 w-3.5 shrink-0 text-[#059669]" />
+            Double-check account holder name matches your bill
+          </li>
         </ul>
         <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
-          View all tips →
+          View all tips &gt;
         </button>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Need Help?" icon={HelpCircle} tone="info">
-        <PersonalMockBtn variant="outline" className="w-full">Contact Support</PersonalMockBtn>
-        <button type="button" className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]">
+        <PersonalMockBtn variant="outline" className="w-full gap-2">
+          <Headphones className="h-4 w-4" />
+          Contact Support
+        </PersonalMockBtn>
+        <button
+          type="button"
+          className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
+        >
           View Porting Guide <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </PersonalMockAsideCard>
@@ -281,30 +296,58 @@ export function PersonalPortingClient({
   const portOutSidebar = (
     <>
       <PersonalMockAsideCard title="What You'll Need" icon={CheckCircle}>
-        <ul className="list-inside list-disc space-y-1">
-          <li>Carrier name at destination</li>
-          <li>Authorized contact info</li>
-          <li>Port-out PIN</li>
-          <li>Account verification</li>
-          <li>Timing preferences</li>
+        <ul className="space-y-2">
+          {[
+            "Destination carrier name",
+            "Authorized contact info",
+            "Port-out PIN",
+            "Account verification",
+            "Timing preferences",
+          ].map((item) => (
+            <li key={item} className="flex items-center gap-2">
+              <CheckCircle className="h-3.5 w-3.5 shrink-0 text-[#059669]" />
+              {item}
+            </li>
+          ))}
         </ul>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Important" icon={AlertTriangle} tone="warning">
         <p>Porting out may interrupt service on your Transovo number until the transfer completes.</p>
+        <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
+          Learn more
+        </button>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Port-Out Tips" icon={Lightbulb}>
         <ul className="space-y-2 text-[12px]">
-          <li className="flex items-center gap-2"><Shield className="h-3.5 w-3.5" /> Verify PIN before submitting</li>
-          <li className="flex items-center gap-2"><RefreshCw className="h-3.5 w-3.5" /> Confirm number is unlocked</li>
-          <li className="flex items-center gap-2"><Headphones className="h-3.5 w-3.5" /> Keep access to authorized email</li>
+          <li className="flex items-center gap-2">
+            <Shield className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />
+            Verify PIN before submitting
+          </li>
+          <li className="flex items-center gap-2">
+            <RefreshCw className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />
+            Confirm number is unlocked
+          </li>
+          <li className="flex items-center gap-2">
+            <Mail className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />
+            Keep access to authorized email
+          </li>
         </ul>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Need Help?" icon={HelpCircle} tone="info">
-        <Link href="/support" className="text-[12px] font-semibold text-[#2563eb]">Contact Support →</Link>
-        <button type="button" className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]">
+        <PersonalMockBtn variant="outline" className="w-full gap-2">
+          <Headphones className="h-4 w-4" />
+          Contact Support
+        </PersonalMockBtn>
+        <button
+          type="button"
+          className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
+        >
           View Porting Guide <ExternalLink className="h-3.5 w-3.5" />
         </button>
-        <button type="button" className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]">
+        <button
+          type="button"
+          className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
+        >
           Check PIN Status <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </PersonalMockAsideCard>
@@ -490,7 +533,7 @@ export function PersonalPortingClient({
               </table>
             </div>
             <button type="button" className="mt-4 text-[13px] font-semibold text-[#2563eb]">
-              View all port requests →
+              View all port requests &gt;
             </button>
           </PersonalMockSection>
         </div>
@@ -514,25 +557,27 @@ export function PersonalPortingClient({
                       <label className="text-[13px] font-semibold text-[#374151]">
                         Phone Number(s) to Port Out
                       </label>
-                      <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-[#e5e7eb] p-2">
+                      <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-[#e5e7eb] p-2">
                         {selected ? (
-                          <span className="rounded-md bg-[#eff6ff] px-2 py-1 text-[12px] font-semibold text-[#2563eb]">
+                          <span className="rounded-md bg-[#eff6ff] px-2.5 py-1 text-[12px] font-semibold text-[#2563eb]">
                             {formatPhone(selected.number)}
                           </span>
                         ) : null}
+                        {numbers.length > 1 ? (
+                          <select
+                            className="min-w-[140px] flex-1 border-0 bg-transparent text-[12px] text-[#6b7280] outline-none"
+                            value={selectedId}
+                            onChange={(e) => setSelectedId(e.target.value)}
+                          >
+                            {numbers.map((n) => (
+                              <option key={n.id} value={n.id}>
+                                {formatPhone(n.number)}
+                                {n.friendlyName ? ` — ${n.friendlyName}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
                       </div>
-                      <select
-                        className="mt-2 block w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
-                        value={selectedId}
-                        onChange={(e) => setSelectedId(e.target.value)}
-                      >
-                        {numbers.map((n) => (
-                          <option key={n.id} value={n.id}>
-                            {formatPhone(n.number)}
-                            {n.friendlyName ? ` — ${n.friendlyName}` : ""}
-                          </option>
-                        ))}
-                      </select>
                     </div>
                     <div>
                       <label className="text-[12px] text-[#6b7280]">
@@ -563,7 +608,15 @@ export function PersonalPortingClient({
                         >
                           Show
                         </button>
-                        <PersonalMockBtn variant="ghost" className="h-8 px-2 text-[12px]">
+                        <PersonalMockBtn
+                          variant="ghost"
+                          className="h-8 px-2 text-[12px]"
+                          disabled={submitting}
+                          onClick={() => {
+                            if (locked) portAction("unlock");
+                            else portAction("sync");
+                          }}
+                        >
                           <RefreshCw className="h-3.5 w-3.5" />
                           Regenerate
                         </PersonalMockBtn>
@@ -571,35 +624,6 @@ export function PersonalPortingClient({
                       <p className="mt-1 text-[11px] text-[#9ca3af]">
                         Required by your new carrier to authorize the transfer.
                       </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {locked ? (
-                          <PersonalMockBtn
-                            variant="outline"
-                            className="h-8 text-[12px]"
-                            onClick={() => portAction("unlock")}
-                            disabled={submitting}
-                          >
-                            Unlock for port-out
-                          </PersonalMockBtn>
-                        ) : (
-                          <PersonalMockBtn
-                            variant="outline"
-                            className="h-8 text-[12px]"
-                            onClick={() => portAction("lock")}
-                            disabled={submitting}
-                          >
-                            Lock number
-                          </PersonalMockBtn>
-                        )}
-                        <PersonalMockBtn
-                          variant="ghost"
-                          className="h-8 text-[12px]"
-                          onClick={() => portAction("sync")}
-                          disabled={submitting}
-                        >
-                          Sync from {providerLabel(provider)}
-                        </PersonalMockBtn>
-                      </div>
                     </div>
                     <div>
                       <label className="text-[12px] text-[#6b7280]">Authorized Contact Email</label>
@@ -644,12 +668,13 @@ export function PersonalPortingClient({
                       eligible
                       title="Eligible to transfer"
                       message="Selected number(s) are eligible to be ported out."
+                      linkLabel="View eligibility details"
                     />
                     <div>
                       <label className="text-[12px] text-[#6b7280]">Destination (New Carrier)</label>
                       <PersonalMockInput
                         className="mt-1"
-                        placeholder="Verizon, AT&T, T-Mobile…"
+                        placeholder="Enter new carrier name"
                         value={gainingCarrier}
                         onChange={(e) => setGainingCarrier(e.target.value)}
                       />
@@ -658,36 +683,27 @@ export function PersonalPortingClient({
                       <label className="text-[12px] text-[#6b7280]">Authorized Contact Name</label>
                       <PersonalMockInput
                         className="mt-1"
-                        placeholder="Full name"
+                        placeholder="Enter full name"
                         value={authName}
                         onChange={(e) => setAuthName(e.target.value)}
                       />
                     </div>
                     <div>
                       <label className="text-[12px] text-[#6b7280]">Authorized Contact Phone</label>
-                      <PersonalMockInput
-                        className="mt-1"
-                        placeholder="+1 (555) 123-4567"
-                        value={authPhone}
-                        onChange={(e) => setAuthPhone(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Account at new carrier (optional)</label>
-                      <PersonalMockInput
-                        className="mt-1"
-                        value={gainingAccountNumber}
-                        onChange={(e) => setGainingAccountNumber(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Notes (optional)</label>
-                      <textarea
-                        className="mt-1 w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
-                        rows={2}
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                      />
+                      <div className="relative mt-1">
+                        <span
+                          className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-[12px] text-[#6b7280]"
+                          aria-hidden
+                        >
+                          <span className="text-[14px] leading-none">🇺🇸</span>
+                        </span>
+                        <PersonalMockInput
+                          className="pl-10"
+                          placeholder="+1 (555) 123-4567"
+                          value={authPhone}
+                          onChange={(e) => setAuthPhone(e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -743,7 +759,7 @@ export function PersonalPortingClient({
                   </table>
                 </div>
                 <button type="button" className="mt-4 text-[13px] font-semibold text-[#2563eb]">
-                  View all port-out requests →
+                  View all port-out requests &gt;
                 </button>
               </PersonalMockSection>
             </>
