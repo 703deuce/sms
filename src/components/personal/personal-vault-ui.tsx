@@ -11,6 +11,8 @@ import {
   Lock,
   MoreHorizontal,
   Phone,
+  Pencil,
+  Play,
   Plus,
   Search,
   Shield,
@@ -646,19 +648,38 @@ export function PersonalVaultUI({
 
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                  Number
-                </p>
-                <p className="mt-1 text-[20px] font-bold text-[#111827]">
+                <p className="mt-1 text-[22px] font-bold text-[#111827]">
                   {formatPhone(managed.number)}
                 </p>
-                {managed.friendlyName ? (
-                  <p className="mt-1 text-[13px] text-[#6366f1]">{managed.friendlyName}</p>
-                ) : null}
-                <p className="mt-1 text-[12px] text-[#6b7280]">
-                  {managed.type} · ${managed.monthlyCost.toFixed(2)}/mo
-                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-[14px] font-semibold text-[#2563eb]">
+                    {managed.friendlyName || formatPhone(managed.number)}
+                  </p>
+                  <Pencil className="h-3.5 w-3.5 text-[#9ca3af]" />
+                </div>
+                <div className="mt-2">
+                  <PersonalMockPill tone="blue">Vaulted</PersonalMockPill>
+                </div>
               </div>
+
+              <dl className="space-y-2 text-[13px]">
+                <div className="flex justify-between">
+                  <dt className="text-[#6b7280]">Vaulted Since</dt>
+                  <dd className="font-medium">
+                    {managed.parkedSince
+                      ? new Date(managed.parkedSince).toLocaleDateString()
+                      : "Recently"}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[#6b7280]">Monthly Price</dt>
+                  <dd className="font-medium">${managed.monthlyCost.toFixed(2)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[#6b7280]">Next Renewal</dt>
+                  <dd className="font-medium">{nextRenewalDate(managed.parkedSince)}</dd>
+                </div>
+              </dl>
 
               <div>
                 <p className="mb-3 text-[13px] font-semibold text-[#111827]">
@@ -667,9 +688,9 @@ export function PersonalVaultUI({
                 <div className="space-y-2 text-[13px]">
                   {(
                     [
-                      { id: "silent", label: "Silent — no service" },
-                      { id: "parked_message", label: "Play announcement" },
-                      { id: "voicemail", label: "Voicemail" },
+                      { id: "silent", label: "Hold Only" },
+                      { id: "parked_message", label: "Play Announcement" },
+                      { id: "voicemail", label: "Take Voicemail" },
                     ] as const
                   ).map((opt) => (
                     <label key={opt.id} className="flex items-center gap-2">
@@ -690,14 +711,36 @@ export function PersonalVaultUI({
                     Vault announcement
                   </p>
                   <textarea
-                    className="w-full rounded-lg border border-[#e5e7eb] p-3 text-[13px] outline-none focus:border-[#6366f1]"
+                    className="w-full rounded-lg border border-[#e5e7eb] p-3 text-[13px] outline-none focus:border-[#2563eb]"
                     rows={4}
                     value={messageDraft}
                     onChange={(e) => setMessageDraft(e.target.value)}
-                    placeholder="Message played when callers reach this vaulted number…"
+                    placeholder="Thank you for calling. This number is currently parked…"
                   />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <PersonalMockBtn variant="outline" className="h-8 text-[12px]">Record</PersonalMockBtn>
+                    <PersonalMockBtn variant="outline" className="h-8 text-[12px]">Upload</PersonalMockBtn>
+                    <PersonalMockBtn variant="outline" className="h-8 text-[12px]">Generate</PersonalMockBtn>
+                    <PersonalMockBtn variant="ghost" className="h-8 text-[12px]">
+                      <Play className="h-3.5 w-3.5" />
+                      Preview
+                    </PersonalMockBtn>
+                  </div>
                 </div>
               ) : null}
+
+              <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3 text-[12px]">
+                <p className="font-semibold text-[#111827]">Voicemail summary</p>
+                <p className="mt-1 text-[#6b7280]">
+                  Greeting: {managed.vaultIncomingMode === "voicemail" ? "Active" : "Off"}
+                </p>
+                <Link
+                  href={`/personal/voicemail?numberId=${managed.id}`}
+                  className="mt-2 font-semibold text-[#2563eb]"
+                >
+                  Open Voicemail →
+                </Link>
+              </div>
             </div>
 
             <div className="border-t border-[#e5e7eb] p-5 space-y-2">
@@ -706,7 +749,7 @@ export function PersonalVaultUI({
                 disabled={busy === "save" || busy === "reactivate"}
                 onClick={saveManaged}
               >
-                {busy === "save" ? "Saving…" : "Save changes"}
+                {busy === "save" ? "Saving…" : "Save Changes"}
               </PersonalMockBtn>
               <PersonalMockBtn
                 variant="outline"

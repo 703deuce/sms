@@ -1,6 +1,12 @@
 "use client";
 
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
+import {
+  WIREFRAME_FORWARDING_ACTIVITY,
+  WIREFRAME_FORWARDING_DESTINATIONS,
+  WIREFRAME_FORWARDING_USAGE,
+  usePersonalWireframe,
+} from "@/lib/workspace/personal-mockup-wireframe";
 import { FORWARD_RING_PRESETS } from "@/lib/numbers/personal-call-settings";
 import { formatPhone } from "@/lib/utils";
 import {
@@ -220,6 +226,24 @@ export function PersonalForwardingUI({
     usage?.perNumber.find((p) => p.numberId === editId)?.forwardingMinutes ?? 0;
   const minutesLimit = usage?.forwardingMinutesLimit ?? 500;
   const minutesPct = Math.min(100, Math.round((forwardingMinutes / minutesLimit) * 100));
+  const useWireframe = usePersonalWireframe(activity.length + forwardingMinutes, 10);
+  const displayMinutes = useWireframe ? WIREFRAME_FORWARDING_USAGE.minutesUsed : forwardingMinutes;
+  const displayLimit = useWireframe ? WIREFRAME_FORWARDING_USAGE.minutesLimit : minutesLimit;
+  const displayMinutesPct = Math.min(100, Math.round((displayMinutes / displayLimit) * 100));
+  const displayActivity =
+    useWireframe && activity.length < 3 ? WIREFRAME_FORWARDING_ACTIVITY : activity;
+  const displayDestinations = useMemo(() => {
+    if (useWireframe && cleanedTargets.length <= 1) {
+      return WIREFRAME_FORWARDING_DESTINATIONS.map((d) => ({ ...d, isDemo: true as const }));
+    }
+    return targets.map((t, i) => ({
+      number: t,
+      label: "",
+      ringSeconds: ringSeconds,
+      isDemo: false as const,
+      index: i,
+    }));
+  }, [useWireframe, cleanedTargets.length, targets, ringSeconds]);
   const forwardingHealthy =
     incomingHandling === "forward" &&
     forwardingOn &&
@@ -385,7 +409,7 @@ export function PersonalForwardingUI({
       <PersonalMockPage>
         <p className={pm.muted}>
           No numbers yet.{" "}
-          <Link href="/personal/numbers/premium" className="text-[#6366f1]">
+          <Link href="/personal/numbers/premium" className="text-[#2563eb]">
             Find a number
           </Link>
         </p>
@@ -450,10 +474,10 @@ export function PersonalForwardingUI({
         <p className="text-[13px] font-semibold text-[#111827]">Usage This Month</p>
         <div className="mt-3">
           <PersonalMockProgress
-            value={forwardingMinutes}
-            max={minutesLimit}
+            value={displayMinutes}
+            max={displayLimit}
             label="Forwarding minutes"
-            sub={`${usage?.forwardingMinutesRemaining ?? Math.max(0, minutesLimit - forwardingMinutes)} remaining`}
+            sub={`${useWireframe ? displayLimit - displayMinutes : usage?.forwardingMinutesRemaining ?? Math.max(0, minutesLimit - forwardingMinutes)} remaining`}
           />
         </div>
       </div>
@@ -481,7 +505,7 @@ export function PersonalForwardingUI({
 
       <div className={pm.card + " border-[#c7d2fe] bg-[#eef2ff] p-4"}>
         <div className="flex items-center gap-2">
-          <Route className="h-4 w-4 text-[#6366f1]" />
+          <Route className="h-4 w-4 text-[#2563eb]" />
           <p className="text-[13px] font-semibold text-[#111827]">Smart Routing</p>
         </div>
         <p className="mt-2 text-[12px] text-[#6b7280]">
@@ -489,7 +513,7 @@ export function PersonalForwardingUI({
         </p>
         <Link
           href="/smart-routing"
-          className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#6366f1]"
+          className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
         >
           Explore Smart Routing <ArrowRight className="h-3.5 w-3.5" />
         </Link>
@@ -538,24 +562,36 @@ export function PersonalForwardingUI({
         />
         <PersonalMockKpi
           label="Current Destination"
-          value={cleanedTargets[0] ? formatPhone(cleanedTargets[0]) : "—"}
-          sub={cleanedTargets.length > 1 ? `+${cleanedTargets.length - 1} more` : undefined}
+          value={
+            useWireframe
+              ? formatPhone(WIREFRAME_FORWARDING_DESTINATIONS[0].number)
+              : cleanedTargets[0]
+                ? formatPhone(cleanedTargets[0])
+                : "—"
+          }
+          sub={
+            useWireframe
+              ? "Primary Destination"
+              : cleanedTargets.length > 1
+                ? `+${cleanedTargets.length - 1} more`
+                : undefined
+          }
         />
         <PersonalMockKpi
           label="Calls Forwarded"
-          value={activity.length}
-          sub="recent on this number"
+          value={useWireframe ? WIREFRAME_FORWARDING_USAGE.callsForwarded : activity.length}
+          sub={useWireframe ? "Total Calls" : "recent on this number"}
         />
         <div className={pm.card + " p-4"}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[12px] font-medium text-[#6b7280]">Forwarding Minutes</p>
               <p className="mt-1 text-[26px] font-bold leading-none text-[#111827]">
-                {forwardingMinutes}
+                {displayMinutes}
               </p>
-              <p className="mt-1 text-[11px] text-[#9ca3af]">of {minutesLimit} min</p>
+              <p className="mt-1 text-[11px] text-[#9ca3af]">of {displayLimit} min</p>
             </div>
-            <RingProgress pct={minutesPct} />
+            <RingProgress pct={displayMinutesPct} />
           </div>
         </div>
       </div>
@@ -605,7 +641,7 @@ export function PersonalForwardingUI({
                   onClick={() => setForwardMode(mode)}
                   className={`rounded-md px-4 py-1.5 text-[13px] font-semibold transition ${
                     forwardMode === mode
-                      ? "bg-white text-[#6366f1] shadow-sm"
+                      ? "bg-white text-[#2563eb] shadow-sm"
                       : "text-[#6b7280] hover:text-[#111827]"
                   }`}
                 >
@@ -683,34 +719,30 @@ export function PersonalForwardingUI({
             description="Destinations ring in the order shown for sequential mode."
           >
             <div className="space-y-3">
-              {targets.map((target, i) => (
+              {displayDestinations.map((dest, i) => (
                 <div
-                  key={i}
+                  key={dest.isDemo ? dest.number : `target-${dest.index}`}
                   className="flex flex-wrap items-center gap-2 rounded-lg border border-[#f3f4f6] bg-[#fafafa] p-3"
                 >
                   <GripVertical className="h-4 w-4 shrink-0 text-[#d1d5db]" aria-hidden />
                   <span className="w-6 text-[12px] font-semibold text-[#9ca3af]">{i + 1}</span>
-                  <PersonalMockInput
-                    className="min-w-[180px] flex-1"
-                    placeholder={i === 0 ? "(571) 477-6175" : "Add another line"}
-                    value={target}
-                    onChange={(e) => updateTarget(i, e.target.value)}
-                  />
-                  <PersonalMockSelect
-                    className="w-[100px]"
-                    value={String(ringSeconds)}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setRingSeconds(val);
-                      setUseCustomRing(!(FORWARD_RING_PRESETS as readonly number[]).includes(val));
-                    }}
-                  >
-                    {FORWARD_RING_PRESETS.map((sec) => (
-                      <option key={sec} value={sec}>
-                        {sec}s
-                      </option>
-                    ))}
-                    {useCustomRing ? <option value={ringSeconds}>{ringSeconds}s</option> : null}
+                  {dest.isDemo ? (
+                    <div className="min-w-[180px] flex-1">
+                      <p className="text-[13px] font-semibold text-[#111827]">
+                        {formatPhone(dest.number)}
+                      </p>
+                      <p className="text-[11px] text-[#6b7280]">{dest.label}</p>
+                    </div>
+                  ) : (
+                    <PersonalMockInput
+                      className="min-w-[180px] flex-1"
+                      placeholder={dest.index === 0 ? "(571) 477-6175" : "Add another line"}
+                      value={dest.number}
+                      onChange={(e) => updateTarget(dest.index!, e.target.value)}
+                    />
+                  )}
+                  <PersonalMockSelect className="w-[100px]" value={String(dest.ringSeconds)} disabled={dest.isDemo}>
+                    <option value={dest.ringSeconds}>{dest.ringSeconds}s</option>
                   </PersonalMockSelect>
                   <button
                     type="button"
@@ -719,11 +751,11 @@ export function PersonalForwardingUI({
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
-                  {i > 0 ? (
+                  {!dest.isDemo && dest.index! > 0 ? (
                     <button
                       type="button"
                       className="rounded-lg p-2 text-[#dc2626] hover:bg-[#fef2f2]"
-                      onClick={() => removeTarget(i)}
+                      onClick={() => removeTarget(dest.index!)}
                       aria-label="Remove destination"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -731,10 +763,10 @@ export function PersonalForwardingUI({
                   ) : null}
                 </div>
               ))}
-              {targets.length < 5 ? (
+              {!useWireframe && targets.length < 5 ? (
                 <button
                   type="button"
-                  className="text-[13px] font-semibold text-[#6366f1]"
+                  className="text-[13px] font-semibold text-[#2563eb]"
                   onClick={addTarget}
                 >
                   + Add Destination
@@ -747,7 +779,7 @@ export function PersonalForwardingUI({
                     type="button"
                     onClick={() => setUseCustomRing(true)}
                     className={`rounded-lg px-3 py-1 text-[12px] ${
-                      useCustomRing ? "bg-[#6366f1] text-white" : "border border-[#e5e7eb] bg-white"
+                      useCustomRing ? "bg-[#2563eb] text-white" : "border border-[#e5e7eb] bg-white"
                     }`}
                   >
                     Custom
@@ -826,7 +858,8 @@ export function PersonalForwardingUI({
         updateOutsideTarget={updateOutsideTarget}
         addOutsideTarget={addOutsideTarget}
         removeOutsideTarget={removeOutsideTarget}
-        activity={activity}
+        activity={displayActivity}
+        useWireframe={useWireframe}
       />
     </PersonalMockPage>
   );
@@ -845,13 +878,13 @@ function RingProgress({ pct }: { pct: number }) {
           cy="22"
           r={r}
           fill="none"
-          stroke="#6366f1"
+          stroke="#2563eb"
           strokeWidth="4"
           strokeDasharray={`${dash} ${c - dash}`}
           strokeLinecap="round"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#6366f1]">
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#2563eb]">
         {pct}%
       </span>
     </div>
@@ -876,6 +909,7 @@ function ScheduleAndActivitySection({
   addOutsideTarget,
   removeOutsideTarget,
   activity,
+  useWireframe = false,
 }: {
   scheduleMode: "always" | "custom";
   setScheduleMode: (v: "always" | "custom") => void;
@@ -912,6 +946,7 @@ function ScheduleAndActivitySection({
   addOutsideTarget: () => void;
   removeOutsideTarget: (index: number) => void;
   activity: ActivityRow[];
+  useWireframe?: boolean;
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -951,7 +986,36 @@ function ScheduleAndActivitySection({
             ))}
           </div>
 
-          {scheduleMode === "custom" ? (
+          {useWireframe ? (
+            <div className="space-y-3">
+              <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
+                <span className="rounded-md px-4 py-1.5 text-[13px] font-semibold text-[#6b7280]">
+                  Always
+                </span>
+                <span className="rounded-md bg-white px-4 py-1.5 text-[13px] font-semibold text-[#2563eb] shadow-sm">
+                  Custom Schedule
+                </span>
+              </div>
+              <p className="text-[12px] text-[#6b7280]">America/New_York</p>
+              <ul className="space-y-2 text-[13px]">
+                {[
+                  "Mon–Fri 9:00 AM – 5:00 PM · Forward to destinations",
+                  "Evenings · Voicemail",
+                  "Weekends · Announcement",
+                ].map((row) => (
+                  <li
+                    key={row}
+                    className="rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2 text-[#374151]"
+                  >
+                    {row}
+                  </li>
+                ))}
+              </ul>
+              <div className="rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[12px] text-[#1d4ed8]">
+                Outside scheduled hours, callers are sent to voicemail.
+              </div>
+            </div>
+          ) : scheduleMode === "custom" ? (
             <div className="space-y-3 rounded-lg border border-[#f3f4f6] p-3">
               <label className="block text-[12px] text-[#6b7280]">
                 Timezone
@@ -1080,7 +1144,7 @@ function ScheduleAndActivitySection({
               ))}
               <button
                 type="button"
-                className="text-[12px] font-semibold text-[#6366f1]"
+                className="text-[12px] font-semibold text-[#2563eb]"
                 onClick={() =>
                   setScheduleBlocks((prev) => [
                     ...prev,
@@ -1136,7 +1200,7 @@ function ScheduleAndActivitySection({
         {activity.length === 0 ? (
           <p className={pm.muted}>
             No recent calls. View full history on{" "}
-            <Link href="/personal/activity" className="font-semibold text-[#6366f1]">
+            <Link href="/personal/activity" className="font-semibold text-[#2563eb]">
               Call Activity
             </Link>
             .

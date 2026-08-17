@@ -217,3 +217,62 @@ export const WIREFRAME_ANALYTICS_KPIS = {
   avgDurationSec: 154,
   trends: { total: 12.4, answered: 68.2, missed: -6.8, voicemails: 8.7, forwarded: 15.6, avgDuration: 7.3 },
 };
+
+export const WIREFRAME_FORWARDING_DESTINATIONS = [
+  { number: "+15714776175", label: "Anthony's Cell", ringSeconds: 25 },
+  { number: "+17035552408", label: "Office", ringSeconds: 20 },
+  { number: "+15405559012", label: "Home", ringSeconds: 15 },
+];
+
+export const WIREFRAME_FORWARDING_ACTIVITY = [
+  { id: "demo-f1", caller: "+17035559191", calledNumber: "+15714073615", outcome: "Answered", date: "May 15, 2026", time: "3:42 PM" },
+  { id: "demo-f2", caller: "+12025550199", calledNumber: "+15714073615", outcome: "Voicemail", date: "May 14, 2026", time: "11:18 AM" },
+  { id: "demo-f3", caller: "+15714776175", calledNumber: "+15714073615", outcome: "Office Busy", date: "May 14, 2026", time: "9:05 AM" },
+];
+
+export const WIREFRAME_FORWARDING_USAGE = {
+  minutesUsed: 436,
+  minutesLimit: 600,
+  callsForwarded: 128,
+  statusSub: "Sequential Mode",
+};
+
+export const WIREFRAME_VOICEMAIL_MESSAGES = [
+  {
+    id: "demo-vm1",
+    callerName: "John Smith",
+    callerNumber: "+17035559191",
+    durationSec: 38,
+    transcript:
+      "Hi, this is John Smith. I was calling about the listing on Maple Street. Please call me back when you get a chance. Thanks.",
+    readAt: null,
+    createdAt: "2026-05-15T15:42:00",
+    isDemo: true,
+  },
+  {
+    id: "demo-vm2",
+    callerName: "Sarah Chen",
+    callerNumber: "+12025550199",
+    durationSec: 22,
+    transcript: "Just checking in on our appointment tomorrow. Let me know if the time still works.",
+    readAt: "2026-05-14T10:00:00",
+    createdAt: "2026-05-14T11:18:00",
+    isDemo: true,
+  },
+  {
+    id: "demo-vm3",
+    callerName: "Unknown",
+    callerNumber: "+17035559202",
+    durationSec: 15,
+    transcript: "Please return my call regarding the property inquiry.",
+    readAt: "2026-05-13T08:30:00",
+    createdAt: "2026-05-13T09:05:00",
+    isDemo: true,
+  },
+];
+
+export const WIREFRAME_VOICEMAIL_KPIS = {
+  total: 42,
+  unread: 6,
+  minutes: 38,
+};

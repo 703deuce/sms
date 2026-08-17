@@ -6,6 +6,11 @@ import {
   type PersonalVoicemailMessage,
 } from "@/lib/personal/voicemail-mappers";
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
+import {
+  WIREFRAME_VOICEMAIL_KPIS,
+  WIREFRAME_VOICEMAIL_MESSAGES,
+  usePersonalWireframe,
+} from "@/lib/workspace/personal-mockup-wireframe";
 import { runPersonalNumberAction } from "@/lib/personal/client-actions";
 import {
   Archive,
@@ -83,14 +88,31 @@ export function PersonalVoicemailUI({
     loadVoicemail().finally(() => setLoading(false));
   }, [loadVoicemail, numberId]);
 
-  const unread = messages.filter((m) => !m.readAt).length;
-  const voicemailMinutes = Math.round(
-    messages.reduce((sum, m) => sum + (m.durationSec || 0), 0) / 60,
-  );
-  const selected = messages.find((m) => m.id === selectedId) ?? null;
+  const useWireframe = usePersonalWireframe(messages.length);
+  const sourceMessages = useWireframe
+    ? WIREFRAME_VOICEMAIL_MESSAGES.map((m) => ({
+        id: m.id,
+        callerNumber: m.callerNumber,
+        callerName: m.callerName,
+        durationSec: m.durationSec,
+        transcript: m.transcript,
+        readAt: m.readAt,
+        createdAt: m.createdAt,
+        isDemo: true,
+      }))
+    : messages.map((m) => ({ ...m, callerName: undefined, isDemo: false }));
+
+  const unread = sourceMessages.filter((m) => !m.readAt).length;
+  const voicemailMinutes = useWireframe
+    ? WIREFRAME_VOICEMAIL_KPIS.minutes
+    : Math.round(messages.reduce((sum, m) => sum + (m.durationSec || 0), 0) / 60);
+  const selected =
+    sourceMessages.find((m) => m.id === selectedId) ??
+    sourceMessages[0] ??
+    null;
 
   const filteredMessages = useMemo(() => {
-    return messages.filter((m) => {
+    return sourceMessages.filter((m) => {
       if (inboxFilter === "Unread" && m.readAt) return false;
       if (inboxFilter === "Read" && !m.readAt) return false;
       const q = searchQuery.trim().toLowerCase();
@@ -100,7 +122,7 @@ export function PersonalVoicemailUI({
         (m.transcript || "").toLowerCase().includes(q)
       );
     });
-  }, [messages, inboxFilter, searchQuery]);
+  }, [sourceMessages, inboxFilter, searchQuery]);
 
   const greetingLibrary = [
     {
@@ -282,7 +304,7 @@ export function PersonalVoicemailUI({
       {settingsMessage ? (
         <p className="text-center text-[12px] text-[#6b7280]">{settingsMessage}</p>
       ) : null}
-      <Link href="/settings/billing" className="block text-center text-[12px] font-semibold text-[#6366f1]">
+      <Link href="/settings/billing" className="block text-center text-[12px] font-semibold text-[#2563eb]">
         Upgrade storage
       </Link>
     </div>
@@ -316,17 +338,22 @@ export function PersonalVoicemailUI({
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <PersonalMockKpi label="Total Voicemails" value={messages.length} icon={Voicemail} />
+        <PersonalMockKpi
+          label="Total Voicemails"
+          value={useWireframe ? WIREFRAME_VOICEMAIL_KPIS.total : messages.length}
+          icon={Voicemail}
+        />
         <PersonalMockKpi
           label="Unread"
-          value={unread}
+          value={useWireframe ? WIREFRAME_VOICEMAIL_KPIS.unread : unread}
+          sub={useWireframe ? "Needs attention" : undefined}
           icon={Phone}
           iconClass="bg-[#fef2f2] text-[#dc2626]"
         />
         <PersonalMockKpi
           label="Voicemail Minutes"
           value={voicemailMinutes}
-          sub="total duration"
+          sub={useWireframe ? "This month" : "total duration"}
           icon={Clock}
           iconClass="bg-[#eff6ff] text-[#2563eb]"
         />
@@ -370,24 +397,43 @@ export function PersonalVoicemailUI({
                     type="button"
                     onClick={() => {
                       setSelectedId(m.id);
-                      if (!m.readAt) markRead(m.id);
+                      if (!m.readAt && !m.isDemo) markRead(m.id);
                     }}
                     className={`w-full px-1 py-3 text-left transition hover:bg-[#f9fafb] ${
-                      selectedId === m.id ? "bg-[#eef2ff]" : ""
+                      selectedId === m.id ? "bg-[#eff6ff]" : ""
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-[13px] font-semibold text-[#111827]">Caller</p>
+                    <div className="flex items-start gap-2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+                        {(m.callerName || m.callerNumber || "?")
+                          .replace(/\D/g, "")
+                          .slice(-2) || "?"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[13px] font-semibold text-[#111827]">
+                            {m.callerName || formatPhone(m.callerNumber || "Unknown")}
+                          </p>
+                          {!m.readAt ? (
+                            <PersonalMockPill tone="blue">Unread</PersonalMockPill>
+                          ) : (
+                            <PersonalMockPill tone="gray">Read</PersonalMockPill>
+                          )}
+                        </div>
                         <p className="text-[12px] text-[#6b7280]">
                           {formatPhone(m.callerNumber || "Unknown")}
                         </p>
+                        <p className="mt-1 text-[11px] text-[#9ca3af]">
+                          {new Date(m.createdAt).toLocaleDateString()} · 0:
+                          {String(m.durationSec).padStart(2, "0")}
+                        </p>
+                        {m.transcript ? (
+                          <p className="mt-1 line-clamp-2 text-[11px] text-[#6b7280]">
+                            {m.transcript}
+                          </p>
+                        ) : null}
                       </div>
-                      {!m.readAt ? <PersonalMockPill tone="blue">New</PersonalMockPill> : null}
                     </div>
-                    <p className="mt-1 text-[11px] text-[#9ca3af]">
-                      {new Date(m.createdAt).toLocaleString()} · {m.durationSec}s
-                    </p>
                   </button>
                 </li>
               ))}
@@ -418,7 +464,7 @@ export function PersonalVoicemailUI({
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1] text-white"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563eb] text-white"
                     onClick={() =>
                       setPlayingId(playingId === selected.id ? null : selected.id)
                     }
@@ -437,7 +483,7 @@ export function PersonalVoicemailUI({
                       {Array.from({ length: 32 }).map((_, i) => (
                         <span
                           key={i}
-                          className="w-1 rounded-full bg-[#6366f1]/70"
+                          className="w-1 rounded-full bg-[#2563eb]/70"
                           style={{ height: `${8 + ((i * 7) % 24)}px` }}
                         />
                       ))}
@@ -524,7 +570,7 @@ export function PersonalVoicemailUI({
               <li
                 key={g.id}
                 className={`rounded-lg border px-3 py-2 text-[13px] ${
-                  g.active ? "border-[#c7d2fe] bg-[#eef2ff]" : "border-[#f3f4f6]"
+                  g.active ? "border-[#bfdbfe] bg-[#eff6ff]" : "border-[#f3f4f6]"
                 }`}
               >
                 <p className="font-semibold text-[#111827]">{g.label}</p>
