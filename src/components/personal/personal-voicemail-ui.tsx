@@ -70,7 +70,25 @@ type VmMessage = {
   readAt: string | null;
   createdAt: string;
   isDemo: boolean;
+  avatarTone?: "blue" | "purple" | "orange" | "green" | "pink";
 };
+
+const AVATAR_TONE_CLASSES = {
+  blue: "bg-[#eff6ff] text-[#2563eb]",
+  purple: "bg-[#f5f3ff] text-[#7c3aed]",
+  orange: "bg-[#fff7ed] text-[#ea580c]",
+  green: "bg-[#ecfdf5] text-[#059669]",
+  pink: "bg-[#fdf2f8] text-[#db2777]",
+} as const;
+
+function avatarToneClass(
+  tone?: VmMessage["avatarTone"],
+  fallbackIndex = 0,
+): string {
+  const keys = Object.keys(AVATAR_TONE_CLASSES) as Array<keyof typeof AVATAR_TONE_CLASSES>;
+  const key = tone || keys[fallbackIndex % keys.length];
+  return AVATAR_TONE_CLASSES[key];
+}
 
 function callerAvatarInitials(name?: string | null, number?: string | null): string {
   const trimmed = (name || "").trim();
@@ -184,6 +202,7 @@ export function PersonalVoicemailUI({
         readAt: m.readAt,
         createdAt: m.createdAt,
         isDemo: true,
+        avatarTone: m.avatarTone,
       }))
     : messages.map((m) => ({
         id: m.id,
@@ -225,7 +244,7 @@ export function PersonalVoicemailUI({
 
   const inboxPerPage = 5;
   const inboxTotal = useWireframe ? WIREFRAME_VOICEMAIL_KPIS.total : filteredMessages.length;
-  const inboxPages = Math.max(1, Math.ceil(inboxTotal / inboxPerPage));
+  const inboxPages = useWireframe ? 9 : Math.max(1, Math.ceil(inboxTotal / inboxPerPage));
   const pagedMessages = useWireframe
     ? filteredMessages.slice(0, inboxPerPage)
     : filteredMessages.slice((inboxPage - 1) * inboxPerPage, inboxPage * inboxPerPage);
@@ -397,7 +416,7 @@ export function PersonalVoicemailUI({
             Upload
           </PersonalMockBtn>
         </div>
-        <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
+        <PersonalMockBtn variant="outline" className="mt-2 w-full gap-1 text-[12px]">
           <Wand2 className="h-3.5 w-3.5" />
           Generate
         </PersonalMockBtn>
@@ -554,15 +573,17 @@ export function PersonalVoicemailUI({
         }
         filters={
           numbers.length > 0 ? (
-            <div className={pm.card + " flex flex-wrap items-center gap-3 px-4 py-3"}>
-              <span className="text-[12px] font-semibold text-[#374151]">Managing Number</span>
-              <PersonalNumberSelector
-                numbers={numbers}
-                selectedId={managingNumberId}
-                label=""
-                allowAll={!useWireframe}
-                selectClassName="h-10 min-w-[280px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
-              />
+            <div className={pm.card + " px-4 py-3"}>
+              <label className="text-[12px] font-semibold text-[#374151]">Managing Number</label>
+              <div className="mt-2">
+                <PersonalNumberSelector
+                  numbers={numbers}
+                  selectedId={managingNumberId}
+                  label=""
+                  allowAll={!useWireframe}
+                  selectClassName="h-10 w-full min-w-0 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
+                />
+              </div>
             </div>
           ) : null
         }
@@ -601,26 +622,25 @@ export function PersonalVoicemailUI({
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[300px_1fr_300px]">
-        <PersonalMockSection title="Inbox" className="xl:max-h-[720px] xl:overflow-y-auto">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+        <div className="space-y-4 xl:col-start-1">
+        <PersonalMockSection title="Inbox" className="xl:max-h-[520px] xl:overflow-y-auto">
+          <div className="relative mb-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+            <PersonalMockInput
+              className="pl-9"
+              placeholder="Search caller or transcript"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <PersonalMockFilterChips
               options={["All", "Unread", "Read"]}
               active={inboxFilter}
               onChange={(v) => setInboxFilter(v as typeof inboxFilter)}
             />
-          </div>
-          <div className="mb-3 flex gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-              <PersonalMockInput
-                className="pl-9"
-                placeholder="Search caller or transcript"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <PersonalMockSelect className="w-[120px] shrink-0">
+            <PersonalMockSelect className="h-8 w-[120px] shrink-0 text-[12px]">
               <option>Newest First</option>
               <option>Oldest First</option>
             </PersonalMockSelect>
@@ -632,7 +652,7 @@ export function PersonalVoicemailUI({
           ) : (
             <>
               <ul className="divide-y divide-[#f3f4f6]">
-                {pagedMessages.map((m) => (
+                {pagedMessages.map((m, idx) => (
                   <li key={m.id}>
                     <button
                       type="button"
@@ -641,12 +661,19 @@ export function PersonalVoicemailUI({
                         if (!m.readAt && !m.isDemo) markRead(m.id);
                       }}
                       className={cn(
-                        "w-full px-1 py-3 text-left transition hover:bg-[#f9fafb]",
-                        selectedId === m.id && "bg-[#eef2ff]",
+                        "w-full border-l-4 px-2 py-3 text-left transition hover:bg-[#f9fafb]",
+                        selectedId === m.id
+                          ? "border-l-[#6366f1] bg-[#eef2ff]"
+                          : "border-l-transparent",
                       )}
                     >
                       <div className="flex items-start gap-2">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+                        <span
+                          className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                            avatarToneClass(m.avatarTone, idx),
+                          )}
+                        >
                           {callerAvatarInitials(m.callerName, m.callerNumber)}
                         </span>
                         <div className="min-w-0 flex-1">
@@ -698,18 +725,98 @@ export function PersonalVoicemailUI({
                 total={inboxTotal}
                 page={inboxPage}
                 pages={inboxPages}
+                pageSizeLabel="5 / page"
               />
             </>
           )}
         </PersonalMockSection>
 
-        <PersonalMockSection title="Message Detail" className="min-h-[400px]">
+        <div ref={greetingRef}>
+        <PersonalMockSection
+          title="Greeting Library"
+          action={
+            <PersonalMockBtn variant="outline" className="h-8 gap-1 text-[12px]">
+              <Mic className="h-3.5 w-3.5" />
+              Add Greeting
+            </PersonalMockBtn>
+          }
+        >
+          <ul className="space-y-2">
+            {greetingLibrary.map((g) => (
+              <li
+                key={g.id}
+                className={cn(
+                  "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
+                  g.status === "Active" ? "border-[#c7d2fe] bg-[#eef2ff]" : "border-[#f3f4f6]",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-semibold text-[#111827]">{g.label}</p>
+                    {g.status === "Active" ? (
+                      <PersonalMockPill tone="green">Active</PersonalMockPill>
+                    ) : (
+                      <PersonalMockPill tone="gray">Inactive</PersonalMockPill>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[#6b7280]">
+                    {g.durationSec > 0 ? `${g.durationSec}s · ` : ""}Updated {g.updated}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button type="button" className="rounded p-1.5 hover:bg-white">
+                    <Play className="h-3.5 w-3.5 text-[#6b7280]" />
+                  </button>
+                  <button type="button" className="rounded p-1.5 hover:bg-white">
+                    <Pencil className="h-3.5 w-3.5 text-[#6b7280]" />
+                  </button>
+                  <button type="button" className="rounded p-1.5 hover:bg-white">
+                    <MoreHorizontal className="h-3.5 w-3.5 text-[#6b7280]" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {showGreetingEditor ? (
+            <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+              <PersonalGreetingControls
+                greetingText={box?.greetingText || "Please leave a message after the tone."}
+                greetingUrl={box?.greetingUrl}
+                onSaveText={saveGreetingText}
+                onSaveUrl={saveGreetingUrl}
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <PersonalMockBtn
+                  variant="outline"
+                  onClick={() =>
+                    persistGreeting({ greetingText: "Please leave a message after the tone." })
+                  }
+                >
+                  Use default greeting
+                </PersonalMockBtn>
+                <PersonalMockBtn variant="ghost" onClick={() => setShowGreetingEditor(false)}>
+                  Close
+                </PersonalMockBtn>
+              </div>
+            </div>
+          ) : null}
+        </PersonalMockSection>
+        </div>
+        </div>
+
+        <div className="space-y-4 xl:col-start-2">
+        <PersonalMockSection hideHeader className="min-h-[400px]">
           {!selected ? (
             <p className={pm.muted}>Select a voicemail to listen and read the transcript.</p>
           ) : (
             <div className="space-y-4">
               <div className="flex items-start gap-3">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[16px] font-bold text-[#2563eb]">
+                <span
+                  className={cn(
+                    "flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[18px] font-bold",
+                    avatarToneClass(selected.avatarTone),
+                  )}
+                >
                   {callerAvatarInitials(selected.callerName, selected.callerNumber)}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -875,78 +982,6 @@ export function PersonalVoicemailUI({
           )}
         </PersonalMockSection>
 
-        {settingsSidebar}
-      </div>
-
-      <div ref={greetingRef} className="grid gap-6 lg:grid-cols-2">
-        <PersonalMockSection
-          title="Greeting Library"
-          action={
-            <PersonalMockBtn variant="outline" className="h-8 text-[12px] gap-1">
-              <Mic className="h-3.5 w-3.5" />
-              Add Greeting
-            </PersonalMockBtn>
-          }
-        >
-          <ul className="space-y-2">
-            {greetingLibrary.map((g) => (
-              <li
-                key={g.id}
-                className={cn(
-                  "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
-                  g.status === "Active" ? "border-[#c7d2fe] bg-[#eef2ff]" : "border-[#f3f4f6]",
-                )}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-semibold text-[#111827]">{g.label}</p>
-                    {g.status === "Active" ? (
-                      <PersonalMockPill tone="green">Active</PersonalMockPill>
-                    ) : (
-                      <PersonalMockPill tone="gray">Inactive</PersonalMockPill>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-[#6b7280]">
-                    {g.durationSec > 0 ? `${g.durationSec}s · ` : ""}Updated {g.updated}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button type="button" className="rounded p-1.5 hover:bg-white">
-                    <Play className="h-3.5 w-3.5 text-[#6b7280]" />
-                  </button>
-                  <button type="button" className="rounded p-1.5 hover:bg-white">
-                    <Pencil className="h-3.5 w-3.5 text-[#6b7280]" />
-                  </button>
-                  <button type="button" className="rounded p-1.5 hover:bg-white">
-                    <MoreHorizontal className="h-3.5 w-3.5 text-[#6b7280]" />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {showGreetingEditor ? (
-            <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
-              <PersonalGreetingControls
-                greetingText={box?.greetingText || "Please leave a message after the tone."}
-                greetingUrl={box?.greetingUrl}
-                onSaveText={saveGreetingText}
-                onSaveUrl={saveGreetingUrl}
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <PersonalMockBtn
-                  variant="outline"
-                  onClick={() => persistGreeting({ greetingText: "Please leave a message after the tone." })}
-                >
-                  Use default greeting
-                </PersonalMockBtn>
-                <PersonalMockBtn variant="ghost" onClick={() => setShowGreetingEditor(false)}>
-                  Close
-                </PersonalMockBtn>
-              </div>
-            </div>
-          ) : null}
-        </PersonalMockSection>
-
         <PersonalMockSection
           title="Recent Voicemail Activity"
           action={
@@ -1000,6 +1035,9 @@ export function PersonalVoicemailUI({
             </ul>
           )}
         </PersonalMockSection>
+        </div>
+
+        <div className="xl:col-start-3 xl:row-span-2">{settingsSidebar}</div>
       </div>
     </PersonalMockPage>
   );

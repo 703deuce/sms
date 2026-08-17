@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
 export const pm = {
   card: "rounded-xl border border-[#e5e7eb] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
@@ -124,23 +125,27 @@ export function PersonalMockSection({
   children,
   action,
   className,
+  hideHeader,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   action?: ReactNode;
   className?: string;
+  hideHeader?: boolean;
 }) {
   return (
     <div className={cn(pm.card, "overflow-hidden", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] px-5 py-4">
-        <div>
-          <h2 className="text-[15px] font-semibold text-[#111827]">{title}</h2>
-          {description ? <p className="mt-0.5 text-[12px] text-[#6b7280]">{description}</p> : null}
+      {!hideHeader ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] px-5 py-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-[#111827]">{title}</h2>
+            {description ? <p className="mt-0.5 text-[12px] text-[#6b7280]">{description}</p> : null}
+          </div>
+          {action}
         </div>
-        {action}
-      </div>
-      <div className="p-5">{children}</div>
+      ) : null}
+      <div className={cn(hideHeader ? "p-5" : "p-5")}>{children}</div>
     </div>
   );
 }
@@ -298,36 +303,60 @@ export function PersonalMockPagination({
   total,
   page = 1,
   pages = 1,
+  pageSizeLabel = "10 / page",
 }: {
   showing: string;
   total: number;
   page?: number;
   pages?: number;
+  pageSizeLabel?: string;
 }) {
+  const pageItems = useMemo(() => {
+    if (pages <= 9) {
+      return Array.from({ length: pages }, (_, i) => i + 1) as number[];
+    }
+    if (pages > 100) {
+      return [1, 2, 3, "ellipsis", pages] as Array<number | "ellipsis">;
+    }
+    return [1, 2, 3, "ellipsis", pages] as Array<number | "ellipsis">;
+  }, [pages]);
+
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#6b7280]">
       <span>{showing}</span>
-      <div className="flex items-center gap-2">
-        <button type="button" className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb]">
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb]"
+        >
           ‹
         </button>
-        {Array.from({ length: Math.min(pages, 5) }, (_, i) => i + 1).map((p) => (
-          <button
-            key={p}
-            type="button"
-            className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-md text-[12px] font-semibold",
-              p === page ? "bg-[#6366f1] text-white" : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
-            )}
-          >
-            {p}
-          </button>
-        ))}
-        <button type="button" className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb]">
+        {pageItems.map((p, idx) =>
+          p === "ellipsis" ? (
+            <span key={`ellipsis-${idx}`} className="px-1 text-[#9ca3af]">…</span>
+          ) : (
+            <button
+              key={p}
+              type="button"
+              className={cn(
+                "flex h-7 min-w-[28px] items-center justify-center rounded-md px-1.5 text-[12px] font-semibold",
+                p === page
+                  ? "bg-[#6366f1] text-white"
+                  : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
+              )}
+            >
+              {p}
+            </button>
+          ),
+        )}
+        <button
+          type="button"
+          className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb]"
+        >
           ›
         </button>
-        <PersonalMockSelect className="h-8 w-[90px] text-[12px]">
-          <option>10 / page</option>
+        <PersonalMockSelect className="h-8 w-[96px] text-[12px]">
+          <option>{pageSizeLabel}</option>
           <option>25 / page</option>
         </PersonalMockSelect>
       </div>

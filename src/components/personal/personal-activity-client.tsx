@@ -30,7 +30,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PersonalMockLineChart } from "./mockup/charts";
 import {
   PersonalMockBtn,
-  PersonalMockFilterChips,
   PersonalMockHeader,
   PersonalMockInput,
   PersonalMockKpi,
@@ -56,13 +55,27 @@ type ActivityDisplayRow = PersonalActivityRow & {
   screening?: string;
 };
 
-function outcomeTone(outcome: string): "green" | "orange" | "purple" | "red" | "gray" {
+function outcomeTone(outcome: string): "green" | "orange" | "purple" | "red" | "gray" | "blue" {
   const o = outcome.toLowerCase();
   if (o.includes("answer")) return "green";
   if (o.includes("voice")) return "purple";
   if (o.includes("miss")) return "orange";
-  if (o.includes("block") || o.includes("fail")) return "red";
+  if (o.includes("block")) return "blue";
+  if (o.includes("fail")) return "red";
   return "gray";
+}
+
+const ACTIVITY_AVATAR_TONES = [
+  "bg-[#eff6ff] text-[#2563eb]",
+  "bg-[#f5f3ff] text-[#7c3aed]",
+  "bg-[#fff7ed] text-[#ea580c]",
+  "bg-[#ecfdf5] text-[#059669]",
+  "bg-[#fdf2f8] text-[#db2777]",
+  "bg-[#fef3c7] text-[#d97706]",
+] as const;
+
+function activityAvatarClass(index: number): string {
+  return ACTIVITY_AVATAR_TONES[index % ACTIVITY_AVATAR_TONES.length];
 }
 
 function formatDuration(sec: number) {
@@ -410,7 +423,7 @@ export function PersonalActivityClient({
                   onChange={(e) => setOutcomeFilter(e.target.value)}
                   className="w-[120px]"
                 >
-                  <option>All</option>
+                  <option value="All">Outcome</option>
                   <option>Answered</option>
                   <option>Missed</option>
                   <option>Voicemail</option>
@@ -421,7 +434,8 @@ export function PersonalActivityClient({
                   onChange={(e) => setHandlingFilter(e.target.value)}
                   className="w-[130px]"
                 >
-                  <option>All</option>
+                  <option value="All">Handling Type</option>
+                  <option value="All">Handling Type</option>
                   <option>Forward</option>
                   <option>Voicemail</option>
                   <option>Smart Routed</option>
@@ -454,7 +468,7 @@ export function PersonalActivityClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f3f4f6]">
-                      {filtered.slice(0, useWireframe ? 8 : 10).map((r) => {
+                      {filtered.slice(0, useWireframe ? 8 : 10).map((r, rowIdx) => {
                         const isSelected = selected?.id === r.id;
                         return (
                           <tr
@@ -469,7 +483,12 @@ export function PersonalActivityClient({
                           >
                             <td className="py-3 pr-3">
                               <div className="flex items-center gap-2">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+                                <span
+                                  className={cn(
+                                    "flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold",
+                                    activityAvatarClass(rowIdx),
+                                  )}
+                                >
                                   {callerInitials(r)}
                                 </span>
                                 <div>
@@ -530,6 +549,7 @@ export function PersonalActivityClient({
                   }
                   total={tableTotal}
                   pages={tablePages}
+                  pageSizeLabel="10 / page"
                 />
               </>
             )}
@@ -630,7 +650,14 @@ export function PersonalActivityClient({
               <PersonalMockPill tone={outcomeTone(selected.outcome)}>{selected.outcome}</PersonalMockPill>
             </div>
             <div className="mt-4 flex items-center gap-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[18px] font-bold text-[#2563eb]">
+              <div
+                className={cn(
+                  "flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[18px] font-bold",
+                  activityAvatarClass(
+                    filtered.findIndex((r) => r.id === selected.id),
+                  ),
+                )}
+              >
                 {callerInitials(selected)}
               </div>
               <div>
