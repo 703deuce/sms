@@ -189,6 +189,12 @@ export function PersonalVoicemailUI({
     ? numberId || numbers[0]?.id
     : numberId;
 
+  useEffect(() => {
+    if (useWireframe && !selectedId && WIREFRAME_VOICEMAIL_MESSAGES[0]) {
+      setSelectedId(WIREFRAME_VOICEMAIL_MESSAGES[0].id);
+    }
+  }, [useWireframe, selectedId]);
+
   const sourceMessages: VmMessage[] = useWireframe
     ? WIREFRAME_VOICEMAIL_MESSAGES.map((m) => ({
         id: m.id,
@@ -645,7 +651,7 @@ export function PersonalVoicemailUI({
               <option>Oldest First</option>
             </PersonalMockSelect>
           </div>
-          {loading ? (
+          {loading && !useWireframe ? (
             <p className={pm.muted}>Loading voicemail…</p>
           ) : pagedMessages.length === 0 ? (
             <p className={pm.muted}>No voicemails yet.</p>

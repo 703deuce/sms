@@ -130,6 +130,12 @@ export function PersonalActivityClient({
 
   const useWireframe = usePersonalWireframe(rows.length);
 
+  useEffect(() => {
+    if (useWireframe && !selectedId && WIREFRAME_ACTIVITY_ROWS[0]) {
+      setSelectedId(WIREFRAME_ACTIVITY_ROWS[0].id);
+    }
+  }, [useWireframe, selectedId]);
+
   const displayRows: ActivityDisplayRow[] = useMemo(() => {
     if (!useWireframe) return rows as ActivityDisplayRow[];
     return WIREFRAME_ACTIVITY_ROWS.map((r) => ({
@@ -447,7 +453,7 @@ export function PersonalActivityClient({
               </div>
             }
           >
-            {loading ? (
+            {loading && !useWireframe ? (
               <p className={pm.muted}>Loading…</p>
             ) : filtered.length === 0 ? (
               <p className={pm.muted}>No call activity yet.</p>
