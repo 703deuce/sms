@@ -302,19 +302,236 @@ export const WIREFRAME_BLOCKED_ROWS = [
     addedBy: "Alex Rivera",
     isDemo: true,
   },
+  {
+    id: "demo-b3",
+    phone: "+17035558899",
+    label: "Robocall",
+    scope: "Sales Line",
+    scopeTone: "green" as const,
+    behavior: "Disconnect",
+    behaviorTone: "red" as const,
+    blockedCalls: 12,
+    lastAttempt: "Aug 14, 2:08 PM",
+    added: "Aug 5, 2026",
+    addedBy: "Alex Rivera",
+    isDemo: true,
+  },
+  {
+    id: "demo-b4",
+    phone: "+12025550123",
+    label: "Spam Caller",
+    scope: "Support Line",
+    scopeTone: "green" as const,
+    behavior: "Disconnect",
+    behaviorTone: "red" as const,
+    blockedCalls: 4,
+    lastAttempt: "Aug 11, 10:45 AM",
+    added: "Aug 3, 2026",
+    addedBy: "Alex Rivera",
+    isDemo: true,
+  },
+  {
+    id: "demo-b5",
+    phone: "+17035557788",
+    label: "Blocked",
+    scope: "All Numbers",
+    scopeTone: "purple" as const,
+    behavior: "Unavailable Message",
+    behaviorTone: "orange" as const,
+    blockedCalls: 9,
+    lastAttempt: "Aug 9, 6:20 PM",
+    added: "Jul 28, 2026",
+    addedBy: "Alex Rivera",
+    isDemo: true,
+  },
+  {
+    id: "demo-b6",
+    phone: "+12025559901",
+    label: "Fraud",
+    scope: "Main Line",
+    scopeTone: "blue" as const,
+    behavior: "Disconnect",
+    behaviorTone: "red" as const,
+    blockedCalls: 3,
+    lastAttempt: "Aug 7, 1:15 PM",
+    added: "Jul 25, 2026",
+    addedBy: "Alex Rivera",
+    isDemo: true,
+  },
 ];
 
 export const WIREFRAME_BLOCKED_ATTEMPTS = [
-  { id: "demo-ba1", at: "Today, 4:12 PM", outcome: "Call disconnected" },
-  { id: "demo-ba2", at: "Yesterday, 2:30 PM", outcome: "Call disconnected" },
-  { id: "demo-ba3", at: "Aug 10, 2026 · 9:15 AM", outcome: "Unavailable message played" },
+  { id: "demo-ba1", at: "Today, 4:12 PM", line: "Main Line", outcome: "Call disconnected" },
+  { id: "demo-ba2", at: "Yesterday, 2:30 PM", line: "Main Line", outcome: "Call disconnected" },
+  {
+    id: "demo-ba3",
+    at: "Aug 10, 2026 · 9:15 AM",
+    line: "Sales Line",
+    outcome: "Unavailable message played",
+  },
 ];
 
+export const WIREFRAME_BLOCKED_RECENT = [
+  {
+    id: "demo-br1",
+    phone: "+17035559191",
+    line: "Main Line",
+    at: "Today, 4:12 PM",
+  },
+  {
+    id: "demo-br2",
+    phone: "+12025558812",
+    line: "Main Line",
+    at: "Yesterday, 2:30 PM",
+  },
+  {
+    id: "demo-br3",
+    phone: "+17035558899",
+    line: "Sales Line",
+    at: "Aug 14, 2:08 PM",
+  },
+  {
+    id: "demo-br4",
+    phone: "+12025550123",
+    line: "Support Line",
+    at: "Aug 11, 10:45 AM",
+  },
+  {
+    id: "demo-br5",
+    phone: "+17035557788",
+    line: "Main Line",
+    at: "Aug 9, 6:20 PM",
+  },
+];
+
+export const WIREFRAME_BLOCKED_PROTECTION = {
+  accountWide: 14,
+  perNumber: 10,
+  defaultHandling: "Disconnect",
+  protectedNumbers: 4,
+};
+
 export const WIREFRAME_USAGE_BY_NUMBER = [
-  { number: "+15714073615", friendlyName: "Main Line", calls: 312, forwarded: 342, vm: 12, transcribe: 11, pct: 63, trend: [20, 35, 28, 42, 38, 45, 50] },
-  { number: "+18663464256", friendlyName: "Sales Line", calls: 98, forwarded: 112, vm: 8, transcribe: 7, pct: 21, trend: [8, 12, 10, 14, 11, 9, 15] },
-  { number: "+18665779653", friendlyName: "Support Line", calls: 64, forwarded: 88, vm: 6, transcribe: 5, pct: 16, trend: [5, 7, 6, 8, 7, 9, 10] },
-  { number: "+14155550198", friendlyName: "After Hours", calls: 24, forwarded: 0, vm: 4, transcribe: 3, pct: 2, trend: [2, 1, 3, 2, 1, 2, 1] },
+  {
+    number: "+15714073615",
+    friendlyName: "Main Line",
+    calls: 142,
+    forwarded: 214,
+    vm: 14,
+    transcribe: 12,
+    pct: 39,
+    trend: [18, 22, 28, 24, 32, 30, 35],
+  },
+  {
+    number: "+18663464256",
+    friendlyName: "Sales Line",
+    calls: 98,
+    forwarded: 112,
+    vm: 8,
+    transcribe: 7,
+    pct: 21,
+    trend: [8, 12, 10, 14, 11, 9, 15],
+  },
+  {
+    number: "+18665779653",
+    friendlyName: "Support Line",
+    calls: 64,
+    forwarded: 88,
+    vm: 6,
+    transcribe: 5,
+    pct: 16,
+    trend: [5, 7, 6, 8, 7, 9, 10],
+  },
+  {
+    number: "+14155550198",
+    friendlyName: "After Hours",
+    calls: 24,
+    forwarded: 0,
+    vm: 4,
+    transcribe: 3,
+    pct: 2,
+    trend: [2, 1, 3, 2, 1, 2, 1],
+  },
+];
+
+export const WIREFRAME_USAGE_SUMMARY = {
+  forwardingUsed: 542,
+  forwardingLimit: 1000,
+  pctUsed: 54,
+  remaining: 458,
+  calls: 428,
+  vmMinutes: 38,
+  transcribeMinutes: 36,
+  estimatedOverage: "$0.00",
+  projectedMinutes: 918,
+  projectedOverage: "$0.00",
+  trendVsLastMonth: 12,
+  periodStart: "Aug 1, 2026",
+  periodEnd: "Aug 31, 2026",
+  daysRemaining: 17,
+  planName: "Numbers Plus",
+  planPrice: "$29.99 / month",
+  forwardingAllowance: "1,000 min",
+  transcriptionAllowance: "100 min",
+  vaultLimit: "5 numbers",
+  overageRate: "$0.02 / minute",
+};
+
+export const WIREFRAME_USAGE_AVERAGES = {
+  callsPerDay: 25,
+  forwardedMinPerDay: 32,
+  avgCallLength: "2m 41s",
+  avgVoicemailLength: "0:39",
+};
+
+export const WIREFRAME_USAGE_TREND_LABELS = [
+  "Aug 1",
+  "Aug 5",
+  "Aug 9",
+  "Aug 13",
+  "Aug 17",
+  "Aug 21",
+  "Aug 25",
+  "Aug 29",
+  "Aug 31",
+];
+
+export const WIREFRAME_USAGE_TREND_FORWARDED = [12, 18, 22, 28, 32, 30, 35, 38, 42];
+export const WIREFRAME_USAGE_TREND_CALLS = [8, 12, 15, 18, 22, 20, 24, 26, 28];
+
+export const WIREFRAME_USAGE_VOICEMAIL = {
+  voicemails: 42,
+  vmMinutes: 38,
+  transcribed: 39,
+  storageMb: 52,
+};
+
+export const WIREFRAME_USAGE_SMART_ROUTING = {
+  callsThrough: 128,
+  routedMinutes: 176,
+  menuInteractions: 304,
+  vmFallbacks: 11,
+};
+
+export const WIREFRAME_USAGE_HISTORY = [
+  {
+    period: "Aug 2026 (current)",
+    forwarded: 542,
+    pctAllowance: "54%",
+    overage: "$0.00",
+  },
+  {
+    period: "Jul 2026",
+    forwarded: 486,
+    pctAllowance: "49%",
+    overage: "$0.00",
+  },
+  {
+    period: "Jun 2026",
+    forwarded: 412,
+    pctAllowance: "41%",
+    overage: "$0.00",
+  },
 ];
 
 export const WIREFRAME_ANALYTICS_KPIS = {
