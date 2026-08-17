@@ -686,3 +686,100 @@ export const WIREFRAME_VOICEMAIL_KPIS = {
   unread: 6,
   minutes: 38,
 };
+
+export const WIREFRAME_OVERVIEW_KPIS = {
+  totalContacts: 0,
+  contactsAddedLastMonth: 0,
+  activeNumbers: 0,
+  textsSent30d: 0,
+  calls30d: 428,
+  balance: "$12.40",
+  balanceSub: "Next refill at $5.00",
+  vaultCount: 4,
+  vaultActive: 4,
+};
+
+export const WIREFRAME_OVERVIEW_TOP_CONTACTS = [
+  {
+    id: "demo-oc1",
+    phone: "+15123419887",
+    location: "Austin, TX",
+    recentActivity: "Sent inbound text...",
+    type: "Inbound",
+    line: "N/A",
+    status: "Active",
+    statusTone: "green" as const,
+    totalActivity: "12 hours",
+    lastAction: "Today",
+  },
+  {
+    id: "demo-oc2",
+    phone: "+15031234567",
+    location: "Portland, OR",
+    recentActivity: "Responded to campaign",
+    type: "Call Flow",
+    line: "Fall Sale",
+    status: "Managed",
+    statusTone: "blue" as const,
+    totalActivity: "23 min",
+    lastAction: "Yesterday",
+  },
+  {
+    id: "demo-oc3",
+    phone: "+12067890123",
+    location: "Seattle, WA",
+    recentActivity: "Scheduled",
+    type: "Email",
+    line: "E-Commerce",
+    status: "Prospect",
+    statusTone: "orange" as const,
+    totalActivity: "14 hours",
+    lastAction: "2 days ago",
+  },
+  {
+    id: "demo-oc4",
+    phone: "+16465554321",
+    location: "New York, NY",
+    recentActivity: "Completed campaign",
+    type: "SMS",
+    line: "Spring Event",
+    status: "Finished",
+    statusTone: "green" as const,
+    totalActivity: "45 min",
+    lastAction: "3 days ago",
+  },
+];
+
+export const WIREFRAME_OVERVIEW_NUMBER_REVIEW = {
+  total: 4,
+  mobile: 3,
+  landline: 1,
+  voip: 0,
+  invalid: 0,
+};
+
+export const WIREFRAME_OVERVIEW_PENDING_TASKS = [
+  { id: "demo-pt1", text: "Follow up with (512) 341-9887", at: "1m ago" },
+  { id: "demo-pt2", text: "Review voicemail from (703) 555-9202", at: "5m ago" },
+  { id: "demo-pt3", text: "Confirm port documents for Main Line", at: "12m ago" },
+  { id: "demo-pt4", text: "Update forwarding for Sales Line", at: "1h ago" },
+];
+
+export const WIREFRAME_OVERVIEW_COMM_LOG = [
+  { phone: "+1 (512) 555-0199", date: "Jul 24, 2024", time: "10:20 AM" },
+  { phone: "+1 (703) 555-9191", date: "Jul 23, 2024", time: "4:12 PM" },
+  { phone: "+1 (571) 407-3615", date: "Jul 22, 2024", time: "9:15 AM" },
+];
+
+export const WIREFRAME_OVERVIEW_ACTIVITY_LOG = [
+  { id: "demo-al1", text: "Contact Added to 'Campaign A'", at: "2h ago" },
+  { id: "demo-al2", text: "Text sent to (512) 341-9887", at: "3h ago" },
+  { id: "demo-al3", text: "Call completed with (503) 123-4567", at: "5h ago" },
+];
+
+export const WIREFRAME_OVERVIEW_ANALYTICS = {
+  total: 428,
+  changePct: 12,
+  sparkline: [12, 18, 22, 28, 32, 30, 35],
+};
+
