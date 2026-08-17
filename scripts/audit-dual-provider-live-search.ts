@@ -93,6 +93,15 @@ async function probeRawInventory(areaCodes: string[]) {
         `    ${attempt.provider} ${attempt.strategy}: ${attempt.status}${attempt.error ? ` — ${attempt.error}` : ""} (raw ${count})`,
       );
     }
+    for (const c of result.candidates.slice(0, 12)) {
+      const src = (c.raw?.costSource as string | undefined) ?? "unknown";
+      console.log(
+        `    ${c.provider.padEnd(6)} ${c.e164} buy=${c.upfrontCost ?? "—"} monthly=${c.monthlyCost ?? "—"} ${c.currency ?? "USD"} (${src})`,
+      );
+    }
+    if (result.candidates.length > 12) {
+      console.log(`    … ${result.candidates.length - 12} more (see Coolify inventory JSON logs)`);
+    }
   }
   console.log();
 }
@@ -148,7 +157,7 @@ async function runDirectSearch(industry: string, areaCodes: string[], limit: num
   ];
 
   printSearchSummary(product, allResults, elapsed, searchResult.status);
-  printNumberTable(allResults);
+  printNumberTable(allResults, searchResult.candidates);
 
   const sampleNumbers = [
     "+15717154448",
@@ -192,18 +201,32 @@ function printNumberTable(
     provider: string;
     businessMatchLabel: string;
     premiumPriceBand: string;
+    premiumPriceCents?: number;
     matchedWords: string[];
   }>,
+  candidates?: Array<{
+    phoneNumber: string;
+    telnyxCost?: { upfrontCost?: string; monthlyCost?: string; currency?: string };
+    provider?: string;
+  }>,
 ) {
-  console.log("=== Numbers (provider + NPA) ===");
-  const header = "provider  npa   number           vanity           band      match";
+  const costByPhone = new Map(
+    (candidates ?? []).map((c) => [c.phoneNumber, c.telnyxCost]),
+  );
+  console.log("=== Numbers (provider, carrier costs, customer price) ===");
+  const header = "provider  npa   number           buy      monthly  customer  band";
   console.log(header);
   console.log("-".repeat(header.length));
   for (const r of results) {
-    const vanity = (r.vanityDisplay ?? "").padEnd(16).slice(0, 16);
-    const match = (r.matchedWords[0] ?? r.businessMatchLabel).slice(0, 20);
+    const cost = costByPhone.get(r.phoneNumber);
+    const buy = (cost?.upfrontCost ?? "—").padEnd(7).slice(0, 7);
+    const monthly = (cost?.monthlyCost ?? "—").padEnd(8).slice(0, 8);
+    const customer =
+      r.premiumPriceCents != null
+        ? `$${(r.premiumPriceCents / 100).toFixed(2)}`
+        : "—";
     console.log(
-      `${r.provider.padEnd(8)}  ${npa(r.phoneNumber).padEnd(4)}  ${r.displayNumber.padEnd(16)} ${vanity} ${r.premiumPriceBand.padEnd(8)} ${match}`,
+      `${r.provider.padEnd(8)}  ${npa(r.phoneNumber).padEnd(4)}  ${r.displayNumber.padEnd(16)} ${buy} ${monthly} ${customer.padEnd(8)} ${r.premiumPriceBand}`,
     );
   }
   console.log();

@@ -19,6 +19,7 @@ import { serializeResultsForLog } from "@/lib/premium-numbers/reservation-servic
 import {
   buildSearchUiBreakdown,
   logPremiumSearchCompleted,
+  providerCostFromTelnyxCost,
 } from "@/lib/premium-numbers/search-observability";
 import {
   type NumberType,
@@ -325,6 +326,9 @@ export async function executePremiumSearch(
     results: allResults,
     providerAttempts: searchResult.providerAttempts,
     uiBreakdown,
+    inventoryCosts: searchResult.candidates.map((c) =>
+      providerCostFromTelnyxCost(c.phoneNumber, c.provider ?? "telnyx", c.telnyxCost),
+    ),
   });
 
   return {

@@ -3,7 +3,7 @@ import type { PremiumNumberProductResult, PremiumSearchProductResponse } from ".
 import { BUSINESS_MATCH_LIST_THRESHOLD } from "./scoring-config";
 import { parsePhoneDigits } from "./keypad";
 import { resolveVanityPresentation } from "./vanity-display";
-import type { ScoredCandidate } from "./types";
+import type { ScoredCandidate, TelnyxCost } from "./types";
 
 function npaFromPhone(phone: string): string {
   const digits = parsePhoneDigits(phone);
@@ -18,6 +18,104 @@ function summarizeAttempts(attempts: ProviderSearchAttempt[]) {
     result_count: a.resultCount ?? 0,
     error: a.error ?? null,
   }));
+}
+
+export type ProviderCostCandidate = {
+  phone: string;
+  provider: string;
+  upfrontCost?: string | null;
+  monthlyCost?: string | null;
+  currency?: string | null;
+  costSource?: "provider_api" | "estimate" | "unknown";
+};
+
+function parseMoney(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const n = Number.parseFloat(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function summarizeProviderCosts(candidates: ProviderCostCandidate[]) {
+  const byProvider: Record<
+    string,
+    {
+      count: number;
+      with_upfront: number;
+      with_monthly: number;
+      upfront_min: number | null;
+      upfront_max: number | null;
+      monthly_min: number | null;
+      monthly_max: number | null;
+      cost_sources: Record<string, number>;
+    }
+  > = {};
+
+  for (const c of candidates) {
+    const provider = c.provider || "unknown";
+    if (!byProvider[provider]) {
+      byProvider[provider] = {
+        count: 0,
+        with_upfront: 0,
+        with_monthly: 0,
+        upfront_min: null,
+        upfront_max: null,
+        monthly_min: null,
+        monthly_max: null,
+        cost_sources: {},
+      };
+    }
+    const bucket = byProvider[provider];
+    bucket.count += 1;
+    const src = c.costSource ?? "unknown";
+    bucket.cost_sources[src] = (bucket.cost_sources[src] ?? 0) + 1;
+
+    const upfront = parseMoney(c.upfrontCost);
+    if (upfront != null) {
+      bucket.with_upfront += 1;
+      bucket.upfront_min =
+        bucket.upfront_min == null ? upfront : Math.min(bucket.upfront_min, upfront);
+      bucket.upfront_max =
+        bucket.upfront_max == null ? upfront : Math.max(bucket.upfront_max, upfront);
+    }
+
+    const monthly = parseMoney(c.monthlyCost);
+    if (monthly != null) {
+      bucket.with_monthly += 1;
+      bucket.monthly_min =
+        bucket.monthly_min == null ? monthly : Math.min(bucket.monthly_min, monthly);
+      bucket.monthly_max =
+        bucket.monthly_max == null ? monthly : Math.max(bucket.monthly_max, monthly);
+    }
+  }
+
+  return byProvider;
+}
+
+function compactCandidateCosts(candidates: ProviderCostCandidate[]) {
+  return candidates.map((c) => ({
+    phone: c.phone,
+    provider: c.provider,
+    upfront_cost: c.upfrontCost ?? null,
+    monthly_cost: c.monthlyCost ?? null,
+    currency: c.currency ?? null,
+    cost_source: c.costSource ?? "unknown",
+  }));
+}
+
+export function providerCostFromTelnyxCost(
+  phone: string,
+  provider: string,
+  cost?: TelnyxCost,
+  costSource?: ProviderCostCandidate["costSource"],
+): ProviderCostCandidate {
+  return {
+    phone,
+    provider,
+    upfrontCost: cost?.upfrontCost ?? null,
+    monthlyCost: cost?.monthlyCost ?? null,
+    currency: cost?.currency ?? null,
+    costSource: costSource ?? (cost?.monthlyCost || cost?.upfrontCost ? "provider_api" : "unknown"),
+  };
 }
 
 export function buildSearchUiBreakdown(input: {
@@ -109,14 +207,34 @@ export function buildSearchUiBreakdown(input: {
 /** Per area-code inventory fetch — emitted from NumberSearchService (Coolify / stdout). */
 export function logInventoryProviderSearch(input: {
   areaCode: string;
-  candidates: Array<{ provider: string }>;
+  candidates: Array<{
+    e164: string;
+    provider: string;
+    upfrontCost?: string | null;
+    monthlyCost?: string | null;
+    currency?: string | null;
+    raw?: Record<string, unknown>;
+  }>;
   attempts: ProviderSearchAttempt[];
   latencyMs: number;
 }) {
   const candidatesByProvider = { telnyx: 0, twilio: 0 };
+  const costCandidates: ProviderCostCandidate[] = [];
+
   for (const c of input.candidates) {
     if (c.provider === "telnyx") candidatesByProvider.telnyx += 1;
     if (c.provider === "twilio") candidatesByProvider.twilio += 1;
+    const costSource =
+      (c.raw?.costSource as ProviderCostCandidate["costSource"] | undefined) ??
+      (c.monthlyCost || c.upfrontCost ? "provider_api" : "unknown");
+    costCandidates.push({
+      phone: c.e164,
+      provider: c.provider,
+      upfrontCost: c.upfrontCost,
+      monthlyCost: c.monthlyCost,
+      currency: c.currency,
+      costSource,
+    });
   }
 
   console.info(
@@ -127,6 +245,8 @@ export function logInventoryProviderSearch(input: {
       latency_ms: input.latencyMs,
       candidate_count: input.candidates.length,
       candidates_by_provider: candidatesByProvider,
+      provider_cost_summary: summarizeProviderCosts(costCandidates),
+      candidates: compactCandidateCosts(costCandidates),
       attempts: summarizeAttempts(input.attempts),
     }),
   );
@@ -151,19 +271,38 @@ export function logPremiumSearchCompleted(input: {
   results: PremiumNumberProductResult[];
   providerAttempts?: ProviderSearchAttempt[];
   uiBreakdown?: ReturnType<typeof buildSearchUiBreakdown>;
+  inventoryCosts?: ProviderCostCandidate[];
 }) {
   const resultsByProvider = { telnyx: 0, twilio: 0 };
   const resultsByNpa: Record<string, number> = {};
-  const compactResults = input.results.map((r) => ({
-    phone: r.phoneNumber,
-    display: r.displayNumber,
-    provider: r.provider,
-    npa: npaFromPhone(r.phoneNumber),
-    vanity: r.vanityDisplay ?? null,
-    band: r.premiumPriceBand,
-    matched: r.matchedWords[0] ?? null,
-    section: r.listSection,
-    provider_ref: r.providerReference ?? null,
+  const premiumByPhone = new Map(
+    input.results.map((r) => [r.phoneNumber, r.premiumPriceCents]),
+  );
+
+  const inventoryCosts =
+    input.inventoryCosts ??
+    input.results.map((r) => ({
+      phone: r.phoneNumber,
+      provider: r.provider,
+      upfrontCost: null,
+      monthlyCost: null,
+      currency: null,
+      costSource: "unknown" as const,
+    }));
+
+  const compactResults = inventoryCosts.map((cost) => ({
+    phone: cost.phone,
+    display: cost.phone,
+    provider: cost.provider,
+    npa: npaFromPhone(cost.phone),
+    provider_upfront_cost: cost.upfrontCost ?? null,
+    provider_monthly_cost: cost.monthlyCost ?? null,
+    currency: cost.currency ?? null,
+    cost_source: cost.costSource ?? "unknown",
+    customer_premium_price_cents: premiumByPhone.get(cost.phone) ?? null,
+    provider_ref:
+      input.results.find((r) => r.phoneNumber === cost.phone)?.providerReference ?? null,
+    band: input.results.find((r) => r.phoneNumber === cost.phone)?.premiumPriceBand ?? null,
   }));
 
   for (const r of input.results) {
@@ -192,6 +331,7 @@ export function logPremiumSearchCompleted(input: {
       total_results: input.totalResults,
       results_by_provider: resultsByProvider,
       results_by_npa: resultsByNpa,
+      provider_cost_summary: summarizeProviderCosts(inventoryCosts),
       provider_attempts: input.providerAttempts
         ? summarizeAttempts(input.providerAttempts)
         : [],

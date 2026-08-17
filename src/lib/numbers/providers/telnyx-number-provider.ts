@@ -32,7 +32,11 @@ function mapTelnyxRaw(raw: TelnyxRawCandidate): NormalizedNumberCandidate {
     rateCenter: null,
     capabilities: { voice: true, sms: true, mms: true },
     vanityFormat: raw.vanityFormat,
-    raw: raw.raw,
+    raw: {
+      ...raw.raw,
+      costSource:
+        raw.monthlyCost || raw.upfrontCost ? "provider_api" : "unknown",
+    },
   };
 }
 

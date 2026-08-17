@@ -22,6 +22,35 @@ import type {
 import { nationalNumberFromE164 } from "./normalize";
 import { withProviderTiming } from "./observability";
 
+/** Twilio available-number search does not return carrier cost — use list-price estimates. */
+const TWILIO_ESTIMATED_COSTS = {
+  local: { upfront: "1.00", monthly: "1.15" },
+  tollfree: { upfront: "1.00", monthly: "2.15" },
+} as const;
+
+function extractTwilioCosts(e164: string, raw: Record<string, unknown>) {
+  const digits = e164.replace(/\D/g, "");
+  const npa =
+    digits.length === 11 && digits.startsWith("1")
+      ? digits.slice(1, 4)
+      : digits.length >= 10
+        ? digits.slice(0, 3)
+        : "";
+  const tollFree = isTollFreeAreaCode(npa);
+  const estimate = tollFree ? TWILIO_ESTIMATED_COSTS.tollfree : TWILIO_ESTIMATED_COSTS.local;
+
+  const monthlyRaw = raw.monthly_cost ?? raw.monthlyCost ?? raw.monthly_price;
+  const upfrontRaw = raw.upfront_cost ?? raw.upfrontCost ?? raw.setup_cost;
+  const hasApiCost = monthlyRaw != null || upfrontRaw != null;
+
+  return {
+    monthlyCost: monthlyRaw != null ? String(monthlyRaw) : estimate.monthly,
+    upfrontCost: upfrontRaw != null ? String(upfrontRaw) : estimate.upfront,
+    currency: "USD",
+    costSource: hasApiCost ? "provider_api" : "estimate",
+  };
+}
+
 function mapTwilioRaw(raw: {
   phoneNumber: string;
   friendlyName?: string;
@@ -29,20 +58,25 @@ function mapTwilioRaw(raw: {
   region?: string;
   raw: Record<string, unknown>;
 }): NormalizedNumberCandidate {
+  const costs = extractTwilioCosts(raw.phoneNumber, raw.raw);
   return {
     e164: raw.phoneNumber,
     nationalNumber: nationalNumberFromE164(raw.phoneNumber),
     provider: "twilio",
     providerReference:
-      typeof raw.raw.sid === "string" ? raw.raw.sid : typeof raw.raw.phone_number === "string" ? raw.raw.phone_number : null,
-    monthlyCost: null,
-    upfrontCost: null,
-    currency: "USD",
+      typeof raw.raw.sid === "string"
+        ? raw.raw.sid
+        : typeof raw.raw.phone_number === "string"
+          ? raw.raw.phone_number
+          : null,
+    monthlyCost: costs.monthlyCost,
+    upfrontCost: costs.upfrontCost,
+    currency: costs.currency,
     locality: raw.locality ?? null,
     region: raw.region ?? null,
     rateCenter: null,
     capabilities: { voice: true, sms: true, mms: true },
-    raw: raw.raw,
+    raw: { ...raw.raw, costSource: costs.costSource },
   };
 }
 
