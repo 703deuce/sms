@@ -110,7 +110,8 @@ export function PersonalMockKpi({
                 trend >= 0 ? "text-[#059669]" : "text-[#dc2626]",
               )}
             >
-              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}% {trendLabel || "vs previous"}
+              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
+              {trendLabel ? ` ${trendLabel}` : ""}
             </p>
           ) : null}
         </div>
@@ -155,7 +156,7 @@ export function PersonalMockPill({
   tone = "blue",
 }: {
   children: ReactNode;
-  tone?: "blue" | "green" | "orange" | "purple" | "red" | "gray";
+  tone?: "blue" | "green" | "orange" | "purple" | "red" | "gray" | "yellow";
 }) {
   const tones = {
     blue: "bg-[#eef2ff] text-[#6366f1]",
@@ -164,6 +165,7 @@ export function PersonalMockPill({
     purple: "bg-[#f5f3ff] text-[#7c3aed]",
     red: "bg-[#fef2f2] text-[#dc2626]",
     gray: "bg-[#f3f4f6] text-[#6b7280]",
+    yellow: "bg-[#fef9c3] text-[#ca8a04]",
   };
   return (
     <span

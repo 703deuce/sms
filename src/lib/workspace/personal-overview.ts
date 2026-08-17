@@ -1,53 +1,62 @@
 import { getPrisma } from "@/lib/db";
+import { listVoicemailMessages } from "@/lib/phone/voicemail-service";
 import { listPortRequests } from "@/lib/numbers/port-service";
 import { loadDashboardMetrics } from "@/lib/workspace-data";
 import {
+  loadPersonalBlockedNumbers,
   loadPersonalCallActivity,
   loadPersonalNumbers,
-  loadParkedNumbers,
   loadPersonalUsage,
 } from "@/lib/workspace/personal-data";
 
-export type PersonalOverviewTopContact = {
+export type PersonalOverviewStatusTone = "green" | "blue" | "orange" | "purple" | "gray" | "yellow";
+
+export type PersonalOverviewTopNumber = {
   id: string;
+  label: string;
   phone: string;
-  location: string;
-  recentActivity: string;
   type: string;
-  line: string;
+  forwarding: string;
   status: string;
-  statusTone: "green" | "blue" | "orange" | "purple" | "gray";
-  totalActivity: string;
-  lastAction: string;
+  statusTone: PersonalOverviewStatusTone;
+  activitySparkline: number[];
 };
 
 export type PersonalOverviewData = {
   kpis: {
-    totalContacts: number;
-    contactsAddedLastMonth: number;
-    activeNumbers: number;
-    textsSent30d: number;
+    totalNumbers: number;
+    totalNumbersDelta: string;
+    voicemails: number;
+    voicemailsTrendPct: number;
+    transcriptions: number;
+    transcriptionsTrendPct: number;
     calls30d: number;
-    balance: number;
-    balanceSub: string;
-    vaultCount: number;
-    vaultActive: number;
+    callsTrendPct: number;
+    walletBalance: number;
+    walletTrendPct: number;
+    blockedNumbers: number;
+    blockedDelta: string;
+    walletAutoTopup: boolean;
   };
-  topContacts: PersonalOverviewTopContact[];
-  numberReview: {
-    total: number;
-    mobile: number;
-    landline: number;
-    voip: number;
-    invalid: number;
-  };
-  pendingTasks: Array<{ id: string; text: string; at: string }>;
-  communicationLog: Array<{ phone: string; date: string; time: string }>;
-  recentActivityLog: Array<{ id: string; text: string; at: string }>;
-  analyticsTotal: number;
-  analyticsChangePct: number;
-  monthlyPerformance: number[];
-  voicemailUnread: number;
+  topNumbers: PersonalOverviewTopNumber[];
+  timeline: Array<{ id: string; date: string; label: string }>;
+  topDestinations: Array<{ phone: string; date: string; duration: string }>;
+  pendingTransfers: Array<{
+    id: string;
+    toFrom: string;
+    started: string;
+    status: string;
+    statusTone: PersonalOverviewStatusTone;
+  }>;
+  recentNumbers: Array<{
+    phone: string;
+    forwarding: string;
+    status: string;
+    statusTone: PersonalOverviewStatusTone;
+  }>;
+  billingHistory: Array<{ date: string; amount: string }>;
+  recentVoicemail: Array<{ id: string; name: string; phone: string; at: string }>;
+  topCallNumbers: Array<{ label: string; value: number }>;
   activityCount: number;
 };
 
@@ -71,40 +80,88 @@ function relativeShort(date: Date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function formatDurationShort(sec: number) {
-  if (sec < 60) return `${sec}s`;
+function formatDurationClock(sec: number) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return s > 0 ? `${m}m ${s}s` : `${m} min`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function outcomeStatus(outcome: string, blocked: boolean): {
-  label: string;
-  tone: PersonalOverviewTopContact["statusTone"];
-} {
-  if (blocked) return { label: "Blocked", tone: "orange" };
-  const o = outcome.toLowerCase();
-  if (o.includes("answer")) return { label: "Active", tone: "green" };
-  if (o.includes("miss")) return { label: "Prospect", tone: "orange" };
-  if (o.includes("voicemail")) return { label: "Managed", tone: "blue" };
-  if (o.includes("fail")) return { label: "Finished", tone: "green" };
-  return { label: "Active", tone: "green" };
+function numberStatusTone(serviceState: string): PersonalOverviewStatusTone {
+  if (serviceState === "PARKED" || serviceState === "PORT_AWAY") return "yellow";
+  if (serviceState === "ACTIVE" || serviceState === "FORWARDING") return "green";
+  return "gray";
+}
+
+function numberStatusLabel(serviceState: string, serviceLabel: string): string {
+  if (serviceState === "PARKED") return "Inactive";
+  if (serviceState === "PORT_AWAY") return "Porting";
+  return serviceLabel === "Active" ? "Active" : serviceLabel;
+}
+
+function portStatusTone(status: string): PersonalOverviewStatusTone {
+  const s = status.toLowerCase();
+  if (s.includes("progress") || s.includes("pending") || s.includes("submitted")) return "blue";
+  if (s.includes("complete") || s.includes("approved")) return "green";
+  if (s.includes("reject") || s.includes("fail")) return "orange";
+  return "gray";
+}
+
+function trendPct(current: number, previous: number): number {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+function sparklineFromCalls(counts: number[]): number[] {
+  if (counts.length === 0) return [0, 0, 0, 0, 0, 0, 0];
+  const padded = counts.slice(-7);
+  while (padded.length < 7) padded.unshift(0);
+  return padded;
 }
 
 export async function loadPersonalOverviewData(workspaceId: string): Promise<PersonalOverviewData> {
   const periodStart = daysAgo(30);
   const priorStart = daysAgo(60);
+  const weekStart = daysAgo(7);
+  const priorWeekStart = daysAgo(14);
 
-  const [numbers, parked, activity, usage, metrics, portRequests, voicemailUnread] = await Promise.all([
+  const prisma = getPrisma();
+
+  const [
+    numbers,
+    activity,
+    usage,
+    metrics,
+    portRequests,
+    blockedRows,
+    voicemailMessages,
+    voicemailTotal,
+    transcriptionTotal,
+    voicemailsPrior,
+    transcriptionsPrior,
+    callsPrior,
+  ] = await Promise.all([
     loadPersonalNumbers(workspaceId),
-    loadParkedNumbers(workspaceId),
-    loadPersonalCallActivity(workspaceId, { limit: 300 }),
+    loadPersonalCallActivity(workspaceId, { limit: 400 }),
     loadPersonalUsage(workspaceId).catch(() => null),
     loadDashboardMetrics(workspaceId),
     listPortRequests(workspaceId),
-    getPrisma().voicemailMessage.count({
-      where: { workspaceId, isRead: false },
+    loadPersonalBlockedNumbers(workspaceId),
+    listVoicemailMessages(workspaceId).catch(() => []),
+    prisma.voicemailMessage.count({ where: { workspaceId } }).catch(() => 0),
+    prisma.voicemailMessage.count({
+      where: { workspaceId, transcriptText: { not: null } },
     }).catch(() => 0),
+    prisma.voicemailMessage.count({
+      where: { workspaceId, createdAt: { gte: priorStart, lt: periodStart } },
+    }).catch(() => 0),
+    prisma.voicemailMessage.count({
+      where: {
+        workspaceId,
+        transcriptText: { not: null },
+        createdAt: { gte: priorStart, lt: periodStart },
+      },
+    }).catch(() => 0),
+    loadPersonalCallActivity(workspaceId, { limit: 400 }),
   ]);
 
   const calls30d = activity.filter((r) => {
@@ -112,181 +169,213 @@ export async function loadPersonalOverviewData(workspaceId: string): Promise<Per
     return d >= periodStart;
   });
 
-  const callsPrior = activity.filter((r) => {
+  const callsPriorPeriod = callsPrior.filter((r) => {
     const d = new Date(`${r.date} ${r.time}`);
     return d >= priorStart && d < periodStart;
   });
 
-  const labelByNumber = new Map(
-    numbers.map((n) => [n.number, n.friendlyName || n.areaCode || "Main Line"]),
-  );
+  const numbersThisWeek = await prisma.phoneNumber.count({
+    where: { workspaceId, purchasedAt: { gte: weekStart } },
+  }).catch(() => 0);
+  const numbersPriorWeek = await prisma.phoneNumber.count({
+    where: {
+      workspaceId,
+      purchasedAt: { gte: priorWeekStart, lt: weekStart },
+    },
+  }).catch(() => 0);
 
-  const callerMap = new Map<
-    string,
-    {
-      id: string;
-      phone: string;
-      count: number;
-      totalSeconds: number;
-      last: PersonalOverviewTopContact;
-    }
-  >();
+  const blockedThisWeek = blockedRows.filter((b) => new Date(b.createdAt) >= weekStart).length;
+  const blockedPriorWeek = blockedRows.filter((b) => {
+    const d = new Date(b.createdAt);
+    return d >= priorWeekStart && d < weekStart;
+  }).length;
 
+  const callsByNumber = new Map<string, number[]>();
   for (const row of calls30d) {
-    const key = row.caller.replace(/\D/g, "") || row.caller;
-    const stamp = new Date(`${row.date} ${row.time}`);
-    const status = outcomeStatus(row.outcome, row.blocked);
-    const entry = callerMap.get(key);
-    const recentActivity =
-      row.voicemail
-        ? "Voicemail received"
-        : row.blocked
-          ? "Blocked call attempt"
-          : row.outcome === "Answered"
-            ? "Inbound call answered"
-            : `Inbound call — ${row.outcome}`;
-
-    if (!entry) {
-      callerMap.set(key, {
-        id: row.id,
-        phone: row.caller,
-        count: 1,
-        totalSeconds: row.durationSeconds,
-        last: {
-          id: row.id,
-          phone: row.caller,
-          location: labelByNumber.get(row.calledNumber) || "—",
-          recentActivity,
-          type: "Inbound",
-          line: labelByNumber.get(row.calledNumber) || row.calledNumber,
-          status: status.label,
-          statusTone: status.tone,
-          totalActivity: formatDurationShort(row.durationSeconds),
-          lastAction: relativeShort(stamp),
-        },
-      });
-    } else {
-      entry.count += 1;
-      entry.totalSeconds += row.durationSeconds;
-      entry.last = {
-        ...entry.last,
-        recentActivity,
-        totalActivity: formatDurationShort(entry.totalSeconds),
-        lastAction: relativeShort(stamp),
-        status: status.label,
-        statusTone: status.tone,
-      };
-    }
+    const key = row.calledNumber;
+    if (!callsByNumber.has(key)) callsByNumber.set(key, []);
+    callsByNumber.get(key)!.push(row.durationSeconds);
   }
 
-  const topContacts = [...callerMap.values()]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 6)
-    .map((e) => ({
-      ...e.last,
-      totalActivity:
-        e.count > 1
-          ? `${e.count} calls · ${formatDurationShort(e.totalSeconds)}`
-          : formatDurationShort(e.totalSeconds),
+  const topNumbers = numbers
+    .filter((n) => n.serviceState !== "PARKED")
+    .slice(0, 8)
+    .map((n) => {
+      const dayBuckets = Array.from({ length: 7 }, (_, i) => {
+        const start = daysAgo((6 - i) * 4 + 4);
+        const end = daysAgo((6 - i) * 4);
+        return calls30d.filter((r) => {
+          if (r.calledNumber !== n.number) return false;
+          const d = new Date(`${r.date} ${r.time}`);
+          return d >= start && d < end;
+        }).length;
+      });
+      const fwd =
+        n.forwardTargets.length > 0
+          ? n.forwardTargets[0]
+          : n.forwardingEnabled
+            ? "Forwarding on"
+            : "—";
+      return {
+        id: n.id,
+        label: n.friendlyName || n.areaCode || "Main Line",
+        phone: n.number,
+        type: n.type === "Toll-free" ? "Toll Free" : "Local",
+        forwarding: fwd,
+        status: numberStatusLabel(n.serviceState, n.serviceLabel),
+        statusTone: numberStatusTone(n.serviceState),
+        activitySparkline: sparklineFromCalls(dayBuckets),
+      };
+    });
+
+  const destinationMap = new Map<
+    string,
+    { phone: string; date: Date; durationSeconds: number }
+  >();
+  for (const row of calls30d) {
+    const dest = row.forwardDestination || row.caller;
+    const stamp = new Date(`${row.date} ${row.time}`);
+    const key = dest.replace(/\D/g, "");
+    const existing = destinationMap.get(key);
+    if (!existing || stamp > existing.date) {
+      destinationMap.set(key, {
+        phone: dest,
+        date: stamp,
+        durationSeconds: row.durationSeconds,
+      });
+    }
+  }
+  const topDestinations = [...destinationMap.values()]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 4)
+    .map((d) => ({
+      phone: d.phone,
+      date: d.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      duration: formatDurationClock(d.durationSeconds),
     }));
 
-  const activeNumbers = numbers.filter((n) => n.serviceState !== "PARKED").length;
+  const pendingTransfers = portRequests
+    .filter((p: { status: string }) => {
+      const s = String(p.status).toLowerCase();
+      return !s.includes("complete") && !s.includes("cancel");
+    })
+    .slice(0, 5)
+    .map((p: { id: string; phone: string; createdAt?: string; status: string; statusLabel?: string }) => ({
+      id: p.id,
+      toFrom: p.phone,
+      started: p.createdAt
+        ? new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "—",
+      status: p.statusLabel || p.status,
+      statusTone: portStatusTone(p.status),
+    }));
 
-  const pendingTasks: PersonalOverviewData["pendingTasks"] = [];
-  for (const p of portRequests.filter(
-    (r: { status: string; id: string; phone: string }) =>
-      r.status === "docs_needed" || r.status === "rejected",
-  ).slice(0, 5)) {
-    pendingTasks.push({
-      id: `port-${p.id}`,
-      text: `Port action: ${p.phone}`,
-      at: "Today",
-    });
-  }
-  if (voicemailUnread > 0) {
-    pendingTasks.push({
-      id: "vm-unread",
-      text: `${voicemailUnread} unread voicemail${voicemailUnread === 1 ? "" : "s"}`,
-      at: "Now",
-    });
-  }
-  for (const row of calls30d.filter((r) => r.outcome === "Missed").slice(0, 3)) {
-    pendingTasks.push({
-      id: `missed-${row.id}`,
-      text: `Follow up with ${row.caller}`,
-      at: relativeShort(new Date(`${row.date} ${row.time}`)),
-    });
-  }
-
-  const communicationLog = calls30d.slice(0, 5).map((r) => {
-    const d = new Date(`${r.date} ${r.time}`);
-    return {
-      phone: r.caller,
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
-    };
-  });
-
-  const recentActivityLog = calls30d.slice(0, 6).map((r) => ({
-    id: r.id,
-    text: `${r.outcome} call from ${r.caller}`,
-    at: relativeShort(new Date(`${r.date} ${r.time}`)),
+  const recentNumbers = numbers.slice(0, 4).map((n) => ({
+    phone: n.number,
+    forwarding:
+      n.forwardTargets.length > 0 ? n.forwardTargets[0] : n.forwardingEnabled ? "On" : "—",
+    status: numberStatusLabel(n.serviceState, n.serviceLabel),
+    statusTone: numberStatusTone(n.serviceState),
   }));
 
-  const monthlyBuckets = Array.from({ length: 7 }, (_, i) => {
-    const start = daysAgo((6 - i) * 4);
-    const end = daysAgo((6 - i - 1) * 4);
-    return activity.filter((r) => {
-      const d = new Date(`${r.date} ${r.time}`);
-      return d >= start && d < end;
-    }).length;
-  });
+  const billingHistory: PersonalOverviewData["billingHistory"] = [];
+  if (usage) {
+    billingHistory.push({
+      date: new Date(usage.billingPeriodStart).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      amount: `$${metrics.balance.toFixed(2)}`,
+    });
+  }
 
-  const uniqueCallers30 = new Set(calls30d.map((r) => r.caller.replace(/\D/g, ""))).size;
-  const uniqueCallersPrior = new Set(callsPrior.map((r) => r.caller.replace(/\D/g, ""))).size;
-  const contactsAdded = Math.max(0, uniqueCallers30 - uniqueCallersPrior);
+  const recentVoicemail = (voicemailMessages as Array<{
+    id: string;
+    fromE164?: string | null;
+    createdAt: Date | string;
+  }>)
+    .slice(0, 5)
+    .map((m) => ({
+      id: m.id,
+      name: "Unknown",
+      phone: m.fromE164 || "—",
+      at: relativeShort(new Date(m.createdAt)),
+    }));
 
-  const analyticsChangePct =
-    callsPrior.length > 0
-      ? Math.round(((calls30d.length - callsPrior.length) / callsPrior.length) * 100)
-      : calls30d.length > 0
-        ? 100
-        : 0;
+  const callsByLabel = new Map<string, number>();
+  for (const n of numbers) {
+    const label = n.friendlyName || n.number;
+    const count = calls30d.filter((r) => r.calledNumber === n.number).length;
+    if (count > 0) callsByLabel.set(label, count);
+  }
+  const topCallNumbers = [...callsByLabel.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([label, value]) => ({ label, value }));
 
-  const mobile = numbers.filter((n) => n.type === "Toll-free").length;
-  const landline = numbers.filter((n) => n.type === "Local").length;
-  const voip = 0;
+  const timeline: PersonalOverviewData["timeline"] = [];
+  for (const p of portRequests.slice(0, 2)) {
+    timeline.push({
+      id: `port-${p.id}`,
+      date: p.createdAt
+        ? new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "Recent",
+      label: `Port request for ${p.phone}`,
+    });
+  }
+  for (const vm of recentVoicemail.slice(0, 2)) {
+    timeline.push({
+      id: `vm-${vm.id}`,
+      date: vm.at,
+      label: `Voicemail from ${vm.phone}`,
+    });
+  }
+  for (const row of calls30d.slice(0, 3)) {
+    timeline.push({
+      id: `call-${row.id}`,
+      date: row.date,
+      label: `${row.outcome} call on ${row.calledNumber}`,
+    });
+  }
+
+  const numbersDelta = numbersThisWeek - numbersPriorWeek;
+  const blockedDelta = blockedThisWeek - blockedPriorWeek;
 
   return {
     kpis: {
-      totalContacts: uniqueCallers30 || metrics.contactGrowth,
-      contactsAddedLastMonth: contactsAdded,
-      activeNumbers,
-      textsSent30d: metrics.messagesSentPeriod,
+      totalNumbers: numbers.length,
+      totalNumbersDelta:
+        numbersDelta === 0
+          ? "+0 from last week"
+          : numbersDelta > 0
+            ? `+${numbersDelta} from last week`
+            : `${numbersDelta} from last week`,
+      voicemails: voicemailTotal,
+      voicemailsTrendPct: trendPct(voicemailTotal, voicemailsPrior),
+      transcriptions: transcriptionTotal,
+      transcriptionsTrendPct: trendPct(transcriptionTotal, transcriptionsPrior),
       calls30d: calls30d.length,
-      balance: metrics.balance,
-      balanceSub:
-        usage && usage.forwardingMinutesRemaining > 0
-          ? `${usage.forwardingMinutesRemaining} min remaining`
-          : "Next refill at $5.00",
-      vaultCount: parked.length,
-      vaultActive: parked.filter((n) => n.serviceState === "PARKED").length,
+      callsTrendPct: trendPct(calls30d.length, callsPriorPeriod.length),
+      walletBalance: metrics.balance,
+      walletTrendPct: 0,
+      blockedNumbers: blockedRows.length,
+      blockedDelta:
+        blockedDelta === 0
+          ? "+0 from last week"
+          : blockedDelta > 0
+            ? `+${blockedDelta} from last week`
+            : `${blockedDelta} from last week`,
+      walletAutoTopup: Boolean(usage && usage.forwardingMinutesRemaining > 0),
     },
-    topContacts,
-    numberReview: {
-      total: numbers.length,
-      mobile: mobile || Math.max(0, numbers.length - landline - voip),
-      landline,
-      voip,
-      invalid: 0,
-    },
-    pendingTasks,
-    communicationLog,
-    recentActivityLog,
-    analyticsTotal: calls30d.length,
-    analyticsChangePct,
-    monthlyPerformance: monthlyBuckets,
-    voicemailUnread,
+    topNumbers,
+    timeline: timeline.slice(0, 6),
+    topDestinations,
+    pendingTransfers,
+    recentNumbers,
+    billingHistory,
+    recentVoicemail,
+    topCallNumbers,
     activityCount: activity.length,
   };
 }

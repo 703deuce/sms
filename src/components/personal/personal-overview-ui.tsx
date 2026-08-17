@@ -2,29 +2,35 @@
 
 import type { PersonalOverviewData } from "@/lib/workspace/personal-overview";
 import {
-  WIREFRAME_OVERVIEW_ACTIVITY_LOG,
-  WIREFRAME_OVERVIEW_ANALYTICS,
-  WIREFRAME_OVERVIEW_COMM_LOG,
+  WIREFRAME_OVERVIEW_BILLING_HISTORY,
   WIREFRAME_OVERVIEW_KPIS,
-  WIREFRAME_OVERVIEW_NUMBER_REVIEW,
-  WIREFRAME_OVERVIEW_PENDING_TASKS,
-  WIREFRAME_OVERVIEW_TOP_CONTACTS,
+  WIREFRAME_OVERVIEW_PENDING_TRANSFERS,
+  WIREFRAME_OVERVIEW_RECENT_NUMBERS,
+  WIREFRAME_OVERVIEW_RECENT_VOICEMAIL,
+  WIREFRAME_OVERVIEW_TIMELINE,
+  WIREFRAME_OVERVIEW_TOP_CALL_NUMBERS,
+  WIREFRAME_OVERVIEW_TOP_DESTINATIONS,
+  WIREFRAME_OVERVIEW_TOP_NUMBERS,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
-import { cn, formatPhone } from "@/lib/utils";
+import { formatPhone } from "@/lib/utils";
 import {
-  CheckCircle2,
+  AlertTriangle,
+  BookOpen,
   CreditCard,
+  Download,
+  MessageSquare,
+  Mic,
+  MoreVertical,
   Phone,
+  PhoneCall,
   Plus,
-  SlidersHorizontal,
-  TrendingUp,
+  Settings,
   Users,
-  Vault,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import { PersonalMockSparkline } from "./mockup/charts";
+import { PersonalMockBarChart, PersonalMockSparkline } from "./mockup/charts";
 import {
   PersonalMockBtn,
   PersonalMockHeader,
@@ -33,195 +39,252 @@ import {
   PersonalMockPill,
   PersonalMockSection,
   PersonalMockSelect,
-  PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
 
-const QUICK_ACTIONS = [
-  { label: "Dashboard", href: "/personal" },
-  { label: "Add a new number", href: "/personal/numbers/premium" },
-  { label: "View call activity", href: "/personal/activity" },
-  { label: "Create smart routing flow", href: "/smart-routing/new" },
-  { label: "Import contacts", href: "/contacts/imports" },
+const QUICK_MENU = [
+  { label: "Downloads", href: "/settings", icon: Download },
+  { label: "Documentation", href: "/help", icon: BookOpen },
+  { label: "Manage team", href: "/settings/team", icon: Users },
+  { label: "Billing details", href: "/settings/billing", icon: CreditCard },
+  { label: "Wallet history", href: "/settings/billing", icon: Wallet },
+  { label: "Integration status", href: "/settings/integrations", icon: Settings },
 ];
 
-export function PersonalOverviewUI({
-  data,
-}: {
-  data: PersonalOverviewData;
-}) {
-  const [autoRefill, setAutoRefill] = useState(true);
+const QUICK_ACTIONS = [
+  { label: "Buy a number", href: "/personal/numbers/premium", done: true },
+  { label: "Port number", href: "/personal/porting", done: true },
+  { label: "Set voicemail", href: "/personal/voicemail", done: true },
+  { label: "Send sms", href: "/campaigns/new", done: false },
+  { label: "Analytics", href: "/personal/analytics", done: false },
+  { label: "API Settings", href: "/settings/api", done: false },
+];
+
+function WidgetFooterLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="mt-4 block text-[12px] font-semibold text-[#6366f1] hover:underline"
+    >
+      {label}
+    </Link>
+  );
+}
+
+export function PersonalOverviewUI({ data }: { data: PersonalOverviewData }) {
   const useWireframe = usePersonalWireframe(data.activityCount, 8);
   const wf = WIREFRAME_OVERVIEW_KPIS;
-  const analytics = WIREFRAME_OVERVIEW_ANALYTICS;
 
   const kpis = useWireframe
-    ? {
-        totalContacts: wf.totalContacts,
-        contactsAddedLastMonth: wf.contactsAddedLastMonth,
-        activeNumbers: wf.activeNumbers,
-        textsSent30d: wf.textsSent30d,
-        calls30d: wf.calls30d,
-        balance: wf.balance,
-        balanceSub: wf.balanceSub,
-        vaultCount: wf.vaultCount,
-        vaultActive: wf.vaultActive,
-      }
+    ? wf
     : {
-        totalContacts: data.kpis.totalContacts,
-        contactsAddedLastMonth: data.kpis.contactsAddedLastMonth,
-        activeNumbers: data.kpis.activeNumbers,
-        textsSent30d: data.kpis.textsSent30d,
+        totalNumbers: data.kpis.totalNumbers,
+        totalNumbersDelta: data.kpis.totalNumbersDelta,
+        voicemails: data.kpis.voicemails,
+        voicemailsTrendPct: data.kpis.voicemailsTrendPct,
+        transcriptions: data.kpis.transcriptions,
+        transcriptionsTrendPct: data.kpis.transcriptionsTrendPct,
         calls30d: data.kpis.calls30d,
-        balance: `$${data.kpis.balance.toFixed(2)}`,
-        balanceSub: data.kpis.balanceSub,
-        vaultCount: data.kpis.vaultCount,
-        vaultActive: data.kpis.vaultActive,
+        callsTrendPct: data.kpis.callsTrendPct,
+        walletBalance: `$${data.kpis.walletBalance.toFixed(2)}`,
+        walletTrendPct: data.kpis.walletTrendPct,
+        blockedNumbers: data.kpis.blockedNumbers,
+        blockedDelta: data.kpis.blockedDelta,
+        walletAutoTopup: data.kpis.walletAutoTopup,
       };
 
-  const topContacts = useWireframe
-    ? WIREFRAME_OVERVIEW_TOP_CONTACTS
-    : data.topContacts;
+  const walletDisplay =
+    typeof kpis.walletBalance === "string"
+      ? kpis.walletBalance
+      : `$${Number(kpis.walletBalance).toFixed(2)}`;
 
-  const numberReview = useWireframe ? WIREFRAME_OVERVIEW_NUMBER_REVIEW : data.numberReview;
-  const pendingTasks = useWireframe ? WIREFRAME_OVERVIEW_PENDING_TASKS : data.pendingTasks;
-  const commLog = useWireframe ? WIREFRAME_OVERVIEW_COMM_LOG : data.communicationLog;
-  const activityLog = useWireframe ? WIREFRAME_OVERVIEW_ACTIVITY_LOG : data.recentActivityLog;
-  const analyticsTotal = useWireframe ? analytics.total : data.analyticsTotal;
-  const analyticsChange = useWireframe ? analytics.changePct : data.analyticsChangePct;
-  const sparkline = useWireframe ? analytics.sparkline : data.monthlyPerformance;
+  const topNumbers = useWireframe ? WIREFRAME_OVERVIEW_TOP_NUMBERS : data.topNumbers;
+  const timeline = useWireframe ? WIREFRAME_OVERVIEW_TIMELINE : data.timeline;
+  const topDestinations = useWireframe
+    ? WIREFRAME_OVERVIEW_TOP_DESTINATIONS
+    : data.topDestinations;
+  const pendingTransfers = useWireframe
+    ? WIREFRAME_OVERVIEW_PENDING_TRANSFERS
+    : data.pendingTransfers;
+  const recentNumbers = useWireframe ? WIREFRAME_OVERVIEW_RECENT_NUMBERS : data.recentNumbers;
+  const billingHistory = useWireframe
+    ? WIREFRAME_OVERVIEW_BILLING_HISTORY
+    : data.billingHistory;
+  const recentVoicemail = useWireframe
+    ? WIREFRAME_OVERVIEW_RECENT_VOICEMAIL
+    : data.recentVoicemail;
+  const topCallNumbers = useWireframe
+    ? WIREFRAME_OVERVIEW_TOP_CALL_NUMBERS
+    : data.topCallNumbers;
 
   return (
     <PersonalMockPage>
       <PersonalMockHeader
         title="Overview"
-        description="Manage contacts and communication insights."
+        description="Manage your calls and view your numbers at a glance."
         actions={
           <>
             <Link href="/personal/numbers/premium">
               <PersonalMockBtn>
                 <Plus className="h-4 w-4" />
-                New Campaign
+                Create a new number
               </PersonalMockBtn>
             </Link>
-            <PersonalMockBtn variant="outline">
-              <SlidersHorizontal className="h-4 w-4" />
-              Refine search
-            </PersonalMockBtn>
+            <button
+              type="button"
+              className="text-[13px] font-semibold text-[#6366f1] hover:underline"
+            >
+              Edit dashboard
+            </button>
           </>
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <PersonalMockKpi
-          label="Total Contacts"
-          value={kpis.totalContacts}
-          sub={`${kpis.contactsAddedLastMonth} Added last month`}
-          icon={Users}
+          label="Total Numbers"
+          value={kpis.totalNumbers}
+          sub={kpis.totalNumbersDelta}
+          icon={Phone}
           iconClass="bg-[#eff6ff] text-[#2563eb]"
         />
         <PersonalMockKpi
-          label="Active Campaigns"
-          value={kpis.activeNumbers}
-          sub={`${kpis.activeNumbers} Active`}
-          icon={TrendingUp}
+          label="Voicemails"
+          value={kpis.voicemails}
+          trend={kpis.voicemailsTrendPct}
+          trendLabel=""
+          icon={MessageSquare}
           iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
         <PersonalMockKpi
-          label="Texts Sent (30d)"
-          value={kpis.textsSent30d}
-          sub="This Billing Period"
-          icon={Phone}
+          label="Transcriptions"
+          value={kpis.transcriptions}
+          trend={kpis.transcriptionsTrendPct}
+          trendLabel=""
+          icon={Mic}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
         <PersonalMockKpi
-          label="Calls (30d)"
+          label="Calls"
           value={kpis.calls30d}
-          sub="This Period"
-          icon={Phone}
+          trend={kpis.callsTrendPct}
+          trendLabel=""
+          icon={PhoneCall}
           iconClass="bg-[#fff7ed] text-[#ea580c]"
         />
         <PersonalMockKpi
-          label="Current Month Balance"
-          value={kpis.balance}
-          sub={kpis.balanceSub}
-          icon={CreditCard}
+          label="Wallet Balance"
+          value={walletDisplay}
+          trend={kpis.walletTrendPct}
+          trendLabel=""
+          icon={Wallet}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
         <PersonalMockKpi
-          label="Number Vault"
-          value={kpis.vaultCount}
-          sub={`${kpis.vaultActive} Active numbers`}
-          icon={Vault}
-          iconClass="bg-[#eff6ff] text-[#2563eb]"
+          label="Blocked Numbers"
+          value={kpis.blockedNumbers}
+          sub={kpis.blockedDelta}
+          icon={AlertTriangle}
+          iconClass="bg-[#fef2f2] text-[#dc2626]"
         />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
         <PersonalMockSection
-          title="Top Contacts"
-          description="Contacts with most activity this month"
+          title="Top Numbers"
+          description="Manage your top active numbers"
           action={
             <div className="flex items-center gap-2">
-              <PersonalMockSelect className="h-8 w-[100px] text-[12px]">
+              <PersonalMockSelect className="h-8 w-[110px] text-[12px]">
+                <option>Show 30 rows</option>
+                <option>Show 10 rows</option>
+                <option>Show 50 rows</option>
+              </PersonalMockSelect>
+              <PersonalMockSelect className="h-8 w-[90px] text-[12px]">
                 <option>30 days</option>
                 <option>7 days</option>
                 <option>90 days</option>
               </PersonalMockSelect>
-              <Link href="/personal/activity" className="text-[12px] font-semibold text-[#2563eb]">
-                View all
-              </Link>
             </div>
           }
         >
-          {topContacts.length === 0 ? (
-            <p className={pm.muted}>No contact activity yet.</p>
+          {topNumbers.length === 0 ? (
+            <p className={pm.muted}>No numbers yet.</p>
           ) : (
-            <div className="overflow-x-auto -mx-5 px-5">
-              <table className="w-full min-w-[880px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                    <th className="pb-3 pr-3">Contact</th>
-                    <th className="pb-3 pr-3">Recent Activity</th>
-                    <th className="pb-3 pr-3">Type</th>
-                    <th className="pb-3 pr-3">Campaign</th>
-                    <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3 pr-3">Total Activity</th>
-                    <th className="pb-3 pr-3">Last Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f3f4f6]">
-                  {topContacts.map((row) => (
-                    <tr key={row.id}>
-                      <td className="py-3 pr-3">
-                        <p className="font-semibold text-[#111827]">{formatPhone(row.phone)}</p>
-                        <p className="text-[11px] text-[#9ca3af]">{row.location}</p>
-                      </td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.recentActivity}</td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.type}</td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.line}</td>
-                      <td className="py-3 pr-3">
-                        <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
-                      </td>
-                      <td className="py-3 pr-3 font-medium text-[#111827]">{row.totalActivity}</td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.lastAction}</td>
+            <>
+              <div className="overflow-x-auto -mx-5 px-5">
+                <table className="w-full min-w-[920px] text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                      <th className="pb-3 pr-3 w-8">
+                        <input type="checkbox" className="rounded border-[#d1d5db]" aria-label="Select all" />
+                      </th>
+                      <th className="pb-3 pr-3">Label</th>
+                      <th className="pb-3 pr-3">Phone Number</th>
+                      <th className="pb-3 pr-3">Type</th>
+                      <th className="pb-3 pr-3">Forwarding</th>
+                      <th className="pb-3 pr-3">Status</th>
+                      <th className="pb-3 pr-3 w-10">Action</th>
+                      <th className="pb-3 pr-3">Activity</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[#f3f4f6]">
+                    {topNumbers.map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-3 pr-3">
+                          <input type="checkbox" className="rounded border-[#d1d5db]" aria-label={`Select ${row.label}`} />
+                        </td>
+                        <td className="py-3 pr-3 font-semibold text-[#111827]">{row.label}</td>
+                        <td className="py-3 pr-3 text-[#374151]">{formatPhone(row.phone)}</td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{row.type}</td>
+                        <td className="py-3 pr-3 text-[#6b7280]">
+                          {row.forwarding === "—" ? "—" : formatPhone(row.forwarding)}
+                        </td>
+                        <td className="py-3 pr-3">
+                          <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
+                        </td>
+                        <td className="py-3 pr-3">
+                          <button
+                            type="button"
+                            className="rounded p-1 text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
+                            aria-label="Actions"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </td>
+                        <td className="py-3 pr-3">
+                          <PersonalMockSparkline
+                            points={row.activitySparkline}
+                            color="#059669"
+                            width={72}
+                            height={28}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Link
+                href="/personal/numbers"
+                className="mt-4 inline-block text-[13px] font-semibold text-[#6366f1] hover:underline"
+              >
+                View all numbers →
+              </Link>
+            </>
           )}
         </PersonalMockSection>
 
         <div className="space-y-4">
-          <PersonalMockSection title="Quick Actions">
+          <PersonalMockSection title="Quick Menu">
             <ul className="space-y-1 text-[13px]">
-              {QUICK_ACTIONS.map((item) => (
-                <li key={item.href}>
+              {QUICK_MENU.map((item) => (
+                <li key={item.label}>
                   <Link
                     href={item.href}
-                    className="block rounded-lg px-2 py-2 font-medium text-[#2563eb] hover:bg-[#f9fafb]"
+                    className="flex items-center gap-2 rounded-lg px-2 py-2 font-medium text-[#374151] hover:bg-[#f9fafb]"
                   >
+                    <item.icon className="h-4 w-4 text-[#9ca3af]" strokeWidth={2} />
                     {item.label}
                   </Link>
                 </li>
@@ -229,132 +292,186 @@ export function PersonalOverviewUI({
             </ul>
           </PersonalMockSection>
 
-          <PersonalMockSection title="Number Review">
+          <PersonalMockSection title="Quick Actions">
             <ul className="space-y-2 text-[13px]">
-              {[
-                { label: "Total", value: numberReview.total },
-                { label: "Mobile", value: numberReview.mobile },
-                { label: "Landline", value: numberReview.landline },
-                { label: "VoIP", value: numberReview.voip },
-                { label: "Invalid", value: numberReview.invalid },
-              ].map((row) => (
-                <li key={row.label} className="flex justify-between">
-                  <span className="text-[#6b7280]">{row.label}</span>
-                  <span className="font-semibold text-[#111827]">{row.value}</span>
+              {QUICK_ACTIONS.map((item) => (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[#374151] hover:bg-[#f9fafb]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      readOnly
+                      className="rounded border-[#d1d5db]"
+                      aria-hidden
+                    />
+                    <span>{item.label}</span>
+                  </Link>
                 </li>
               ))}
             </ul>
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Number Vault">
-            <div className="space-y-2 text-[13px]">
-              <Link
-                href="/personal/vault"
-                className="block font-semibold text-[#2563eb] hover:underline"
-              >
-                Add numbers to vault
-              </Link>
-              <Link
-                href="/personal/vault"
-                className="block font-semibold text-[#2563eb] hover:underline"
-              >
-                View vault
-              </Link>
-            </div>
           </PersonalMockSection>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4">
-          <PersonalMockSection title="Analytics">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[12px] text-[#6b7280]">Total</p>
-                <p className="text-[28px] font-bold text-[#111827]">{analyticsTotal}</p>
-                <p
-                  className={cn(
-                    "mt-1 text-[12px] font-semibold",
-                    analyticsChange >= 0 ? "text-[#059669]" : "text-[#dc2626]",
-                  )}
-                >
-                  {analyticsChange >= 0 ? "↑" : "↓"} {Math.abs(analyticsChange)}%
-                </p>
-              </div>
-              <PersonalMockSparkline points={sparkline} color="#2563eb" width={80} height={32} />
-            </div>
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Pending Tasks">
-            {pendingTasks.length === 0 ? (
-              <p className={pm.muted}>No pending tasks.</p>
+        <PersonalMockSection title="Timeline">
+          <ul className="space-y-3 text-[13px]">
+            {timeline.length === 0 ? (
+              <li className={pm.muted}>No recent events.</li>
             ) : (
-              <ul className="space-y-3 text-[13px]">
-                {pendingTasks.map((task) => (
-                  <li key={task.id} className="flex justify-between gap-2">
-                    <span className="text-[#111827]">{task.text}</span>
-                    <span className="shrink-0 text-[11px] text-[#9ca3af]">{task.at}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </PersonalMockSection>
-        </div>
-
-        <div className="space-y-4">
-          <PersonalMockSection title="Balance & Billing">
-            <p className="text-[28px] font-bold text-[#111827]">{kpis.balance}</p>
-            <p className="mt-1 text-[12px] text-[#6b7280]">{kpis.balanceSub}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/settings/billing">
-                <PersonalMockBtn>Refill Now</PersonalMockBtn>
-              </Link>
-            </div>
-            <div className="mt-4">
-              <PersonalMockToggle label="Auto-refill" checked={autoRefill} onChange={setAutoRefill} />
-            </div>
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Service Status">
-            <div className="flex items-center gap-2 text-[13px]">
-              <CheckCircle2 className="h-5 w-5 text-[#059669]" />
-              <span className="font-semibold text-[#059669]">System Status: Online</span>
-            </div>
-          </PersonalMockSection>
-        </div>
-
-        <div className="space-y-4">
-          <PersonalMockSection title="Communication Log">
-            <ul className="space-y-2 text-[13px]">
-              {commLog.map((row, i) => (
-                <li key={`${row.phone}-${i}`} className="flex justify-between gap-2">
-                  <span className="font-medium text-[#111827]">{formatPhone(row.phone)}</span>
-                  <span className="text-[11px] text-[#9ca3af]">
-                    {row.date} {row.time}
+              timeline.map((row) => (
+                <li key={row.id} className="flex gap-3">
+                  <span className="shrink-0 text-[11px] font-semibold text-[#9ca3af] w-16">
+                    {row.date}
                   </span>
+                  <span className="text-[#374151]">{row.label}</span>
+                </li>
+              ))
+            )}
+          </ul>
+          <WidgetFooterLink href="/personal/activity" label="View all activity →" />
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Wallet balance">
+          <p className="text-[28px] font-bold text-[#111827]">{walletDisplay}</p>
+          <p className="mt-1 text-[12px] text-[#6b7280]">
+            {kpis.walletAutoTopup ? "Auto-topup active" : "Auto-topup off"}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/settings/billing">
+              <PersonalMockBtn>Add funds</PersonalMockBtn>
+            </Link>
+          </div>
+          <WidgetFooterLink href="/settings/billing" label="View history" />
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Top Destinations">
+          {topDestinations.length === 0 ? (
+            <p className={pm.muted}>No destination data yet.</p>
+          ) : (
+            <ul className="space-y-3 text-[13px]">
+              {topDestinations.map((row, i) => (
+                <li key={`${row.phone}-${i}`} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 font-medium text-[#111827]">
+                    <span className="text-[12px] text-[#9ca3af]" aria-hidden>+1</span>
+                    {formatPhone(row.phone)}
+                  </span>
+                  <span className="text-[11px] text-[#9ca3af]">{row.date}</span>
+                  <span className="font-semibold tabular-nums text-[#111827]">{row.duration}</span>
                 </li>
               ))}
             </ul>
-          </PersonalMockSection>
+          )}
+          <WidgetFooterLink href="/personal/analytics" label="View all destinations →" />
+        </PersonalMockSection>
 
-          <PersonalMockSection title="Monthly Performance">
-            <div className="flex items-center justify-between">
-              <p className="text-[12px] text-[#6b7280]">Call volume trend</p>
-              <PersonalMockSparkline points={sparkline} color="#2563eb" width={120} height={36} />
-            </div>
-          </PersonalMockSection>
+        <PersonalMockSection title="Pending Transfers">
+          {pendingTransfers.length === 0 ? (
+            <p className={pm.muted}>No pending transfers.</p>
+          ) : (
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                  <th className="pb-2 pr-2">To/From</th>
+                  <th className="pb-2 pr-2">Started</th>
+                  <th className="pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f3f4f6]">
+                {pendingTransfers.map((row) => (
+                  <tr key={row.id}>
+                    <td className="py-2 pr-2 text-[#374151]">{row.toFrom}</td>
+                    <td className="py-2 pr-2 text-[#9ca3af]">{row.started}</td>
+                    <td className="py-2">
+                      <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <WidgetFooterLink href="/personal/porting" label="View all transfers →" />
+        </PersonalMockSection>
 
-          <PersonalMockSection title="Recent Activity Log">
+        <PersonalMockSection title="Recent Numbers">
+          {recentNumbers.length === 0 ? (
+            <p className={pm.muted}>No numbers yet.</p>
+          ) : (
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                  <th className="pb-2 pr-2">Number</th>
+                  <th className="pb-2 pr-2">Forwarding</th>
+                  <th className="pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f3f4f6]">
+                {recentNumbers.map((row, i) => (
+                  <tr key={`${row.phone}-${i}`}>
+                    <td className="py-2 pr-2 font-medium text-[#111827]">
+                      {formatPhone(row.phone)}
+                    </td>
+                    <td className="py-2 pr-2 text-[#6b7280]">
+                      {row.forwarding === "—" || row.forwarding === "On"
+                        ? row.forwarding
+                        : formatPhone(row.forwarding)}
+                    </td>
+                    <td className="py-2">
+                      <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <WidgetFooterLink href="/personal/numbers" label="View all numbers →" />
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Billing History">
+          {billingHistory.length === 0 ? (
+            <p className={pm.muted}>No billing history yet.</p>
+          ) : (
             <ul className="space-y-2 text-[13px]">
-              {activityLog.map((row) => (
-                <li key={row.id} className="flex justify-between gap-2">
-                  <span className="text-[#111827]">{row.text}</span>
-                  <span className="shrink-0 text-[11px] text-[#9ca3af]">{row.at}</span>
+              {billingHistory.map((row, i) => (
+                <li key={`${row.date}-${i}`} className="flex justify-between gap-2">
+                  <span className="text-[#374151]">{row.date}</span>
+                  <span className="font-semibold text-[#111827]">{row.amount}</span>
                 </li>
               ))}
             </ul>
-          </PersonalMockSection>
-        </div>
+          )}
+          <WidgetFooterLink href="/settings/billing" label="View all billing →" />
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Recent Voicemail">
+          {recentVoicemail.length === 0 ? (
+            <p className={pm.muted}>No voicemails yet.</p>
+          ) : (
+            <ul className="space-y-3 text-[13px]">
+              {recentVoicemail.map((row) => (
+                <li key={row.id}>
+                  <p className="font-semibold text-[#111827]">{row.name}</p>
+                  <p className="text-[12px] text-[#6b7280]">
+                    {formatPhone(row.phone)} · {row.at}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <WidgetFooterLink href="/personal/voicemail" label="View all voicemail →" />
+        </PersonalMockSection>
+
+        <PersonalMockSection title="Top Call Numbers">
+          {topCallNumbers.length === 0 ? (
+            <p className={pm.muted}>No call volume yet.</p>
+          ) : (
+            <PersonalMockBarChart items={topCallNumbers} barClass="bg-[#6366f1]" />
+          )}
+          <WidgetFooterLink href="/personal/analytics" label="View analytics →" />
+        </PersonalMockSection>
       </div>
     </PersonalMockPage>
   );

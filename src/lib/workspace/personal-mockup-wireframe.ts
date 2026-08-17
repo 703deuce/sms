@@ -688,98 +688,123 @@ export const WIREFRAME_VOICEMAIL_KPIS = {
 };
 
 export const WIREFRAME_OVERVIEW_KPIS = {
-  totalContacts: 0,
-  contactsAddedLastMonth: 0,
-  activeNumbers: 0,
-  textsSent30d: 0,
-  calls30d: 428,
-  balance: "$12.40",
-  balanceSub: "Next refill at $5.00",
-  vaultCount: 4,
-  vaultActive: 4,
+  totalNumbers: 3,
+  totalNumbersDelta: "+1 from last week",
+  voicemails: 0,
+  voicemailsTrendPct: 0,
+  transcriptions: 0,
+  transcriptionsTrendPct: 0,
+  calls30d: 0,
+  callsTrendPct: 0,
+  walletBalance: "$112.42",
+  walletTrendPct: 23.23,
+  blockedNumbers: 0,
+  blockedDelta: "+0 from last week",
+  walletAutoTopup: true,
 };
 
-export const WIREFRAME_OVERVIEW_TOP_CONTACTS = [
+export const WIREFRAME_OVERVIEW_TOP_NUMBERS = [
   {
-    id: "demo-oc1",
-    phone: "+15123419887",
-    location: "Austin, TX",
-    recentActivity: "Sent inbound text...",
-    type: "Inbound",
-    line: "N/A",
+    id: "demo-on1",
+    label: "Sales",
+    phone: "+12134214467",
+    type: "Local",
+    forwarding: "+14153214567",
     status: "Active",
     statusTone: "green" as const,
-    totalActivity: "12 hours",
-    lastAction: "Today",
+    activitySparkline: [2, 4, 3, 6, 5, 8, 7],
   },
   {
-    id: "demo-oc2",
-    phone: "+15031234567",
-    location: "Portland, OR",
-    recentActivity: "Responded to campaign",
-    type: "Call Flow",
-    line: "Fall Sale",
-    status: "Managed",
-    statusTone: "blue" as const,
-    totalActivity: "23 min",
-    lastAction: "Yesterday",
-  },
-  {
-    id: "demo-oc3",
-    phone: "+12067890123",
-    location: "Seattle, WA",
-    recentActivity: "Scheduled",
-    type: "Email",
-    line: "E-Commerce",
-    status: "Prospect",
-    statusTone: "orange" as const,
-    totalActivity: "14 hours",
-    lastAction: "2 days ago",
-  },
-  {
-    id: "demo-oc4",
-    phone: "+16465554321",
-    location: "New York, NY",
-    recentActivity: "Completed campaign",
-    type: "SMS",
-    line: "Spring Event",
-    status: "Finished",
+    id: "demo-on2",
+    label: "Support",
+    phone: "+18005551234",
+    type: "Toll Free",
+    forwarding: "+14153214567",
+    status: "Active",
     statusTone: "green" as const,
-    totalActivity: "45 min",
-    lastAction: "3 days ago",
+    activitySparkline: [1, 2, 4, 3, 5, 4, 6],
+  },
+  {
+    id: "demo-on3",
+    label: "Personal",
+    phone: "+13105559876",
+    type: "Local",
+    forwarding: "—",
+    status: "Inactive",
+    statusTone: "yellow" as const,
+    activitySparkline: [0, 1, 0, 0, 1, 0, 0],
+  },
+  {
+    id: "demo-on4",
+    label: "Marketing",
+    phone: "+12135557890",
+    type: "Local",
+    forwarding: "+14153214567",
+    status: "Active",
+    statusTone: "green" as const,
+    activitySparkline: [3, 5, 4, 7, 6, 8, 9],
   },
 ];
 
-export const WIREFRAME_OVERVIEW_NUMBER_REVIEW = {
-  total: 4,
-  mobile: 3,
-  landline: 1,
-  voip: 0,
-  invalid: 0,
-};
-
-export const WIREFRAME_OVERVIEW_PENDING_TASKS = [
-  { id: "demo-pt1", text: "Follow up with (512) 341-9887", at: "1m ago" },
-  { id: "demo-pt2", text: "Review voicemail from (703) 555-9202", at: "5m ago" },
-  { id: "demo-pt3", text: "Confirm port documents for Main Line", at: "12m ago" },
-  { id: "demo-pt4", text: "Update forwarding for Sales Line", at: "1h ago" },
+export const WIREFRAME_OVERVIEW_TIMELINE = [
+  { id: "demo-tl1", date: "Oct 24th", label: "Wallet topped up $25.00" },
+  { id: "demo-tl2", date: "Oct 23rd", label: "Number (213) 421-4467 activated" },
+  { id: "demo-tl3", date: "Oct 22nd", label: "Port request submitted" },
+  { id: "demo-tl4", date: "Oct 21st", label: "Voicemail greeting updated" },
 ];
 
-export const WIREFRAME_OVERVIEW_COMM_LOG = [
-  { phone: "+1 (512) 555-0199", date: "Jul 24, 2024", time: "10:20 AM" },
-  { phone: "+1 (703) 555-9191", date: "Jul 23, 2024", time: "4:12 PM" },
-  { phone: "+1 (571) 407-3615", date: "Jul 22, 2024", time: "9:15 AM" },
+export const WIREFRAME_OVERVIEW_TOP_DESTINATIONS = [
+  { phone: "+14153214567", date: "Oct 24", duration: "2:34" },
+  { phone: "+13105559876", date: "Oct 23", duration: "1:12" },
+  { phone: "+18005551234", date: "Oct 22", duration: "0:45" },
 ];
 
-export const WIREFRAME_OVERVIEW_ACTIVITY_LOG = [
-  { id: "demo-al1", text: "Contact Added to 'Campaign A'", at: "2h ago" },
-  { id: "demo-al2", text: "Text sent to (512) 341-9887", at: "3h ago" },
-  { id: "demo-al3", text: "Call completed with (503) 123-4567", at: "5h ago" },
+export const WIREFRAME_OVERVIEW_PENDING_TRANSFERS = [
+  {
+    id: "demo-pt1",
+    toFrom: "(213) 421-4467 → Carrier",
+    started: "Oct 22",
+    status: "In progress",
+    statusTone: "blue" as const,
+  },
 ];
 
-export const WIREFRAME_OVERVIEW_ANALYTICS = {
-  total: 428,
-  changePct: 12,
-  sparkline: [12, 18, 22, 28, 32, 30, 35],
-};
+export const WIREFRAME_OVERVIEW_RECENT_NUMBERS = [
+  {
+    phone: "+12134214467",
+    forwarding: "+14153214567",
+    status: "Active",
+    statusTone: "green" as const,
+  },
+  {
+    phone: "+18005551234",
+    forwarding: "+14153214567",
+    status: "Active",
+    statusTone: "green" as const,
+  },
+  {
+    phone: "+13105559876",
+    forwarding: "—",
+    status: "Inactive",
+    statusTone: "yellow" as const,
+  },
+];
+
+export const WIREFRAME_OVERVIEW_BILLING_HISTORY = [
+  { date: "Oct 23rd 2023", amount: "$10.00" },
+  { date: "Sep 23rd 2023", amount: "$10.00" },
+  { date: "Aug 23rd 2023", amount: "$25.00" },
+];
+
+export const WIREFRAME_OVERVIEW_RECENT_VOICEMAIL = [
+  { id: "demo-vm1", name: "John Smith", phone: "+13104124235", at: "3m ago" },
+  { id: "demo-vm2", name: "Unknown", phone: "+12135557890", at: "1h ago" },
+];
+
+export const WIREFRAME_OVERVIEW_TOP_CALL_NUMBERS = [
+  { label: "Sales", value: 12 },
+  { label: "Support", value: 8 },
+  { label: "Marketing", value: 5 },
+  { label: "Personal", value: 2 },
+];
 
