@@ -501,7 +501,7 @@ export function PersonalForwardingUI({
     <PersonalMockPage right={sidebar}>
       <PersonalMockHeader
         title="Call Forwarding"
-        description="Control where your calls go — ring your phone first, then voicemail or another destination."
+        description="Control where your calls go and what happens when they aren't answered."
         actions={
           <>
             <PersonalMockBtn onClick={addTarget}>
