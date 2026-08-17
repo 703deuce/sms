@@ -53,6 +53,7 @@ const routes = [
   { path: "/personal/blocked", name: "blocked" },
   { path: "/personal/usage", name: "usage" },
   { path: "/personal/porting", name: "porting" },
+  { path: "/personal/porting?tab=out", name: "porting-out" },
 ];
 
 const browser = await chromium.launch({ headless: true });
@@ -69,6 +70,27 @@ for (const route of routes) {
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${OUT}/${route.name}.png`, fullPage: true });
   console.log(`Saved ${OUT}/${route.name}.png`);
+}
+
+// Interactive states: vault and blocked manage drawers
+await page.goto(`${BASE}/personal/vault`, { waitUntil: "domcontentloaded", timeout: 120000 });
+await page.waitForTimeout(2000);
+const vaultManage = page.getByRole("button", { name: "Manage" }).first();
+if (await vaultManage.count()) {
+  await vaultManage.click();
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${OUT}/vault-manage-drawer.png`, fullPage: true });
+  console.log(`Saved ${OUT}/vault-manage-drawer.png`);
+}
+
+await page.goto(`${BASE}/personal/blocked`, { waitUntil: "domcontentloaded", timeout: 120000 });
+await page.waitForTimeout(2000);
+const blockedManage = page.getByRole("button", { name: "Manage" }).first();
+if (await blockedManage.count()) {
+  await blockedManage.click();
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${OUT}/blocked-manage-drawer.png`, fullPage: true });
+  console.log(`Saved ${OUT}/blocked-manage-drawer.png`);
 }
 
 await browser.close();
