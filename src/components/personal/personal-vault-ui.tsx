@@ -4,7 +4,7 @@ import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
 import type { VaultIncomingMode } from "@/lib/numbers/personal-call-settings";
 import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
 import { runPersonalNumberAction } from "@/lib/personal/client-actions";
-import { formatPhone } from "@/lib/utils";
+import { formatPhone, cn } from "@/lib/utils";
 import {
   AlertTriangle,
   Archive,
@@ -30,7 +30,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   PersonalMockBtn,
-  PersonalMockFilterChips,
   PersonalMockHeader,
   PersonalMockInput,
   PersonalMockKpi,
@@ -47,6 +46,7 @@ type VaultActivity = {
   id: string;
   text: string;
   at: string;
+  by?: string;
   icon: "archive" | "shield" | "megaphone" | "reactivate";
 };
 type ModeFilter = "All" | "Silent" | "Announcement" | "Voicemail" | "Porting";
@@ -86,14 +86,62 @@ function formatVaultDate(dateStr: string | null): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function vaultRowStatus(n: PersonalNumberRow): { label: string; tone: VaultStatusTone } {
+function daysUntilRenewal(parkedSince: string | null): number | null {
+  if (!parkedSince) return null;
+  const renewal = new Date(parkedSince);
+  renewal.setMonth(renewal.getMonth() + 1);
+  return Math.ceil((renewal.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function vaultRowStatus(n: PersonalNumberRow): {
+  label: string;
+  tone: VaultStatusTone;
+  sub?: string;
+} {
+  const daysLeft = daysUntilRenewal(n.parkedSince);
   if (n.portAwayExpiresAt || n.serviceState.includes("PORT")) {
-    return { label: "Action Required", tone: "orange" };
+    return {
+      label: "Action Required",
+      tone: "orange",
+      sub: daysLeft != null ? `${daysLeft} days` : undefined,
+    };
+  }
+  if (daysLeft != null && daysLeft >= 0 && daysLeft <= 7) {
+    return { label: "Action Required", tone: "orange", sub: `${daysLeft} days` };
   }
   if (n.portOutLocked) {
     return { label: "Protected", tone: "green" };
   }
   return { label: "Vaulted", tone: "blue" };
+}
+
+function VaultModeTabs({
+  active,
+  onChange,
+}: {
+  active: ModeFilter;
+  onChange: (v: ModeFilter) => void;
+}) {
+  const tabs: ModeFilter[] = ["All", "Silent", "Announcement", "Voicemail", "Porting"];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          onClick={() => onChange(tab)}
+          className={cn(
+            "rounded-lg px-3 py-1.5 text-[12px] font-semibold transition",
+            active === tab
+              ? "bg-[#eef2ff] text-[#6366f1]"
+              : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]",
+          )}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function ModeIcon({ mode }: { mode: VaultIncomingMode }) {
@@ -104,7 +152,7 @@ function ModeIcon({ mode }: { mode: VaultIncomingMode }) {
 }
 
 function ActivityIcon({ kind }: { kind: VaultActivity["icon"] }) {
-  const className = "mt-0.5 h-4 w-4 shrink-0 text-[#2563eb]";
+  const className = "mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]";
   if (kind === "shield") return <Shield className={className} />;
   if (kind === "megaphone") return <Megaphone className={className} />;
   if (kind === "reactivate") return <ArrowRightLeft className={className} />;
@@ -115,10 +163,12 @@ export function PersonalVaultUI({
   numbers,
   parked,
   initialNumberId,
+  actorName = "You",
 }: {
   numbers: PersonalNumberRow[];
   parked: PersonalNumberRow[];
   initialNumberId?: string;
+  actorName?: string;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -262,6 +312,7 @@ export function PersonalVaultUI({
         events.push({
           id: `${n.id}-vault`,
           text: `${label} was vaulted`,
+          by: actorName,
           at: formatVaultDate(n.parkedSince),
           icon: "archive",
         });
@@ -270,6 +321,7 @@ export function PersonalVaultUI({
         events.push({
           id: `${n.id}-port`,
           text: `Port protection enabled for ${formatPhone(n.number)}`,
+          by: actorName,
           at: formatVaultDate(n.parkedSince),
           icon: "shield",
         });
@@ -278,15 +330,14 @@ export function PersonalVaultUI({
         events.push({
           id: `${n.id}-announce`,
           text: `Announcement updated for ${label}`,
+          by: actorName,
           at: formatVaultDate(n.parkedSince),
           icon: "megaphone",
         });
       }
     }
-    return events
-      .sort((a, b) => (a.at > b.at ? -1 : 1))
-      .slice(0, 5);
-  }, [parked]);
+    return events.sort((a, b) => (a.at > b.at ? -1 : 1)).slice(0, 5);
+  }, [parked, actorName]);
 
   function openManage(id: string) {
     const row = parked.find((n) => n.id === id);
@@ -423,34 +474,37 @@ export function PersonalVaultUI({
         <PersonalMockHeader
           title="Number Vault"
           description="Keep valuable numbers secure while they're not actively in use."
-          actions={
-            <>
-              <Link href={addToVaultHref}>
-                <PersonalMockBtn>
-                  <Plus className="h-4 w-4" />
-                  Add to Vault
-                </PersonalMockBtn>
-              </Link>
-              <Link href="/personal/porting">
-                <PersonalMockBtn variant="outline">Port a Number In</PersonalMockBtn>
-              </Link>
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
-                />
-                <PersonalMockInput
-                  className="w-56 bg-[#f9fafb] pl-9 focus:bg-white"
-                  placeholder="Search numbers or names"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </div>
-            </>
-          }
         />
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="relative min-w-[280px] flex-1 max-w-xl">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
+            />
+            <PersonalMockInput
+              className="w-full bg-[#f9fafb] pl-9 focus:bg-white"
+              placeholder="Search numbers or names"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link href={addToVaultHref}>
+              <PersonalMockBtn className="!bg-[#6366f1] hover:!bg-[#4f46e5]">
+                <Plus className="h-4 w-4" />
+                Add to Vault
+              </PersonalMockBtn>
+            </Link>
+            <Link href="/personal/porting">
+              <PersonalMockBtn variant="outline" className="!border-[#6366f1] !text-[#6366f1]">
+                Port a Number In
+              </PersonalMockBtn>
+            </Link>
+          </div>
+        </div>
 
         {error ? <p className="text-[13px] text-rose-600">{error}</p> : null}
 
@@ -490,12 +544,14 @@ export function PersonalVaultUI({
         </div>
 
         <div className={pm.card}>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] px-5 py-4">
-            <PersonalMockFilterChips
-              options={["All", "Silent", "Announcement", "Voicemail", "Porting"]}
+          <div className="border-b border-[#f3f4f6] px-5 py-4">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Your Vault</h2>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] px-5 py-3">
+            <VaultModeTabs
               active={modeFilter}
               onChange={(v) => {
-                setModeFilter(v as ModeFilter);
+                setModeFilter(v);
                 setPage(1);
               }}
             />
@@ -509,9 +565,15 @@ export function PersonalVaultUI({
                 <option value="name">Friendly Name</option>
                 <option value="cost">Monthly Cost</option>
               </PersonalMockSelect>
-              <PersonalMockBtn
-                variant={localOnly ? "primary" : "outline"}
-                className="h-8 px-3 text-[12px]"
+              <button
+                type="button"
+                aria-label="Filter local numbers"
+                className={cn(
+                  "flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold transition",
+                  localOnly
+                    ? "border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
+                    : "border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]",
+                )}
                 onClick={() => {
                   setLocalOnly((v) => !v);
                   if (!localOnly) setTollFreeOnly(false);
@@ -520,10 +582,16 @@ export function PersonalVaultUI({
               >
                 <Filter className="h-3.5 w-3.5" />
                 Local
-              </PersonalMockBtn>
-              <PersonalMockBtn
-                variant={tollFreeOnly ? "primary" : "outline"}
-                className="h-8 px-3 text-[12px]"
+              </button>
+              <button
+                type="button"
+                aria-label="Filter toll-free numbers"
+                className={cn(
+                  "flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold transition",
+                  tollFreeOnly
+                    ? "border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
+                    : "border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]",
+                )}
                 onClick={() => {
                   setTollFreeOnly((v) => !v);
                   if (!tollFreeOnly) setLocalOnly(false);
@@ -532,7 +600,7 @@ export function PersonalVaultUI({
               >
                 <Filter className="h-3.5 w-3.5" />
                 Toll-Free
-              </PersonalMockBtn>
+              </button>
             </div>
           </div>
 
@@ -542,7 +610,7 @@ export function PersonalVaultUI({
                 <p className={pm.muted}>No numbers in your vault yet.</p>
                 <Link
                   href={addToVaultHref}
-                  className="mt-3 text-[13px] font-semibold text-[#2563eb] hover:underline"
+                  className="mt-3 text-[13px] font-semibold text-[#6366f1] hover:underline"
                 >
                   {activeToPark.length > 0
                     ? "Park a number from My Numbers"
@@ -575,7 +643,7 @@ export function PersonalVaultUI({
                           <td className="py-3 pr-3">
                             <button
                               type="button"
-                              className="font-semibold text-[#2563eb] hover:underline"
+                              className="font-semibold text-[#6366f1] hover:underline"
                               onClick={() => openManage(n.id)}
                             >
                               {formatPhone(n.number)}
@@ -586,9 +654,7 @@ export function PersonalVaultUI({
                           </td>
                           <td className="py-3 pr-3 text-[#6b7280]">{n.type}</td>
                           <td className="py-3 pr-3">
-                            <span
-                              className="inline-flex items-center gap-1.5 rounded-full bg-[#eff6ff] px-2.5 py-0.5 text-[11px] font-semibold text-[#2563eb]"
-                            >
+                            <span className="inline-flex items-center gap-1.5 text-[#374151]">
                               <ModeIcon mode={n.vaultIncomingMode} />
                               {vaultModeLabel(n.vaultIncomingMode)}
                             </span>
@@ -601,6 +667,11 @@ export function PersonalVaultUI({
                           </td>
                           <td className="py-3 pr-3">
                             <PersonalMockPill tone={status.tone}>{status.label}</PersonalMockPill>
+                            {status.sub ? (
+                              <p className="mt-0.5 text-[10px] font-medium text-[#ea580c]">
+                                {status.sub}
+                              </p>
+                            ) : null}
                           </td>
                           <td className="py-3 pr-3">
                             {unread > 0 ? (
@@ -696,8 +767,9 @@ export function PersonalVaultUI({
                       <ActivityIcon kind={a.icon} />
                       <div>
                         <p className="text-[#111827]">{a.text}</p>
-                        <p className="flex items-center gap-1 text-[11px] text-[#9ca3af]">
-                          <Clock className="h-3 w-3" /> {a.at}
+                        <p className="text-[11px] text-[#9ca3af]">
+                          {a.by ? `by ${a.by} · ` : ""}
+                          {a.at}
                         </p>
                       </div>
                     </li>
@@ -705,7 +777,7 @@ export function PersonalVaultUI({
                 </ul>
                 <Link
                   href="/personal/activity"
-                  className="mt-4 inline-block text-[12px] font-semibold text-[#2563eb] hover:underline"
+                  className="mt-4 inline-block text-[12px] font-semibold text-[#6366f1] hover:underline"
                 >
                   View all activity →
                 </Link>
@@ -736,11 +808,11 @@ export function PersonalVaultUI({
                     Require extra verification steps before sensitive number changes.
                   </p>
                 </div>
-                <div className="flex gap-3 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3">
-                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[#2563eb]" />
-                  <p className="text-[12px] leading-relaxed text-[#1e40af]">
+                <div className="flex gap-3 rounded-lg border border-[#e0e7ff] bg-[#eef2ff] p-3">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
+                  <p className="text-[12px] leading-relaxed text-[#4338ca]">
                     Your numbers are protected with enterprise-grade security.{" "}
-                    <Link href="/help" className="font-semibold text-[#2563eb] hover:underline">
+                    <Link href="/help" className="font-semibold text-[#6366f1] hover:underline">
                       Learn more
                     </Link>
                   </p>
@@ -789,13 +861,10 @@ export function PersonalVaultUI({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-lg border border-[#f3f4f6] bg-[#fafafa] p-3">
-                  <Archive className="mx-auto h-4 w-4 text-[#9ca3af]" />
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                    Vaulted Since
-                  </p>
-                  <p className="mt-1 text-[12px] font-semibold text-[#111827]">
+              <dl className="space-y-2 text-[13px]">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[#6b7280]">Vaulted Since</dt>
+                  <dd className="font-medium text-[#111827]">
                     {managed.parkedSince
                       ? new Date(managed.parkedSince).toLocaleDateString(undefined, {
                           month: "short",
@@ -803,31 +872,23 @@ export function PersonalVaultUI({
                           year: "numeric",
                         })
                       : "Recently"}
-                  </p>
+                  </dd>
                 </div>
-                <div className="rounded-lg border border-[#f3f4f6] bg-[#fafafa] p-3">
-                  <DollarSign className="mx-auto h-4 w-4 text-[#9ca3af]" />
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                    Monthly Price
-                  </p>
-                  <p className="mt-1 text-[12px] font-semibold text-[#111827]">
-                    ${managed.monthlyCost.toFixed(2)}
-                  </p>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[#6b7280]">Monthly Price</dt>
+                  <dd className="font-medium text-[#111827]">${managed.monthlyCost.toFixed(2)}</dd>
                 </div>
-                <div className="rounded-lg border border-[#f3f4f6] bg-[#fafafa] p-3">
-                  <Clock className="mx-auto h-4 w-4 text-[#9ca3af]" />
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                    Next Renewal
-                  </p>
-                  <p className="mt-1 text-[12px] font-semibold text-[#111827]">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[#6b7280]">Next Renewal</dt>
+                  <dd className="font-medium text-[#111827]">
                     {nextRenewalDate(managed.parkedSince)}
-                  </p>
+                  </dd>
                 </div>
-              </div>
+              </dl>
 
               <div>
                 <p className="mb-3 text-[13px] font-semibold text-[#111827]">
-                  Incoming call handling
+                  Incoming Call Handling
                 </p>
                 <div className="space-y-2 text-[13px] text-[#374151]">
                   {(
@@ -840,7 +901,7 @@ export function PersonalVaultUI({
                     <label key={opt.id} className="flex items-center gap-2">
                       <input
                         type="radio"
-                        className="accent-[#2563eb]"
+                        className="accent-[#6366f1]"
                         checked={modeDraft === opt.id}
                         onChange={() => setModeDraft(opt.id)}
                       />
@@ -856,7 +917,7 @@ export function PersonalVaultUI({
                     Vault announcement
                   </p>
                   <textarea
-                    className="w-full rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3 text-[13px] outline-none focus:border-[#2563eb] focus:bg-white"
+                    className="w-full rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3 text-[13px] outline-none focus:border-[#6366f1] focus:bg-white"
                     rows={4}
                     value={messageDraft}
                     onChange={(e) => setMessageDraft(e.target.value)}
@@ -895,7 +956,7 @@ export function PersonalVaultUI({
                 </dl>
                 <Link
                   href={`/personal/voicemail?numberId=${managed.id}`}
-                  className="mt-3 inline-block font-semibold text-[#2563eb] hover:underline"
+                  className="mt-3 inline-block font-semibold text-[#6366f1] hover:underline"
                 >
                   Open Voicemail →
                 </Link>
@@ -904,7 +965,7 @@ export function PersonalVaultUI({
 
             <div className="border-t border-[#e5e7eb] p-5 space-y-2">
               <PersonalMockBtn
-                className="w-full"
+                className="w-full !bg-[#6366f1] hover:!bg-[#4f46e5]"
                 disabled={busy === "save" || busy === "reactivate"}
                 onClick={saveManaged}
               >
@@ -912,7 +973,7 @@ export function PersonalVaultUI({
               </PersonalMockBtn>
               <PersonalMockBtn
                 variant="outline"
-                className="w-full"
+                className="w-full !border-[#6366f1] !text-[#6366f1]"
                 disabled={busy === "reactivate" || busy === "save"}
                 onClick={reactivateManaged}
               >
@@ -927,7 +988,7 @@ export function PersonalVaultUI({
                   More Actions
                 </PersonalMockBtn>
                 {drawerMoreOpen ? (
-                  <div className="absolute bottom-full left-0 right-0 z-10 mb-2 rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg text-[13px]">
+                  <div className="absolute left-0 right-0 top-full z-10 mt-2 rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg text-[13px]">
                     <Link
                       href={`/personal/porting?tab=out&numberId=${managed.id}`}
                       className="flex items-center gap-2 px-3 py-2 hover:bg-[#f9fafb]"

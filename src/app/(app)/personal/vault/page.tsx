@@ -7,12 +7,19 @@ export default async function PersonalVaultPage({
 }: {
   searchParams: Promise<{ numberId?: string }>;
 }) {
-  const { workspaceId } = await requireWorkspaceContext();
+  const { workspaceId, session } = await requireWorkspaceContext();
   const { numberId } = await searchParams;
   const [numbers, parked] = await Promise.all([
     loadPersonalNumbers(workspaceId),
     loadParkedNumbers(workspaceId),
   ]);
 
-  return <PersonalVaultUI numbers={numbers} parked={parked} initialNumberId={numberId} />;
+  return (
+    <PersonalVaultUI
+      numbers={numbers}
+      parked={parked}
+      initialNumberId={numberId}
+      actorName={session.name || "You"}
+    />
+  );
 }
