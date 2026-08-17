@@ -7,27 +7,42 @@ import {
 } from "@/lib/personal/voicemail-mappers";
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
 import {
+  WIREFRAME_VOICEMAIL_ACTIVITY,
+  WIREFRAME_VOICEMAIL_FORWARDING,
+  WIREFRAME_VOICEMAIL_GREETINGS,
   WIREFRAME_VOICEMAIL_KPIS,
   WIREFRAME_VOICEMAIL_MESSAGES,
+  WIREFRAME_VOICEMAIL_STORAGE,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
 import { runPersonalNumberAction } from "@/lib/personal/client-actions";
 import {
-  Archive,
+  AudioLines,
   Ban,
+  Check,
+  ChevronRight,
+  Circle,
   Clock,
   Download,
+  Infinity,
+  Mail,
   Mic,
+  MoreHorizontal,
+  Pencil,
   Phone,
   PhoneCall,
+  Play,
   Search,
+  Sparkles,
   Trash2,
-  Voicemail,
+  Upload,
+  Wand2,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatPhone } from "@/lib/utils";
-import { PersonalMockProgress } from "./mockup/charts";
+import { cn, formatPhone } from "@/lib/utils";
+import { PersonalGreetingControls } from "./personal-greeting-controls";
+import { PersonalNumberSelector } from "./personal-number-selector";
 import {
   PersonalMockBtn,
   PersonalMockFilterChips,
@@ -35,13 +50,27 @@ import {
   PersonalMockInput,
   PersonalMockKpi,
   PersonalMockPage,
+  PersonalMockPagination,
   PersonalMockPill,
   PersonalMockSection,
+  PersonalMockSelect,
   PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
-import { PersonalGreetingControls } from "./personal-greeting-controls";
-import { PersonalNumberSelector } from "./personal-number-selector";
+
+type VmMessage = {
+  id: string;
+  callerNumber: string;
+  callerName?: string;
+  calledNumber?: string;
+  calledLabel?: string;
+  durationSec: number;
+  transcript?: string;
+  summary?: string;
+  readAt: string | null;
+  createdAt: string;
+  isDemo: boolean;
+};
 
 function callerAvatarInitials(name?: string | null, number?: string | null): string {
   const trimmed = (name || "").trim();
@@ -63,6 +92,30 @@ function callerDisplayName(name?: string | null, number?: string | null): string
   return formatPhone(number || "Unknown");
 }
 
+function relativeVmDate(createdAt: string): string {
+  const d = new Date(createdAt);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startYesterday = new Date(startToday);
+  startYesterday.setDate(startYesterday.getDate() - 1);
+  if (d >= startToday) return "Today";
+  if (d >= startYesterday) return "Yesterday";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatVmTime(createdAt: string): string {
+  return new Date(createdAt).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDurationLabel(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export function PersonalVoicemailUI({
   numberId,
   numbers = [],
@@ -75,12 +128,17 @@ export function PersonalVoicemailUI({
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [playSpeed, setPlaySpeed] = useState(1);
+  const [voicemailEnabled, setVoicemailEnabled] = useState(true);
   const [autoTranscription, setAutoTranscription] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
+  const [includeAudio, setIncludeAudio] = useState(true);
+  const [includeTranscript, setIncludeTranscript] = useState(true);
   const [forwardEmail, setForwardEmail] = useState("");
   const [secondaryEmail, setSecondaryEmail] = useState("");
   const [inboxFilter, setInboxFilter] = useState<"All" | "Unread" | "Read">("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [inboxPage, setInboxPage] = useState(1);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [showGreetingEditor, setShowGreetingEditor] = useState(false);
@@ -109,27 +167,47 @@ export function PersonalVoicemailUI({
   }, [loadVoicemail, numberId]);
 
   const useWireframe = usePersonalWireframe(messages.length);
-  const sourceMessages = useWireframe
+  const managingNumberId = useWireframe
+    ? numberId || numbers[0]?.id
+    : numberId;
+
+  const sourceMessages: VmMessage[] = useWireframe
     ? WIREFRAME_VOICEMAIL_MESSAGES.map((m) => ({
         id: m.id,
         callerNumber: m.callerNumber,
         callerName: m.callerName,
+        calledNumber: m.calledNumber,
+        calledLabel: m.calledLabel,
         durationSec: m.durationSec,
         transcript: m.transcript,
+        summary: m.summary,
         readAt: m.readAt,
         createdAt: m.createdAt,
         isDemo: true,
       }))
-    : messages.map((m) => ({ ...m, callerName: undefined, isDemo: false }));
+    : messages.map((m) => ({
+        id: m.id,
+        callerNumber: m.callerNumber,
+        callerName: undefined,
+        calledNumber: numberId
+          ? numbers.find((n) => n.id === numberId)?.number
+          : numbers[0]?.number,
+        calledLabel: numberId
+          ? numbers.find((n) => n.id === numberId)?.friendlyName
+          : numbers[0]?.friendlyName,
+        durationSec: m.durationSec,
+        transcript: m.transcript,
+        readAt: m.readAt,
+        createdAt: m.createdAt,
+        isDemo: false,
+      }));
 
   const unread = sourceMessages.filter((m) => !m.readAt).length;
   const voicemailMinutes = useWireframe
     ? WIREFRAME_VOICEMAIL_KPIS.minutes
     : Math.round(messages.reduce((sum, m) => sum + (m.durationSec || 0), 0) / 60);
   const selected =
-    sourceMessages.find((m) => m.id === selectedId) ??
-    sourceMessages[0] ??
-    null;
+    sourceMessages.find((m) => m.id === selectedId) ?? sourceMessages[0] ?? null;
 
   const filteredMessages = useMemo(() => {
     return sourceMessages.filter((m) => {
@@ -145,22 +223,51 @@ export function PersonalVoicemailUI({
     });
   }, [sourceMessages, inboxFilter, searchQuery]);
 
-  const greetingLibrary = [
-    {
-      id: "default",
-      label: "Default greeting",
-      detail: "Please leave a message after the tone.",
-      active: !box?.greetingUrl && !box?.greetingText,
-    },
-    ...(box?.greetingText
-      ? [{ id: "text", label: "Personal greeting", detail: box.greetingText, active: !box.greetingUrl }]
-      : []),
-    ...(box?.greetingUrl
-      ? [{ id: "audio", label: "Custom audio greeting", detail: "Recorded or uploaded", active: true }]
-      : []),
-  ];
+  const inboxPerPage = 5;
+  const inboxTotal = useWireframe ? WIREFRAME_VOICEMAIL_KPIS.total : filteredMessages.length;
+  const inboxPages = Math.max(1, Math.ceil(inboxTotal / inboxPerPage));
+  const pagedMessages = useWireframe
+    ? filteredMessages.slice(0, inboxPerPage)
+    : filteredMessages.slice((inboxPage - 1) * inboxPerPage, inboxPage * inboxPerPage);
+
+  const greetingLibrary = useWireframe
+    ? WIREFRAME_VOICEMAIL_GREETINGS
+    : [
+        {
+          id: "default",
+          label: "Default greeting",
+          status: "Inactive" as const,
+          durationSec: 0,
+          updated: "—",
+        },
+        ...(box?.greetingText
+          ? [
+              {
+                id: "text",
+                label: "Personal greeting",
+                status: "Active" as const,
+                durationSec: 0,
+                updated: "—",
+              },
+            ]
+          : []),
+        ...(box?.greetingUrl
+          ? [
+              {
+                id: "audio",
+                label: "Custom audio greeting",
+                status: "Active" as const,
+                durationSec: 0,
+                updated: "—",
+              },
+            ]
+          : []),
+      ];
 
   async function markRead(messageId: string) {
+    if (sourceMessages.find((m) => m.id === messageId)?.isDemo) {
+      return;
+    }
     await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -172,6 +279,7 @@ export function PersonalVoicemailUI({
   }
 
   async function deleteMessage(messageId: string) {
+    if (sourceMessages.find((m) => m.id === messageId)?.isDemo) return;
     if (!window.confirm("Delete this voicemail permanently?")) return;
     const res = await fetch("/api/phone/voicemail", {
       method: "POST",
@@ -222,7 +330,7 @@ export function PersonalVoicemailUI({
       if (numberId) {
         await runPersonalNumberAction(
           numberId,
-          emailAlerts ? "enable_voicemail" : "disable_voicemail",
+          voicemailEnabled ? "enable_voicemail" : "disable_voicemail",
         );
       }
 
@@ -261,73 +369,159 @@ export function PersonalVoicemailUI({
     await persistGreeting({ greetingUrl: url });
   }
 
-  async function useDefaultGreeting() {
-    await persistGreeting({ greetingText: "Please leave a message after the tone." });
-  }
-
   const settingsSidebar = (
-    <div className={pm.card + " space-y-4 p-4"}>
-      <h3 className="text-[15px] font-semibold text-[#111827]">Voicemail Settings</h3>
-      <div className="rounded-lg border border-[#f3f4f6] bg-[#fafafa] p-3">
-        <p className="text-[12px] font-semibold text-[#374151]">Greeting</p>
-        <p className="mt-1 text-[12px] text-[#6b7280]">
-          {box?.greetingUrl
-            ? "Custom audio greeting"
-            : box?.greetingText
-              ? "Personal greeting"
-              : "Default greeting"}
+    <div className="space-y-4">
+      <div className={pm.card + " space-y-3 p-4"}>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[15px] font-semibold text-[#111827]">Voicemail Greeting</h3>
+          <PersonalMockPill tone="green">Active</PersonalMockPill>
+        </div>
+        <p className="text-[13px] font-semibold text-[#111827]">
+          {useWireframe ? "Main Line Greeting" : box?.greetingUrl ? "Custom audio greeting" : "Personal greeting"}
         </p>
-        <PersonalMockBtn
-          variant="outline"
-          className="mt-2 w-full"
-          onClick={() => greetingRef.current?.scrollIntoView({ behavior: "smooth" })}
-        >
-          Manage greeting
+        <div className="grid grid-cols-2 gap-2">
+          <PersonalMockBtn variant="outline" className="text-[12px]">Preview Greeting</PersonalMockBtn>
+          <PersonalMockBtn variant="outline" className="text-[12px]">Change Greeting</PersonalMockBtn>
+          <PersonalMockBtn
+            variant="outline"
+            className="text-[12px]"
+            onClick={() => {
+              setShowGreetingEditor(true);
+              greetingRef.current?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            Record
+          </PersonalMockBtn>
+          <PersonalMockBtn variant="outline" className="gap-1 text-[12px]">
+            <Upload className="h-3.5 w-3.5" />
+            Upload
+          </PersonalMockBtn>
+        </div>
+        <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
+          <Wand2 className="h-3.5 w-3.5" />
+          Generate
         </PersonalMockBtn>
       </div>
-      <PersonalMockToggle
-        label="Auto-transcription"
-        checked={autoTranscription}
-        onChange={setAutoTranscription}
-      />
-      <PersonalMockToggle
-        label="Email alerts"
-        checked={emailAlerts}
-        onChange={setEmailAlerts}
-      />
-      <div>
-        <label className="text-[12px] font-medium text-[#6b7280]">Primary email</label>
-        <PersonalMockInput
-          className="mt-1"
-          placeholder="you@email.com"
-          value={forwardEmail}
-          onChange={(e) => setForwardEmail(e.target.value)}
+
+      <div className={pm.card + " space-y-4 p-4"}>
+        <h3 className="text-[15px] font-semibold text-[#111827]">Voicemail Settings</h3>
+        <PersonalMockToggle
+          label="Voicemail Enabled"
+          checked={voicemailEnabled}
+          onChange={setVoicemailEnabled}
+        />
+        <PersonalMockToggle
+          label="Auto-Transcription"
+          checked={autoTranscription}
+          onChange={setAutoTranscription}
+        />
+        <PersonalMockToggle label="Email Alerts" checked={emailAlerts} onChange={setEmailAlerts} />
+        <div>
+          <label className="text-[12px] font-medium text-[#6b7280]">Primary Email</label>
+          <PersonalMockInput
+            className="mt-1"
+            placeholder="you@email.com"
+            value={forwardEmail}
+            onChange={(e) => setForwardEmail(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-[12px] font-medium text-[#6b7280]">
+            Secondary Email (optional)
+          </label>
+          <PersonalMockInput
+            className="mt-1"
+            placeholder="optional@email.com"
+            value={secondaryEmail}
+            onChange={(e) => setSecondaryEmail(e.target.value)}
+          />
+        </div>
+        <PersonalMockToggle
+          label="Include Audio Attachment"
+          checked={includeAudio}
+          onChange={setIncludeAudio}
+        />
+        <PersonalMockToggle
+          label="Include Transcript"
+          checked={includeTranscript}
+          onChange={setIncludeTranscript}
         />
       </div>
-      <div>
-        <label className="text-[12px] font-medium text-[#6b7280]">Second notification email</label>
-        <PersonalMockInput
-          className="mt-1"
-          placeholder="optional@email.com"
-          value={secondaryEmail}
-          onChange={(e) => setSecondaryEmail(e.target.value)}
-        />
+
+      <div className={pm.card + " space-y-2 p-4 text-[12px]"}>
+        <h3 className="text-[15px] font-semibold text-[#111827]">How Calls Reach This Voicemail</h3>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Forwarding</span>
+          <span className="font-medium text-[#111827]">
+            {useWireframe
+              ? WIREFRAME_VOICEMAIL_FORWARDING.forwardingEnabled
+                ? "Enabled"
+                : "Disabled"
+              : "Enabled"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Ring time</span>
+          <span className="font-medium text-[#111827]">
+            {useWireframe ? `${WIREFRAME_VOICEMAIL_FORWARDING.ringSeconds} seconds` : "25 seconds"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Direct to voicemail</span>
+          <span className="font-medium text-[#111827]">Off</span>
+        </div>
+        <Link
+          href="/personal/forwarding"
+          className="mt-2 block text-[12px] font-semibold text-[#6366f1]"
+        >
+          Open Forwarding Settings &gt;
+        </Link>
       </div>
-      <PersonalMockProgress
-        value={messages.length}
-        max={100}
-        label="Storage"
-        sub={`${messages.length} messages stored`}
-      />
+
+      <div className={pm.card + " space-y-2 p-4 text-[12px]"}>
+        <h3 className="text-[15px] font-semibold text-[#111827]">Storage &amp; Usage</h3>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Messages Stored</span>
+          <span className="font-medium text-[#111827]">
+            {useWireframe ? WIREFRAME_VOICEMAIL_STORAGE.messagesStored : messages.length}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Audio Stored</span>
+          <span className="font-medium text-[#111827]">
+            {useWireframe ? `${WIREFRAME_VOICEMAIL_STORAGE.audioMb} MB` : "—"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Transcripts</span>
+          <span className="font-medium text-[#111827]">
+            {useWireframe ? WIREFRAME_VOICEMAIL_STORAGE.transcripts : "—"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6b7280]">Retention</span>
+          <span className="font-medium text-[#111827]">
+            {useWireframe ? `${WIREFRAME_VOICEMAIL_STORAGE.retentionDays} days` : "90 days"}
+          </span>
+        </div>
+        <Link href="/settings/billing" className="mt-2 block text-[12px] font-semibold text-[#6366f1]">
+          Manage Storage &gt;
+        </Link>
+      </div>
+
       <PersonalMockBtn className="w-full" disabled={savingSettings} onClick={saveSettings}>
         {savingSettings ? "Saving…" : "Save Settings"}
       </PersonalMockBtn>
       {settingsMessage ? (
         <p className="text-center text-[12px] text-[#6b7280]">{settingsMessage}</p>
       ) : null}
-      <Link href="/settings/billing" className="block text-center text-[12px] font-semibold text-[#2563eb]">
-        Upgrade storage
-      </Link>
+      <button
+        type="button"
+        className="flex w-full items-center justify-center gap-1.5 text-[12px] font-semibold text-[#6366f1]"
+      >
+        <Phone className="h-3.5 w-3.5" />
+        Test Voicemail
+      </button>
     </div>
   );
 
@@ -338,10 +532,22 @@ export function PersonalVoicemailUI({
         description="Manage messages, greetings, transcription, and voicemail delivery for each of your numbers."
         actions={
           <>
-            <PersonalMockBtn onClick={() => setShowGreetingEditor(true)}>
+            <PersonalMockBtn
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => setShowGreetingEditor(true)}
+            >
+              <Mic className="h-4 w-4" />
               Create Greeting
             </PersonalMockBtn>
-            <PersonalMockBtn variant="outline" onClick={() => setShowGreetingEditor(true)}>
+            <PersonalMockBtn
+              className="gap-1.5"
+              onClick={() => {
+                setShowGreetingEditor(true);
+                greetingRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              <Circle className="h-3.5 w-3.5 fill-current" />
               Record Greeting
             </PersonalMockBtn>
           </>
@@ -349,10 +555,14 @@ export function PersonalVoicemailUI({
         filters={
           numbers.length > 0 ? (
             <div className={pm.card + " flex flex-wrap items-center gap-3 px-4 py-3"}>
-              <span className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                Managing Number
-              </span>
-              <PersonalNumberSelector numbers={numbers} selectedId={numberId} allowAll />
+              <span className="text-[12px] font-semibold text-[#374151]">Managing Number</span>
+              <PersonalNumberSelector
+                numbers={numbers}
+                selectedId={managingNumberId}
+                label=""
+                allowAll={!useWireframe}
+                selectClassName="h-10 min-w-[280px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
+              />
             </div>
           ) : null
         }
@@ -362,101 +572,134 @@ export function PersonalVoicemailUI({
         <PersonalMockKpi
           label="Total Voicemails"
           value={useWireframe ? WIREFRAME_VOICEMAIL_KPIS.total : messages.length}
-          icon={Voicemail}
+          sub="All time"
+          icon={Infinity}
+          iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
         <PersonalMockKpi
           label="Unread"
           value={useWireframe ? WIREFRAME_VOICEMAIL_KPIS.unread : unread}
-          sub={useWireframe ? "Needs attention" : undefined}
-          icon={Phone}
-          iconClass="bg-[#fef2f2] text-[#dc2626]"
+          sub="Needs attention"
+          icon={Mail}
+          iconClass="bg-[#fff7ed] text-[#ea580c]"
         />
         <PersonalMockKpi
           label="Voicemail Minutes"
-          value={voicemailMinutes}
-          sub={useWireframe ? "This month" : "total duration"}
+          value={`${voicemailMinutes} min`}
+          sub="This month"
           icon={Clock}
           iconClass="bg-[#eff6ff] text-[#2563eb]"
         />
         <PersonalMockKpi
           label="Transcription"
           value={autoTranscription ? "On" : "Off"}
-          icon={Mic}
+          sub="Auto-transcription"
+          icon={AudioLines}
           iconClass={
             autoTranscription ? "bg-[#ecfdf5] text-[#059669]" : "bg-[#f3f4f6] text-[#6b7280]"
           }
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[280px_1fr_300px]">
-        <PersonalMockSection title="Inbox" className="xl:max-h-[640px] xl:overflow-y-auto">
-          <div className="mb-3">
+      <div className="grid gap-4 xl:grid-cols-[300px_1fr_300px]">
+        <PersonalMockSection title="Inbox" className="xl:max-h-[720px] xl:overflow-y-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <PersonalMockFilterChips
               options={["All", "Unread", "Read"]}
               active={inboxFilter}
               onChange={(v) => setInboxFilter(v as typeof inboxFilter)}
             />
           </div>
-          <div className="relative mb-3">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-            <PersonalMockInput
-              className="pl-9"
-              placeholder="Search caller or transcript"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="mb-3 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+              <PersonalMockInput
+                className="pl-9"
+                placeholder="Search caller or transcript"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <PersonalMockSelect className="w-[120px] shrink-0">
+              <option>Newest First</option>
+              <option>Oldest First</option>
+            </PersonalMockSelect>
           </div>
           {loading ? (
             <p className={pm.muted}>Loading voicemail…</p>
-          ) : filteredMessages.length === 0 ? (
+          ) : pagedMessages.length === 0 ? (
             <p className={pm.muted}>No voicemails yet.</p>
           ) : (
-            <ul className="divide-y divide-[#f3f4f6]">
-              {filteredMessages.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(m.id);
-                      if (!m.readAt && !m.isDemo) markRead(m.id);
-                    }}
-                    className={`w-full px-1 py-3 text-left transition hover:bg-[#f9fafb] ${
-                      selectedId === m.id ? "bg-[#eff6ff]" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
-                        {callerAvatarInitials(m.callerName, m.callerNumber)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-[13px] font-semibold text-[#111827]">
-                            {callerDisplayName(m.callerName, m.callerNumber)}
+            <>
+              <ul className="divide-y divide-[#f3f4f6]">
+                {pagedMessages.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(m.id);
+                        if (!m.readAt && !m.isDemo) markRead(m.id);
+                      }}
+                      className={cn(
+                        "w-full px-1 py-3 text-left transition hover:bg-[#f9fafb]",
+                        selectedId === m.id && "bg-[#eef2ff]",
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+                          {callerAvatarInitials(m.callerName, m.callerNumber)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[13px] font-semibold text-[#111827]">
+                              {callerDisplayName(m.callerName, m.callerNumber)}
+                            </p>
+                            {!m.readAt ? (
+                              <PersonalMockPill tone="purple">Unread</PersonalMockPill>
+                            ) : (
+                              <PersonalMockPill tone="gray">Read</PersonalMockPill>
+                            )}
+                          </div>
+                          <p className="text-[12px] text-[#6b7280]">
+                            {formatPhone(m.callerNumber || "Unknown")}
                           </p>
-                          {!m.readAt ? (
-                            <PersonalMockPill tone="blue">Unread</PersonalMockPill>
-                          ) : (
-                            <PersonalMockPill tone="gray">Read</PersonalMockPill>
-                          )}
+                          <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#9ca3af]">
+                            <span>
+                              {relativeVmDate(m.createdAt)} · {formatVmTime(m.createdAt)}
+                            </span>
+                            <span>{formatDurationLabel(m.durationSec)}</span>
+                          </div>
+                          {m.transcript ? (
+                            <p className="mt-1 line-clamp-2 text-[11px] text-[#6b7280]">
+                              {m.transcript}
+                            </p>
+                          ) : null}
                         </div>
-                        <p className="text-[12px] text-[#6b7280]">
-                          {formatPhone(m.callerNumber || "Unknown")}
-                        </p>
-                        <p className="mt-1 text-[11px] text-[#9ca3af]">
-                          {new Date(m.createdAt).toLocaleDateString()} · 0:
-                          {String(m.durationSec).padStart(2, "0")}
-                        </p>
-                        {m.transcript ? (
-                          <p className="mt-1 line-clamp-2 text-[11px] text-[#6b7280]">
-                            {m.transcript}
-                          </p>
-                        ) : null}
+                        <div className="flex shrink-0 items-center gap-1 self-center">
+                          <span className="rounded p-1 text-[#9ca3af]">
+                            <Play className="h-3.5 w-3.5" />
+                          </span>
+                          <ChevronRight className="h-4 w-4 text-[#9ca3af]" />
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <PersonalMockPagination
+                showing={
+                  useWireframe
+                    ? `Showing 1 to 5 of ${WIREFRAME_VOICEMAIL_KPIS.total} voicemails`
+                    : `Showing ${(inboxPage - 1) * inboxPerPage + 1} to ${Math.min(
+                        inboxPage * inboxPerPage,
+                        filteredMessages.length,
+                      )} of ${filteredMessages.length} voicemails`
+                }
+                total={inboxTotal}
+                page={inboxPage}
+                pages={inboxPages}
+              />
+            </>
           )}
         </PersonalMockSection>
 
@@ -465,33 +708,65 @@ export function PersonalVoicemailUI({
             <p className={pm.muted}>Select a voicemail to listen and read the transcript.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-[15px] font-semibold text-[#111827]">
-                    {callerDisplayName(selected.callerName, selected.callerNumber)}
-                  </p>
+              <div className="flex items-start gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[16px] font-bold text-[#2563eb]">
+                  {callerAvatarInitials(selected.callerName, selected.callerNumber)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[16px] font-semibold text-[#111827]">
+                      {callerDisplayName(selected.callerName, selected.callerNumber)}
+                    </p>
+                    {!selected.readAt ? (
+                      <PersonalMockPill tone="purple">Unread</PersonalMockPill>
+                    ) : (
+                      <PersonalMockPill tone="gray">Read</PersonalMockPill>
+                    )}
+                  </div>
                   <p className="text-[12px] text-[#6b7280]">
-                    {formatPhone(selected.callerNumber || "Unknown")} ·{" "}
-                    {new Date(selected.createdAt).toLocaleString()} · {selected.durationSec}s
+                    {formatPhone(selected.callerNumber || "Unknown")}
                   </p>
                 </div>
-                <PersonalMockPill tone={selected.readAt ? "gray" : "blue"}>
-                  {selected.readAt ? "Read" : "Unread"}
-                </PersonalMockPill>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 text-[12px]">
+                <div>
+                  <p className="text-[#6b7280]">Called Number</p>
+                  <p className="mt-0.5 font-semibold text-[#111827]">
+                    {formatPhone(selected.calledNumber || numbers[0]?.number || "—")}
+                  </p>
+                  {selected.calledLabel ? (
+                    <p className="text-[11px] text-[#6b7280]">{selected.calledLabel}</p>
+                  ) : null}
+                </div>
+                <div>
+                  <p className="text-[#6b7280]">Received</p>
+                  <p className="mt-0.5 font-semibold text-[#111827]">
+                    {new Date(selected.createdAt).toLocaleDateString(undefined, {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}{" "}
+                    at {formatVmTime(selected.createdAt)}
+                  </p>
+                  <p className="text-[11px] text-[#6b7280]">
+                    Duration {formatDurationLabel(selected.durationSec)}
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-4">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563eb] text-white"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-white"
                     onClick={() =>
                       setPlayingId(playingId === selected.id ? null : selected.id)
                     }
                   >
                     {playingId === selected.id ? "■" : "▶"}
                   </button>
-                  {playingId === selected.id ? (
+                  {playingId === selected.id && !selected.isDemo ? (
                     <audio
                       controls
                       autoPlay
@@ -500,25 +775,32 @@ export function PersonalVoicemailUI({
                     />
                   ) : (
                     <div className="flex flex-1 items-end gap-0.5">
-                      {Array.from({ length: 32 }).map((_, i) => (
+                      {Array.from({ length: 40 }).map((_, i) => (
                         <span
                           key={i}
-                          className="w-1 rounded-full bg-[#2563eb]/70"
-                          style={{ height: `${8 + ((i * 7) % 24)}px` }}
+                          className="w-1 rounded-full bg-[#6366f1]/70"
+                          style={{ height: `${8 + ((i * 7) % 28)}px` }}
                         />
                       ))}
                     </div>
                   )}
-                  <span className="text-[11px] text-[#9ca3af]">
-                    0:{String(selected.durationSec).padStart(2, "0")}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2 text-[11px] text-[#6b7280]">
+                    <span>0:00 / {formatDurationLabel(selected.durationSec)}</span>
+                    <button
+                      type="button"
+                      className="rounded border border-[#e5e7eb] px-1.5 py-0.5 text-[10px] font-semibold"
+                      onClick={() =>
+                        setPlaySpeed((s) => (s >= 2 ? 1 : s + 0.5))
+                      }
+                    >
+                      {playSpeed}x
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                  Transcript
-                </p>
+                <p className="text-[12px] font-semibold text-[#111827]">Transcript</p>
                 {selected.transcript ? (
                   <p className="mt-2 text-[13px] leading-relaxed text-[#374151]">
                     {selected.transcript}
@@ -529,31 +811,22 @@ export function PersonalVoicemailUI({
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <ActionBtn icon={PhoneCall} label="Call Back" href={`tel:${selected.callerNumber}`} />
                 <ActionBtn
-                  icon={PhoneCall}
-                  label="Call Back"
-                  href={`tel:${selected.callerNumber}`}
-                />
-                <ActionBtn
-                  icon={Archive}
-                  label="Archive"
+                  icon={Check}
+                  label="Mark Read"
                   onClick={() => markRead(selected.id)}
                 />
                 <ActionBtn
                   icon={Download}
                   label="Download"
-                  href={`/api/phone/voicemail/${selected.id}/recording`}
+                  href={selected.isDemo ? undefined : `/api/phone/voicemail/${selected.id}/recording`}
                   external
                 />
                 <ActionBtn
-                  icon={Trash2}
-                  label="Delete"
-                  tone="danger"
-                  onClick={() => deleteMessage(selected.id)}
-                />
-                <ActionBtn
                   icon={Ban}
-                  label="Block"
+                  label="Block Caller"
+                  tone="danger"
                   onClick={async () => {
                     if (!selected.callerNumber) return;
                     await fetch("/api/personal/blocked", {
@@ -564,9 +837,10 @@ export function PersonalVoicemailUI({
                   }}
                 />
                 <ActionBtn
-                  icon={Mic}
+                  icon={AudioLines}
                   label="Retranscribe"
                   onClick={async () => {
+                    if (selected.isDemo) return;
                     await fetch("/api/phone/voicemail", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
@@ -575,6 +849,27 @@ export function PersonalVoicemailUI({
                     await loadVoicemail();
                   }}
                 />
+                <ActionBtn
+                  icon={Trash2}
+                  label="Delete"
+                  tone="danger"
+                  onClick={() => deleteMessage(selected.id)}
+                />
+              </div>
+
+              <div className="rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-4">
+                <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#111827]">
+                  <Sparkles className="h-4 w-4 text-[#6366f1]" />
+                  Message Summary
+                </p>
+                <p className="mt-2 text-[13px] text-[#374151]">
+                  {selected.summary ||
+                    selected.transcript?.slice(0, 120) ||
+                    "No summary available."}
+                </p>
+                <button type="button" className="mt-2 text-[12px] font-semibold text-[#6366f1]">
+                  Suggested action: Call back
+                </button>
               </div>
             </div>
           )}
@@ -584,17 +879,48 @@ export function PersonalVoicemailUI({
       </div>
 
       <div ref={greetingRef} className="grid gap-6 lg:grid-cols-2">
-        <PersonalMockSection title="Greeting Library">
+        <PersonalMockSection
+          title="Greeting Library"
+          action={
+            <PersonalMockBtn variant="outline" className="h-8 text-[12px] gap-1">
+              <Mic className="h-3.5 w-3.5" />
+              Add Greeting
+            </PersonalMockBtn>
+          }
+        >
           <ul className="space-y-2">
             {greetingLibrary.map((g) => (
               <li
                 key={g.id}
-                className={`rounded-lg border px-3 py-2 text-[13px] ${
-                  g.active ? "border-[#bfdbfe] bg-[#eff6ff]" : "border-[#f3f4f6]"
-                }`}
+                className={cn(
+                  "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
+                  g.status === "Active" ? "border-[#c7d2fe] bg-[#eef2ff]" : "border-[#f3f4f6]",
+                )}
               >
-                <p className="font-semibold text-[#111827]">{g.label}</p>
-                <p className="mt-0.5 text-[12px] text-[#6b7280]">{g.detail}</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-semibold text-[#111827]">{g.label}</p>
+                    {g.status === "Active" ? (
+                      <PersonalMockPill tone="green">Active</PersonalMockPill>
+                    ) : (
+                      <PersonalMockPill tone="gray">Inactive</PersonalMockPill>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[#6b7280]">
+                    {g.durationSec > 0 ? `${g.durationSec}s · ` : ""}Updated {g.updated}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button type="button" className="rounded p-1.5 hover:bg-white">
+                    <Play className="h-3.5 w-3.5 text-[#6b7280]" />
+                  </button>
+                  <button type="button" className="rounded p-1.5 hover:bg-white">
+                    <Pencil className="h-3.5 w-3.5 text-[#6b7280]" />
+                  </button>
+                  <button type="button" className="rounded p-1.5 hover:bg-white">
+                    <MoreHorizontal className="h-3.5 w-3.5 text-[#6b7280]" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -607,7 +933,10 @@ export function PersonalVoicemailUI({
                 onSaveUrl={saveGreetingUrl}
               />
               <div className="mt-3 flex flex-wrap gap-2">
-                <PersonalMockBtn variant="outline" onClick={useDefaultGreeting}>
+                <PersonalMockBtn
+                  variant="outline"
+                  onClick={() => persistGreeting({ greetingText: "Please leave a message after the tone." })}
+                >
                   Use default greeting
                 </PersonalMockBtn>
                 <PersonalMockBtn variant="ghost" onClick={() => setShowGreetingEditor(false)}>
@@ -615,27 +944,61 @@ export function PersonalVoicemailUI({
                 </PersonalMockBtn>
               </div>
             </div>
-          ) : (
-            <p className="mt-3 text-[12px] text-[#6b7280]">
-              Use Create Greeting or Record Greeting above to customize your message.
-            </p>
-          )}
+          ) : null}
         </PersonalMockSection>
 
-        <PersonalMockSection title="Recent Voicemail Activity">
-          <ul className="space-y-2 text-[13px] text-[#6b7280]">
-            {messages.slice(0, 5).map((m) => (
-              <li key={m.id} className="flex items-center justify-between gap-2 border-b border-[#f3f4f6] pb-2">
-                <span>
-                  Voicemail from {formatPhone(m.callerNumber || "Unknown")}
-                </span>
-                <span className="shrink-0 text-[11px]">
-                  {new Date(m.createdAt).toLocaleDateString()}
-                </span>
-              </li>
-            ))}
-            {messages.length === 0 ? <li>No recent voicemail activity.</li> : null}
-          </ul>
+        <PersonalMockSection
+          title="Recent Voicemail Activity"
+          action={
+            <button type="button" className="text-[12px] font-semibold text-[#6366f1]">
+              View all
+            </button>
+          }
+        >
+          {useWireframe ? (
+            <ul className="space-y-3">
+              {WIREFRAME_VOICEMAIL_ACTIVITY.map((a) => (
+                <li key={a.id} className="flex items-start gap-3 text-[13px]">
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                      a.icon === "mic" && "bg-[#eef2ff] text-[#6366f1]",
+                      a.icon === "waveform" && "bg-[#ecfdf5] text-[#059669]",
+                      a.icon === "mail" && "bg-[#fff7ed] text-[#ea580c]",
+                    )}
+                  >
+                    {a.icon === "mic" ? (
+                      <Mic className="h-4 w-4" />
+                    ) : a.icon === "waveform" ? (
+                      <AudioLines className="h-4 w-4" />
+                    ) : (
+                      <Mail className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-[#111827]">{a.text}</p>
+                    <p className="text-[12px] text-[#6b7280]">{a.detail}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-[#9ca3af]">{a.time}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-2 text-[13px] text-[#6b7280]">
+              {messages.slice(0, 5).map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between gap-2 border-b border-[#f3f4f6] pb-2"
+                >
+                  <span>Voicemail from {formatPhone(m.callerNumber || "Unknown")}</span>
+                  <span className="shrink-0 text-[11px]">
+                    {new Date(m.createdAt).toLocaleDateString()}
+                  </span>
+                </li>
+              ))}
+              {messages.length === 0 ? <li>No recent voicemail activity.</li> : null}
+            </ul>
+          )}
         </PersonalMockSection>
       </div>
     </PersonalMockPage>
@@ -657,11 +1020,12 @@ function ActionBtn({
   external?: boolean;
   tone?: "default" | "danger";
 }) {
-  const className = `flex flex-col items-center justify-center gap-1 rounded-lg border px-2 py-3 text-[11px] font-semibold ${
+  const className = cn(
+    "flex flex-col items-center justify-center gap-1 rounded-lg border px-2 py-3 text-[11px] font-semibold",
     tone === "danger"
       ? "border-[#fecaca] text-[#dc2626] hover:bg-[#fef2f2]"
-      : "border-[#e5e7eb] text-[#374151] hover:bg-[#f9fafb]"
-  }`;
+      : "border-[#e5e7eb] text-[#374151] hover:bg-[#f9fafb]",
+  );
   if (href) {
     return (
       <a
@@ -676,7 +1040,7 @@ function ActionBtn({
     );
   }
   return (
-    <button type="button" className={className} onClick={onClick}>
+    <button type="button" className={className} onClick={onClick} disabled={!onClick}>
       <Icon className="h-4 w-4" />
       {label}
     </button>

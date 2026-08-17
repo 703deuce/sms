@@ -126,10 +126,18 @@ export const WIREFRAME_ACTIVITY_ROWS = [
     answered: true,
     voicemail: false,
     blocked: false,
+    smartRouted: true,
     ringDurationSeconds: 12,
     durationSeconds: 154,
     date: "May 15, 2026",
     time: "3:42 PM",
+    startedAt: "3:42:03 PM",
+    connectedAt: "3:42:15 PM",
+    endedAt: "3:45:18 PM",
+    callId: "call_8f3a2b1c9d0e7f6a5b4c3d2e1f0a9b8",
+    handlingType: "Forwarding Rule",
+    callerIdMode: "Preserve Caller ID",
+    screening: "Call Screening Basic",
     isDemo: true,
   },
   {
@@ -298,9 +306,12 @@ export const WIREFRAME_VOICEMAIL_MESSAGES = [
     id: "demo-vm1",
     callerName: "John Smith",
     callerNumber: "+17035559191",
+    calledNumber: "+15714073615",
+    calledLabel: "Main Line",
     durationSec: 38,
     transcript:
       "Hi, this is John Smith. I was calling about the listing on Maple Street. Please call me back when you get a chance. Thanks.",
+    summary: "Caller asking about Maple Street listing and requesting a callback.",
     readAt: null,
     createdAt: "2026-05-15T15:42:00",
     isDemo: true,
@@ -309,8 +320,11 @@ export const WIREFRAME_VOICEMAIL_MESSAGES = [
     id: "demo-vm2",
     callerName: "Sarah Chen",
     callerNumber: "+12025550199",
+    calledNumber: "+15714073615",
+    calledLabel: "Main Line",
     durationSec: 22,
     transcript: "Just checking in on our appointment tomorrow. Let me know if the time still works.",
+    summary: "Appointment confirmation for tomorrow.",
     readAt: "2026-05-14T10:00:00",
     createdAt: "2026-05-14T11:18:00",
     isDemo: true,
@@ -319,12 +333,123 @@ export const WIREFRAME_VOICEMAIL_MESSAGES = [
     id: "demo-vm3",
     callerName: "Unknown",
     callerNumber: "+17035559202",
+    calledNumber: "+18663464256",
+    calledLabel: "Sales Line",
     durationSec: 15,
     transcript: "Please return my call regarding the property inquiry.",
+    summary: "Property inquiry callback request.",
     readAt: "2026-05-13T08:30:00",
     createdAt: "2026-05-13T09:05:00",
     isDemo: true,
   },
+  {
+    id: "demo-vm4",
+    callerName: "Steve Johnson",
+    callerNumber: "+17035559303",
+    calledNumber: "+15714073615",
+    calledLabel: "Main Line",
+    durationSec: 45,
+    transcript: "Following up on the open house this weekend. Let me know if you need anything else.",
+    summary: "Open house follow-up.",
+    readAt: "2026-05-12T14:00:00",
+    createdAt: "2026-05-12T16:22:00",
+    isDemo: true,
+  },
+  {
+    id: "demo-vm5",
+    callerName: "Amy Brooks",
+    callerNumber: "+14155550198",
+    calledNumber: "+15714073615",
+    calledLabel: "Main Line",
+    durationSec: 31,
+    transcript: "Hi, I'd like to schedule a showing for the condo downtown. Please call me back.",
+    summary: "Showing request for downtown condo.",
+    readAt: null,
+    createdAt: "2026-05-11T10:15:00",
+    isDemo: true,
+  },
+];
+
+export const WIREFRAME_VOICEMAIL_GREETINGS = [
+  {
+    id: "g-main",
+    label: "Main Line",
+    status: "Active" as const,
+    durationSec: 12,
+    updated: "May 10, 2026",
+  },
+  {
+    id: "g-vacation",
+    label: "Vacation",
+    status: "Inactive" as const,
+    durationSec: 18,
+    updated: "Apr 22, 2026",
+  },
+  {
+    id: "g-after",
+    label: "After Hours",
+    status: "Inactive" as const,
+    durationSec: 15,
+    updated: "Mar 8, 2026",
+  },
+];
+
+export const WIREFRAME_VOICEMAIL_ACTIVITY = [
+  {
+    id: "va1",
+    icon: "mic" as const,
+    text: "Greeting updated",
+    detail: "Main Line Greeting",
+    time: "Today, 2:15 PM",
+  },
+  {
+    id: "va2",
+    icon: "waveform" as const,
+    text: "Auto-transcription enabled",
+    detail: "Main Line",
+    time: "Yesterday, 9:30 AM",
+  },
+  {
+    id: "va3",
+    icon: "mail" as const,
+    text: "Email alert delivered",
+    detail: "Voicemail from John Smith",
+    time: "May 15, 3:45 PM",
+  },
+];
+
+export const WIREFRAME_VOICEMAIL_STORAGE = {
+  messagesStored: 42,
+  audioMb: 52,
+  transcripts: 40,
+  retentionDays: 90,
+};
+
+export const WIREFRAME_VOICEMAIL_FORWARDING = {
+  forwardingEnabled: true,
+  ringSeconds: 25,
+  directToVoicemail: false,
+};
+
+export const WIREFRAME_ROUTING_HEALTH = [
+  {
+    id: "rh1",
+    tone: "red" as const,
+    text: "5 failed calls to Support Queue",
+    action: "Investigate",
+  },
+  {
+    id: "rh2",
+    tone: "orange" as const,
+    text: "High voicemail rate on Sales Line",
+    action: "View Details",
+  },
+];
+
+export const WIREFRAME_RECENT_CALL_EVENTS = [
+  { id: "rce1", icon: "answered" as const, text: "Call answered", number: "+1 (703) 555-9191", time: "3:42 PM" },
+  { id: "rce2", icon: "voicemail" as const, text: "Voicemail received", number: "+1 (202) 555-0199", time: "11:18 AM" },
+  { id: "rce3", icon: "missed" as const, text: "Missed call", number: "+1 (703) 555-9202", time: "9:05 AM" },
 ];
 
 export const WIREFRAME_VOICEMAIL_KPIS = {

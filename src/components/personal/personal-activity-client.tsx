@@ -4,6 +4,8 @@ import type { PersonalActivityRow, PersonalNumberRow } from "@/lib/workspace/per
 import {
   WIREFRAME_ACTIVITY_ROWS,
   WIREFRAME_ANALYTICS_KPIS,
+  WIREFRAME_RECENT_CALL_EVENTS,
+  WIREFRAME_ROUTING_HEALTH,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
 import { cn, formatPhone } from "@/lib/utils";
@@ -12,11 +14,14 @@ import {
   Ban,
   Calendar,
   ChevronDown,
+  Copy,
   Download,
+  ExternalLink,
   MoreHorizontal,
   Phone,
   PhoneIncoming,
   PhoneMissed,
+  PhoneOff,
   Voicemail,
   X,
 } from "lucide-react";
@@ -37,6 +42,20 @@ import {
   pm,
 } from "./mockup/primitives";
 
+type ActivityDisplayRow = PersonalActivityRow & {
+  callerName?: string;
+  calledLabel?: string;
+  routeDevice?: string;
+  smartRouted?: boolean;
+  startedAt?: string;
+  connectedAt?: string;
+  endedAt?: string;
+  callId?: string;
+  handlingType?: string;
+  callerIdMode?: string;
+  screening?: string;
+};
+
 function outcomeTone(outcome: string): "green" | "orange" | "purple" | "red" | "gray" {
   const o = outcome.toLowerCase();
   if (o.includes("answer")) return "green";
@@ -52,6 +71,20 @@ function formatDuration(sec: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function callerInitials(row: ActivityDisplayRow): string {
+  if (row.callerName && row.callerName.toLowerCase() !== "unknown") {
+    const parts = row.callerName.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return row.callerName.slice(0, 2).toUpperCase();
+  }
+  return row.caller.replace(/\D/g, "").slice(-2);
+}
+
+function callerName(row: ActivityDisplayRow): string {
+  if (row.callerName && row.callerName.toLowerCase() !== "unknown") return row.callerName;
+  return formatPhone(row.caller);
+}
+
 export function PersonalActivityClient({
   numbers,
   initialNumberId,
@@ -65,6 +98,7 @@ export function PersonalActivityClient({
   const [handlingFilter, setHandlingFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [chartGranularity, setChartGranularity] = useState("Day");
   const numberId = initialNumberId || numbers[0]?.id;
 
   const load = useCallback(async () => {
@@ -83,8 +117,8 @@ export function PersonalActivityClient({
 
   const useWireframe = usePersonalWireframe(rows.length);
 
-  const displayRows = useMemo(() => {
-    if (!useWireframe) return rows;
+  const displayRows: ActivityDisplayRow[] = useMemo(() => {
+    if (!useWireframe) return rows as ActivityDisplayRow[];
     return WIREFRAME_ACTIVITY_ROWS.map((r) => ({
       id: r.id,
       caller: r.caller,
@@ -101,6 +135,14 @@ export function PersonalActivityClient({
       callerName: r.callerName,
       calledLabel: r.calledLabel,
       routeDevice: r.routeDevice,
+      smartRouted: r.smartRouted,
+      startedAt: r.startedAt,
+      connectedAt: r.connectedAt,
+      endedAt: r.endedAt,
+      callId: r.callId,
+      handlingType: r.handlingType,
+      callerIdMode: r.callerIdMode,
+      screening: r.screening,
     }));
   }, [rows, useWireframe]);
 
@@ -110,15 +152,17 @@ export function PersonalActivityClient({
       if (outcomeFilter === "Missed" && r.answered) return false;
       if (outcomeFilter === "Voicemail" && !r.voicemail) return false;
       if (outcomeFilter === "Blocked" && !r.blocked) return false;
+      if (handlingFilter === "Smart Routed" && !r.smartRouted) return false;
       const q = search.trim().toLowerCase();
       if (!q) return true;
       return (
         r.caller.includes(q) ||
         r.calledNumber.includes(q) ||
-        (r.forwardDestination?.toLowerCase().includes(q) ?? false)
+        (r.forwardDestination?.toLowerCase().includes(q) ?? false) ||
+        (r.callerName?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [displayRows, outcomeFilter, search]);
+  }, [displayRows, outcomeFilter, handlingFilter, search]);
 
   const selected = filtered.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
 
@@ -137,7 +181,9 @@ export function PersonalActivityClient({
     const answered = rows.filter((r) => r.answered).length;
     const missed = rows.filter((r) => !r.answered && !r.voicemail).length;
     const voicemails = rows.filter((r) => r.voicemail).length;
-    const failed = rows.filter((r) => r.outcome.toLowerCase().includes("fail") || r.blocked).length;
+    const failed = rows.filter(
+      (r) => r.outcome.toLowerCase().includes("fail") || r.blocked,
+    ).length;
     return { total, answered, missed, voicemails, failed };
   }, [rows, useWireframe]);
 
@@ -189,6 +235,36 @@ export function PersonalActivityClient({
     ];
   }, [displayRows, chartLabels, useWireframe]);
 
+  const journeySteps = useMemo(() => {
+    if (!selected) return [];
+    const steps: Array<{ label: string; time?: string; tone: "blue" | "green" | "red" }> = [
+      {
+        label: "Incoming call received",
+        time: selected.startedAt || selected.time,
+        tone: "blue",
+      },
+    ];
+    if (selected.forwardDestination) {
+      steps.push({
+        label: "Forwarding rule matched",
+        tone: "blue",
+      });
+      steps.push({
+        label: `Dialing ${selected.forwardDestination.replace(/^Forward to /i, "")}`,
+        tone: "blue",
+      });
+      if (selected.answered) {
+        steps.push({ label: "Destination answered", tone: "green" });
+      }
+    }
+    steps.push({
+      label: "Call ended",
+      time: selected.endedAt || selected.time,
+      tone: "red",
+    });
+    return steps;
+  }, [selected]);
+
   async function blockCaller(phone: string) {
     await fetch("/api/personal/blocked", {
       method: "POST",
@@ -197,6 +273,20 @@ export function PersonalActivityClient({
     });
     load();
   }
+
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const tablePageSize = 8;
+  const tableTotal = useWireframe ? WIREFRAME_ANALYTICS_KPIS.totalCalls : filtered.length;
+  const tablePages = useWireframe
+    ? Math.ceil(tableTotal / tablePageSize)
+    : Math.max(1, Math.ceil(filtered.length / 10));
 
   return (
     <PersonalMockPage>
@@ -228,9 +318,8 @@ export function PersonalActivityClient({
         <PersonalMockKpi
           label="Total Calls"
           value={totals.total}
-          sub="This period"
           icon={PhoneIncoming}
-          trend={useWireframe ? 12 : 12}
+          trend={useWireframe ? 12 : undefined}
           trendLabel="vs previous 30 days"
         />
         <PersonalMockKpi
@@ -275,7 +364,13 @@ export function PersonalActivityClient({
         <PersonalMockKpi
           label="Failed / Blocked"
           value={totals.failed}
-          sub={useWireframe ? "3.1% of total calls" : totals.total ? `${Math.round((totals.failed / totals.total) * 100)}% of total` : "—"}
+          sub={
+            useWireframe
+              ? "3.1% of total calls"
+              : totals.total
+                ? `${Math.round((totals.failed / totals.total) * 100)}% of total`
+                : "—"
+          }
           icon={Ban}
           iconClass="bg-[#fef2f2] text-[#dc2626]"
         />
@@ -283,7 +378,20 @@ export function PersonalActivityClient({
 
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">
-          <PersonalMockSection title="Call Volume Trend">
+          <PersonalMockSection
+            title="Call Volume Trend"
+            action={
+              <PersonalMockSelect
+                className="h-8 w-[90px] text-[12px]"
+                value={chartGranularity}
+                onChange={(e) => setChartGranularity(e.target.value)}
+              >
+                <option>Day</option>
+                <option>Week</option>
+                <option>Month</option>
+              </PersonalMockSelect>
+            }
+          >
             <PersonalMockLineChart labels={chartLabels} series={chartSeries} height={220} />
           </PersonalMockSection>
 
@@ -346,73 +454,69 @@ export function PersonalActivityClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f3f4f6]">
-                      {filtered.slice(0, 10).map((r) => {
-                        const row = r as PersonalActivityRow & {
-                          callerName?: string;
-                          calledLabel?: string;
-                          routeDevice?: string;
-                        };
-                        const initials = row.callerName
-                          ? row.callerName
-                              .split(" ")
-                              .map((w) => w[0])
-                              .join("")
-                              .slice(0, 2)
-                          : row.caller.replace(/\D/g, "").slice(-2);
+                      {filtered.slice(0, useWireframe ? 8 : 10).map((r) => {
+                        const isSelected = selected?.id === r.id;
                         return (
-                        <tr
-                          key={r.id}
-                          className={cn(
-                            "cursor-pointer transition",
-                            selected?.id === r.id ? "bg-[#eff6ff]" : "hover:bg-[#f9fafb]",
-                          )}
-                          onClick={() => setSelectedId(r.id)}
-                        >
-                          <td className="py-3 pr-3">
-                            <div className="flex items-center gap-2">
-                              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
-                                {initials}
-                              </span>
-                              <div>
-                                <p className="font-semibold text-[#111827]">
-                                  {row.callerName || formatPhone(r.caller)}
-                                </p>
-                                <p className="text-[11px] text-[#6b7280]">{formatPhone(r.caller)}</p>
+                          <tr
+                            key={r.id}
+                            className={cn(
+                              "cursor-pointer transition",
+                              isSelected
+                                ? "border-l-4 border-l-[#6366f1] bg-[#eef2ff]"
+                                : "border-l-4 border-l-transparent hover:bg-[#f9fafb]",
+                            )}
+                            onClick={() => setSelectedId(r.id)}
+                          >
+                            <td className="py-3 pr-3">
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+                                  {callerInitials(r)}
+                                </span>
+                                <div>
+                                  <p className="font-semibold text-[#111827]">{callerName(r)}</p>
+                                  <p className="text-[11px] text-[#6b7280]">{formatPhone(r.caller)}</p>
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-3 pr-3">
-                            <p className="text-[#111827]">{formatPhone(r.calledNumber)}</p>
-                            {row.calledLabel ? (
-                              <p className="text-[11px] text-[#6b7280]">{row.calledLabel}</p>
-                            ) : null}
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">
-                            <p>{r.forwardDestination || "—"}</p>
-                            {row.routeDevice ? (
-                              <p className="text-[11px]">({row.routeDevice})</p>
-                            ) : null}
-                          </td>
-                          <td className="py-3 pr-3">
-                            <PersonalMockPill tone={outcomeTone(r.outcome)}>
-                              {r.outcome}
-                            </PersonalMockPill>
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">
-                            {r.ringDurationSeconds != null
-                              ? `${r.ringDurationSeconds}s`
-                              : "—"}
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">
-                            {formatDuration(r.durationSeconds)}
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">{r.date} {r.time}</td>
-                          <td className="py-3 text-right">
-                            <button type="button" className="rounded p-1 hover:bg-[#f3f4f6]">
-                              <MoreHorizontal className="h-4 w-4 text-[#9ca3af]" />
-                            </button>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="py-3 pr-3">
+                              <p className="text-[#111827]">{formatPhone(r.calledNumber)}</p>
+                              {r.calledLabel ? (
+                                <p className="text-[11px] text-[#6b7280]">{r.calledLabel}</p>
+                              ) : null}
+                            </td>
+                            <td className="py-3 pr-3 text-[#6b7280]">
+                              <p>{r.forwardDestination || "—"}</p>
+                              {r.routeDevice ? (
+                                <p className="text-[11px]">({r.routeDevice})</p>
+                              ) : null}
+                            </td>
+                            <td className="py-3 pr-3">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <PersonalMockPill tone={outcomeTone(r.outcome)}>
+                                  {r.outcome}
+                                </PersonalMockPill>
+                                {r.smartRouted ? (
+                                  <PersonalMockPill tone="blue">Smart Routed</PersonalMockPill>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="py-3 pr-3 text-[#6b7280]">
+                              {r.ringDurationSeconds != null
+                                ? formatDuration(r.ringDurationSeconds)
+                                : "—"}
+                            </td>
+                            <td className="py-3 pr-3 text-[#6b7280]">
+                              {formatDuration(r.durationSeconds)}
+                            </td>
+                            <td className="py-3 pr-3 text-[#6b7280]">
+                              {r.date} {r.time}
+                            </td>
+                            <td className="py-3 text-right">
+                              <button type="button" className="rounded p-1 hover:bg-[#f3f4f6]">
+                                <MoreHorizontal className="h-4 w-4 text-[#9ca3af]" />
+                              </button>
+                            </td>
+                          </tr>
                         );
                       })}
                     </tbody>
@@ -424,8 +528,8 @@ export function PersonalActivityClient({
                       ? "Showing 1 to 8 of 1,284 calls"
                       : `Showing 1 to ${Math.min(10, filtered.length)} of ${filtered.length} calls`
                   }
-                  total={useWireframe ? 1284 : filtered.length}
-                  pages={useWireframe ? 13 : Math.max(1, Math.ceil(filtered.length / 10))}
+                  total={tableTotal}
+                  pages={tablePages}
                 />
               </>
             )}
@@ -438,7 +542,27 @@ export function PersonalActivityClient({
                   <span className="h-2 w-2 rounded-full bg-[#10b981]" />
                   Good
                 </p>
-                {totals.failed > 0 ? (
+                {useWireframe ? (
+                  WIREFRAME_ROUTING_HEALTH.map((alert) => (
+                    <div key={alert.id} className="flex items-start justify-between gap-2">
+                      <p
+                        className={cn(
+                          "flex items-start gap-2",
+                          alert.tone === "red" ? "text-[#dc2626]" : "text-[#ea580c]",
+                        )}
+                      >
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        {alert.text}
+                      </p>
+                      <button
+                        type="button"
+                        className="shrink-0 text-[12px] font-semibold text-[#6366f1]"
+                      >
+                        {alert.action}
+                      </button>
+                    </div>
+                  ))
+                ) : totals.failed > 0 ? (
                   <p className="flex items-start gap-2 text-[#dc2626]">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     {totals.failed} failed or blocked calls need review.
@@ -449,15 +573,45 @@ export function PersonalActivityClient({
               </div>
             </PersonalMockSection>
             <PersonalMockSection title="Recent Call Events">
-              <ul className="space-y-2 text-[13px]">
-                {filtered.slice(0, 4).map((r) => (
-                  <li key={r.id} className="flex justify-between gap-2">
-                    <span>{r.outcome} · {formatPhone(r.caller)}</span>
-                    <span className="text-[#9ca3af]">{r.time}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link href="/personal/activity" className="mt-3 text-[12px] font-semibold text-[#2563eb]">
+              {useWireframe ? (
+                <ul className="space-y-3 text-[13px]">
+                  {WIREFRAME_RECENT_CALL_EVENTS.map((e) => (
+                    <li key={e.id} className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                          e.icon === "answered" && "bg-[#ecfdf5] text-[#059669]",
+                          e.icon === "voicemail" && "bg-[#f5f3ff] text-[#7c3aed]",
+                          e.icon === "missed" && "bg-[#fff7ed] text-[#ea580c]",
+                        )}
+                      >
+                        {e.icon === "answered" ? (
+                          <Phone className="h-4 w-4" />
+                        ) : e.icon === "voicemail" ? (
+                          <Voicemail className="h-4 w-4" />
+                        ) : (
+                          <PhoneOff className="h-4 w-4" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-[#111827]">{e.text}</p>
+                        <p className="text-[12px] text-[#6b7280]">{e.number}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] text-[#9ca3af]">{e.time}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <ul className="space-y-2 text-[13px]">
+                  {filtered.slice(0, 4).map((r) => (
+                    <li key={r.id} className="flex justify-between gap-2">
+                      <span>{r.outcome} · {formatPhone(r.caller)}</span>
+                      <span className="text-[#9ca3af]">{r.time}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link href="/personal/activity" className="mt-3 text-[12px] font-semibold text-[#6366f1]">
                 View all
               </Link>
             </PersonalMockSection>
@@ -472,51 +626,186 @@ export function PersonalActivityClient({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <PersonalMockPill tone={outcomeTone(selected.outcome)}>
-              {selected.outcome}
-            </PersonalMockPill>
-            <div className="mt-4 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eff6ff] text-[18px] font-bold text-[#2563eb]">
-                {selected.caller.replace(/\D/g, "").slice(-2)}
-              </div>
-              <p className="mt-2 font-semibold text-[#111827]">{formatPhone(selected.caller)}</p>
+            <div className="mt-2">
+              <PersonalMockPill tone={outcomeTone(selected.outcome)}>{selected.outcome}</PersonalMockPill>
             </div>
-            <dl className="mt-4 space-y-2 text-[12px]">
+            <div className="mt-4 flex items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[18px] font-bold text-[#2563eb]">
+                {callerInitials(selected)}
+              </div>
+              <div>
+                <p className="text-[16px] font-semibold text-[#111827]">{callerName(selected)}</p>
+                <p className="text-[12px] text-[#6b7280]">{formatPhone(selected.caller)}</p>
+              </div>
+              <a
+                href={`tel:${selected.caller}`}
+                className="ml-auto flex h-9 w-9 items-center justify-center rounded-full border border-[#e5e7eb] text-[#6366f1]"
+              >
+                <Phone className="h-4 w-4" />
+              </a>
+            </div>
+
+            <dl className="mt-4 space-y-2.5 text-[12px]">
+              <div>
+                <dt className="text-[#6b7280]">Called Transovo Number</dt>
+                <dd className="mt-0.5 flex items-center gap-1 font-medium text-[#111827]">
+                  {formatPhone(selected.calledNumber)}
+                  <button
+                    type="button"
+                    className="text-[#9ca3af] hover:text-[#6366f1]"
+                    onClick={() => copyText(selected.calledNumber)}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </dd>
+              </div>
+              {selected.calledLabel ? (
+                <div>
+                  <dt className="text-[#6b7280]">Label</dt>
+                  <dd className="mt-0.5 font-medium text-[#111827]">{selected.calledLabel}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between">
-                <dt className="text-[#6b7280]">Called Number</dt>
-                <dd className="font-medium">{formatPhone(selected.calledNumber)}</dd>
+                <dt className="text-[#6b7280]">Started</dt>
+                <dd className="font-medium">{selected.startedAt || selected.time}</dd>
+              </div>
+              {selected.connectedAt ? (
+                <div className="flex justify-between">
+                  <dt className="text-[#6b7280]">Connected</dt>
+                  <dd className="font-medium">{selected.connectedAt}</dd>
+                </div>
+              ) : null}
+              <div className="flex justify-between">
+                <dt className="text-[#6b7280]">Ended</dt>
+                <dd className="font-medium">{selected.endedAt || selected.time}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-[#6b7280]">Duration</dt>
+                <dt className="text-[#6b7280]">Ring Time</dt>
+                <dd className="font-medium">
+                  {selected.ringDurationSeconds != null
+                    ? formatDuration(selected.ringDurationSeconds)
+                    : "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[#6b7280]">Connected Duration</dt>
                 <dd className="font-medium">{formatDuration(selected.durationSeconds)}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-[#6b7280]">Date</dt>
-                <dd className="font-medium">{selected.date} {selected.time}</dd>
-              </div>
+              {selected.callId ? (
+                <div>
+                  <dt className="text-[#6b7280]">Call ID</dt>
+                  <dd className="mt-0.5 flex items-center gap-1 font-mono text-[11px] text-[#111827]">
+                    <span className="truncate">{selected.callId}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-[#9ca3af] hover:text-[#6366f1]"
+                      onClick={() => copyText(selected.callId || "")}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </dd>
+                </div>
+              ) : null}
             </dl>
-            <div className="mt-4 space-y-2">
+
+            <div className="mt-4">
               <p className="text-[12px] font-semibold text-[#111827]">Call Journey</p>
-              <ol className="space-y-2 text-[12px] text-[#6b7280]">
-                <li>Incoming call received</li>
-                {selected.forwardDestination ? (
-                  <li>Forwarded to {selected.forwardDestination}</li>
-                ) : null}
-                <li>Call ended · {formatDuration(selected.durationSeconds)}</li>
+              <ol className="mt-3 space-y-3">
+                {journeySteps.map((step, i) => (
+                  <li key={i} className="flex gap-3 text-[12px]">
+                    <span
+                      className={cn(
+                        "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                        step.tone === "green" && "bg-[#10b981]",
+                        step.tone === "red" && "bg-[#dc2626]",
+                        step.tone === "blue" && "bg-[#6366f1]",
+                      )}
+                    />
+                    <div>
+                      <p className="font-medium text-[#111827]">{step.label}</p>
+                      {step.time ? (
+                        <p className="text-[11px] text-[#9ca3af]">{step.time}</p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
               </ol>
             </div>
+
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <PersonalMockBtn variant="outline" className="w-full text-[12px]">Call Back</PersonalMockBtn>
+              <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
+                <Phone className="h-3.5 w-3.5" />
+                Call Back
+              </PersonalMockBtn>
               {!selected.blocked ? (
                 <PersonalMockBtn
                   variant="outline"
-                  className="w-full text-[12px] text-[#dc2626]"
+                  className="w-full gap-1 text-[12px] text-[#dc2626]"
                   onClick={() => blockCaller(selected.caller)}
                 >
+                  <Ban className="h-3.5 w-3.5" />
                   Block Caller
                 </PersonalMockBtn>
               ) : null}
+              {selected.voicemail ? (
+                <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
+                  <Voicemail className="h-3.5 w-3.5 text-[#7c3aed]" />
+                  View Voicemail
+                </PersonalMockBtn>
+              ) : null}
+              {selected.forwardDestination ? (
+                <Link href="/personal/forwarding" className="col-span-2">
+                  <PersonalMockBtn variant="outline" className="w-full text-[12px]">
+                    View Forwarding Rule
+                  </PersonalMockBtn>
+                </Link>
+              ) : null}
             </div>
+            {selected.callId ? (
+              <button
+                type="button"
+                className="mt-3 flex w-full items-center justify-center gap-1 text-[12px] font-semibold text-[#6366f1]"
+                onClick={() => copyText(selected.callId || "")}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy Call ID
+              </button>
+            ) : null}
+
+            {(selected.handlingType || selected.forwardDestination) ? (
+              <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-3 text-[12px]">
+                <p className="font-semibold text-[#111827]">Routing Details</p>
+                <dl className="mt-2 space-y-1.5">
+                  {selected.handlingType ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[#6b7280]">Handling Type</dt>
+                      <dd className="font-medium">{selected.handlingType}</dd>
+                    </div>
+                  ) : null}
+                  {selected.callerIdMode ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[#6b7280]">Caller ID Mode</dt>
+                      <dd className="font-medium">{selected.callerIdMode}</dd>
+                    </div>
+                  ) : null}
+                  {selected.screening ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[#6b7280]">Screening</dt>
+                      <dd className="font-medium">{selected.screening}</dd>
+                    </div>
+                  ) : null}
+                  {selected.forwardDestination ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[#6b7280]">Destination</dt>
+                      <dd className="flex items-center gap-1 font-medium">
+                        {selected.forwardDestination.replace(/^Forward to /i, "")}
+                        <ExternalLink className="h-3 w-3 text-[#9ca3af]" />
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
