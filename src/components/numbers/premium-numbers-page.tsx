@@ -32,7 +32,7 @@ import {
   Wand2,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { PersonalFindNumberClient } from "./personal-find-number-ui";
 import {
   PremiumCheckoutModal,
