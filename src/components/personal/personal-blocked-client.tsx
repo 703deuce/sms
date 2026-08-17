@@ -2,6 +2,7 @@
 
 import type { PersonalActivityRow, PersonalBlockedRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import {
+  WIREFRAME_BLOCKED_ATTEMPTS,
   WIREFRAME_BLOCKED_ROWS,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
 import {
   Ban,
   Clock,
+  Pencil,
   PhoneOff,
   Plus,
   Shield,
@@ -20,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PersonalMockBarChart } from "./mockup/charts";
 import {
@@ -75,6 +78,8 @@ function isLastMonth(dateStr: string) {
   return d.getMonth() === last.getMonth() && d.getFullYear() === last.getFullYear();
 }
 
+type WireframeBlockedRow = typeof WIREFRAME_BLOCKED_ROWS[number];
+
 export function PersonalBlockedClient({
   numbers,
   initialNumberId,
@@ -92,6 +97,7 @@ export function PersonalBlockedClient({
   const [addOpen, setAddOpen] = useState(false);
   const [addPhone, setAddPhone] = useState("");
   const [manageRow, setManageRow] = useState<BlockedDisplayRow | null>(null);
+  const [manageDemo, setManageDemo] = useState<WireframeBlockedRow | null>(null);
   const [blockedAction, setBlockedAction] = useState<"disconnect" | "unavailable_message">(
     "disconnect",
   );
@@ -192,6 +198,14 @@ export function PersonalBlockedClient({
   }, [selected]);
 
   useEffect(() => {
+    if (!manageRow && !manageDemo) return;
+    if (manageDemo) {
+      setBlockedAction(
+        manageDemo.behavior === "Unavailable Message" ? "unavailable_message" : "disconnect",
+      );
+      setUnavailableDraft(PERSONAL_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (!manageRow) return;
     const numberForRow = manageRow.numberId
       ? numbers.find((n) => n.id === manageRow.numberId)
@@ -207,7 +221,7 @@ export function PersonalBlockedClient({
         : "disconnect",
     );
     setUnavailableDraft(PERSONAL_UNAVAILABLE_MESSAGE);
-  }, [manageRow, numbers, selected]);
+  }, [manageRow, manageDemo, numbers, selected]);
 
   const activityByCaller = useMemo(() => {
     const counts = new Map<string, number>();
@@ -223,6 +237,64 @@ export function PersonalBlockedClient({
     }
     return { counts, lastAttempt };
   }, [activity]);
+
+  const drawerAttempts = useMemo(() => {
+    if (manageDemo) return WIREFRAME_BLOCKED_ATTEMPTS;
+    if (!manageRow) return [];
+    const key = manageRow.phone.replace(/\D/g, "");
+    return activity
+      .filter((r) => r.blocked && r.caller.replace(/\D/g, "") === key)
+      .slice(0, 3)
+      .map((r) => ({
+        id: r.id,
+        at: `${r.date} ${r.time}`,
+        outcome: "Call disconnected",
+      }));
+  }, [manageDemo, manageRow, activity]);
+
+  const drawerPhone = manageDemo?.phone ?? manageRow?.phone ?? "";
+  const drawerLabel =
+    manageDemo?.label ?? (manageRow ? reasonLabel(manageRow.reason) : "");
+  const drawerScope = manageDemo?.scope ?? manageRow?.scopeLabel ?? "";
+  const drawerScopeTone =
+    manageDemo?.scopeTone ??
+    (manageRow?.scopeKind === "account" ? "purple" : "blue");
+  const drawerBlockedSince =
+    manageDemo?.added ??
+    (manageRow ? new Date(manageRow.createdAt).toLocaleDateString() : "");
+  const drawerCallsBlocked =
+    manageDemo?.blockedCalls ??
+    (manageRow
+      ? activityByCaller.counts.get(manageRow.phone.replace(/\D/g, "")) ?? 0
+      : 0);
+  const drawerLastAttempt =
+    manageDemo?.lastAttempt ??
+    (manageRow
+      ? activityByCaller.lastAttempt.get(manageRow.phone.replace(/\D/g, "")) ?? "—"
+      : "—");
+  const drawerAddedBy = manageDemo?.addedBy ?? "You";
+
+  function closeManageDrawer() {
+    setManageRow(null);
+    setManageDemo(null);
+  }
+
+  async function saveManageDrawer() {
+    if (manageDemo) {
+      setMessage("Blocked caller settings saved.");
+      closeManageDrawer();
+      return;
+    }
+    await saveBlockedAction();
+  }
+
+  async function unblockFromDrawer() {
+    if (manageDemo) {
+      closeManageDrawer();
+      return;
+    }
+    if (manageRow) await remove(manageRow.id);
+  }
 
   const scopedRows = useMemo(() => {
     let list = rows;
@@ -323,7 +395,7 @@ export function PersonalBlockedClient({
 
   async function remove(id: string) {
     await fetch(`/api/personal/blocked?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (manageRow?.id === id) setManageRow(null);
+    if (manageRow?.id === id) closeManageDrawer();
     load();
   }
 
@@ -345,7 +417,7 @@ export function PersonalBlockedClient({
         throw new Error(j.error || "Could not save blocked-caller behavior.");
       }
       setMessage("Blocked-caller behavior saved.");
-      setManageRow(null);
+      closeManageDrawer();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not save blocked-caller behavior.");
     } finally {
@@ -588,8 +660,15 @@ export function PersonalBlockedClient({
                             variant="outline"
                             className="h-8 px-3 text-[12px]"
                             onClick={() => {
-                              if (!r.isDemo && "raw" in r && r.raw) {
+                              if (r.isDemo) {
+                                const demo = WIREFRAME_BLOCKED_ROWS.find((d) => d.id === r.id);
+                                if (demo) {
+                                  setManageDemo(demo);
+                                  setManageRow(null);
+                                }
+                              } else if ("raw" in r && r.raw) {
                                 setManageRow(r.raw as BlockedDisplayRow);
+                                setManageDemo(null);
                               }
                             }}
                           >
@@ -678,20 +757,20 @@ export function PersonalBlockedClient({
         </div>
       ) : null}
 
-      {manageRow ? (
+      {(manageRow || manageDemo) ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
           <button
             type="button"
             className="absolute inset-0"
             aria-label="Close blocked caller details"
-            onClick={() => setManageRow(null)}
+            onClick={closeManageDrawer}
           />
           <aside className="relative flex h-full w-full max-w-md flex-col bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-[#e5e7eb] px-5 py-4">
               <h2 className="text-[16px] font-bold text-[#111827]">Manage Blocked Caller</h2>
               <button
                 type="button"
-                onClick={() => setManageRow(null)}
+                onClick={closeManageDrawer}
                 className="rounded-lg p-1 hover:bg-[#f3f4f6]"
               >
                 <X className="h-5 w-5 text-[#6b7280]" />
@@ -700,24 +779,40 @@ export function PersonalBlockedClient({
 
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                  Blocked number
+                <p className="text-[22px] font-bold text-[#111827]">
+                  {formatPhone(drawerPhone)}
                 </p>
-                <p className="mt-1 text-[20px] font-bold text-[#111827]">
-                  {formatPhone(manageRow.phone)}
-                </p>
-                <p className="mt-1 text-[13px] text-[#6b7280]">
-                  Scope: {manageRow.scopeLabel} · Added{" "}
-                  {new Date(manageRow.createdAt).toLocaleDateString()}
-                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-[14px] font-semibold text-[#111827]">{drawerLabel}</p>
+                  <Pencil className="h-3.5 w-3.5 text-[#9ca3af]" />
+                </div>
+                <div className="mt-2">
+                  <PersonalMockPill tone={drawerScopeTone}>{drawerScope}</PersonalMockPill>
+                </div>
               </div>
+
+              <dl className="grid grid-cols-2 gap-3 text-[13px]">
+                <div>
+                  <dt className="text-[#6b7280]">Blocked Since</dt>
+                  <dd className="mt-0.5 font-medium text-[#111827]">{drawerBlockedSince}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#6b7280]">Calls Blocked</dt>
+                  <dd className="mt-0.5 font-medium text-[#111827]">{drawerCallsBlocked}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#6b7280]">Last Attempt</dt>
+                  <dd className="mt-0.5 font-medium text-[#111827]">{drawerLastAttempt}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#6b7280]">Added By</dt>
+                  <dd className="mt-0.5 font-medium text-[#111827]">{drawerAddedBy}</dd>
+                </div>
+              </dl>
 
               <div>
                 <p className="mb-3 text-[13px] font-semibold text-[#111827]">
-                  Call handling for blocked callers
-                </p>
-                <p className="mb-3 text-[12px] text-[#6b7280]">
-                  Applies to the Transovo line this block is tied to.
+                  When this caller reaches your numbers
                 </p>
                 <div className="space-y-2 text-[13px]">
                   <label className="flex items-center gap-2">
@@ -726,7 +821,7 @@ export function PersonalBlockedClient({
                       checked={blockedAction === "disconnect"}
                       onChange={() => setBlockedAction("disconnect")}
                     />
-                    Disconnect immediately
+                    Disconnect Call
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -734,44 +829,73 @@ export function PersonalBlockedClient({
                       checked={blockedAction === "unavailable_message"}
                       onChange={() => setBlockedAction("unavailable_message")}
                     />
-                    Play unavailable message, then disconnect
+                    Play Unavailable Message
                   </label>
                 </div>
               </div>
 
               {blockedAction === "unavailable_message" ? (
                 <div>
-                  <p className="mb-2 text-[13px] font-semibold text-[#111827]">
-                    Unavailable message
-                  </p>
+                  <p className="mb-2 text-[13px] font-semibold text-[#111827]">Message</p>
                   <textarea
-                    className="w-full rounded-lg border border-[#e5e7eb] p-3 text-[13px] outline-none focus:border-[#6366f1] bg-[#f9fafb]"
-                    rows={3}
+                    className="w-full rounded-lg border border-[#e5e7eb] p-3 text-[13px] outline-none focus:border-[#2563eb] bg-[#f9fafb] focus:bg-white"
+                    rows={4}
                     value={unavailableDraft}
-                    readOnly
-                    aria-readonly
+                    onChange={(e) => setUnavailableDraft(e.target.value)}
+                    readOnly={!manageDemo}
+                    aria-readonly={!manageDemo}
                   />
                   <p className="mt-1 text-[11px] text-[#9ca3af]">
-                    System message played to blocked callers on this line.
+                    {unavailableDraft.length}/160 characters
                   </p>
                 </div>
               ) : null}
+
+              <div>
+                <p className="mb-3 text-[13px] font-semibold text-[#111827]">Recent attempts</p>
+                {drawerAttempts.length === 0 ? (
+                  <p className={pm.muted}>No blocked attempts recorded yet.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {drawerAttempts.map((attempt) => (
+                      <li key={attempt.id} className="flex items-start gap-3 text-[13px]">
+                        <Ban className="mt-0.5 h-4 w-4 shrink-0 text-[#dc2626]" />
+                        <div>
+                          <p className="text-[#111827]">{attempt.outcome}</p>
+                          <p className="text-[11px] text-[#9ca3af]">{attempt.at}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Link
+                  href="/personal/activity"
+                  className="mt-3 inline-block text-[12px] font-semibold text-[#2563eb]"
+                >
+                  View all attempts →
+                </Link>
+              </div>
             </div>
 
             <div className="border-t border-[#e5e7eb] p-5 space-y-2">
               <PersonalMockBtn
                 className="w-full"
                 disabled={savingAction}
-                onClick={saveBlockedAction}
+                onClick={saveManageDrawer}
               >
-                {savingAction ? "Saving…" : "Save behavior"}
+                {savingAction ? "Saving…" : "Save Changes"}
               </PersonalMockBtn>
+              <Link href="/personal/activity" className="block">
+                <PersonalMockBtn variant="outline" className="w-full">
+                  View in Call Activity
+                </PersonalMockBtn>
+              </Link>
               <PersonalMockBtn
                 variant="outline"
                 className="w-full text-rose-600 hover:bg-[#fef2f2]"
-                onClick={() => remove(manageRow.id)}
+                onClick={unblockFromDrawer}
               >
-                Unblock caller
+                Unblock Caller
               </PersonalMockBtn>
             </div>
           </aside>

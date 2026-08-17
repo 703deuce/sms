@@ -201,6 +201,12 @@ export const WIREFRAME_BLOCKED_ROWS = [
   },
 ];
 
+export const WIREFRAME_BLOCKED_ATTEMPTS = [
+  { id: "demo-ba1", at: "Today, 4:12 PM", outcome: "Call disconnected" },
+  { id: "demo-ba2", at: "Yesterday, 2:30 PM", outcome: "Call disconnected" },
+  { id: "demo-ba3", at: "Aug 10, 2026 · 9:15 AM", outcome: "Unavailable message played" },
+];
+
 export const WIREFRAME_USAGE_BY_NUMBER = [
   { number: "+15714073615", friendlyName: "Main Line", calls: 312, forwarded: 342, vm: 12, transcribe: 11, pct: 63, trend: [20, 35, 28, 42, 38, 45, 50] },
   { number: "+18663464256", friendlyName: "Sales Line", calls: 98, forwarded: 112, vm: 8, transcribe: 7, pct: 21, trend: [8, 12, 10, 14, 11, 9, 15] },

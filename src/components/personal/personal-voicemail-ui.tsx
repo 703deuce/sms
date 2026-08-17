@@ -43,6 +43,26 @@ import {
 import { PersonalGreetingControls } from "./personal-greeting-controls";
 import { PersonalNumberSelector } from "./personal-number-selector";
 
+function callerAvatarInitials(name?: string | null, number?: string | null): string {
+  const trimmed = (name || "").trim();
+  if (trimmed && trimmed.toLowerCase() !== "unknown") {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return trimmed.slice(0, 2).toUpperCase();
+  }
+  const digits = (number || "").replace(/\D/g, "");
+  if (digits.length >= 2) return digits.slice(-2);
+  return "?";
+}
+
+function callerDisplayName(name?: string | null, number?: string | null): string {
+  const trimmed = (name || "").trim();
+  if (trimmed && trimmed.toLowerCase() !== "unknown") return trimmed;
+  return formatPhone(number || "Unknown");
+}
+
 export function PersonalVoicemailUI({
   numberId,
   numbers = [],
@@ -119,6 +139,7 @@ export function PersonalVoicemailUI({
       if (!q) return true;
       return (
         (m.callerNumber || "").includes(q) ||
+        (m.callerName || "").toLowerCase().includes(q) ||
         (m.transcript || "").toLowerCase().includes(q)
       );
     });
@@ -405,14 +426,12 @@ export function PersonalVoicemailUI({
                   >
                     <div className="flex items-start gap-2">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
-                        {(m.callerName || m.callerNumber || "?")
-                          .replace(/\D/g, "")
-                          .slice(-2) || "?"}
+                        {callerAvatarInitials(m.callerName, m.callerNumber)}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-[13px] font-semibold text-[#111827]">
-                            {m.callerName || formatPhone(m.callerNumber || "Unknown")}
+                            {callerDisplayName(m.callerName, m.callerNumber)}
                           </p>
                           {!m.readAt ? (
                             <PersonalMockPill tone="blue">Unread</PersonalMockPill>
@@ -449,9 +468,10 @@ export function PersonalVoicemailUI({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-[15px] font-semibold text-[#111827]">
-                    {formatPhone(selected.callerNumber || "Unknown")}
+                    {callerDisplayName(selected.callerName, selected.callerNumber)}
                   </p>
                   <p className="text-[12px] text-[#6b7280]">
+                    {formatPhone(selected.callerNumber || "Unknown")} ·{" "}
                     {new Date(selected.createdAt).toLocaleString()} · {selected.durationSec}s
                   </p>
                 </div>
