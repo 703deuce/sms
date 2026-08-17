@@ -1,6 +1,11 @@
 "use client";
 
 import type { PersonalActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import {
+  WIREFRAME_ACTIVITY_ROWS,
+  WIREFRAME_ANALYTICS_KPIS,
+  usePersonalWireframe,
+} from "@/lib/workspace/personal-mockup-wireframe";
 import { cn, formatPhone } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -8,6 +13,7 @@ import {
   Calendar,
   ChevronDown,
   Download,
+  MoreHorizontal,
   Phone,
   PhoneIncoming,
   PhoneMissed,
@@ -75,8 +81,31 @@ export function PersonalActivityClient({
     load();
   }, [load]);
 
+  const useWireframe = usePersonalWireframe(rows.length);
+
+  const displayRows = useMemo(() => {
+    if (!useWireframe) return rows;
+    return WIREFRAME_ACTIVITY_ROWS.map((r) => ({
+      id: r.id,
+      caller: r.caller,
+      calledNumber: r.calledNumber,
+      forwardDestination: r.route,
+      outcome: r.outcome,
+      answered: r.answered,
+      voicemail: r.voicemail,
+      blocked: r.blocked,
+      ringDurationSeconds: r.ringDurationSeconds,
+      durationSeconds: r.durationSeconds,
+      date: r.date,
+      time: r.time,
+      callerName: r.callerName,
+      calledLabel: r.calledLabel,
+      routeDevice: r.routeDevice,
+    }));
+  }, [rows, useWireframe]);
+
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    return displayRows.filter((r) => {
       if (outcomeFilter === "Answered" && !r.answered) return false;
       if (outcomeFilter === "Missed" && r.answered) return false;
       if (outcomeFilter === "Voicemail" && !r.voicemail) return false;
@@ -89,27 +118,50 @@ export function PersonalActivityClient({
         (r.forwardDestination?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [rows, outcomeFilter, search]);
+  }, [displayRows, outcomeFilter, search]);
 
   const selected = filtered.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
 
   const totals = useMemo(() => {
+    if (useWireframe) {
+      const k = WIREFRAME_ANALYTICS_KPIS;
+      return {
+        total: k.totalCalls,
+        answered: k.answered,
+        missed: k.missed,
+        voicemails: k.voicemails,
+        failed: 40,
+      };
+    }
     const total = rows.length;
     const answered = rows.filter((r) => r.answered).length;
     const missed = rows.filter((r) => !r.answered && !r.voicemail).length;
     const voicemails = rows.filter((r) => r.voicemail).length;
     const failed = rows.filter((r) => r.outcome.toLowerCase().includes("fail") || r.blocked).length;
     return { total, answered, missed, voicemails, failed };
-  }, [rows]);
+  }, [rows, useWireframe]);
 
   const chartLabels = useMemo(() => {
-    const days = [...new Set(rows.map((r) => r.date))].slice(-14);
+    if (useWireframe) {
+      return ["Apr 28", "May 2", "May 6", "May 10", "May 14", "May 18", "May 22", "May 26"];
+    }
+    const days = [...new Set(displayRows.map((r) => r.date))].slice(-14);
     return days.length ? days : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  }, [rows]);
+  }, [displayRows, useWireframe]);
 
   const chartSeries = useMemo(() => {
+    if (useWireframe) {
+      const answered = [12, 18, 22, 28, 35, 42, 38, 45];
+      const missed = [4, 6, 5, 8, 7, 9, 6, 8];
+      const voicemail = [2, 3, 2, 4, 3, 5, 4, 3];
+      return [
+        { label: "Answered", color: "#10b981", values: answered },
+        { label: "Missed", color: "#f97316", values: missed },
+        { label: "Voicemail", color: "#8b5cf6", values: voicemail },
+      ];
+    }
     const byDay = new Map<string, { answered: number; missed: number; voicemail: number }>();
-    for (const r of rows) {
+    for (const r of displayRows) {
       const d = r.date;
       const cur = byDay.get(d) || { answered: 0, missed: 0, voicemail: 0 };
       if (r.answered) cur.answered += 1;
@@ -135,7 +187,7 @@ export function PersonalActivityClient({
         values: days.map((d) => byDay.get(d)?.voicemail ?? 0),
       },
     ];
-  }, [rows, chartLabels]);
+  }, [displayRows, chartLabels, useWireframe]);
 
   async function blockCaller(phone: string) {
     await fetch("/api/personal/blocked", {
@@ -178,34 +230,52 @@ export function PersonalActivityClient({
           value={totals.total}
           sub="This period"
           icon={PhoneIncoming}
-          trend={12}
+          trend={useWireframe ? 12 : 12}
           trendLabel="vs previous 30 days"
         />
         <PersonalMockKpi
           label="Answered"
           value={totals.answered}
-          sub={totals.total ? `${Math.round((totals.answered / totals.total) * 100)}% of total` : "—"}
+          sub={
+            useWireframe
+              ? "68.2% of total calls"
+              : totals.total
+                ? `${Math.round((totals.answered / totals.total) * 100)}% of total`
+                : "—"
+          }
           icon={Phone}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
         <PersonalMockKpi
           label="Missed"
           value={totals.missed}
-          sub={totals.total ? `${Math.round((totals.missed / totals.total) * 100)}% of total` : "—"}
+          sub={
+            useWireframe
+              ? "19.9% of total calls"
+              : totals.total
+                ? `${Math.round((totals.missed / totals.total) * 100)}% of total`
+                : "—"
+          }
           icon={PhoneMissed}
           iconClass="bg-[#fff7ed] text-[#ea580c]"
         />
         <PersonalMockKpi
           label="Voicemails"
           value={totals.voicemails}
-          sub={totals.total ? `${Math.round((totals.voicemails / totals.total) * 100)}% of total` : "—"}
+          sub={
+            useWireframe
+              ? "8.7% of total calls"
+              : totals.total
+                ? `${Math.round((totals.voicemails / totals.total) * 100)}% of total`
+                : "—"
+          }
           icon={Voicemail}
           iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
         <PersonalMockKpi
           label="Failed / Blocked"
           value={totals.failed}
-          sub={totals.total ? `${Math.round((totals.failed / totals.total) * 100)}% of total` : "—"}
+          sub={useWireframe ? "3.1% of total calls" : totals.total ? `${Math.round((totals.failed / totals.total) * 100)}% of total` : "—"}
           icon={Ban}
           iconClass="bg-[#fef2f2] text-[#dc2626]"
         />
@@ -222,8 +292,8 @@ export function PersonalActivityClient({
             action={
               <div className="flex flex-wrap gap-2">
                 <PersonalMockInput
-                  placeholder="Search…"
-                  className="w-40"
+                  placeholder="Search by caller, number, or destination"
+                  className="w-52"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -246,7 +316,12 @@ export function PersonalActivityClient({
                   <option>All</option>
                   <option>Forward</option>
                   <option>Voicemail</option>
+                  <option>Smart Routed</option>
                 </PersonalMockSelect>
+                <PersonalMockSelect className="w-[120px]">
+                  <option>Newest First</option>
+                </PersonalMockSelect>
+                <PersonalMockBtn variant="outline" className="h-8 text-[12px]">Filters</PersonalMockBtn>
               </div>
             }
           >
@@ -267,24 +342,56 @@ export function PersonalActivityClient({
                         <th className="pb-3 pr-3">Ring Time</th>
                         <th className="pb-3 pr-3">Duration</th>
                         <th className="pb-3 pr-3">Date / Time</th>
+                        <th className="pb-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f3f4f6]">
-                      {filtered.slice(0, 10).map((r) => (
+                      {filtered.slice(0, 10).map((r) => {
+                        const row = r as PersonalActivityRow & {
+                          callerName?: string;
+                          calledLabel?: string;
+                          routeDevice?: string;
+                        };
+                        const initials = row.callerName
+                          ? row.callerName
+                              .split(" ")
+                              .map((w) => w[0])
+                              .join("")
+                              .slice(0, 2)
+                          : row.caller.replace(/\D/g, "").slice(-2);
+                        return (
                         <tr
                           key={r.id}
                           className={cn(
                             "cursor-pointer transition",
-                            selected?.id === r.id ? "bg-[#eef2ff]" : "hover:bg-[#f9fafb]",
+                            selected?.id === r.id ? "bg-[#eff6ff]" : "hover:bg-[#f9fafb]",
                           )}
                           onClick={() => setSelectedId(r.id)}
                         >
                           <td className="py-3 pr-3">
-                            <p className="font-semibold text-[#111827]">{formatPhone(r.caller)}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eff6ff] text-[11px] font-bold text-[#2563eb]">
+                                {initials}
+                              </span>
+                              <div>
+                                <p className="font-semibold text-[#111827]">
+                                  {row.callerName || formatPhone(r.caller)}
+                                </p>
+                                <p className="text-[11px] text-[#6b7280]">{formatPhone(r.caller)}</p>
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">{formatPhone(r.calledNumber)}</td>
+                          <td className="py-3 pr-3">
+                            <p className="text-[#111827]">{formatPhone(r.calledNumber)}</p>
+                            {row.calledLabel ? (
+                              <p className="text-[11px] text-[#6b7280]">{row.calledLabel}</p>
+                            ) : null}
+                          </td>
                           <td className="py-3 pr-3 text-[#6b7280]">
-                            {r.forwardDestination || "—"}
+                            <p>{r.forwardDestination || "—"}</p>
+                            {row.routeDevice ? (
+                              <p className="text-[11px]">({row.routeDevice})</p>
+                            ) : null}
                           </td>
                           <td className="py-3 pr-3">
                             <PersonalMockPill tone={outcomeTone(r.outcome)}>
@@ -300,15 +407,25 @@ export function PersonalActivityClient({
                             {formatDuration(r.durationSeconds)}
                           </td>
                           <td className="py-3 pr-3 text-[#6b7280]">{r.date} {r.time}</td>
+                          <td className="py-3 text-right">
+                            <button type="button" className="rounded p-1 hover:bg-[#f3f4f6]">
+                              <MoreHorizontal className="h-4 w-4 text-[#9ca3af]" />
+                            </button>
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
                 <PersonalMockPagination
-                  showing={`Showing 1 to ${Math.min(10, filtered.length)} of ${filtered.length} calls`}
-                  total={filtered.length}
-                  pages={Math.max(1, Math.ceil(filtered.length / 10))}
+                  showing={
+                    useWireframe
+                      ? "Showing 1 to 8 of 1,284 calls"
+                      : `Showing 1 to ${Math.min(10, filtered.length)} of ${filtered.length} calls`
+                  }
+                  total={useWireframe ? 1284 : filtered.length}
+                  pages={useWireframe ? 13 : Math.max(1, Math.ceil(filtered.length / 10))}
                 />
               </>
             )}
@@ -340,7 +457,7 @@ export function PersonalActivityClient({
                   </li>
                 ))}
               </ul>
-              <Link href="/personal/activity" className="mt-3 text-[12px] font-semibold text-[#6366f1]">
+              <Link href="/personal/activity" className="mt-3 text-[12px] font-semibold text-[#2563eb]">
                 View all
               </Link>
             </PersonalMockSection>
@@ -359,7 +476,7 @@ export function PersonalActivityClient({
               {selected.outcome}
             </PersonalMockPill>
             <div className="mt-4 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eef2ff] text-[18px] font-bold text-[#6366f1]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eff6ff] text-[18px] font-bold text-[#2563eb]">
                 {selected.caller.replace(/\D/g, "").slice(-2)}
               </div>
               <p className="mt-2 font-semibold text-[#111827]">{formatPhone(selected.caller)}</p>

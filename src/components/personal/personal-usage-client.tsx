@@ -1,6 +1,11 @@
 "use client";
 
 import type { PersonalUsageSummary, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import {
+  WIREFRAME_ANALYTICS_KPIS,
+  WIREFRAME_USAGE_BY_NUMBER,
+  usePersonalWireframe,
+} from "@/lib/workspace/personal-mockup-wireframe";
 import { formatPhone } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -184,13 +189,31 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
     );
   }
 
-  const totalCallsEstimate = Math.round(usage.forwardingMinutesUsed * 1.2);
+  const useWireframe = usePersonalWireframe(usage.forwardingMinutesUsed, 50);
+  const totalCallsEstimate = useWireframe
+    ? 428
+    : Math.round(usage.forwardingMinutesUsed * 1.2);
+
+  const displayByNumber = useWireframe
+    ? WIREFRAME_USAGE_BY_NUMBER
+    : filteredNumbers.map((n) => ({
+        number: n.number,
+        friendlyName: n.friendlyName || formatPhone(n.number),
+        calls: Math.round(n.forwardingMinutes * 1.2),
+        forwarded: n.forwardingMinutes,
+        vm: 0,
+        transcribe: 0,
+        pct: Math.round(
+          (n.forwardingMinutes / Math.max(usage.forwardingMinutesUsed, 1)) * 100,
+        ),
+        trend: n.sparkline,
+      }));
 
   return (
     <PersonalMockPage right={sidebar}>
       <PersonalMockHeader
         title="Usage"
-        description="Forwarding minutes and feature usage for your current billing period."
+        description="Track call minutes, voicemail usage, storage, and plan limits across your numbers."
         filters={
           <>
             <PersonalNumberSelector
@@ -209,34 +232,34 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <PersonalMockKpi
           label="Forwarding Minutes"
-          value={`${usage.forwardingMinutesUsed}`}
-          sub={`of ${usage.forwardingMinutesLimit}`}
+          value={useWireframe ? "542" : `${usage.forwardingMinutesUsed}`}
+          sub={useWireframe ? "54% used" : `of ${usage.forwardingMinutesLimit}`}
           icon={Clock}
         />
         <PersonalMockKpi
           label="Calls"
           value={totalCallsEstimate}
-          sub="estimated"
+          sub={useWireframe ? "This billing period" : "estimated"}
           icon={Phone}
         />
         <PersonalMockKpi
           label="Voicemail Minutes"
-          value={Math.round(usage.forwardingMinutesUsed * 0.15)}
-          sub="estimated"
+          value={useWireframe ? "38 min" : Math.round(usage.forwardingMinutesUsed * 0.15)}
+          sub={useWireframe ? "This billing period" : "estimated"}
           icon={Voicemail}
           iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
         <PersonalMockKpi
           label="Transcription Minutes"
-          value={Math.round(usage.forwardingMinutesUsed * 0.08)}
-          sub="estimated"
+          value={useWireframe ? "36 min" : Math.round(usage.forwardingMinutesUsed * 0.08)}
+          sub={useWireframe ? "This billing period" : "estimated"}
           icon={Mic}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
         <PersonalMockKpi
           label="Estimated Overage"
-          value={usage.estimatedOverageMinutes}
-          sub="minutes"
+          value={useWireframe ? "$0.00" : usage.estimatedOverageMinutes}
+          sub={useWireframe ? "No overage expected" : "minutes"}
           icon={AlertTriangle}
           iconClass="bg-[#fff7ed] text-[#ea580c]"
         />
@@ -252,7 +275,9 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
           />
           <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
             <p className="text-[12px] font-semibold text-[#111827]">Projected usage</p>
-            <p className="mt-1 text-[22px] font-bold text-[#6366f1]">{projectedMinutes} min</p>
+            <p className="mt-1 text-[22px] font-bold text-[#2563eb]">
+              {useWireframe ? "918 minutes" : `${projectedMinutes} min`}
+            </p>
             <p className="mt-1 text-[12px] text-[#6b7280]">
               Based on {daysElapsed} days of activity this period
               {projectedMinutes > usage.forwardingMinutesLimit
@@ -301,7 +326,7 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
             series={[
               {
                 label: "Forwarding minutes",
-                color: "#6366f1",
+                color: "#2563eb",
                 values: trendSeries,
               },
             ]}
@@ -310,23 +335,33 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
 
         <PersonalMockSection title="Usage by Number">
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full min-w-[640px] text-[13px]">
               <thead>
                 <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase text-[#9ca3af]">
                   <th className="pb-2 text-left">Number</th>
-                  <th className="pb-2 text-right">Minutes</th>
+                  <th className="pb-2 text-left">Friendly Name</th>
+                  <th className="pb-2 text-right">Calls</th>
+                  <th className="pb-2 text-right">Forwarded Min</th>
+                  <th className="pb-2 text-right">VM Min</th>
+                  <th className="pb-2 text-right">Transcribe</th>
+                  <th className="pb-2 text-right">% Total</th>
                   <th className="pb-2 text-right">Trend</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredNumbers.map((n) => (
-                  <tr key={n.id} className="border-b border-[#f9fafb]">
+                {displayByNumber.map((row) => (
+                  <tr key={row.number} className="border-b border-[#f9fafb]">
                     <td className="py-2.5 font-medium text-[#111827]">
-                      {formatPhone(n.number)}
+                      {formatPhone(row.number)}
                     </td>
-                    <td className="py-2.5 text-right font-semibold">{n.forwardingMinutes}</td>
+                    <td className="py-2.5 text-[#6b7280]">{row.friendlyName}</td>
+                    <td className="py-2.5 text-right">{row.calls}</td>
+                    <td className="py-2.5 text-right font-semibold">{row.forwarded}</td>
+                    <td className="py-2.5 text-right">{row.vm}</td>
+                    <td className="py-2.5 text-right">{row.transcribe}</td>
+                    <td className="py-2.5 text-right">{row.pct}%</td>
                     <td className="py-2.5 text-right">
-                      <PersonalMockSparkline points={n.sparkline} />
+                      <PersonalMockSparkline points={row.trend} color="#2563eb" />
                     </td>
                   </tr>
                 ))}
@@ -356,7 +391,7 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
         <PersonalMockSection title="Smart Routing Usage">
           <div className="space-y-2 text-[13px]">
             <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-[#6366f1]" />
+              <Zap className="h-4 w-4 text-[#2563eb]" />
               <span className="font-semibold text-[#111827]">Included</span>
             </div>
             <p className="text-[#6b7280]">

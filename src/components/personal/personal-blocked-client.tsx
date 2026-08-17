@@ -2,6 +2,10 @@
 
 import type { PersonalActivityRow, PersonalBlockedRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import {
+  WIREFRAME_BLOCKED_ROWS,
+  usePersonalWireframe,
+} from "@/lib/workspace/personal-mockup-wireframe";
+import {
   PERSONAL_UNAVAILABLE_MESSAGE,
 } from "@/lib/numbers/personal-call-settings";
 import { formatPhone } from "@/lib/utils";
@@ -390,6 +394,40 @@ export function PersonalBlockedClient({
     return behaviorLabel(action);
   };
 
+  const useWireframe = usePersonalWireframe(rows.length, 6);
+
+  const tableRows = useWireframe
+    ? WIREFRAME_BLOCKED_ROWS.map((r) => ({
+        id: r.id,
+        phone: r.phone,
+        label: r.label,
+        scopeLabel: r.scope,
+        behavior: r.behavior,
+        blockedCalls: r.blockedCalls,
+        lastAttempt: r.lastAttempt,
+        added: r.added,
+        isDemo: true,
+      }))
+    : scopedRows.map((r) => {
+        const phoneKey = r.phone.replace(/\D/g, "");
+        return {
+          id: r.id,
+          phone: r.phone,
+          label: reasonLabel(r.reason),
+          scopeLabel: r.scopeLabel,
+          behavior: behaviorForRow(r),
+          blockedCalls: activityByCaller.counts.get(phoneKey) || 0,
+          lastAttempt: activityByCaller.lastAttempt.get(phoneKey) || "—",
+          added: new Date(r.createdAt).toLocaleDateString(),
+          isDemo: false,
+          raw: r,
+        };
+      });
+
+  const displayKpis = useWireframe
+    ? { total: 24, thisMonth: 7, thisMonthTrend: 16.7, callsBlocked: 63, callsTrend: 12.5, numbersProtected: 4 }
+    : kpis;
+
   if (numbers.length === 0) {
     return (
       <PersonalMockPage>
@@ -407,7 +445,7 @@ export function PersonalBlockedClient({
       <PersonalMockPage>
         <PersonalMockHeader
           title="Blocked Callers"
-          description="Control which callers can reach your numbers — block spam, fraud, or unwanted contacts account-wide or per line."
+          description="Control which callers can reach your numbers and how blocked calls are handled."
           actions={
             <>
               <PersonalMockBtn onClick={() => setAddOpen(true)}>
@@ -459,7 +497,7 @@ export function PersonalBlockedClient({
                     className={cn(
                       "rounded-md px-3 py-1.5 text-[12px] font-semibold transition",
                       scopeSegment === tab.id
-                        ? "bg-[#6366f1] text-white"
+                        ? "bg-[#2563eb] text-white"
                         : "text-[#6b7280] hover:bg-[#f9fafb]",
                     )}
                   >
@@ -471,9 +509,9 @@ export function PersonalBlockedClient({
                 <PersonalNumberSelector numbers={numbers} selectedId={selectedId} label="" />
               ) : null}
               <PersonalMockFilterChips
-                options={["All", "Manual", "Spam", "Fraud"]}
-                active={reasonFilter}
-                onChange={(v) => setReasonFilter(v as ReasonFilter)}
+                options={["All", "Global", "Per Number"]}
+                active={reasonFilter === "All" ? "All" : reasonFilter}
+                onChange={(v) => setReasonFilter(v === "Global" || v === "Per Number" ? "All" : (v as ReasonFilter))}
               />
             </div>
           }
@@ -482,35 +520,35 @@ export function PersonalBlockedClient({
         {message ? <p className="text-[13px] text-[#6b7280]">{message}</p> : null}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PersonalMockKpi label="Total Blocked" value={kpis.total} icon={Ban} />
+          <PersonalMockKpi label="Total Blocked" value={displayKpis.total} icon={Ban} />
           <PersonalMockKpi
             label="Blocked This Month"
-            value={kpis.thisMonth}
+            value={displayKpis.thisMonth}
             icon={Clock}
-            trend={kpis.thisMonthTrend}
+            trend={displayKpis.thisMonthTrend}
             trendLabel="vs last month"
           />
           <PersonalMockKpi
             label="Calls Blocked"
-            value={kpis.callsBlocked}
+            value={displayKpis.callsBlocked}
             icon={PhoneOff}
             iconClass="bg-[#fef2f2] text-[#dc2626]"
-            trend={kpis.callsTrend}
-            trendLabel="vs prior period"
+            trend={displayKpis.callsTrend}
+            trendLabel="vs last month"
           />
           <PersonalMockKpi
             label="Numbers Protected"
-            value={kpis.numbersProtected}
-            sub={`of ${numbers.length} lines`}
+            value={displayKpis.numbersProtected}
+            sub={useWireframe ? "Active phone numbers" : `of ${numbers.length} lines`}
             icon={Shield}
-            iconClass="bg-[#eef2ff] text-[#6366f1]"
+            iconClass="bg-[#eff6ff] text-[#2563eb]"
           />
         </div>
 
         <PersonalMockSection title="Blocked Callers">
           {loading ? (
             <p className={pm.muted}>Loading…</p>
-          ) : scopedRows.length === 0 ? (
+          ) : tableRows.length === 0 ? (
             <p className={pm.muted}>
               {scopeSegment === "number" && selected
                 ? `No blocked numbers for ${formatPhone(selected.number)}.`
@@ -532,42 +570,44 @@ export function PersonalBlockedClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f3f4f6]">
-                  {scopedRows.map((r) => {
-                    const phoneKey = r.phone.replace(/\D/g, "");
-                    const blockedCalls = activityByCaller.counts.get(phoneKey) || 0;
-                    const lastAttempt = activityByCaller.lastAttempt.get(phoneKey) || "—";
-                    return (
+                  {tableRows.map((r) => (
                       <tr key={r.id}>
-                        <td className="py-3 pr-3 font-semibold text-[#111827]">
+                        <td className="py-3 pr-3 font-semibold text-[#2563eb]">
                           {formatPhone(r.phone)}
                         </td>
                         <td className="py-3 pr-3">
-                          <PersonalMockPill tone="gray">{reasonLabel(r.reason)}</PersonalMockPill>
+                          <PersonalMockPill tone="gray">{r.label}</PersonalMockPill>
                         </td>
                         <td className="py-3 pr-3 text-[#6b7280]">{r.scopeLabel}</td>
-                        <td className="py-3 pr-3 text-[#6b7280]">{behaviorForRow(r)}</td>
-                        <td className="py-3 pr-3 font-medium">{blockedCalls}</td>
-                        <td className="py-3 pr-3 text-[#6b7280]">{lastAttempt}</td>
-                        <td className="py-3 pr-3 text-[#6b7280]">
-                          {new Date(r.createdAt).toLocaleDateString()}
-                        </td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{r.behavior}</td>
+                        <td className="py-3 pr-3 font-medium">{r.blockedCalls}</td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{r.lastAttempt}</td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{r.added}</td>
                         <td className="py-3 text-right">
                           <PersonalMockBtn
                             variant="outline"
                             className="h-8 px-3 text-[12px]"
-                            onClick={() => setManageRow(r)}
+                            onClick={() => {
+                              if (!r.isDemo && "raw" in r && r.raw) {
+                                setManageRow(r.raw as BlockedDisplayRow);
+                              }
+                            }}
                           >
                             Manage
                           </PersonalMockBtn>
                         </td>
                       </tr>
-                    );
-                  })}
+                    ))}
                 </tbody>
               </table>
               <PersonalMockPagination
-                showing={`Showing ${scopedRows.length} blocked caller${scopedRows.length === 1 ? "" : "s"}`}
-                total={scopedRows.length}
+                showing={
+                  useWireframe
+                    ? "Showing 1 to 6 of 24 results"
+                    : `Showing ${tableRows.length} blocked caller${tableRows.length === 1 ? "" : "s"}`
+                }
+                total={useWireframe ? 24 : tableRows.length}
+                pages={useWireframe ? 3 : 1}
               />
             </div>
           )}

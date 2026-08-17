@@ -333,7 +333,7 @@ export function PersonalVaultUI({
                 />
                 <PersonalMockInput
                   className="w-56 bg-[#f9fafb] pl-9 focus:bg-white"
-                  placeholder="Search your vault…"
+                  placeholder="Search numbers or names"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -575,12 +575,12 @@ export function PersonalVaultUI({
             {protectionNumber ? (
               <div className="space-y-4">
                 <PersonalMockToggle
-                  label="Lock port-out credentials"
+                  label="Port-out Lock"
                   checked={portLocked}
                   onChange={(v) => togglePortLock(v)}
                 />
                 <PersonalMockToggle
-                  label="Call screening on reactivation"
+                  label="Verification Required"
                   checked={callScreening}
                   onChange={(v) => toggleCallScreening(v)}
                 />

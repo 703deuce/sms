@@ -9,8 +9,13 @@ export const pm = {
   muted: "text-[13px] text-[#6b7280]",
   title: "text-[22px] font-bold tracking-tight text-[#111827]",
   subtitle: "mt-1 text-[14px] text-[#6b7280]",
-  primary: "#6366f1",
+  primary: "#2563eb",
+  primaryBg: "#eff6ff",
+  primaryRing: "ring-[#2563eb]/30",
 };
+
+const PRIMARY = "#2563eb";
+const PRIMARY_LIGHT = "#eff6ff";
 
 export function PersonalMockPage({
   children,
@@ -59,7 +64,7 @@ export function PersonalMockKpi({
   value,
   sub,
   icon: Icon,
-  iconClass = "bg-[#eef2ff] text-[#6366f1]",
+  iconClass = "bg-[#eff6ff] text-[#2563eb]",
   trend,
   trendLabel,
 }: {
@@ -165,7 +170,7 @@ export function PersonalMockSelect({
   return (
     <select
       className={cn(
-        "h-9 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[13px] text-[#374151] outline-none focus:border-[#6366f1]",
+        "h-9 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[13px] text-[#374151] outline-none focus:border-[#2563eb]",
         className,
       )}
       {...props}
@@ -195,10 +200,9 @@ export function PersonalMockBtn({
   ...props
 }: React.ComponentProps<"button"> & { variant?: "primary" | "outline" | "ghost" }) {
   const variants = {
-    primary:
-      "bg-[#6366f1] text-white hover:bg-[#5558e8] shadow-sm",
+    primary: "bg-[#2563eb] text-white hover:bg-[#1d4ed8] shadow-sm",
     outline: "border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb]",
-    ghost: "text-[#6366f1] hover:bg-[#eef2ff]",
+    ghost: "text-[#2563eb] hover:bg-[#eff6ff]",
   };
   return (
     <button
@@ -237,7 +241,7 @@ export function PersonalMockTabs({
             className={cn(
               "flex items-center gap-2 border-b-2 pb-3 text-[14px] font-semibold transition",
               isActive
-                ? "border-[#6366f1] text-[#6366f1]"
+                ? "border-[#2563eb] text-[#2563eb]"
                 : "border-transparent text-[#6b7280] hover:text-[#111827]",
             )}
           >
@@ -269,7 +273,7 @@ export function PersonalMockFilterChips({
           className={cn(
             "rounded-lg px-3 py-1.5 text-[12px] font-semibold",
             active === opt
-              ? "bg-[#eef2ff] text-[#6366f1]"
+              ? "bg-[#eff6ff] text-[#2563eb]"
               : "bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]",
           )}
         >
@@ -304,7 +308,7 @@ export function PersonalMockPagination({
             type="button"
             className={cn(
               "flex h-7 w-7 items-center justify-center rounded-md text-[12px] font-semibold",
-              p === page ? "bg-[#6366f1] text-white" : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
+              p === page ? "bg-[#2563eb] text-white" : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
             )}
           >
             {p}
@@ -341,7 +345,7 @@ export function PersonalMockAsideCard({
   return (
     <div className={cn(pm.card, "p-4", tones[tone])}>
       <div className="flex items-center gap-2">
-        {Icon ? <Icon className="h-4 w-4 text-[#6366f1]" /> : null}
+        {Icon ? <Icon className="h-4 w-4 text-[#2563eb]" /> : null}
         <h3 className="text-[13px] font-semibold text-[#111827]">{title}</h3>
       </div>
       <div className="mt-3 space-y-2 text-[12px] text-[#6b7280]">{children}</div>
@@ -368,7 +372,7 @@ export function PersonalMockToggle({
         onClick={() => onChange(!checked)}
         className={cn(
           "relative h-6 w-11 rounded-full transition",
-          checked ? "bg-[#6366f1]" : "bg-[#d1d5db]",
+          checked ? "bg-[#2563eb]" : "bg-[#d1d5db]",
         )}
       >
         <span
@@ -379,5 +383,139 @@ export function PersonalMockToggle({
         />
       </button>
     </label>
+  );
+}
+
+export function PersonalMockHorizontalStepper({
+  steps,
+  activeIndex = 0,
+}: {
+  steps: string[];
+  activeIndex?: number;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[12px]">
+      {steps.map((label, i) => {
+        const isActive = i === activeIndex;
+        const isDone = i < activeIndex;
+        return (
+          <div key={label} className="flex items-center gap-2">
+            <span
+              className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                isDone
+                  ? "bg-[#059669] text-white"
+                  : isActive
+                    ? "bg-[#2563eb] text-white"
+                    : "bg-[#f3f4f6] text-[#9ca3af]",
+              )}
+            >
+              {isDone ? "✓" : i + 1}
+            </span>
+            <span
+              className={cn(
+                "hidden font-medium sm:inline",
+                isActive ? "text-[#2563eb]" : "text-[#6b7280]",
+              )}
+            >
+              {label}
+            </span>
+            {i < steps.length - 1 ? (
+              <span className="mx-1 hidden h-px w-6 bg-[#e5e7eb] sm:block" />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function PersonalMockCollapsedSteps({
+  steps,
+}: {
+  steps: Array<{ n: number; title: string; desc?: string; required?: boolean }>;
+}) {
+  return (
+    <div className="space-y-2">
+      {steps.map((step) => (
+        <div
+          key={step.n}
+          className={cn(pm.card, "flex items-center gap-3 px-4 py-3")}
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f3f4f6] text-[12px] font-bold text-[#9ca3af]">
+            {step.n}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold text-[#111827]">{step.title}</p>
+            {step.desc ? <p className="text-[12px] text-[#6b7280]">{step.desc}</p> : null}
+          </div>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+              step.required
+                ? "bg-[#eff6ff] text-[#2563eb]"
+                : "bg-[#f3f4f6] text-[#9ca3af]",
+            )}
+          >
+            {step.required ? "Required" : "Optional"}
+          </span>
+          <ChevronRightIcon />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg className="h-4 w-4 shrink-0 text-[#9ca3af]" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function PersonalMockEligibilityBanner({
+  eligible,
+  title,
+  message,
+  linkLabel,
+}: {
+  eligible: boolean;
+  title: string;
+  message: string;
+  linkLabel?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border p-4",
+        eligible
+          ? "border-[#bbf7d0] bg-[#ecfdf5]"
+          : "border-[#fecaca] bg-[#fef2f2]",
+      )}
+    >
+      <p
+        className={cn(
+          "text-[14px] font-semibold",
+          eligible ? "text-[#059669]" : "text-[#dc2626]",
+        )}
+      >
+        {title}
+      </p>
+      <p className={cn("mt-1 text-[13px]", eligible ? "text-[#047857]" : "text-[#b91c1c]")}>
+        {message}
+      </p>
+      {linkLabel ? (
+        <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
+          {linkLabel}
+        </button>
+      ) : null}
+    </div>
   );
 }

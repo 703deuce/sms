@@ -1,6 +1,10 @@
 "use client";
 
 import type { PersonalAnalyticsSummary, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import {
+  WIREFRAME_ANALYTICS_KPIS,
+  usePersonalWireframe,
+} from "@/lib/workspace/personal-mockup-wireframe";
 import { formatPhone } from "@/lib/utils";
 import { Calendar, ChevronDown, Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -73,32 +77,47 @@ export function PersonalAnalyticsClient({
     ];
   }, [data]);
 
-  const answerRate = data && data.totalCalls
-    ? ((data.answered / data.totalCalls) * 100).toFixed(1)
+  const useWireframe = data ? usePersonalWireframe(data.totalCalls) : false;
+  const kpi = useWireframe ? WIREFRAME_ANALYTICS_KPIS : null;
+
+  const displayData = data && useWireframe
+    ? {
+        ...data,
+        totalCalls: kpi!.totalCalls,
+        answered: kpi!.answered,
+        missed: kpi!.missed,
+        voicemails: kpi!.voicemails,
+        forwardedMinutes: kpi!.forwardedMinutes,
+        averageDurationSeconds: kpi!.avgDurationSec,
+      }
+    : data;
+
+  const answerRate = displayData && displayData.totalCalls
+    ? ((displayData.answered / displayData.totalCalls) * 100).toFixed(1)
     : "0";
 
   return (
     <PersonalMockPage
       right={
-        data ? (
+        data && displayData ? (
           <>
             <PersonalMockSection title="Period Summary">
               <ul className="space-y-2 text-[13px]">
                 <li className="flex justify-between">
                   <span>Total Calls</span>
-                  <span className="font-semibold">{data.totalCalls}</span>
+                  <span className="font-semibold">{displayData.totalCalls}</span>
                 </li>
                 <li className="flex justify-between">
                   <span>Answered</span>
-                  <span className="font-semibold">{data.answered}</span>
+                  <span className="font-semibold">{displayData.answered}</span>
                 </li>
                 <li className="flex justify-between">
                   <span>Missed</span>
-                  <span className="font-semibold">{data.missed}</span>
+                  <span className="font-semibold">{displayData.missed}</span>
                 </li>
                 <li className="flex justify-between">
                   <span>Voicemails</span>
-                  <span className="font-semibold">{data.voicemails}</span>
+                  <span className="font-semibold">{displayData.voicemails}</span>
                 </li>
               </ul>
             </PersonalMockSection>
@@ -108,7 +127,7 @@ export function PersonalAnalyticsClient({
                 <li>
                   Peak activity clusters around business hours.
                 </li>
-                {data.voicemails > 0 ? (
+                {displayData.voicemails > 0 ? (
                   <li>Voicemails up vs prior periods — review inbox.</li>
                 ) : null}
               </ul>
@@ -116,7 +135,7 @@ export function PersonalAnalyticsClient({
             <PersonalMockSection title="Usage">
               <PersonalMockProgress
                 label="Minutes Used"
-                value={data.forwardedMinutes}
+                value={displayData.forwardedMinutes}
                 max={1000}
               />
               <PersonalMockProgress
@@ -171,7 +190,7 @@ export function PersonalAnalyticsClient({
                 type="button"
                 onClick={() => setDays(d)}
                 className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold ${
-                  days === d ? "bg-[#6366f1] text-white" : "bg-[#f3f4f6] text-[#374151]"
+                  days === d ? "bg-[#2563eb] text-white" : "bg-[#f3f4f6] text-[#374151]"
                 }`}
               >
                 {d} days
@@ -181,43 +200,47 @@ export function PersonalAnalyticsClient({
         }
       />
 
-      {loading || !data ? (
+      {loading || !displayData ? (
         <p className={pm.muted}>Loading analytics…</p>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <PersonalMockKpi
               label="Total Calls"
-              value={data.totalCalls}
-              trend={pctChange(data.totalCalls, data.totalCalls - 2)}
+              value={displayData.totalCalls}
+              trend={useWireframe ? kpi!.trends.total : pctChange(displayData.totalCalls, displayData.totalCalls - 2)}
             />
             <PersonalMockKpi
               label="Answered"
-              value={data.answered}
-              trend={pctChange(data.answered, data.answered - 1)}
+              value={displayData.answered}
+              trend={useWireframe ? kpi!.trends.answered : pctChange(displayData.answered, displayData.answered - 1)}
               iconClass="bg-[#ecfdf5] text-[#059669]"
             />
             <PersonalMockKpi
               label="Missed"
-              value={data.missed}
-              trend={-pctChange(data.missed, data.missed + 1)}
+              value={displayData.missed}
+              trend={useWireframe ? kpi!.trends.missed : -pctChange(displayData.missed, displayData.missed + 1)}
               iconClass="bg-[#fff7ed] text-[#ea580c]"
             />
             <PersonalMockKpi
               label="Voicemails"
-              value={data.voicemails}
-              trend={8}
+              value={displayData.voicemails}
+              trend={useWireframe ? kpi!.trends.voicemails : 8}
               iconClass="bg-[#f5f3ff] text-[#7c3aed]"
             />
-            <PersonalMockKpi label="Forwarded Minutes" value={data.forwardedMinutes} trend={15} />
+            <PersonalMockKpi
+              label="Forwarded Minutes"
+              value={displayData.forwardedMinutes}
+              trend={useWireframe ? kpi!.trends.forwarded : 15}
+            />
             <PersonalMockKpi
               label="Avg Duration"
-              value={`${Math.floor(data.averageDurationSeconds / 60)}:${(
-                data.averageDurationSeconds % 60
+              value={`${Math.floor(displayData.averageDurationSeconds / 60)}:${(
+                displayData.averageDurationSeconds % 60
               )
                 .toString()
                 .padStart(2, "0")}`}
-              trend={7}
+              trend={useWireframe ? kpi!.trends.avgDuration : 7}
             />
           </div>
 
@@ -227,12 +250,12 @@ export function PersonalAnalyticsClient({
             </PersonalMockSection>
             <PersonalMockSection title="Call Outcomes">
               <PersonalMockDonut
-                centerValue={String(data.totalCalls)}
+                centerValue={String(displayData.totalCalls)}
                 centerLabel="Total Calls"
                 segments={[
-                  { label: "Answered", value: data.answered, color: "#10b981" },
-                  { label: "Missed", value: data.missed, color: "#f97316" },
-                  { label: "Voicemails", value: data.voicemails, color: "#8b5cf6" },
+                  { label: "Answered", value: displayData.answered, color: "#10b981" },
+                  { label: "Missed", value: displayData.missed, color: "#f97316" },
+                  { label: "Voicemails", value: displayData.voicemails, color: "#8b5cf6" },
                 ]}
               />
             </PersonalMockSection>
@@ -241,7 +264,7 @@ export function PersonalAnalyticsClient({
           <div className="grid gap-6 md:grid-cols-2">
             <PersonalMockSection title="Calls by Hour">
               <PersonalMockBarChart
-                items={data.byHour
+                items={displayData.byHour
                   .filter((h) => h.calls > 0)
                   .slice(0, 8)
                   .map((h) => ({ label: `${h.hour}:00`, value: h.calls }))}
@@ -249,7 +272,7 @@ export function PersonalAnalyticsClient({
             </PersonalMockSection>
             <PersonalMockSection title="Calls by Day">
               <PersonalMockBarChart
-                items={data.byDay.slice(-7).map((d) => ({
+                items={displayData.byDay.slice(-7).map((d) => ({
                   label: d.date,
                   value: d.calls,
                 }))}
@@ -269,7 +292,7 @@ export function PersonalAnalyticsClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f3f4f6]">
-                  {data.byNumber
+                  {displayData.byNumber
                     .filter((n) => n.calls > 0)
                     .sort((a, b) => b.calls - a.calls)
                     .map((n) => (
