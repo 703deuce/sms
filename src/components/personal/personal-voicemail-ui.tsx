@@ -221,8 +221,8 @@ export function PersonalVoicemailUI({
           ? numbers.find((n) => n.id === numberId)?.friendlyName
           : numbers[0]?.friendlyName,
         durationSec: m.durationSec,
-        transcript: m.transcript,
-        readAt: m.readAt,
+        transcript: m.transcript ?? undefined,
+        readAt: m.readAt ?? null,
         createdAt: m.createdAt,
         isDemo: false,
       }));
@@ -811,7 +811,7 @@ export function PersonalVoicemailUI({
         </div>
 
         <div className="space-y-4 xl:col-start-2">
-        <PersonalMockSection hideHeader className="min-h-[400px]">
+        <PersonalMockSection title="Voicemail message" hideHeader className="min-h-[400px]">
           {!selected ? (
             <p className={pm.muted}>Select a voicemail to listen and read the transcript.</p>
           ) : (
