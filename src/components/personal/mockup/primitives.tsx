@@ -144,7 +144,7 @@ export function PersonalMockPill({
   tone?: "blue" | "green" | "orange" | "purple" | "red" | "gray";
 }) {
   const tones = {
-    blue: "bg-[#eef2ff] text-[#4338ca]",
+    blue: "bg-[#ebf2ff] text-[#2563eb]",
     green: "bg-[#ecfdf5] text-[#059669]",
     orange: "bg-[#fff7ed] text-[#ea580c]",
     purple: "bg-[#f5f3ff] text-[#7c3aed]",
