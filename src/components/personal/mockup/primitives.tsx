@@ -9,13 +9,13 @@ export const pm = {
   muted: "text-[13px] text-[#6b7280]",
   title: "text-[22px] font-bold tracking-tight text-[#111827]",
   subtitle: "mt-1 text-[14px] text-[#6b7280]",
-  primary: "#2563eb",
-  primaryBg: "#eff6ff",
-  primaryRing: "ring-[#2563eb]/30",
+  primary: "#6366f1",
+  primaryBg: "#eef2ff",
+  primaryRing: "ring-[#6366f1]/30",
 };
 
-const PRIMARY = "#2563eb";
-const PRIMARY_LIGHT = "#eff6ff";
+const PRIMARY = "#6366f1";
+const PRIMARY_LIGHT = "#eef2ff";
 
 export function PersonalMockPage({
   children,
@@ -64,7 +64,7 @@ export function PersonalMockKpi({
   value,
   sub,
   icon: Icon,
-  iconClass = "bg-[#eff6ff] text-[#2563eb]",
+  iconClass = "bg-[#eef2ff] text-[#6366f1]",
   trend,
   trendLabel,
 }: {
@@ -78,11 +78,23 @@ export function PersonalMockKpi({
 }) {
   return (
     <div className={cn(pm.card, "p-4")}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[12px] font-medium text-[#6b7280]">{label}</p>
-          <p className="mt-1 text-[26px] font-bold leading-none text-[#111827]">{value}</p>
-          {sub ? <p className="mt-1 text-[11px] text-[#9ca3af]">{sub}</p> : null}
+      <div className="flex items-center gap-4">
+        {Icon ? (
+          <div
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+              iconClass,
+            )}
+          >
+            <Icon className="h-5 w-5" strokeWidth={2} />
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-medium leading-snug text-[#6b7280]">{label}</p>
+          <p className="mt-0.5 text-[28px] font-bold leading-none tracking-tight text-[#111827]">
+            {value}
+          </p>
+          {sub ? <p className="mt-1 text-[12px] leading-snug text-[#6b7280]">{sub}</p> : null}
           {trend != null ? (
             <p
               className={cn(
@@ -94,16 +106,6 @@ export function PersonalMockKpi({
             </p>
           ) : null}
         </div>
-        {Icon ? (
-          <div
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-              iconClass,
-            )}
-          >
-            <Icon className="h-5 w-5" />
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -144,7 +146,7 @@ export function PersonalMockPill({
   tone?: "blue" | "green" | "orange" | "purple" | "red" | "gray";
 }) {
   const tones = {
-    blue: "bg-[#ebf2ff] text-[#2563eb]",
+    blue: "bg-[#eef2ff] text-[#6366f1]",
     green: "bg-[#ecfdf5] text-[#059669]",
     orange: "bg-[#fff7ed] text-[#ea580c]",
     purple: "bg-[#f5f3ff] text-[#7c3aed]",
@@ -170,7 +172,7 @@ export function PersonalMockSelect({
   return (
     <select
       className={cn(
-        "h-9 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[13px] text-[#374151] outline-none focus:border-[#2563eb]",
+        "h-9 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[13px] text-[#374151] outline-none focus:border-[#6366f1]",
         className,
       )}
       {...props}
@@ -200,9 +202,9 @@ export function PersonalMockBtn({
   ...props
 }: React.ComponentProps<"button"> & { variant?: "primary" | "outline" | "ghost" }) {
   const variants = {
-    primary: "bg-[#2563eb] text-white hover:bg-[#1d4ed8] shadow-sm",
+    primary: "bg-[#6366f1] text-white hover:bg-[#4f46e5] shadow-sm",
     outline: "border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb]",
-    ghost: "text-[#2563eb] hover:bg-[#eff6ff]",
+    ghost: "text-[#6366f1] hover:bg-[#eef2ff]",
   };
   return (
     <button
@@ -241,7 +243,7 @@ export function PersonalMockTabs({
             className={cn(
               "flex items-center gap-2 border-b-2 pb-3 text-[14px] font-semibold transition",
               isActive
-                ? "border-[#2563eb] text-[#2563eb]"
+                ? "border-[#6366f1] text-[#6366f1]"
                 : "border-transparent text-[#6b7280] hover:text-[#111827]",
             )}
           >
@@ -273,7 +275,7 @@ export function PersonalMockFilterChips({
           className={cn(
             "rounded-lg px-3 py-1.5 text-[12px] font-semibold",
             active === opt
-              ? "bg-[#eff6ff] text-[#2563eb]"
+              ? "bg-[#eef2ff] text-[#6366f1]"
               : "bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]",
           )}
         >
@@ -308,7 +310,7 @@ export function PersonalMockPagination({
             type="button"
             className={cn(
               "flex h-7 w-7 items-center justify-center rounded-md text-[12px] font-semibold",
-              p === page ? "bg-[#2563eb] text-white" : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
+              p === page ? "bg-[#6366f1] text-white" : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
             )}
           >
             {p}
@@ -345,7 +347,7 @@ export function PersonalMockAsideCard({
   return (
     <div className={cn(pm.card, "p-4", tones[tone])}>
       <div className="flex items-center gap-2">
-        {Icon ? <Icon className="h-4 w-4 text-[#2563eb]" /> : null}
+        {Icon ? <Icon className="h-4 w-4 text-[#6366f1]" /> : null}
         <h3 className="text-[13px] font-semibold text-[#111827]">{title}</h3>
       </div>
       <div className="mt-3 space-y-2 text-[12px] text-[#6b7280]">{children}</div>
@@ -364,7 +366,7 @@ export function PersonalMockToggle({
 }) {
   return (
     <label className="flex items-center justify-between gap-3 text-[13px]">
-      <span className="text-[#374151]">{label}</span>
+      <span className="font-medium text-[#111827]">{label}</span>
       <button
         type="button"
         role="switch"
@@ -372,7 +374,7 @@ export function PersonalMockToggle({
         onClick={() => onChange(!checked)}
         className={cn(
           "relative h-6 w-11 rounded-full transition",
-          checked ? "bg-[#2563eb]" : "bg-[#d1d5db]",
+          checked ? "bg-[#6366f1]" : "bg-[#d1d5db]",
         )}
       >
         <span
@@ -406,7 +408,7 @@ export function PersonalMockHorizontalStepper({
                 isDone
                   ? "bg-[#059669] text-white"
                   : isActive
-                    ? "bg-[#2563eb] text-white"
+                    ? "bg-[#6366f1] text-white"
                     : "bg-[#f3f4f6] text-[#9ca3af]",
               )}
             >
@@ -415,7 +417,7 @@ export function PersonalMockHorizontalStepper({
             <span
               className={cn(
                 "hidden font-medium sm:inline",
-                isActive ? "text-[#2563eb]" : "text-[#6b7280]",
+                isActive ? "text-[#6366f1]" : "text-[#6b7280]",
               )}
             >
               {label}
@@ -453,7 +455,7 @@ export function PersonalMockCollapsedSteps({
             className={cn(
               "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
               step.required
-                ? "bg-[#eff6ff] text-[#2563eb]"
+                ? "bg-[#eef2ff] text-[#6366f1]"
                 : "bg-[#f3f4f6] text-[#9ca3af]",
             )}
           >
@@ -512,7 +514,7 @@ export function PersonalMockEligibilityBanner({
         {message}
       </p>
       {linkLabel ? (
-        <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
+        <button type="button" className="mt-2 text-[12px] font-semibold text-[#6366f1]">
           {linkLabel}
         </button>
       ) : null}

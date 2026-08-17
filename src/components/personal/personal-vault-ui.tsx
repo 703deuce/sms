@@ -514,7 +514,7 @@ export function PersonalVaultUI({
             value={parked.length}
             sub="Across all locations"
             icon={Lock}
-            iconClass="bg-[#eff6ff] text-[#2563eb]"
+            iconClass="bg-[#eef2ff] text-[#6366f1]"
           />
           <PersonalMockKpi
             label="Monthly Vault Cost"
@@ -528,13 +528,13 @@ export function PersonalVaultUI({
             value={voicemailEnabledCount}
             sub="Numbers taking VM"
             icon={Voicemail}
-            iconClass="bg-[#f5f3ff] text-[#7c3aed]"
+            iconClass="bg-[#f3e8ff] text-[#9333ea]"
           />
           <PersonalMockKpi
             label="Action Required"
             value={actionRequiredCount}
             sub={actionRequiredCount > 0 ? "Renewals or updates" : "All clear"}
-            icon={AlertTriangle}
+            icon={actionRequiredCount > 0 ? AlertTriangle : Shield}
             iconClass={
               actionRequiredCount > 0
                 ? "bg-[#fff7ed] text-[#ea580c]"
