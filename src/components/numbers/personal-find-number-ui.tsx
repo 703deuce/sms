@@ -38,17 +38,21 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Cpu,
+  Dumbbell,
   Filter,
   Grid3x3,
   Heart,
+  Home,
   LayoutList,
   Lightbulb,
   MapPin,
-  MessageSquare,
   Phone,
   RefreshCw,
   Search,
+  ShoppingBag,
   Sparkles,
+  Stethoscope,
   Trophy,
   Wand2,
   Zap,
@@ -83,14 +87,31 @@ const PATTERN_CHIPS: { id: PatternChipId; label: string }[] = [
   { id: "word_pattern", label: "Word + Pattern" },
 ];
 
-const AI_QUICK_BRANDS = ["Toll", "800", "855", "Premium", "SMS", "VoIP", "POTS", "FAX"];
+const AI_PROMPT_MAX_LENGTH = 200;
 
-const AI_SUGGESTION_PICKS = [
-  { label: "Travel", industry: "travel" },
-  { label: "Real Estate", industry: "real estate" },
-  { label: "Pool Services", industry: "pool services" },
-  { label: "Lawyers", industry: "lawyers" },
-  { label: "Electricians", industry: "electrician" },
+const AI_EXAMPLE_CHIPS = [
+  "Vanity",
+  "800",
+  "Services",
+  "Beautiful",
+  "Gold",
+  "Top",
+  "Area",
+  "917",
+  "212",
+  "Local",
+];
+
+const AI_POPULAR_CATEGORIES: {
+  label: string;
+  industry: string;
+  icon: typeof Dumbbell;
+}[] = [
+  { label: "Fitness", industry: "fitness", icon: Dumbbell },
+  { label: "Real Estate", industry: "real estate", icon: Home },
+  { label: "E-commerce", industry: "e-commerce", icon: ShoppingBag },
+  { label: "Healthcare", industry: "healthcare", icon: Stethoscope },
+  { label: "Tech", industry: "technology", icon: Cpu },
 ];
 
 const pm = {
@@ -145,6 +166,8 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   const [searchMode, setSearchMode] = useState<FindNumberSearchMode>("manual");
   const [aiPromptDraft, setAiPromptDraft] = useState("");
   const [aiStarted, setAiStarted] = useState(false);
+  const [wantPorting, setWantPorting] = useState(false);
+  const [wantVanity, setWantVanity] = useState(false);
   const [searchState, setSearchState] = useState<NumberSearchState>(() =>
     createDefaultNumberSearchState(),
   );
@@ -322,9 +345,12 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
 
   async function onGetNumber(result: PremiumNumberProductResult) {
     if (!searchResponse?.searchLogId) return;
-    const searchMode = searchIntent === "business_keyword" ? "business" : "personal";
+    const reserveSearchMode = searchIntent === "business_keyword" ? "business" : "personal";
     setReserving(result.phoneNumber);
     setReserveError("");
+    if (aiEngaged) {
+      trackFindNumberAiEvent("number_reserved_from_ai", { phone: result.phoneNumber });
+    }
     try {
       const res = await fetch("/api/numbers/premium/reserve", {
         method: "POST",
@@ -523,33 +549,62 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     setSearchMode(mode);
   }
 
-  async function onStartAiConversation() {
+  function buildAiSearchState(): NumberSearchState {
+    let state = buildSearchStateFromManual();
+    if (wantVanity) {
+      state = applySearchStatePatch(state, {
+        searchPrefs: [...new Set([...state.searchPrefs, "vanity"] as const)],
+        apiIntent: "business_keyword",
+        intent: "business",
+      });
+    }
+    return state;
+  }
+
+  async function onAiFindMyNumber() {
     const msg = aiPromptDraft.trim();
     if (!msg) return;
-    setSearchState(buildSearchStateFromManual());
+    const state = buildAiSearchState();
+    setSearchState(state);
     trackFindNumberAiEvent("ai_search_opened");
     ai.openAiMode();
     setAiStarted(true);
     await ai.sendAiMessage(msg);
   }
 
-  async function onAiQuickBrand(brand: string) {
-    setSearchState(buildSearchStateFromManual());
-    setAiStarted(true);
-    await ai.sendAiMessage(`Show me ${brand} numbers`, brand);
+  function onAiExampleChip(chip: string) {
+    const additions: Record<string, string> = {
+      Vanity: "vanity memorable number",
+      Area: "local area code",
+      Top: "top rated",
+      Services: "professional services",
+      Beautiful: "beautiful memorable pattern",
+      Gold: "premium gold tier",
+      Local: "local number",
+    };
+    const text = additions[chip] ?? chip;
+    setAiPromptDraft((prev) => {
+      const base = prev.trim();
+      return base ? `${base} ${text}` : text;
+    });
   }
 
-  async function onAiSuggestionPick(industry: string) {
+  async function onAiCategoryPick(industry: string) {
     setIndustry(industry);
+    setAiPromptDraft((prev) => {
+      const base = prev.trim();
+      const phrase = `memorable number for my ${industry} business`;
+      return base ? `${base} ${phrase}` : phrase;
+    });
     setSearchState(
-      applySearchStatePatch(buildSearchStateFromManual(), {
+      applySearchStatePatch(buildAiSearchState(), {
         industry,
         intent: "business",
         apiIntent: "business_keyword",
       }),
     );
     setAiStarted(true);
-    await ai.sendAiMessage(`Find memorable numbers for my ${industry} business`);
+    await ai.sendAiMessage(`Find memorable numbers for my ${industry} business`, industry);
   }
 
   return (
@@ -559,7 +614,9 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
           <header>
             <h1 className="text-[22px] font-bold tracking-tight text-[#111827]">Find a Number</h1>
             <p className="mt-1 text-[14px] text-[#6b7280]">
-              Search memorable local and toll-free numbers that help your business stand out.
+              {searchMode === "ai"
+                ? "Search for a new number to add to your workspace by area code or vanity keyword."
+                : "Search memorable local and toll-free numbers that help your business stand out."}
             </p>
           </header>
 
@@ -589,93 +646,117 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                 )}
               >
                 <Sparkles className="h-4 w-4" />
-                AI Conversational
+                Ask AI Concierge
               </button>
             </div>
 
             {searchMode === "ai" ? (
               <div className="space-y-5">
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
                   <div className="space-y-4">
-                    <div>
+                    <div className="relative">
                       <textarea
                         value={aiPromptDraft}
-                        onChange={(e) => setAiPromptDraft(e.target.value)}
+                        onChange={(e) =>
+                          setAiPromptDraft(e.target.value.slice(0, AI_PROMPT_MAX_LENGTH))
+                        }
                         rows={5}
-                        placeholder="I'm your TransOvo concierge — tell me what type of numbers you're looking for. I'll search across inventory and help with search strategy along the way."
-                        className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-[14px] outline-none focus:border-[#6366f1]"
+                        placeholder="Tell us what you're looking for…"
+                        className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 pb-8 text-[14px] outline-none focus:border-[#6366f1]"
                       />
+                      <span className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-[#9ca3af]">
+                        {aiPromptDraft.length}/{AI_PROMPT_MAX_LENGTH}
+                      </span>
                     </div>
                     <div>
-                      <p className="mb-2 text-[12px] font-semibold text-[#374151]">Quick Brands</p>
+                      <p className="mb-2 text-[12px] font-semibold text-[#374151]">
+                        Examples:
+                      </p>
                       <div className="flex flex-wrap gap-2">
-                        {AI_QUICK_BRANDS.map((brand) => (
+                        {AI_EXAMPLE_CHIPS.map((chip) => (
                           <button
-                            key={brand}
+                            key={chip}
                             type="button"
-                            onClick={() => onAiQuickBrand(brand)}
+                            onClick={() => onAiExampleChip(chip)}
                             className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1 text-[12px] font-semibold text-[#374151] hover:border-[#c7d2fe] hover:bg-[#eef2ff]"
                           >
-                            {brand}
+                            {chip}
                           </button>
                         ))}
                       </div>
                     </div>
                     <div>
                       <p className="mb-2 text-[12px] font-semibold text-[#374151]">
-                        Try these suggestions
+                        Popular categories
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {AI_SUGGESTION_PICKS.map((pick) => (
-                          <button
-                            key={pick.label}
-                            type="button"
-                            onClick={() => onAiSuggestionPick(pick.industry)}
-                            className="rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-[12px] font-semibold text-[#374151] hover:border-[#c7d2fe] hover:bg-[#eef2ff]"
-                          >
-                            {pick.label}
-                          </button>
-                        ))}
+                        {AI_POPULAR_CATEGORIES.map((cat) => {
+                          const Icon = cat.icon;
+                          return (
+                            <button
+                              key={cat.label}
+                              type="button"
+                              disabled={ai.loading}
+                              onClick={() => onAiCategoryPick(cat.industry)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-[12px] font-semibold text-[#374151] hover:border-[#c7d2fe] hover:bg-[#eef2ff]"
+                            >
+                              <Icon className="h-4 w-4 text-[#6366f1]" />
+                              {cat.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                    <Button
-                      onClick={onStartAiConversation}
-                      disabled={ai.loading || !aiPromptDraft.trim()}
-                      className="h-11 w-full rounded-lg bg-[#6366f1] text-[14px] font-semibold shadow-[0_4px_14px_rgba(99,102,241,0.35)] hover:bg-[#5558e3] sm:w-auto sm:min-w-[220px]"
-                    >
-                      {ai.loading ? "Starting…" : "Start Conversation"}
-                    </Button>
-                    {ai.error ? <p className="text-[12px] text-red-600">{ai.error}</p> : null}
-                  </div>
-                  <div className="space-y-4">
-                    <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
-                      <h3 className="text-[13px] font-bold text-[#111827]">Search Tips & Strategy</h3>
-                      <ul className="mt-3 space-y-2 text-[12px] leading-relaxed text-[#6b7280]">
-                        <li className="flex gap-2">
-                          <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
-                          Start broad — area code, industry, or a memorable pattern — then refine.
-                        </li>
-                        <li className="flex gap-2">
-                          <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
-                          Toll-free builds national trust; local codes signal your primary market.
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="rounded-lg border border-[#e5e7eb] p-4">
-                      <h3 className="text-[13px] font-bold text-[#111827]">Chat with a specialist</h3>
-                      <p className="mt-2 text-[12px] text-[#6b7280]">
-                        Need help with a complex project? Chat with us!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          switchSearchMode("ai");
-                          setAiPromptDraft("I need help choosing the right number for my business.");
-                        }}
-                        className="mt-3 w-full rounded-lg border border-[#6366f1] px-4 py-2 text-[13px] font-semibold text-[#6366f1] hover:bg-[#eef2ff]"
+                    <div className="flex justify-center pt-2">
+                      <Button
+                        onClick={onAiFindMyNumber}
+                        disabled={ai.loading || !aiPromptDraft.trim()}
+                        className="h-12 min-w-[240px] rounded-lg bg-[#6366f1] text-[15px] font-semibold shadow-[0_4px_14px_rgba(99,102,241,0.35)] hover:bg-[#5558e3]"
                       >
-                        Chat with a specialist for help
-                      </button>
+                        {ai.loading ? "Finding your numbers…" : "Find My Number"}
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {ai.error ? <p className="text-center text-[12px] text-red-600">{ai.error}</p> : null}
+                  </div>
+                  <div className="relative space-y-4">
+                    <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+                      <h3 className="text-[13px] font-bold text-[#111827]">
+                        Personalize & Portability
+                      </h3>
+                      <div className="mt-3 space-y-3">
+                        <label className="flex items-start gap-2 text-[12px] text-[#374151]">
+                          <input
+                            type="checkbox"
+                            checked={wantPorting}
+                            onChange={(e) => setWantPorting(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 rounded border-[#d1d5db] text-[#6366f1]"
+                          />
+                          <span>
+                            Do you have a personal number you&apos;d like to use? (Porting)
+                          </span>
+                        </label>
+                        <label className="flex items-start gap-2 text-[12px] text-[#374151]">
+                          <input
+                            type="checkbox"
+                            checked={wantVanity}
+                            onChange={(e) => setWantVanity(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 rounded border-[#d1d5db] text-[#6366f1]"
+                          />
+                          <span>Are you looking for a vanity number?</span>
+                        </label>
+                      </div>
+                      {wantPorting ? (
+                        <Link
+                          href="/personal/porting"
+                          className="mt-3 inline-block text-[12px] font-semibold text-[#6366f1] hover:underline"
+                        >
+                          Start a port request →
+                        </Link>
+                      ) : null}
+                    </div>
+                    <div className="absolute bottom-0 right-0 max-w-[220px] rounded-2xl rounded-br-sm border border-[#e5e7eb] bg-white px-3 py-2 text-[12px] text-[#374151] shadow-sm">
+                      Hello, how can I help you today?
                     </div>
                   </div>
                 </div>

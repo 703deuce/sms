@@ -159,6 +159,7 @@ function parseHeuristic(
   suggestedActions: string[];
 } | null {
   const text = (quickAction || message).toLowerCase().trim();
+  const rawMessage = message.trim();
 
   if (text === "new_search" || text === "new search") {
     return {
@@ -168,8 +169,8 @@ function parseHeuristic(
     };
   }
 
-  if (text === "cheaper" || text.includes("cheaper") || text.includes("under $50")) {
-    const max = text.includes("50") ? 5000 : state.maxPriceCents ?? 7500;
+  if (text === "cheaper" || (text.includes("cheaper") && text.length < 24)) {
+    const max = state.maxPriceCents ?? 7500;
     const nextMax = Math.max(0, max - 2500);
     return {
       assistantMessage: `Prioritizing lower-priced numbers under $${(nextMax / 100).toFixed(0)}.`,
@@ -190,33 +191,6 @@ function parseHeuristic(
     };
   }
 
-  const underMatch = text.match(/under\s*\$?\s*(\d+)/);
-  if (underMatch) {
-    const dollars = Number(underMatch[1]);
-    return {
-      assistantMessage: `Searching with a $${dollars} budget cap.`,
-      action: {
-        type: "UPDATE_SEARCH",
-        patch: { maxPriceCents: dollars * 100 },
-        rerun: true,
-      },
-      suggestedActions: ["cheaper", "better_patterns"],
-    };
-  }
-
-  const areaCodes = parseAreaCodesInput(message.replace(/under|under \$?\d+/gi, ""));
-  if (areaCodes.length && text.length < 80) {
-    return {
-      assistantMessage: `Searching area code${areaCodes.length > 1 ? "s" : ""} ${areaCodes.join(", ")}.`,
-      action: {
-        type: "UPDATE_SEARCH",
-        patch: { areaCodes: [...new Set([...state.areaCodes, ...areaCodes])] },
-        rerun: true,
-      },
-      suggestedActions: ["cheaper", "compare_top_3"],
-    };
-  }
-
   if (quickAction === "better_patterns") {
     return {
       assistantMessage: "Looking for cleaner, more memorable patterns.",
@@ -229,6 +203,92 @@ function parseHeuristic(
         rerun: true,
       },
       suggestedActions: ["cheaper", "try_another_area"],
+    };
+  }
+
+  const chipActions: Record<string, Partial<NumberSearchState>> = {
+    vanity: {
+      searchPrefs: [...new Set([...state.searchPrefs, "vanity"] as const)] as import("./types").FindNumberSearchPrefId[],
+      apiIntent: "business_keyword",
+      intent: "business",
+    },
+    "800": { numberType: "tollfree", tollFreePrefix: "800" },
+    toll: { numberType: "tollfree" },
+    services: { apiIntent: "business_keyword", intent: "business" },
+    beautiful: { searchPrefs: [...new Set([...state.searchPrefs, "vanity"] as const)] as import("./types").FindNumberSearchPrefId[] },
+    gold: { minPriceCents: 5000 },
+    top: { sortBy: "score" },
+    area: { numberType: "local" },
+    "917": { areaCodes: [...new Set([...state.areaCodes, "917"])] },
+    "212": { areaCodes: [...new Set([...state.areaCodes, "212"])] },
+    local: { numberType: "local" },
+    fitness: { industry: "fitness", intent: "business", apiIntent: "business_keyword" },
+    "real estate": { industry: "real estate", intent: "business", apiIntent: "business_keyword" },
+    "e-commerce": { industry: "e-commerce", intent: "business", apiIntent: "business_keyword" },
+    healthcare: { industry: "healthcare", intent: "business", apiIntent: "business_keyword" },
+    technology: { industry: "technology", intent: "business", apiIntent: "business_keyword" },
+    electrician: { industry: "electrician", intent: "business", apiIntent: "business_keyword" },
+    lawyers: { industry: "lawyers", intent: "business", apiIntent: "business_keyword" },
+  };
+
+  if (quickAction && chipActions[quickAction.toLowerCase()]) {
+    const patch = chipActions[quickAction.toLowerCase()];
+    return {
+      assistantMessage: `Searching for ${quickAction} numbers in live inventory.`,
+      action: { type: "UPDATE_SEARCH", patch, rerun: true },
+      suggestedActions: ["cheaper", "compare_top_3", "better_patterns"],
+    };
+  }
+
+  const patch: Partial<NumberSearchState> = {};
+  let rerun = false;
+
+  const underMatch = rawMessage.match(/under\s*\$?\s*(\d+)/i);
+  if (underMatch) {
+    patch.maxPriceCents = Number(underMatch[1]) * 100;
+    patch.sortBy = "price";
+    rerun = true;
+  }
+
+  const areaCodes = parseAreaCodesInput(rawMessage.replace(/under\s*\$?\s*\d+/gi, ""));
+  if (areaCodes.length) {
+    patch.areaCodes = [...new Set([...state.areaCodes, ...areaCodes])];
+    rerun = true;
+  }
+
+  const industry = inferIndustryFromText(rawMessage);
+  if (industry) {
+    patch.industry = industry;
+    patch.intent = "business";
+    patch.apiIntent = "business_keyword";
+    rerun = true;
+  }
+
+  if (/vanity|memorable|brand/i.test(rawMessage)) {
+    patch.searchPrefs = [...new Set([...state.searchPrefs, "vanity"] as const)] as import("./types").FindNumberSearchPrefId[];
+    patch.apiIntent = "business_keyword";
+    rerun = true;
+  }
+
+  if (/\b800\b|toll[- ]?free|\b888\b|\b855\b/.test(rawMessage)) {
+    patch.numberType = "tollfree";
+    rerun = true;
+  }
+
+  if (rerun && Object.keys(patch).length > 0) {
+    const parts: string[] = [];
+    if (patch.maxPriceCents) parts.push(`under $${patch.maxPriceCents / 100}`);
+    if (patch.areaCodes?.length) parts.push(`area ${patch.areaCodes.join(", ")}`);
+    if (patch.industry) parts.push(`for ${patch.industry}`);
+    const assistantMessage =
+      parts.length > 0
+        ? `Searching live inventory ${parts.join(", ")}.`
+        : "Updated your search — scanning inventory now.";
+
+    return {
+      assistantMessage,
+      action: { type: "UPDATE_SEARCH", patch, rerun: true },
+      suggestedActions: ["cheaper", "better_patterns", "compare_top_3"],
     };
   }
 
