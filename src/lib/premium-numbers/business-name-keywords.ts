@@ -30,6 +30,13 @@ export function extractBusinessNameKeywords(businessName?: string): string[] {
 export function inferIndustryFromText(text: string): string | undefined {
   const lower = text.toLowerCase();
   const rules: Array<{ industry: string; hints: string[] }> = [
+    { industry: "electrician", hints: ["electric", "electrician", "wiring"] },
+    { industry: "real_estate", hints: ["real estate", "realtor", "property"] },
+    { industry: "fitness", hints: ["fitness", "gym", "workout"] },
+    { industry: "healthcare", hints: ["health", "healthcare", "medical", "clinic"] },
+    { industry: "technology", hints: ["tech", "technology", "software", "saas"] },
+    { industry: "ecommerce", hints: ["e-commerce", "ecommerce", "online store", "shop"] },
+    { industry: "pool_services", hints: ["pool", "spa"] },
     { industry: "roofing", hints: ["roof", "roofer", "shingle"] },
     { industry: "plumbing", hints: ["plumb", "pipe", "drain"] },
     { industry: "hvac", hints: ["hvac", "heat", "cool", "ac "] },
