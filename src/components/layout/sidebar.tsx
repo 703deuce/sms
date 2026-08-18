@@ -332,7 +332,7 @@ export function Sidebar({
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
                   {personalMode
                     ? isNumbersPlatformOnlyLaunch()
-                      ? "Phone numbers + routing"
+                      ? "Phone numbers platform"
                       : "Your phone numbers"
                     : "AI receptionist + SMS"}
                 </span>

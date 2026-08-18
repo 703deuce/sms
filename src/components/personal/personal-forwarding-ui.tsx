@@ -33,9 +33,10 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { PersonalMockProgress } from "./mockup/charts";
+import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 import { PersonalGreetingControls } from "./personal-greeting-controls";
 import { PersonalNumberSelector } from "./personal-number-selector";
 import {
@@ -118,7 +119,10 @@ export function PersonalForwardingUI({
   initialNumberId?: string;
 }) {
   const router = useRouter();
-  const [editId, setEditId] = useState(initialNumberId || numbers[0]?.id || "");
+  const searchParams = useSearchParams();
+  const [editId, setEditId] = useState(
+    () => searchParams.get("numberId") || initialNumberId || numbers[0]?.id || "",
+  );
   const [targets, setTargets] = useState<string[]>([""]);
   const [forwardingOn, setForwardingOn] = useState(false);
   const [forwardMode, setForwardMode] = useState<"single" | "sequential" | "simultaneous">("single");
@@ -166,8 +170,10 @@ export function PersonalForwardingUI({
   const selected = numbers.find((n) => n.id === editId);
 
   useEffect(() => {
-    if (initialNumberId) setEditId(initialNumberId);
-  }, [initialNumberId]);
+    const fromUrl = searchParams.get("numberId");
+    const nextId = fromUrl || initialNumberId || numbers[0]?.id || "";
+    if (nextId && nextId !== editId) setEditId(nextId);
+  }, [searchParams, initialNumberId, numbers, editId]);
 
   useEffect(() => {
     fetch("/api/personal/usage")
@@ -187,7 +193,6 @@ export function PersonalForwardingUI({
 
   useEffect(() => {
     if (!selected) return;
-    setEditId(selected.id);
     const settings =
       selected.settingsJson && typeof selected.settingsJson === "object"
         ? (selected.settingsJson as Record<string, unknown>)
@@ -284,7 +289,7 @@ export function PersonalForwardingUI({
     setFailedNumber(
       typeof settings.forwardFailedNumber === "string" ? settings.forwardFailedNumber : "",
     );
-  }, [selected, hydrateKey]);
+  }, [editId, numbers, hydrateKey]);
 
   const cleanedTargets = useMemo(() => targets.map((t) => t.trim()).filter(Boolean), [targets]);
   const forwardingMinutes =
@@ -685,21 +690,23 @@ export function PersonalForwardingUI({
     </button>
     {message ? <p className="text-center text-[12px] text-[#6b7280]">{message}</p> : null}
 
-    <div className={pm.card + " border-[#c7d2fe] bg-[#eef2ff] p-4"}>
-      <div className="flex items-center gap-2">
-        <Route className="h-4 w-4 text-[#6366f1]" />
-        <p className="text-[13px] font-semibold text-[#111827]">Need a Call Menu?</p>
+    {isSmartRoutingInNav() ? (
+      <div className={pm.card + " border-[#c7d2fe] bg-[#eef2ff] p-4"}>
+        <div className="flex items-center gap-2">
+          <Route className="h-4 w-4 text-[#6366f1]" />
+          <p className="text-[13px] font-semibold text-[#111827]">Need a Call Menu?</p>
+        </div>
+        <p className="mt-2 text-[12px] text-[#6b7280]">
+          Route callers with menus and time-based rules before they reach forwarding.
+        </p>
+        <Link
+          href="/smart-routing"
+          className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#6366f1]"
+        >
+          Set Up Smart Routing <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
-      <p className="mt-2 text-[12px] text-[#6b7280]">
-        Route callers with menus and time-based rules before they reach forwarding.
-      </p>
-      <Link
-        href="/smart-routing"
-        className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#6366f1]"
-      >
-        Set Up Smart Routing <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
-    </div>
+    ) : null}
   </>
   );
 
@@ -726,7 +733,6 @@ export function PersonalForwardingUI({
         <div className="mt-2">
           <PersonalNumberSelector
             numbers={numbers}
-            selectedId={editId}
             label=""
             selectClassName="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
           />

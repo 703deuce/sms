@@ -40,7 +40,7 @@ type PortRow = {
   documents?: PortDoc[];
 };
 
-export function PortNumberForm() {
+export function PortNumberForm({ variant = "business" }: { variant?: "business" | "personal" }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -162,22 +162,28 @@ export function PortNumberForm() {
     if (res.ok) await loadPorts();
   }
 
+  const isPersonal = variant === "personal";
+
   return (
     <div>
-      <PageHeader
-        title="Port a number"
-        description="Submit and track port requests with a real status timeline. FOC dates and completion are only set when confirmed."
-        actions={
-          <Link href="/numbers">
-            <Button variant="outline">Back to numbers</Button>
-          </Link>
-        }
-      />
+      {!isPersonal ? (
+        <>
+          <PageHeader
+            title="Port a number"
+            description="Submit and track port requests with a real status timeline. FOC dates and completion are only set when confirmed."
+            actions={
+              <Link href="/numbers">
+                <Button variant="outline">Back to numbers</Button>
+              </Link>
+            }
+          />
 
-      <Tabs items={numberTabs} />
+          <Tabs items={numberTabs} />
+        </>
+      ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+      <div className={isPersonal ? "" : "grid gap-6 xl:grid-cols-3"}>
+        <Card className={isPersonal ? "" : "xl:col-span-2"}>
           <CardTitle>New port request</CardTitle>
           {success ? <p className="mt-4 text-sm text-violet-600">{success}</p> : null}
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
@@ -259,6 +265,7 @@ export function PortNumberForm() {
           </form>
         </Card>
 
+        {!isPersonal ? (
         <div className="space-y-4">
           <Card>
             <CardTitle>What to expect</CardTitle>
@@ -270,8 +277,10 @@ export function PortNumberForm() {
             </ul>
           </Card>
         </div>
+        ) : null}
       </div>
 
+      {!isPersonal ? (
       <Card className="mt-6">
         <CardTitle>Porting status center</CardTitle>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -441,6 +450,7 @@ export function PortNumberForm() {
           )}
         </div>
       </Card>
+      ) : null}
     </div>
   );
 }

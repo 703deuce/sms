@@ -111,7 +111,7 @@ async function main() {
 
   const flows = await getJson("/api/smart-routing/flows", cookies);
   const flowCount = flows.json.data?.length ?? flows.json.flows?.length ?? 0;
-  record("smart-routing", flows.ok, `flows=${flowCount}`);
+  record("smart-routing-api", flows.ok, `flows=${flowCount} (optional v1)`);
 
   const pages = [
     "/personal",
@@ -128,9 +128,6 @@ async function main() {
     "/settings/billing",
     "/settings",
     "/contact",
-    "/smart-routing",
-    "/smart-routing/new",
-    "/smart-routing/audio",
   ];
 
   for (const path of pages) {

@@ -20,9 +20,10 @@ export function PersonalNumberSelector({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const urlId = searchParams.get("numberId");
   const current =
+    urlId ||
     selectedId ||
-    searchParams.get("numberId") ||
     (allowAll ? "" : numbers[0]?.id) ||
     "";
 

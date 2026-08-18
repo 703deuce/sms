@@ -16,16 +16,17 @@ import {
 import type { NavItem } from "@/lib/nav";
 import { buildSmartRoutingNavChildren } from "@/lib/solutions-nav";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
+import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 
 export type PersonalNavOptions = {
   smartRoutingFlowId?: string | null;
 };
 
-/** Compact Personal sidebar — numbers platform + Smart Routing */
+/** Compact Personal sidebar — numbers platform (Smart Routing optional via launch flag). */
 export function buildPersonalNav(options?: PersonalNavOptions): NavItem[] {
   const smartRoutingFlowId = options?.smartRoutingFlowId ?? null;
 
-  return [
+  const items: NavItem[] = [
     { label: "Overview", href: "/personal", icon: LayoutDashboard },
     { label: "My Numbers", href: "/personal/numbers", icon: Phone },
     { label: "Find a Number", href: "/personal/numbers/premium", icon: Hash },
@@ -33,18 +34,26 @@ export function buildPersonalNav(options?: PersonalNavOptions): NavItem[] {
     { label: "Forwarding", href: "/personal/forwarding", icon: PhoneForwarded },
     { label: "Voicemail", href: "/personal/voicemail", icon: Voicemail },
     { label: "Call Activity", href: "/personal/activity", icon: Activity },
-    {
+  ];
+
+  if (isSmartRoutingInNav()) {
+    items.push({
       label: "Smart Routing",
       href: "/smart-routing",
       icon: GitBranch,
       children: buildSmartRoutingNavChildren(smartRoutingFlowId),
-    },
+    });
+  }
+
+  items.push(
     { label: "Analytics", href: "/personal/analytics", icon: BarChart3 },
     { label: "Blocked", href: "/personal/blocked", icon: Ban },
     { label: "Usage", href: "/personal/usage", icon: Gauge },
     { label: "Porting", href: "/personal/porting", icon: ArrowRightLeft },
     { label: "Billing", href: "/settings/billing", icon: CreditCard },
-  ];
+  );
+
+  return items;
 }
 
 export function getPersonalPageTitle(pathname: string): string {

@@ -6,6 +6,7 @@ import {
   WIREFRAME_USAGE_BY_NUMBER,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
+import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 import { formatPhone } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -443,6 +444,7 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
           </div>
         </PersonalMockSection>
 
+        {isSmartRoutingInNav() ? (
         <PersonalMockSection title="Smart Routing Usage">
           <div className="space-y-2 text-[13px]">
             <div className="flex items-center gap-2">
@@ -458,6 +460,7 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
             </div>
           </div>
         </PersonalMockSection>
+        ) : null}
 
         <PersonalMockSection title="Usage History">
           <ul className="space-y-2 text-[12px] text-[#6b7280]">

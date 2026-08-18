@@ -508,7 +508,7 @@ export function PersonalPortingClient({
             </div>
             {eligibility?.eligible ? (
               <div className="border-t border-[#f3f4f6] pt-4">
-                <PortNumberForm />
+                <PortNumberForm variant="personal" />
               </div>
             ) : null}
           </div>

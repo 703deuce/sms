@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { srCard } from "@/components/smart-routing/shared";
 import { formatPremiumPrice } from "@/lib/premium-numbers/premium-pricing";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
@@ -146,13 +147,20 @@ export function PremiumSuccessPanel({
   onClose: () => void;
 }) {
   const headline = state.vanityDisplay ?? state.displayNumber ?? state.phoneNumber;
-  const services = [
-    { label: "Park This Number", href: "/numbers", icon: Vault },
-    { label: "Forward Calls", href: "/phone/settings", icon: Forward },
-    { label: "Smart Routing", href: "/smart-routing", icon: Phone },
-    { label: "AI Receptionist", href: "/voice/receptionist", icon: Brain },
-    { label: "Business Texting", href: "/compliance", icon: MessageSquare },
-  ];
+  const personalV1 = isNumbersPlatformOnlyLaunch();
+  const services = personalV1
+    ? [
+        { label: "Park This Number", href: "/personal/vault", icon: Vault },
+        { label: "Forward Calls", href: "/personal/forwarding", icon: Forward },
+        { label: "Set Up Voicemail", href: "/personal/voicemail", icon: Phone },
+      ]
+    : [
+        { label: "Park This Number", href: "/numbers", icon: Vault },
+        { label: "Forward Calls", href: "/phone/settings", icon: Forward },
+        { label: "Smart Routing", href: "/smart-routing", icon: Phone },
+        { label: "AI Receptionist", href: "/voice/receptionist", icon: Brain },
+        { label: "Business Texting", href: "/compliance", icon: MessageSquare },
+      ];
 
   return (
     <div className={cn(srCard, "border-[#e0e7ff] bg-[#faf5ff] p-6")}>

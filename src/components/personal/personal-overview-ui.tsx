@@ -38,7 +38,7 @@ const QUICK_ACTIONS = [
   { label: "Overview", href: "/personal" },
   { label: "Add a new number", href: "/personal/numbers/premium" },
   { label: "View call activity", href: "/personal/activity" },
-  { label: "Create smart routing flow", href: "/smart-routing/new" },
+  { label: "Set up call forwarding", href: "/personal/forwarding" },
   { label: "Park a number in vault", href: "/personal/vault" },
 ];
 

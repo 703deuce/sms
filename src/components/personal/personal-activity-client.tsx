@@ -9,6 +9,7 @@ import {
   WIREFRAME_ROUTING_HEALTH,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
+import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 import { cn, formatPhone } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -490,7 +491,7 @@ export function PersonalActivityClient({
                   <option value="All">Handling Type</option>
                   <option>Forward</option>
                   <option>Voicemail</option>
-                  <option>Smart Routed</option>
+                  {isSmartRoutingInNav() ? <option>Smart Routed</option> : null}
                 </PersonalMockSelect>
                 <PersonalMockSelect className="w-[120px]">
                   <option>Newest First</option>
@@ -570,7 +571,7 @@ export function PersonalActivityClient({
                                 <PersonalMockPill tone={outcomeTone(r.outcome)}>
                                   {r.outcome}
                                 </PersonalMockPill>
-                                {r.smartRouted ? (
+                                {isSmartRoutingInNav() && r.smartRouted ? (
                                   <PersonalMockPill tone="blue">Smart Routed</PersonalMockPill>
                                 ) : null}
                               </div>
@@ -821,10 +822,12 @@ export function PersonalActivityClient({
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
-                <Phone className="h-3.5 w-3.5" />
-                Call Back
-              </PersonalMockBtn>
+              <a href={`tel:${selected.caller}`} className="col-span-1">
+                <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
+                  <Phone className="h-3.5 w-3.5" />
+                  Call Back
+                </PersonalMockBtn>
+              </a>
               {!selected.blocked ? (
                 <PersonalMockBtn
                   variant="outline"
@@ -835,14 +838,27 @@ export function PersonalActivityClient({
                   Block Caller
                 </PersonalMockBtn>
               ) : null}
-              <Link href="/personal/voicemail" className="col-span-1">
+              <Link
+                href={
+                  selected.calledNumberId
+                    ? `/personal/voicemail?numberId=${selected.calledNumberId}`
+                    : "/personal/voicemail"
+                }
+                className="col-span-1"
+              >
                 <PersonalMockBtn variant="outline" className="w-full gap-1 text-[12px]">
                   <Voicemail className="h-3.5 w-3.5 text-[#7c3aed]" />
                   View Voicemail
                 </PersonalMockBtn>
               </Link>
               {selected.forwardDestination ? (
-                <Link href="/personal/forwarding">
+                <Link
+                  href={
+                    selected.calledNumberId
+                      ? `/personal/forwarding?numberId=${selected.calledNumberId}`
+                      : "/personal/forwarding"
+                  }
+                >
                   <PersonalMockBtn variant="outline" className="w-full text-[12px]">
                     View Forwarding Rule
                   </PersonalMockBtn>

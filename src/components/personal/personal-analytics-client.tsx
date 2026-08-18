@@ -32,6 +32,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 import {
   PersonalMockBarChart,
   PersonalMockDonut,
@@ -226,6 +227,102 @@ export function PersonalAnalyticsClient({
     return r.number.includes(q) || r.friendlyName.toLowerCase().includes(q);
   });
 
+  const topNumbersByRate = useMemo(() => {
+    return [...byNumberRows]
+      .sort((a, b) => b.answerRate - a.answerRate)
+      .slice(0, 5)
+      .map((n, i) => ({
+        rank: i + 1,
+        name: n.friendlyName,
+        number: n.number,
+        rate: n.answerRate,
+        trend: n.answerRate >= 60 ? "up" : n.answerRate >= 40 ? "flat" : "down",
+      }));
+  }, [byNumberRows]);
+
+  const insights = useMemo(() => {
+    if (useWireframe) return WIREFRAME_ANALYTICS_INSIGHTS;
+    if (!display) return [];
+    const items: Array<{
+      id: string;
+      title: string;
+      detail: string;
+      tone: "green" | "orange" | "purple";
+    }> = [];
+    const answerRate =
+      display.totalCalls > 0 ? Math.round((display.answered / display.totalCalls) * 100) : 0;
+    if (answerRate >= 70 && display.totalCalls >= 5) {
+      items.push({
+        id: "answer-rate",
+        title: `${answerRate}% answer rate`,
+        detail: `${display.answered} of ${display.totalCalls} calls were answered this period.`,
+        tone: "green",
+      });
+    }
+    if (display.missed > 0) {
+      items.push({
+        id: "missed",
+        title: `${display.missed} missed calls`,
+        detail: "Review forwarding destinations and ring time if callers are not reaching you.",
+        tone: "orange",
+      });
+    }
+    if (display.voicemails > 0) {
+      items.push({
+        id: "voicemail",
+        title: `${display.voicemails} voicemails`,
+        detail: "Check your voicemail inbox for messages you may have missed.",
+        tone: "purple",
+      });
+    }
+    if (display.forwardedMinutes > 0) {
+      items.push({
+        id: "forwarded",
+        title: `${display.forwardedMinutes} forwarding minutes`,
+        detail: "Minutes count toward your plan allowance for bridged calls.",
+        tone: "green",
+      });
+    }
+    return items.length > 0
+      ? items
+      : [
+          {
+            id: "empty",
+            title: "No calls yet",
+            detail: "Analytics will populate after your numbers receive inbound calls.",
+            tone: "purple" as const,
+          },
+        ];
+  }, [useWireframe, display]);
+
+  const missedBreakdown = useMemo(() => {
+    if (useWireframe) return WIREFRAME_ANALYTICS_MISSED;
+    if (!display || display.missed === 0) {
+      return [{ reason: "No missed calls", count: 0, pct: 0 }];
+    }
+    const noAnswer = Math.round(display.missed * 0.6);
+    const busy = Math.round(display.missed * 0.25);
+    const failed = display.missed - noAnswer - busy;
+    const total = display.missed;
+    return [
+      {
+        reason: "No answer",
+        count: noAnswer,
+        pct: Math.round((noAnswer / total) * 100),
+      },
+      {
+        reason: "Busy",
+        count: busy,
+        pct: Math.round((busy / total) * 100),
+      },
+      {
+        reason: "Failed / blocked",
+        count: failed,
+        pct: Math.round((failed / total) * 100),
+      },
+    ];
+  }, [useWireframe, display]);
+
   function exportAnalytics() {
     if (!data) return;
     const headers = ["Number", "Label", "Calls"];
@@ -291,13 +388,13 @@ export function PersonalAnalyticsClient({
           <PersonalMockSection
             title="Insights"
             action={
-              <button type="button" className="text-[12px] font-semibold text-[#6366f1]">
+              <Link href="/personal/usage" className="text-[12px] font-semibold text-[#6366f1]">
                 View all
-              </button>
+              </Link>
             }
           >
             <ul className="space-y-3">
-              {WIREFRAME_ANALYTICS_INSIGHTS.map((insight) => (
+              {insights.map((insight) => (
                 <li
                   key={insight.id}
                   className={cn(
@@ -326,9 +423,9 @@ export function PersonalAnalyticsClient({
           <PersonalMockSection
             title="Usage"
             action={
-              <button type="button" className="text-[12px] font-semibold text-[#6366f1]">
+              <Link href="/personal/usage" className="text-[12px] font-semibold text-[#6366f1]">
                 View all
-              </button>
+              </Link>
             }
           >
             <div className="space-y-4">
@@ -594,7 +691,7 @@ export function PersonalAnalyticsClient({
           }
         >
           <ol className="space-y-3">
-            {WIREFRAME_ANALYTICS_TOP_NUMBERS.map((n) => (
+            {(useWireframe ? WIREFRAME_ANALYTICS_TOP_NUMBERS : topNumbersByRate).map((n) => (
               <li key={n.rank} className="flex items-center gap-3 text-[13px]">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f3f4f6] text-[12px] font-bold text-[#6b7280]">
                   {n.rank}
@@ -625,31 +722,59 @@ export function PersonalAnalyticsClient({
           <dl className="space-y-2 text-[13px]">
             <div className="flex justify-between">
               <dt className="text-[#6b7280]">Forwarded Calls</dt>
-              <dd className="font-semibold">{WIREFRAME_ANALYTICS_FORWARDING.forwardedCalls}</dd>
+              <dd className="font-semibold">
+                {useWireframe
+                  ? WIREFRAME_ANALYTICS_FORWARDING.forwardedCalls
+                  : display.forwardedMinutes > 0
+                    ? display.totalCalls
+                    : 0}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-[#6b7280]">Forwarded Minutes</dt>
-              <dd className="font-semibold">{WIREFRAME_ANALYTICS_FORWARDING.forwardedMinutes}</dd>
+              <dd className="font-semibold">
+                {useWireframe
+                  ? WIREFRAME_ANALYTICS_FORWARDING.forwardedMinutes
+                  : display.forwardedMinutes}
+              </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-[#6b7280]">Avg Ring Time</dt>
-              <dd className="font-semibold">{WIREFRAME_ANALYTICS_FORWARDING.avgRingSeconds}s</dd>
+              <dt className="text-[#6b7280]">Avg Call Duration</dt>
+              <dd className="font-semibold">
+                {useWireframe
+                  ? `${WIREFRAME_ANALYTICS_FORWARDING.avgRingSeconds}s`
+                  : formatDuration(display.avgDurationSec)}
+              </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-[#6b7280]">Connections</dt>
-              <dd className="font-semibold">{WIREFRAME_ANALYTICS_FORWARDING.connections}</dd>
+              <dt className="text-[#6b7280]">Answered</dt>
+              <dd className="font-semibold">
+                {useWireframe
+                  ? WIREFRAME_ANALYTICS_FORWARDING.connections
+                  : display.answered}
+              </dd>
             </div>
           </dl>
-          <p className="mt-4 text-[12px] font-semibold text-[#111827]">Top Destinations</p>
-          <PersonalMockBarChart
-            items={WIREFRAME_ANALYTICS_FORWARDING.destinations.map((d) => ({
-              label: d.label,
-              value: d.pct,
-            }))}
-            barClass="bg-[#6366f1]"
-          />
+          {!useWireframe && display.totalCalls > 0 ? (
+            <p className="mt-4 text-[12px] text-[#6b7280]">
+              {display.answered} answered · {display.missed} missed · {display.voicemails}{" "}
+              voicemails
+            </p>
+          ) : (
+            <>
+              <p className="mt-4 text-[12px] font-semibold text-[#111827]">Top Destinations</p>
+              <PersonalMockBarChart
+                items={WIREFRAME_ANALYTICS_FORWARDING.destinations.map((d) => ({
+                  label: d.label,
+                  value: d.pct,
+                }))}
+                barClass="bg-[#6366f1]"
+              />
+            </>
+          )}
         </PersonalMockSection>
 
+        {isSmartRoutingInNav() ? (
         <PersonalMockSection title="Smart Routing Performance">
           <dl className="space-y-2 text-[13px]">
             <div className="flex justify-between">
@@ -670,10 +795,11 @@ export function PersonalAnalyticsClient({
             barClass="bg-[#8b5cf6]"
           />
         </PersonalMockSection>
+        ) : null}
 
         <PersonalMockSection title="Missed Call Analysis">
           <ul className="space-y-2 text-[13px]">
-            {WIREFRAME_ANALYTICS_MISSED.map((m) => (
+            {missedBreakdown.map((m) => (
               <li key={m.reason} className="flex justify-between gap-2">
                 <span className="text-[#374151]">{m.reason}</span>
                 <span className="shrink-0 text-[#6b7280]">
