@@ -58,14 +58,27 @@ async function main() {
   const forwardRow = {
     ...parkedRow,
     voiceForwardTo: "+15552220000",
-    settingsJson: { parked: false, forwardingEnabled: true },
+    settingsJson: {
+      parked: false,
+      forwardingEnabled: true,
+      forwardTargets: ["+15552220000"],
+    },
   } as const;
   const forwardRoute = resolveNumberInboundRoute(forwardRow);
   assert.equal(forwardRoute.kind, "forward");
   if (forwardRoute.kind === "forward") {
-    assert.equal(forwardRoute.destination, "+15552220000");
+    assert.deepEqual(forwardRoute.destinations, ["+15552220000"]);
     assert.equal(forwardRoute.ringSeconds, 25);
   }
+
+  const staleDisplayStateRow = {
+    ...forwardRow,
+    settingsJson: {
+      ...forwardRow.settingsJson,
+      personalServiceState: "PARKED",
+    },
+  } as const;
+  assert.equal(resolveNumberInboundRoute(staleDisplayStateRow).kind, "forward");
 
   const vmRow = {
     ...parkedRow,

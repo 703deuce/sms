@@ -164,12 +164,7 @@ export function readPersonalCallSettings(row: {
 
 export function isPersonalNumberParked(row: { settingsJson?: unknown }): boolean {
   const settings = readSettings(row);
-  return (
-    settings.parked === true ||
-    settings.personalParked === true ||
-    settings.personalServiceState === "PARKED" ||
-    settings.personalServiceState === "PARKED_VOICEMAIL"
-  );
+  return settings.parked === true || settings.personalParked === true;
 }
 
 export function derivePersonalDisplayState(
