@@ -133,6 +133,18 @@ export async function applyPersonalForwardOverflow(input: {
 
   if (action === "destination_voicemail" && input.reason === "unanswered") {
     await tagForwardOutcome(call.id, "DESTINATION_VOICEMAIL");
+    await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+      method: "POST",
+      body: {},
+    }).catch(() => undefined);
+    await prisma.humanCall.update({
+      where: { id: call.id },
+      data: {
+        status: "no-answer",
+        endedAt: new Date(),
+        onHold: false,
+      },
+    });
     return { ok: true, action: "destination_voicemail" };
   }
 

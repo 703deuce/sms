@@ -38,13 +38,13 @@ async function configureNumber(
     forwardingEnabled: true,
     forwardDestination: FORWARD_TO,
     forwardMode: "single",
-    forwardRingSeconds: 25,
+    forwardRingSeconds: 20,
     forwardUnansweredAction: "transovo_voicemail",
     forwardBusyAction: "voicemail",
     forwardFailedAction: "voicemail",
     voicemailEnabled: true,
     directVoicemail: false,
-    callScreeningEnabled: true,
+    callScreeningEnabled: false,
     forwardScreeningSeconds: 8,
   });
 

@@ -538,7 +538,7 @@ export function PersonalForwardingUI({
     );
   }
 
-  const displayCallScreening = useWireframe ? true : callScreening;
+  const displayCallScreening = callScreening;
   const sidebarStatusLabel = isForwardingActive ? "Active" : statusLabel;
 
   const sidebar = (
@@ -598,17 +598,23 @@ export function PersonalForwardingUI({
           }}
         />
       </div>
-      <label className="mt-3 block text-[11px] font-medium text-[#9ca3af]">
-        Prompt
-        <PersonalMockSelect
-          className="mt-1 w-full text-[12px]"
-          value={screeningPrompt}
-          onChange={(e) => setScreeningPrompt(e.target.value)}
-        >
-          <option value="press_1">Press 1 to accept</option>
-          <option value="name">Announce caller name</option>
-        </PersonalMockSelect>
-      </label>
+      <p className="mt-2 text-[11px] leading-relaxed text-[#6b7280]">
+        Require you to press 1 before a forwarded call connects. This prevents your mobile
+        voicemail or automated systems from accidentally answering the call.
+      </p>
+      {callScreening ? (
+        <label className="mt-3 block text-[11px] font-medium text-[#9ca3af]">
+          Prompt
+          <PersonalMockSelect
+            className="mt-1 w-full text-[12px]"
+            value={screeningPrompt}
+            onChange={(e) => setScreeningPrompt(e.target.value)}
+          >
+            <option value="press_1">Press 1 to accept</option>
+            <option value="name">Announce caller name</option>
+          </PersonalMockSelect>
+        </label>
+      ) : null}
     </div>
 
     <div className={pm.card + " p-4"}>
@@ -956,7 +962,11 @@ export function PersonalForwardingUI({
                     action={unansweredActionLabel(unansweredAction)}
                     pills={
                       unansweredAction === "transovo_voicemail"
-                        ? [`Greeting: ${greetingLabel}`, "Transcription: On"]
+                        ? [
+                            `Ring ${ringSeconds}s before Transovo voicemail`,
+                            `Greeting: ${greetingLabel}`,
+                            "Transcription: On",
+                          ]
                         : undefined
                     }
                   />

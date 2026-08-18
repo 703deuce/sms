@@ -99,7 +99,7 @@ export function readPersonalCallSettings(row: {
   const settings = readSettings(row);
   const ringRaw = settings.forwardRingSeconds;
   const ringSeconds =
-    typeof ringRaw === "number" && ringRaw >= 15 && ringRaw <= 45 ? ringRaw : 25;
+    typeof ringRaw === "number" && ringRaw >= 15 && ringRaw <= 45 ? ringRaw : 20;
 
   const screeningRaw = settings.forwardScreeningSeconds;
   const forwardScreeningSeconds =
@@ -161,7 +161,7 @@ export function readPersonalCallSettings(row: {
     voicemailEnabled,
     directVoicemail: settings.directVoicemail === true,
     callerIdDisplay,
-    callScreeningEnabled: forwardUnansweredAction === "transovo_voicemail",
+    callScreeningEnabled: settings.callScreeningEnabled === true,
     forwardScreeningSeconds,
     forwardScheduleMode:
       settings.forwardScheduleMode === "custom" ? "custom" : "always",

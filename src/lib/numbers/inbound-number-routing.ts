@@ -11,7 +11,7 @@ import {
   type ForwardUnansweredAction,
   type IncomingCallHandling,
 } from "./personal-call-settings";
-import { requiresPress1Screening } from "./forward-screening";
+import { requiresPress1Screening, effectiveForwardRingSeconds } from "./forward-screening";
 import {
   readPersonalForwardSchedule,
   resolveForwardSchedule,
@@ -91,7 +91,7 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
       kind: "forward",
       destinations: targets,
       mode: callSettings.forwardMode,
-      ringSeconds: callSettings.forwardRingSeconds,
+      ringSeconds: effectiveForwardRingSeconds(callSettings),
       unansweredAction: callSettings.forwardUnansweredAction,
       callScreening: requiresPress1Screening(callSettings),
       callerIdDisplay: callSettings.callerIdDisplay,

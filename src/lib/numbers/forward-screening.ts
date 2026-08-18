@@ -4,13 +4,12 @@
 
 import type { PersonalCallSettings } from "./personal-call-settings";
 import {
-  type ForwardUnansweredAction,
   normalizeForwardUnansweredAction,
 } from "./personal-call-settings";
 
 export const FORWARD_RING_MIN_SECONDS = 15;
 export const FORWARD_RING_MAX_SECONDS = 45;
-export const DEFAULT_FORWARD_RING_SECONDS = 25;
+export const DEFAULT_FORWARD_RING_SECONDS = 20;
 export const DEFAULT_SCREENING_SECONDS = 8;
 export const SCREENING_MIN_SECONDS = 5;
 export const SCREENING_MAX_SECONDS = 8;
@@ -28,16 +27,23 @@ export function clampScreeningSeconds(raw: number | undefined): number {
   return Math.min(SCREENING_MAX_SECONDS, Math.max(SCREENING_MIN_SECONDS, Math.round(raw)));
 }
 
-/** Press-1 required when Transovo voicemail owns the unanswered experience. */
+/** Optional Press-1 — only when customer explicitly enables Call Screening. */
 export function requiresPress1Screening(settings: PersonalCallSettings): boolean {
+  return settings.callScreeningEnabled === true;
+}
+
+export function effectiveForwardRingSeconds(settings: PersonalCallSettings): number {
   const action = normalizeForwardUnansweredAction(
     settings.forwardUnansweredAction,
     settings.voicemailEnabled,
   );
-  return action === "transovo_voicemail";
+  if (action === "destination_voicemail") {
+    return FORWARD_RING_MAX_SECONDS;
+  }
+  return clampForwardRingSeconds(settings.forwardRingSeconds);
 }
 
-export function defaultUnansweredAction(voicemailEnabled: boolean): ForwardUnansweredAction {
+export function defaultUnansweredAction(voicemailEnabled: boolean): import("./personal-call-settings").ForwardUnansweredAction {
   return voicemailEnabled ? "transovo_voicemail" : "destination_voicemail";
 }
 

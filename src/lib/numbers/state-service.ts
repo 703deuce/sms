@@ -116,12 +116,13 @@ export async function transitionNumberService(
         forwardingEnabled: true,
         forwardDestination: validated.e164,
         forwardMode: "single",
-        forwardRingSeconds: 25,
+        forwardRingSeconds: 20,
         forwardUnansweredAction: "transovo_voicemail",
         forwardBusyAction: "voicemail",
         forwardFailedAction: "voicemail",
         voicemailEnabled: true,
         directVoicemail: false,
+        callScreeningEnabled: false,
       });
 
       const updated = await prisma.phoneNumber.update({
