@@ -155,12 +155,15 @@ export async function transitionNumberService(
         mergePersonalCallSettingsPatch(settings, { voicemailEnabled: true }),
         { voiceForwardTo: row.voiceForwardTo },
       );
-      return mapPhoneNumber(
+      const vmEnabled = mapPhoneNumber(
         await prisma.phoneNumber.update({
           where: { id: numberId },
           data: { settingsJson: vmSettings },
         }) as Parameters<typeof mapPhoneNumber>[0],
       );
+      const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+      await ensureNumberVoicemailBox(workspaceId, numberId);
+      return vmEnabled;
 
     case "disable_voicemail":
       const noVmSettings = withDisplayState(
@@ -194,10 +197,17 @@ export async function transitionNumberService(
         ),
         { voiceForwardTo: row.voiceForwardTo },
       );
+      await prisma.phoneNumber.update({
+        where: { id: numberId },
+        data: { settingsJson: vaultVmSettings },
+      });
+      const { ensureNumberVoicemailBox: ensureVaultVmBox } = await import(
+        "@/lib/phone/voicemail-service"
+      );
+      await ensureVaultVmBox(workspaceId, numberId);
       return mapPhoneNumber(
-        await prisma.phoneNumber.update({
-          where: { id: numberId },
-          data: { settingsJson: vaultVmSettings },
+        await prisma.phoneNumber.findFirstOrThrow({
+          where: { id: numberId, workspaceId },
         }) as Parameters<typeof mapPhoneNumber>[0],
       );
 

@@ -162,6 +162,31 @@ export function PersonalVoicemailUI({
   const [showGreetingEditor, setShowGreetingEditor] = useState(false);
   const greetingRef = useRef<HTMLDivElement>(null);
 
+  async function ensureVoicemailBoxId(): Promise<string | undefined> {
+    if (numberId) {
+      const res = await fetch("/api/phone/voicemail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ensure_number_box", phoneNumberId: numberId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Could not create voicemail box for this number.");
+      }
+      return json.data?.id as string | undefined;
+    }
+    const res = await fetch("/api/phone/voicemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ensure_personal", name: "Personal voicemail" }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json.error || "Could not create voicemail box.");
+    }
+    return json.data?.id as string | undefined;
+  }
+
   const loadVoicemail = useCallback(async () => {
     const params = new URLSearchParams();
     if (numberId) params.set("phoneNumberId", numberId);
@@ -322,16 +347,7 @@ export function PersonalVoicemailUI({
     try {
       let boxId = box?.id;
       if (!boxId) {
-        const ensureRes = await fetch("/api/phone/voicemail", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "ensure_personal", name: "Personal voicemail" }),
-        });
-        const ensureJson = await ensureRes.json().catch(() => ({}));
-        if (!ensureRes.ok) {
-          throw new Error(ensureJson.error || "Could not create voicemail box.");
-        }
-        boxId = ensureJson.data?.id;
+        boxId = await ensureVoicemailBoxId();
       }
 
       if (boxId) {
@@ -369,13 +385,19 @@ export function PersonalVoicemailUI({
   }
 
   async function persistGreeting(patch: { greetingText?: string; greetingUrl?: string }) {
+    let boxId = box?.id;
+    if (!boxId) {
+      boxId = await ensureVoicemailBoxId();
+    }
+    if (!boxId) {
+      throw new Error("Could not resolve voicemail box for this number.");
+    }
     const res = await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: box?.id ? "update_box" : "ensure_personal",
-        boxId: box?.id,
-        name: "Personal voicemail",
+        action: "update_box",
+        boxId,
         ...patch,
       }),
     });

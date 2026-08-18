@@ -121,6 +121,27 @@ async function testNumberProvider(label, row, cookies) {
     `boxes=${boxes.length} hasMatch=${hasBox}`,
   );
 
+  const ensureBox = await postJson("/api/phone/voicemail", {
+    action: "ensure_number_box",
+    phoneNumberId: numberId,
+  }, cookies);
+  gate(
+    `${provider}-ensure-number-voicemail-box`,
+    ensureBox.ok && ensureBox.json.data?.phoneNumberId === numberId,
+    ensureBox.ok ? ensureBox.json.data?.id : JSON.stringify(ensureBox.json),
+  );
+
+  const perNumberVm = await getJson(
+    `/api/phone/voicemail?phoneNumberId=${numberId}`,
+    cookies,
+  );
+  const perBoxes = perNumberVm.json.data?.boxes || [];
+  gate(
+    `${provider}-per-number-voicemail-get`,
+    perNumberVm.ok && perBoxes.length === 1 && perBoxes[0]?.phoneNumberId === numberId,
+    `boxes=${perBoxes.length}`,
+  );
+
   const fwd = await patchJson(
     `/api/numbers/${numberId}`,
     {

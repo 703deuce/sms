@@ -116,6 +116,7 @@ export async function processSoftphoneInbound(input: {
         humanCallId: human.callId,
         telnyxCallControlId: input.telnyxCallControlId,
         userId: assignment?.userId ?? null,
+        phoneNumberId: pn.id,
       });
       return { ...human, voicemail: true, vault: true };
     }
@@ -150,6 +151,7 @@ export async function processSoftphoneInbound(input: {
         humanCallId: human.callId,
         telnyxCallControlId: input.telnyxCallControlId,
         userId: assignment?.userId ?? null,
+        phoneNumberId: pn.id,
       });
       return { ...human, voicemail: true };
     }
@@ -254,6 +256,7 @@ export async function processSoftphoneInbound(input: {
           humanCallId: human.callId,
           telnyxCallControlId: input.telnyxCallControlId,
           userId: assignedUserId,
+          phoneNumberId: pn?.id ?? null,
         });
       }
       return { ...human, forwarded: true, mode: rule.mode };

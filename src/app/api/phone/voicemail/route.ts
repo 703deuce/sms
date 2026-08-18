@@ -10,13 +10,21 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const boxId = url.searchParams.get("boxId") || undefined;
     const phoneNumberId = url.searchParams.get("phoneNumberId") || undefined;
-    const boxes = await getPrisma().voicemailBox.findMany({
+    let boxes = await getPrisma().voicemailBox.findMany({
       where: {
         workspaceId: auth.workspaceId,
         ...(phoneNumberId ? { phoneNumberId } : {}),
       },
       orderBy: { createdAt: "desc" },
     });
+    if (phoneNumberId && boxes.length === 0) {
+      const ensured = await ensureNumberVoicemailBox(
+        auth.workspaceId,
+        phoneNumberId,
+        auth.session.userId,
+      );
+      boxes = [ensured];
+    }
     const resolvedBoxId = boxId ?? boxes[0]?.id;
     const messages = await listVoicemailMessages(auth.workspaceId, resolvedBoxId);
     return NextResponse.json({ data: { boxes, messages } });

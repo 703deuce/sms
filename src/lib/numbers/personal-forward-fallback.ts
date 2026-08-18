@@ -116,6 +116,7 @@ export async function applyPersonalForwardOverflow(input: {
       humanCallId: call.id,
       telnyxCallControlId: controlId,
       userId: call.agentUserId,
+      phoneNumberId: pn?.id ?? null,
     }).catch(async () => {
       await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
         method: "POST",
