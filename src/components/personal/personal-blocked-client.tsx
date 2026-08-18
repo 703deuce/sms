@@ -3,6 +3,8 @@
 import type { PersonalActivityRow, PersonalBlockedRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
 import {
   WIREFRAME_BLOCKED_ATTEMPTS,
+  WIREFRAME_BLOCKED_PROTECTION,
+  WIREFRAME_BLOCKED_RECENT,
   WIREFRAME_BLOCKED_ROWS,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
@@ -14,10 +16,13 @@ import { cn } from "@/lib/utils";
 import {
   Ban,
   Clock,
+  MoreVertical,
   Pencil,
   PhoneOff,
   Plus,
+  Search,
   Shield,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -35,6 +40,7 @@ import {
   PersonalMockPagination,
   PersonalMockPill,
   PersonalMockSection,
+  PersonalMockSelect,
   pm,
 } from "./mockup/primitives";
 import { PersonalNumberSelector } from "./personal-number-selector";
@@ -62,7 +68,17 @@ function reasonLabel(reason: string): string {
 }
 
 function behaviorLabel(action: "disconnect" | "unavailable_message"): string {
-  return action === "unavailable_message" ? "Unavailable message" : "Disconnect";
+  return action === "unavailable_message" ? "Unavailable Message" : "Disconnect";
+}
+
+function scopeToneForLabel(label: string): "purple" | "blue" | "green" {
+  if (label.toLowerCase().includes("all")) return "purple";
+  if (label.toLowerCase().includes("sales")) return "green";
+  return "blue";
+}
+
+function behaviorToneForLabel(label: string): "red" | "orange" {
+  return label.toLowerCase().includes("unavailable") ? "orange" : "red";
 }
 
 function isThisMonth(dateStr: string) {
@@ -248,6 +264,7 @@ export function PersonalBlockedClient({
       .map((r) => ({
         id: r.id,
         at: `${r.date} ${r.time}`,
+        line: r.calledNumber ? formatPhone(r.calledNumber) : "Main Line",
         outcome: "Call disconnected",
       }));
   }, [manageDemo, manageRow, activity]);
@@ -474,7 +491,9 @@ export function PersonalBlockedClient({
         phone: r.phone,
         label: r.label,
         scopeLabel: r.scope,
+        scopeTone: r.scopeTone,
         behavior: r.behavior,
+        behaviorTone: r.behaviorTone,
         blockedCalls: r.blockedCalls,
         lastAttempt: r.lastAttempt,
         added: r.added,
@@ -482,12 +501,15 @@ export function PersonalBlockedClient({
       }))
     : scopedRows.map((r) => {
         const phoneKey = r.phone.replace(/\D/g, "");
+        const behavior = behaviorForRow(r);
         return {
           id: r.id,
           phone: r.phone,
           label: reasonLabel(r.reason),
           scopeLabel: r.scopeLabel,
-          behavior: behaviorForRow(r),
+          scopeTone: scopeToneForLabel(r.scopeLabel),
+          behavior,
+          behaviorTone: behaviorToneForLabel(behavior),
           blockedCalls: activityByCaller.counts.get(phoneKey) || 0,
           lastAttempt: activityByCaller.lastAttempt.get(phoneKey) || "—",
           added: new Date(r.createdAt).toLocaleDateString(),
@@ -542,61 +564,25 @@ export function PersonalBlockedClient({
                   e.target.value = "";
                 }}
               />
-              <div className="relative">
-                <PersonalMockInput
-                  className="w-56 bg-[#f9fafb] focus:bg-white"
-                  placeholder="Search blocked numbers…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
             </>
-          }
-          filters={
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex rounded-lg border border-[#e5e7eb] bg-white p-0.5">
-                {(
-                  [
-                    { id: "all", label: "All Blocks" },
-                    { id: "account", label: "Account-Wide" },
-                    { id: "number", label: "This Number" },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setScopeSegment(tab.id)}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-[12px] font-semibold transition",
-                      scopeSegment === tab.id
-                        ? "bg-[#2563eb] text-white"
-                        : "text-[#6b7280] hover:bg-[#f9fafb]",
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              {scopeSegment === "number" ? (
-                <PersonalNumberSelector numbers={numbers} selectedId={selectedId} label="" />
-              ) : null}
-              <PersonalMockFilterChips
-                options={["All", "Global", "Per Number"]}
-                active={reasonFilter === "All" ? "All" : reasonFilter}
-                onChange={(v) => setReasonFilter(v === "Global" || v === "Per Number" ? "All" : (v as ReasonFilter))}
-              />
-            </div>
           }
         />
 
         {message ? <p className="text-[13px] text-[#6b7280]">{message}</p> : null}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PersonalMockKpi label="Total Blocked" value={displayKpis.total} icon={Ban} />
+          <PersonalMockKpi
+            label="Total Blocked"
+            value={displayKpis.total}
+            sub={useWireframe ? "Across all numbers" : undefined}
+            icon={Ban}
+            iconClass="bg-[#f5f3ff] text-[#7c3aed]"
+          />
           <PersonalMockKpi
             label="Blocked This Month"
             value={displayKpis.thisMonth}
             icon={Clock}
+            iconClass="bg-[#ecfdf5] text-[#059669]"
             trend={displayKpis.thisMonthTrend}
             trendLabel="vs last month"
           />
@@ -604,7 +590,7 @@ export function PersonalBlockedClient({
             label="Calls Blocked"
             value={displayKpis.callsBlocked}
             icon={PhoneOff}
-            iconClass="bg-[#fef2f2] text-[#dc2626]"
+            iconClass="bg-[#fff7ed] text-[#ea580c]"
             trend={displayKpis.callsTrend}
             trendLabel="vs last month"
           />
@@ -617,8 +603,74 @@ export function PersonalBlockedClient({
           />
         </div>
 
-        <PersonalMockSection title="Blocked Callers">
-          {loading ? (
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+            <PersonalMockInput
+              className="w-full bg-[#f9fafb] pl-9 focus:bg-white"
+              placeholder="Search blocked number or label"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-lg border border-[#e5e7eb] bg-white p-0.5">
+              {(
+                [
+                  { id: "all", label: "All Blocks" },
+                  { id: "account", label: "Account-Wide" },
+                  { id: "number", label: "This Number" },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setScopeSegment(tab.id)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-[12px] font-semibold transition",
+                    scopeSegment === tab.id
+                      ? "bg-[#2563eb] text-white"
+                      : "text-[#6b7280] hover:bg-[#f9fafb]",
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {scopeSegment === "number" ? (
+              <PersonalNumberSelector numbers={numbers} selectedId={selectedId} label="" />
+            ) : null}
+            <PersonalMockFilterChips
+              options={["All", "Global", "Per Number"]}
+              active={reasonFilter === "All" ? "All" : reasonFilter}
+              onChange={(v) =>
+                setReasonFilter(
+                  v === "Global" || v === "Per Number" ? "All" : (v as ReasonFilter),
+                )
+              }
+            />
+          </div>
+        </div>
+
+        <PersonalMockSection
+          title="Blocked Callers"
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <PersonalMockSelect className="h-8 min-w-[130px] text-[12px]">
+                <option>All Numbers</option>
+                {numbers.map((n) => (
+                  <option key={n.id} value={n.id}>{formatPhone(n.number)}</option>
+                ))}
+              </PersonalMockSelect>
+              <PersonalMockSelect className="h-8 min-w-[120px] text-[12px]">
+                <option>Newest First</option>
+                <option>Oldest First</option>
+                <option>Most Blocked Calls</option>
+              </PersonalMockSelect>
+            </div>
+          }
+        >
+          {loading && !useWireframe ? (
             <p className={pm.muted}>Loading…</p>
           ) : tableRows.length === 0 ? (
             <p className={pm.muted}>
@@ -650,30 +702,43 @@ export function PersonalBlockedClient({
                         <td className="py-3 pr-3">
                           <PersonalMockPill tone="gray">{r.label}</PersonalMockPill>
                         </td>
-                        <td className="py-3 pr-3 text-[#6b7280]">{r.scopeLabel}</td>
-                        <td className="py-3 pr-3 text-[#6b7280]">{r.behavior}</td>
+                        <td className="py-3 pr-3">
+                          <PersonalMockPill tone={r.scopeTone}>{r.scopeLabel}</PersonalMockPill>
+                        </td>
+                        <td className="py-3 pr-3">
+                          <PersonalMockPill tone={r.behaviorTone}>{r.behavior}</PersonalMockPill>
+                        </td>
                         <td className="py-3 pr-3 font-medium">{r.blockedCalls}</td>
                         <td className="py-3 pr-3 text-[#6b7280]">{r.lastAttempt}</td>
                         <td className="py-3 pr-3 text-[#6b7280]">{r.added}</td>
                         <td className="py-3 text-right">
-                          <PersonalMockBtn
-                            variant="outline"
-                            className="h-8 px-3 text-[12px]"
-                            onClick={() => {
-                              if (r.isDemo) {
-                                const demo = WIREFRAME_BLOCKED_ROWS.find((d) => d.id === r.id);
-                                if (demo) {
-                                  setManageDemo(demo);
-                                  setManageRow(null);
+                          <div className="flex items-center justify-end gap-1">
+                            <PersonalMockBtn
+                              variant="outline"
+                              className="h-8 px-3 text-[12px]"
+                              onClick={() => {
+                                if (r.isDemo) {
+                                  const demo = WIREFRAME_BLOCKED_ROWS.find((d) => d.id === r.id);
+                                  if (demo) {
+                                    setManageDemo(demo);
+                                    setManageRow(null);
+                                  }
+                                } else if ("raw" in r && r.raw) {
+                                  setManageRow(r.raw as BlockedDisplayRow);
+                                  setManageDemo(null);
                                 }
-                              } else if ("raw" in r && r.raw) {
-                                setManageRow(r.raw as BlockedDisplayRow);
-                                setManageDemo(null);
-                              }
-                            }}
-                          >
-                            Manage
-                          </PersonalMockBtn>
+                              }}
+                            >
+                              Manage
+                            </PersonalMockBtn>
+                            <button
+                              type="button"
+                              className="rounded-lg p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
+                              aria-label="More actions"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -694,7 +759,21 @@ export function PersonalBlockedClient({
 
         <div className="grid gap-4 lg:grid-cols-2">
           <PersonalMockSection title="Recent Blocked Activity">
-            {recentActivity.length === 0 ? (
+            {useWireframe ? (
+              <ul className="space-y-3">
+                {WIREFRAME_BLOCKED_RECENT.map((a) => (
+                  <li key={a.id} className="flex items-start gap-3 text-[13px]">
+                    <Ban className="mt-0.5 h-4 w-4 shrink-0 text-[#dc2626]" />
+                    <div>
+                      <p className="text-[#111827]">
+                        {formatPhone(a.phone)} blocked from {a.line}
+                      </p>
+                      <p className="text-[11px] text-[#9ca3af]">{a.at}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : recentActivity.length === 0 ? (
               <p className={pm.muted}>No blocked calls recorded yet.</p>
             ) : (
               <ul className="space-y-3">
@@ -711,8 +790,38 @@ export function PersonalBlockedClient({
             )}
           </PersonalMockSection>
 
-          <PersonalMockSection title="Call Protection Summary">
-            {protectionSummary.length === 0 ? (
+          <PersonalMockSection title="Call Protection">
+            {useWireframe ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  { label: "Account-Wide Blocks", value: WIREFRAME_BLOCKED_PROTECTION.accountWide },
+                  { label: "Per-Number Blocks", value: WIREFRAME_BLOCKED_PROTECTION.perNumber },
+                  {
+                    label: "Default Handling",
+                    value: WIREFRAME_BLOCKED_PROTECTION.defaultHandling,
+                    isText: true,
+                  },
+                  {
+                    label: "Protected Numbers",
+                    value: WIREFRAME_BLOCKED_PROTECTION.protectedNumbers,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4"
+                  >
+                    <p className="text-[12px] text-[#6b7280]">{item.label}</p>
+                    {item.isText ? (
+                      <div className="mt-2">
+                        <PersonalMockPill tone="red">{item.value}</PersonalMockPill>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[22px] font-bold text-[#111827]">{item.value}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : protectionSummary.length === 0 ? (
               <p className={pm.muted}>No numbers have blocked callers yet.</p>
             ) : (
               <PersonalMockBarChart items={protectionSummary} maxLabel="Blocks per number" />
@@ -811,9 +920,7 @@ export function PersonalBlockedClient({
               </dl>
 
               <div>
-                <p className="mb-3 text-[13px] font-semibold text-[#111827]">
-                  When this caller reaches your numbers
-                </p>
+                <p className="mb-3 text-[13px] font-semibold text-[#111827]">Call Handling</p>
                 <div className="space-y-2 text-[13px]">
                   <label className="flex items-center gap-2">
                     <input
@@ -836,7 +943,10 @@ export function PersonalBlockedClient({
 
               {blockedAction === "unavailable_message" ? (
                 <div>
-                  <p className="mb-2 text-[13px] font-semibold text-[#111827]">Message</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[13px] font-semibold text-[#111827]">Message</p>
+                    <Pencil className="h-3.5 w-3.5 text-[#9ca3af]" />
+                  </div>
                   <textarea
                     className="w-full rounded-lg border border-[#e5e7eb] p-3 text-[13px] outline-none focus:border-[#2563eb] bg-[#f9fafb] focus:bg-white"
                     rows={4}
@@ -861,8 +971,16 @@ export function PersonalBlockedClient({
                       <li key={attempt.id} className="flex items-start gap-3 text-[13px]">
                         <Ban className="mt-0.5 h-4 w-4 shrink-0 text-[#dc2626]" />
                         <div>
-                          <p className="text-[#111827]">{attempt.outcome}</p>
-                          <p className="text-[11px] text-[#9ca3af]">{attempt.at}</p>
+                          <p className="text-[#111827]">
+                            {attempt.line
+                              ? `${attempt.at} → ${attempt.line}`
+                              : attempt.outcome}
+                          </p>
+                          {attempt.line ? (
+                            <p className="text-[11px] text-[#9ca3af]">{attempt.outcome}</p>
+                          ) : (
+                            <p className="text-[11px] text-[#9ca3af]">{attempt.at}</p>
+                          )}
                         </div>
                       </li>
                     ))}
@@ -890,13 +1008,14 @@ export function PersonalBlockedClient({
                   View in Call Activity
                 </PersonalMockBtn>
               </Link>
-              <PersonalMockBtn
-                variant="outline"
-                className="w-full text-rose-600 hover:bg-[#fef2f2]"
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-2 py-2 text-[13px] font-semibold text-[#dc2626] hover:text-[#b91c1c]"
                 onClick={unblockFromDrawer}
               >
+                <Trash2 className="h-4 w-4" />
                 Unblock Caller
-              </PersonalMockBtn>
+              </button>
             </div>
           </aside>
         </div>
