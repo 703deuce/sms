@@ -1,6 +1,7 @@
 "use client";
 
 import { PortNumberForm } from "@/components/numbers/port-number-form";
+import { PersonalPortOutFlow } from "@/components/personal/personal-port-out-flow";
 import { EmptyState } from "@/components/ui/empty-state";
 import { personalPortInStatusLabel } from "@/lib/numbers/port-constants";
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
@@ -80,9 +81,24 @@ function toneFromStatus(status: string): "blue" | "green" | "orange" | "purple" 
 export function PersonalPortingClient({
   numbers,
   portRequests,
+  portOutRequests: portOutRequestRows = [],
 }: {
   numbers: PersonalNumberRow[];
   portRequests: Array<{ id: string; phoneNumber: string; status: string; direction?: string }>;
+  portOutRequests?: Array<{
+    id: string;
+    phoneNumberId: string;
+    phone: string;
+    status: string;
+    statusLabel: string;
+    destinationCarrier: string | null;
+    destinationLabel: string | null;
+    guaranteeEligible: boolean;
+    customerActionRequired: boolean;
+    initiatedAt: string | null;
+    focDate: string | null;
+    rejectionMessage: string | null;
+  }>;
 }) {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "out" ? "out" : "in";
@@ -115,23 +131,23 @@ export function PersonalPortingClient({
   const [portInStep, setPortInStep] = useState(0);
 
   const selected = numbers.find((n) => n.id === selectedId);
-  const portOutRequests = portRequests.filter(
+  const legacyPortOutRequests = portRequests.filter(
     (p) =>
       (p as { notes?: string }).notes?.includes("direction:out") || p.direction === "out",
   );
   const portInRequests = portRequests.filter(
-    (p) => !portOutRequests.some((out) => out.id === p.id),
+    (p) => !legacyPortOutRequests.some((out) => out.id === p.id),
   );
 
   const useWireframe = usePersonalWireframe(
-    tab === "in" ? portInRequests.length : portOutRequests.length,
+    tab === "in" ? portInRequests.length : legacyPortOutRequests.length,
   );
 
   const summary = useMemo(() => {
-    const live = statusSummary(tab === "in" ? portInRequests : portOutRequests);
+    const live = statusSummary(tab === "in" ? portInRequests : legacyPortOutRequests);
     if (!useWireframe) return live;
     return WIREFRAME_PORTING_SUMMARY;
-  }, [tab, portInRequests, portOutRequests, useWireframe]);
+  }, [tab, portInRequests, legacyPortOutRequests, useWireframe]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -315,7 +331,10 @@ export function PersonalPortingClient({
         </ul>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Important" icon={AlertTriangle} tone="warning">
-        <p>Porting out may interrupt service on your Transovo number until the transfer completes.</p>
+        <p>
+          Do not cancel or release your Transovo number before your new carrier completes the
+          transfer.
+        </p>
         <Link href="/contact" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
           Learn more
         </Link>
@@ -375,7 +394,7 @@ export function PersonalPortingClient({
 
   const portOutTableRows = useWireframe
     ? WIREFRAME_PORT_OUT_REQUESTS
-    : portOutRequests.map((p) => ({
+    : legacyPortOutRequests.map((p) => ({
         id: p.id,
         phone: p.phoneNumber,
         status: personalPortInStatusLabel(p.status),
@@ -551,233 +570,11 @@ export function PersonalPortingClient({
           </PersonalMockSection>
         </div>
       ) : (
-        <div className="space-y-6">
-          {numbers.length === 0 ? (
-            <EmptyState title="No numbers" description="Add a number before starting a port away." />
-          ) : (
-            <>
-              <div className={cn(pm.card, "p-5 space-y-5")}>
-                <PersonalMockHorizontalStepper steps={WIREFRAME_PORT_OUT_STEPPER} activeIndex={0} />
-                <div>
-                  <h3 className="text-[16px] font-bold text-[#111827]">1. Transfer Your Number</h3>
-                  <p className="mt-1 text-[13px] text-[#6b7280]">
-                    Provide credentials and new carrier details to port out.
-                  </p>
-                </div>
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[13px] font-semibold text-[#374151]">
-                        Phone Number(s) to Port Out
-                      </label>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-[#e5e7eb] p-2">
-                        {selected ? (
-                          <span className="rounded-md bg-[#eff6ff] px-2.5 py-1 text-[12px] font-semibold text-[#2563eb]">
-                            {formatPhone(selected.number)}
-                          </span>
-                        ) : null}
-                        {numbers.length > 1 ? (
-                          <select
-                            className="min-w-[140px] flex-1 border-0 bg-transparent text-[12px] text-[#6b7280] outline-none"
-                            value={selectedId}
-                            onChange={(e) => setSelectedId(e.target.value)}
-                          >
-                            {numbers.map((n) => (
-                              <option key={n.id} value={n.id}>
-                                {formatPhone(n.number)}
-                                {n.friendlyName ? ` — ${n.friendlyName}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">
-                        Account Number (Transfer Account Reference)
-                      </label>
-                      <PersonalMockInput
-                        className="mt-1 font-mono"
-                        value={loadingCreds ? "Loading…" : accountNumber || "ACME-654321"}
-                        readOnly
-                      />
-                      <p className="mt-1 text-[11px] text-[#9ca3af]">
-                        Used to validate your account for the transfer.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Port-Out PIN (Transfer PIN)</label>
-                      <div className="mt-1 flex items-center gap-2">
-                        <PersonalMockInput
-                          className="font-mono"
-                          type={showPin && portPin ? "text" : "password"}
-                          value={locked ? "••••••" : portPin || "—"}
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="text-[12px] font-semibold text-[#2563eb]"
-                          onClick={() => setShowPin((v) => !v)}
-                        >
-                          Show
-                        </button>
-                        <PersonalMockBtn
-                          variant="ghost"
-                          className="h-8 px-2 text-[12px]"
-                          disabled={submitting}
-                          onClick={() => {
-                            if (locked) portAction("unlock");
-                            else portAction("sync");
-                          }}
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          Regenerate
-                        </PersonalMockBtn>
-                      </div>
-                      <p className="mt-1 text-[11px] text-[#9ca3af]">
-                        Required by your new carrier to authorize the transfer.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Authorized Contact Email</label>
-                      <PersonalMockInput
-                        className="mt-1"
-                        placeholder="name@company.com"
-                        value={authEmail}
-                        onChange={(e) => setAuthEmail(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">
-                        Preferred Transfer Date (Optional)
-                      </label>
-                      <PersonalMockInput
-                        className="mt-1"
-                        type="date"
-                        value={transferDate}
-                        onChange={(e) => setTransferDate(e.target.value)}
-                      />
-                    </div>
-                    <label className="flex items-start gap-2 text-[12px] text-[#6b7280]">
-                      <input
-                        type="checkbox"
-                        checked={portAck}
-                        onChange={(e) => setPortAck(e.target.checked)}
-                        className="mt-0.5"
-                      />
-                      I understand that porting out may interrupt service on this number until the
-                      transfer completes.
-                    </label>
-                    <PersonalMockBtn
-                      className="w-full"
-                      onClick={initiatePortOut}
-                      disabled={submitting || !portAck}
-                    >
-                      {submitting ? "Submitting…" : "Start Port Out Request"}
-                    </PersonalMockBtn>
-                  </div>
-                  <div className="space-y-4">
-                    <PersonalMockEligibilityBanner
-                      eligible
-                      title="Eligible to transfer"
-                      message="Selected number(s) are eligible to be ported out."
-                      linkLabel="View eligibility details"
-                    />
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Destination (New Carrier)</label>
-                      <PersonalMockInput
-                        className="mt-1"
-                        placeholder="Enter new carrier name"
-                        value={gainingCarrier}
-                        onChange={(e) => setGainingCarrier(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Authorized Contact Name</label>
-                      <PersonalMockInput
-                        className="mt-1"
-                        placeholder="Enter full name"
-                        value={authName}
-                        onChange={(e) => setAuthName(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[12px] text-[#6b7280]">Authorized Contact Phone</label>
-                      <div className="relative mt-1">
-                        <span
-                          className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-[12px] text-[#6b7280]"
-                          aria-hidden
-                        >
-                          <span className="text-[14px] leading-none">🇺🇸</span>
-                        </span>
-                        <PersonalMockInput
-                          className="pl-10"
-                          placeholder="+1 (555) 123-4567"
-                          value={authPhone}
-                          onChange={(e) => setAuthPhone(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <PersonalMockCollapsedSteps steps={WIREFRAME_PORT_OUT_STEPS.slice(1)} />
-
-              {portMessage ? (
-                <div className="rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[13px] text-[#1d4ed8]">
-                  {portMessage}
-                </div>
-              ) : null}
-
-              <PersonalMockSection title="Existing Port-Out Requests">
-                <div className="overflow-x-auto -mx-5 px-5">
-                  <table className="w-full min-w-[720px] text-left text-[13px]">
-                    <thead>
-                      <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                        <th className="pb-3 pr-3">Number</th>
-                        <th className="pb-3 pr-3">Status</th>
-                        <th className="pb-3 pr-3">Submitted</th>
-                        <th className="pb-3 pr-3">Scheduled Transfer</th>
-                        <th className="pb-3 pr-3">Action Required</th>
-                        <th className="pb-3 pr-3">View Details</th>
-                        <th className="pb-3 text-right" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#f3f4f6]">
-                      {portOutTableRows.map((row) => (
-                        <tr key={row.id}>
-                          <td className="py-3 pr-3 font-semibold text-[#111827]">
-                            {formatPhone(row.phone)}
-                          </td>
-                          <td className="py-3 pr-3">
-                            <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">{row.submitted}</td>
-                          <td className="py-3 pr-3 text-[#6b7280]">{row.scheduled}</td>
-                          <td className="py-3 pr-3 text-[#6b7280]">{row.action}</td>
-                          <td className="py-3 pr-3">
-                            <button type="button" className="text-[12px] font-semibold text-[#2563eb]">
-                              View Details
-                            </button>
-                          </td>
-                          <td className="py-3 text-right">
-                            <button type="button" className="rounded p-1 hover:bg-[#f3f4f6]">
-                              <MoreHorizontal className="h-4 w-4 text-[#9ca3af]" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <button type="button" className="mt-4 text-[13px] font-semibold text-[#2563eb]">
-                  View all port-out requests &gt;
-                </button>
-              </PersonalMockSection>
-            </>
-          )}
-        </div>
+        <PersonalPortOutFlow
+          numbers={numbers}
+          initialNumberId={selectedId}
+          portOutRequests={portOutRequestRows}
+        />
       )}
     </PersonalMockPage>
   );

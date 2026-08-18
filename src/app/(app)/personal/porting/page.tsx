@@ -1,13 +1,15 @@
 import { PersonalPortingClient } from "@/components/personal/personal-porting-client";
 import { listPortRequests } from "@/lib/numbers/port-service";
+import { listCustomerPortOutRequests } from "@/lib/numbers/port-out-service";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
 
 export default async function PersonalPortingPage() {
   const { workspaceId } = await requireWorkspaceContext();
-  const [numbers, portRequests] = await Promise.all([
+  const [numbers, portRequests, portOutRequests] = await Promise.all([
     loadPersonalNumbers(workspaceId),
     listPortRequests(workspaceId),
+    listCustomerPortOutRequests(workspaceId),
   ]);
 
   return (
@@ -20,6 +22,7 @@ export default async function PersonalPortingPage() {
         notes: typeof p.notes === "string" ? p.notes : undefined,
         direction: typeof p.notes === "string" && p.notes.includes("direction:out") ? "out" : "in",
       }))}
+      portOutRequests={portOutRequests}
     />
   );
 }

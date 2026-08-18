@@ -1,22 +1,27 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { requireWorkspaceFeature, jsonError } from "@/lib/api-auth";
 import {
   revealPersonalPortOutCredentials,
   setPersonalPortOutPin,
   syncPersonalPortOutFromProvider,
-  initiatePersonalPortOut,
 } from "@/lib/numbers/personal-port-out-service";
+import { buildCustomerPortOutPacket } from "@/lib/numbers/port-out-service";
+import { syncTelnyxPortOutOrdersForNumber } from "@/lib/numbers/telnyx-port-out-service";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ numberId: string }> },
 ) {
   try {
-    const auth = await requireSession();
+    const auth = await requireWorkspaceFeature("port_out");
     if ("error" in auth) return auth.error;
     const { numberId } = await params;
-    const creds = await revealPersonalPortOutCredentials(auth.workspaceId, numberId);
-    return NextResponse.json({ data: creds });
+    const packet = await buildCustomerPortOutPacket(
+      auth.workspaceId,
+      numberId,
+      auth.session.userId,
+    );
+    return NextResponse.json({ data: packet });
   } catch (err) {
     return jsonError(err, 400);
   }
@@ -27,37 +32,35 @@ export async function POST(
   { params }: { params: Promise<{ numberId: string }> },
 ) {
   try {
-    const auth = await requireSession();
+    const auth = await requireWorkspaceFeature("port_out");
     if ("error" in auth) return auth.error;
     const { numberId } = await params;
     const body = (await request.json()) as {
-      action?: "sync" | "unlock" | "lock" | "set_pin" | "initiate";
+      action?: "sync" | "unlock" | "lock" | "set_pin";
       pin?: string;
-      gainingCarrier?: string;
-      gainingAccountNumber?: string;
-      notes?: string;
     };
 
     if (body.action === "sync") {
       const data = await syncPersonalPortOutFromProvider(auth.workspaceId, numberId);
-      return NextResponse.json({ data });
-    }
-
-    if (body.action === "initiate") {
-      const data = await initiatePersonalPortOut({
-        workspaceId: auth.workspaceId,
-        userId: auth.session.userId,
+      if (data.provider === "telnyx") {
+        await syncTelnyxPortOutOrdersForNumber(auth.workspaceId, numberId).catch(() => undefined);
+      }
+      const packet = await buildCustomerPortOutPacket(
+        auth.workspaceId,
         numberId,
-        gainingCarrier: body.gainingCarrier,
-        gainingAccountNumber: body.gainingAccountNumber,
-        notes: body.notes,
-      });
-      return NextResponse.json({ data });
+        auth.session.userId,
+      );
+      return NextResponse.json({ data: { ...data, packet } });
     }
 
     if (body.action === "unlock") {
       const data = await setPersonalPortOutPin(auth.workspaceId, numberId, body.pin || "", false);
-      return NextResponse.json({ data });
+      const packet = await buildCustomerPortOutPacket(
+        auth.workspaceId,
+        numberId,
+        auth.session.userId,
+      );
+      return NextResponse.json({ data: { ...data, packet } });
     }
 
     if (body.action === "lock") {
@@ -77,7 +80,12 @@ export async function POST(
         body.pin.trim(),
         false,
       );
-      return NextResponse.json({ data });
+      const packet = await buildCustomerPortOutPacket(
+        auth.workspaceId,
+        numberId,
+        auth.session.userId,
+      );
+      return NextResponse.json({ data: { ...data, packet } });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

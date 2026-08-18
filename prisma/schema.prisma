@@ -223,6 +223,7 @@ model Workspace {
   emailToSmsAddresses EmailToSmsAddress[]
   paymentLinks PaymentLink[]
   portRequests PortRequest[]
+  portOutRequests PortOutRequest[]
   humanCalls HumanCall[]
   humanCallEvents HumanCallEvent[]
   pushSubscriptions PushSubscription[]
@@ -599,6 +600,50 @@ model PortRequest {
 
   @@index([workspaceId, status])
   @@index([workspaceId, createdAt])
+}
+
+model PortOutRequest {
+  id                       String    @id @default(cuid())
+  workspaceId              String
+  userId                   String
+  phoneNumberId            String
+  phone                    String
+  provider                 String
+  providerPortOutId          String?
+  destinationCarrier       String?
+  destinationType          String?
+  /// Transovo-normalized lifecycle status (see port-out-constants.ts).
+  status                   String    @default("WAITING_FOR_CARRIER")
+  purchasedAt              DateTime?
+  initiatedAt              DateTime?
+  carrierRequestReceivedAt DateTime?
+  authorizedAt             DateTime?
+  focDate                  DateTime?
+  completedAt              DateTime?
+  rejectionCategory        String?
+  rejectionDetailsInternal String?
+  customerActionRequired   Boolean   @default(false)
+  guaranteeEligible        Boolean   @default(false)
+  guaranteeReviewStatus    String?
+  refundStatus             String?
+  returnedToInventoryAt    DateTime?
+  voicePortStatus          String?
+  messagingPortStatus      String?
+  authorizedContactEmail   String?
+  authorizedContactName    String?
+  authorizedContactPhone   String?
+  preferredTransferDate    DateTime?
+  statusHistoryJson        Json      @default("[]")
+  providerPayloadJson      Json      @default("{}")
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, phoneNumberId])
+  @@index([phoneNumberId, status])
+  @@index([providerPortOutId])
+  @@map("port_out_requests")
 }
 
 model Contact {

@@ -147,7 +147,7 @@ export async function createPortOutRequest(input: {
     data: {
       workspaceId: input.workspaceId,
       phone,
-      currentCarrier: input.provider === "twilio" ? "Twilio (Transovo)" : "Telnyx (Transovo)",
+      currentCarrier: "Transovo",
       accountNumber: input.accountNumber?.trim() || null,
       accountPin: input.accountPin?.trim() || null,
       notes: noteParts.join(" | "),

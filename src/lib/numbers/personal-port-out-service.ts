@@ -240,7 +240,9 @@ export async function initiatePersonalPortOut(input: {
 
   const creds = await revealPersonalPortOutCredentials(input.workspaceId, input.numberId);
   if (creds.locked) {
-    await setPersonalPortOutPin(input.workspaceId, input.numberId, randomPin(), false);
+    throw new Error(
+      "Unlock port-out credentials before initiating. Your PIN is hidden while locked.",
+    );
   }
 
   const refreshed = await revealPersonalPortOutCredentials(input.workspaceId, input.numberId);
