@@ -62,12 +62,13 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
     return { twiml: twiml("<Say>Routing error.</Say><Hangup/>") };
   }
 
-  const compiled = asCompiledFlow(published.compiled as Record<string, unknown>);
+  const compiled: CompiledFlow = asCompiledFlow(published.compiled as Record<string, unknown>);
   let currentId: string | null = nodeId;
   const parts: string[] = [];
 
-  while (currentId && compiled.nodes[currentId]) {
-    const node = compiled.nodes[currentId];
+  while (currentId) {
+    const node: CompiledNode | undefined = compiled.nodes[currentId];
+    if (!node) break;
     const state = (session.stateJson as SessionState) ?? {};
     const execution = await createNodeExecution({
       callSessionId: sessionId,

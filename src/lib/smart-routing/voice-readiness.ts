@@ -51,7 +51,9 @@ export async function diagnoseNumberVoiceReadiness(
         smsSending: diag.ready.smsSending,
         fully: diag.ready.fully,
       },
-      errors: diag.errors ?? [],
+      errors: diag.issues
+        .filter((issue) => issue.severity === "error")
+        .map((issue) => issue.message),
     };
   }
 

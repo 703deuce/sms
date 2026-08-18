@@ -4,7 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { requiresLiveKitVoiceRuntime } from "@/lib/voice/architecture/livekit-voice-profiles";
 import { buildExplicitDispatchMetadata } from "@/lib/telephony/provisioning/dispatch-metadata";
-import { requireLiveKitSipHost } from "@/lib/telephony/provisioning/config";
+import { getLiveKitSipHost } from "@/lib/telephony/provisioning/config";
 import { escapeXml } from "./prompt-playback";
 import { finalizeSession } from "./flow-runtime";
 import { emitSmartRoutingEvent } from "./events";
@@ -80,7 +80,11 @@ export async function buildTwilioAiReceptionistTwiml(input: {
   });
 
   if (liveKitAgent) {
-    const { host: sipHost } = requireLiveKitSipHost();
+    const sipHost = getLiveKitSipHost();
+    if (!sipHost) {
+      await finalizeSession(input.sessionId, "ai_receptionist_unavailable");
+      return twiml("<Say>LiveKit SIP is not configured.</Say><Hangup/>");
+    }
     const { livekitProfileFromConfig } = await import("@/lib/voice/frontdesk/agent-config");
     const metadata = buildExplicitDispatchMetadata({
       workspaceId: input.workspaceId,
@@ -91,9 +95,9 @@ export async function buildTwilioAiReceptionistTwiml(input: {
       toE164: input.calledNumber,
       dispatchSource: "sip_metadata",
     });
-  if (inbound.callId) {
-    metadata.callId = inbound.callId;
-  }
+    if (inbound.callId) {
+      metadata.callId = inbound.callId;
+    }
 
     const sipUri = `sip:${input.calledNumber}@${sipHost};transport=tcp`;
     await prisma.voiceCall.update({
