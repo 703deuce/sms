@@ -17,13 +17,11 @@ import {
   CreditCard,
   Phone,
   Plus,
-  SlidersHorizontal,
   TrendingUp,
   Users,
   Vault,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 import { PersonalMockSparkline } from "./mockup/charts";
 import {
   PersonalMockBtn,
@@ -33,16 +31,15 @@ import {
   PersonalMockPill,
   PersonalMockSection,
   PersonalMockSelect,
-  PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
 
 const QUICK_ACTIONS = [
-  { label: "Dashboard", href: "/personal" },
+  { label: "Overview", href: "/personal" },
   { label: "Add a new number", href: "/personal/numbers/premium" },
   { label: "View call activity", href: "/personal/activity" },
   { label: "Create smart routing flow", href: "/smart-routing/new" },
-  { label: "Import contacts", href: "/contacts/imports" },
+  { label: "Park a number in vault", href: "/personal/vault" },
 ];
 
 export function PersonalOverviewUI({
@@ -50,7 +47,6 @@ export function PersonalOverviewUI({
 }: {
   data: PersonalOverviewData;
 }) {
-  const [autoRefill, setAutoRefill] = useState(true);
   const useWireframe = usePersonalWireframe(data.activityCount, 8);
   const wf = WIREFRAME_OVERVIEW_KPIS;
   const analytics = WIREFRAME_OVERVIEW_ANALYTICS;
@@ -95,42 +91,44 @@ export function PersonalOverviewUI({
     <PersonalMockPage>
       <PersonalMockHeader
         title="Overview"
-        description="Manage contacts and communication insights."
+        description="Your numbers, calls, and account at a glance."
         actions={
           <>
             <Link href="/personal/numbers/premium">
               <PersonalMockBtn>
                 <Plus className="h-4 w-4" />
-                New Campaign
+                Add Number
               </PersonalMockBtn>
             </Link>
-            <PersonalMockBtn variant="outline">
-              <SlidersHorizontal className="h-4 w-4" />
-              Refine search
-            </PersonalMockBtn>
+            <Link href="/personal/activity">
+              <PersonalMockBtn variant="outline">
+                <Phone className="h-4 w-4" />
+                Call Activity
+              </PersonalMockBtn>
+            </Link>
           </>
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <PersonalMockKpi
-          label="Total Contacts"
-          value={kpis.totalContacts}
-          sub={`${kpis.contactsAddedLastMonth} Added last month`}
+          label="Frequent Callers"
+          value={topContacts.length}
+          sub={`${kpis.calls30d} calls this month`}
           icon={Users}
           iconClass="bg-[#eff6ff] text-[#2563eb]"
         />
         <PersonalMockKpi
-          label="Active Campaigns"
+          label="Active Numbers"
           value={kpis.activeNumbers}
-          sub={`${kpis.activeNumbers} Active`}
+          sub={`${kpis.activeNumbers} in service`}
           icon={TrendingUp}
           iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
         <PersonalMockKpi
           label="Texts Sent (30d)"
           value={kpis.textsSent30d}
-          sub="This Billing Period"
+          sub="SMS this period"
           icon={Phone}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
@@ -159,8 +157,8 @@ export function PersonalOverviewUI({
 
       <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
         <PersonalMockSection
-          title="Top Contacts"
-          description="Contacts with most activity this month"
+          title="Top Callers"
+          description="Callers with the most activity this month"
           action={
             <div className="flex items-center gap-2">
               <PersonalMockSelect className="h-8 w-[100px] text-[12px]">
@@ -184,7 +182,7 @@ export function PersonalOverviewUI({
                     <th className="pb-3 pr-3">Contact</th>
                     <th className="pb-3 pr-3">Recent Activity</th>
                     <th className="pb-3 pr-3">Type</th>
-                    <th className="pb-3 pr-3">Campaign</th>
+                    <th className="pb-3 pr-3">Line</th>
                     <th className="pb-3 pr-3">Status</th>
                     <th className="pb-3 pr-3">Total Activity</th>
                     <th className="pb-3 pr-3">Last Action</th>
@@ -310,9 +308,12 @@ export function PersonalOverviewUI({
                 <PersonalMockBtn>Refill Now</PersonalMockBtn>
               </Link>
             </div>
-            <div className="mt-4">
-              <PersonalMockToggle label="Auto-refill" checked={autoRefill} onChange={setAutoRefill} />
-            </div>
+            <Link
+              href="/settings/billing"
+              className="mt-4 block text-[12px] font-semibold text-[#2563eb]"
+            >
+              Manage billing & credits
+            </Link>
           </PersonalMockSection>
 
           <PersonalMockSection title="Service Status">

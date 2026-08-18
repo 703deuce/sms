@@ -11,8 +11,12 @@ export async function GET(request: Request) {
     const numberId = url.searchParams.get("numberId") || undefined;
     const days = Number(url.searchParams.get("days") || "30");
     const periodDays = [7, 30, 90].includes(days) ? days : 30;
+    const offsetDays = Number(url.searchParams.get("offsetDays") || "0");
+    const offset = Number.isFinite(offsetDays) && offsetDays >= 0 ? offsetDays : 0;
 
-    const summary = await loadPersonalAnalytics(auth.workspaceId, periodDays, numberId);
+    const summary = await loadPersonalAnalytics(auth.workspaceId, periodDays, numberId, {
+      offsetDays: offset,
+    });
     return NextResponse.json({ data: summary });
   } catch (err) {
     return jsonError(err, 500);

@@ -61,6 +61,41 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
   const [hardCap, setHardCap] = useState(false);
 
   useEffect(() => {
+    fetch("/api/settings/limits")
+      .then((r) => r.json())
+      .then((j) => {
+        const alerts = j.data?.personalUsageAlerts;
+        if (!alerts) return;
+        if (typeof alerts.alert80 === "boolean") setAlert80(alerts.alert80);
+        if (typeof alerts.alert95 === "boolean") setAlert95(alerts.alert95);
+        if (typeof alerts.alertOverage === "boolean") setAlertOverage(alerts.alertOverage);
+        if (typeof alerts.hardCap === "boolean") setHardCap(alerts.hardCap);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function saveUsagePrefs(patch: {
+    alert80?: boolean;
+    alert95?: boolean;
+    alertOverage?: boolean;
+    hardCap?: boolean;
+  }) {
+    await fetch("/api/settings/limits", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personalUsageAlerts: {
+          alert80,
+          alert95,
+          alertOverage,
+          hardCap,
+          ...patch,
+        },
+      }),
+    }).catch(() => undefined);
+  }
+
+  useEffect(() => {
     fetch("/api/personal/usage")
       .then((r) => r.json())
       .then((j) => {
@@ -141,12 +176,29 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
 
       <div className={pm.card + " p-4 space-y-4"}>
         <h3 className="text-[13px] font-semibold text-[#111827]">Usage Alerts</h3>
-        <PersonalMockToggle label="Alert at 80% usage" checked={alert80} onChange={setAlert80} />
-        <PersonalMockToggle label="Alert at 95% usage" checked={alert95} onChange={setAlert95} />
+        <PersonalMockToggle
+          label="Alert at 80% usage"
+          checked={alert80}
+          onChange={(on) => {
+            setAlert80(on);
+            saveUsagePrefs({ alert80: on });
+          }}
+        />
+        <PersonalMockToggle
+          label="Alert at 95% usage"
+          checked={alert95}
+          onChange={(on) => {
+            setAlert95(on);
+            saveUsagePrefs({ alert95: on });
+          }}
+        />
         <PersonalMockToggle
           label="Overage notifications"
           checked={alertOverage}
-          onChange={setAlertOverage}
+          onChange={(on) => {
+            setAlertOverage(on);
+            saveUsagePrefs({ alertOverage: on });
+          }}
         />
       </div>
 
@@ -155,7 +207,10 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
         <PersonalMockToggle
           label="Hard cap at plan limit"
           checked={hardCap}
-          onChange={setHardCap}
+          onChange={(on) => {
+            setHardCap(on);
+            saveUsagePrefs({ hardCap: on });
+          }}
         />
         <p className="text-[11px] text-[#9ca3af]">
           When enabled, forwarding stops once you reach your monthly limit.

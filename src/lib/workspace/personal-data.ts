@@ -247,9 +247,12 @@ export async function loadPersonalAnalytics(
   workspaceId: string,
   periodDays = 30,
   numberId?: string,
+  options?: { offsetDays?: number },
 ): Promise<PersonalAnalyticsSummary> {
   const prisma = getPrisma();
-  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
+  const offsetDays = options?.offsetDays ?? 0;
+  const periodEnd = new Date(Date.now() - offsetDays * 24 * 60 * 60 * 1000);
+  const since = new Date(periodEnd.getTime() - periodDays * 24 * 60 * 60 * 1000);
   const numbers = await loadPersonalNumbers(workspaceId);
   const filterE164 = numberId ? numbers.find((n) => n.id === numberId)?.number : undefined;
 
@@ -257,7 +260,7 @@ export async function loadPersonalAnalytics(
     where: {
       workspaceId,
       direction: "inbound",
-      startedAt: { gte: since },
+      startedAt: { gte: since, lte: periodEnd },
       ...(filterE164 ? { to: filterE164 } : {}),
     },
     select: {

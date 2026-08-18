@@ -138,12 +138,12 @@ export const WIREFRAME_AUDIO_ASSETS = [
 ];
 
 export function shouldUseWireframeOverview(
-  flowsCount: number,
-  metrics: { routedToday: number } | null,
+  _flowsCount: number,
+  _metrics: { routedToday: number } | null,
 ): boolean {
-  return flowsCount === 0 && (metrics == null || metrics.routedToday === 0);
+  return false;
 }
 
-export function shouldUseWireframeAudio(count: number): boolean {
-  return count === 0;
+export function shouldUseWireframeAudio(_count: number): boolean {
+  return false;
 }

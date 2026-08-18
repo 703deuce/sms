@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   getWorkspaceLimits,
   upsertWorkspaceLimits,
+  parseWorkspaceLimits,
   type WorkspaceLimitsJson,
 } from "@/lib/settings/limits";
 
@@ -24,7 +25,16 @@ export async function PATCH(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as WorkspaceLimitsJson;
-    const row = await upsertWorkspaceLimits(auth.workspaceId, body);
+    const existing = await getWorkspaceLimits(auth.workspaceId);
+    const merged = {
+      ...parseWorkspaceLimits(existing),
+      ...body,
+      personalUsageAlerts: {
+        ...parseWorkspaceLimits(existing).personalUsageAlerts,
+        ...body.personalUsageAlerts,
+      },
+    };
+    const row = await upsertWorkspaceLimits(auth.workspaceId, merged);
     return NextResponse.json({ data: row.limits });
   } catch (err) {
     return jsonError(err, 400);

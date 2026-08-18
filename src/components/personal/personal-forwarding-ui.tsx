@@ -634,9 +634,12 @@ export function PersonalForwardingUI({
             Last successful forward: {displayActivityRows[0]?.time ?? "—"}
           </p>
           <p className="text-[11px] text-[#9ca3af]">Recent failures: 0</p>
-          <button type="button" className="mt-2 text-[12px] font-semibold text-[#6366f1]">
+          <Link
+            href="/personal/activity"
+            className="mt-2 text-[12px] font-semibold text-[#6366f1]"
+          >
             View Health Details
-          </button>
+          </Link>
         </div>
       </div>
     </div>
@@ -683,7 +686,9 @@ export function PersonalForwardingUI({
               <Plus className="h-4 w-4" />
               Add Forwarding Rule
             </PersonalMockBtn>
-            <PersonalMockBtn variant="outline">Test Forwarding</PersonalMockBtn>
+            <Link href="/personal/activity">
+              <PersonalMockBtn variant="outline">View Forwarding Activity</PersonalMockBtn>
+            </Link>
           </>
         }
       />

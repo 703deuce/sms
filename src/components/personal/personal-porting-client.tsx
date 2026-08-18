@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Shield,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -255,9 +256,9 @@ export function PersonalPortingClient({
         <p>
           <strong>Do not cancel</strong> your current service until your transfer completes.
         </p>
-        <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
+        <Link href="/contact" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
           Learn more
-        </button>
+        </Link>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Porting Tips" icon={Lightbulb}>
         <ul className="space-y-2 text-[12px]">
@@ -274,21 +275,23 @@ export function PersonalPortingClient({
             Double-check account holder name matches your bill
           </li>
         </ul>
-        <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
+        <Link href="/contact" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
           View all tips &gt;
-        </button>
+        </Link>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Need Help?" icon={HelpCircle} tone="info">
-        <PersonalMockBtn variant="outline" className="w-full gap-2">
-          <Headphones className="h-4 w-4" />
-          Contact Support
-        </PersonalMockBtn>
-        <button
-          type="button"
+        <Link href="/contact">
+          <PersonalMockBtn variant="outline" className="w-full gap-2">
+            <Headphones className="h-4 w-4" />
+            Contact Support
+          </PersonalMockBtn>
+        </Link>
+        <Link
+          href="/contact"
           className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
         >
           View Porting Guide <ExternalLink className="h-3.5 w-3.5" />
-        </button>
+        </Link>
       </PersonalMockAsideCard>
     </>
   );
@@ -313,9 +316,9 @@ export function PersonalPortingClient({
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Important" icon={AlertTriangle} tone="warning">
         <p>Porting out may interrupt service on your Transovo number until the transfer completes.</p>
-        <button type="button" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
+        <Link href="/contact" className="mt-2 text-[12px] font-semibold text-[#2563eb]">
           Learn more
-        </button>
+        </Link>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Port-Out Tips" icon={Lightbulb}>
         <ul className="space-y-2 text-[12px]">
@@ -334,19 +337,22 @@ export function PersonalPortingClient({
         </ul>
       </PersonalMockAsideCard>
       <PersonalMockAsideCard title="Need Help?" icon={HelpCircle} tone="info">
-        <PersonalMockBtn variant="outline" className="w-full gap-2">
-          <Headphones className="h-4 w-4" />
-          Contact Support
-        </PersonalMockBtn>
-        <button
-          type="button"
+        <Link href="/contact">
+          <PersonalMockBtn variant="outline" className="w-full gap-2">
+            <Headphones className="h-4 w-4" />
+            Contact Support
+          </PersonalMockBtn>
+        </Link>
+        <Link
+          href="/contact"
           className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
         >
           View Porting Guide <ExternalLink className="h-3.5 w-3.5" />
-        </button>
+        </Link>
         <button
           type="button"
           className="mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#2563eb]"
+          onClick={() => portAction("sync")}
         >
           Check PIN Status <ExternalLink className="h-3.5 w-3.5" />
         </button>
@@ -475,10 +481,9 @@ export function PersonalPortingClient({
                 />
               ) : (
                 <PersonalMockEligibilityBanner
-                  eligible
-                  title="Eligible to transfer"
-                  message="All 1 number(s) can be ported to Transovo"
-                  linkLabel="View eligibility details"
+                  eligible={false}
+                  title="Check portability"
+                  message="Enter your numbers and run Check Portability to confirm they can transfer."
                 />
               )}
             </div>
@@ -518,7 +523,15 @@ export function PersonalPortingClient({
                       <td className="py-3 pr-3 text-[#6b7280]">{row.confirmed}</td>
                       <td className="py-3 pr-3 text-[#6b7280]">{row.action}</td>
                       <td className="py-3 pr-3">
-                        <button type="button" className="text-[12px] font-semibold text-[#2563eb]">
+                        <button
+                          type="button"
+                          className="text-[12px] font-semibold text-[#2563eb]"
+                          onClick={() =>
+                            setPortMessage(
+                              `Port request ${row.status} for ${formatPhone(row.phone)}`,
+                            )
+                          }
+                        >
                           View Details
                         </button>
                       </td>

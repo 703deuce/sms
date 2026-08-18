@@ -1,6 +1,7 @@
 "use client";
 
 import type { PersonalActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import { downloadPersonalCsv } from "@/lib/workspace/personal-export";
 import {
   WIREFRAME_ACTIVITY_ROWS,
   WIREFRAME_ANALYTICS_KPIS,
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PersonalMockLineChart } from "./mockup/charts";
 import {
   PersonalMockBtn,
@@ -42,6 +44,7 @@ import {
   PersonalMockSelect,
   pm,
 } from "./mockup/primitives";
+import { PersonalNumberSelector } from "./personal-number-selector";
 
 type ActivityDisplayRow = PersonalActivityRow & {
   callerName?: string;
@@ -107,6 +110,7 @@ export function PersonalActivityClient({
   numbers: PersonalNumberRow[];
   initialNumberId?: string;
 }) {
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<PersonalActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [outcomeFilter, setOutcomeFilter] = useState("All");
@@ -114,11 +118,12 @@ export function PersonalActivityClient({
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [chartGranularity, setChartGranularity] = useState("Day");
-  const numberId = initialNumberId || numbers[0]?.id;
+  const [daysFilter, setDaysFilter] = useState(30);
+  const numberId = searchParams.get("numberId") || initialNumberId || "";
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ limit: "200" });
     if (numberId) params.set("numberId", numberId);
     const res = await fetch(`/api/personal/activity?${params}`);
     const j = await res.json().catch(() => ({}));
@@ -170,8 +175,18 @@ export function PersonalActivityClient({
     }));
   }, [rows, useWireframe]);
 
-  const filtered = useMemo(() => {
+  const sinceMs = Date.now() - daysFilter * 24 * 60 * 60 * 1000;
+
+  const periodRows = useMemo(() => {
+    if (useWireframe) return displayRows;
     return displayRows.filter((r) => {
+      const stamp = Date.parse(r.date);
+      return Number.isFinite(stamp) && stamp >= sinceMs;
+    });
+  }, [displayRows, sinceMs, useWireframe]);
+
+  const filtered = useMemo(() => {
+    return periodRows.filter((r) => {
       if (outcomeFilter === "Answered" && !r.answered) return false;
       if (outcomeFilter === "Missed" && r.answered) return false;
       if (outcomeFilter === "Voicemail" && !r.voicemail) return false;
@@ -186,7 +201,7 @@ export function PersonalActivityClient({
         (r.callerName?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [displayRows, outcomeFilter, handlingFilter, search]);
+  }, [periodRows, outcomeFilter, handlingFilter, search]);
 
   const selected = filtered.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
 
@@ -201,15 +216,15 @@ export function PersonalActivityClient({
         failed: 40,
       };
     }
-    const total = rows.length;
-    const answered = rows.filter((r) => r.answered).length;
-    const missed = rows.filter((r) => !r.answered && !r.voicemail).length;
-    const voicemails = rows.filter((r) => r.voicemail).length;
-    const failed = rows.filter(
+    const total = periodRows.length;
+    const answered = periodRows.filter((r) => r.answered).length;
+    const missed = periodRows.filter((r) => !r.answered && !r.voicemail).length;
+    const voicemails = periodRows.filter((r) => r.voicemail).length;
+    const failed = periodRows.filter(
       (r) => r.outcome.toLowerCase().includes("fail") || r.blocked,
     ).length;
     return { total, answered, missed, voicemails, failed };
-  }, [rows, useWireframe]);
+  }, [periodRows, useWireframe]);
 
   const chartLabels = useMemo(() => {
     if (useWireframe) {
@@ -231,7 +246,7 @@ export function PersonalActivityClient({
       ];
     }
     const byDay = new Map<string, { answered: number; missed: number; voicemail: number }>();
-    for (const r of displayRows) {
+    for (const r of periodRows) {
       const d = r.date;
       const cur = byDay.get(d) || { answered: 0, missed: 0, voicemail: 0 };
       if (r.answered) cur.answered += 1;
@@ -306,6 +321,28 @@ export function PersonalActivityClient({
     }
   }
 
+  function exportActivity() {
+    const headers = [
+      "Date",
+      "Time",
+      "Caller",
+      "Called Number",
+      "Outcome",
+      "Duration (sec)",
+      "Forward Destination",
+    ];
+    const csvRows = filtered.map((r) => [
+      r.date,
+      r.time,
+      r.caller,
+      r.calledNumber,
+      r.outcome,
+      String(r.durationSeconds),
+      r.forwardDestination || "",
+    ]);
+    downloadPersonalCsv(`call-activity-${daysFilter}d.csv`, headers, csvRows);
+  }
+
   const tablePageSize = 8;
   const tableTotal = useWireframe ? WIREFRAME_ANALYTICS_KPIS.totalCalls : filtered.length;
   const tablePages = useWireframe
@@ -319,18 +356,23 @@ export function PersonalActivityClient({
         description="See every call, route, outcome, and voicemail event across your numbers."
         actions={
           <>
-            <PersonalMockSelect className="w-[140px]">
-              <option>All Numbers</option>
-              {numbers.map((n) => (
-                <option key={n.id} value={n.id}>{formatPhone(n.number)}</option>
-              ))}
+            <PersonalNumberSelector
+              numbers={numbers}
+              selectedId={numberId || undefined}
+              allowAll
+              label=""
+              selectClassName="h-9 w-[140px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[12px] font-semibold text-[#111827]"
+            />
+            <PersonalMockSelect
+              className="w-[140px]"
+              value={String(daysFilter)}
+              onChange={(e) => setDaysFilter(Number(e.target.value))}
+            >
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
             </PersonalMockSelect>
-            <PersonalMockBtn variant="outline" className="gap-1.5">
-              <Calendar className="h-4 w-4" />
-              Last 30 Days
-              <ChevronDown className="h-3.5 w-3.5" />
-            </PersonalMockBtn>
-            <PersonalMockBtn variant="outline" className="gap-1.5">
+            <PersonalMockBtn variant="outline" className="gap-1.5" onClick={exportActivity}>
               <Download className="h-4 w-4" />
               Export Activity
             </PersonalMockBtn>
@@ -591,6 +633,9 @@ export function PersonalActivityClient({
                       <button
                         type="button"
                         className="shrink-0 text-[12px] font-semibold text-[#6366f1]"
+                        onClick={() => {
+                          window.location.href = "/personal/analytics";
+                        }}
                       >
                         {alert.action}
                       </button>

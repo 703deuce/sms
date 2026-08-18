@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { settingsTabs } from "@/lib/settings-tabs";
+import { settingsTabs, personalSettingsTabs } from "@/lib/settings-tabs";
 
 type UsageRow = {
   id: string;
@@ -83,6 +83,7 @@ export function BillingSettingsPanel() {
   const [creditAmount, setCreditAmount] = useState(50);
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
+  const [personalMode, setPersonalMode] = useState(false);
 
   function applyData(data: {
     metrics?: Metrics;
@@ -103,6 +104,12 @@ export function BillingSettingsPanel() {
       .then((r) => r.json())
       .then((j) => {
         if (j.data) applyData(j.data);
+      })
+      .catch(() => undefined);
+    fetch("/api/workspace")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.workspaceType === "PERSONAL") setPersonalMode(true);
       })
       .catch(() => undefined);
   }, []);
@@ -160,7 +167,7 @@ export function BillingSettingsPanel() {
         }
       />
 
-      <Tabs items={settingsTabs} />
+      <Tabs items={personalMode ? personalSettingsTabs : settingsTabs} />
 
       {metrics ? (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

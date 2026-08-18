@@ -3,8 +3,9 @@
  * is sparse so pages match product mockups (same pattern as smart-routing wireframe).
  */
 
-export function usePersonalWireframe(count: number, threshold = 8): boolean {
-  return count < threshold;
+/** Demo wireframes are disabled in production — show real data or empty states. */
+export function usePersonalWireframe(_count: number, _threshold = 8): boolean {
+  return false;
 }
 
 export const WIREFRAME_PORTING_SUMMARY = {

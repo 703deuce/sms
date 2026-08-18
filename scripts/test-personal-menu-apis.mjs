@@ -114,7 +114,9 @@ async function main() {
   record("smart-routing", flows.ok, `flows=${flowCount}`);
 
   const pages = [
+    "/personal",
     "/personal/numbers",
+    "/personal/numbers/premium",
     "/personal/vault",
     "/personal/forwarding",
     "/personal/voicemail",
@@ -123,7 +125,12 @@ async function main() {
     "/personal/blocked",
     "/personal/usage",
     "/personal/porting",
+    "/settings/billing",
+    "/settings",
+    "/contact",
     "/smart-routing",
+    "/smart-routing/new",
+    "/smart-routing/audio",
   ];
 
   for (const path of pages) {

@@ -7,6 +7,13 @@ export type WorkspaceLimitsJson = {
   inboxRate?: number;
   apiRate?: number;
   importBatch?: number;
+  /** Personal usage page — alert toggles and forwarding hard cap. */
+  personalUsageAlerts?: {
+    alert80?: boolean;
+    alert95?: boolean;
+    alertOverage?: boolean;
+    hardCap?: boolean;
+  };
 };
 
 export async function getWorkspaceLimits(workspaceId: string) {

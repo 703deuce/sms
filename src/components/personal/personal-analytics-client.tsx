@@ -1,6 +1,7 @@
 "use client";
 
 import type { PersonalAnalyticsSummary, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import { downloadPersonalCsv } from "@/lib/workspace/personal-export";
 import {
   WIREFRAME_ANALYTICS_BY_NUMBER,
   WIREFRAME_ANALYTICS_CHART_LABELS,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   PersonalMockBarChart,
   PersonalMockDonut,
@@ -49,6 +51,12 @@ import {
   PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
+import { PersonalNumberSelector } from "./personal-number-selector";
+
+function pctChange(current: number, prior: number): number {
+  if (prior === 0) return current > 0 ? 100 : 0;
+  return ((current - prior) / prior) * 100;
+}
 
 function formatDuration(sec: number) {
   const m = Math.floor(sec / 60);
@@ -69,14 +77,16 @@ export function PersonalAnalyticsClient({
   numbers: PersonalNumberRow[];
   initialNumberId?: string;
 }) {
+  const searchParams = useSearchParams();
   const [days, setDays] = useState(30);
   const [comparePeriod, setComparePeriod] = useState(true);
   const [chartGranularity, setChartGranularity] = useState("Day");
   const [hourFilter, setHourFilter] = useState("All Days");
   const [data, setData] = useState<PersonalAnalyticsSummary | null>(null);
+  const [priorData, setPriorData] = useState<PersonalAnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailSearch, setDetailSearch] = useState("");
-  const numberId = initialNumberId;
+  const numberId = searchParams.get("numberId") || initialNumberId || "";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,8 +95,21 @@ export function PersonalAnalyticsClient({
     const res = await fetch(`/api/personal/analytics?${params}`);
     const j = await res.json().catch(() => ({}));
     setData(j.data ?? null);
+
+    if (comparePeriod) {
+      const priorParams = new URLSearchParams({
+        days: String(days),
+        offsetDays: String(days),
+      });
+      if (numberId) priorParams.set("numberId", numberId);
+      const priorRes = await fetch(`/api/personal/analytics?${priorParams}`);
+      const priorJson = await priorRes.json().catch(() => ({}));
+      setPriorData(priorJson.data ?? null);
+    } else {
+      setPriorData(null);
+    }
     setLoading(false);
-  }, [days, numberId]);
+  }, [days, numberId, comparePeriod]);
 
   useEffect(() => {
     load();
@@ -98,6 +121,26 @@ export function PersonalAnalyticsClient({
   const display = useMemo(() => {
     if (!useWireframe) {
       if (!data) return null;
+      const trends = priorData
+        ? {
+            total: pctChange(data.totalCalls, priorData.totalCalls),
+            answered: pctChange(data.answered, priorData.answered),
+            missed: pctChange(data.missed, priorData.missed),
+            voicemails: pctChange(data.voicemails, priorData.voicemails),
+            forwarded: pctChange(data.forwardedMinutes, priorData.forwardedMinutes),
+            avgDuration: pctChange(
+              data.averageDurationSeconds,
+              priorData.averageDurationSeconds,
+            ),
+          }
+        : {
+            total: 0,
+            answered: 0,
+            missed: 0,
+            voicemails: 0,
+            forwarded: 0,
+            avgDuration: 0,
+          };
       return {
         totalCalls: data.totalCalls,
         answered: data.answered,
@@ -108,7 +151,7 @@ export function PersonalAnalyticsClient({
         forwardedMinutes: data.forwardedMinutes,
         avgDurationSec: data.averageDurationSeconds,
         periodLabel: `Last ${days} days`,
-        trends: kpi.trends,
+        trends,
       };
     }
     return {
@@ -123,7 +166,7 @@ export function PersonalAnalyticsClient({
       periodLabel: kpi.periodLabel,
       trends: kpi.trends,
     };
-  }, [useWireframe, data, days, kpi]);
+  }, [useWireframe, data, priorData, days, kpi]);
 
   const chartLabels = useWireframe
     ? WIREFRAME_ANALYTICS_CHART_LABELS
@@ -182,6 +225,13 @@ export function PersonalAnalyticsClient({
     if (!q) return true;
     return r.number.includes(q) || r.friendlyName.toLowerCase().includes(q);
   });
+
+  function exportAnalytics() {
+    if (!data) return;
+    const headers = ["Number", "Label", "Calls"];
+    const rows = data.byNumber.map((n) => [n.e164, n.label, String(n.calls)]);
+    downloadPersonalCsv(`analytics-${days}d.csv`, headers, rows);
+  }
 
   if (loading && !useWireframe) {
     return (
@@ -320,7 +370,7 @@ export function PersonalAnalyticsClient({
             <p className="mt-1 text-[12px] text-[#6b7280]">
               Download a detailed CSV report for this period.
             </p>
-            <PersonalMockBtn className="mt-3 w-full gap-1.5">
+            <PersonalMockBtn className="mt-3 w-full gap-1.5" onClick={exportAnalytics}>
               <Download className="h-4 w-4" />
               Export Analytics Report
             </PersonalMockBtn>
@@ -333,23 +383,28 @@ export function PersonalAnalyticsClient({
         description="Understand call volume, outcomes, routing performance, and number usage across your account."
         actions={
           <>
-            <PersonalMockSelect className="w-[140px]">
-              <option>All Numbers</option>
-              {numbers.map((n) => (
-                <option key={n.id}>{formatPhone(n.number)}</option>
-              ))}
+            <PersonalNumberSelector
+              numbers={numbers}
+              selectedId={numberId || undefined}
+              allowAll
+              label=""
+              selectClassName="h-9 w-[140px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-[12px] font-semibold text-[#111827]"
+            />
+            <PersonalMockSelect
+              className="w-[140px]"
+              value={String(days)}
+              onChange={(e) => setDays(Number(e.target.value))}
+            >
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
             </PersonalMockSelect>
-            <PersonalMockBtn variant="outline" className="gap-1.5">
-              <Calendar className="h-4 w-4" />
-              Last 30 Days
-              <ChevronDown className="h-3.5 w-3.5" />
-            </PersonalMockBtn>
             <PersonalMockToggle
               label="Compare to Previous Period"
               checked={comparePeriod}
               onChange={setComparePeriod}
             />
-            <PersonalMockBtn variant="outline" className="gap-1.5">
+            <PersonalMockBtn variant="outline" className="gap-1.5" onClick={exportAnalytics}>
               <Download className="h-4 w-4" />
               Export Report
             </PersonalMockBtn>
