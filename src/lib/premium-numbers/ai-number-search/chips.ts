@@ -77,6 +77,7 @@ export function removeChipFromState(
     const kw = chipId.slice(9);
     return {
       explicitKeywords: state.explicitKeywords.filter((k) => k !== kw),
+      excludedKeywords: [...new Set([...state.excludedKeywords, kw])],
       keywords: state.keywords.filter((k) => k.toUpperCase() !== kw),
     };
   }
@@ -84,6 +85,7 @@ export function removeChipFromState(
     const kw = chipId.slice(3);
     return {
       aiGeneratedKeywords: state.aiGeneratedKeywords.filter((k) => k !== kw),
+      excludedKeywords: [...new Set([...state.excludedKeywords, kw])],
       keywords: state.keywords.filter((k) => k.toUpperCase() !== kw),
     };
   }

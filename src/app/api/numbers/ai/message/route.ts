@@ -10,6 +10,7 @@ import {
   buildIndustryPatch,
   parseAiSearchMessage,
 } from "@/lib/premium-numbers/ai-number-search/intent";
+import { sanitizeAssistantMessage } from "@/lib/premium-numbers/ai-number-search/controller";
 import {
   getOrCreateAiSession,
   pushMessage,
@@ -134,6 +135,10 @@ export async function POST(request: Request) {
     if (applied.searchPerformed) {
       session.lastSearchAt = new Date().toISOString();
     }
+
+    const allowedPhones = body?.resultSummaries?.map((r) => r.phoneNumber) ?? [];
+    const allowedDisplays = body?.resultSummaries?.map((r) => r.displayNumber) ?? [];
+    assistantText = sanitizeAssistantMessage(assistantText, allowedPhones, allowedDisplays);
 
     pushMessage(session, "assistant", assistantText);
     saveAiSession(session);

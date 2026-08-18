@@ -30,7 +30,7 @@ export function extractBusinessNameKeywords(businessName?: string): string[] {
 export function inferIndustryFromText(text: string): string | undefined {
   const lower = text.toLowerCase();
   const rules: Array<{ industry: string; hints: string[] }> = [
-    { industry: "electrician", hints: ["electric", "electrician", "wiring"] },
+    { industry: "electrician", hints: ["electric", "electrician", "eletric", "eletrican", "wiring"] },
     { industry: "real_estate", hints: ["real estate", "realtor", "property"] },
     { industry: "fitness", hints: ["fitness", "gym", "workout"] },
     { industry: "healthcare", hints: ["health", "healthcare", "medical", "clinic"] },
@@ -38,7 +38,7 @@ export function inferIndustryFromText(text: string): string | undefined {
     { industry: "ecommerce", hints: ["e-commerce", "ecommerce", "online store", "shop"] },
     { industry: "pool_services", hints: ["pool", "spa"] },
     { industry: "roofing", hints: ["roof", "roofer", "shingle"] },
-    { industry: "plumbing", hints: ["plumb", "pipe", "drain"] },
+    { industry: "plumbing", hints: ["plumb", "plumber", "pipe", "drain"] },
     { industry: "hvac", hints: ["hvac", "heat", "cool", "ac "] },
     { industry: "lawn_care", hints: ["lawn", "mow", "grass", "yard"] },
     { industry: "junk_removal", hints: ["junk", "haul", "trash"] },
@@ -48,7 +48,15 @@ export function inferIndustryFromText(text: string): string | undefined {
     { industry: "auto", hints: ["auto", "car", "garage", "mechanic"] },
   ];
   for (const rule of rules) {
-    if (rule.hints.some((h) => lower.includes(h))) return rule.industry;
+    if (
+      rule.hints.some((h) => {
+        if (h.includes(" ")) return lower.includes(h);
+        const escaped = h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${escaped}\\b`, "i").test(lower);
+      })
+    ) {
+      return rule.industry;
+    }
   }
   return undefined;
 }

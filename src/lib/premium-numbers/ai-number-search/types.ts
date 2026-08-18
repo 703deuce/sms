@@ -36,6 +36,8 @@ export type NumberSearchState = {
   explicitKeywords: string[];
   /** AI-expanded synonyms — safe to drop on refinement */
   aiGeneratedKeywords: string[];
+  /** User-removed keywords — never re-added during this session intent */
+  excludedKeywords: string[];
   industry?: string;
   maxPriceCents?: number;
   minPriceCents?: number;

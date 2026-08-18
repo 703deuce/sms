@@ -20,6 +20,10 @@ import {
   applySearchStatePatch,
   createDefaultNumberSearchState,
 } from "@/lib/premium-numbers/ai-number-search/state";
+import {
+  manualFormToSearchState,
+  searchStateToManualFields,
+} from "@/lib/premium-numbers/ai-number-search/controller";
 import type {
   FindNumberSearchMode,
   NumberSearchState,
@@ -244,6 +248,8 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     setSearchDurationSec(null);
     setSearchCompletedAt(null);
     setMorePage(0);
+    const manualState = buildSearchStateFromManual();
+    setSearchState(manualState);
     const started = performance.now();
 
     const body =
@@ -359,7 +365,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
           workspaceId,
           phoneNumber: result.phoneNumber,
           searchLogId: searchResponse.searchLogId,
-          searchMode,
+          searchMode: reserveSearchMode,
         }),
       });
       const data = await res.json();
@@ -438,18 +444,29 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   const bestScore = bestMatches[0]?.numberQualityScore ?? 0;
 
   function buildSearchStateFromManual(): NumberSearchState {
-    const extra = splitKeywordInput(extraKeywords);
-    return applySearchStatePatch(createDefaultNumberSearchState(), {
+    return manualFormToSearchState({
       numberType,
       areaCodes: parsedAreaCodes,
       tollFreePrefix,
-      industry: industry.trim(),
-      keywords: [...keywordTags, ...extra],
-      explicitKeywords: extra,
-      apiIntent: searchIntent,
-      intent: searchIntent === "business_keyword" ? "business" : "personal",
-      preferences: toApiPreferences(patternPrefs),
+      industry,
+      suggestedKeywordTags: keywordTags,
+      extraKeywords: splitKeywordInput(extraKeywords),
+      searchIntent,
+      patternPrefs: toApiPreferences(patternPrefs),
     });
+  }
+
+  function applySearchStateToManualForm(state: NumberSearchState) {
+    const fields = searchStateToManualFields(state);
+    setNumberType(fields.numberType);
+    setAreaCodesInput(fields.areaCodesInput);
+    setTollFreePrefix(fields.tollFreePrefix);
+    setIndustry(fields.industry);
+    setSuggestedKeywords(fields.suggestedKeywords);
+    setExtraKeywords(fields.extraKeywords);
+    setSearchIntent(fields.searchIntent as SearchIntent);
+    const prefs = fields.patternPrefs as PatternChipId[];
+    setPatternPrefs(prefs.length ? prefs : ["repeating_digits"]);
   }
 
   const allResults = useMemo(() => {
@@ -537,13 +554,25 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
 
   const aiEngaged = ai.messages.length > 0;
 
+  const summaryAreaCodes =
+    searchState.areaCodes.length > 0 ? searchState.areaCodes : parsedAreaCodes;
+  const summaryIndustry = searchState.industry?.trim() || industry.trim();
+  const summarySearchIntent =
+    aiEngaged || searchState.areaCodes.length > 0 || searchState.industry
+      ? (searchState.apiIntent as SearchIntent)
+      : searchIntent;
+  const summaryNumberType =
+    searchState.areaCodes.length > 0 || aiEngaged ? searchState.numberType : numberType;
+
   function switchSearchMode(mode: FindNumberSearchMode) {
     if (mode === searchMode) return;
     if (mode === "ai") {
-      setSearchState(buildSearchStateFromManual());
+      const fromManual = buildSearchStateFromManual();
+      setSearchState(fromManual);
       trackFindNumberAiEvent("manual_to_ai_switch");
       ai.openAiMode();
     } else {
+      applySearchStateToManualForm(searchState);
       trackFindNumberAiEvent("ai_to_manual_switch");
     }
     setSearchMode(mode);
@@ -1154,10 +1183,10 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
 
         <aside className="w-full shrink-0 space-y-4 xl:w-[300px]">
           <SearchSummaryCard
-            areaCodes={parsedAreaCodes}
-            industry={industry}
-            searchIntent={searchIntent}
-            numberType={numberType}
+            areaCodes={summaryAreaCodes}
+            industry={summaryIndustry}
+            searchIntent={summarySearchIntent}
+            numberType={summaryNumberType}
             bestScore={bestScore}
             hasResults={Boolean(searchResponse)}
           />

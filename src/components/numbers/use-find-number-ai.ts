@@ -3,7 +3,6 @@
 import { removeChipFromState } from "@/lib/premium-numbers/ai-number-search/chips";
 import {
   applySearchStatePatch,
-  createDefaultNumberSearchState,
   resetNumberSearchState,
 } from "@/lib/premium-numbers/ai-number-search/state";
 import type {
@@ -13,7 +12,7 @@ import type {
 } from "@/lib/premium-numbers/ai-number-search/types";
 import type { PremiumNumberProductResult } from "@/lib/premium-numbers/product-api";
 import { trackFindNumberAiEvent } from "@/lib/premium-numbers/find-number-analytics";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const SESSION_STORAGE_PREFIX = "find-number-ai-session";
 
@@ -68,6 +67,18 @@ export function useFindNumberAi({
   const [suggestedActions, setSuggestedActions] = useState<string[]>([]);
   const [error, setError] = useState("");
 
+  const searchStateRef = useRef(searchState);
+  const topResultsRef = useRef(topResults);
+  const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    searchStateRef.current = searchState;
+  }, [searchState]);
+
+  useEffect(() => {
+    topResultsRef.current = topResults;
+  }, [topResults]);
+
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(storageKey(workspaceId));
@@ -99,8 +110,9 @@ export function useFindNumberAi({
   const sendAiMessage = useCallback(
     async (message: string, quickAction?: string) => {
       const trimmed = message.trim();
-      if (!trimmed) return;
+      if (!trimmed || loading) return;
 
+      const seq = ++requestSeqRef.current;
       setLoading(true);
       setError("");
       setLoadingStage("Understanding your request…");
@@ -115,6 +127,7 @@ export function useFindNumberAi({
 
       try {
         setLoadingStage("Generating number ideas…");
+        const currentState = searchStateRef.current;
         const res = await fetch("/api/numbers/ai/message", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -123,14 +136,18 @@ export function useFindNumberAi({
             sessionId,
             message: trimmed,
             quickAction,
-            currentSearchState: searchState,
+            currentSearchState: currentState,
             selectedNumberIds: selectedNumberId ? [selectedNumberId] : [],
-            resultSummaries: toResultSummaries(topResults),
+            resultSummaries: toResultSummaries(topResultsRef.current),
           }),
         });
 
+        if (seq !== requestSeqRef.current) return;
+
         const data = (await res.json()) as AiMessageApiResponse & { error?: string };
         if (!res.ok) throw new Error(data.error || "AI request failed");
+
+        if (seq !== requestSeqRef.current) return;
 
         setSessionId(data.sessionId);
         setMessages(data.messages);
@@ -149,29 +166,32 @@ export function useFindNumberAi({
         if (data.searchPerformed) {
           setLoadingStage("Searching live inventory…");
           await onSearchPerformed(data.searchState);
+          if (seq !== requestSeqRef.current) return;
           setLoadingStage("Ranking matches…");
           trackFindNumberAiEvent("ai_search_completed", {
             area_codes: data.searchState.areaCodes.join(","),
           });
         }
       } catch (err) {
+        if (seq !== requestSeqRef.current) return;
         const msg =
           err instanceof Error
             ? err.message
             : "AI is temporarily unavailable. You can continue using manual search.";
         setError(msg);
       } finally {
-        setLoading(false);
-        setLoadingStage("");
+        if (seq === requestSeqRef.current) {
+          setLoading(false);
+          setLoadingStage("");
+        }
       }
     },
     [
       workspaceId,
       sessionId,
-      searchState,
       selectedNumberId,
-      topResults,
       messages.length,
+      loading,
       setSearchState,
       onSearchPerformed,
     ],
@@ -179,12 +199,10 @@ export function useFindNumberAi({
 
   const removeChip = useCallback(
     async (chipId: string) => {
-      const patch = removeChipFromState(searchState, chipId);
-      const next = applySearchStatePatch(searchState, patch);
+      const patch = removeChipFromState(searchStateRef.current, chipId);
+      const next = applySearchStatePatch(searchStateRef.current, patch);
       setSearchState(next);
-      setUnderstandingChips(
-        (prev) => prev.filter((c) => c.id !== chipId),
-      );
+      setUnderstandingChips((prev) => prev.filter((c) => c.id !== chipId));
       setLoading(true);
       setLoadingStage("Updating search…");
       try {
@@ -194,10 +212,11 @@ export function useFindNumberAi({
         setLoadingStage("");
       }
     },
-    [searchState, setSearchState, onSearchPerformed],
+    [setSearchState, onSearchPerformed],
   );
 
   const clearAiSession = useCallback(() => {
+    requestSeqRef.current += 1;
     setSessionId(null);
     setMessages([]);
     setUnderstandingChips([]);
@@ -213,23 +232,30 @@ export function useFindNumberAi({
 
   const openAiMode = useCallback(() => {
     trackFindNumberAiEvent("ai_search_opened");
-    if (messages.length === 0 && searchState.areaCodes.length > 0) {
-      const codes = searchState.areaCodes.join(", ");
-      const kws = searchState.keywords.slice(0, 4).join(", ");
+    const state = searchStateRef.current;
+    if (messages.length === 0 && state.areaCodes.length > 0) {
+      const codes = state.areaCodes.join(", ");
+      const explicit = state.explicitKeywords.slice(0, 4).join(", ");
+      const aiKws = state.aiGeneratedKeywords.slice(0, 4).join(", ");
+      const kws = explicit || aiKws || state.keywords.slice(0, 4).join(", ");
+      const budget =
+        state.maxPriceCents != null
+          ? ` under $${(state.maxPriceCents / 100).toFixed(0)}`
+          : "";
       const intro =
         kws.length > 0
-          ? `You're currently searching ${codes} numbers using ${kws}. I can refine these results or look for alternatives.`
+          ? `You're searching ${codes} ${state.industry ?? ""} numbers using ${kws}${budget}. I can refine these results or look for alternatives.`
           : `You're currently searching ${codes}. Tell me what kind of number you want.`;
       setMessages([
         {
           id: "context-intro",
           role: "assistant",
-          content: intro,
+          content: intro.trim(),
           createdAt: new Date().toISOString(),
         },
       ]);
     }
-  }, [messages.length, searchState.areaCodes, searchState.keywords]);
+  }, [messages.length]);
 
   return {
     sessionId,

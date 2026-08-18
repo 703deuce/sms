@@ -22,6 +22,7 @@ export function createDefaultNumberSearchState(): NumberSearchState {
     keywords: [],
     explicitKeywords: [],
     aiGeneratedKeywords: [],
+    excludedKeywords: [],
     industry: undefined,
     maxPriceCents: undefined,
     minPriceCents: undefined,
@@ -45,11 +46,13 @@ function uniqueUpper(words: string[]): string[] {
 }
 
 export function mergeKeywords(state: NumberSearchState): string[] {
+  const excluded = new Set(state.excludedKeywords.map((k) => k.toUpperCase()));
   return uniqueUpper([
-    ...state.explicitKeywords,
-    ...state.aiGeneratedKeywords,
+    ...state.explicitKeywords.filter((k) => !excluded.has(k.toUpperCase())),
+    ...state.aiGeneratedKeywords.filter((k) => !excluded.has(k.toUpperCase())),
     ...state.keywords.filter(
       (k) =>
+        !excluded.has(k.toUpperCase()) &&
         !state.explicitKeywords.includes(k.toUpperCase()) &&
         !state.aiGeneratedKeywords.includes(k.toUpperCase()),
     ),
@@ -108,6 +111,9 @@ export function applySearchStatePatch(
     aiGeneratedKeywords: patch.aiGeneratedKeywords
       ? uniqueUpper(patch.aiGeneratedKeywords)
       : [...state.aiGeneratedKeywords],
+    excludedKeywords: patch.excludedKeywords
+      ? uniqueUpper(patch.excludedKeywords)
+      : [...state.excludedKeywords],
     preferences: patch.preferences ? [...patch.preferences] : [...state.preferences],
   };
 

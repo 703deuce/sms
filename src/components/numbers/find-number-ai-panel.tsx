@@ -145,6 +145,20 @@ export function FindNumberAiPanel({
             {loadingStage || "Finding your best numbers…"}
           </div>
         ) : null}
+        {!loading && suggestedActions.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {suggestedActions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => onQuickAction(action)}
+                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1 text-[11px] font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+              >
+                {action.replace(/_/g, " ")}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 

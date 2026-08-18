@@ -5,7 +5,7 @@ import {
   suggestIndustryVanityKeywords,
 } from "@/lib/premium-numbers/business-keyword-llm";
 import { parseAreaCodesInput } from "@/lib/premium-numbers/toll-free";
-import { applySearchStatePatch, mergeKeywords } from "./state";
+import { applySearchStatePatch, mergeKeywords, resetNumberSearchState } from "./state";
 import type { AiSearchAction, NumberSearchState } from "./types";
 
 const SYSTEM_PROMPT = `You are AI Concierge for Find a Number. You NEVER invent phone numbers.
@@ -61,7 +61,7 @@ export async function parseAiSearchMessage(input: {
   action: AiSearchAction;
   suggestedActions: string[];
 }> {
-  const heuristic = parseHeuristic(input.message, input.quickAction, input.searchState);
+  const heuristic = parseConciergeHeuristic(input.message, input.quickAction, input.searchState);
   if (heuristic) return heuristic;
 
   if (!hasLlmConfigured()) {
@@ -149,7 +149,75 @@ function defaultSuggestions(action: AiSearchAction): string[] {
   return ["cheaper", "compare_top_3", "why_this_number"];
 }
 
-function parseHeuristic(
+function uniqueUpper(words: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const w of words) {
+    const n = w.trim().toUpperCase();
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+/** Extract user-supplied vanity words (SPARK, WIRE, etc.) from natural language. */
+export function extractExplicitKeywordsFromMessage(message: string): string[] {
+  const fromList =
+    message.match(/\b([A-Z]{2,8})\b/g) ?? [];
+  const commaParts = message
+    .split(/[,;]|\bor\b/gi)
+    .map((p) => p.trim().toUpperCase())
+    .filter((p) => /^[A-Z]{2,8}$/.test(p));
+  return uniqueUpper([...fromList, ...commaParts]);
+}
+
+function detectAreaCodeConflict(message: string): boolean {
+  const lower = message.toLowerCase();
+  if (/only\s+571/.test(lower) && /only\s+240/.test(lower)) return true;
+  if (lower.includes("but also only")) {
+    const codes = message.match(/\b\d{3}\b/g) ?? [];
+    if (codes.length >= 2) return true;
+  }
+  const onlyMatches = [...message.matchAll(/only\s+(?:show\s+)?(\d{3})/gi)].map((m) => m[1]);
+  if (onlyMatches.length >= 2 && new Set(onlyMatches).size > 1) return true;
+  return false;
+}
+
+function detectBudgetConflict(message: string): boolean {
+  const under = message.match(/under\s*\$?\s*(\d+)/i);
+  const atLeast =
+    message.match(/at least\s*\$?\s*(\d+)/i) ?? message.match(/cost at least\s*\$?\s*(\d+)/i);
+  if (under && atLeast && Number(under[1]) < Number(atLeast[1])) return true;
+  return false;
+}
+
+const EXCLUDE_STOPWORDS = new Set([
+  "DON",
+  "LIKE",
+  "SHOW",
+  "WANT",
+  "THOSE",
+  "THEM",
+  "THE",
+  "OR",
+  "AND",
+  "NOT",
+]);
+
+function parseUpToPriceCents(message: string): number | undefined {
+  const m = message.match(/up to\s*\$?\s*(\d+)/i);
+  return m ? Number(m[1]) * 100 : undefined;
+}
+
+function extractExcludedKeywords(message: string): string[] {
+  if (!/don'?t|remove|exclude/i.test(message)) return [];
+  const caps = message.match(/\b([A-Z]{2,8})\b/g) ?? [];
+  return uniqueUpper(caps);
+}
+
+/** Deterministic concierge intent — exported for controller tests. */
+export function parseConciergeHeuristic(
   message: string,
   quickAction: string | undefined,
   state: NumberSearchState,
@@ -169,11 +237,60 @@ function parseHeuristic(
     };
   }
 
-  if (text === "cheaper" || (text.includes("cheaper") && text.length < 24)) {
-    const max = state.maxPriceCents ?? 7500;
-    const nextMax = Math.max(0, max - 2500);
+  if (detectAreaCodeConflict(rawMessage)) {
     return {
-      assistantMessage: `Prioritizing lower-priced numbers under $${(nextMax / 100).toFixed(0)}.`,
+      assistantMessage: "Those area-code constraints conflict. Do you want 571, 240, or both?",
+      action: { type: "NO_SEARCH" },
+      suggestedActions: [],
+    };
+  }
+
+  if (detectBudgetConflict(rawMessage)) {
+    return {
+      assistantMessage:
+        "Those budget constraints conflict. What maximum price should I use for this search?",
+      action: { type: "NO_SEARCH" },
+      suggestedActions: [],
+    };
+  }
+
+  if (
+    /invent|made up|fake numbers|don't have to actually|doesn't have to actually/i.test(rawMessage) &&
+    /number/i.test(rawMessage)
+  ) {
+    return {
+      assistantMessage:
+        "I can only show numbers from live inventory. Tell me your area code and what you're looking for.",
+      action: { type: "NO_SEARCH" },
+      suggestedActions: [],
+    };
+  }
+
+  if (/personal|my personal|not a business|personal cell/i.test(rawMessage)) {
+    const areaCodes = parseAreaCodesInput(rawMessage);
+    return {
+      assistantMessage: "Searching for a memorable personal number — no business keywords.",
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: {
+          intent: "personal",
+          apiIntent: "surprise_me",
+          industry: undefined,
+          explicitKeywords: [],
+          aiGeneratedKeywords: [],
+          ...(areaCodes.length ? { areaCodes } : {}),
+        },
+        rerun: true,
+      },
+      suggestedActions: ["better_patterns"],
+    };
+  }
+
+  if (text === "cheaper" || text.includes("cheaper") || text.includes("lower price")) {
+    const max = state.maxPriceCents ?? 10000;
+    const nextMax = Math.max(2500, max - 2500);
+    return {
+      assistantMessage: `Prioritizing lower-priced numbers under $${(nextMax / 100).toFixed(0)} while keeping your other filters.`,
       action: {
         type: "UPDATE_SEARCH",
         patch: { maxPriceCents: nextMax, sortBy: "price" },
@@ -183,7 +300,37 @@ function parseHeuristic(
     };
   }
 
-  if (text.includes("compare top") || quickAction === "compare_top_3") {
+  if (
+    text.includes("better ones") ||
+    text.includes("better patterns") ||
+    text.includes("stronger patterns") ||
+    quickAction === "better_patterns"
+  ) {
+    const upTo = parseUpToPriceCents(rawMessage);
+    const patch: Partial<NumberSearchState> = {
+      searchPrefs: [...new Set([...state.searchPrefs, "vanity", "sequential"] as const)] as import("./types").FindNumberSearchPrefId[],
+      apiIntent: "number_pattern",
+      sortBy: "score",
+    };
+    if (upTo != null) patch.maxPriceCents = upTo;
+    const budgetNote =
+      upTo != null ? ` up to $${(upTo / 100).toFixed(0)}` : "";
+    return {
+      assistantMessage: `Looking for cleaner, more memorable patterns${budgetNote}.`,
+      action: {
+        type: "UPDATE_SEARCH",
+        patch,
+        rerun: true,
+      },
+      suggestedActions: ["cheaper", "try_another_area"],
+    };
+  }
+
+  if (
+    text.includes("compare top") ||
+    /compare.*top/i.test(text) ||
+    quickAction === "compare_top_3"
+  ) {
     return {
       assistantMessage: "I'll compare your top matches using scores and price.",
       action: { type: "COMPARE_RESULTS", resultIds: [] },
@@ -203,6 +350,161 @@ function parseHeuristic(
         rerun: true,
       },
       suggestedActions: ["cheaper", "try_another_area"],
+    };
+  }
+
+  if (/forget\s+(?:the\s+)?budget|no budget|remove budget/i.test(rawMessage)) {
+    return {
+      assistantMessage: "Removed the budget cap — showing the best matches across prices.",
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: { maxPriceCents: undefined },
+        rerun: true,
+      },
+      suggestedActions: ["cheaper", "compare_top_3"],
+    };
+  }
+
+  if (/toll[- ]?free/i.test(rawMessage) && /instead|try|switch/i.test(rawMessage)) {
+    return {
+      assistantMessage: "Switching to toll-free numbers.",
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: { numberType: "tollfree", areaCodes: [] },
+        rerun: true,
+      },
+      suggestedActions: ["cheaper", "compare_top_3"],
+    };
+  }
+
+  if (/truck wrap|on the radio|heard once/i.test(text)) {
+    return {
+      assistantMessage: "I'll analyze your current matches for memorability and readability.",
+      action: { type: "COMPARE_RESULTS", resultIds: [] },
+      suggestedActions: [],
+    };
+  }
+
+  if (/find more like this|something like this/i.test(text)) {
+    return {
+      assistantMessage: "Searching for similar patterns in live inventory.",
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: {
+          searchPrefs: [...new Set([...state.searchPrefs, "vanity"] as const)] as import("./types").FindNumberSearchPrefId[],
+          sortBy: "score",
+        },
+        rerun: true,
+      },
+      suggestedActions: ["cheaper", "compare_top_3"],
+    };
+  }
+
+  if (/try\s+(\d{3})\s+too/i.test(rawMessage)) {
+    const m = rawMessage.match(/try\s+(\d{3})\s+too/i);
+    if (m?.[1]) {
+      return {
+        assistantMessage: `Added ${m[1]} while keeping your other search filters.`,
+        action: {
+          type: "UPDATE_SEARCH",
+          patch: { areaCodes: [...new Set([...state.areaCodes, m[1]])] },
+          rerun: true,
+        },
+        suggestedActions: ["cheaper", "compare_top_3"],
+      };
+    }
+  }
+
+  if (/only\s+(?:show\s+)?(\d{3})/i.test(rawMessage) || /actually,?\s+only\s+(\d{3})/i.test(rawMessage)) {
+    const codes = parseAreaCodesInput(rawMessage);
+    if (codes.length) {
+      return {
+        assistantMessage: `Narrowed to area code${codes.length > 1 ? "s" : ""} ${codes.join(", ")}.`,
+        action: { type: "UPDATE_SEARCH", patch: { areaCodes: codes }, rerun: true },
+        suggestedActions: ["cheaper", "better_patterns"],
+      };
+    }
+  }
+
+  const multiExclude = extractExcludedKeywords(rawMessage);
+  if (multiExclude.length > 0 && /don'?t|remove|exclude/i.test(rawMessage)) {
+    const removed = multiExclude;
+    return {
+      assistantMessage: `Removed ${removed.join(", ")} from this search.`,
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: {
+          explicitKeywords: state.explicitKeywords.filter((k) => !removed.includes(k)),
+          aiGeneratedKeywords: state.aiGeneratedKeywords.filter((k) => !removed.includes(k)),
+          excludedKeywords: [...new Set([...state.excludedKeywords, ...removed])],
+        },
+        rerun: true,
+      },
+      suggestedActions: ["better_patterns", "compare_top_3"],
+    };
+  }
+
+  const removeKw =
+    rawMessage.match(/don'?t\s+(?:like|show|want)\s+([A-Za-z]+)/i) ??
+    rawMessage.match(/remove\s+([A-Za-z]+)/i) ??
+    rawMessage.match(/exclude\s+([A-Za-z]+)/i);
+  if (removeKw?.[1]) {
+    const kw = removeKw[1].toUpperCase();
+    return {
+      assistantMessage: `Removed ${kw} from this search.`,
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: {
+          explicitKeywords: state.explicitKeywords.filter((k) => k !== kw),
+          aiGeneratedKeywords: state.aiGeneratedKeywords.filter((k) => k !== kw),
+          excludedKeywords: [...new Set([...state.excludedKeywords, kw])],
+        },
+        rerun: true,
+      },
+      suggestedActions: ["better_patterns", "compare_top_3"],
+    };
+  }
+
+  const replaceMatch = rawMessage.match(
+    /forget\s+([A-Za-z,\s]+?)\.?\s*try\s+([A-Za-z,\s]+?)(?:\s+instead)?[.!]?\s*$/i,
+  );
+  if (replaceMatch) {
+    const remove = uniqueUpper(replaceMatch[1].split(/[,\s]+/));
+    const add = uniqueUpper(
+      replaceMatch[2].split(/[,\s]+/).filter((w) => /^[A-Z]{2,}$/.test(w)),
+    );
+    return {
+      assistantMessage: `Swapped keywords — now searching ${add.join(", ")}.`,
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: {
+          explicitKeywords: [
+            ...state.explicitKeywords.filter((k) => !remove.includes(k)),
+            ...add,
+          ],
+          aiGeneratedKeywords: state.aiGeneratedKeywords.filter((k) => !remove.includes(k)),
+          excludedKeywords: [...new Set([...state.excludedKeywords, ...remove])],
+        },
+        rerun: true,
+      },
+      suggestedActions: ["cheaper", "compare_top_3"],
+    };
+  }
+
+  if (/roofing|roofer/i.test(rawMessage) && /instead|now find|switch/i.test(rawMessage)) {
+    return {
+      assistantMessage: "Switching to roofing while keeping your area and budget constraints.",
+      action: {
+        type: "UPDATE_SEARCH",
+        patch: {
+          industry: "roofing",
+          intent: "business",
+          apiIntent: "business_keyword",
+          aiGeneratedKeywords: [],
+        },
+        rerun: true,
+      },
+      suggestedActions: ["cheaper", "better_patterns"],
     };
   }
 
@@ -275,6 +577,21 @@ function parseHeuristic(
     rerun = true;
   }
 
+  const explicitFromMsg = extractExplicitKeywordsFromMessage(rawMessage);
+  if (explicitFromMsg.length) {
+    patch.explicitKeywords = [...new Set([...state.explicitKeywords, ...explicitFromMsg])];
+    patch.apiIntent = "business_keyword";
+    patch.intent = "business";
+    rerun = true;
+  }
+
+  if (/\b833\b/.test(rawMessage) && /toll|free|electrician/i.test(rawMessage)) {
+    patch.numberType = "tollfree";
+    patch.tollFreePrefix = "833";
+    patch.areaCodes = [];
+    rerun = true;
+  }
+
   if (rerun && Object.keys(patch).length > 0) {
     const parts: string[] = [];
     if (patch.maxPriceCents) parts.push(`under $${patch.maxPriceCents / 100}`);
@@ -326,7 +643,7 @@ export function applyAiAction(
 ): { state: NumberSearchState; searchPerformed: boolean; searchChanged: boolean } {
   if (action.type === "NEW_SEARCH") {
     return {
-      state: applySearchStatePatch(state, {}),
+      state: resetNumberSearchState(),
       searchPerformed: false,
       searchChanged: true,
     };
