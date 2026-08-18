@@ -91,20 +91,25 @@ export async function PATCH(
         if (!validated.ok) {
           return NextResponse.json({ error: validated.error }, { status: 400 });
         }
-        data.voiceForwardTo = validated.e164;
+        const applied = applyPersonalCallSettingsToRow(existing, {
+          incomingCallHandling: "forward",
+          forwardingEnabled: true,
+          forwardDestination: validated.e164,
+          forwardUnansweredAction: "voicemail",
+          voicemailEnabled: true,
+        });
+        data.voiceForwardTo = applied.voiceForwardTo;
+        data.settingsJson = applied.settingsJson;
+        const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+        await ensureNumberVoicemailBox(auth.workspaceId, numberId);
       } else {
-        data.voiceForwardTo = null;
+        const applied = applyPersonalCallSettingsToRow(existing, {
+          forwardingEnabled: false,
+          forwardDestination: null,
+        });
+        data.voiceForwardTo = applied.voiceForwardTo;
+        data.settingsJson = applied.settingsJson;
       }
-
-      const settings =
-        existing.settingsJson && typeof existing.settingsJson === "object"
-          ? { ...(existing.settingsJson as Record<string, unknown>) }
-          : {};
-      const parked = settings.parked === true || settings.personalParked === true;
-      if (!parked) {
-        settings.personalServiceState = nextForward ? "FORWARDING" : settings.voicemailEnabled ? "VOICEMAIL" : "ACTIVE";
-      }
-      data.settingsJson = settings;
     }
     if (body.webhookUrl !== undefined) {
       data.webhookUrl = body.webhookUrl?.trim() || null;

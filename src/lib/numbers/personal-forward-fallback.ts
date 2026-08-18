@@ -109,8 +109,22 @@ export async function applyPersonalForwardOverflow(input: {
     return { ok: true, action: "announcement" };
   }
 
-  if (action === "voicemail" && callSettings.voicemailEnabled) {
-    const { leaveVoicemailOnCall } = await import("@/lib/phone/voicemail-service");
+  if (action === "voicemail") {
+    const allowVoicemailOverflow =
+      callSettings.voicemailEnabled ||
+      (input.reason === "unanswered" &&
+        callSettings.forwardUnansweredAction === "voicemail" &&
+        callSettings.forwardingEnabled);
+
+    if (!allowVoicemailOverflow) {
+      // fall through to unavailable message below
+    } else {
+    const { leaveVoicemailOnCall, ensureNumberVoicemailBox } = await import(
+      "@/lib/phone/voicemail-service"
+    );
+    if (pn?.id) {
+      await ensureNumberVoicemailBox(input.workspaceId, pn.id).catch(() => undefined);
+    }
     await leaveVoicemailOnCall({
       workspaceId: input.workspaceId,
       humanCallId: call.id,
@@ -124,6 +138,7 @@ export async function applyPersonalForwardOverflow(input: {
       }).catch(() => undefined);
     });
     return { ok: true, action: "voicemail" };
+    }
   }
 
   await telnyxRequest(`/calls/${controlId}/actions/speak`, {

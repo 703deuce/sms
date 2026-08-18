@@ -110,29 +110,36 @@ export async function transitionNumberService(
       });
       if (!validated.ok) throw new Error(validated.error);
 
-      const forwardSettings = withDisplayState(
-        mergePersonalCallSettingsPatch(
-          {
-            ...settings,
+      const applied = applyPersonalCallSettingsToRow(row, {
+        incomingCallHandling: "forward",
+        forwardingEnabled: true,
+        forwardDestination: validated.e164,
+        forwardMode: "single",
+        forwardRingSeconds: 25,
+        forwardUnansweredAction: "voicemail",
+        forwardBusyAction: "voicemail",
+        forwardFailedAction: "voicemail",
+        voicemailEnabled: true,
+        directVoicemail: false,
+      });
+
+      const updated = await prisma.phoneNumber.update({
+        where: { id: numberId },
+        data: {
+          voiceForwardTo: applied.voiceForwardTo,
+          settingsJson: {
+            ...applied.settingsJson,
             parked: false,
             personalParked: false,
             routingOwner: null,
-            forwardingEnabled: true,
           },
-          {},
-        ),
-        { voiceForwardTo: validated.e164 },
-      );
+        },
+      });
 
-      return mapPhoneNumber(
-        await prisma.phoneNumber.update({
-          where: { id: numberId },
-          data: {
-            voiceForwardTo: validated.e164,
-            settingsJson: forwardSettings,
-          },
-        }) as Parameters<typeof mapPhoneNumber>[0],
-      );
+      const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+      await ensureNumberVoicemailBox(workspaceId, numberId);
+
+      return mapPhoneNumber(updated as Parameters<typeof mapPhoneNumber>[0]);
     }
 
     case "clear_forwarding":
