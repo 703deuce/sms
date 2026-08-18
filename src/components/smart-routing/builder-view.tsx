@@ -414,7 +414,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                   </div>
                 </div>
                 <div>
-                  <SrFieldLabel>Assigned Telnyx number</SrFieldLabel>
+                  <SrFieldLabel>Assigned phone number</SrFieldLabel>
                   <SrSelect
                     value={flow.assignedPhoneNumberId ?? ""}
                     onChange={(e) =>

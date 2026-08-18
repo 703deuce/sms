@@ -85,6 +85,20 @@ export async function buildTwilioInboundTwiml(params: {
     return twiml("<Say>This number is not configured for Twilio voice.</Say><Hangup/>");
   }
 
+  const { tryStartTwilioSmartRoutingInbound } = await import(
+    "@/lib/smart-routing/twilio-webhook-handler"
+  );
+  const smartRouting = await tryStartTwilioSmartRoutingInbound({
+    workspaceId: pn.workspaceId,
+    phoneNumberId: pn.id,
+    fromE164: from,
+    toE164: to,
+    callSid: params.callSid,
+  });
+  if (smartRouting.started && smartRouting.twiml) {
+    return smartRouting.twiml;
+  }
+
   if (await isCallerBlocked(pn.workspaceId, pn.id, from)) {
     const settings =
       pn.settingsJson && typeof pn.settingsJson === "object"

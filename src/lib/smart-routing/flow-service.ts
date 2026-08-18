@@ -178,14 +178,12 @@ export async function publishFlow(workspaceId: string, flowId: string, createdBy
     throw new Error("Assign a phone number before publishing Smart Routing");
   }
 
-  const { diagnoseWorkspaceNumber } = await import("@/lib/phone/telnyx-dual-provision");
-  const diag = await diagnoseWorkspaceNumber({
-    workspaceId,
-    phoneNumberId: flow.assignedPhoneNumberId,
-  });
+  const { diagnoseNumberVoiceReadiness } = await import("./voice-readiness");
+  const diag = await diagnoseNumberVoiceReadiness(workspaceId, flow.assignedPhoneNumberId);
   if (!diag.ready.voice) {
+    const detail = diag.errors[0] ?? "not voice-ready";
     throw new Error(
-      "Assigned number is not voice-ready. Run number provision/repair before publishing.",
+      `Assigned number is not voice-ready (${diag.provider}). ${detail}`,
     );
   }
 

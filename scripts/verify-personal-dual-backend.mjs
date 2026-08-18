@@ -264,20 +264,29 @@ async function testSmartRoutingTwilio(numberId, cookies) {
   const createRes = await fetch(`${BASE}/api/smart-routing/flows`, {
     method: "POST",
     headers: { "content-type": "application/json", cookie: cookies },
-    body: JSON.stringify({ name: "Twilio should fail", type: "phone_menu" }),
+    body: JSON.stringify({ name: "Twilio backend verify", type: "phone_menu" }),
   });
   const created = await createRes.json().catch(() => ({}));
   const flowId = created.data?.id;
   const draftConfig = created.data?.draftConfigJson || created.data?.draftConfig;
   if (!flowId || !draftConfig) {
-    gate("twilio-smart-routing-reject", false, "could not create flow shell");
+    gate("twilio-smart-routing-create", false, JSON.stringify(created));
     return;
   }
+  gate("twilio-smart-routing-create", true, flowId);
 
-  draftConfig.greeting = { source: "elevenlabs", text: "Test" };
+  draftConfig.greeting = { source: "elevenlabs", text: "Press 1 for sales." };
   draftConfig.menuOptions = [
-    { digit: "1", label: "A", action: "transfer", phoneNumber: FORWARD_DEST },
+    { digit: "1", label: "Sales", action: "transfer", phoneNumber: FORWARD_DEST },
+    { digit: "2", label: "Service", action: "transfer", phoneNumber: FORWARD_DEST },
+    { digit: "3", label: "Billing", action: "transfer", phoneNumber: FORWARD_DEST },
   ];
+  draftConfig.nodes = draftConfig.nodes.map((n) => {
+    if (n.id === "opt1" || n.id === "opt2" || n.id === "opt3") {
+      return { ...n, config: { ...n.config, phoneNumber: FORWARD_DEST } };
+    }
+    return n;
+  });
 
   const patchRes = await fetch(`${BASE}/api/smart-routing/flows/${flowId}`, {
     method: "PATCH",
@@ -288,22 +297,32 @@ async function testSmartRoutingTwilio(numberId, cookies) {
       numberMode: "transovo_number",
     }),
   });
-  gate("twilio-smart-routing-assign-patch", patchRes.ok, patchRes.ok ? "assigned" : "patch failed");
+  gate("twilio-smart-routing-assign", patchRes.ok, patchRes.ok ? numberId : "patch failed");
 
   const pubRes = await fetch(`${BASE}/api/smart-routing/flows/${flowId}/publish`, {
     method: "POST",
     headers: { cookie: cookies },
   });
   const published = await pubRes.json().catch(() => ({}));
-  // Twilio numbers should not publish (voice-ready / Telnyx-only runtime)
-  const rejected = !pubRes.ok;
   gate(
-    "twilio-smart-routing-publish-rejected",
-    rejected,
-    rejected ? `expected fail status=${pubRes.status}` : "UNEXPECTED publish success",
+    "twilio-smart-routing-publish",
+    pubRes.ok,
+    pubRes.ok ? "published" : JSON.stringify(published),
   );
-  if (!rejected) {
-    console.warn("Twilio smart routing published — runtime may not handle calls");
+
+  if (pubRes.ok) {
+    const numGet = await getJson(`/api/numbers/${numberId}`, cookies);
+    const routingOwner = numGet.json.data?.settingsJson?.routingOwner;
+    gate(
+      "twilio-smart-routing-owner",
+      routingOwner === "smart_routing",
+      `routingOwner=${routingOwner}`,
+    );
+    await fetch(`${BASE}/api/smart-routing/flows/${flowId}/pause`, {
+      method: "POST",
+      headers: { cookie: cookies },
+    });
+    gate("twilio-smart-routing-pause", true, "paused for cleanup");
   }
 }
 

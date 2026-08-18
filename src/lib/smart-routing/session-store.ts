@@ -104,6 +104,7 @@ export async function startCallSession(input: {
   callControlId: string;
   forwardedFrom?: string;
   isTest?: boolean;
+  provider?: "telnyx" | "twilio";
 }) {
   const prisma = getPrisma();
   const correlationId = randomUUID();
@@ -113,6 +114,7 @@ export async function startCallSession(input: {
       workspaceId: input.workspaceId,
       flowId: input.flowId,
       flowVersionId: input.flowVersionId,
+      provider: input.provider ?? "telnyx",
       callerNumber: input.callerNumber,
       calledNumber: input.calledNumber,
       forwardedFromNumber: input.forwardedFrom ?? null,

@@ -25,6 +25,7 @@
     "test:nav-crosswalk": "tsx scripts/test-nav-crosswalk.ts",
     "test:smart-routing-compiler": "tsx scripts/test-smart-routing-compiler.ts",
     "test:smart-routing-preprod": "tsx scripts/smart-routing-preprod-suite.ts",
+    "test:smart-routing-twilio-runtime": "tsx scripts/test-smart-routing-twilio-runtime.ts",
     "test:number-product-lifecycle": "tsx scripts/test-number-product-lifecycle.ts",
     "test:number-product-preprod": "tsx scripts/number-product-preprod-suite.ts",
     "test:dual-provider-search": "tsx scripts/test-dual-provider-search.ts",
