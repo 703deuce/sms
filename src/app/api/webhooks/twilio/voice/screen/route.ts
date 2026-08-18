@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildTwilioScreenTwiml } from "@/lib/numbers/providers/voice/twilio-personal-voice";
+import {
+  buildTwilioDestinationScreenTwiml,
+} from "@/lib/numbers/providers/voice/twilio-personal-voice";
 import { verifyTwilioVoiceWebhookSignature } from "@/lib/numbers/providers/voice/twilio-voice-webhook-auth";
+import { DEFAULT_SCREENING_SECONDS } from "@/lib/numbers/forward-screening";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -26,8 +29,23 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url);
   const humanCallId = url.searchParams.get("humanCallId") || "";
+  const leg = url.searchParams.get("leg") || "";
+  const screeningSeconds = Number(url.searchParams.get("screeningSeconds")) || DEFAULT_SCREENING_SECONDS;
   const digits = params.Digits || "";
 
-  const xml = await buildTwilioScreenTwiml({ humanCallId, digits });
+  if (leg === "destination") {
+    const xml = await buildTwilioDestinationScreenTwiml({
+      humanCallId,
+      digits: digits || undefined,
+      screeningSeconds,
+    });
+    return twimlResponse(xml);
+  }
+
+  const xml = await buildTwilioDestinationScreenTwiml({
+    humanCallId,
+    digits,
+    screeningSeconds,
+  });
   return twimlResponse(xml);
 }

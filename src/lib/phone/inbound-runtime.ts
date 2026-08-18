@@ -489,7 +489,7 @@ async function forwardPersonalWithRing(
     destinations: string[];
     mode: "single" | "sequential" | "simultaneous";
     ringSeconds: number;
-    unansweredAction: "voicemail" | "end";
+    unansweredAction: import("@/lib/numbers/personal-call-settings").ForwardUnansweredAction;
     callScreening: boolean;
     callerIdDisplay: "original" | "transovo_number";
   },
@@ -524,7 +524,7 @@ async function forwardPersonalWithRing(
 
   const huntNote = `[hunt_targets:${targets.join(",")}] [hunt_index:0] [hunt_mode:${sequential ? "sequential" : simultaneous ? "simultaneous" : "single"}]`;
   const screeningTag = route.callScreening ? "screening" : "1";
-  const tag = `[personal_forward:${screeningTag}] [forward_unanswered:${route.unansweredAction}] [ring_seconds:${route.ringSeconds}] [voicemail_enabled:${callSettings.voicemailEnabled ? "1" : "0"}] [caller_id:${route.callerIdDisplay}]`;
+  const tag = `[personal_forward:${screeningTag}] [forward_unanswered:${route.unansweredAction}] [ring_seconds:${route.ringSeconds}] [screen_seconds:${callSettings.forwardScreeningSeconds}] [voicemail_enabled:${callSettings.voicemailEnabled ? "1" : "0"}] [caller_id:${route.callerIdDisplay}]`;
 
   const ringLegIds: string[] = [];
   const dialList =

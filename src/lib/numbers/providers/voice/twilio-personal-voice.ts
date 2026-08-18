@@ -8,7 +8,15 @@ import { resolveNumberInboundRoute } from "@/lib/numbers/inbound-number-routing"
 import {
   PERSONAL_UNAVAILABLE_MESSAGE,
   readPersonalCallSettings,
+  type ForwardUnansweredAction,
 } from "@/lib/numbers/personal-call-settings";
+import { TRANSOVO_SCREEN_PROMPT } from "@/lib/numbers/forward-screening";
+import {
+  hasTerminalForwardOutcome,
+  tagForwardOutcome,
+} from "@/lib/numbers/forward-call-outcomes";
+import { isScreeningAccepted } from "@/lib/numbers/forward-screening";
+import { tagTwilioForwardOverflow } from "@/lib/numbers/personal-forward-twilio-fallback";
 import { assertPhoneNumberProvider } from "@/lib/numbers/providers/provider-guard";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -154,15 +162,10 @@ export async function buildTwilioInboundTwiml(params: {
     await prisma.humanCall.update({
       where: { id: human.callId },
       data: {
-        notes: `${human.call?.notes || ""}\n${huntNote}`.trim(),
+        notes: `${human.call?.notes || ""}\n${huntNote}${route.callScreening ? "\n[personal_forward:screening]" : ""}`.trim(),
       },
     });
-    if (route.callScreening) {
-      const gatherUrl = `${base}/api/webhooks/twilio/voice/screen?humanCallId=${encodeURIComponent(human.callId)}`;
-      return twiml(
-        `<Gather numDigits="1" action="${xmlEscape(gatherUrl)}" method="POST"><Say>Press 1 to accept this call.</Say></Gather><Hangup/>`,
-      );
-    }
+    const callSettings = readPersonalCallSettings(pn);
     return await buildForwardTwiml({
       route,
       humanCallId: human.callId,
@@ -172,6 +175,7 @@ export async function buildTwilioInboundTwiml(params: {
       recordingUrl,
       huntIndex: 0,
       pn,
+      screeningSeconds: callSettings.forwardScreeningSeconds,
     });
   }
 
@@ -187,7 +191,8 @@ async function buildForwardTwiml(input: {
     destinations: string[];
     mode: "single" | "sequential" | "simultaneous";
     ringSeconds: number;
-    unansweredAction: "voicemail" | "end";
+    unansweredAction: ForwardUnansweredAction;
+    callScreening: boolean;
     callerIdDisplay: "original" | "transovo_number";
   };
   humanCallId: string;
@@ -196,6 +201,7 @@ async function buildForwardTwiml(input: {
   statusUrl: string;
   recordingUrl: string;
   huntIndex: number;
+  screeningSeconds: number;
   pn: { id: string; workspaceId: string };
 }): Promise<string> {
   const callerId =
@@ -221,8 +227,16 @@ async function buildForwardTwiml(input: {
         ? [targets[input.huntIndex] ?? targets[0]]
         : [targets[0]];
 
+  const base = getAppBaseUrl();
+  const screenUrl = `${base}/api/webhooks/twilio/voice/screen?humanCallId=${encodeURIComponent(input.humanCallId)}&leg=destination&screeningSeconds=${input.screeningSeconds}`;
+
   const numbersXml = dialTargets
-    .map((dest) => `<Number>${xmlEscape(dest)}</Number>`)
+    .map((dest) => {
+      const numberAttrs = input.route.callScreening
+        ? ` url="${xmlEscape(screenUrl)}" urlMethod="POST"`
+        : "";
+      return `<Number${numberAttrs}>${xmlEscape(dest)}</Number>`;
+    })
     .join("");
 
   return twiml(
@@ -268,6 +282,7 @@ export async function buildTwilioDialStatusTwiml(params: {
   const prisma = getPrisma();
   const human = await prisma.humanCall.findUnique({ where: { id: params.humanCallId } });
   if (!human) return twiml("<Hangup/>");
+  if (hasTerminalForwardOutcome(human.notes)) return twiml("");
 
   const pn = await prisma.phoneNumber.findFirst({
     where: { workspaceId: human.workspaceId, e164: human.to },
@@ -278,25 +293,43 @@ export async function buildTwilioDialStatusTwiml(params: {
   const statusUrl = `${base}/api/webhooks/twilio/voice?humanCallId=${encodeURIComponent(human.id)}`;
   const recordingUrl = `${base}/api/webhooks/twilio/voice/recording?humanCallId=${encodeURIComponent(human.id)}`;
 
-  const answered =
+  const route = resolveNumberInboundRoute(pn);
+  const callSettings = readPersonalCallSettings(pn);
+  const screeningRequired =
+    route.kind === "forward" && route.callScreening;
+  const accepted = isScreeningAccepted(human.notes);
+
+  const dialCompleted =
     params.dialCallStatus === "completed" || params.dialCallStatus === "answered";
-  if (answered) {
+
+  if (dialCompleted) {
+    if (screeningRequired && !accepted) {
+      await tagForwardOutcome(human.id, "SCREENING_TIMEOUT");
+      const fallback = await tagTwilioForwardOverflow(
+        human.id,
+        "unanswered",
+        route.kind === "forward" ? route.unansweredAction : "transovo_voicemail",
+      );
+      if (fallback === "transovo_voicemail") {
+        return buildVoicemailTwiml(pn.workspaceId, pn.id, human.id, recordingUrl);
+      }
+      return twiml("<Hangup/>");
+    }
+    await tagForwardOutcome(human.id, "FORWARDED_ANSWERED");
     await prisma.humanCall.update({
       where: { id: human.id },
-      data: { status: "completed", answeredAt: new Date() },
+      data: { status: "in_progress", answeredAt: new Date() },
     });
     return twiml("");
   }
 
-  const route = resolveNumberInboundRoute(pn);
-  const callSettings = readPersonalCallSettings(pn);
   const huntTargets = parseHuntTargets(human.notes);
   const huntIndex = parseHuntIndex(human.notes);
 
   const overflowReason =
     params.dialCallStatus === "busy"
       ? "busy"
-      : params.dialCallStatus === "failed"
+      : params.dialCallStatus === "failed" || params.dialCallStatus === "canceled"
         ? "failed"
         : "unanswered";
 
@@ -315,13 +348,14 @@ export async function buildTwilioDialStatusTwiml(params: {
       },
     });
     return await buildForwardTwiml({
-      route: { ...route, mode: "sequential" },
+      route,
       humanCallId: human.id,
       transovoNumber: human.to,
       callerNumber: human.from,
       statusUrl,
       recordingUrl,
       huntIndex: nextIndex,
+      screeningSeconds: callSettings.forwardScreeningSeconds,
       pn,
     });
   }
@@ -361,66 +395,72 @@ export async function buildTwilioDialStatusTwiml(params: {
     }
   }
 
-  if (
-    overflowReason === "unanswered" &&
-    route.kind === "forward" &&
-    route.unansweredAction === "end"
-  ) {
+  const unansweredAction =
+    route.kind === "forward" ? route.unansweredAction : "transovo_voicemail";
+  const fallback = await tagTwilioForwardOverflow(human.id, overflowReason, unansweredAction);
+
+  if (fallback === "hang_up") {
     await prisma.humanCall.update({
       where: { id: human.id },
-      data: { status: "no-answer", disposition: `twilio_${overflowReason}` },
+      data: { status: "no-answer" },
     });
     return twiml("<Hangup/>");
   }
 
+  if (fallback === "transovo_voicemail") {
+    return buildVoicemailTwiml(pn.workspaceId, pn.id, human.id, recordingUrl);
+  }
+
   await prisma.humanCall.update({
     where: { id: human.id },
-    data: { status: "no-answer", disposition: `twilio_${overflowReason}` },
+    data: { status: "no-answer" },
   });
+  return twiml("");
+}
 
-  return buildVoicemailTwiml(pn.workspaceId, pn.id, human.id, recordingUrl);
+/** Destination-leg Press-1 screening (called party only — caller never hears this). */
+export async function buildTwilioDestinationScreenTwiml(params: {
+  humanCallId: string;
+  digits?: string;
+  screeningSeconds: number;
+}): Promise<string> {
+  const prisma = getPrisma();
+  const human = await prisma.humanCall.findUnique({ where: { id: params.humanCallId } });
+  if (!human || hasTerminalForwardOutcome(human.notes)) {
+    return twiml("<Hangup/>");
+  }
+
+  const base = getAppBaseUrl();
+  const actionUrl = `${base}/api/webhooks/twilio/voice/screen?humanCallId=${encodeURIComponent(params.humanCallId)}&leg=destination&screeningSeconds=${params.screeningSeconds}`;
+
+  if (!params.digits) {
+    return twiml(
+      `<Gather numDigits="1" timeout="${params.screeningSeconds}" action="${xmlEscape(actionUrl)}" method="POST"><Say>${xmlEscape(TRANSOVO_SCREEN_PROMPT)}</Say></Gather><Hangup/>`,
+    );
+  }
+
+  if (params.digits === "1") {
+    await prisma.humanCall.update({
+      where: { id: human.id },
+      data: {
+        notes: `${human.notes || ""}\nscreening:accepted`.trim(),
+      },
+    });
+    return twiml("");
+  }
+
+  await tagForwardOutcome(params.humanCallId, "SCREENING_REJECTED");
+  return twiml("<Hangup/>");
 }
 
 export async function buildTwilioScreenTwiml(params: {
   humanCallId: string;
   digits: string;
+  screeningSeconds?: number;
 }): Promise<string> {
-  const prisma = getPrisma();
-  const human = await prisma.humanCall.findUnique({ where: { id: params.humanCallId } });
-  if (!human) return twiml("<Hangup/>");
-
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { workspaceId: human.workspaceId, e164: human.to },
-  });
-  if (!pn) return twiml("<Hangup/>");
-
-  if (params.digits !== "1") {
-    return twiml("<Say>Goodbye.</Say><Hangup/>");
-  }
-
-  const route = resolveNumberInboundRoute(pn);
-  if (route.kind !== "forward") {
-    return twiml("<Hangup/>");
-  }
-
-  const base = getAppBaseUrl();
-  const statusUrl = `${base}/api/webhooks/twilio/voice?humanCallId=${encodeURIComponent(human.id)}`;
-  const recordingUrl = `${base}/api/webhooks/twilio/voice/recording?humanCallId=${encodeURIComponent(human.id)}`;
-
-  const huntNote = `[hunt_targets:${route.destinations.join(",")}] [hunt_index:0]`;
-  await prisma.humanCall.update({
-    where: { id: human.id },
-    data: { notes: `${human.notes || ""}\n${huntNote}`.trim() },
-  });
-
-  return await buildForwardTwiml({
-    route,
-    humanCallId: human.id,
-    transovoNumber: human.to,
-    callerNumber: human.from,
-    statusUrl,
-    recordingUrl,
-    huntIndex: 0,
-    pn,
+  return buildTwilioDestinationScreenTwiml({
+    humanCallId: params.humanCallId,
+    digits: params.digits,
+    screeningSeconds: params.screeningSeconds ?? 8,
   });
 }

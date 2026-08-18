@@ -22,7 +22,7 @@ export type PersonalNumberRow = PhoneNumber & {
   portAwayExpiresAt: string | null;
   forwardingEnabled: boolean;
   forwardRingSeconds: number;
-  forwardUnansweredAction: "voicemail" | "end";
+  forwardUnansweredAction: import("@/lib/numbers/personal-call-settings").ForwardUnansweredAction;
   directVoicemail: boolean;
   vaultIncomingMode: VaultIncomingMode;
   incomingCallHandling: IncomingCallHandling;

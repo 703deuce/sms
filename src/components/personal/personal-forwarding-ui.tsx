@@ -87,6 +87,14 @@ function fallbackActionLabel(action: FallbackAction | "voicemail" | "end"): stri
   return action;
 }
 
+function unansweredActionLabel(
+  action: "transovo_voicemail" | "destination_voicemail" | "hang_up",
+): string {
+  if (action === "transovo_voicemail") return "Use Transovo voicemail";
+  if (action === "destination_voicemail") return "Use forwarded phone voicemail";
+  return "Hang up";
+}
+
 function outcomeToneFromLabel(outcome: string): OutcomeTone {
   const o = outcome.toLowerCase();
   if (o.includes("answer")) return "green";
@@ -116,7 +124,9 @@ export function PersonalForwardingUI({
   const [forwardMode, setForwardMode] = useState<"single" | "sequential" | "simultaneous">("single");
   const [ringSeconds, setRingSeconds] = useState(25);
   const [useCustomRing, setUseCustomRing] = useState(false);
-  const [unansweredAction, setUnansweredAction] = useState<"voicemail" | "end">("voicemail");
+  const [unansweredAction, setUnansweredAction] = useState<
+    "transovo_voicemail" | "destination_voicemail" | "hang_up"
+  >("transovo_voicemail");
   const [busyAction, setBusyAction] = useState<FallbackAction>("voicemail");
   const [failedAction, setFailedAction] = useState<FallbackAction>("voicemail");
   const [incomingHandling, setIncomingHandling] = useState<
@@ -195,7 +205,13 @@ export function PersonalForwardingUI({
     const ringVal = typeof ring === "number" ? ring : 25;
     setRingSeconds(ringVal);
     setUseCustomRing(!(FORWARD_RING_PRESETS as readonly number[]).includes(ringVal));
-    setUnansweredAction(settings.forwardUnansweredAction === "end" ? "end" : "voicemail");
+    setUnansweredAction(
+      settings.forwardUnansweredAction === "hang_up"
+        ? "hang_up"
+        : settings.forwardUnansweredAction === "destination_voicemail"
+          ? "destination_voicemail"
+          : "transovo_voicemail",
+    );
     setBusyAction((settings.forwardBusyAction as FallbackAction) || "voicemail");
     setFailedAction((settings.forwardFailedAction as FallbackAction) || "voicemail");
     setIncomingHandling(
@@ -452,7 +468,8 @@ export function PersonalForwardingUI({
             forwardBusyNumber: busyAction === "another_number" ? busyNumber.trim() || null : null,
             forwardFailedNumber:
               failedAction === "another_number" ? failedNumber.trim() || null : null,
-            voicemailEnabled: unansweredAction === "voicemail" || incomingHandling === "voicemail_only",
+            voicemailEnabled:
+              unansweredAction === "transovo_voicemail" || incomingHandling === "voicemail_only",
             directVoicemail: incomingHandling === "voicemail_only",
             callerIdDisplay,
             callScreeningEnabled: callScreening,
@@ -936,8 +953,12 @@ export function PersonalForwardingUI({
                 <>
                   <FallbackRow
                     condition="If No One Answers"
-                    action={fallbackActionLabel(unansweredAction)}
-                    pills={unansweredAction === "voicemail" ? [`Greeting: ${greetingLabel}`, "Transcription: On"] : undefined}
+                    action={unansweredActionLabel(unansweredAction)}
+                    pills={
+                      unansweredAction === "transovo_voicemail"
+                        ? [`Greeting: ${greetingLabel}`, "Transcription: On"]
+                        : undefined
+                    }
                   />
                   <FallbackRow
                     condition="If Destination Is Busy"

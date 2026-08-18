@@ -6,6 +6,7 @@ import {
   readPersonalCallSettings,
 } from "./personal-call-settings";
 import { validateForwardingDestination } from "./forwarding-validation";
+import type { ForwardUnansweredAction, LegacyForwardUnansweredAction } from "./personal-call-settings";
 
 export type NumberServiceAction =
   | "park"
@@ -116,7 +117,7 @@ export async function transitionNumberService(
         forwardDestination: validated.e164,
         forwardMode: "single",
         forwardRingSeconds: 25,
-        forwardUnansweredAction: "voicemail",
+        forwardUnansweredAction: "transovo_voicemail",
         forwardBusyAction: "voicemail",
         forwardFailedAction: "voicemail",
         voicemailEnabled: true,
@@ -282,7 +283,7 @@ export function applyPersonalCallSettingsToRow(
     forwardTargets?: string[];
     forwardMode?: "single" | "sequential" | "simultaneous";
     forwardRingSeconds?: number;
-    forwardUnansweredAction?: "voicemail" | "end";
+    forwardUnansweredAction?: ForwardUnansweredAction | LegacyForwardUnansweredAction;
     forwardBusyAction?: "voicemail" | "another_number" | "announcement" | "end";
     forwardFailedAction?: "voicemail" | "another_number" | "announcement" | "end";
     voicemailEnabled?: boolean;

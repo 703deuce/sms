@@ -4,11 +4,31 @@ export type VaultIncomingMode = "silent" | "parked_message" | "voicemail";
 export type IncomingCallHandling = "forward" | "voicemail_only" | "announcement_only";
 export type ForwardMode = "single" | "sequential" | "simultaneous";
 export type ForwardFallbackAction = "voicemail" | "another_number" | "announcement" | "end";
-export type ForwardUnansweredAction = "voicemail" | "end";
+/** Unanswered forwarding behavior when destination does not accept with Press 1. */
+export type ForwardUnansweredAction =
+  | "transovo_voicemail"
+  | "destination_voicemail"
+  | "hang_up";
+/** Legacy values stored in older rows. */
+export type LegacyForwardUnansweredAction = "voicemail" | "end";
 export type CallerIdDisplay = "original" | "transovo_number";
 
-export const FORWARD_RING_PRESETS = [10, 15, 20, 25, 30] as const;
+export const FORWARD_RING_PRESETS = [15, 20, 25, 30, 35, 40, 45] as const;
 export const MAX_FORWARD_TARGETS = 5;
+
+export function normalizeForwardUnansweredAction(
+  raw: unknown,
+  voicemailEnabled?: boolean,
+): ForwardUnansweredAction {
+  if (raw === "transovo_voicemail" || raw === "destination_voicemail" || raw === "hang_up") {
+    return raw;
+  }
+  if (raw === "end") return "hang_up";
+  if (raw === "voicemail") {
+    return voicemailEnabled ? "transovo_voicemail" : "destination_voicemail";
+  }
+  return voicemailEnabled ? "transovo_voicemail" : "destination_voicemail";
+}
 
 export type PersonalCallSettings = {
   incomingCallHandling: IncomingCallHandling;
@@ -27,6 +47,7 @@ export type PersonalCallSettings = {
   directVoicemail: boolean;
   callerIdDisplay: CallerIdDisplay;
   callScreeningEnabled: boolean;
+  forwardScreeningSeconds: number;
   forwardScheduleMode: "always" | "custom";
   portOutAccountNumber: string | null;
   portOutPin: string | null;
@@ -78,11 +99,19 @@ export function readPersonalCallSettings(row: {
   const settings = readSettings(row);
   const ringRaw = settings.forwardRingSeconds;
   const ringSeconds =
-    typeof ringRaw === "number" && ringRaw >= 5 && ringRaw <= 60 ? ringRaw : 25;
+    typeof ringRaw === "number" && ringRaw >= 15 && ringRaw <= 45 ? ringRaw : 25;
 
-  const unansweredRaw = settings.forwardUnansweredAction;
-  const forwardUnansweredAction: ForwardUnansweredAction =
-    unansweredRaw === "end" ? "end" : "voicemail";
+  const screeningRaw = settings.forwardScreeningSeconds;
+  const forwardScreeningSeconds =
+    typeof screeningRaw === "number" && screeningRaw >= 5 && screeningRaw <= 8
+      ? screeningRaw
+      : 8;
+
+  const voicemailEnabled = settings.voicemailEnabled === true;
+  const forwardUnansweredAction = normalizeForwardUnansweredAction(
+    settings.forwardUnansweredAction,
+    voicemailEnabled,
+  );
 
   const vaultRaw = settings.vaultIncomingMode;
   const vaultIncomingMode: VaultIncomingMode =
@@ -129,10 +158,11 @@ export function readPersonalCallSettings(row: {
     forwardUnansweredAction,
     forwardBusyAction: parseFallbackAction(settings.forwardBusyAction),
     forwardFailedAction: parseFallbackAction(settings.forwardFailedAction),
-    voicemailEnabled: settings.voicemailEnabled === true,
+    voicemailEnabled,
     directVoicemail: settings.directVoicemail === true,
     callerIdDisplay,
-    callScreeningEnabled: settings.callScreeningEnabled === true,
+    callScreeningEnabled: forwardUnansweredAction === "transovo_voicemail",
+    forwardScreeningSeconds,
     forwardScheduleMode:
       settings.forwardScheduleMode === "custom" ? "custom" : "always",
     portOutAccountNumber:
@@ -201,13 +231,14 @@ export type PersonalCallSettingsPatch = Partial<{
   forwardMode: ForwardMode;
   forwardTargets: string[];
   forwardRingSeconds: number;
-  forwardUnansweredAction: ForwardUnansweredAction;
+  forwardUnansweredAction: ForwardUnansweredAction | LegacyForwardUnansweredAction;
   forwardBusyAction: ForwardFallbackAction;
   forwardFailedAction: ForwardFallbackAction;
   voicemailEnabled: boolean;
   directVoicemail: boolean;
   callerIdDisplay: CallerIdDisplay;
   callScreeningEnabled: boolean;
+  forwardScreeningSeconds: number;
   forwardScheduleMode: "always" | "custom";
   portOutAccountNumber: string | null;
   portOutPin: string | null;
@@ -245,6 +276,9 @@ export function mergePersonalCallSettingsPatch(
   }
   if (patch.forwardUnansweredAction !== undefined) {
     next.forwardUnansweredAction = patch.forwardUnansweredAction;
+  }
+  if (patch.forwardScreeningSeconds !== undefined) {
+    next.forwardScreeningSeconds = patch.forwardScreeningSeconds;
   }
   if (patch.forwardBusyAction !== undefined) {
     next.forwardBusyAction = patch.forwardBusyAction;

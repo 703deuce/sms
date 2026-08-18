@@ -117,9 +117,14 @@ export async function processVoiceWebhookEvent(input: {
       const workspaceId = String(screeningState.workspaceId || input.workspaceId || "");
 
       if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
-        if ((digit === "2" || !digit) && humanCallId && parentId) {
+        if (digit !== "1" && humanCallId && parentId) {
           if (screeningState.kind === "personal_call_screening") {
             const callRow = await prisma.humanCall.findUnique({ where: { id: humanCallId } });
+            const { tagForwardOutcome } = await import("@/lib/numbers/forward-call-outcomes");
+            await tagForwardOutcome(
+              humanCallId,
+              digit ? "SCREENING_REJECTED" : "SCREENING_TIMEOUT",
+            );
             const { applyPersonalForwardOverflow } = await import(
               "@/lib/numbers/personal-forward-fallback"
             );
@@ -148,6 +153,7 @@ export async function processVoiceWebhookEvent(input: {
           }
         } else if (digit === "1" && humanCallId && parentId && agentControlId) {
           const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+          const { tagForwardOutcome } = await import("@/lib/numbers/forward-call-outcomes");
           await telnyxRequest(`/calls/${parentId}/actions/unhold`, {
             method: "POST",
             body: {},
@@ -156,6 +162,7 @@ export async function processVoiceWebhookEvent(input: {
             method: "POST",
             body: { call_control_id: agentControlId },
           }).catch(() => undefined);
+          await tagForwardOutcome(humanCallId, "FORWARDED_ANSWERED");
           await prisma.humanCall.update({
             where: { id: humanCallId },
             data: {

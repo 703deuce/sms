@@ -1858,18 +1858,17 @@ export async function processHumanCallWebhookEvent(input: {
 
     // Call screening: agent phone answered — gather accept/decline on the agent leg.
     if ((kind === "call_screening" || kind === "personal_call_screening") && eventControlId) {
-      const callerLabel =
-        kind === "personal_call_screening"
-          ? String(clientState.callerE164 || call.from || "unknown caller")
-          : call.from;
+      const screeningSeconds =
+        Number((call.notes || "").match(/\[screen_seconds:(\d+)\]/)?.[1]) || 8;
+      const { TRANSOVO_SCREEN_PROMPT } = await import("@/lib/numbers/forward-screening");
       await telnyxAction(eventControlId, "gather_using_speak", {
-        payload: `Call from ${callerLabel}. Press 1 to accept, press 2 to send to voicemail.`,
+        payload: TRANSOVO_SCREEN_PROMPT,
         voice: "female",
         language: "en-US",
-        valid_digits: "12",
+        valid_digits: "1",
         maximum_digits: 1,
         minimum_digits: 1,
-        timeout_millis: 15000,
+        timeout_millis: screeningSeconds * 1000,
         client_state: encodeClientState({
           workspaceId: call.workspaceId,
           humanCallId: call.id,

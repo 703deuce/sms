@@ -8,17 +8,22 @@ import { isTelnyxPhoneConfigured } from "@/lib/phone/human-call-service";
 import {
   readPersonalCallSettings,
   type ForwardFallbackAction,
+  type ForwardUnansweredAction,
 } from "./personal-call-settings";
+import {
+  hasTerminalForwardOutcome,
+  tagForwardOutcome,
+} from "./forward-call-outcomes";
 
 export type PersonalOverflowReason = "unanswered" | "busy" | "failed";
 
-function actionForReason(
+function overflowUnansweredAction(
   settings: ReturnType<typeof readPersonalCallSettings>,
   reason: PersonalOverflowReason,
-): ForwardFallbackAction {
+): ForwardUnansweredAction | ForwardFallbackAction {
   if (reason === "busy") return settings.forwardBusyAction;
   if (reason === "failed") return settings.forwardFailedAction;
-  return settings.forwardUnansweredAction === "end" ? "end" : "voicemail";
+  return settings.forwardUnansweredAction;
 }
 
 function fallbackNumber(
@@ -46,6 +51,7 @@ export async function applyPersonalForwardOverflow(input: {
     where: { id: input.humanCallId, workspaceId: input.workspaceId },
   });
   if (!call) return { skipped: true };
+  if (hasTerminalForwardOutcome(call.notes)) return { skipped: true, duplicate: true };
 
   const pn = await prisma.phoneNumber.findFirst({
     where: { workspaceId: input.workspaceId, e164: input.toE164 },
@@ -58,7 +64,7 @@ export async function applyPersonalForwardOverflow(input: {
     settingsJson: settings,
     voiceForwardTo: pn?.voiceForwardTo,
   });
-  const action = actionForReason(callSettings, input.reason);
+  const action = overflowUnansweredAction(callSettings, input.reason);
   const controlId = input.telnyxCallControlId;
 
   await telnyxRequest(`/calls/${controlId}/actions/unhold`, {
@@ -84,7 +90,6 @@ export async function applyPersonalForwardOverflow(input: {
       });
       return { ok: true, action: "another_number", destination: alt };
     }
-    // fall through to voicemail if no alt number
   }
 
   if (action === "announcement") {
@@ -109,16 +114,41 @@ export async function applyPersonalForwardOverflow(input: {
     return { ok: true, action: "announcement" };
   }
 
-  if (action === "voicemail") {
-    const allowVoicemailOverflow =
-      callSettings.voicemailEnabled ||
-      (input.reason === "unanswered" &&
-        callSettings.forwardUnansweredAction === "voicemail" &&
-        callSettings.forwardingEnabled);
+  if (action === "hang_up" || action === "end") {
+    await tagForwardOutcome(call.id, "HANG_UP");
+    await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
+      method: "POST",
+      body: {},
+    }).catch(() => undefined);
+    await prisma.humanCall.update({
+      where: { id: call.id },
+      data: {
+        status: "no-answer",
+        endedAt: new Date(),
+        onHold: false,
+      },
+    });
+    return { ok: true, action: "hang_up" };
+  }
 
-    if (!allowVoicemailOverflow) {
-      // fall through to unavailable message below
-    } else {
+  if (action === "destination_voicemail" && input.reason === "unanswered") {
+    await tagForwardOutcome(call.id, "DESTINATION_VOICEMAIL");
+    return { ok: true, action: "destination_voicemail" };
+  }
+
+  const shouldTransovoVoicemail =
+    action === "transovo_voicemail" ||
+    action === "voicemail" ||
+    input.reason !== "unanswered";
+
+  if (shouldTransovoVoicemail) {
+    const subReason =
+      input.reason === "busy" ? "busy" : input.reason === "failed" ? "failed" : "no-answer";
+    await tagForwardOutcome(
+      call.id,
+      "SENT_TO_TRANSOVO_VOICEMAIL",
+      `[forward_reason:${subReason}]`,
+    );
     const { leaveVoicemailOnCall, ensureNumberVoicemailBox } = await import(
       "@/lib/phone/voicemail-service"
     );
@@ -137,8 +167,7 @@ export async function applyPersonalForwardOverflow(input: {
         body: {},
       }).catch(() => undefined);
     });
-    return { ok: true, action: "voicemail" };
-    }
+    return { ok: true, action: "transovo_voicemail" };
   }
 
   await telnyxRequest(`/calls/${controlId}/actions/speak`, {

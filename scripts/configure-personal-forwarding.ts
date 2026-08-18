@@ -39,12 +39,13 @@ async function configureNumber(
     forwardDestination: FORWARD_TO,
     forwardMode: "single",
     forwardRingSeconds: 25,
-    forwardUnansweredAction: "voicemail",
+    forwardUnansweredAction: "transovo_voicemail",
     forwardBusyAction: "voicemail",
     forwardFailedAction: "voicemail",
     voicemailEnabled: true,
     directVoicemail: false,
-    callScreeningEnabled: false,
+    callScreeningEnabled: true,
+    forwardScreeningSeconds: 8,
   });
 
   await prisma.phoneNumber.update({
