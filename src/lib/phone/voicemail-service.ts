@@ -1,7 +1,116 @@
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { isTelnyxPhoneConfigured } from "./human-call-service";
 import { resolveVoicemailGreetingPlayback } from "./voicemail-greeting-playback";
+
+function encodeVoicemailClientState(data: Record<string, unknown>) {
+  return Buffer.from(JSON.stringify(data)).toString("base64");
+}
+
+async function resolvePhoneNumberIdForVoicemail(
+  workspaceId: string,
+  phoneNumberId?: string | null,
+  toE164?: string | null,
+) {
+  if (phoneNumberId) return phoneNumberId;
+  const to = toE164?.trim();
+  if (!to) return null;
+  const normalized = normalizeE164(to);
+  const pn = await getPrisma().phoneNumber.findFirst({
+    where: {
+      workspaceId,
+      OR: [{ e164: to }, { e164: normalized }],
+    },
+    select: { id: true },
+  });
+  return pn?.id ?? null;
+}
+
+export async function startVoicemailRecordingOnCall(input: {
+  telnyxCallControlId: string;
+  humanCallId: string;
+}) {
+  if (!isTelnyxPhoneConfigured()) return;
+  await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/record_start`, {
+    method: "POST",
+    body: { format: "mp3", channels: "single", play_beep: true, max_length: 180 },
+  }).catch((err) => {
+    console.warn("[voicemail] record_start failed", {
+      humanCallId: input.humanCallId,
+      err,
+    });
+  });
+}
+
+export async function handleVoicemailGreetingMediaEnded(input: {
+  eventType: string;
+  eventPayload: Record<string, unknown>;
+  clientState: Record<string, unknown>;
+}) {
+  const clientState = input.clientState;
+  if (clientState.kind !== "voicemail_greeting") return { handled: false as const };
+
+  const humanCallId = String(clientState.humanCallId || "");
+  const telnyxCallControlId = String(
+    input.eventPayload.call_control_id || clientState.telnyxCallControlId || "",
+  );
+  if (!humanCallId || !telnyxCallControlId) return { handled: false as const };
+
+  const playbackStatus = String(
+    (input.eventPayload as { status?: string }).status ||
+      (input.eventPayload.payload as { status?: string } | undefined)?.status ||
+      "",
+  );
+
+  if (input.eventType === "call.playback.ended") {
+    const failedPlayback =
+      playbackStatus === "file_not_found" ||
+      playbackStatus === "failed" ||
+      playbackStatus === "unknown";
+    const sayText =
+      typeof clientState.sayText === "string" ? clientState.sayText.trim() : "";
+
+    if (failedPlayback && sayText) {
+      console.warn("[voicemail] Telnyx playback ended with failure — falling back to speak", {
+        humanCallId,
+        playbackStatus,
+        playUrl: clientState.playUrl,
+      });
+      await telnyxRequest(`/calls/${telnyxCallControlId}/actions/speak`, {
+        method: "POST",
+        body: {
+          payload: sayText,
+          voice: "female",
+          language: "en-US",
+          client_state: encodeVoicemailClientState({
+            kind: "voicemail_greeting",
+            humanCallId,
+            awaiting: "speak",
+            sayText,
+          }),
+        },
+      }).catch((err) => {
+        console.error("[voicemail] speak fallback after playback failure failed", {
+          humanCallId,
+          err,
+        });
+        return startVoicemailRecordingOnCall({ telnyxCallControlId, humanCallId });
+      });
+      return { handled: true as const, kind: "voicemail_greeting_speak_fallback" };
+    }
+  }
+
+  if (
+    input.eventType === "call.playback.ended" ||
+    input.eventType === "call.speak.ended"
+  ) {
+    await startVoicemailRecordingOnCall({ telnyxCallControlId, humanCallId });
+    return { handled: true as const, kind: "voicemail_recording_started" };
+  }
+
+  return { handled: false as const };
+}
 
 export async function ensureNumberVoicemailBox(
   workspaceId: string,
@@ -74,13 +183,20 @@ export async function leaveVoicemailOnCall(input: {
   phoneNumberId?: string | null;
 }) {
   const prisma = getPrisma();
-  let box = input.phoneNumberId
+  const call = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+  const phoneNumberId = await resolvePhoneNumberIdForVoicemail(
+    input.workspaceId,
+    input.phoneNumberId,
+    call?.to,
+  );
+
+  let box = phoneNumberId
     ? await prisma.voicemailBox.findFirst({
-        where: { workspaceId: input.workspaceId, phoneNumberId: input.phoneNumberId, active: true },
+        where: { workspaceId: input.workspaceId, phoneNumberId, active: true },
       })
     : null;
-  if (!box && input.phoneNumberId) {
-    box = await ensureNumberVoicemailBox(input.workspaceId, input.phoneNumberId, input.userId);
+  if (!box && phoneNumberId) {
+    box = await ensureNumberVoicemailBox(input.workspaceId, phoneNumberId, input.userId);
   }
   if (!box && input.queueId) {
     box = await prisma.voicemailBox.findFirst({
@@ -105,40 +221,90 @@ export async function leaveVoicemailOnCall(input: {
     });
   }
 
-  const call = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
-
   if (isTelnyxPhoneConfigured()) {
     const playback = await resolveVoicemailGreetingPlayback(input.workspaceId, box);
+    console.info("[voicemail] leaveVoicemailOnCall", {
+      humanCallId: input.humanCallId,
+      phoneNumberId,
+      boxId: box.id,
+      boxPhoneNumberId: box.phoneNumberId,
+      greetingUrl: box.greetingUrl,
+      playUrl: playback.playUrl,
+      sayText: playback.sayText
+        ? playback.sayText.length > 40
+          ? `${playback.sayText.slice(0, 40)}…`
+          : playback.sayText
+        : null,
+    });
+
+    const greetingState = encodeVoicemailClientState({
+      kind: "voicemail_greeting",
+      humanCallId: input.humanCallId,
+      workspaceId: input.workspaceId,
+      phoneNumberId,
+      playUrl: playback.playUrl,
+      sayText: playback.sayText,
+    });
+
     if (playback.playUrl) {
       try {
         await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/playback_start`, {
           method: "POST",
-          body: { audio_url: playback.playUrl },
+          body: {
+            audio_url: playback.playUrl,
+            client_state: greetingState,
+          },
         });
       } catch (err) {
         console.error("[voicemail] Telnyx playback_start failed", {
           humanCallId: input.humanCallId,
-          phoneNumberId: input.phoneNumberId,
+          phoneNumberId,
           playUrl: playback.playUrl,
           err,
         });
         if (playback.sayText) {
           await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
             method: "POST",
-            body: { payload: playback.sayText, voice: "female", language: "en-US" },
+            body: {
+              payload: playback.sayText,
+              voice: "female",
+              language: "en-US",
+              client_state: encodeVoicemailClientState({
+                kind: "voicemail_greeting",
+                humanCallId: input.humanCallId,
+                awaiting: "speak",
+                sayText: playback.sayText,
+              }),
+            },
           }).catch(() => undefined);
+        } else {
+          await startVoicemailRecordingOnCall({
+            telnyxCallControlId: input.telnyxCallControlId,
+            humanCallId: input.humanCallId,
+          });
         }
       }
     } else if (playback.sayText) {
       await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
         method: "POST",
-        body: { payload: playback.sayText, voice: "female", language: "en-US" },
+        body: {
+          payload: playback.sayText,
+          voice: "female",
+          language: "en-US",
+          client_state: encodeVoicemailClientState({
+            kind: "voicemail_greeting",
+            humanCallId: input.humanCallId,
+            awaiting: "speak",
+            sayText: playback.sayText,
+          }),
+        },
       }).catch(() => undefined);
+    } else {
+      await startVoicemailRecordingOnCall({
+        telnyxCallControlId: input.telnyxCallControlId,
+        humanCallId: input.humanCallId,
+      });
     }
-    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/record_start`, {
-      method: "POST",
-      body: { format: "mp3", channels: "single", play_beep: true, max_length: 180 },
-    }).catch(() => undefined);
   }
 
   const msg = await prisma.voicemailMessage.create({

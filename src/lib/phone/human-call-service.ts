@@ -1557,6 +1557,21 @@ export async function processHumanCallWebhookEvent(input: {
   }
   if (!call) return { ok: false, reason: "human_call_not_found" };
 
+  if (
+    input.eventType === "call.playback.ended" ||
+    input.eventType === "call.speak.ended"
+  ) {
+    const { handleVoicemailGreetingMediaEnded } = await import("./voicemail-service");
+    const vmGreeting = await handleVoicemailGreetingMediaEnded({
+      eventType: input.eventType,
+      eventPayload: input.eventPayload,
+      clientState,
+    });
+    if (vmGreeting.handled) {
+      return { ok: true, ...vmGreeting };
+    }
+  }
+
   const secondaryKinds = new Set([
     "queue_member_ring",
     "simultaneous_ring",

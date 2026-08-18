@@ -436,6 +436,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
           humanCallId: call.id,
           telnyxCallControlId: controlId,
           userId: call.agentUserId,
+          phoneNumberId: pn?.id ?? null,
         }).catch(async () => {
           await telnyxRequest(`/calls/${controlId}/actions/hangup`, {
             method: "POST",
