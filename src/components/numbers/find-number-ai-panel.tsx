@@ -2,24 +2,25 @@
 
 import { cn } from "@/lib/utils";
 import type { AiNumberSearchMessage } from "@/lib/premium-numbers/ai-number-search/types";
-import { Loader2, Sparkles, X } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-const PRIMARY = "#4338ca";
+const PRIMARY = "#4f46e5";
 
-const SUGGESTED_PROMPTS = [
-  "Find me a memorable number for an electrician",
-  "Find me a 571 business number under $75",
-  "Find something with SPARK or WIRE",
-  "Find the easiest number to remember",
-  "Find me something good for advertising",
-];
-
-const QUICK_ACTIONS = [
-  { id: "cheaper", label: "Cheaper" },
-  { id: "better_patterns", label: "Better patterns" },
-  { id: "compare_top_3", label: "Compare top 3" },
-  { id: "try_another_area", label: "Try another area code" },
+const STARTER_MESSAGES: AiNumberSearchMessage[] = [
+  {
+    id: "starter-1",
+    role: "user",
+    content:
+      "I'm looking for a number that sounds professional but also friendly. Something that would work well for a real estate business.",
+    createdAt: "",
+  },
+  {
+    id: "starter-2",
+    role: "assistant",
+    content: "Do you have any recommendations? I'm open to both toll-free and local numbers.",
+    createdAt: "",
+  },
 ];
 
 type Chip = { id: string; label: string; kind: "explicit" | "ai" | "filter" };
@@ -36,6 +37,7 @@ export function FindNumberAiPanel({
   onClear,
   onRemoveChip,
   className,
+  variant = "default",
 }: {
   sessionId: string | null;
   messages: AiNumberSearchMessage[];
@@ -48,21 +50,16 @@ export function FindNumberAiPanel({
   onClear: () => void;
   onRemoveChip: (chipId: string) => void;
   className?: string;
+  variant?: "default" | "mockup";
 }) {
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isMockup = variant === "mockup";
+  const displayMessages = messages.length > 0 ? messages : isMockup ? STARTER_MESSAGES : [];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
-
-  const actions =
-    suggestedActions.length > 0
-      ? suggestedActions.map((id) => ({
-          id,
-          label: id.replace(/_/g, " "),
-        }))
-      : QUICK_ACTIONS;
 
   return (
     <div
@@ -73,16 +70,20 @@ export function FindNumberAiPanel({
     >
       <div className="flex items-center justify-between border-b border-[#f3f4f6] px-4 py-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-[#4338ca]" />
-          <h2 className="text-[14px] font-semibold text-[#111827]">AI Concierge</h2>
+          <Sparkles className="h-4 w-4 text-[#4f46e5]" />
+          <h2 className="text-[14px] font-semibold text-[#111827]">
+            {isMockup ? "Your AI Concierge" : "AI Concierge"}
+          </h2>
         </div>
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-[12px] font-medium text-[#6366f1] hover:underline"
-        >
-          Clear
-        </button>
+        {!isMockup ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[12px] font-medium text-[#6366f1] hover:underline"
+          >
+            Clear
+          </button>
+        ) : null}
       </div>
 
       {understandingChips.length > 0 ? (
@@ -99,7 +100,7 @@ export function FindNumberAiPanel({
                   chip.kind === "ai"
                     ? "bg-[#f5f3ff] text-[#7c3aed]"
                     : chip.kind === "explicit"
-                      ? "bg-[#eef2ff] text-[#4338ca]"
+                      ? "bg-[#eef2ff] text-[#4f46e5]"
                       : "bg-[#f3f4f6] text-[#374151]",
                 )}
               >
@@ -119,34 +120,19 @@ export function FindNumberAiPanel({
       ) : null}
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 ? (
-          <div className="space-y-3">
-            <p className="text-[13px] text-[#6b7280]">
-              Describe the number you want in plain language. I&apos;ll search live inventory —
-              never made-up numbers.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  className="rounded-lg border border-[#e5e7eb] px-3 py-1.5 text-[12px] text-[#374151] hover:border-[#c7d2fe] hover:bg-[#eef2ff]"
-                  onClick={() => onSend(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
+        {displayMessages.length === 0 ? (
+          <p className="text-[13px] text-[#6b7280]">
+            Describe the number you want in plain language. I&apos;ll search live inventory.
+          </p>
         ) : (
-          messages.map((m) => (
+          displayMessages.map((m) => (
             <div
               key={m.id}
               className={cn(
-                "max-w-[95%] rounded-xl px-3 py-2 text-[13px] leading-relaxed",
+                "max-w-[95%] rounded-xl px-3 py-2.5 text-[13px] leading-relaxed",
                 m.role === "user"
-                  ? "ml-auto bg-[#4338ca] text-white"
-                  : "bg-[#f9fafb] text-[#374151]",
+                  ? "ml-auto bg-[#4f46e5] text-white"
+                  : "bg-[#f3f4f6] text-[#374151]",
               )}
             >
               {m.content}
@@ -155,27 +141,14 @@ export function FindNumberAiPanel({
         )}
         {loading ? (
           <div className="flex items-center gap-2 text-[13px] text-[#6b7280]">
-            <Loader2 className="h-4 w-4 animate-spin text-[#4338ca]" />
+            <Loader2 className="h-4 w-4 animate-spin text-[#4f46e5]" />
             {loadingStage || "Finding your best numbers…"}
           </div>
         ) : null}
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-[#f3f4f6] px-4 py-3 space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {actions.slice(0, 4).map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              disabled={loading}
-              className="rounded-lg border border-[#e5e7eb] px-2.5 py-1 text-[11px] font-semibold text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50"
-              onClick={() => onQuickAction(a.id)}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
+      <div className="border-t border-[#f3f4f6] px-4 py-3">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -188,21 +161,22 @@ export function FindNumberAiPanel({
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Ask AI…"
-            className="h-10 flex-1 rounded-lg border border-[#e5e7eb] px-3 text-[13px] outline-none focus:border-[#6366f1]"
+            placeholder={isMockup ? "Give me some more options…" : "Ask AI…"}
+            className="h-11 flex-1 rounded-lg border border-[#e5e7eb] px-3 text-[13px] outline-none focus:border-[#6366f1]"
             disabled={loading}
           />
           <button
             type="submit"
             disabled={loading || !draft.trim()}
-            className="h-10 rounded-lg px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-white disabled:opacity-50"
             style={{ backgroundColor: PRIMARY }}
+            aria-label="Send"
           >
-            Send
+            <ArrowRight className="h-4 w-4" />
           </button>
         </form>
-        {sessionId ? (
-          <p className="text-[10px] text-[#9ca3af]">Session active</p>
+        {!isMockup && sessionId ? (
+          <p className="mt-2 text-[10px] text-[#9ca3af]">Session active</p>
         ) : null}
       </div>
     </div>
