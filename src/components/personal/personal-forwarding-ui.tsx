@@ -122,7 +122,7 @@ export function PersonalForwardingUI({
   const [targets, setTargets] = useState<string[]>([""]);
   const [forwardingOn, setForwardingOn] = useState(false);
   const [forwardMode, setForwardMode] = useState<"single" | "sequential" | "simultaneous">("single");
-  const [ringSeconds, setRingSeconds] = useState(25);
+  const [ringSeconds, setRingSeconds] = useState(20);
   const [useCustomRing, setUseCustomRing] = useState(false);
   const [unansweredAction, setUnansweredAction] = useState<
     "transovo_voicemail" | "destination_voicemail" | "hang_up"
@@ -601,6 +601,11 @@ export function PersonalForwardingUI({
       <p className="mt-2 text-[11px] leading-relaxed text-[#6b7280]">
         Require you to press 1 before a forwarded call connects. This prevents your mobile
         voicemail or automated systems from accidentally answering the call.
+        {unansweredAction === "transovo_voicemail" && !callScreening ? (
+          <span className="mt-1 block text-[#6366f1]">
+            For stronger voicemail protection, turn Call Screening on.
+          </span>
+        ) : null}
       </p>
       {callScreening ? (
         <label className="mt-3 block text-[11px] font-medium text-[#9ca3af]">
@@ -870,9 +875,9 @@ export function PersonalForwardingUI({
                       className="w-[88px] text-[12px]"
                       value={String(dest.isDemo ? dest.ringSeconds : ringSeconds)}
                       disabled={dest.isDemo}
-                      onChange={(e) => setRingSeconds(Number(e.target.value) || 25)}
+                      onChange={(e) => setRingSeconds(Number(e.target.value) || 20)}
                     >
-                      {[15, 20, 25, 30, 45].map((s) => (
+                      {FORWARD_RING_PRESETS.map((s) => (
                         <option key={s} value={s}>{s} sec</option>
                       ))}
                     </PersonalMockSelect>
@@ -914,6 +919,13 @@ export function PersonalForwardingUI({
                   <Plus className="h-4 w-4" />
                   Add Destination
                 </button>
+              ) : null}
+              {incomingHandling === "forward" && forwardingOn && !useWireframe ? (
+                <p className="mt-3 text-[11px] leading-relaxed text-[#6b7280]">
+                  <strong className="font-medium text-[#374151]">Ring for</strong> sets how long
+                  your forwarding destination rings before fallback. When using Transovo voicemail,
+                  pick a shorter time if your mobile voicemail usually picks up quickly.
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -957,19 +969,34 @@ export function PersonalForwardingUI({
                 ))
               : (
                 <>
-                  <FallbackRow
-                    condition="If No One Answers"
-                    action={unansweredActionLabel(unansweredAction)}
-                    pills={
-                      unansweredAction === "transovo_voicemail"
-                        ? [
-                            `Ring ${ringSeconds}s before Transovo voicemail`,
-                            `Greeting: ${greetingLabel}`,
-                            "Transcription: On",
-                          ]
-                        : undefined
-                    }
-                  />
+                  <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <div>
+                      <p className="text-[13px] font-medium text-[#111827]">If No One Answers</p>
+                      <p className="mt-0.5 text-[11px] text-[#6b7280]">
+                        {unansweredAction === "transovo_voicemail"
+                          ? "We’ll send callers to your Transovo voicemail after your selected ring time."
+                          : unansweredAction === "destination_voicemail"
+                            ? "Allow your forwarded phone’s carrier voicemail to answer."
+                            : "End the call without voicemail."}
+                      </p>
+                    </div>
+                    <PersonalMockSelect
+                      className="min-w-[200px] text-[12px]"
+                      value={unansweredAction}
+                      onChange={(e) =>
+                        setUnansweredAction(
+                          e.target.value as
+                            | "transovo_voicemail"
+                            | "destination_voicemail"
+                            | "hang_up",
+                        )
+                      }
+                    >
+                      <option value="transovo_voicemail">Use Transovo voicemail</option>
+                      <option value="destination_voicemail">Use forwarded phone voicemail</option>
+                      <option value="hang_up">Hang up</option>
+                    </PersonalMockSelect>
+                  </div>
                   <FallbackRow
                     condition="If Destination Is Busy"
                     action={fallbackActionLabel(busyAction)}
