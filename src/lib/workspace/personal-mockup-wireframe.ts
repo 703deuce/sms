@@ -688,100 +688,116 @@ export const WIREFRAME_VOICEMAIL_KPIS = {
 };
 
 export const WIREFRAME_OVERVIEW_KPIS = {
-  totalContacts: 0,
-  contactsAddedLastMonth: 0,
-  activeNumbers: 0,
-  textsSent30d: 0,
-  calls30d: 428,
-  balance: "$12.40",
-  balanceSub: "Next refill at $5.00",
-  vaultCount: 4,
-  vaultActive: 4,
+  phoneNumbers: 0,
+  totalExtensions: 0,
+  forwardedNumbers: 0,
+  agents: 0,
+  monthlySpend: "$12.45",
+  activeConversations: 0,
 };
 
-export const WIREFRAME_OVERVIEW_TOP_CONTACTS = [
+export const WIREFRAME_OVERVIEW_CALL_ACTIVITY = [
   {
-    id: "demo-oc1",
-    phone: "+15123419887",
-    location: "Austin, TX",
-    recentActivity: "Sent inbound text...",
-    type: "Inbound",
-    line: "N/A",
+    id: "demo-ca1",
+    date: "Jul 12, 2023",
+    extensionAgent: "Samantha Reed",
+    type: "Cell",
+    duration: "4:32",
+    outcome: "Completed",
+    direction: "Inbound",
     status: "Active",
     statusTone: "green" as const,
-    totalActivity: "12 hours",
-    lastAction: "Today",
   },
   {
-    id: "demo-oc2",
-    phone: "+15031234567",
-    location: "Portland, OR",
-    recentActivity: "Responded to campaign",
-    type: "Call Flow",
-    line: "Fall Sale",
-    status: "Managed",
-    statusTone: "blue" as const,
-    totalActivity: "23 min",
-    lastAction: "Yesterday",
-  },
-  {
-    id: "demo-oc3",
-    phone: "+12067890123",
-    location: "Seattle, WA",
-    recentActivity: "Scheduled",
-    type: "Email",
-    line: "E-Commerce",
-    status: "Prospect",
-    statusTone: "orange" as const,
-    totalActivity: "14 hours",
-    lastAction: "2 days ago",
-  },
-  {
-    id: "demo-oc4",
-    phone: "+16465554321",
-    location: "New York, NY",
-    recentActivity: "Completed campaign",
-    type: "SMS",
-    line: "Spring Event",
-    status: "Finished",
+    id: "demo-ca2",
+    date: "Jul 11, 2023",
+    extensionAgent: "Jerome Bell",
+    type: "Landline",
+    duration: "2:18",
+    outcome: "Completed",
+    direction: "Outbound",
+    status: "Active",
     statusTone: "green" as const,
-    totalActivity: "45 min",
-    lastAction: "3 days ago",
+  },
+  {
+    id: "demo-ca3",
+    date: "Jul 10, 2023",
+    extensionAgent: "Albert Flores",
+    type: "VoIP",
+    duration: "6:05",
+    outcome: "Missed",
+    direction: "Inbound",
+    status: "Pending",
+    statusTone: "orange" as const,
+  },
+  {
+    id: "demo-ca4",
+    date: "Jul 09, 2023",
+    extensionAgent: "Katherine Moss",
+    type: "Cell",
+    duration: "1:47",
+    outcome: "Completed",
+    direction: "Inbound",
+    status: "Active",
+    statusTone: "green" as const,
   },
 ];
 
-export const WIREFRAME_OVERVIEW_NUMBER_REVIEW = {
-  total: 4,
-  mobile: 3,
-  landline: 1,
-  voip: 0,
-  invalid: 0,
-};
-
-export const WIREFRAME_OVERVIEW_PENDING_TASKS = [
-  { id: "demo-pt1", text: "Follow up with (512) 341-9887", at: "1m ago" },
-  { id: "demo-pt2", text: "Review voicemail from (703) 555-9202", at: "5m ago" },
-  { id: "demo-pt3", text: "Confirm port documents for Main Line", at: "12m ago" },
-  { id: "demo-pt4", text: "Update forwarding for Sales Line", at: "1h ago" },
+export const WIREFRAME_OVERVIEW_TOP_EXTENSIONS = [
+  { id: "demo-ext1", label: "Extension 101" },
+  { id: "demo-ext2", label: "Extension 202" },
+  { id: "demo-ext3", label: "Extension 303" },
 ];
 
-export const WIREFRAME_OVERVIEW_COMM_LOG = [
-  { phone: "+1 (512) 555-0199", date: "Jul 24, 2024", time: "10:20 AM" },
-  { phone: "+1 (703) 555-9191", date: "Jul 23, 2024", time: "4:12 PM" },
-  { phone: "+1 (571) 407-3615", date: "Jul 22, 2024", time: "9:15 AM" },
+export const WIREFRAME_OVERVIEW_ACTIVE_DEVICES = [
+  { id: "demo-dev1", label: "Office Desk Phone", sub: "San Francisco, CA" },
+  { id: "demo-dev2", label: "Mobile — Anthony", sub: "iOS Device" },
 ];
 
-export const WIREFRAME_OVERVIEW_ACTIVITY_LOG = [
-  { id: "demo-al1", text: "Contact Added to 'Campaign A'", at: "2h ago" },
-  { id: "demo-al2", text: "Text sent to (512) 341-9887", at: "3h ago" },
-  { id: "demo-al3", text: "Call completed with (503) 123-4567", at: "5h ago" },
+export const WIREFRAME_OVERVIEW_QUICK_NOTES = [
+  { id: "demo-qn1", text: "Follow up on port request" },
+  { id: "demo-qn2", text: "Update voicemail greeting" },
 ];
 
-export const WIREFRAME_OVERVIEW_ANALYTICS = {
-  total: 428,
-  changePct: 12,
-  sparkline: [12, 18, 22, 28, 32, 30, 35],
-};
+export const WIREFRAME_OVERVIEW_INVOICES_LIST = [
+  { label: "May 2023", amount: "$12.45" },
+  { label: "Apr 2023", amount: "$12.45" },
+];
+
+export const WIREFRAME_OVERVIEW_PENDING_DEPLOYMENTS = [
+  { id: "demo-dep1", label: "SMS routing update", progress: 65 },
+  { id: "demo-dep2", label: "Number provisioning", progress: 30 },
+];
+
+export const WIREFRAME_OVERVIEW_ACTIVE_NUMBERS_LIST = [
+  {
+    id: "demo-an1",
+    phone: "+14555455555",
+    label: "New Line Number",
+  },
+];
+
+export const WIREFRAME_OVERVIEW_SERVICES = [
+  { label: "Cloud Connect", online: true },
+  { label: "SMS Messaging", online: true },
+  { label: "Voice Analytics", online: true },
+];
+
+export const WIREFRAME_OVERVIEW_COMMUNICATIONS = [
+  { phone: "+1 (415) 555-0199", at: "Jul 12, 2023 · 10:15 AM" },
+  { phone: "+1 (703) 555-9202", at: "Jul 11, 2023 · 4:42 PM" },
+  { phone: "+1 (571) 407-3615", at: "Jul 10, 2023 · 9:30 AM" },
+];
+
+export const WIREFRAME_OVERVIEW_RECENT_REPORTS = [
+  { name: "Call Summary Report.pdf", size: "5.2 MB" },
+  { name: "Usage Analytics Q2.pdf", size: "3.8 MB" },
+];
+
+export const WIREFRAME_OVERVIEW_CALL_STATUS = [
+  { label: "Call Time", value: 72 },
+  { label: "Average Wait Time", value: 28 },
+];
 
 /** Find a Number mockup — populated search state (TransOvo reference layout). */
 export const WIREFRAME_FIND_NUMBER_SUMMARY = {

@@ -2,29 +2,34 @@
 
 import type { PersonalOverviewData } from "@/lib/workspace/personal-overview";
 import {
-  WIREFRAME_OVERVIEW_ACTIVITY_LOG,
-  WIREFRAME_OVERVIEW_ANALYTICS,
-  WIREFRAME_OVERVIEW_COMM_LOG,
+  WIREFRAME_OVERVIEW_ACTIVE_DEVICES,
+  WIREFRAME_OVERVIEW_ACTIVE_NUMBERS_LIST,
+  WIREFRAME_OVERVIEW_CALL_ACTIVITY,
+  WIREFRAME_OVERVIEW_CALL_STATUS,
+  WIREFRAME_OVERVIEW_COMMUNICATIONS,
+  WIREFRAME_OVERVIEW_INVOICES_LIST,
   WIREFRAME_OVERVIEW_KPIS,
-  WIREFRAME_OVERVIEW_NUMBER_REVIEW,
-  WIREFRAME_OVERVIEW_PENDING_TASKS,
-  WIREFRAME_OVERVIEW_TOP_CONTACTS,
+  WIREFRAME_OVERVIEW_PENDING_DEPLOYMENTS,
+  WIREFRAME_OVERVIEW_QUICK_NOTES,
+  WIREFRAME_OVERVIEW_RECENT_REPORTS,
+  WIREFRAME_OVERVIEW_SERVICES,
+  WIREFRAME_OVERVIEW_TOP_EXTENSIONS,
   usePersonalWireframe,
 } from "@/lib/workspace/personal-mockup-wireframe";
 import { cn, formatPhone } from "@/lib/utils";
 import {
-  CheckCircle2,
-  CreditCard,
+  FileText,
+  Hash,
+  MessageCircle,
+  MoreVertical,
   Phone,
-  Plus,
-  SlidersHorizontal,
-  TrendingUp,
+  PhoneForwarded,
+  Smartphone,
   Users,
-  Vault,
+  Wifi,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import { PersonalMockSparkline } from "./mockup/charts";
+import { PersonalMockBarChart } from "./mockup/charts";
 import {
   PersonalMockBtn,
   PersonalMockHeader,
@@ -33,267 +38,276 @@ import {
   PersonalMockPill,
   PersonalMockSection,
   PersonalMockSelect,
-  PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
 
-const QUICK_ACTIONS = [
-  { label: "Dashboard", href: "/personal" },
-  { label: "Add a new number", href: "/personal/numbers/premium" },
-  { label: "View call activity", href: "/personal/activity" },
-  { label: "Create smart routing flow", href: "/smart-routing/new" },
-  { label: "Import contacts", href: "/contacts/imports" },
-];
+function WidgetFooterLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="mt-4 block text-[12px] font-semibold text-[#6366f1] hover:underline"
+    >
+      {label}
+    </Link>
+  );
+}
 
-export function PersonalOverviewUI({
-  data,
-}: {
-  data: PersonalOverviewData;
-}) {
-  const [autoRefill, setAutoRefill] = useState(true);
+function CallTypeIcon({ type }: { type: string }) {
+  const t = type.toLowerCase();
+  if (t.includes("land")) return <Phone className="h-4 w-4 text-[#9ca3af]" />;
+  if (t.includes("voip")) return <Wifi className="h-4 w-4 text-[#9ca3af]" />;
+  return <Smartphone className="h-4 w-4 text-[#9ca3af]" />;
+}
+
+export function PersonalOverviewUI({ data }: { data: PersonalOverviewData }) {
   const useWireframe = usePersonalWireframe(data.activityCount, 8);
   const wf = WIREFRAME_OVERVIEW_KPIS;
-  const analytics = WIREFRAME_OVERVIEW_ANALYTICS;
 
   const kpis = useWireframe
-    ? {
-        totalContacts: wf.totalContacts,
-        contactsAddedLastMonth: wf.contactsAddedLastMonth,
-        activeNumbers: wf.activeNumbers,
-        textsSent30d: wf.textsSent30d,
-        calls30d: wf.calls30d,
-        balance: wf.balance,
-        balanceSub: wf.balanceSub,
-        vaultCount: wf.vaultCount,
-        vaultActive: wf.vaultActive,
-      }
+    ? wf
     : {
-        totalContacts: data.kpis.totalContacts,
-        contactsAddedLastMonth: data.kpis.contactsAddedLastMonth,
-        activeNumbers: data.kpis.activeNumbers,
-        textsSent30d: data.kpis.textsSent30d,
-        calls30d: data.kpis.calls30d,
-        balance: `$${data.kpis.balance.toFixed(2)}`,
-        balanceSub: data.kpis.balanceSub,
-        vaultCount: data.kpis.vaultCount,
-        vaultActive: data.kpis.vaultActive,
+        phoneNumbers: data.kpis.phoneNumbers,
+        totalExtensions: data.kpis.totalExtensions,
+        forwardedNumbers: data.kpis.forwardedNumbers,
+        agents: data.kpis.agents,
+        monthlySpend: `$${data.kpis.monthlySpend.toFixed(2)}`,
+        activeConversations: data.kpis.activeConversations,
       };
 
-  const topContacts = useWireframe
-    ? WIREFRAME_OVERVIEW_TOP_CONTACTS
-    : data.topContacts;
+  const monthlySpendDisplay =
+    typeof kpis.monthlySpend === "string"
+      ? kpis.monthlySpend
+      : `$${Number(kpis.monthlySpend).toFixed(2)}`;
 
-  const numberReview = useWireframe ? WIREFRAME_OVERVIEW_NUMBER_REVIEW : data.numberReview;
-  const pendingTasks = useWireframe ? WIREFRAME_OVERVIEW_PENDING_TASKS : data.pendingTasks;
-  const commLog = useWireframe ? WIREFRAME_OVERVIEW_COMM_LOG : data.communicationLog;
-  const activityLog = useWireframe ? WIREFRAME_OVERVIEW_ACTIVITY_LOG : data.recentActivityLog;
-  const analyticsTotal = useWireframe ? analytics.total : data.analyticsTotal;
-  const analyticsChange = useWireframe ? analytics.changePct : data.analyticsChangePct;
-  const sparkline = useWireframe ? analytics.sparkline : data.monthlyPerformance;
+  const callActivity = useWireframe ? WIREFRAME_OVERVIEW_CALL_ACTIVITY : data.callActivity;
+  const topExtensions = useWireframe ? WIREFRAME_OVERVIEW_TOP_EXTENSIONS : data.topExtensions;
+  const activeDevices = useWireframe ? WIREFRAME_OVERVIEW_ACTIVE_DEVICES : data.activeDevices;
+  const quickNotes = useWireframe ? WIREFRAME_OVERVIEW_QUICK_NOTES : data.quickNotes;
+  const invoices = useWireframe ? WIREFRAME_OVERVIEW_INVOICES_LIST : data.invoices;
+  const pendingDeployments = useWireframe
+    ? WIREFRAME_OVERVIEW_PENDING_DEPLOYMENTS
+    : data.pendingDeployments;
+  const activeNumbers = useWireframe ? WIREFRAME_OVERVIEW_ACTIVE_NUMBERS_LIST : data.activeNumbers;
+  const services = useWireframe ? WIREFRAME_OVERVIEW_SERVICES : data.services;
+  const communications = useWireframe ? WIREFRAME_OVERVIEW_COMMUNICATIONS : data.communications;
+  const recentReports = useWireframe ? WIREFRAME_OVERVIEW_RECENT_REPORTS : data.recentReports;
+  const callStatusOverview = useWireframe ? WIREFRAME_OVERVIEW_CALL_STATUS : data.callStatusOverview;
 
   return (
     <PersonalMockPage>
       <PersonalMockHeader
         title="Overview"
-        description="Manage contacts and communication insights."
+        description="Manage systems and other account details for the platform"
         actions={
           <>
-            <Link href="/personal/numbers/premium">
-              <PersonalMockBtn>
-                <Plus className="h-4 w-4" />
-                New Campaign
-              </PersonalMockBtn>
-            </Link>
-            <PersonalMockBtn variant="outline">
-              <SlidersHorizontal className="h-4 w-4" />
-              Refine search
-            </PersonalMockBtn>
+            <PersonalMockBtn>Update Dashboard</PersonalMockBtn>
+            <PersonalMockSelect className="h-9 min-w-[140px] text-[13px]">
+              <option>All Accounts</option>
+            </PersonalMockSelect>
           </>
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <PersonalMockKpi
-          label="Total Contacts"
-          value={kpis.totalContacts}
-          sub={`${kpis.contactsAddedLastMonth} Added last month`}
-          icon={Users}
-          iconClass="bg-[#eff6ff] text-[#2563eb]"
+          label="Phone Numbers"
+          value={kpis.phoneNumbers}
+          sub="Active Numbers"
+          icon={Phone}
+          iconClass="bg-[#eef2ff] text-[#6366f1]"
         />
         <PersonalMockKpi
-          label="Active Campaigns"
-          value={kpis.activeNumbers}
-          sub={`${kpis.activeNumbers} Active`}
-          icon={TrendingUp}
+          label="Total Extensions"
+          value={kpis.totalExtensions}
+          sub="Total"
+          icon={Hash}
           iconClass="bg-[#f5f3ff] text-[#7c3aed]"
         />
         <PersonalMockKpi
-          label="Texts Sent (30d)"
-          value={kpis.textsSent30d}
-          sub="This Billing Period"
-          icon={Phone}
+          label="Forwarded Numbers"
+          value={kpis.forwardedNumbers}
+          sub="Total Forwarded"
+          icon={PhoneForwarded}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
         <PersonalMockKpi
-          label="Calls (30d)"
-          value={kpis.calls30d}
-          sub="This Period"
-          icon={Phone}
+          label="Agents"
+          value={kpis.agents}
+          sub="Total"
+          icon={Users}
           iconClass="bg-[#fff7ed] text-[#ea580c]"
         />
         <PersonalMockKpi
-          label="Current Month Balance"
-          value={kpis.balance}
-          sub={kpis.balanceSub}
-          icon={CreditCard}
+          label="Monthly Spend Estimate"
+          value={monthlySpendDisplay}
+          sub="Effective this month"
+          icon={FileText}
           iconClass="bg-[#ecfdf5] text-[#059669]"
         />
         <PersonalMockKpi
-          label="Number Vault"
-          value={kpis.vaultCount}
-          sub={`${kpis.vaultActive} Active numbers`}
-          icon={Vault}
+          label="Active Conversations"
+          value={kpis.activeConversations}
+          sub="Effective this month"
+          icon={MessageCircle}
           iconClass="bg-[#eff6ff] text-[#2563eb]"
         />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
         <PersonalMockSection
-          title="Top Contacts"
-          description="Contacts with most activity this month"
+          title="Call Activity"
+          description="Review and view account details."
           action={
             <div className="flex items-center gap-2">
-              <PersonalMockSelect className="h-8 w-[100px] text-[12px]">
-                <option>30 days</option>
-                <option>7 days</option>
-                <option>90 days</option>
+              <PersonalMockSelect className="h-8 text-[12px]">
+                <option>Filter by Date Range</option>
+                <option>Last 7 days</option>
+                <option>Last 30 days</option>
               </PersonalMockSelect>
-              <Link href="/personal/activity" className="text-[12px] font-semibold text-[#2563eb]">
-                View all
-              </Link>
+              <PersonalMockSelect className="h-8 text-[12px]">
+                <option>All Calls</option>
+                <option>Inbound</option>
+                <option>Outbound</option>
+              </PersonalMockSelect>
             </div>
           }
         >
-          {topContacts.length === 0 ? (
-            <p className={pm.muted}>No contact activity yet.</p>
+          {callActivity.length === 0 ? (
+            <p className={pm.muted}>No call activity yet.</p>
           ) : (
-            <div className="overflow-x-auto -mx-5 px-5">
-              <table className="w-full min-w-[880px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                    <th className="pb-3 pr-3">Contact</th>
-                    <th className="pb-3 pr-3">Recent Activity</th>
-                    <th className="pb-3 pr-3">Type</th>
-                    <th className="pb-3 pr-3">Campaign</th>
-                    <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3 pr-3">Total Activity</th>
-                    <th className="pb-3 pr-3">Last Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f3f4f6]">
-                  {topContacts.map((row) => (
-                    <tr key={row.id}>
-                      <td className="py-3 pr-3">
-                        <p className="font-semibold text-[#111827]">{formatPhone(row.phone)}</p>
-                        <p className="text-[11px] text-[#9ca3af]">{row.location}</p>
-                      </td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.recentActivity}</td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.type}</td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.line}</td>
-                      <td className="py-3 pr-3">
-                        <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
-                      </td>
-                      <td className="py-3 pr-3 font-medium text-[#111827]">{row.totalActivity}</td>
-                      <td className="py-3 pr-3 text-[#6b7280]">{row.lastAction}</td>
+            <>
+              <div className="overflow-x-auto -mx-5 px-5">
+                <table className="w-full min-w-[880px] text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                      <th className="pb-3 pr-3">Date</th>
+                      <th className="pb-3 pr-3">Extension/Agent</th>
+                      <th className="pb-3 pr-3">Type</th>
+                      <th className="pb-3 pr-3">Duration</th>
+                      <th className="pb-3 pr-3">Outcome</th>
+                      <th className="pb-3 pr-3">Direction</th>
+                      <th className="pb-3 pr-3">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[#f3f4f6]">
+                    {callActivity.map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-3 pr-3 text-[#6b7280]">{row.date}</td>
+                        <td className="py-3 pr-3 font-semibold text-[#111827]">
+                          {row.extensionAgent}
+                        </td>
+                        <td className="py-3 pr-3">
+                          <span className="inline-flex items-center gap-1.5 text-[#6b7280]">
+                            <CallTypeIcon type={row.type} />
+                            {row.type}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{row.duration}</td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{row.outcome}</td>
+                        <td className="py-3 pr-3 text-[#6b7280]">{row.direction}</td>
+                        <td className="py-3 pr-3">
+                          <PersonalMockPill tone={row.statusTone}>{row.status}</PersonalMockPill>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 text-right">
+                <Link
+                  href="/personal/activity"
+                  className="text-[13px] font-semibold text-[#6366f1] hover:underline"
+                >
+                  View Activity Report →
+                </Link>
+              </div>
+            </>
           )}
         </PersonalMockSection>
 
         <div className="space-y-4">
-          <PersonalMockSection title="Quick Actions">
-            <ul className="space-y-1 text-[13px]">
-              {QUICK_ACTIONS.map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className="block rounded-lg px-2 py-2 font-medium text-[#2563eb] hover:bg-[#f9fafb]"
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Number Review">
+          <PersonalMockSection title="Top Extensions">
             <ul className="space-y-2 text-[13px]">
-              {[
-                { label: "Total", value: numberReview.total },
-                { label: "Mobile", value: numberReview.mobile },
-                { label: "Landline", value: numberReview.landline },
-                { label: "VoIP", value: numberReview.voip },
-                { label: "Invalid", value: numberReview.invalid },
-              ].map((row) => (
-                <li key={row.label} className="flex justify-between">
-                  <span className="text-[#6b7280]">{row.label}</span>
-                  <span className="font-semibold text-[#111827]">{row.value}</span>
+              {topExtensions.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-center justify-between rounded-lg px-2 py-2 hover:bg-[#f9fafb]"
+                >
+                  <span className="font-medium text-[#111827]">{row.label}</span>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-[#9ca3af] hover:bg-[#f3f4f6]"
+                    aria-label="Extension actions"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
                 </li>
               ))}
             </ul>
           </PersonalMockSection>
 
-          <PersonalMockSection title="Number Vault">
-            <div className="space-y-2 text-[13px]">
-              <Link
-                href="/personal/vault"
-                className="block font-semibold text-[#2563eb] hover:underline"
-              >
-                Add numbers to vault
-              </Link>
-              <Link
-                href="/personal/vault"
-                className="block font-semibold text-[#2563eb] hover:underline"
-              >
-                View vault
-              </Link>
-            </div>
+          <PersonalMockSection title="Active Device">
+            {activeDevices.length === 0 ? (
+              <p className={pm.muted}>No active devices.</p>
+            ) : (
+              <ul className="space-y-3 text-[13px]">
+                {activeDevices.map((row) => (
+                  <li key={row.id}>
+                    <p className="font-semibold text-[#111827]">{row.label}</p>
+                    {row.sub ? <p className="text-[12px] text-[#9ca3af]">{row.sub}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </PersonalMockSection>
+
+          <PersonalMockSection title="Quick Notes">
+            {quickNotes.length === 0 ? (
+              <p className={pm.muted}>No notes.</p>
+            ) : (
+              <ul className="space-y-2 text-[13px] text-[#374151]">
+                {quickNotes.map((row) => (
+                  <li key={row.id}>{row.text}</li>
+                ))}
+              </ul>
+            )}
           </PersonalMockSection>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4">
-          <PersonalMockSection title="Analytics">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[12px] text-[#6b7280]">Total</p>
-                <p className="text-[28px] font-bold text-[#111827]">{analyticsTotal}</p>
-                <p
-                  className={cn(
-                    "mt-1 text-[12px] font-semibold",
-                    analyticsChange >= 0 ? "text-[#059669]" : "text-[#dc2626]",
-                  )}
-                >
-                  {analyticsChange >= 0 ? "↑" : "↓"} {Math.abs(analyticsChange)}%
-                </p>
-              </div>
-              <PersonalMockSparkline points={sparkline} color="#2563eb" width={80} height={32} />
-            </div>
+          <PersonalMockSection title="Invoices">
+            <ul className="space-y-2 text-[13px]">
+              {invoices.map((row, i) => (
+                <li key={`${row.label}-${i}`} className="flex justify-between gap-2">
+                  <span className="text-[#374151]">{row.label}</span>
+                  <span className="font-semibold text-[#111827]">{row.amount}</span>
+                </li>
+              ))}
+            </ul>
+            <Link href="/settings/billing" className="mt-4 block">
+              <PersonalMockBtn className="w-full">View All Invoices</PersonalMockBtn>
+            </Link>
           </PersonalMockSection>
 
-          <PersonalMockSection title="Pending Tasks">
-            {pendingTasks.length === 0 ? (
-              <p className={pm.muted}>No pending tasks.</p>
+          <PersonalMockSection title="Pending Deployments">
+            {pendingDeployments.length === 0 ? (
+              <p className={pm.muted}>No pending deployments.</p>
             ) : (
-              <ul className="space-y-3 text-[13px]">
-                {pendingTasks.map((task) => (
-                  <li key={task.id} className="flex justify-between gap-2">
-                    <span className="text-[#111827]">{task.text}</span>
-                    <span className="shrink-0 text-[11px] text-[#9ca3af]">{task.at}</span>
+              <ul className="space-y-4 text-[13px]">
+                {pendingDeployments.map((row) => (
+                  <li key={row.id}>
+                    <div className="flex justify-between text-[#374151]">
+                      <span>{row.label}</span>
+                      <span className="font-semibold text-[#111827]">{row.progress}%</span>
+                    </div>
+                    <div className="mt-2 h-2 rounded-full bg-[#e5e7eb]">
+                      <div
+                        className="h-2 rounded-full bg-[#6366f1]"
+                        style={{ width: `${row.progress}%` }}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -302,57 +316,77 @@ export function PersonalOverviewUI({
         </div>
 
         <div className="space-y-4">
-          <PersonalMockSection title="Balance & Billing">
-            <p className="text-[28px] font-bold text-[#111827]">{kpis.balance}</p>
-            <p className="mt-1 text-[12px] text-[#6b7280]">{kpis.balanceSub}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/settings/billing">
-                <PersonalMockBtn>Refill Now</PersonalMockBtn>
-              </Link>
-            </div>
-            <div className="mt-4">
-              <PersonalMockToggle label="Auto-refill" checked={autoRefill} onChange={setAutoRefill} />
-            </div>
+          <PersonalMockSection title="Active Numbers">
+            {activeNumbers.length === 0 ? (
+              <p className={pm.muted}>No active numbers.</p>
+            ) : (
+              <ul className="space-y-3 text-[13px]">
+                {activeNumbers.map((row) => (
+                  <li key={row.id}>
+                    <p className="font-semibold text-[#111827]">{formatPhone(row.phone)}</p>
+                    <p className="text-[12px] text-[#9ca3af]">({row.label})</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link href="/personal/numbers/premium" className="mt-4 block">
+              <PersonalMockBtn variant="outline" className="w-full">Assign Number</PersonalMockBtn>
+            </Link>
           </PersonalMockSection>
 
-          <PersonalMockSection title="Service Status">
-            <div className="flex items-center gap-2 text-[13px]">
-              <CheckCircle2 className="h-5 w-5 text-[#059669]" />
-              <span className="font-semibold text-[#059669]">System Status: Online</span>
-            </div>
-          </PersonalMockSection>
-        </div>
-
-        <div className="space-y-4">
-          <PersonalMockSection title="Communication Log">
-            <ul className="space-y-2 text-[13px]">
-              {commLog.map((row, i) => (
-                <li key={`${row.phone}-${i}`} className="flex justify-between gap-2">
-                  <span className="font-medium text-[#111827]">{formatPhone(row.phone)}</span>
-                  <span className="text-[11px] text-[#9ca3af]">
-                    {row.date} {row.time}
+          <PersonalMockSection title="Service & Status">
+            <ul className="space-y-3 text-[13px]">
+              {services.map((row) => (
+                <li key={row.label} className="flex items-center justify-between gap-2">
+                  <span className="text-[#374151]">{row.label}</span>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#059669]">
+                    <span
+                      className={cn(
+                        "h-2 w-2 rounded-full",
+                        row.online ? "bg-[#059669]" : "bg-[#9ca3af]",
+                      )}
+                    />
+                    {row.online ? "Online" : "Offline"}
                   </span>
                 </li>
               ))}
             </ul>
+            <WidgetFooterLink href="/settings" label="Manage Status & Settings →" />
+          </PersonalMockSection>
+        </div>
+
+        <div className="space-y-4">
+          <PersonalMockSection title="Communications">
+            {communications.length === 0 ? (
+              <p className={pm.muted}>No communications yet.</p>
+            ) : (
+              <ul className="space-y-2 text-[13px]">
+                {communications.map((row, i) => (
+                  <li key={`${row.phone}-${i}`} className="flex justify-between gap-2">
+                    <span className="font-medium text-[#111827]">{formatPhone(row.phone)}</span>
+                    <span className="text-[11px] text-[#9ca3af]">{row.at}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </PersonalMockSection>
 
-          <PersonalMockSection title="Monthly Performance">
-            <div className="flex items-center justify-between">
-              <p className="text-[12px] text-[#6b7280]">Call volume trend</p>
-              <PersonalMockSparkline points={sparkline} color="#2563eb" width={120} height={36} />
-            </div>
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Recent Activity Log">
-            <ul className="space-y-2 text-[13px]">
-              {activityLog.map((row) => (
-                <li key={row.id} className="flex justify-between gap-2">
-                  <span className="text-[#111827]">{row.text}</span>
-                  <span className="shrink-0 text-[11px] text-[#9ca3af]">{row.at}</span>
+          <PersonalMockSection title="Recent Reports">
+            <ul className="space-y-3 text-[13px]">
+              {recentReports.map((row) => (
+                <li key={row.name} className="flex items-center gap-3">
+                  <FileText className="h-4 w-4 shrink-0 text-[#6366f1]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-[#111827]">{row.name}</p>
+                    <p className="text-[11px] text-[#9ca3af]">{row.size}</p>
+                  </div>
                 </li>
               ))}
             </ul>
+          </PersonalMockSection>
+
+          <PersonalMockSection title="Call Status Overview">
+            <PersonalMockBarChart items={callStatusOverview} barClass="bg-[#6366f1]" />
           </PersonalMockSection>
         </div>
       </div>
