@@ -90,6 +90,7 @@ export type CompiledFlow = {
 };
 
 export type SessionState = {
+  humanCallId?: string;
   gatherRetries?: number;
   ringIndex?: number;
   whisperPending?: boolean;

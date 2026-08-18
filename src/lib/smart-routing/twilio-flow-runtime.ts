@@ -15,15 +15,27 @@ import {
   promptToTwimlInner,
   resolvePromptPlayback,
 } from "./prompt-playback";
-import { buildTwilioAiReceptionistTwiml } from "./twilio-ai-handoff";
 import { startTwilioWhisperTransfer } from "./twilio-whisper-service";
 import { evaluateScheduleBranch } from "./schedule-engine";
 import { recordSmsConsent, triggerMissedCallTextFromConsent } from "./consent-service";
 import { emitSmartRoutingEvent } from "./events";
 import { finalizeSession } from "./flow-runtime";
+import { humanCallIdForSession } from "./human-call-bridge";
+import {
+  twilioVoicemailTranscriptionCallbackUrl,
+} from "@/lib/phone/twilio-voicemail-pipeline";
 
 function twiml(body: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
+}
+
+function twilioPersonalRecordingCallbackUrl(humanCallId: string, sessionId: string): string {
+  const base = getAppBaseUrl().replace(/\/$/, "");
+  const params = new URLSearchParams({
+    humanCallId,
+    srSessionId: sessionId,
+  });
+  return `${base}/api/webhooks/twilio/voice/recording?${params.toString()}`;
 }
 
 function smartRoutingCallbackUrl(params: Record<string, string>): string {
@@ -269,17 +281,26 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
             greeting: node.config.greeting,
             text: node.config.greeting,
           });
-          const action = smartRoutingCallbackUrl({
-            sessionId,
-            event: "recording",
-          });
+          const humanCallId = await humanCallIdForSession(sessionId);
           const preamble =
             promptToTwimlInner(playback) ||
             `<Say>${escapeXml("Please leave a message after the tone.")}</Say>`;
           parts.push(preamble);
-          parts.push(
-            `<Record maxLength="180" playBeep="true" recordingStatusCallback="${escapeXml(action)}" recordingStatusCallbackMethod="POST"/>`,
-          );
+          if (humanCallId) {
+            const recordingCallback = twilioPersonalRecordingCallbackUrl(humanCallId, sessionId);
+            const transcribeCallback = twilioVoicemailTranscriptionCallbackUrl(humanCallId);
+            parts.push(
+              `<Record maxLength="180" playBeep="true" transcribe="true" transcribeCallback="${escapeXml(transcribeCallback)}" recordingStatusCallback="${escapeXml(recordingCallback)}" recordingStatusCallbackMethod="POST"/>`,
+            );
+          } else {
+            const action = smartRoutingCallbackUrl({
+              sessionId,
+              event: "recording",
+            });
+            parts.push(
+              `<Record maxLength="180" playBeep="true" recordingStatusCallback="${escapeXml(action)}" recordingStatusCallbackMethod="POST"/>`,
+            );
+          }
           await updateSessionState(sessionId, {
             stateJson: { ...state, awaitingEvent: "voicemail" },
           });
@@ -338,20 +359,22 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           continue;
         }
         case "AI_RECEPTIONIST": {
-          const agentId = String(node.config.aiAgentId ?? "");
-          const aiTwiml = await buildTwilioAiReceptionistTwiml({
-            sessionId,
-            workspaceId: session.workspaceId,
-            flowId: session.flowId,
-            callerNumber: session.callerNumber,
-            calledNumber: session.calledNumber,
-            callSid: session.callControlId ?? "",
-            agentId,
-            intentHint: String(node.config.intentHint ?? ""),
-            menuSelection: session.menuSelection,
-          });
-          await completeNodeExecution(execution.id, { handoff: "ai", agentId });
-          return { twiml: aiTwiml };
+          const skipNext =
+            nextNodeId(node, "no_answer") ??
+            nextNodeId(node, "failed") ??
+            Object.values(node.edges)[0];
+          if (skipNext) {
+            await completeNodeExecution(execution.id, {
+              skipped: "ai_receptionist_not_launched",
+              nextId: skipNext,
+            });
+            currentId = skipNext;
+            continue;
+          }
+          parts.push("<Say>Thank you for calling. Goodbye.</Say><Hangup/>");
+          await finalizeSession(sessionId, "completed");
+          await completeNodeExecution(execution.id, { skipped: "ai_receptionist_not_launched" });
+          return { twiml: twiml(parts.join("")) };
         }
         case "HANGUP": {
           parts.push("<Hangup/>");
@@ -421,6 +444,15 @@ export async function startTwilioFlowForInbound(input: {
     callControlId: input.callSid,
     forwardedFrom: input.forwardedFrom,
     isTest: input.isTest,
+    provider: "twilio",
+  });
+  const { ensureSmartRoutingHumanCall } = await import("./human-call-bridge");
+  await ensureSmartRoutingHumanCall({
+    workspaceId: input.workspaceId,
+    sessionId: session.id,
+    fromE164: input.callerNumber,
+    toE164: input.calledNumber,
+    callSid: input.callSid,
     provider: "twilio",
   });
   const published = await loadPublishedCompiledFlow(input.flowId);
@@ -564,22 +596,15 @@ export async function handleTwilioRecordingCallback(sessionId: string, recording
   const session = await loadCallSession(sessionId);
   if (!session) return twiml("<Hangup/>");
 
-  const prisma = getPrisma();
   if (recordingUrl) {
-    await prisma.smartRoutingCallSession.update({
-      where: { id: sessionId },
-      data: {
-        recordingUrl,
-        finalOutcome: "voicemail",
-        completedAt: new Date(),
-      },
-    });
+    await updateSessionState(sessionId, { recordingUrl });
     await emitSmartRoutingEvent({
       workspaceId: session.workspaceId,
       type: "VOICEMAIL_RECEIVED",
       sessionId,
       payload: { url: recordingUrl },
     });
+    await finalizeSession(sessionId, "voicemail");
   }
   return twiml("<Say>Thank you. Goodbye.</Say><Hangup/>");
 }

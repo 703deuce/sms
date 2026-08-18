@@ -50,6 +50,40 @@ export async function tryStartTwilioSmartRoutingInbound(input: {
   return { started: true as const, sessionId: session.id, twiml };
 }
 
+/** Outbound test call: callee hears the published flow (isTest=true). */
+export async function startTwilioSmartRoutingTestCall(input: {
+  workspaceId: string;
+  flowId: string;
+  callSid: string;
+  businessE164: string;
+  testUserE164: string;
+}) {
+  const prisma = getPrisma();
+  const flow = await prisma.smartRoutingFlow.findFirst({
+    where: { id: input.flowId, workspaceId: input.workspaceId },
+    select: { id: true, publishedVersionId: true },
+  });
+  if (!flow?.publishedVersionId) {
+    return {
+      sessionId: "",
+      twiml:
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say>Publish this flow before testing.</Say><Hangup/></Response>",
+    };
+  }
+
+  const { session, twiml: flowTwiml } = await startTwilioFlowForInbound({
+    workspaceId: input.workspaceId,
+    flowId: flow.id,
+    flowVersionId: flow.publishedVersionId,
+    callerNumber: input.testUserE164,
+    calledNumber: input.businessE164,
+    callSid: input.callSid,
+    isTest: true,
+  });
+
+  return { sessionId: session.id, twiml: flowTwiml };
+}
+
 export async function processTwilioSmartRoutingCallback(input: {
   sessionId: string;
   event: string;

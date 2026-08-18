@@ -32,14 +32,18 @@ export async function startTestCall(input: {
     const client = await getTwilioClientForWorkspace(input.workspaceId);
     const base = process.env.NEXT_PUBLIC_APP_URL || process.env.LOCAL_APP_URL || "";
     const voiceUrl = base
-      ? `${base.replace(/\/$/, "")}/api/webhooks/twilio/voice`
+      ? `${base.replace(/\/$/, "")}/api/webhooks/twilio/voice?srTestFlowId=${encodeURIComponent(input.flowId)}`
       : undefined;
     await client.calls.create({
       to: normalizeE164(input.testNumber),
       from: normalizeE164(pn.e164),
       ...(voiceUrl ? { url: voiceUrl, method: "POST" } : {}),
     });
-    return { ok: true, message: "Twilio test call initiated", provider: "twilio" };
+    return {
+      ok: true,
+      message: "Twilio test call initiated — answer to hear your published flow",
+      provider: "twilio",
+    };
   }
 
   if (!isTelnyxVoiceConfigured()) {

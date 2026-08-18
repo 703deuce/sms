@@ -359,6 +359,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       });
       if (
         !call ||
+        (call.notes || "").includes("smart_routing:") ||
         !["ringing", "queued", "initiated"].includes(call.status) ||
         ((call.notes || "").includes("screening:accepted") && call.answeredAt) ||
         (call.answeredAt && !(call.notes || "").includes("screening:"))

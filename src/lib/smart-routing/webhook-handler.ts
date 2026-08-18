@@ -283,11 +283,11 @@ export async function processSmartRoutingWebhookEvent(input: {
         input.eventPayload.recording_url ??
         "",
     );
-    if (url) {
+  if (url) {
       const prisma = getPrisma();
       await prisma.smartRoutingCallSession.update({
         where: { id: clientState.sessionId },
-        data: { recordingUrl: url, finalOutcome: "voicemail", completedAt: new Date() },
+        data: { recordingUrl: url },
       });
       await emitSmartRoutingEvent({
         workspaceId: session.workspaceId,
@@ -295,6 +295,8 @@ export async function processSmartRoutingWebhookEvent(input: {
         sessionId: clientState.sessionId,
         payload: { url },
       });
+      const { finalizeSession } = await import("./flow-runtime");
+      await finalizeSession(clientState.sessionId, "voicemail");
     }
     return { handled: true as const, kind: "recording" };
   }

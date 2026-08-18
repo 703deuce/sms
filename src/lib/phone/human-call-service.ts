@@ -526,7 +526,7 @@ export async function handleInboundHumanCall(input: {
   }
 
   // Unanswered timeout for non-queue softphone rings (forwarding "unanswered" rules).
-  if (!queueId && input.telnyxCallControlId) {
+  if (!queueId && input.telnyxCallControlId && !String(note || "").includes("smart_routing:")) {
     try {
       const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
       await enqueueJob({

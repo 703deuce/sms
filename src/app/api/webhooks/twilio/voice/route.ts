@@ -3,7 +3,9 @@ import {
   buildTwilioDialStatusTwiml,
   buildTwilioInboundTwiml,
 } from "@/lib/numbers/providers/voice/twilio-personal-voice";
+import { startTwilioSmartRoutingTestCall } from "@/lib/smart-routing/twilio-webhook-handler";
 import { verifyTwilioVoiceWebhookSignature } from "@/lib/numbers/providers/voice/twilio-voice-webhook-auth";
+import { getPrisma } from "@/lib/db";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
   const dialStatus = params.DialCallStatus;
   const url = new URL(request.url);
   const humanCallId = url.searchParams.get("humanCallId");
+  const srTestFlowId = url.searchParams.get("srTestFlowId");
 
   if (dialStatus && humanCallId) {
     const xml = await buildTwilioDialStatusTwiml({
@@ -40,6 +43,24 @@ export async function POST(request: Request) {
       humanCallId,
     });
     return twimlResponse(xml);
+  }
+
+  if (srTestFlowId && callSid) {
+    const prisma = getPrisma();
+    const flow = await prisma.smartRoutingFlow.findFirst({
+      where: { id: srTestFlowId },
+      select: { workspaceId: true },
+    });
+    if (flow) {
+      const result = await startTwilioSmartRoutingTestCall({
+        workspaceId: flow.workspaceId,
+        flowId: srTestFlowId,
+        callSid,
+        businessE164: from,
+        testUserE164: to,
+      });
+      return twimlResponse(result.twiml);
+    }
   }
 
   const xml = await buildTwilioInboundTwiml({ callSid, from, to });

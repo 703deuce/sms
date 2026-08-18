@@ -299,39 +299,22 @@ export async function executeNode(input: {
         break;
       }
       case "AI_RECEPTIONIST": {
-        const agentId = String(node.config.aiAgentId ?? "");
-        await emitSmartRoutingEvent({
-          workspaceId: session.workspaceId,
-          type: "AI_HANDOFF_STARTED",
-          sessionId: input.sessionId,
-          flowId: session.flowId,
-          payload: {
-            agentId,
-            intentHint: node.config.intentHint,
-            menuSelection: session.menuSelection,
-          },
-        });
-        const { handleInboundCallEvent } = await import("@/lib/voice/inbound");
-        const prisma = getPrisma();
-        const pn = await prisma.phoneNumber.findFirst({
-          where: { workspaceId: session.workspaceId, e164: session.calledNumber },
-        });
-        await handleInboundCallEvent({
-          workspaceId: session.workspaceId,
-          fromE164: session.callerNumber,
-          toE164: session.calledNumber,
-          telnyxCallControlId: controlId,
-          payload: {
-            smartRoutingSessionId: input.sessionId,
-            intentHint: node.config.intentHint,
-            menuSelection: session.menuSelection,
-            agentId: agentId || undefined,
-            phoneNumberId: pn?.id,
-          },
-        });
-        await finalizeSession(input.sessionId, "ai_receptionist");
-        await completeNodeExecution(execution.id, { handoff: "ai" });
-        return { done: true, handoff: "ai" };
+        const skipNext =
+          nextNodeId(node, "no_answer") ??
+          nextNodeId(node, "failed") ??
+          Object.values(node.edges)[0];
+        if (skipNext) {
+          nextId = skipNext;
+          await completeNodeExecution(execution.id, {
+            skipped: "ai_receptionist_not_launched",
+            nextId,
+          });
+          break;
+        }
+        await hangupCall(controlId, input.sessionId);
+        await finalizeSession(input.sessionId, "completed");
+        await completeNodeExecution(execution.id, { skipped: "ai_receptionist_not_launched" });
+        return { done: true };
       }
       case "HANGUP": {
         await hangupCall(controlId, input.sessionId);
@@ -401,6 +384,8 @@ export async function finalizeSession(sessionId: string, outcome: string) {
   });
   const session = await loadCallSession(sessionId);
   if (session) {
+    const { syncHumanCallFromSmartRoutingSession } = await import("./human-call-bridge");
+    await syncHumanCallFromSmartRoutingSession(sessionId, outcome);
     await emitSmartRoutingEvent({
       workspaceId: session.workspaceId,
       type: outcome.includes("error") || outcome.includes("failed") ? "FLOW_FAILED" : "FLOW_COMPLETED",
@@ -564,6 +549,15 @@ export async function startFlowForInboundCall(input: {
 }) {
   const { startCallSession } = await import("./session-store");
   const session = await startCallSession(input);
+  const { ensureSmartRoutingHumanCall } = await import("./human-call-bridge");
+  await ensureSmartRoutingHumanCall({
+    workspaceId: input.workspaceId,
+    sessionId: session.id,
+    fromE164: input.callerNumber,
+    toE164: input.calledNumber,
+    callSid: input.callControlId,
+    provider: "telnyx",
+  });
   const published = await loadPublishedCompiledFlow(input.flowId);
   if (!published?.compiled) throw new Error("No published flow");
   const compiled = asCompiledFlow(published.compiled as Record<string, unknown>);

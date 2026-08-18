@@ -22,6 +22,7 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url);
   const humanCallId = url.searchParams.get("humanCallId");
+  const srSessionId = url.searchParams.get("srSessionId");
   const recordingUrl = params.RecordingUrl;
   const recordingSid = params.RecordingSid;
   const duration = Number(params.RecordingDuration || "0");
@@ -48,6 +49,20 @@ export async function POST(request: Request) {
     durationSeconds: duration,
     phoneNumberId: pn?.id,
   });
+
+  if (srSessionId && recordingUrl) {
+    const { updateSessionState } = await import("@/lib/smart-routing/session-store");
+    const { emitSmartRoutingEvent } = await import("@/lib/smart-routing/events");
+    const { finalizeSession } = await import("@/lib/smart-routing/flow-runtime");
+    await updateSessionState(srSessionId, { recordingUrl });
+    await emitSmartRoutingEvent({
+      workspaceId: human.workspaceId,
+      type: "VOICEMAIL_RECEIVED",
+      sessionId: srSessionId,
+      payload: { url: recordingUrl, humanCallId: human.id },
+    });
+    await finalizeSession(srSessionId, "voicemail");
+  }
 
   return NextResponse.json({ ok: true });
 }
