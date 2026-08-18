@@ -24,6 +24,7 @@ import {
   revealPersonalPortOutCredentials,
   setPersonalPortOutPin,
 } from "./personal-port-out-service";
+import { executePortOutGuaranteeRefund } from "./port-out-guarantee-service";
 
 export type PortOutHistoryEntry = {
   status: string;
@@ -515,22 +516,19 @@ export async function resolveGuaranteeChoice(input: {
     );
   }
 
-  const updated = await prisma.portOutRequest.update({
+  const refundResult = await executePortOutGuaranteeRefund({
+    workspaceId: input.workspaceId,
+    portOutId: input.portOutId,
+    userId: input.userId,
+  });
+
+  const updated = await prisma.portOutRequest.findFirst({
     where: { id: portOut.id },
-    data: {
-      guaranteeReviewStatus: "refund_requested",
-      refundStatus: "pending_review",
-    },
   });
+  if (!updated) throw new Error("Port-out request not found after refund");
 
-  await prisma.auditLog.create({
-    data: {
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      event: "number.port_out_guarantee_refund_requested",
-      detail: portOut.phone,
-    },
-  });
-
-  return mapRowToCustomer(updated);
+  return {
+    ...mapRowToCustomer(updated),
+    guaranteeRefund: refundResult,
+  };
 }

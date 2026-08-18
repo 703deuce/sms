@@ -183,6 +183,15 @@ export async function handleTelnyxPortOutWebhook(payload: Record<string, unknown
   if (portedAt || status === "ported") finalStatus = "COMPLETED";
   if (focDate && mapped === "AUTHORIZED") finalStatus = "SCHEDULED";
 
+  const voicePortStatus =
+    finalStatus === "COMPLETED" || status === "ported" ? "completed" : status || "pending";
+  const messagingPortStatus =
+    inner.messaging_status
+      ? String(inner.messaging_status)
+      : finalStatus === "COMPLETED"
+        ? "completed"
+        : "not_started";
+
   await transitionPortOutStatus({
     workspaceId: match.workspaceId,
     portOutId: match.portOutId,
@@ -192,6 +201,8 @@ export async function handleTelnyxPortOutWebhook(payload: Record<string, unknown
     rejectionCategory,
     rejectionDetailsInternal: String(inner.rejection_reason || ""),
     focDate,
+    voicePortStatus,
+    messagingPortStatus,
     providerPayload: inner,
   });
 
