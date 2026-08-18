@@ -11,6 +11,7 @@ import {
   CircleHelp,
   Coins,
   Menu,
+  Plus,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -234,8 +235,9 @@ export function Header({
         {personalMode ? (
           <Link
             href="/personal/numbers/premium"
-            className="hidden h-9 items-center rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
+            className="hidden h-9 items-center gap-1.5 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
           >
+            <Plus className="h-4 w-4" />
             Find a New Number
           </Link>
         ) : null}

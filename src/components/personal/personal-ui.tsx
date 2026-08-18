@@ -18,7 +18,7 @@ export function PersonalPageWrap({
   aside?: ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-[1320px]">
+    <div className="mx-auto max-w-[1400px]">
       <div className={cn(aside ? "grid gap-6 lg:grid-cols-[1fr_300px]" : "")}>
         <div className="min-w-0 space-y-6">{children}</div>
         {aside ? <aside className="space-y-4">{aside}</aside> : null}

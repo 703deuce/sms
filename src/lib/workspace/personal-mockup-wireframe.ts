@@ -783,3 +783,46 @@ export const WIREFRAME_OVERVIEW_ANALYTICS = {
   sparkline: [12, 18, 22, 28, 32, 30, 35],
 };
 
+/** Find a Number mockup — populated search state (TransOvo reference layout). */
+export const WIREFRAME_FIND_NUMBER_SUMMARY = {
+  priceMinCents: 125,
+  priceMaxCents: 245,
+  numbersFound: 843,
+};
+
+export const WIREFRAME_FIND_NUMBER_RECENT = [
+  { label: "Orlando", count: 124, date: "22 Feb" },
+];
+
+export const WIREFRAME_FIND_NUMBER_BEST = [
+  {
+    displayNumber: "407-123-4567",
+    phoneNumber: "+14071234567",
+    monthlyCents: 125,
+    bullets: ["Clean number", "High deliverability", "Easy to remember"],
+  },
+  {
+    displayNumber: "407-888-1234",
+    phoneNumber: "+14078881234",
+    monthlyCents: 145,
+    bullets: ["Repeating pattern", "Strong local presence", "SMS ready"],
+  },
+  {
+    displayNumber: "321-407-5678",
+    phoneNumber: "+13214075678",
+    monthlyCents: 165,
+    bullets: ["Premium vanity style", "Voice + SMS + MMS", "Florida local"],
+  },
+];
+
+export const WIREFRAME_FIND_NUMBER_MORE = [
+  { displayNumber: "407-555-0100", phoneNumber: "+14075550100", monthlyCents: 125 },
+  { displayNumber: "407-321-9876", phoneNumber: "+14073219876", monthlyCents: 125 },
+  { displayNumber: "813-407-2222", phoneNumber: "+18134072222", monthlyCents: 135 },
+  { displayNumber: "727-888-3333", phoneNumber: "+17278883333", monthlyCents: 145 },
+  { displayNumber: "404-407-4444", phoneNumber: "+14044074444", monthlyCents: 155 },
+  { displayNumber: "321-555-1212", phoneNumber: "+13215551212", monthlyCents: 125 },
+  { displayNumber: "407-813-5656", phoneNumber: "+14078135656", monthlyCents: 165 },
+  { displayNumber: "888-407-7777", phoneNumber: "+18884077777", monthlyCents: 245 },
+];
+

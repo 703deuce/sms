@@ -6,7 +6,6 @@ import {
   type PremiumNumberProductResult,
   type PremiumSearchProductResponse,
 } from "@/lib/premium-numbers/product-api";
-import { formatPremiumPrice } from "@/lib/premium-numbers/premium-pricing";
 import type { PersonalPreference } from "@/lib/premium-numbers/personal-search";
 import {
   TOLL_FREE_AREA_CODES,
@@ -19,9 +18,7 @@ import {
   createDefaultNumberSearchState,
   resetNumberSearchState,
 } from "@/lib/premium-numbers/ai-number-search/state";
-import type {
-  NumberSearchState,
-} from "@/lib/premium-numbers/ai-number-search/types";
+import type { NumberSearchState } from "@/lib/premium-numbers/ai-number-search/types";
 import { trackFindNumberAiEvent } from "@/lib/premium-numbers/find-number-analytics";
 import { runPremiumNumberSearch } from "@/lib/premium-numbers/find-number-client-search";
 import {
@@ -30,34 +27,28 @@ import {
 } from "@/lib/premium-numbers/find-number-search-bridge";
 import { cn } from "@/lib/utils";
 import {
-  ArrowRight,
   ArrowRightLeft,
-  Briefcase,
-  Building2,
   Check,
   CheckCircle2,
-  Filter,
+  ChevronDown,
   Globe,
   Grid3x3,
-  Heart,
-  HeartPulse,
-  Laptop,
   LayoutList,
+  Lightbulb,
   ListOrdered,
-  MessageCircle,
-  MessageSquare,
-  Mic,
   Phone,
-  RefreshCw,
-  ShoppingBag,
   Sparkles,
-  Star,
   Users,
-  UtensilsCrossed,
   Wand2,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import {
+  WIREFRAME_FIND_NUMBER_BEST,
+  WIREFRAME_FIND_NUMBER_MORE,
+  WIREFRAME_FIND_NUMBER_RECENT,
+  WIREFRAME_FIND_NUMBER_SUMMARY,
+} from "@/lib/workspace/personal-mockup-wireframe";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FindNumberAiPanel } from "./find-number-ai-panel";
 import {
   PremiumCheckoutModal,
@@ -73,48 +64,39 @@ const TOLL_FREE_OPTIONS: { value: TollFreePrefix; label: string }[] = [
 
 const PRIMARY = "#4f46e5";
 
-const POPULAR_AREA_CODES = [
-  "702",
-  "310",
-  "212",
-  "415",
-  "646",
-  "305",
-  "404",
-  "678",
-  "713",
-  "832",
+const QUICK_SEARCH_CHIPS = [
+  { label: "407", kind: "area" as const, value: "407" },
+  { label: "321", kind: "area" as const, value: "321" },
+  { label: "888", kind: "area" as const, value: "888" },
+  { label: "800", kind: "area" as const, value: "800" },
+  { label: "Florida", kind: "region" as const, value: "florida" },
+  { label: "Orlando", kind: "region" as const, value: "orlando" },
+  { label: "727", kind: "area" as const, value: "727" },
+  { label: "813", kind: "area" as const, value: "813" },
+  { label: "404", kind: "area" as const, value: "404" },
+  { label: "Miami", kind: "region" as const, value: "miami" },
+  { label: "Tampa", kind: "region" as const, value: "tampa" },
+  { label: "Atlanta", kind: "region" as const, value: "atlanta" },
 ];
 
-const BUSINESS_CATEGORIES = [
-  { id: "retail", label: "Retail", industry: "retail", icon: ShoppingBag },
-  { id: "real_estate", label: "Real Estate", industry: "real estate", icon: Building2 },
-  { id: "healthcare", label: "Healthcare", industry: "healthcare", icon: HeartPulse },
-  { id: "tech", label: "Tech/SaaS", industry: "technology", icon: Laptop },
-  { id: "hospitality", label: "Hospitality", industry: "hospitality", icon: UtensilsCrossed },
-  { id: "professional", label: "Professional", industry: "professional services", icon: Briefcase },
+const REGION_AREA_CODES: Record<string, string[]> = {
+  florida: ["407", "321", "305", "727", "813"],
+  orlando: ["407", "321"],
+  miami: ["305", "786"],
+  tampa: ["813", "727"],
+  atlanta: ["404", "678"],
+};
+
+const CAPABILITY_OPTIONS = [
+  { id: "Voice", label: "Voice" },
+  { id: "SMS", label: "Two-Way SMS" },
+  { id: "MMS", label: "MMS" },
+  { id: "Multi-Channel", label: "Multi-Channel" },
+  { id: "Global Reach", label: "Global Reach" },
+  { id: "Programmable", label: "Programmable" },
 ] as const;
 
-const DISPLAY_MONTHLY_CENTS = 100;
-
-type SearchTab = "area_code" | "toll_free";
-
-const AREA_CODE_LOCATIONS: Record<string, string> = {
-  "702": "Las Vegas, NV",
-  "310": "Los Angeles, CA",
-  "212": "New York, NY",
-  "415": "San Francisco, CA",
-  "646": "New York, NY",
-  "305": "Miami, FL",
-  "404": "Atlanta, GA",
-  "678": "Atlanta, GA",
-  "713": "Houston, TX",
-  "832": "Houston, TX",
-  "571": "Northern Virginia",
-  "240": "Maryland",
-  "301": "Maryland",
-  "602": "Phoenix, AZ",
-};
+const DISPLAY_MONTHLY_CENTS = 125;
 
 type SearchType = "contains" | "starts_with" | "ends_with";
 type SearchIntent = "business_keyword" | "number_pattern" | "surprise_me";
@@ -141,24 +123,7 @@ const SEARCH_PREFS: {
   { id: "multi_region", label: "Multi-Region", icon: Globe },
 ];
 
-const SERVICE_TAGS = ["SMS", "MMS", "Voice", "Fax"] as const;
-
-const QUICK_AREA_CODES = POPULAR_AREA_CODES;
-
-const BUSINESS_QUICK_PICKS = BUSINESS_CATEGORIES.map((c) => ({
-  id: c.id,
-  label: c.label,
-  industry: c.industry,
-}));
-
-const PROVINCES = [
-  "Vermont",
-  "Virginia",
-  "California",
-  "Texas",
-  "New York",
-  "Florida",
-];
+const SERVICE_TAGS = ["Voice", "SMS", "MMS"] as const;
 
 const pm = {
   card: "rounded-xl border border-[#e5e7eb] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
@@ -203,6 +168,39 @@ function toApiPreferences(
   return [...new Set(prefs)];
 }
 
+function wireframeToResult(
+  item: {
+    displayNumber: string;
+    phoneNumber: string;
+    monthlyCents: number;
+    bullets?: string[];
+  },
+): PremiumNumberProductResult {
+  const bullets = item.bullets ?? [];
+  return {
+    resultId: item.phoneNumber,
+    phoneNumber: item.phoneNumber,
+    displayNumber: item.displayNumber,
+    businessMatchScore: 85,
+    numberQualityScore: 85,
+    commercialSemanticScore: 0,
+    businessMatchLabel: "Strong Match",
+    memorabilityLabel: "Memorable",
+    premiumPriceCents: item.monthlyCents,
+    premiumPriceBand: "nice",
+    headlineLabel: "Match",
+    cardBullets: bullets,
+    tags: [],
+    whyReasons: bullets,
+    matchedWords: [],
+    patterns: [],
+    providerPremium: false,
+    provider: "telnyx",
+    availabilityStatus: "available",
+    listSection: "top_pick",
+  };
+}
+
 function formatMonthlyDisplay(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -212,15 +210,27 @@ function formatMonthlyDisplay(cents: number): string {
   }).format(cents / 100);
 }
 
+function resultMonthlyCents(result: PremiumNumberProductResult, wireframe: boolean): number {
+  if (wireframe && result.premiumPriceCents > 0) return result.premiumPriceCents;
+  return DISPLAY_MONTHLY_CENTS;
+}
+
 export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string }) {
-  const [searchState, setSearchState] = useState<NumberSearchState>(
-    createDefaultNumberSearchState(),
+  const [searchState, setSearchState] = useState<NumberSearchState>(() =>
+    applySearchStatePatch(createDefaultNumberSearchState(), {
+      countryProvince: "United States",
+      serviceTags: ["Voice", "SMS", "MMS"],
+    }),
   );
-  const [searchTab, setSearchTab] = useState<SearchTab>("area_code");
-  const [mobileAiOpen, setMobileAiOpen] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [selectedForAi, setSelectedForAi] = useState<string | null>(null);
-  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [extraCapabilities, setExtraCapabilities] = useState<Set<string>>(
+    new Set(["Multi-Channel", "Global Reach", "Programmable"]),
+  );
+  const [recentSearches, setRecentSearches] = useState<
+    Array<{ label: string; count: number; date: string }>
+  >(WIREFRAME_FIND_NUMBER_RECENT);
+  const pendingRecentLabelRef = useRef<string | null>(null);
   const [suggestingKeywords, setSuggestingKeywords] = useState(false);
   const [suggestError, setSuggestError] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -290,12 +300,10 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   );
 
   const canSearch =
-    parsedAreaCodes.length > 0 &&
-    (apiIntent === "business_keyword"
-      ? industryForSearch.length >= 2 ||
-        keywordTags.length > 0 ||
-        numberMask.replace(/\D/g, "").length >= 4
-      : true);
+    numberType === "tollfree" ||
+    parsedAreaCodes.length > 0 ||
+    numberMask.replace(/\D/g, "").length >= 3 ||
+    numberMask.replace(/[^A-Za-z]/g, "").length >= 3;
 
   async function onSuggestKeywords() {
     const industryText = industryForSearch;
@@ -412,7 +420,70 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   );
 
   async function onSearch() {
+    const label =
+      numberMask.trim() ||
+      (parsedAreaCodes.length ? parsedAreaCodes.join(", ") : "Toll-free search");
+    pendingRecentLabelRef.current = label;
     await runSearchFromState(searchState);
+  }
+
+  useEffect(() => {
+    const label = pendingRecentLabelRef.current;
+    if (!label || !searchResponse) return;
+    pendingRecentLabelRef.current = null;
+    setRecentSearches((prev) =>
+      [
+        {
+          label,
+          count: searchResponse.resultCount ?? 0,
+          date: new Date().toLocaleDateString("en-US", { day: "numeric", month: "short" }),
+        },
+        ...prev.filter((p) => p.label !== label),
+      ].slice(0, 5),
+    );
+  }, [searchResponse]);
+
+  function toggleCapability(label: string) {
+    if (label === "Voice" || label === "SMS" || label === "MMS") {
+      toggleServiceTag(label);
+      return;
+    }
+    setExtraCapabilities((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+
+  function isCapabilityActive(label: string) {
+    if (label === "Voice" || label === "SMS" || label === "MMS") {
+      return serviceTags.has(label);
+    }
+    return extraCapabilities.has(label);
+  }
+
+  function onQuickChip(chip: typeof QUICK_SEARCH_CHIPS[number]) {
+    if (chip.kind === "area") {
+      toggleQuickAreaCode(chip.value);
+      if (chip.value === "888" || chip.value === "800") {
+        setNumberType("tollfree");
+      }
+      return;
+    }
+    const codes = REGION_AREA_CODES[chip.value] ?? [];
+    patchSearch({
+      areaCodes: [...new Set([...searchState.areaCodes, ...codes])],
+      industry: chip.value,
+      intent: "business",
+      apiIntent: "business_keyword",
+    });
+  }
+
+  function openAiConcierge() {
+    setAiDrawerOpen(true);
+    trackFindNumberAiEvent("ai_search_opened");
+    ai.openAiMode();
   }
 
   function toggleFavorite(phone: string) {
@@ -480,8 +551,25 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
 
   const basketCount = favorites.size;
   const aiEngaged = ai.messages.length > 0;
+  const isWireframePreview = !searchResponse && !loading && !success;
+
+  const wireframeBest = useMemo(
+    () => WIREFRAME_FIND_NUMBER_BEST.map((item) => wireframeToResult(item)),
+    [],
+  );
+  const wireframeMore = useMemo(
+    () => WIREFRAME_FIND_NUMBER_MORE.map((item) => wireframeToResult(item)),
+    [],
+  );
+
+  const displayedBest = isWireframePreview ? wireframeBest : bestMatches;
+  const displayedMore = isWireframePreview ? wireframeMore : moreMatches;
 
   async function onGetNumber(result: PremiumNumberProductResult) {
+    if (isWireframePreview) {
+      toggleFavorite(result.phoneNumber);
+      return;
+    }
     if (!searchResponse?.searchLogId) return;
     const reserveSearchMode = apiIntent === "business_keyword" ? "business" : "personal";
     setReserving(result.phoneNumber);
@@ -518,293 +606,259 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     }
   }
 
-  function setSearchTabValue(tab: SearchTab) {
-    setSearchTab(tab);
-    patchSearch({ numberType: tab === "toll_free" ? "tollfree" : "local" });
-  }
-
-  async function onBusinessCategoryPick(industry: string) {
-    patchSearch({ industry, intent: "business", apiIntent: "business_keyword" });
-    await ai.sendAiMessage(`Find me a memorable number for my ${industry} business`);
-  }
-
-  function onAskAiAboutNumber(result: PremiumNumberProductResult) {
-    setSelectedForAi(result.phoneNumber);
-    setMobileAiOpen(true);
-    ai.sendAiMessage(
-      `Why is ${result.vanityDisplay ?? result.displayNumber} a good choice for my search?`,
-    );
+  function onBuyNow(result: PremiumNumberProductResult) {
+    if (isWireframePreview) {
+      toggleFavorite(result.phoneNumber);
+      return;
+    }
+    onGetNumber(result);
   }
 
   function fullReset() {
     resetSearch();
     setSearchState(resetNumberSearchState());
-    setSearchTab("area_code");
+    patchSearch({ serviceTags: ["Voice", "SMS", "MMS"] });
     ai.clearAiSession();
   }
 
-  const displayedBest = showSelectedOnly
-    ? bestMatches.filter((r) => favorites.has(r.phoneNumber))
-    : bestMatches;
-  const displayedMore = showSelectedOnly
-    ? moreMatches.filter((r) => favorites.has(r.phoneNumber))
-    : moreMatches;
+  const priceRange = useMemo(() => {
+    if (isWireframePreview) {
+      return {
+        min: WIREFRAME_FIND_NUMBER_SUMMARY.priceMinCents,
+        max: WIREFRAME_FIND_NUMBER_SUMMARY.priceMaxCents,
+      };
+    }
+    if (!allResults.length) return null;
+    const prices = allResults.map((r) => resultMonthlyCents(r, false));
+    return { min: Math.min(...prices), max: Math.max(...prices) };
+  }, [allResults, isWireframePreview]);
+
+  const summaryResultCount = searchResponse
+    ? resultCount
+    : isWireframePreview
+      ? WIREFRAME_FIND_NUMBER_SUMMARY.numbersFound
+      : 0;
+
+  const totalMonthlyCents = basketCount * DISPLAY_MONTHLY_CENTS;
+
+  const capabilitySummary = [
+    ...[...serviceTags].filter((t) => ["Voice", "SMS", "MMS"].includes(t)),
+    ...[...extraCapabilities],
+  ].join(", ");
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-6">
-      <header>
-        <h1 className="text-[22px] font-bold tracking-tight text-[#111827]">Find a Number</h1>
-        <p className="mt-1 text-[14px] text-[#6b7280]">
-          Search for phone numbers to expand your business presence and reach more customers.
-        </p>
-      </header>
+    <>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0 space-y-6">
+        <header>
+          <h1 className="text-[22px] font-bold tracking-tight text-[#111827]">Find a Number</h1>
+          <p className="mt-1 text-[14px] text-[#6b7280]">
+            Search through millions of available phone numbers and choose one that fits your
+            brand or business needs.
+          </p>
+        </header>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_280px]">
-        {/* Left — search controls */}
-        <div className={cn(pm.card, "p-5 md:p-6")}>
-          <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
-            <button
-              type="button"
-              onClick={() => setSearchTabValue("area_code")}
-              className={cn(
-                "rounded-md px-4 py-2 text-[13px] font-semibold transition",
-                searchTab === "area_code"
-                  ? "bg-[#4f46e5] text-white shadow-sm"
-                  : "text-[#6b7280] hover:text-[#111827]",
-              )}
-            >
-              Area Code
-            </button>
-            <button
-              type="button"
-              onClick={() => setSearchTabValue("toll_free")}
-              className={cn(
-                "rounded-md px-4 py-2 text-[13px] font-semibold transition",
-                searchTab === "toll_free"
-                  ? "bg-[#4f46e5] text-white shadow-sm"
-                  : "text-[#6b7280] hover:text-[#111827]",
-              )}
-            >
-              Toll Free/Local
-            </button>
+        <div className={cn(pm.card, "p-5 md:p-6 space-y-5")}>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[200px]">
+              <select
+                className="h-10 w-full appearance-none rounded-lg border border-[#e5e7eb] bg-white pl-10 pr-8 text-[14px] text-[#111827]"
+                value={countryProvince}
+                onChange={(e) => setCountryProvince(e.target.value)}
+              >
+                <option value="United States">United States</option>
+                <option value="Canada">Canada</option>
+              </select>
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px]">🇺🇸</span>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+            </div>
+            <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
+              <button
+                type="button"
+                onClick={() => setNumberType("local")}
+                className={cn(
+                  "rounded-md px-4 py-2 text-[13px] font-semibold transition",
+                  numberType === "local"
+                    ? "bg-[#4f46e5] text-white shadow-sm"
+                    : "text-[#6b7280] hover:text-[#111827]",
+                )}
+              >
+                Local Numbers
+              </button>
+              <button
+                type="button"
+                onClick={() => setNumberType("tollfree")}
+                className={cn(
+                  "rounded-md px-4 py-2 text-[13px] font-semibold transition",
+                  numberType === "tollfree"
+                    ? "bg-[#4f46e5] text-white shadow-sm"
+                    : "text-[#6b7280] hover:text-[#111827]",
+                )}
+              >
+                Toll-Free Numbers
+              </button>
+            </div>
           </div>
 
-          {searchTab === "area_code" ? (
-            <div className="mt-4 space-y-4">
-              <div>
-                <Input
-                  value={areaCodesInput}
-                  onChange={(e) =>
-                    setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
-                  }
-                  placeholder="Enter 3-digit area code"
-                  className="h-11 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
-                />
-                <p className="mt-2 text-[12px] leading-relaxed text-[#6b7280]">
-                  Local area codes help customers recognize your business as part of their
-                  community — building trust and improving response rates for calls and texts.
-                </p>
-              </div>
+          <div>
+            <label className="mb-2 block text-[13px] font-semibold text-[#374151]">
+              What do you want your number to look like?
+            </label>
+            <textarea
+              value={numberMask}
+              onChange={(e) => setNumberMask(e.target.value)}
+              rows={3}
+              placeholder="888, TAXI, 1234…"
+              className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-[14px] outline-none focus:border-[#6366f1]"
+            />
+            <p className="mt-2 text-[12px] leading-relaxed text-[#6b7280]">
+              Find numbers that start with, end with, or contain certain characters or digits.
+              E.g. &quot;888&quot;, &quot;TAXI&quot;, &quot;1234&quot;. Minimum length is 3 digits.
+            </p>
+          </div>
 
+          <div className="flex flex-wrap gap-2">
+            {QUICK_SEARCH_CHIPS.map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => onQuickChip(chip)}
+                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1 text-[12px] font-semibold text-[#374151] hover:border-[#c7d2fe] hover:bg-[#eef2ff]"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <p className="mb-2 text-[12px] font-semibold text-[#374151]">Number Capabilities</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {CAPABILITY_OPTIONS.map((cap) => (
+                <label key={cap.id} className="inline-flex items-center gap-2 text-[13px] text-[#374151]">
+                  <input
+                    type="checkbox"
+                    checked={isCapabilityActive(cap.label)}
+                    onChange={() => toggleCapability(cap.label)}
+                    className="h-4 w-4 rounded border-[#d1d5db] text-[#4f46e5]"
+                  />
+                  {cap.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {showAdvanced ? (
+            <div className="space-y-4 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+              <p className="text-[12px] font-semibold text-[#374151]">Search filters</p>
+              {numberType === "local" ? (
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#6b7280]">
+                    Area codes
+                  </label>
+                  <Input
+                    value={areaCodesInput}
+                    onChange={(e) => setAreaCodesInput(e.target.value)}
+                    placeholder="407, 321, 813"
+                    className="h-10 text-[14px]"
+                  />
+                </div>
+              ) : null}
+              {numberType === "tollfree" ? (
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#6b7280]">
+                    Toll-free prefix
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
+                    value={tollFreePrefix}
+                    onChange={(e) => setTollFreePrefix(e.target.value as TollFreePrefix)}
+                  >
+                    {TOLL_FREE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-[#374151]">Popular Areas</p>
-                <div className="grid grid-cols-5 gap-2">
-                  {POPULAR_AREA_CODES.map((code) => {
-                    const active = searchState.areaCodes.includes(code);
+                <label className="mb-1 block text-[12px] font-medium text-[#6b7280]">
+                  Match pattern
+                </label>
+                <select
+                  className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
+                  value={searchType}
+                  onChange={(e) => setSearchType(e.target.value as SearchType)}
+                >
+                  <option value="contains">Contains</option>
+                  <option value="starts_with">Starts with</option>
+                  <option value="ends_with">Ends with</option>
+                </select>
+              </div>
+              <div>
+                <p className="mb-2 text-[12px] font-medium text-[#6b7280]">Search preferences</p>
+                <div className="flex flex-wrap gap-2">
+                  {SEARCH_PREFS.map((pref) => {
+                    const Icon = pref.icon;
+                    const active = searchPrefs.includes(pref.id);
                     return (
                       <button
-                        key={code}
+                        key={pref.id}
                         type="button"
-                        onClick={() => toggleQuickAreaCode(code)}
+                        onClick={() => toggleSearchPref(pref.id)}
                         className={cn(
-                          "rounded-lg border py-2 text-[13px] font-semibold transition",
+                          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold transition",
                           active
                             ? "border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]"
                             : "border-[#e5e7eb] bg-white text-[#374151] hover:border-[#c7d2fe]",
                         )}
                       >
-                        {code}
+                        <Icon className="h-3.5 w-3.5" />
+                        {pref.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              <p className="text-[12px] text-[#6b7280]">
-                Search toll-free prefixes for nationwide reach with a single memorable number.
-              </p>
-              <select
-                className="h-11 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px]"
-                value={tollFreePrefix}
-                onChange={(e) => setTollFreePrefix(e.target.value as TollFreePrefix)}
-              >
-                {TOLL_FREE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="mt-5">
-            <p className="mb-2 text-[12px] font-semibold text-[#374151]">Business Categories</p>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {BUSINESS_CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                const active = searchState.industry === cat.industry;
-                return (
-                  <button
-                    key={cat.id}
+              <div>
+                <label className="mb-1 block text-[12px] font-medium text-[#6b7280]">
+                  Keyword hints
+                </label>
+                <Input
+                  value={suggestedKeywords}
+                  onChange={(e) => setSuggestedKeywords(e.target.value)}
+                  placeholder="TAXI, HOME, LAW"
+                  className="h-10 text-[14px]"
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button
                     type="button"
-                    onClick={() => onBusinessCategoryPick(cat.industry)}
-                    className={cn(
-                      "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-[10px] font-semibold transition",
-                      active
-                        ? "border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]"
-                        : "border-[#e5e7eb] bg-white text-[#374151] hover:border-[#c7d2fe]",
-                    )}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-[12px]"
+                    disabled={suggestingKeywords}
+                    onClick={onSuggestKeywords}
                   >
-                    <Icon className="h-4 w-4" />
-                    <span className="text-center leading-tight">{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {showAdvancedFilters ? (
-            <div className="mt-4 space-y-3 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
-              <p className="text-[12px] font-semibold text-[#374151]">Advanced filters</p>
-              <Input
-                value={numberMask}
-                onChange={(e) => setNumberMask(e.target.value)}
-                placeholder="Number mask e.g. 555-GET-HELP"
-                className="h-10 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
-              />
-              <div className="flex flex-wrap gap-2">
-                {SEARCH_PREFS.map((pref) => {
-                  const Icon = pref.icon;
-                  const active = searchPrefs.includes(pref.id);
-                  return (
-                    <button
-                      key={pref.id}
-                      type="button"
-                      onClick={() => toggleSearchPref(pref.id)}
-                      className={cn(
-                        "flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold",
-                        active
-                          ? "border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]"
-                          : "border-[#e5e7eb] bg-white text-[#6b7280]",
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {pref.label}
-                    </button>
-                  );
-                })}
+                    <Wand2 className="mr-1 h-3.5 w-3.5" />
+                    {suggestingKeywords ? "Suggesting…" : "Suggest keywords"}
+                  </Button>
+                  {suggestError ? (
+                    <span className="text-[12px] text-red-600">{suggestError}</span>
+                  ) : null}
+                </div>
               </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[12px] font-medium text-[#4f46e5]"
-                onClick={onSuggestKeywords}
-                disabled={suggestingKeywords}
-              >
-                <Wand2 className="h-3.5 w-3.5" />
-                {suggestingKeywords ? "Suggesting…" : "Suggest keywords"}
-              </button>
-              {suggestError ? <p className="text-[11px] text-red-600">{suggestError}</p> : null}
             </div>
           ) : null}
 
-          <Button
-            onClick={onSearch}
-            disabled={loading || !canSearch}
-            className="mt-5 h-12 w-full rounded-lg text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(79,70,229,0.35)] hover:opacity-95"
-            style={{ backgroundColor: PRIMARY }}
-          >
-            {loading ? "Searching…" : "Start Search"}
-          </Button>
-        </div>
-
-        {/* Center — AI Concierge (desktop) */}
-        <div className="hidden xl:block min-h-[480px]">
-          <FindNumberAiPanel
-            sessionId={ai.sessionId}
-            messages={ai.messages}
-            understandingChips={ai.understandingChips}
-            loading={ai.loading}
-            loadingStage={ai.loadingStage}
-            suggestedActions={ai.suggestedActions}
-            onSend={(msg, quick) => ai.sendAiMessage(msg, quick)}
-            onQuickAction={(action) => ai.sendAiMessage(action, action)}
-            onClear={fullReset}
-            onRemoveChip={ai.removeChip}
-            variant="mockup"
-          />
-        </div>
-
-        {/* Right — info cards */}
-        <div className="hidden space-y-4 xl:block">
-          <MockupSearchSummaryCard
-            areaCodes={parsedAreaCodes}
-            basketCount={basketCount}
-            resultCount={searchResponse ? resultCount : 0}
-            isActive={Boolean(searchResponse) || loading}
-          />
-          <MockupSearchImpactCard />
-          <MockupNewFeaturesCard />
-          <MockupWhyCard />
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-[13px]">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className={cn(
-                "font-medium",
-                showAdvancedFilters ? "text-[#4f46e5]" : "text-[#374151] hover:text-[#4f46e5]",
-              )}
-              onClick={() => setShowAdvancedFilters((v) => !v)}
+          <div className="flex justify-center pt-2">
+            <Button
+              onClick={onSearch}
+              disabled={loading || !canSearch}
+              className="h-12 min-w-[280px] rounded-lg px-8 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(79,70,229,0.35)] hover:opacity-95"
+              style={{ backgroundColor: PRIMARY }}
             >
-              Show filters
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "font-medium",
-                showSelectedOnly ? "text-[#4f46e5]" : "text-[#374151] hover:text-[#4f46e5]",
-              )}
-              onClick={() => setShowSelectedOnly((v) => !v)}
-            >
-              Show Selected Only
-            </button>
-            <button type="button" className="font-medium text-[#374151] hover:text-[#4f46e5]">
-              Export results to .csv
-            </button>
+              {loading ? "Searching…" : "Search for Numbers"}
+            </Button>
           </div>
         </div>
-
-        {searchResponse && searchDurationSec != null ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#bbf7d0] bg-[#ecfdf5] px-4 py-3 text-[13px]">
-            <span className="flex items-center gap-2 font-medium text-[#047857]">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              {searchResponse.inventoryScannedCount ?? resultCount} numbers scanned • Search
-              completed in {searchDurationSec} sec
-            </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 font-semibold text-[#4f46e5]"
-              onClick={fullReset}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              New Search
-            </button>
-          </div>
-        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {reserveError ? <p className="text-sm text-red-600">{reserveError}</p> : null}
@@ -815,17 +869,18 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
 
         {success ? <PremiumSuccessPanel state={success} onClose={() => setSuccess(null)} /> : null}
 
-        {searchResponse && !success && displayedBest.length > 0 ? (
+        {(searchResponse || isWireframePreview) && !success && displayedBest.length > 0 ? (
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-[16px] font-bold text-[#111827]">Best Matches</h2>
               <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] text-[#6b7280]">Sort By:</span>
                 <select
                   className="h-9 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[12px] font-medium text-[#374151]"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                 >
-                  <option value="default">Relevance</option>
+                  <option value="default">Best Match</option>
                   <option value="score">Highest Score</option>
                   <option value="price">Lowest Price</option>
                 </select>
@@ -859,7 +914,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             <div
               className={cn(
                 viewMode === "grid"
-                  ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                  ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
                   : "space-y-3",
               )}
             >
@@ -867,26 +922,18 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                 <FindNumberCard
                   key={result.phoneNumber}
                   result={result}
-                  areaCode={parsedAreaCodes[0]}
+                  monthlyCents={resultMonthlyCents(result, isWireframePreview)}
                   loading={reserving === result.phoneNumber}
                   inBasket={favorites.has(result.phoneNumber)}
-                  onToggleBasket={() => {
-                    toggleFavorite(result.phoneNumber);
-                    if (aiEngaged) {
-                      trackFindNumberAiEvent("number_saved_from_ai", {
-                        phone: result.phoneNumber,
-                      });
-                    }
-                  }}
                   onGetNumber={() => onGetNumber(result)}
-                  onAskAi={() => onAskAiAboutNumber(result)}
+                  onBuyNow={() => onBuyNow(result)}
                 />
               ))}
             </div>
           </section>
         ) : null}
 
-        {searchResponse && !success && displayedMore.length > 0 ? (
+        {(searchResponse || isWireframePreview) && !success && displayedMore.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-[16px] font-bold text-[#111827]">More Great Matches</h2>
             <div className="flex gap-3 overflow-x-auto pb-2">
@@ -894,6 +941,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                 <MoreGreatMatchChip
                   key={result.phoneNumber}
                   result={result}
+                  monthlyCents={resultMonthlyCents(result, isWireframePreview)}
                   loading={reserving === result.phoneNumber}
                   onGetNumber={() => onGetNumber(result)}
                 />
@@ -906,12 +954,30 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
           <div className={cn(pm.card, "border-dashed p-6 text-center")}>
             <p className="text-[15px] font-semibold text-[#111827]">No matches in this search</p>
             <p className="mt-1 text-[13px] text-[#6b7280]">
-              Try another area code, category, or ask AI for alternatives.
+              Try different digits, a city chip, or chat with a specialist for help.
             </p>
           </div>
         ) : null}
       </div>
 
+      <aside className="space-y-4">
+        <TipsForFindNumbersCard onChat={openAiConcierge} />
+        <TransovoSearchSummaryCard
+          priceRange={priceRange}
+          resultCount={summaryResultCount}
+          capabilities={capabilitySummary}
+          basketCount={basketCount}
+          totalMonthlyCents={totalMonthlyCents}
+          onViewFilters={() => setShowAdvanced((v) => !v)}
+        />
+        <RecentSearchCard
+          items={recentSearches}
+          onClear={() => setRecentSearches([])}
+        />
+        <TopBrandsCard />
+        <WhyTransovoCard />
+      </aside>
+    </div>
 
       {checkout && !success ? (
         <PremiumCheckoutModal
@@ -930,57 +996,29 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
         />
       ) : null}
 
-      {/* Mobile AI drawer */}
-      <button
-        type="button"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-5 py-3 text-[14px] font-semibold text-white shadow-lg lg:hidden"
-        style={{ backgroundColor: PRIMARY }}
-        onClick={() => {
-          setMobileAiOpen(true);
-          trackFindNumberAiEvent("ai_search_opened");
-        }}
-      >
-        <Sparkles className="h-4 w-4" />
-        Ask AI
-      </button>
-
-      {mobileAiOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+      {aiDrawerOpen ? (
+        <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={() => setMobileAiOpen(false)}
+            onClick={() => setAiDrawerOpen(false)}
             aria-hidden
           />
-          <div className="absolute inset-x-0 bottom-0 top-[12%] flex flex-col rounded-t-2xl bg-white shadow-2xl">
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#e5e7eb] px-4 py-3">
               <span className="text-[14px] font-semibold text-[#111827]">Your AI Concierge</span>
               <button
                 type="button"
-                onClick={() => setMobileAiOpen(false)}
+                onClick={() => setAiDrawerOpen(false)}
                 className="rounded-lg p-1 hover:bg-[#f3f4f6]"
                 aria-label="Close"
               >
                 <X className="h-5 w-5 text-[#6b7280]" />
               </button>
             </div>
-            {ai.understandingChips.length > 0 ? (
-              <div className="border-b border-[#f3f4f6] px-4 py-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {ai.understandingChips.map((chip) => (
-                    <span
-                      key={chip.id}
-                      className="rounded-full bg-[#eef2ff] px-2 py-0.5 text-[10px] font-semibold text-[#4338ca]"
-                    >
-                      {chip.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
             <FindNumberAiPanel
               sessionId={ai.sessionId}
               messages={ai.messages}
-              understandingChips={[]}
+              understandingChips={ai.understandingChips}
               loading={ai.loading}
               loadingStage={ai.loadingStage}
               suggestedActions={ai.suggestedActions}
@@ -994,114 +1032,79 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
 function FindNumberCard({
   result,
-  areaCode,
+  monthlyCents,
   loading,
   inBasket,
-  onToggleBasket,
   onGetNumber,
-  onAskAi,
+  onBuyNow,
 }: {
   result: PremiumNumberProductResult;
-  areaCode?: string;
+  monthlyCents: number;
   loading: boolean;
   inBasket: boolean;
-  onToggleBasket: () => void;
   onGetNumber: () => void;
-  onAskAi?: () => void;
+  onBuyNow: () => void;
 }) {
   const displayPhone = result.displayNumber;
-  const location =
-    AREA_CODE_LOCATIONS[areaCode ?? result.phoneNumber.slice(2, 5)] ?? "United States";
-  const starCount = Math.min(5, Math.max(1, Math.round(result.numberQualityScore / 20)));
-  const monthlyCents = DISPLAY_MONTHLY_CENTS;
-  const setupCents = result.premiumPriceCents;
+  const bullets = result.cardBullets.length
+    ? result.cardBullets.slice(0, 3)
+    : result.whyReasons.slice(0, 3);
 
   return (
     <div className={cn(pm.card, "flex flex-col p-5 transition hover:shadow-md")}>
-      <div className="flex flex-wrap gap-2">
-        {result.numberQualityScore >= 85 ? (
-          <span className="rounded-md bg-[#eef2ff] px-2 py-0.5 text-[10px] font-bold uppercase text-[#4f46e5]">
-            Top Search
+      <p className="text-[20px] font-bold leading-tight text-[#111827]">{displayPhone}</p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(["Voice", "SMS", "MMS"] as const).map((cap) => (
+          <span
+            key={cap}
+            className="inline-flex items-center gap-1 rounded-md bg-[#ecfdf5] px-2 py-0.5 text-[11px] font-semibold text-[#059669]"
+          >
+            <Check className="h-3 w-3" />
+            {cap}
           </span>
-        ) : null}
-        {result.businessMatchScore >= 70 ? (
-          <span className="rounded-md bg-[#ecfdf5] px-2 py-0.5 text-[10px] font-bold uppercase text-[#059669]">
-            High conversion
-          </span>
-        ) : null}
+        ))}
       </div>
 
-      <p className="mt-3 text-[22px] font-bold leading-tight text-[#111827]">{displayPhone}</p>
-      <p className="mt-0.5 text-[13px] text-[#6b7280]">{location}</p>
-
-      <div className="mt-3 flex items-center gap-3">
-        <div className="flex gap-0.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star
-              key={i}
-              className={cn(
-                "h-3.5 w-3.5",
-                i < starCount ? "fill-amber-400 text-amber-400" : "text-[#e5e7eb]",
-              )}
-            />
+      {bullets.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {bullets.map((b) => (
+            <li key={b} className="flex items-start gap-2 text-[12px] text-[#6b7280]">
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#059669]" />
+              {b}
+            </li>
           ))}
-        </div>
-        <div className="flex items-center gap-2 text-[#9ca3af]">
-          <Mic className="h-3.5 w-3.5" />
-          <MessageSquare className="h-3.5 w-3.5" />
-          <MessageCircle className="h-3.5 w-3.5" />
-        </div>
-      </div>
+        </ul>
+      ) : null}
 
-      <p className="mt-4 text-[14px] font-semibold text-[#111827]">
-        {formatMonthlyDisplay(monthlyCents)} Monthly
-        <span className="text-[#6b7280] font-medium">
-          {" "}
-          / {formatPremiumPrice(setupCents)} Set-up
-        </span>
+      <p className="mt-4 text-[15px] font-bold text-[#111827]">
+        {formatMonthlyDisplay(monthlyCents)}
+        <span className="text-[13px] font-medium text-[#6b7280]"> / month</span>
       </p>
 
-      <Button
-        className="mt-4 h-11 w-full rounded-lg text-[14px] font-semibold text-white hover:opacity-95"
-        style={{ backgroundColor: PRIMARY }}
-        disabled={loading}
-        onClick={onGetNumber}
-      >
-        {loading ? "Reserving…" : "Add To Basket"}
-      </Button>
-
-      <div className="mt-3 flex items-center justify-between text-[12px]">
-        <button
-          type="button"
-          className="font-semibold text-[#4f46e5] hover:underline"
-          onClick={onAskAi}
-        >
-          View details
-        </button>
-        <button
-          type="button"
-          className="font-semibold text-[#4f46e5] hover:underline"
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Button
+          className="h-10 rounded-lg text-[13px] font-semibold text-white hover:opacity-95"
+          style={{ backgroundColor: PRIMARY }}
+          disabled={loading}
           onClick={onGetNumber}
         >
-          Quick Buy
-        </button>
-        <button
-          type="button"
-          onClick={onToggleBasket}
-          className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-lg border",
-            inBasket ? "border-rose-200 bg-rose-50 text-rose-500" : "border-[#e5e7eb] text-[#9ca3af]",
-          )}
-          aria-label="Add to basket"
+          {loading ? "…" : inBasket ? "In Basket" : "Add to Basket"}
+        </Button>
+        <Button
+          variant="outline"
+          className="h-10 rounded-lg border-[#4f46e5] text-[13px] font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+          disabled={loading}
+          onClick={onBuyNow}
         >
-          <Heart className={cn("h-4 w-4", inBasket && "fill-current")} />
-        </button>
+          Buy Now
+        </Button>
       </div>
     </div>
   );
@@ -1109,10 +1112,12 @@ function FindNumberCard({
 
 function MoreGreatMatchChip({
   result,
+  monthlyCents,
   loading,
   onGetNumber,
 }: {
   result: PremiumNumberProductResult;
+  monthlyCents: number;
   loading: boolean;
   onGetNumber: () => void;
 }) {
@@ -1129,94 +1134,164 @@ function MoreGreatMatchChip({
     >
       <span className="text-[13px] font-bold text-[#111827]">{label}</span>
       <span className="text-[12px] font-semibold text-[#4f46e5]">
-        {formatMonthlyDisplay(DISPLAY_MONTHLY_CENTS)} / mo
+        {formatMonthlyDisplay(monthlyCents)} / mo
       </span>
     </button>
   );
 }
 
-function MockupSearchSummaryCard({
-  areaCodes,
-  basketCount,
+function TipsForFindNumbersCard({ onChat }: { onChat: () => void }) {
+  return (
+    <div className={cn(pm.card, "p-4")}>
+      <h3 className="text-[13px] font-bold text-[#111827]">Tips for Find Numbers</h3>
+      <div className="mt-3 space-y-3 text-[12px] leading-relaxed text-[#6b7280]">
+        <p className="flex gap-2">
+          <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#4f46e5]" />
+          Vanity numbers with repeating digits are easier for customers to remember and share.
+        </p>
+        <p className="flex gap-2">
+          <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#4f46e5]" />
+          Local area codes build trust — match your primary market when possible.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onChat}
+        className="mt-4 w-full rounded-lg border border-[#4f46e5] px-4 py-2.5 text-[13px] font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+      >
+        Chat with a specialist for help
+      </button>
+    </div>
+  );
+}
+
+function TransovoSearchSummaryCard({
+  priceRange,
   resultCount,
-  isActive,
+  capabilities,
+  basketCount,
+  totalMonthlyCents,
+  onViewFilters,
 }: {
-  areaCodes: string[];
-  basketCount: number;
+  priceRange: { min: number; max: number } | null;
   resultCount: number;
-  isActive: boolean;
+  capabilities: string;
+  basketCount: number;
+  totalMonthlyCents: number;
+  onViewFilters: () => void;
 }) {
+  const priceLabel = priceRange
+    ? `${formatMonthlyDisplay(priceRange.min)} - ${formatMonthlyDisplay(priceRange.max)}`
+    : "—";
+
   return (
     <div className={cn(pm.card, "p-4")}>
       <h3 className="text-[13px] font-bold text-[#111827]">Search Summary</h3>
       <dl className="mt-3 space-y-2 text-[12px]">
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Area Code</dt>
-          <dd className="font-medium text-[#111827]">{areaCodes.join(", ") || "—"}</dd>
+          <dt className="text-[#6b7280]">Price Range</dt>
+          <dd className="font-medium text-[#111827]">{priceLabel}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Country</dt>
-          <dd className="font-medium text-[#111827]">America</dd>
+          <dt className="text-[#6b7280]">Numbers Found</dt>
+          <dd className="font-medium text-[#111827]">{resultCount}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Search Status</dt>
-          <dd className="font-medium text-[#059669]">{isActive ? "Active" : "Idle"}</dd>
+          <dt className="text-[#6b7280]">Capabilities</dt>
+          <dd className="font-medium text-[#111827] text-right">{capabilities || "—"}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Selected Count</dt>
+          <dt className="text-[#6b7280]">Selected</dt>
           <dd className="font-medium text-[#111827]">{basketCount}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">New Count</dt>
-          <dd className="font-medium text-[#111827]">{resultCount} Numbers</dd>
+          <dt className="text-[#6b7280]">Total Monthly</dt>
+          <dd className="font-medium text-[#111827]">{formatMonthlyDisplay(totalMonthlyCents)}</dd>
         </div>
       </dl>
+      <button
+        type="button"
+        onClick={onViewFilters}
+        className="mt-3 text-[12px] font-semibold text-[#4f46e5] hover:underline"
+      >
+        View Search Filters
+      </button>
     </div>
   );
 }
 
-function MockupSearchImpactCard() {
+function RecentSearchCard({
+  items,
+  onClear,
+}: {
+  items: Array<{ label: string; count: number; date: string }>;
+  onClear: () => void;
+}) {
   return (
     <div className={cn(pm.card, "p-4")}>
-      <h3 className="text-[13px] font-bold text-[#111827]">Search Impact</h3>
-      <dl className="mt-3 space-y-2 text-[12px]">
-        <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Search Volume</dt>
-          <dd className="font-medium text-[#111827]">0</dd>
-        </div>
-        <div className="flex justify-between gap-2">
-          <dt className="text-[#6b7280]">Competition</dt>
-          <dd className="font-medium text-[#059669]">Low</dd>
-        </div>
-      </dl>
+      <h3 className="text-[13px] font-bold text-[#111827]">Recent Search</h3>
+      {items.length === 0 ? (
+        <p className="mt-2 text-[12px] text-[#6b7280]">No recent searches yet.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {items.map((item) => (
+            <li key={item.label} className="text-[12px]">
+              <span className="font-semibold text-[#111827]">{item.label}</span>
+              <span className="text-[#6b7280]">
+                {" "}
+                · {item.count} numbers · {item.date}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={onClear}
+        className="mt-3 text-[12px] font-semibold text-[#4f46e5] hover:underline"
+      >
+        Clear recent searches
+      </button>
     </div>
   );
 }
 
-function MockupNewFeaturesCard() {
-  const items = ["Bulk Buy", "AI Filtering", "Toll-Free"];
-  return (
-    <div className={cn(pm.card, "p-4")}>
-      <h3 className="text-[13px] font-bold text-[#111827]">New Features</h3>
-      <ul className="mt-3 space-y-2">
-        {items.map((item) => (
-          <li key={item} className="text-[12px] font-medium text-[#4f46e5]">{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function MockupWhyCard() {
-  const items = [
-    "Advanced number search tools",
-    "Instant activation",
-    "No hidden fees",
-    "24/7 support",
+function TopBrandsCard() {
+  const brands = [
+    { name: "Amazon", className: "text-[#ff9900] font-bold italic" },
+    { name: "Meta", className: "text-[#0866ff] font-bold" },
+    { name: "Google", className: "font-bold text-[#4285f4]" },
+    { name: "Uber", className: "font-bold text-[#111827]" },
+    { name: "Verizon", className: "font-bold text-[#cd040b]" },
+    { name: "Microsoft", className: "font-bold text-[#737373]" },
   ];
   return (
     <div className={cn(pm.card, "p-4")}>
-      <h3 className="text-[13px] font-bold text-[#111827]">Why choose us?</h3>
+      <h3 className="text-[13px] font-bold text-[#111827]">Top Brands</h3>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {brands.map((brand) => (
+          <div
+            key={brand.name}
+            className="flex h-9 items-center justify-center rounded-lg border border-[#e5e7eb] bg-[#f9fafb] text-[10px]"
+          >
+            <span className={brand.className}>{brand.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WhyTransovoCard() {
+  const items = [
+    "25+ years of experience",
+    "Trusted by Fortune 500",
+    "No Hidden Fees",
+    "Best Support Team",
+  ];
+  return (
+    <div className={cn(pm.card, "p-4")}>
+      <h3 className="text-[13px] font-bold text-[#111827]">Why TransOvo?</h3>
       <ul className="mt-3 space-y-2">
         {items.map((item) => (
           <li key={item} className="flex items-center gap-2 text-[12px] text-[#374151]">
