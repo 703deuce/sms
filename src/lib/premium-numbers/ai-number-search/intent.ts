@@ -6,6 +6,7 @@ import {
 } from "@/lib/premium-numbers/business-keyword-llm";
 import { parseAreaCodesInput } from "@/lib/premium-numbers/toll-free";
 import { applySearchStatePatch, mergeKeywords, resetNumberSearchState } from "./state";
+import type { CustomerSafeNumberResult } from "./customer-context";
 import type { AiSearchAction, NumberSearchState } from "./types";
 
 const SYSTEM_PROMPT = `You are AI Concierge for Find a Number. You NEVER invent phone numbers.
@@ -48,14 +49,7 @@ export async function parseAiSearchMessage(input: {
   searchState: NumberSearchState;
   quickAction?: string;
   selectedNumberIds?: string[];
-  resultSummaries?: Array<{
-    phoneNumber: string;
-    displayNumber: string;
-    premiumPriceCents: number;
-    businessMatchScore: number;
-    numberQualityScore: number;
-    displayWord?: string;
-  }>;
+  resultSummaries?: CustomerSafeNumberResult[];
 }): Promise<{
   assistantMessage: string;
   action: AiSearchAction;

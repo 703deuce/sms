@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { dedupeCandidatesByE164 } from "./normalize";
 import { logInventoryProviderSearch } from "@/lib/premium-numbers/search-observability";
+import { runProviderSearchWithAcceptanceInject } from "./acceptance-inject";
 
 export type ProviderInventoryBatch = {
   provider: NumberUpstreamProvider;
@@ -66,7 +67,7 @@ export class NumberSearchService {
     const runProvider = async (provider: NumberProvider): Promise<InventorySearchResult> => {
       const providerStarted = Date.now();
       try {
-        const result = await provider.searchInventory(input);
+        const result = await runProviderSearchWithAcceptanceInject(provider, input);
         pending.delete(provider.id);
         candidates = dedupeCandidatesByE164([...candidates, ...result.candidates]);
         attempts.push(...result.attempts);

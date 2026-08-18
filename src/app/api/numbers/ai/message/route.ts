@@ -10,7 +10,11 @@ import {
   buildIndustryPatch,
   parseAiSearchMessage,
 } from "@/lib/premium-numbers/ai-number-search/intent";
-import { sanitizeAssistantMessage } from "@/lib/premium-numbers/ai-number-search/controller";
+import {
+  toCustomerSafeNumberResult,
+  toCustomerSafeNumberResults,
+} from "@/lib/premium-numbers/ai-number-search/customer-context";
+import { sanitizeCustomerAiOutput } from "@/lib/premium-numbers/ai-number-search/output-sanitizer";
 import {
   getOrCreateAiSession,
   pushMessage,
@@ -82,12 +86,16 @@ export async function POST(request: Request) {
 
     pushMessage(session, "user", message);
 
+    const safeSummaries = (body?.resultSummaries ?? []).map((r) =>
+      toCustomerSafeNumberResult(r as import("@/lib/premium-numbers/product-api").PremiumNumberProductResult),
+    );
+
     const parsed = await parseAiSearchMessage({
       message,
       quickAction: body?.quickAction,
       searchState: session.searchState,
       selectedNumberIds: body?.selectedNumberIds,
-      resultSummaries: body?.resultSummaries,
+      resultSummaries: safeSummaries,
     });
 
     if (parsed.action.type === "NEW_SEARCH") {
@@ -103,7 +111,9 @@ export async function POST(request: Request) {
       if (hit) {
         assistantText = await explainNumberResult({
           searchSummary: searchSummary(session.searchState),
-          result: hit as import("@/lib/premium-numbers/product-api").PremiumNumberProductResult,
+          result: toCustomerSafeNumberResult(
+            hit as import("@/lib/premium-numbers/product-api").PremiumNumberProductResult,
+          ),
         });
       }
     }
@@ -116,7 +126,9 @@ export async function POST(request: Request) {
       if (picks.length >= 2) {
         assistantText = await compareNumberResults({
           searchSummary: searchSummary(session.searchState),
-          results: picks as import("@/lib/premium-numbers/product-api").PremiumNumberProductResult[],
+          results: toCustomerSafeNumberResults(
+            picks as import("@/lib/premium-numbers/product-api").PremiumNumberProductResult[],
+          ),
         });
       }
     }
@@ -138,7 +150,7 @@ export async function POST(request: Request) {
 
     const allowedPhones = body?.resultSummaries?.map((r) => r.phoneNumber) ?? [];
     const allowedDisplays = body?.resultSummaries?.map((r) => r.displayNumber) ?? [];
-    assistantText = sanitizeAssistantMessage(assistantText, allowedPhones, allowedDisplays);
+    assistantText = sanitizeCustomerAiOutput(assistantText, allowedPhones, allowedDisplays);
 
     pushMessage(session, "assistant", assistantText);
     saveAiSession(session);

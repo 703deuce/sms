@@ -593,6 +593,17 @@ async function main() {
   console.log(`Account: ${email}`);
 
   try {
+    // Release any held acceptance reservations before/after live commerce tests
+    try {
+      const { execSync } = await import("node:child_process");
+      execSync("npx tsx scripts/cleanup-acceptance-reservations.ts", {
+        stdio: "inherit",
+        env: process.env,
+      });
+    } catch {
+      console.warn("Reservation cleanup skipped (DATABASE_URL may be unavailable)");
+    }
+
     const { cookies, workspaceId } = await smokeLogin(base, email);
     await selectWorkspace(base, cookies, PERSONAL_WORKSPACE);
 
@@ -636,6 +647,15 @@ async function main() {
       err instanceof Error ? err.message : String(err),
     );
   } finally {
+    try {
+      const { execSync } = await import("node:child_process");
+      execSync("npx tsx scripts/cleanup-acceptance-reservations.ts", {
+        stdio: "inherit",
+        env: process.env,
+      });
+    } catch {
+      /* ignore */
+    }
     mkdirSync(dirname(reportPath), { recursive: true });
     const report = formatReport(base);
     writeFileSync(reportPath, report, "utf8");
