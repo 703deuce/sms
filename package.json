@@ -29,6 +29,7 @@
     "test:number-product-preprod": "tsx scripts/number-product-preprod-suite.ts",
     "test:dual-provider-search": "tsx scripts/test-dual-provider-search.ts",
     "test:ai-number-concierge": "tsx scripts/test-ai-number-concierge.ts",
+    "test:ai-concierge-staging": "tsx scripts/ai-concierge-staging-acceptance.ts",
     "audit:dual-provider-search": "tsx scripts/audit-dual-provider-live-search.ts",
     "test:personal-menu-apis": "node scripts/test-personal-menu-apis.mjs",
     "stage:personal-dual": "node scripts/stage-personal-dual-provider.mjs",
