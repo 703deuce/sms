@@ -326,6 +326,28 @@ export async function processVoiceWebhookEvent(input: {
           return { ok: true, kind: "ivr_gather" };
         }
 
+        const workspace = await prisma.workspace.findUnique({
+          where: { id: pn.workspaceId },
+          select: { type: true },
+        });
+        const isPersonalWorkspace = workspace?.type === "PERSONAL";
+
+        // Personal product: voicemail / forwarding / smart routing — not AI receptionist.
+        if (isPersonalWorkspace) {
+          const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
+          await processSoftphoneInbound({
+            workspaceId: pn.workspaceId,
+            fromE164: from,
+            toE164: to,
+            telnyxCallControlId: callControlId,
+          });
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return { ok: true, kind: "softphone_inbound" };
+        }
+
         const { resolveInboundAiAgent } = await import("../agent-phone");
         const aiAgent = await resolveInboundAiAgent(pn.workspaceId, pn.id);
 
