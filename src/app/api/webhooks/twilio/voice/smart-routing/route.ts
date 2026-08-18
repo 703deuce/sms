@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     digits: params.Digits,
     dialCallStatus: params.DialCallStatus,
     recordingUrl: params.RecordingUrl,
+    callSid: params.CallSid,
   });
 
   return twimlResponse(xml);

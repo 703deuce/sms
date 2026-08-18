@@ -10,19 +10,17 @@ import {
   loadPublishedCompiledFlow,
   updateSessionState,
 } from "./session-store";
-import { resolveAudioUrlForAsset } from "./media-service";
+import {
+  escapeXml,
+  promptToTwimlInner,
+  resolvePromptPlayback,
+} from "./prompt-playback";
+import { buildTwilioAiReceptionistTwiml } from "./twilio-ai-handoff";
+import { startTwilioWhisperTransfer } from "./twilio-whisper-service";
 import { evaluateScheduleBranch } from "./schedule-engine";
 import { recordSmsConsent, triggerMissedCallTextFromConsent } from "./consent-service";
 import { emitSmartRoutingEvent } from "./events";
 import { finalizeSession } from "./flow-runtime";
-
-function xmlEscape(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function twiml(body: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
@@ -88,14 +86,9 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           continue;
         }
         case "PLAY_PROMPT": {
-          const text = String(node.config.text ?? node.config.promptText ?? "");
-          const assetId = String(node.config.audioAssetId ?? "");
-          const url = await resolveAudioUrlForAsset(session.workspaceId, assetId);
-          if (url) {
-            parts.push(`<Play>${xmlEscape(url)}</Play>`);
-          } else if (text) {
-            parts.push(`<Say>${xmlEscape(text)}</Say>`);
-          }
+          const playback = await resolvePromptPlayback(session.workspaceId, node.config);
+          const inner = promptToTwimlInner(playback);
+          if (inner) parts.push(inner);
           nextId = nextNodeId(node, "always") ?? Object.values(node.edges)[0];
           await completeNodeExecution(execution.id, { nextId });
           currentId = nextId;
@@ -103,27 +96,16 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
         }
         case "MENU":
         case "GATHER_DTMF": {
-          const promptText = String(
-            node.config.promptText ?? node.config.text ?? "Please make a selection.",
-          );
-          const menuOpts = (node.config.menuOptions as Array<{ digit: string }>) ?? [];
-          const validDigits =
-            menuOpts.map((o) => o.digit).join("") ||
-            String(node.config.validDigits ?? "0123456789*#");
-          const assetId = String(node.config.audioAssetId ?? "");
-          const url = await resolveAudioUrlForAsset(session.workspaceId, assetId);
+          const playback = await resolvePromptPlayback(session.workspaceId, node.config);
           const action = smartRoutingCallbackUrl({
             sessionId,
             event: "gather",
           });
-          let inner = "";
-          if (url) {
-            inner = `<Play>${xmlEscape(url)}</Play>`;
-          } else {
-            inner = `<Say>${xmlEscape(promptText)}</Say>`;
-          }
+          const inner =
+            promptToTwimlInner(playback) ||
+            `<Say>${escapeXml("Please make a selection.")}</Say>`;
           parts.push(
-            `<Gather numDigits="1" timeout="10" action="${xmlEscape(action)}" method="POST">${inner}</Gather>`,
+            `<Gather numDigits="1" timeout="10" action="${escapeXml(action)}" method="POST">${inner}</Gather>`,
           );
           parts.push("<Say>We did not receive your selection.</Say><Hangup/>");
           await updateSessionState(sessionId, {
@@ -144,7 +126,62 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           currentId = nextId;
           continue;
         }
-        case "TRANSFER_EXTERNAL":
+        case "TRANSFER_EXTERNAL": {
+          const phone =
+            String(node.config.phoneNumber ?? "").trim() ||
+            await resolveDestinationPhone(
+              session.workspaceId,
+              String(node.config.destinationId ?? ""),
+            );
+          if (!phone) {
+            nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
+            await completeNodeExecution(execution.id, { nextId, error: "no_phone" });
+            currentId = nextId;
+            continue;
+          }
+          const whisperText = String(node.config.whisperText ?? "").trim();
+          const whisperEnabled =
+            Boolean(node.config.whisperEnabled) || whisperText.length > 0;
+          await emitSmartRoutingEvent({
+            workspaceId: session.workspaceId,
+            type: "TRANSFER_STARTED",
+            sessionId,
+            flowId: session.flowId,
+            payload: { to: phone, whisper: whisperEnabled, provider: "twilio" },
+          });
+          if (whisperEnabled) {
+            const whisper = await startTwilioWhisperTransfer({
+              sessionId,
+              workspaceId: session.workspaceId,
+              flowId: session.flowId,
+              nodeId: node.id,
+              callerCallSid: session.callControlId ?? "",
+              agentPhone: phone,
+              fromNumber: session.calledNumber,
+              whisperText:
+                whisperText ||
+                String(node.config.text ?? "Incoming business call. Press 1 to accept."),
+              acceptDigit: String(node.config.acceptDigit ?? "1"),
+            });
+            await completeNodeExecution(execution.id, { whisperTo: phone });
+            return { twiml: whisper.twiml, awaiting: "whisper" };
+          }
+          const action = smartRoutingCallbackUrl({
+            sessionId,
+            event: "transfer",
+          });
+          const ringSeconds =
+            typeof node.config.ringSeconds === "number" ? node.config.ringSeconds : 25;
+          parts.push(
+            `<Dial callerId="${escapeXml(session.calledNumber)}" timeout="${ringSeconds}" action="${escapeXml(action)}" method="POST"><Number>${escapeXml(phone)}</Number></Dial>`,
+          );
+          await updateSessionState(sessionId, {
+            currentNodeId: node.id,
+            stateJson: { ...state, awaitingEvent: "transfer" },
+          });
+          await completeNodeExecution(execution.id, { transferTo: phone });
+          return { twiml: twiml(parts.join("")), awaiting: "transfer" };
+        }
         case "CALL_WHISPER": {
           const phone =
             String(node.config.phoneNumber ?? "").trim() ||
@@ -158,28 +195,30 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
             currentId = nextId;
             continue;
           }
-          const action = smartRoutingCallbackUrl({
-            sessionId,
-            event: "transfer",
-          });
-          const ringSeconds =
-            typeof node.config.ringSeconds === "number" ? node.config.ringSeconds : 25;
-          parts.push(
-            `<Dial callerId="${xmlEscape(session.calledNumber)}" timeout="${ringSeconds}" action="${xmlEscape(action)}" method="POST"><Number>${xmlEscape(phone)}</Number></Dial>`,
-          );
-          await updateSessionState(sessionId, {
-            currentNodeId: node.id,
-            stateJson: { ...state, awaitingEvent: "transfer" },
-          });
-          await completeNodeExecution(execution.id, { transferTo: phone });
           await emitSmartRoutingEvent({
             workspaceId: session.workspaceId,
             type: "TRANSFER_STARTED",
             sessionId,
             flowId: session.flowId,
-            payload: { to: phone, provider: "twilio" },
+            payload: { to: phone, whisper: true, provider: "twilio" },
           });
-          return { twiml: twiml(parts.join("")), awaiting: "transfer" };
+          const whisper = await startTwilioWhisperTransfer({
+            sessionId,
+            workspaceId: session.workspaceId,
+            flowId: session.flowId,
+            nodeId: node.id,
+            callerCallSid: session.callControlId ?? "",
+            agentPhone: phone,
+            fromNumber: session.calledNumber,
+            whisperText: String(
+              node.config.whisperText ??
+                node.config.text ??
+                "Incoming business call. Press 1 to accept.",
+            ),
+            acceptDigit: String(node.config.acceptDigit ?? "1"),
+          });
+          await completeNodeExecution(execution.id, { whisperTo: phone });
+          return { twiml: whisper.twiml, awaiting: "whisper" };
         }
         case "RING_GROUP": {
           const mode = String(node.config.mode ?? "sequential");
@@ -203,14 +242,14 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           const dialTargets =
             mode === "simultaneous" ? phones : [phones[ringIndex] ?? phones[0]];
           const numbersXml = dialTargets
-            .map((p) => `<Number>${xmlEscape(p)}</Number>`)
+            .map((p) => `<Number>${escapeXml(p)}</Number>`)
             .join("");
           const action = smartRoutingCallbackUrl({
             sessionId,
             event: "transfer",
           });
           parts.push(
-            `<Dial callerId="${xmlEscape(session.calledNumber)}" timeout="25" action="${xmlEscape(action)}" method="POST">${numbersXml}</Dial>`,
+            `<Dial callerId="${escapeXml(session.calledNumber)}" timeout="25" action="${escapeXml(action)}" method="POST">${numbersXml}</Dial>`,
           );
           await updateSessionState(sessionId, {
             currentNodeId: node.id,
@@ -225,16 +264,20 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           return { twiml: twiml(parts.join("")), awaiting: "ring_group" };
         }
         case "VOICEMAIL": {
-          const greeting = String(
-            node.config.greeting ?? "Please leave a message after the tone.",
-          );
+          const playback = await resolvePromptPlayback(session.workspaceId, {
+            greeting: node.config.greeting,
+            text: node.config.greeting,
+          });
           const action = smartRoutingCallbackUrl({
             sessionId,
             event: "recording",
           });
-          parts.push(`<Say>${xmlEscape(greeting)}</Say>`);
+          const preamble =
+            promptToTwimlInner(playback) ||
+            `<Say>${escapeXml("Please leave a message after the tone.")}</Say>`;
+          parts.push(preamble);
           parts.push(
-            `<Record maxLength="180" playBeep="true" recordingStatusCallback="${xmlEscape(action)}" recordingStatusCallbackMethod="POST"/>`,
+            `<Record maxLength="180" playBeep="true" recordingStatusCallback="${escapeXml(action)}" recordingStatusCallbackMethod="POST"/>`,
           );
           await updateSessionState(sessionId, {
             stateJson: { ...state, awaitingEvent: "voicemail" },
@@ -243,17 +286,16 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           return { twiml: twiml(parts.join("")), awaiting: "voicemail" };
         }
         case "SMS_CONSENT": {
-          const digit = String(node.config.consentDigit ?? "1");
-          const prompt = String(
-            node.config.promptText ??
-              "Sorry we missed your call. Press 1 and we'll text you now.",
-          );
+          const playback = await resolvePromptPlayback(session.workspaceId, node.config);
           const action = smartRoutingCallbackUrl({
             sessionId,
             event: "gather",
           });
+          const inner =
+            promptToTwimlInner(playback) ||
+            `<Say>${escapeXml("Sorry we missed your call. Press 1 and we'll text you now.")}</Say>`;
           parts.push(
-            `<Gather numDigits="1" timeout="10" action="${xmlEscape(action)}" method="POST"><Say>${xmlEscape(prompt)}</Say></Gather><Hangup/>`,
+            `<Gather numDigits="1" timeout="10" action="${escapeXml(action)}" method="POST">${inner}</Gather><Hangup/>`,
           );
           await updateSessionState(sessionId, {
             currentNodeId: node.id,
@@ -263,10 +305,9 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           return { twiml: twiml(parts.join("")), awaiting: "sms_consent" };
         }
         case "PLAY_CONFIRMATION": {
-          const text = String(
-            node.config.text ?? "Perfect. Check your phone. We've just sent you a message.",
-          );
-          parts.push(`<Say>${xmlEscape(text)}</Say>`);
+          const playback = await resolvePromptPlayback(session.workspaceId, node.config);
+          const inner = promptToTwimlInner(playback);
+          if (inner) parts.push(inner);
           nextId = nextNodeId(node, "always") ?? Object.values(node.edges)[0];
           await completeNodeExecution(execution.id, { nextId });
           currentId = nextId;
@@ -296,19 +337,20 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           continue;
         }
         case "AI_RECEPTIONIST": {
-          await emitSmartRoutingEvent({
-            workspaceId: session.workspaceId,
-            type: "AI_HANDOFF_STARTED",
+          const agentId = String(node.config.aiAgentId ?? "");
+          const aiTwiml = await buildTwilioAiReceptionistTwiml({
             sessionId,
+            workspaceId: session.workspaceId,
             flowId: session.flowId,
-            payload: { provider: "twilio", note: "twilio_ai_handoff_pending" },
+            callerNumber: session.callerNumber,
+            calledNumber: session.calledNumber,
+            callSid: session.callControlId ?? "",
+            agentId,
+            intentHint: String(node.config.intentHint ?? ""),
+            menuSelection: session.menuSelection,
           });
-          await finalizeSession(sessionId, "ai_receptionist_unavailable");
-          await completeNodeExecution(execution.id, { handoff: "twilio_deferred" });
-          parts.push(
-            "<Say>Please call back during business hours or leave a message after the tone.</Say><Hangup/>",
-          );
-          return { twiml: twiml(parts.join("")) };
+          await completeNodeExecution(execution.id, { handoff: "ai", agentId });
+          return { twiml: aiTwiml };
         }
         case "HANGUP": {
           parts.push("<Hangup/>");

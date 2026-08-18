@@ -20,6 +20,7 @@ import {
   updateSessionState,
 } from "./session-store";
 import { resolveAudioUrlForAsset } from "./media-service";
+import { resolvePromptPlayback } from "./prompt-playback";
 import { evaluateScheduleBranch } from "./schedule-engine";
 import { recordSmsConsent, triggerMissedCallTextFromConsent } from "./consent-service";
 import { emitSmartRoutingEvent } from "./events";
@@ -77,9 +78,10 @@ export async function executeNode(input: {
         break;
       }
       case "PLAY_PROMPT": {
-        const text = String(node.config.text ?? node.config.promptText ?? "");
+        const playback = await resolvePromptPlayback(session.workspaceId, node.config);
+        const text = playback.sayText ?? "";
         const assetId = String(node.config.audioAssetId ?? "");
-        const url = await resolveAudioUrlForAsset(session.workspaceId, assetId);
+        const url = playback.playUrl ?? (await resolveAudioUrlForAsset(session.workspaceId, assetId));
         if (url) {
           await playbackOnCall(controlId, url, clientBase, input.sessionId);
         } else if (text) {
@@ -90,15 +92,16 @@ export async function executeNode(input: {
       }
       case "MENU":
       case "GATHER_DTMF": {
-        const promptText = String(
-          node.config.promptText ?? node.config.text ?? "Please make a selection.",
-        );
+        const playback = await resolvePromptPlayback(session.workspaceId, node.config);
+        const promptText =
+          playback.sayText ??
+          String(node.config.promptText ?? node.config.text ?? "Please make a selection.");
         const menuOpts = (node.config.menuOptions as Array<{ digit: string }>) ?? [];
         const validDigits =
           menuOpts.map((o) => o.digit).join("") ||
           String(node.config.validDigits ?? "0123456789*#");
         const assetId = String(node.config.audioAssetId ?? "");
-        const url = await resolveAudioUrlForAsset(session.workspaceId, assetId);
+        const url = playback.playUrl ?? (await resolveAudioUrlForAsset(session.workspaceId, assetId));
         const gatherState: SmartRoutingClientState = {
           ...clientBase,
           awaiting: "gather",

@@ -2,17 +2,16 @@ import "server-only";
 
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { getPrisma } from "@/lib/db";
-import { startFlowForInboundCall } from "./flow-runtime";
+import { resolvePhoneNumberProvider } from "@/lib/numbers/providers/normalize";
+import { getTwilioClientForWorkspace } from "./twilio-whisper-service";
 
 export async function startTestCall(input: {
   workspaceId: string;
   flowId: string;
   testNumber: string;
 }) {
-  if (!isTelnyxVoiceConfigured()) {
-    throw new Error("Telnyx voice is not configured");
-  }
   const prisma = getPrisma();
   const flow = await prisma.smartRoutingFlow.findFirst({
     where: { id: input.flowId, workspaceId: input.workspaceId },
@@ -26,6 +25,26 @@ export async function startTestCall(input: {
       })
     : await prisma.phoneNumber.findFirst({ where: { workspaceId: input.workspaceId } });
   if (!pn) throw new Error("Assign a phone number to this flow");
+
+  const provider = resolvePhoneNumberProvider(pn);
+
+  if (provider === "twilio") {
+    const client = await getTwilioClientForWorkspace(input.workspaceId);
+    const base = process.env.NEXT_PUBLIC_APP_URL || process.env.LOCAL_APP_URL || "";
+    const voiceUrl = base
+      ? `${base.replace(/\/$/, "")}/api/webhooks/twilio/voice`
+      : undefined;
+    await client.calls.create({
+      to: normalizeE164(input.testNumber),
+      from: normalizeE164(pn.e164),
+      ...(voiceUrl ? { url: voiceUrl, method: "POST" } : {}),
+    });
+    return { ok: true, message: "Twilio test call initiated", provider: "twilio" };
+  }
+
+  if (!isTelnyxVoiceConfigured()) {
+    throw new Error("Telnyx voice is not configured");
+  }
 
   const connectionId = process.env.TELNYX_CONNECTION_ID || process.env.TELNYX_CALL_CONTROL_APP_ID;
   if (!connectionId) throw new Error("TELNYX_CONNECTION_ID not configured");
@@ -46,7 +65,7 @@ export async function startTestCall(input: {
     },
   });
 
-  return { ok: true, message: "Test call initiated" };
+  return { ok: true, message: "Telnyx test call initiated", provider: "telnyx" };
 }
 
 export async function simulateFlowPath(

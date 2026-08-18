@@ -94,6 +94,9 @@ export type SessionState = {
   ringIndex?: number;
   whisperPending?: boolean;
   whisperAgentControlId?: string;
+  whisperAgentCallSid?: string;
+  whisperConference?: string;
+  whisperAgentPhone?: string;
   whisperText?: string;
   acceptDigit?: string;
   lastDigit?: string;

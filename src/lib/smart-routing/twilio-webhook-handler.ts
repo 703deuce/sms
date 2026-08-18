@@ -4,10 +4,18 @@ import { getPrisma } from "@/lib/db";
 import { resolveActiveFlowForNumber } from "./flow-service";
 import {
   handleTwilioGatherCallback,
-  handleTwilioRecordingCallback,
   handleTwilioTransferCallback,
+  handleTwilioRecordingCallback,
   startTwilioFlowForInbound,
 } from "./twilio-flow-runtime";
+import { loadCallSession } from "./session-store";
+import {
+  buildWhisperAcceptTwiml,
+  buildWhisperAgentTwiml,
+  cancelTwilioWhisperAgent,
+} from "./twilio-whisper-service";
+import { finalizeSession } from "./flow-runtime";
+import type { SessionState } from "./types";
 
 export async function tryStartTwilioSmartRoutingInbound(input: {
   workspaceId: string;
@@ -48,7 +56,47 @@ export async function processTwilioSmartRoutingCallback(input: {
   digits?: string;
   dialCallStatus?: string;
   recordingUrl?: string;
+  callSid?: string;
 }) {
+  const session = await loadCallSession(input.sessionId);
+  if (!session) {
+    return `<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>`;
+  }
+
+  const state = (session.stateJson as SessionState) ?? {};
+
+  if (input.event === "whisper_agent") {
+    if (input.callSid) {
+      const prisma = getPrisma();
+      await prisma.smartRoutingCallSession.update({
+        where: { id: input.sessionId },
+        data: {
+          stateJson: {
+            ...state,
+            whisperAgentCallSid: input.callSid,
+          } as object,
+        },
+      });
+    }
+    return buildWhisperAgentTwiml({
+      sessionId: input.sessionId,
+      whisperText:
+        state.whisperText ?? "Incoming business call. Press 1 to accept.",
+      acceptDigit: state.acceptDigit ?? "1",
+    });
+  }
+
+  if (input.event === "whisper_accept") {
+    const digit = (input.digits ?? "").trim();
+    const acceptDigit = state.acceptDigit ?? "1";
+    if (digit === acceptDigit) {
+      await finalizeSession(input.sessionId, "connected");
+      return buildWhisperAcceptTwiml(input.sessionId, digit, acceptDigit);
+    }
+    await cancelTwilioWhisperAgent(input.sessionId, session.workspaceId);
+    return handleTwilioTransferCallback(input.sessionId, "no-answer");
+  }
+
   switch (input.event) {
     case "gather":
       return handleTwilioGatherCallback(input.sessionId, input.digits ?? "");
