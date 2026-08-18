@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxPhoneConfigured } from "./human-call-service";
+import { resolveVoicemailGreetingPlayback } from "./voicemail-greeting-playback";
 
 export async function ensureNumberVoicemailBox(
   workspaceId: string,
@@ -107,15 +108,31 @@ export async function leaveVoicemailOnCall(input: {
   const call = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
 
   if (isTelnyxPhoneConfigured()) {
-    if (box.greetingUrl) {
-      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/playback_start`, {
-        method: "POST",
-        body: { audio_url: box.greetingUrl },
-      }).catch(() => undefined);
-    } else if (box.greetingText) {
+    const playback = await resolveVoicemailGreetingPlayback(input.workspaceId, box);
+    if (playback.playUrl) {
+      try {
+        await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/playback_start`, {
+          method: "POST",
+          body: { audio_url: playback.playUrl },
+        });
+      } catch (err) {
+        console.error("[voicemail] Telnyx playback_start failed", {
+          humanCallId: input.humanCallId,
+          phoneNumberId: input.phoneNumberId,
+          playUrl: playback.playUrl,
+          err,
+        });
+        if (playback.sayText) {
+          await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
+            method: "POST",
+            body: { payload: playback.sayText, voice: "female", language: "en-US" },
+          }).catch(() => undefined);
+        }
+      }
+    } else if (playback.sayText) {
       await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
         method: "POST",
-        body: { payload: box.greetingText, voice: "female", language: "en-US" },
+        body: { payload: playback.sayText, voice: "female", language: "en-US" },
       }).catch(() => undefined);
     }
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/record_start`, {

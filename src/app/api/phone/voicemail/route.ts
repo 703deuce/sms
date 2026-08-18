@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { ensureUserVoicemailBox, ensureNumberVoicemailBox, listVoicemailMessages } from "@/lib/phone/voicemail-service";
+import { ensureNumberVoicemailBox, ensureUserVoicemailBox, listVoicemailMessages } from "@/lib/phone/voicemail-service";
+import { normalizeVoicemailGreetingUrl } from "@/lib/phone/voicemail-greeting-playback";
 import { getPrisma } from "@/lib/db";
 
 export async function GET(request: Request) {
@@ -24,6 +25,19 @@ export async function GET(request: Request) {
         auth.session.userId,
       );
       boxes = [ensured];
+    }
+
+    for (const box of boxes) {
+      if (box.greetingUrl && !/^https?:\/\//i.test(box.greetingUrl)) {
+        const normalized = normalizeVoicemailGreetingUrl(box.greetingUrl);
+        if (normalized && normalized !== box.greetingUrl) {
+          await getPrisma().voicemailBox.update({
+            where: { id: box.id, workspaceId: auth.workspaceId },
+            data: { greetingUrl: normalized },
+          });
+          box.greetingUrl = normalized;
+        }
+      }
     }
     const resolvedBoxId = boxId ?? boxes[0]?.id;
     const messages = await listVoicemailMessages(auth.workspaceId, resolvedBoxId);
@@ -97,9 +111,13 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "update_box" && body.boxId) {
+      const normalizedGreetingUrl =
+        body.greetingUrl !== undefined
+          ? normalizeVoicemailGreetingUrl(body.greetingUrl)
+          : undefined;
       const patch: Record<string, unknown> = {
         greetingText: body.greetingText,
-        greetingUrl: body.greetingUrl,
+        ...(body.greetingUrl !== undefined ? { greetingUrl: normalizedGreetingUrl } : {}),
         emailNotify: body.emailNotify,
         secondaryEmailNotify: (body as { secondaryEmailNotify?: string }).secondaryEmailNotify,
         name: body.name,

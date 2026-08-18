@@ -17,6 +17,7 @@ import {
   twilioVoicemailTranscriptionCallbackUrl,
 } from "@/lib/phone/twilio-voicemail-pipeline";
 import { ensureNumberVoicemailBox } from "@/lib/phone/voicemail-service";
+import { resolveVoicemailGreetingPlayback } from "@/lib/phone/voicemail-greeting-playback";
 
 function xmlEscape(value: string): string {
   return value
@@ -242,9 +243,10 @@ async function buildVoicemailTwiml(
   if (!box) {
     box = await ensureNumberVoicemailBox(workspaceId, phoneNumberId);
   }
+  const playback = await resolveVoicemailGreetingPlayback(workspaceId, box);
   const greetingText =
-    box?.greetingText?.trim() || "Please leave a message after the tone.";
-  const greetingUrl = box?.greetingUrl?.trim();
+    playback.sayText || box?.greetingText?.trim() || "Please leave a message after the tone.";
+  const greetingUrl = playback.playUrl;
   const transcribeCallback = twilioVoicemailTranscriptionCallbackUrl(humanCallId);
 
   let preamble = "";
