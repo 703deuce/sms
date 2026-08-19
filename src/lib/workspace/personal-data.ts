@@ -528,6 +528,14 @@ export type VaultRecentAction = {
   tone: "green" | "red" | "blue" | "yellow";
 };
 
+type VaultPortOutRow = {
+  id: string;
+  phoneNumberId: string;
+  phone: string;
+  status: string;
+  initiatedAt: Date | null;
+};
+
 export type VaultHubSummary = {
   totalNumbers: number;
   totalDeltaWeek: number;
@@ -627,7 +635,7 @@ export async function loadVaultHubSummary(workspaceId: string): Promise<VaultHub
         ? 100
         : 0;
 
-  const portOutRows = await prisma.portOutRequest.findMany({
+  const portOutRows: VaultPortOutRow[] = await prisma.portOutRequest.findMany({
     where: { workspaceId },
     orderBy: { createdAt: "desc" },
     take: 50,
