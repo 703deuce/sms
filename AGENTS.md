@@ -4,6 +4,15 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## Cursor Cloud dev environment
+
+The app's runtime data layer is Supabase (PostgREST), so local dev runs the **Supabase CLI stack in nested Docker** — no external secrets needed. Config lives under `.cursor/` (`install.sh`, `start.sh`, `boot.sh`, `lib.sh`) and `supabase/config.toml`.
+
+- Bring it up manually: `bash .cursor/start.sh` (starts Docker + Supabase, writes `.env`, runs `db:push`, seeds), then `npm run dev`. `boot.sh` does both and is the environment `start` command.
+- Seeded login: `alex@harborhome.co` / `demo1234`.
+- Nested-Docker gotcha: inter-container traffic (PostgREST→Postgres) needs `net.bridge.bridge-nf-call-iptables=0` before the stack starts; `start.sh` handles it. Docker uses the `fuse-overlayfs` storage driver.
+- `supabase/config.toml` runs a slimmed stack (db + API/PostgREST only) with `auto_expose_new_tables=true` (Prisma-created tables must be reachable via PostgREST) and Supabase auto-migrations disabled (the Prisma schema is the source of truth).
+
 ## Caller Amy production verification
 
 Do **not** mark Caller Amy overall PASS until all five gates pass on a real phone call:
