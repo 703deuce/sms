@@ -8,10 +8,12 @@ SUPABASE_PROJECT="workspace"
 
 log() { echo "[cloud-env] $*"; }
 
+DOCKERD_LOG="/var/log/cloud-env-dockerd.log"
+
 # Start the Docker daemon inside the Cloud Agent VM (nested Docker).
 # Idempotent: no-op if the daemon already answers.
 start_docker() {
-  if docker info >/dev/null 2>&1; then
+  if sudo docker info >/dev/null 2>&1; then
     log "docker already running"
     sudo chmod 666 /var/run/docker.sock 2>/dev/null || true
     return 0
@@ -23,10 +25,13 @@ start_docker() {
   sudo sysctl -w net.bridge.bridge-nf-call-iptables=0 >/dev/null 2>&1 || true
   sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=0 >/dev/null 2>&1 || true
 
-  log "starting dockerd (fuse-overlayfs)"
-  sudo bash -c 'nohup dockerd --storage-driver=fuse-overlayfs >/tmp/dockerd.log 2>&1 &'
+  log "starting dockerd (fuse-overlayfs), logging to ${DOCKERD_LOG}"
+  # Run as root and detach so dockerd outlives this script. The log lives under
+  # /var/log (root-writable) to avoid /tmp ownership surprises across snapshots.
+  sudo rm -f "$DOCKERD_LOG" 2>/dev/null || true
+  sudo sh -c "setsid dockerd --storage-driver=fuse-overlayfs >'$DOCKERD_LOG' 2>&1 </dev/null &"
 
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 40); do
     if sudo docker info >/dev/null 2>&1; then
       sudo chmod 666 /var/run/docker.sock 2>/dev/null || true
       log "dockerd is up"
@@ -35,7 +40,7 @@ start_docker() {
     sleep 1
   done
   log "ERROR: dockerd did not become ready"
-  tail -20 /tmp/dockerd.log 2>/dev/null || true
+  sudo tail -20 "$DOCKERD_LOG" 2>/dev/null || true
   return 1
 }
 
