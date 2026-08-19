@@ -23,7 +23,7 @@ export async function getPublicLandingSearchContext(): Promise<PublicLandingSear
 
   const prisma = getPrisma();
   const membership = await prisma.membership.findFirst({
-    orderBy: { createdAt: "asc" },
+    orderBy: { id: "asc" },
     select: { workspaceId: true, userId: true },
   });
   if (!membership) {

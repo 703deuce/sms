@@ -2,28 +2,26 @@
 
 import Link from "next/link";
 import { BRAND_NAME } from "@/lib/brand";
-import {
-  focusLandingSearch,
-  NumbersLandingSearch,
-} from "@/components/landing/numbers/numbers-landing-search";
+import { PersonalFindNumberClient } from "@/components/numbers/personal-find-number-ui";
 import type { PremiumNumberProductResult } from "@/lib/premium-numbers/product-api";
 import {
   ArrowRight,
-  Check,
-  Shield,
-  ShoppingBag,
-  PhoneForwarded,
+  Briefcase,
   Globe,
+  PhoneForwarded,
+  Search,
+  Shield,
   Sparkles,
+  Users,
 } from "lucide-react";
 import "./numbers-landing.css";
 
 const NAV = [
   { href: "#search", label: "Find a Number" },
-  { href: "#how-it-works", label: "How It Works" },
-  { href: "#personal-business", label: "Business Numbers" },
-  { href: "#porting", label: "Porting" },
+  { href: "/personal/porting", label: "Port a Number" },
+  { href: "/contact", label: "Enterprise Solutions" },
   { href: "#pricing", label: "Pricing" },
+  { href: "/contact", label: "Support" },
 ];
 
 const FAQS = [
@@ -63,22 +61,14 @@ const FAQS = [
 
 function LogoMark() {
   return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6366f1] to-[#1e3a5f] text-white">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M8 12a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z"
-          fill="currentColor"
-          opacity="0.95"
-        />
-        <path
-          d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
+    <span className="nl-logo-mark" aria-hidden>
+      T
     </span>
   );
+}
+
+export function focusLandingSearch() {
+  document.getElementById("find-number-search")?.scrollIntoView({ behavior: "smooth" });
 }
 
 export function NumbersLandingPage({
@@ -93,394 +83,274 @@ export function NumbersLandingPage({
   return (
     <div className="numbers-landing min-h-screen">
       <header className="nl-nav">
-        <div className="nl-container flex h-16 items-center justify-between gap-4 px-5">
-          <Link href="/" className="flex items-center gap-2 font-bold text-[#111827]">
+        <div className="nl-container flex h-[72px] items-center justify-between gap-4 px-6">
+          <Link href="/" className="nl-logo flex items-center gap-2.5 font-bold text-[#0f172a]">
             <LogoMark />
             {BRAND_NAME}
           </Link>
-          <nav className="hidden items-center gap-6 text-[13px] font-medium text-[#374151] md:flex">
+          <nav className="nl-nav-links hidden items-center gap-7 text-[14px] font-medium text-[#475569] lg:flex">
             {NAV.map((item) => (
-              <a key={item.href} href={item.href} className="hover:text-[#6366f1]">
+              <Link key={item.label} href={item.href} className="hover:text-[#1e3a5f]">
                 {item.label}
-              </a>
+              </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden text-[13px] font-semibold text-[#374151] sm:block">
-              Sign In
+          <div className="flex items-center gap-4">
+            <Link href="/login" className="hidden text-[14px] font-semibold text-[#334155] sm:block">
+              Sign in
             </Link>
-            <button
-              type="button"
-              onClick={focusLandingSearch}
-              className="rounded-lg bg-[#1e3a5f] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#152a45]"
-            >
-              Find My Number
+            <button type="button" onClick={focusLandingSearch} className="nl-btn-primary">
+              Get started
             </button>
           </div>
         </div>
       </header>
 
-      <section id="search" className="nl-section pb-8 pt-10 sm:pt-14">
-        <div className="nl-container px-5">
-          <div className="mx-auto max-w-3xl text-center">
-            <h1 className="nl-hero-title text-[2rem] font-bold leading-tight tracking-tight text-[#111827] sm:text-[2.75rem]">
+      <section id="search" className="nl-hero">
+        <div className="nl-container px-6">
+          <div className="max-w-3xl">
+            <h1 className="nl-hero-title text-[2.5rem] font-bold leading-[1.08] tracking-tight text-[#0f172a] sm:text-[3rem]">
               Choose a phone number you&apos;ll actually remember.
             </h1>
-            <p className="mt-4 text-[15px] leading-relaxed text-[#6b7280] sm:text-[17px]">
-              Search millions of available personal and business phone numbers. Find one you like,
-              buy it, and take it to your current carrier.
+            <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-[#64748b]">
+              Search millions of available phone numbers from every area code and prefix. Pick a
+              number that stands out and fits your brand or personality.
             </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-              {["50% Launch Pricing", "30-Day Portability Guarantee", "Easy Port-Out"].map(
-                (label) => (
-                  <span key={label} className="nl-trust-pill">
-                    <Check className="h-4 w-4" />
-                    {label}
-                  </span>
-                ),
-              )}
-            </div>
           </div>
 
           <div className="mt-8">
-            <NumbersLandingSearch
-              initialTopPicks={initialTopPicks}
-              defaultAreaCodes={defaultAreaCodes}
-              shelfSearchLogId={shelfSearchLogId}
+            <PersonalFindNumberClient
+              workspaceId="public-landing"
+              hidePageHeader
+              publicLanding={{
+                initialTopPicks,
+                defaultAreaCodes,
+                shelfSearchLogId,
+              }}
             />
           </div>
         </div>
       </section>
 
-      <section className="nl-section-alt nl-section py-10">
-        <div className="nl-container px-5">
-          <p className="text-center text-[13px] font-bold uppercase tracking-wide text-[#6366f1]">
-            Your number. Your carrier. Your choice.
-          </p>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {[
-              {
-                icon: ShoppingBag,
-                title: "Buy It",
-                body: "Choose an available number and make it yours.",
-              },
-              {
-                icon: PhoneForwarded,
-                title: "Take It With You",
-                body: "Transfer it to Verizon, AT&T, T-Mobile or another compatible carrier.",
-              },
-              {
-                icon: Shield,
-                title: "Port With Confidence",
-                body: "If you initiate a legitimate port within 30 days and the receiving carrier ultimately cannot accept the number because of a genuine portability or coverage limitation, the purchase is covered by the Transovo Portability Guarantee.",
-              },
-            ].map(({ icon: Icon, title, body }) => (
-              <div
-                key={title}
-                className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm"
-              >
-                <Icon className="h-6 w-6 text-[#6366f1]" />
-                <h3 className="mt-3 text-[16px] font-bold">{title}</h3>
-                <p className="mt-2 text-[13px] leading-relaxed text-[#6b7280]">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="how-it-works" className="nl-section">
-        <div className="nl-container px-5 text-center">
-          <h2 className="text-[28px] font-bold">How it works</h2>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
-            {[
-              { step: "Find it", body: `Search by area code, digits, patterns, words, or ask ${BRAND_NAME}.` },
-              { step: "Buy it", body: "Reserve the number and complete checkout." },
-              { step: "Take it anywhere", body: "Port it to your current carrier or keep it with Transovo." },
-            ].map(({ step, body }) => (
-              <div key={step}>
-                <div className="nl-step-icon mx-auto">
-                  <Globe className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 text-[18px] font-bold">{step}</h3>
-                <p className="mt-2 text-[14px] text-[#6b7280]">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="nl-section-alt nl-section">
-        <div className="nl-container grid gap-8 px-5 lg:grid-cols-2 lg:items-center">
-          <div>
-            <h2 className="text-[26px] font-bold">Can&apos;t find the right number? Ask {BRAND_NAME}.</h2>
-            <div className="mt-6 rounded-xl border border-[#e5e7eb] bg-white p-4 text-[13px]">
-              <p className="font-semibold text-[#6366f1]">You:</p>
-              <p className="mt-1 text-[#374151]">
-                I want an easy 571 number with lots of 7s under $20.
-              </p>
-              <p className="mt-4 font-semibold text-[#6366f1]">{BRAND_NAME}:</p>
-              <p className="mt-1 text-[#374151]">
-                I found several available matches. Here are the strongest options.
-              </p>
-            </div>
-            <p className="mt-4 text-[14px] text-[#6b7280]">
-              Tell {BRAND_NAME} what you want in plain English. It searches real available inventory
-              and helps narrow thousands of possibilities into numbers worth considering.
-            </p>
-            <button
-              type="button"
-              onClick={focusLandingSearch}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#6366f1] px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-[#5558e3]"
-            >
-              <Sparkles className="h-4 w-4" />
-              Ask {BRAND_NAME}
-            </button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {initialTopPicks.slice(0, 3).map((item) => (
-              <div
-                key={item.phoneNumber}
-                className="rounded-xl border border-[#e5e7eb] bg-white p-4 text-center shadow-sm"
-              >
-                <p className="text-[16px] font-bold">{item.displayNumber}</p>
-                <p className="mt-1 text-[12px] text-[#6b7280]">{item.memorabilityLabel}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="personal-business" className="nl-section">
-        <div className="nl-container grid gap-6 px-5 md:grid-cols-2">
+      <section className="nl-steps-bar">
+        <div className="nl-container grid gap-8 px-6 md:grid-cols-3">
           {[
             {
-              title: "Pick a number you actually like.",
-              headline: "Personal Numbers",
-              examples: ["571-404-2020", "703-515-5150"],
-              body: "Find clean endings, repeating numbers, favorite digits, specific area codes and memorable patterns.",
-              cta: "Find a Personal Number",
+              icon: Search,
+              title: "Search & find your perfect number",
+              body: "Enter area code, digits, patterns, or ask AI in plain English.",
             },
             {
-              title: "Give customers a number they remember.",
-              headline: "Business Vanity",
-              examples: ["540-999-WIRE", "703-XX-ROOF"],
-              body: "Find numbers built around your company, industry or advertising message.",
-              cta: "Find a Business Number",
+              icon: Shield,
+              title: "Reserve with a low one-time fee",
+              body: "Choose an available number and secure it instantly at checkout.",
             },
-          ].map((card) => (
-            <div
-              key={card.headline}
-              className="rounded-2xl border border-[#e5e7eb] bg-gradient-to-br from-[#f9fafb] to-white p-8 shadow-sm"
-            >
-              <p className="text-[12px] font-bold uppercase tracking-wide text-[#6366f1]">
-                {card.headline}
-              </p>
-              <h3 className="mt-2 text-[22px] font-bold">{card.title}</h3>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {card.examples.map((ex) => (
-                  <span
-                    key={ex}
-                    className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-semibold shadow-sm ring-1 ring-[#e5e7eb]"
-                  >
-                    {ex}
-                  </span>
-                ))}
+            {
+              icon: PhoneForwarded,
+              title: "Quick activation & porting support",
+              body: "Transfer to your carrier or keep it protected in your Number Vault.",
+            },
+          ].map(({ icon: Icon, title, body }) => (
+            <div key={title} className="flex flex-col items-center text-center">
+              <div className="nl-step-circle">
+                <Icon className="h-6 w-6" />
               </div>
-              <p className="mt-4 text-[14px] text-[#6b7280]">{card.body}</p>
-              <button
-                type="button"
-                onClick={focusLandingSearch}
-                className="mt-6 inline-flex items-center gap-2 text-[14px] font-semibold text-[#6366f1] hover:underline"
-              >
-                {card.cta}
-                <ArrowRight className="h-4 w-4" />
-              </button>
+              <h3 className="mt-4 text-[15px] font-bold text-[#0f172a]">{title}</h3>
+              <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-[#64748b]">{body}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section id="pricing" className="nl-section-alt nl-section">
-        <div className="nl-container px-5 text-center">
-          <h2 className="text-[28px] font-bold">Better numbers don&apos;t have to cost a fortune.</h2>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { tier: "Choice", price: "Starting at $4.99" },
-              { tier: "Nice & Memorable", price: "Usually $9.99–$19.99" },
-              { tier: "Premium", price: "Rare standout numbers from $29.99+" },
-              { tier: "Business Vanity", price: "Priced by word, pattern & availability" },
-            ].map(({ tier, price }) => (
-              <div key={tier} className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
-                <p className="text-[14px] font-bold text-[#6366f1]">{tier}</p>
-                <p className="mt-2 text-[15px] font-semibold text-[#111827]">{price}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="nl-section">
-        <div className="nl-container max-w-3xl px-5 text-center">
-          <h2 className="text-[26px] font-bold">No rush to transfer it today.</h2>
-          <p className="mt-4 text-[15px] leading-relaxed text-[#6b7280]">
-            Your purchased number can remain protected with Transovo for up to 30 days while you
-            prepare your transfer. Transfer it anytime during that period, or keep it in your
-            Transovo Number Vault afterward.
-          </p>
-          <p className="mt-3 text-[13px] text-[#6b7280]">
-            30 days included. Then $2.99/month if the number remains with Transovo. Cancel by
-            completing your port-out.
-          </p>
-        </div>
-      </section>
-
-      <section id="porting" className="nl-section-alt nl-section">
-        <div className="nl-container flex flex-col items-center px-5 text-center">
-          <Shield className="h-12 w-12 text-[#6366f1]" />
-          <h2 className="mt-4 text-[28px] font-bold">30-Day Portability Guarantee</h2>
-          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[#6b7280]">
-            Start your transfer within 30 days. If your receiving carrier ultimately confirms that it
-            cannot accept the number because of a genuine portability or coverage limitation, you
-            can return the number for a refund of the purchase price.
-          </p>
-          <p className="mt-2 text-[14px] text-[#6b7280]">
-            No carrier lock-in. Easy port-out instructions.
-          </p>
-          <Link
-            href="/personal/porting"
-            className="mt-6 text-[14px] font-semibold text-[#6366f1] hover:underline"
-          >
-            Learn About Porting
-          </Link>
-        </div>
-      </section>
-
-      <section className="nl-section">
-        <div className="nl-container px-5">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              "Real-time inventory",
-              "Secure Stripe checkout",
-              "Multiple carrier inventories searched",
-            ].map((point) => (
-              <div
-                key={point}
-                className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-6 text-center text-[14px] font-semibold"
+      <section id="how-it-works" className="nl-section">
+        <div className="nl-container grid gap-10 px-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="nl-category-card">
+              <p className="text-[12px] font-bold uppercase tracking-wide text-[#6366f1]">
+                Personal Numbers
+              </p>
+              <h3 className="mt-2 text-[22px] font-bold leading-snug text-[#0f172a]">
+                Pick a number you actually like.
+              </h3>
+              <p className="mt-4 text-[14px] leading-relaxed text-[#64748b]">
+                Find clean endings, repeating numbers, favorite digits, specific area codes and
+                memorable patterns.
+              </p>
+              <button
+                type="button"
+                onClick={focusLandingSearch}
+                className="nl-btn-primary mt-6 w-full sm:w-auto"
               >
-                {point}
-              </div>
-            ))}
+                Find a Personal Number
+              </button>
+            </div>
+            <div className="nl-category-card">
+              <p className="text-[12px] font-bold uppercase tracking-wide text-[#6366f1]">
+                Business Vanity
+              </p>
+              <h3 className="mt-2 text-[22px] font-bold leading-snug text-[#0f172a]">
+                Give customers a number they remember.
+              </h3>
+              <p className="mt-4 text-[14px] leading-relaxed text-[#64748b]">
+                Find numbers built around your company, industry or advertising message.
+              </p>
+              <button
+                type="button"
+                onClick={focusLandingSearch}
+                className="mt-6 inline-flex items-center gap-2 text-[14px] font-semibold text-[#6366f1] hover:underline"
+              >
+                Browse by Word
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="nl-social-proof">
+              <Users className="h-5 w-5 text-[#6366f1]" />
+              <p className="text-[15px] font-semibold text-[#0f172a]">
+                Over 500,000+ businesses and individuals trust {BRAND_NAME}.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { title: "Real Estate Agents", icon: Briefcase },
+                { title: "Sales Professionals", icon: Globe },
+                { title: "VIP / Unique", icon: Sparkles },
+              ].map(({ title, icon: Icon }) => (
+                <div key={title} className="nl-industry-chip">
+                  <Icon className="h-4 w-4 text-[#6366f1]" />
+                  <span>{title}</span>
+                </div>
+              ))}
+            </div>
+            <div id="pricing" className="nl-pricing-mini">
+              <p className="text-[12px] font-bold uppercase tracking-wide text-[#94a3b8]">
+                Pricing tiers
+              </p>
+              <ul className="mt-3 space-y-2 text-[14px] text-[#334155]">
+                <li>
+                  <strong>$14.99/mo</strong> Starter
+                </li>
+                <li>
+                  <strong>$29.99/mo</strong> Business
+                </li>
+                <li>
+                  <strong>$79.99/mo</strong> Pro
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="nl-section-alt nl-section">
-        <div className="nl-container max-w-3xl px-5">
-          <h2 className="text-center text-[28px] font-bold">FAQ</h2>
-          <div className="mt-8 space-y-4">
+        <div className="nl-container max-w-3xl px-6 text-center">
+          <h2 className="text-[28px] font-bold text-[#0f172a]">No rush to transfer it today.</h2>
+          <p className="mt-4 text-[16px] leading-relaxed text-[#64748b]">
+            Your purchased number can remain protected with Transovo for up to 30 days while you
+            prepare your transfer. Transfer it anytime during that period, or keep it in your
+            Number Vault afterward.
+          </p>
+        </div>
+      </section>
+
+      <section id="porting" className="nl-section">
+        <div className="nl-container flex flex-col items-center px-6 text-center">
+          <div className="nl-guarantee-icon">
+            <Shield className="h-8 w-8" />
+          </div>
+          <h2 className="mt-5 text-[32px] font-bold text-[#0f172a]">30-Day Portability Guarantee</h2>
+          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#64748b]">
+            Start your transfer within 30 days. If your receiving carrier ultimately confirms that it
+            cannot accept the number because of a genuine portability or coverage limitation, you
+            can return the number for a refund of the purchase price.
+          </p>
+          <Link href="/personal/porting" className="mt-6 text-[15px] font-semibold text-[#6366f1] hover:underline">
+            Learn About Porting
+          </Link>
+        </div>
+      </section>
+
+      <section className="nl-section-alt nl-section">
+        <div className="nl-container max-w-3xl px-6">
+          <h2 className="text-center text-[32px] font-bold text-[#0f172a]">FAQ</h2>
+          <div className="mt-8 space-y-3">
             {FAQS.map((faq) => (
-              <details
-                key={faq.q}
-                className="rounded-xl border border-[#e5e7eb] bg-white p-4 shadow-sm"
-              >
-                <summary className="cursor-pointer text-[15px] font-semibold">{faq.q}</summary>
-                <p className="mt-3 text-[14px] leading-relaxed text-[#6b7280]">{faq.a}</p>
+              <details key={faq.q} className="nl-faq-item">
+                <summary>{faq.q}</summary>
+                <p>{faq.a}</p>
               </details>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="nl-section bg-[#1e3a5f] text-white">
-        <div className="nl-container px-5 text-center">
-          <h2 className="text-[28px] font-bold">Your next phone number is waiting.</h2>
-          <p className="mt-3 text-[15px] text-white/80">
-            Don&apos;t settle for whatever number your carrier gives you.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={focusLandingSearch}
-              className="rounded-lg bg-white px-6 py-3 text-[14px] font-semibold text-[#1e3a5f] hover:bg-[#f3f4f6]"
-            >
-              Find My Number
+      <section className="nl-final-cta">
+        <div className="nl-container px-6 text-center">
+          <h2 className="text-[32px] font-bold text-white">
+            Ready to get started? Your new phone number is waiting.
+          </h2>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <button type="button" onClick={focusLandingSearch} className="nl-btn-white">
+              Get Started Now
             </button>
-            <button
-              type="button"
-              onClick={focusLandingSearch}
-              className="rounded-lg border border-white/30 px-6 py-3 text-[14px] font-semibold text-white hover:bg-white/10"
-            >
-              Ask {BRAND_NAME}
-            </button>
+            <Link href="/contact" className="nl-btn-outline-white">
+              Contact Sales
+            </Link>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-[#e5e7eb] bg-white py-12">
-        <div className="nl-container grid gap-8 px-5 sm:grid-cols-2 lg:grid-cols-4">
+      <footer className="nl-footer">
+        <div className="nl-container grid gap-10 px-6 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <div className="flex items-center gap-2 font-bold">
+            <div className="flex items-center gap-2 font-bold text-[#0f172a]">
               <LogoMark />
               {BRAND_NAME}
             </div>
-            <p className="mt-3 text-[13px] text-[#6b7280]">
+            <p className="mt-4 text-[14px] leading-relaxed text-[#64748b]">
               Choose a better phone number. Buy it. Take it with you.
             </p>
+            <div className="nl-social-row mt-5">
+              {["Facebook", "X", "Instagram", "LinkedIn"].map((network) => (
+                <span key={network} className="nl-social-icon" aria-label={network}>
+                  {network[0]}
+                </span>
+              ))}
+            </div>
           </div>
           <div>
-            <p className="text-[12px] font-bold uppercase tracking-wide text-[#9ca3af]">Numbers</p>
-            <ul className="mt-3 space-y-2 text-[13px]">
-              <li>
-                <a href="#search" className="hover:text-[#6366f1]">
-                  Find a Number
-                </a>
-              </li>
-              <li>
-                <a href="#porting" className="hover:text-[#6366f1]">
-                  Porting
-                </a>
-              </li>
+            <p className="nl-footer-label">Products</p>
+            <ul className="nl-footer-links">
+              <li><a href="#search">Find a Number</a></li>
+              <li><Link href="/personal/porting">Port a Number</Link></li>
+              <li><Link href="/sms-marketing">SMS Marketing</Link></li>
             </ul>
           </div>
           <div>
-            <p className="text-[12px] font-bold uppercase tracking-wide text-[#9ca3af]">Product</p>
-            <ul className="mt-3 space-y-2 text-[13px]">
-              <li>
-                <Link href="/sms-marketing" className="hover:text-[#6366f1]">
-                  SMS Marketing
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="hover:text-[#6366f1]">
-                  Help Center
-                </Link>
-              </li>
+            <p className="nl-footer-label">Company</p>
+            <ul className="nl-footer-links">
+              <li><Link href="/contact">About</Link></li>
+              <li><Link href="/contact">Careers</Link></li>
+              <li><Link href="/contact">Contact</Link></li>
             </ul>
           </div>
           <div>
-            <p className="text-[12px] font-bold uppercase tracking-wide text-[#9ca3af]">Legal</p>
-            <ul className="mt-3 space-y-2 text-[13px]">
-              <li>
-                <Link href="/privacy" className="hover:text-[#6366f1]">
-                  Privacy
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="hover:text-[#6366f1]">
-                  Terms
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="hover:text-[#6366f1]">
-                  Contact
-                </Link>
-              </li>
+            <p className="nl-footer-label">Legal</p>
+            <ul className="nl-footer-links">
+              <li><Link href="/privacy">Privacy</Link></li>
+              <li><Link href="/terms">Terms</Link></li>
+              <li><Link href="/contact">Support</Link></li>
             </ul>
           </div>
         </div>
-        <p className="nl-container mt-10 px-5 text-center text-[12px] text-[#9ca3af]">
-          © {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.
-        </p>
+        <div className="nl-container mt-10 flex flex-col items-center justify-between gap-3 px-6 pb-8 sm:flex-row">
+          <p className="text-[13px] text-[#94a3b8]">
+            © {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.
+          </p>
+          <span className="nl-secure-badge">Secure Checkout</span>
+        </div>
       </footer>
     </div>
   );

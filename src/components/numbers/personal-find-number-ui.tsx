@@ -62,7 +62,12 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { NumberShelfCard } from "@/components/landing/numbers/number-shelf-card";
+import { BRAND_NAME } from "@/lib/brand";
+import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
+import { runPublicNumberSearch } from "@/lib/premium-numbers/public-find-number-client-search";
 import { FindNumberAiPanel } from "./find-number-ai-panel";
 import {
   PremiumCheckoutModal,
@@ -150,9 +155,32 @@ function formatMonthlyService(cents: number): string {
   }).format(cents / 100);
 }
 
-export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string }) {
+export type PublicLandingConfig = {
+  initialTopPicks: PremiumNumberProductResult[];
+  shelfSearchLogId?: string;
+  defaultAreaCodes: string[];
+};
+
+export function PersonalFindNumberClient({
+  workspaceId,
+  publicLanding,
+  hidePageHeader = false,
+}: {
+  workspaceId: string;
+  publicLanding?: PublicLandingConfig;
+  hidePageHeader?: boolean;
+}) {
+  const router = useRouter();
+  const isPublic = Boolean(publicLanding);
+  const searchEndpoint = isPublic ? "/api/public/numbers/search" : "/api/numbers/premium/search";
+  const suggestKeywordsEndpoint = isPublic
+    ? "/api/public/numbers/suggest-keywords"
+    : "/api/numbers/premium/suggest-keywords";
+
   const [numberType, setNumberType] = useState<NumberType>("local");
-  const [areaCodesInput, setAreaCodesInput] = useState("");
+  const [areaCodesInput, setAreaCodesInput] = useState(
+    publicLanding?.defaultAreaCodes.join(", ") ?? "",
+  );
   const [tollFreePrefix, setTollFreePrefix] = useState<TollFreePrefix>("all");
   const [searchIntent, setSearchIntent] = useState<SearchIntent>("business_keyword");
   const [industry, setIndustry] = useState("");
@@ -186,6 +214,23 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   const [checkout, setCheckout] = useState<PremiumCheckoutState | null>(null);
   const [success, setSuccess] = useState<PremiumCheckoutState | null>(null);
   const [reserveError, setReserveError] = useState("");
+  const [topPicks, setTopPicks] = useState<PremiumNumberProductResult[]>(
+    publicLanding?.initialTopPicks ?? [],
+  );
+  const [shelfSearchLogId, setShelfSearchLogId] = useState(publicLanding?.shelfSearchLogId);
+
+  useEffect(() => {
+    if (!isPublic || topPicks.length > 0) return;
+    fetch("/api/public/numbers/top-picks")
+      .then((r) => r.json())
+      .then((data: { items?: PremiumNumberProductResult[]; searchLogId?: string }) => {
+        if (data.items?.length) setTopPicks(data.items);
+        if (data.searchLogId) setShelfSearchLogId(data.searchLogId);
+      })
+      .catch(() => {
+        /* shelf unavailable */
+      });
+  }, [isPublic, topPicks.length]);
 
   const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
   const keywordTags = useMemo(() => splitKeywordInput(suggestedKeywords), [suggestedKeywords]);
@@ -207,7 +252,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     setSuggestingKeywords(true);
     setSuggestError("");
     try {
-      const res = await fetch("/api/numbers/premium/suggest-keywords", {
+      const res = await fetch(suggestKeywordsEndpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ industry: industryText }),
@@ -239,6 +284,93 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     setMorePage(0);
   }
 
+  async function onSeeAllPicks() {
+    if (parsedAreaCodes.length === 0) return;
+    setSearchIntent("surprise_me");
+    setLoading(true);
+    setSearchingMore(false);
+    setError("");
+    setSearchResponse(null);
+    setSuccess(null);
+    setSearchDurationSec(null);
+    setSearchCompletedAt(null);
+    setMorePage(0);
+    const started = performance.now();
+
+    try {
+      if (isPublic) {
+        trackNumbersLandingEvent("manual_search_started", { source: "see_all_picks" });
+      }
+      const res = await fetch(searchEndpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Accept: "application/x-ndjson",
+        },
+        body: JSON.stringify({
+          ...(isPublic ? {} : { workspaceId }),
+          mode: "personal" as const,
+          areaCodes: parsedAreaCodes,
+          preferences: ["surprise_me"] as PersonalPreference[],
+        }),
+      });
+
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "Search failed");
+      }
+
+      if (contentType.includes("application/x-ndjson") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let gotFirst = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const msg = JSON.parse(line) as {
+              type: string;
+              data?: PremiumSearchProductResponse;
+              error?: string;
+            };
+            if (msg.type === "error") throw new Error(msg.error || "Search failed");
+            if (!msg.data) continue;
+
+            setSearchResponse(msg.data);
+            setSearchingMore(msg.data.searchStatus === "searching");
+
+            if (!gotFirst) {
+              gotFirst = true;
+              setLoading(false);
+            }
+            if (msg.type === "complete" || msg.data.searchStatus === "complete") {
+              setSearchingMore(false);
+              setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
+              setSearchCompletedAt(new Date());
+            }
+          }
+        }
+
+        if (!gotFirst) {
+          setSearchDurationSec(Math.round(((performance.now() - started) / 1000) * 10) / 10);
+          setSearchCompletedAt(new Date());
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setLoading(false);
+      setSearchingMore(false);
+    }
+  }
+
   async function onSearch() {
     setLoading(true);
     setSearchingMore(false);
@@ -255,7 +387,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     const body =
       searchIntent === "business_keyword"
         ? {
-            workspaceId,
+            ...(isPublic ? {} : { workspaceId }),
             mode: "business" as const,
             numberType,
             areaCodes: parsedAreaCodes,
@@ -266,20 +398,23 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
           }
         : searchIntent === "surprise_me"
           ? {
-              workspaceId,
+              ...(isPublic ? {} : { workspaceId }),
               mode: "personal" as const,
               areaCodes: parsedAreaCodes,
               preferences: ["surprise_me"] as PersonalPreference[],
             }
           : {
-              workspaceId,
+              ...(isPublic ? {} : { workspaceId }),
               mode: "personal" as const,
               areaCodes: parsedAreaCodes,
               preferences: toApiPreferences(patternPrefs),
             };
 
     try {
-      const res = await fetch("/api/numbers/premium/search", {
+      if (isPublic) {
+        trackNumbersLandingEvent("manual_search_started");
+      }
+      const res = await fetch(searchEndpoint, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -350,26 +485,38 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   }
 
   async function onGetNumber(result: PremiumNumberProductResult) {
-    if (!searchResponse?.searchLogId) return;
+    const activeSearchLogId = searchResponse?.searchLogId ?? shelfSearchLogId;
+    if (!activeSearchLogId) return;
     const reserveSearchMode = searchIntent === "business_keyword" ? "business" : "personal";
     setReserving(result.phoneNumber);
     setReserveError("");
     if (aiEngaged) {
       trackFindNumberAiEvent("number_reserved_from_ai", { phone: result.phoneNumber });
     }
+    if (isPublic) {
+      trackNumbersLandingEvent("number_reserve_clicked", { phoneNumber: result.phoneNumber });
+    }
     try {
-      const res = await fetch("/api/numbers/premium/reserve", {
+      const reserveUrl = isPublic
+        ? "/api/public/numbers/reserve"
+        : "/api/numbers/premium/reserve";
+      const res = await fetch(reserveUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          workspaceId,
+          ...(isPublic ? {} : { workspaceId }),
           phoneNumber: result.phoneNumber,
-          searchLogId: searchResponse.searchLogId,
+          searchLogId: activeSearchLogId,
           searchMode: reserveSearchMode,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not reserve this number");
+      if (isPublic && data.signupUrl) {
+        trackNumbersLandingEvent("checkout_started", { phoneNumber: result.phoneNumber });
+        router.push(data.signupUrl);
+        return;
+      }
       if (!data.expiresAt) throw new Error("Reservation did not return an expiration time");
       setCheckout({
         reservationId: data.reservationId,
@@ -495,18 +642,21 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
       setSearchCompletedAt(null);
       setMorePage(0);
 
-      const body = buildPremiumSearchBody(workspaceId, state);
+      const body = buildPremiumSearchBody(isPublic ? "public-landing" : workspaceId, state);
 
       try {
         const snapshots: PremiumSearchProductResponse[] = [];
-        const { durationSec, completedAt } = await runPremiumNumberSearch(body, (data) => {
+        const onData = (data: PremiumSearchProductResponse) => {
           snapshots[0] = data;
           setSearchResponse(data);
           setSearchingMore(data.searchStatus === "searching");
           if (data.searchStatus !== "searching") {
             setLoading(false);
           }
-        });
+        };
+        const { durationSec, completedAt } = isPublic
+          ? await runPublicNumberSearch(body, onData)
+          : await runPremiumNumberSearch(body, onData);
 
         const snapshot = snapshots[0];
         if (snapshot && state.maxPriceCents) {
@@ -541,7 +691,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
         setSearchingMore(false);
       }
     },
-    [workspaceId],
+    [workspaceId, isPublic],
   );
 
   const ai = useFindNumberAi({
@@ -550,6 +700,8 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
     setSearchState,
     onSearchPerformed: runSearchFromState,
     topResults: allResults.slice(0, 12),
+    aiMessageEndpoint: isPublic ? "/api/public/numbers/ai/message" : "/api/numbers/ai/message",
+    sessionStorageId: isPublic ? "public-landing" : undefined,
   });
 
   const aiEngaged = ai.messages.length > 0;
@@ -637,9 +789,10 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
   }
 
   return (
-    <div className="mx-auto max-w-[1320px]">
+    <div className="mx-auto max-w-[1320px]" id={isPublic ? "find-number-search" : undefined}>
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-5">
+          {!hidePageHeader ? (
           <header>
             <h1 className="text-[22px] font-bold tracking-tight text-[#111827]">Find a Number</h1>
             <p className="mt-1 text-[14px] text-[#6b7280]">
@@ -648,6 +801,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                 : "Search memorable local and toll-free numbers that help your business stand out."}
             </p>
           </header>
+          ) : null}
 
           <div className={cn(pm.card, "p-5 md:p-6")}>
             <div className="mb-5 inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
@@ -662,7 +816,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                 )}
               >
                 <Search className="h-4 w-4" />
-                Manual Search
+                {isPublic ? "Search Numbers" : "Manual Search"}
               </button>
               <button
                 type="button"
@@ -675,7 +829,7 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
                 )}
               >
                 <Sparkles className="h-4 w-4" />
-                Ask AI Concierge
+                {isPublic ? `Ask ${BRAND_NAME}` : "Ask AI Concierge"}
               </button>
             </div>
 
@@ -1010,6 +1164,55 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             )}
           </div>
 
+          {isPublic && !searchResponse && !success ? (
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-[22px] font-bold text-[#111827]">Popular Picks Today</h2>
+                  <p className="mt-1 text-[14px] text-[#6b7280]">
+                    Hand-picked for you — explore by city.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onSeeAllPicks}
+                  disabled={loading || parsedAreaCodes.length === 0}
+                  className="text-[13px] font-semibold text-[#6366f1] hover:underline disabled:opacity-50"
+                >
+                  See all picks →
+                </button>
+              </div>
+              {loading && !topPicks.length ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-[180px] animate-pulse rounded-xl border border-[#e5e7eb] bg-[#f3f4f6]"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {topPicks.map((item) => (
+                    <NumberShelfCard
+                      key={item.phoneNumber}
+                      result={item}
+                      loading={reserving === item.phoneNumber}
+                      onGetNumber={() => onGetNumber(item)}
+                    />
+                  ))}
+                </div>
+              )}
+              {!loading && !topPicks.length ? (
+                <div className={cn(pm.card, "border-dashed p-6 text-center")}>
+                  <p className="text-[14px] text-[#6b7280]">
+                    Enter an area code above and search to browse live inventory.
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {searchResponse && searchDurationSec != null ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#bbf7d0] bg-[#ecfdf5] px-4 py-3 text-[13px]">
               <span className="flex items-center gap-2 font-medium text-[#047857]">
@@ -1049,7 +1252,9 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Trophy className="h-5 w-5 text-[#6366f1]" />
-                  <h2 className="text-[16px] font-bold text-[#111827]">Best Matches</h2>
+                  <h2 className="text-[16px] font-bold text-[#111827]">
+                    {isPublic ? "Your Results" : "Best Matches"}
+                  </h2>
                   <span className="text-[12px] text-[#6b7280]">{bestMatches.length} top results</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1190,9 +1395,11 @@ export function PersonalFindNumberClient({ workspaceId }: { workspaceId: string 
             bestScore={bestScore}
             hasResults={Boolean(searchResponse)}
           />
-          <SavedCompareCard favorites={favorites.size} compared={compare.size} />
+          {!isPublic ? (
+            <SavedCompareCard favorites={favorites.size} compared={compare.size} />
+          ) : null}
           <HowItWorksCard />
-          <WhyTransovoCard />
+          {!isPublic ? <WhyTransovoCard /> : null}
         </aside>
       </div>
 

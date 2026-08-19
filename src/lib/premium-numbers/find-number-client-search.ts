@@ -3,9 +3,10 @@ import type { PremiumSearchProductResponse } from "@/lib/premium-numbers/product
 export async function runPremiumNumberSearch(
   body: Record<string, unknown>,
   onData: (data: PremiumSearchProductResponse) => void,
+  options?: { searchEndpoint?: string },
 ): Promise<{ durationSec: number; completedAt: Date }> {
   const started = performance.now();
-  const res = await fetch("/api/numbers/premium/search", {
+  const res = await fetch(options?.searchEndpoint ?? "/api/numbers/premium/search", {
     method: "POST",
     headers: {
       "content-type": "application/json",

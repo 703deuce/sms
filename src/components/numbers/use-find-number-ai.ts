@@ -49,6 +49,8 @@ export function useFindNumberAi({
   onSearchPerformed,
   topResults,
   selectedNumberId,
+  aiMessageEndpoint = "/api/numbers/ai/message",
+  sessionStorageId,
 }: {
   workspaceId: string;
   searchState: NumberSearchState;
@@ -56,7 +58,10 @@ export function useFindNumberAi({
   onSearchPerformed: (state: NumberSearchState) => Promise<void>;
   topResults: PremiumNumberProductResult[];
   selectedNumberId?: string | null;
+  aiMessageEndpoint?: string;
+  sessionStorageId?: string;
 }) {
+  const storageScope = sessionStorageId ?? workspaceId;
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiNumberSearchMessage[]>([]);
   const [understandingChips, setUnderstandingChips] = useState<
@@ -81,7 +86,7 @@ export function useFindNumberAi({
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(storageKey(workspaceId));
+      const raw = sessionStorage.getItem(storageKey(storageScope));
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         sessionId?: string;
@@ -94,18 +99,18 @@ export function useFindNumberAi({
     } catch {
       /* ignore corrupt session */
     }
-  }, [workspaceId, setSearchState]);
+  }, [storageScope, setSearchState]);
 
   useEffect(() => {
     try {
       sessionStorage.setItem(
-        storageKey(workspaceId),
+        storageKey(storageScope),
         JSON.stringify({ sessionId, messages, searchState }),
       );
     } catch {
       /* quota */
     }
-  }, [workspaceId, sessionId, messages, searchState]);
+  }, [storageScope, sessionId, messages, searchState]);
 
   const sendAiMessage = useCallback(
     async (message: string, quickAction?: string) => {
@@ -128,11 +133,11 @@ export function useFindNumberAi({
       try {
         setLoadingStage("Generating number ideas…");
         const currentState = searchStateRef.current;
-        const res = await fetch("/api/numbers/ai/message", {
+        const res = await fetch(aiMessageEndpoint, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            workspaceId,
+            ...(aiMessageEndpoint.includes("/public/") ? {} : { workspaceId }),
             sessionId,
             message: trimmed,
             quickAction,
@@ -188,6 +193,7 @@ export function useFindNumberAi({
     },
     [
       workspaceId,
+      aiMessageEndpoint,
       sessionId,
       selectedNumberId,
       messages.length,
@@ -224,11 +230,11 @@ export function useFindNumberAi({
     setError("");
     setSearchState(resetNumberSearchState());
     try {
-      sessionStorage.removeItem(storageKey(workspaceId));
+      sessionStorage.removeItem(storageKey(storageScope));
     } catch {
       /* ignore */
     }
-  }, [workspaceId, setSearchState]);
+  }, [storageScope, setSearchState]);
 
   const openAiMode = useCallback(() => {
     trackFindNumberAiEvent("ai_search_opened");
