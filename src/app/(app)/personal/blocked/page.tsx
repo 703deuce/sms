@@ -1,15 +1,14 @@
-import { PersonalBlockedClient } from "@/components/personal/personal-blocked-client";
-import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { redirect } from "next/navigation";
 
+/** Blocking is managed per-number and from Call Activity — no standalone nav page. */
 export default async function PersonalBlockedPage({
   searchParams,
 }: {
   searchParams: Promise<{ numberId?: string }>;
 }) {
-  const { workspaceId } = await requireWorkspaceContext();
-  const numbers = await loadPersonalNumbers(workspaceId);
   const { numberId } = await searchParams;
-
-  return <PersonalBlockedClient numbers={numbers} initialNumberId={numberId} />;
+  if (numberId) {
+    redirect(`/personal/activity?numberId=${encodeURIComponent(numberId)}`);
+  }
+  redirect("/personal/activity");
 }

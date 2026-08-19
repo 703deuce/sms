@@ -8,6 +8,8 @@ import {
 } from "@/lib/workspace/personal-mockup-wireframe";
 import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 import { formatPhone } from "@/lib/utils";
+import { personalSettingsTabs } from "@/lib/settings-tabs";
+import { Tabs } from "@/components/ui/tabs";
 import {
   AlertTriangle,
   Calendar,
@@ -240,6 +242,7 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
   if (loading || !usage) {
     return (
       <PersonalMockPage>
+        <Tabs items={personalSettingsTabs} />
         <p className={pm.muted}>Loading usage…</p>
       </PersonalMockPage>
     );
@@ -267,6 +270,7 @@ export function PersonalUsageClient({ numbers }: { numbers: PersonalNumberRow[] 
 
   return (
     <PersonalMockPage right={sidebar}>
+      <Tabs items={personalSettingsTabs} />
       <PersonalMockHeader
         title="Usage"
         description="Track call minutes, voicemail usage, storage, and plan limits across your numbers."

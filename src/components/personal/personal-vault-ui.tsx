@@ -479,7 +479,8 @@ export function PersonalVaultUI({
               type="button"
               className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] shadow-sm hover:bg-[#f9fafb]"
               aria-label="Export"
-              onClick={() => router.push("/personal/numbers")}
+              title="Export numbers"
+              onClick={() => router.push("/personal/activity")}
             >
               <Download className="h-4 w-4" />
             </button>
@@ -489,12 +490,6 @@ export function PersonalVaultUI({
         <div className={pm.card}>
           <div className="flex items-center justify-between border-b border-[#f3f4f6] px-5 py-4">
             <h2 className="text-[15px] font-semibold text-[#111827]">Phone Numbers</h2>
-            <Link
-              href="/personal/numbers"
-              className="text-[12px] font-semibold text-[#2563eb] hover:underline"
-            >
-              View All Numbers &gt;
-            </Link>
           </div>
           <div className="p-5">
             {filtered.length === 0 ? (

@@ -13,9 +13,10 @@ export const settingsTabs = [
   { label: "Data", href: "/settings/data" },
 ];
 
-/** Personal numbers workspace — billing + account essentials only. */
+/** Personal numbers workspace — billing, usage breakdown, account essentials. */
 export const personalSettingsTabs = [
   { label: "Billing", href: "/settings/billing" },
+  { label: "Usage", href: "/personal/usage" },
   { label: "Notifications", href: "/settings/notifications" },
   { label: "Security", href: "/settings/security" },
 ];

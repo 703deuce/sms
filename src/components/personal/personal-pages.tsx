@@ -31,7 +31,7 @@ export function PersonalOverviewClient({
   return (
     <div className="space-y-8">
       <section className="surface rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-foreground">My Numbers</h2>
+        <h2 className="text-sm font-semibold text-foreground">Number Vault</h2>
         <div className="mt-4 divide-y divide-border">
           {numbers.slice(0, 5).map((n) => (
             <div key={n.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -54,7 +54,7 @@ export function PersonalOverviewClient({
           ))}
         </div>
         {numbers.length > 5 ? (
-          <Link href="/personal/numbers" className="mt-3 inline-flex text-sm font-medium text-primary">
+          <Link href="/personal/vault" className="mt-3 inline-flex text-sm font-medium text-primary">
             View all numbers <ArrowRight className="ml-1 h-4 w-4" />
           </Link>
         ) : null}

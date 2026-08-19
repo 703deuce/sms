@@ -645,8 +645,8 @@ export function PersonalAnalyticsClient({
         <PersonalMockSection
           title="Performance by Number"
           action={
-            <Link href="/personal/numbers" className="text-[12px] font-semibold text-[#6366f1]">
-              View all numbers &gt;
+            <Link href="/personal/vault" className="text-[12px] font-semibold text-[#6366f1]">
+              Open Number Vault &gt;
             </Link>
           }
         >

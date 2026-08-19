@@ -115,20 +115,38 @@ async function main() {
 
   const pages = [
     "/personal",
-    "/personal/numbers",
-    "/personal/numbers/premium",
     "/personal/vault",
+    "/personal/numbers/premium",
     "/personal/forwarding",
     "/personal/voicemail",
     "/personal/activity",
     "/personal/analytics",
-    "/personal/blocked",
     "/personal/usage",
     "/personal/porting",
     "/settings/billing",
     "/settings",
     "/contact",
   ];
+
+  const numbersRedirect = await fetch(`${BASE}/personal/numbers`, {
+    headers: { cookie: cookies },
+    redirect: "manual",
+  });
+  record(
+    "my-numbers-redirects-to-vault",
+    numbersRedirect.status === 307 || numbersRedirect.status === 308,
+    String(numbersRedirect.status),
+  );
+
+  const blockedRedirect = await fetch(`${BASE}/personal/blocked`, {
+    headers: { cookie: cookies },
+    redirect: "manual",
+  });
+  record(
+    "blocked-redirects-to-activity",
+    blockedRedirect.status === 307 || blockedRedirect.status === 308,
+    String(blockedRedirect.status),
+  );
 
   for (const path of pages) {
     const res = await fetch(`${BASE}${path}`, { headers: { cookie: cookies } });

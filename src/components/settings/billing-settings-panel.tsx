@@ -7,6 +7,7 @@ import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { settingsTabs, personalSettingsTabs } from "@/lib/settings-tabs";
 
@@ -197,6 +198,16 @@ export function BillingSettingsPanel() {
             }
           />
         </div>
+      ) : null}
+
+      {personalMode ? (
+        <p className="mb-6 text-sm text-muted-foreground">
+          <Link href="/personal/usage" className="font-semibold text-primary hover:underline">
+            View full usage breakdown
+          </Link>
+          {" "}
+          for minutes, voicemail, and per-number limits.
+        </p>
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
