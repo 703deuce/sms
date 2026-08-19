@@ -7,6 +7,7 @@ import type { PersonalNumberRow, PersonalNumberStats } from "@/lib/workspace/per
 import { PERSONAL_VERIFICATION_WARNING } from "@/lib/numbers/personal-call-settings";
 import { formatPhone } from "@/lib/utils";
 import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
