@@ -1,33 +1,32 @@
 "use client";
 
-import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
+import type { PersonalNumberRow, VaultHubSummary } from "@/lib/workspace/personal-data";
 import type { VaultIncomingMode } from "@/lib/numbers/personal-call-settings";
 import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
 import { runPersonalNumberAction } from "@/lib/personal/client-actions";
 import { formatPhone, cn } from "@/lib/utils";
 import {
-  AlertTriangle,
-  Archive,
   ArrowRightLeft,
-  Clock,
-  DollarSign,
+  Columns3,
+  Download,
   Filter,
-  Lock,
-  Megaphone,
   MoreHorizontal,
   Pencil,
+  Phone,
+  PhoneForwarded,
+  PhoneIncoming,
+  PhoneOutgoing,
   Play,
   Plus,
   Search,
   Shield,
   Trash2,
-  Voicemail,
-  VolumeX,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { PersonalMockSparkline } from "./mockup/charts";
 import {
   PersonalMockBtn,
   PersonalMockHeader,
@@ -36,35 +35,15 @@ import {
   PersonalMockPage,
   PersonalMockPagination,
   PersonalMockPill,
-  PersonalMockSection,
   PersonalMockSelect,
-  PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
 
-type VaultActivity = {
-  id: string;
-  text: string;
-  at: string;
-  by?: string;
-  icon: "archive" | "shield" | "megaphone" | "reactivate";
-};
-type ModeFilter = "All" | "Silent" | "Announcement" | "Voicemail" | "Porting";
 type SortKey = "recent" | "name" | "cost";
-type VaultStatusTone = "blue" | "orange" | "green";
-
-function vaultModeLabel(mode: VaultIncomingMode): string {
-  if (mode === "silent") return "Silent";
-  if (mode === "voicemail") return "Voicemail";
-  return "Announcement";
-}
-
-function modeFromChip(chip: ModeFilter): VaultIncomingMode | null {
-  if (chip === "Silent") return "silent";
-  if (chip === "Voicemail") return "voicemail";
-  if (chip === "Announcement") return "parked_message";
-  return null;
-}
+type HubStatus = "vault" | "forward" | "ported";
+type StatusFilter = "All" | "Vault" | "Forward" | "Ported";
+type ProviderFilter = "all" | "telnyx" | "twilio";
+type TypeFilter = "all" | "local" | "tollfree";
 
 function nextRenewalDate(parkedSince: string | null): string {
   if (!parkedSince) return "—";
@@ -73,109 +52,72 @@ function nextRenewalDate(parkedSince: string | null): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatVaultDate(dateStr: string | null): string {
-  if (!dateStr) return "Recently";
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  if (diffHours < 1) return "Just now";
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
-
-function daysUntilRenewal(parkedSince: string | null): number | null {
-  if (!parkedSince) return null;
-  const renewal = new Date(parkedSince);
-  renewal.setMonth(renewal.getMonth() + 1);
-  return Math.ceil((renewal.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-}
-
-function vaultRowStatus(n: PersonalNumberRow): {
-  label: string;
-  tone: VaultStatusTone;
-  sub?: string;
-} {
-  const daysLeft = daysUntilRenewal(n.parkedSince);
-  if (n.portAwayExpiresAt || n.serviceState.includes("PORT")) {
-    return {
-      label: "Action Required",
-      tone: "orange",
-      sub: daysLeft != null ? `${daysLeft} days` : undefined,
-    };
+function hubStatus(n: PersonalNumberRow, portOutIds: Set<string>): HubStatus {
+  if (
+    portOutIds.has(n.id) ||
+    n.serviceState === "PORTING_OUT" ||
+    n.serviceState === "PORT_AWAY_WINDOW"
+  ) {
+    return "ported";
   }
-  if (daysLeft != null && daysLeft >= 0 && daysLeft <= 7) {
-    return { label: "Action Required", tone: "orange", sub: `${daysLeft} days` };
+  if (n.serviceState === "PARKED" || n.serviceState === "PARKED_VOICEMAIL") {
+    return "vault";
   }
-  if (n.portOutLocked) {
-    return { label: "Protected", tone: "green" };
+  return "forward";
+}
+
+function hubStatusPillTone(status: HubStatus): "orange" | "green" | "red" {
+  if (status === "vault") return "orange";
+  if (status === "forward") return "green";
+  return "red";
+}
+
+function hubStatusLabel(status: HubStatus): string {
+  if (status === "vault") return "Vault";
+  if (status === "forward") return "Forward";
+  return "Ported";
+}
+
+function configurationLabel(n: PersonalNumberRow, status: HubStatus): string {
+  if (status === "forward") {
+    const dest = n.forwardTargets[0] || n.voiceForwardTo;
+    return dest ? `To: ${formatPhone(dest)}` : "Forwarding enabled";
   }
-  return { label: "Vaulted", tone: "blue" };
+  if (status === "ported") return "Transfer in progress";
+  if (n.vaultIncomingMode === "voicemail") return "Voicemail on vault";
+  if (n.vaultIncomingMode === "parked_message") return "Play announcement";
+  return "Hold only";
 }
 
-function VaultModeTabs({
-  active,
-  onChange,
-}: {
-  active: ModeFilter;
-  onChange: (v: ModeFilter) => void;
-}) {
-  const tabs: ModeFilter[] = ["All", "Silent", "Announcement", "Voicemail", "Porting"];
-  return (
-    <div className="flex flex-wrap gap-1">
-      {tabs.map((tab) => (
-        <button
-          key={tab}
-          type="button"
-          onClick={() => onChange(tab)}
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-[12px] font-semibold transition",
-            active === tab
-              ? "bg-[#eef2ff] text-[#6366f1]"
-              : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]",
-          )}
-        >
-          {tab}
-        </button>
-      ))}
-    </div>
-  );
+function weekDeltaText(delta: number): string {
+  if (delta === 0) return "+0 from last week";
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta} from last week`;
 }
 
-function ModeIcon({ mode }: { mode: VaultIncomingMode }) {
-  const className = "h-3.5 w-3.5";
-  if (mode === "silent") return <VolumeX className={className} />;
-  if (mode === "voicemail") return <Voicemail className={className} />;
-  return <Megaphone className={className} />;
-}
-
-function ActivityIcon({ kind }: { kind: VaultActivity["icon"] }) {
-  const className = "mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]";
-  if (kind === "shield") return <Shield className={className} />;
-  if (kind === "megaphone") return <Megaphone className={className} />;
-  if (kind === "reactivate") return <ArrowRightLeft className={className} />;
-  return <Archive className={className} />;
+function providerLabel(provider?: string): string {
+  if (provider === "twilio") return "Twilio";
+  if (provider === "telnyx") return "Telnyx";
+  return "Carrier";
 }
 
 export function PersonalVaultUI({
   numbers,
   parked,
+  hubSummary,
   initialNumberId,
-  actorName = "You",
 }: {
   numbers: PersonalNumberRow[];
   parked: PersonalNumberRow[];
+  hubSummary: VaultHubSummary;
   initialNumberId?: string;
-  actorName?: string;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [modeFilter, setModeFilter] = useState<ModeFilter>("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [providerFilter, setProviderFilter] = useState<ProviderFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("recent");
-  const [localOnly, setLocalOnly] = useState(false);
-  const [tollFreeOnly, setTollFreeOnly] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [manageId, setManageId] = useState<string | null>(
@@ -183,55 +125,19 @@ export function PersonalVaultUI({
   );
   const [modeDraft, setModeDraft] = useState<VaultIncomingMode>("silent");
   const [messageDraft, setMessageDraft] = useState("");
-  const [portLocked, setPortLocked] = useState(true);
-  const [callScreening, setCallScreening] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [drawerMoreOpen, setDrawerMoreOpen] = useState(false);
-  const [unreadVm, setUnreadVm] = useState<Record<string, number>>({});
   const [managedVmGreeting, setManagedVmGreeting] = useState("Default greeting");
   const [managedUnreadVm, setManagedUnreadVm] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const activeToPark = numbers.filter((n) => n.serviceState !== "PARKED");
-  const addToVaultHref =
-    activeToPark.length > 0 ? "/personal/numbers" : "/personal/numbers/premium";
-
-  const monthlyVaultCost = parked.reduce((s, n) => s + n.monthlyCost, 0);
-  const voicemailEnabledCount = parked.filter(
-    (n) => n.vaultIncomingMode === "voicemail" || n.voicemailEnabled,
-  ).length;
-  const actionRequiredCount = parked.filter(
-    (n) => n.portAwayExpiresAt || n.serviceState === "PORT_AWAY_WINDOW",
-  ).length;
-
   const managed = manageId ? parked.find((n) => n.id === manageId) : null;
-  const protectionNumber = managed ?? parked[0];
-
-  const loadUnreadCounts = useCallback(async () => {
-    const counts: Record<string, number> = {};
-    await Promise.all(
-      parked.map(async (n) => {
-        const res = await fetch(`/api/phone/voicemail?phoneNumberId=${encodeURIComponent(n.id)}`);
-        const j = await res.json().catch(() => ({}));
-        const { messages } = parseVoicemailApiPayload(j.data);
-        counts[n.id] = messages.filter((m) => !m.readAt).length;
-      }),
-    );
-    setUnreadVm(counts);
-  }, [parked]);
-
-  useEffect(() => {
-    if (parked.length === 0) return;
-    loadUnreadCounts();
-  }, [parked, loadUnreadCounts]);
 
   useEffect(() => {
     if (!managed) return;
     setModeDraft(managed.vaultIncomingMode);
     setMessageDraft(managed.parkedMessageText || "");
-    setPortLocked(managed.portOutLocked);
-    setCallScreening(managed.callScreeningEnabled);
     setDrawerMoreOpen(false);
 
     (async () => {
@@ -248,24 +154,30 @@ export function PersonalVaultUI({
     })();
   }, [managed]);
 
-  useEffect(() => {
-    if (!protectionNumber) return;
-    setPortLocked(protectionNumber.portOutLocked);
-    setCallScreening(protectionNumber.callScreeningEnabled);
-  }, [protectionNumber]);
+  const portOutIds = useMemo(
+    () => new Set(hubSummary.activePortOutNumberIds),
+    [hubSummary.activePortOutNumberIds],
+  );
 
   const filtered = useMemo(() => {
-    const modeTarget = modeFromChip(modeFilter);
-    let list = [...parked];
+    let list = [...numbers];
 
-    if (modeTarget) {
-      list = list.filter((n) => n.vaultIncomingMode === modeTarget);
-    } else if (modeFilter === "Porting") {
-      list = list.filter((n) => n.portAwayExpiresAt || n.serviceState.includes("PORT"));
+    if (statusFilter !== "All") {
+      const want: HubStatus =
+        statusFilter === "Vault"
+          ? "vault"
+          : statusFilter === "Forward"
+            ? "forward"
+            : "ported";
+      list = list.filter((n) => hubStatus(n, portOutIds) === want);
     }
 
-    if (localOnly) list = list.filter((n) => n.type === "Local");
-    if (tollFreeOnly) list = list.filter((n) => n.type === "Toll-free");
+    if (providerFilter !== "all") {
+      list = list.filter((n) => n.provider === providerFilter);
+    }
+
+    if (typeFilter === "local") list = list.filter((n) => n.type === "Local");
+    if (typeFilter === "tollfree") list = list.filter((n) => n.type === "Toll-free");
 
     const q = search.trim().toLowerCase();
     if (q) {
@@ -273,7 +185,8 @@ export function PersonalVaultUI({
         (n) =>
           n.number.includes(q) ||
           n.friendlyName?.toLowerCase().includes(q) ||
-          formatPhone(n.number).toLowerCase().includes(q),
+          formatPhone(n.number).toLowerCase().includes(q) ||
+          hubStatusLabel(hubStatus(n, portOutIds)).toLowerCase().includes(q),
       );
     }
 
@@ -284,15 +197,11 @@ export function PersonalVaultUI({
     } else if (sortKey === "cost") {
       list.sort((a, b) => b.monthlyCost - a.monthlyCost);
     } else {
-      list.sort((a, b) => {
-        const ad = a.parkedSince ? new Date(a.parkedSince).getTime() : 0;
-        const bd = b.parkedSince ? new Date(b.parkedSince).getTime() : 0;
-        return bd - ad;
-      });
+      list.sort((a, b) => a.number.localeCompare(b.number));
     }
 
     return list;
-  }, [parked, modeFilter, localOnly, tollFreeOnly, search, sortKey]);
+  }, [numbers, statusFilter, providerFilter, typeFilter, search, sortKey, portOutIds]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageSafe = Math.min(page, totalPages);
@@ -304,49 +213,12 @@ export function PersonalVaultUI({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const activity = useMemo((): VaultActivity[] => {
-    const events: VaultActivity[] = [];
-    for (const n of parked) {
-      const label = n.friendlyName || formatPhone(n.number);
-      if (n.parkedSince) {
-        events.push({
-          id: `${n.id}-vault`,
-          text: `${label} was vaulted`,
-          by: actorName,
-          at: formatVaultDate(n.parkedSince),
-          icon: "archive",
-        });
-      }
-      if (n.portOutLocked) {
-        events.push({
-          id: `${n.id}-port`,
-          text: `Port protection enabled for ${formatPhone(n.number)}`,
-          by: actorName,
-          at: formatVaultDate(n.parkedSince),
-          icon: "shield",
-        });
-      }
-      if (n.vaultIncomingMode === "parked_message" && n.parkedMessageText) {
-        events.push({
-          id: `${n.id}-announce`,
-          text: `Announcement updated for ${label}`,
-          by: actorName,
-          at: formatVaultDate(n.parkedSince),
-          icon: "megaphone",
-        });
-      }
-    }
-    return events.sort((a, b) => (a.at > b.at ? -1 : 1)).slice(0, 5);
-  }, [parked, actorName]);
-
   function openManage(id: string) {
     const row = parked.find((n) => n.id === id);
     if (!row) return;
     setManageId(id);
     setModeDraft(row.vaultIncomingMode);
     setMessageDraft(row.parkedMessageText || "");
-    setPortLocked(row.portOutLocked);
-    setCallScreening(row.callScreeningEnabled);
     setMenuOpenId(null);
   }
 
@@ -424,66 +296,107 @@ export function PersonalVaultUI({
     }
   }
 
-  async function togglePortLock(locked: boolean) {
-    if (!protectionNumber) return;
-    setBusy("port-lock");
-    try {
-      const res = await fetch(`/api/personal/numbers/${protectionNumber.id}/port-out`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: locked ? "lock" : "unlock" }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || "Could not update port-out lock.");
-      }
-      setPortLocked(locked);
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update port-out protection.");
-    } finally {
-      setBusy(null);
+  function handleManage(n: PersonalNumberRow) {
+    const status = hubStatus(n, portOutIds);
+    if (status === "vault") {
+      openManage(n.id);
+      return;
     }
+    if (status === "forward") {
+      router.push(`/personal/forwarding?numberId=${n.id}`);
+      return;
+    }
+    router.push(`/personal/porting?tab=out&numberId=${n.id}`);
   }
 
-  async function toggleCallScreening(enabled: boolean) {
-    if (!protectionNumber) return;
-    setBusy("screening");
-    try {
-      const res = await fetch(`/api/numbers/${protectionNumber.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personalCallSettings: { callScreeningEnabled: enabled } }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || "Could not update call screening.");
-      }
-      setCallScreening(enabled);
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update call screening.");
-    } finally {
-      setBusy(null);
-    }
-  }
+  const recentActionIcon = (tone: VaultHubSummary["recentActions"][0]["tone"]) => {
+    if (tone === "green") return "bg-[#ecfdf5] text-[#059669]";
+    if (tone === "red") return "bg-[#fef2f2] text-[#dc2626]";
+    if (tone === "yellow") return "bg-[#fffbeb] text-[#d97706]";
+    return "bg-[#eff6ff] text-[#2563eb]";
+  };
 
   return (
     <div className="relative">
       <PersonalMockPage>
         <PersonalMockHeader
           title="Number Vault"
-          description="Keep valuable numbers secure while they're not actively in use."
+          description="Manage and monitor your phone numbers here."
+          actions={
+            <Link href="/personal/numbers/premium">
+              <PersonalMockBtn className="!bg-[#1e40af] hover:!bg-[#1e3a8a]">
+                <Plus className="h-4 w-4" />
+                Add New Number
+              </PersonalMockBtn>
+            </Link>
+          }
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="relative min-w-[280px] flex-1 max-w-xl">
+        {error ? <p className="text-[13px] text-rose-600">{error}</p> : null}
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <PersonalMockKpi
+            label="Total Numbers"
+            value={hubSummary.totalNumbers}
+            icon={Phone}
+            iconClass="bg-[#eff6ff] text-[#2563eb]"
+            deltaText={weekDeltaText(hubSummary.totalDeltaWeek)}
+            deltaTone={
+              hubSummary.totalDeltaWeek > 0
+                ? "green"
+                : hubSummary.totalDeltaWeek < 0
+                  ? "red"
+                  : "gray"
+            }
+          />
+          <PersonalMockKpi
+            label="Vaulted"
+            value={hubSummary.vaulted}
+            icon={Shield}
+            iconClass="bg-[#fff7ed] text-[#ea580c]"
+            deltaText={weekDeltaText(hubSummary.vaultedDeltaWeek)}
+            deltaTone={
+              hubSummary.vaultedDeltaWeek > 0
+                ? "green"
+                : hubSummary.vaultedDeltaWeek < 0
+                  ? "red"
+                  : "gray"
+            }
+          />
+          <PersonalMockKpi
+            label="Forwarding"
+            value={hubSummary.forwarding}
+            icon={PhoneForwarded}
+            iconClass="bg-[#ecfdf5] text-[#059669]"
+            deltaText={weekDeltaText(hubSummary.forwardingDeltaWeek)}
+            deltaTone="gray"
+          />
+          <PersonalMockKpi
+            label="Incoming Calls"
+            value={hubSummary.incomingCalls7d}
+            icon={PhoneIncoming}
+            iconClass="bg-[#f3e8ff] text-[#7c3aed]"
+            deltaText={`${hubSummary.incomingCallsTrendPct >= 0 ? "+" : ""}${hubSummary.incomingCallsTrendPct}% from last week`}
+            deltaTone={hubSummary.incomingCallsTrendPct >= 0 ? "green" : "red"}
+          />
+          <PersonalMockKpi
+            label="Ported Out"
+            value={hubSummary.portedOut}
+            icon={PhoneOutgoing}
+            iconClass="bg-[#fef2f2] text-[#dc2626]"
+            deltaText={hubSummary.portedOutLabel}
+            deltaTone="gray"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[240px] flex-1 max-w-md">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
             />
             <PersonalMockInput
-              className="w-full bg-[#f9fafb] pl-9 focus:bg-white"
-              placeholder="Search numbers or names"
+              className="h-10 w-full bg-white pl-9"
+              placeholder="Search numbers or status"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -491,208 +404,154 @@ export function PersonalVaultUI({
               }}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Link href={addToVaultHref}>
-              <PersonalMockBtn className="!bg-[#6366f1] hover:!bg-[#4f46e5]">
-                <Plus className="h-4 w-4" />
-                Add to Vault
-              </PersonalMockBtn>
-            </Link>
-            <Link href="/personal/porting">
-              <PersonalMockBtn variant="outline" className="!border-[#6366f1] !text-[#6366f1]">
-                Port a Number In
-              </PersonalMockBtn>
-            </Link>
-          </div>
-        </div>
-
-        {error ? <p className="text-[13px] text-rose-600">{error}</p> : null}
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PersonalMockKpi
-            label="Vaulted Numbers"
-            value={parked.length}
-            sub="Across all locations"
-            icon={Lock}
-            iconClass="bg-[#eef2ff] text-[#6366f1]"
-          />
-          <PersonalMockKpi
-            label="Monthly Vault Cost"
-            value={`$${monthlyVaultCost.toFixed(2)}`}
-            sub={`Billed on ${parked.length} number${parked.length === 1 ? "" : "s"}`}
-            icon={DollarSign}
-            iconClass="bg-[#ecfdf5] text-[#059669]"
-          />
-          <PersonalMockKpi
-            label="Voicemail Enabled"
-            value={voicemailEnabledCount}
-            sub="Numbers taking VM"
-            icon={Voicemail}
-            iconClass="bg-[#f3e8ff] text-[#9333ea]"
-          />
-          <PersonalMockKpi
-            label="Action Required"
-            value={actionRequiredCount}
-            sub={actionRequiredCount > 0 ? "Renewals or updates" : "All clear"}
-            icon={actionRequiredCount > 0 ? AlertTriangle : Shield}
-            iconClass={
-              actionRequiredCount > 0
-                ? "bg-[#fff7ed] text-[#ea580c]"
-                : "bg-[#ecfdf5] text-[#059669]"
-            }
-          />
+          <PersonalMockSelect
+            className="h-10 w-[130px] text-[13px]"
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value as TypeFilter);
+              setPage(1);
+            }}
+          >
+            <option value="all">All Types</option>
+            <option value="local">Local</option>
+            <option value="tollfree">Toll-free</option>
+          </PersonalMockSelect>
+          <PersonalMockSelect
+            className="h-10 w-[140px] text-[13px]"
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as StatusFilter);
+              setPage(1);
+            }}
+          >
+            <option value="All">All Statuses</option>
+            <option value="Vault">Vault</option>
+            <option value="Forward">Forward</option>
+            <option value="Ported">Ported</option>
+          </PersonalMockSelect>
+          <PersonalMockSelect
+            className="h-10 w-[140px] text-[13px]"
+            value={providerFilter}
+            onChange={(e) => {
+              setProviderFilter(e.target.value as ProviderFilter);
+              setPage(1);
+            }}
+          >
+            <option value="all">All Providers</option>
+            <option value="telnyx">Telnyx</option>
+            <option value="twilio">Twilio</option>
+          </PersonalMockSelect>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]"
+            aria-label="Filter"
+          >
+            <Filter className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]"
+            aria-label="Columns"
+          >
+            <Columns3 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]"
+            aria-label="Export"
+            onClick={() => router.push("/personal/numbers")}
+          >
+            <Download className="h-4 w-4" />
+          </button>
         </div>
 
         <div className={pm.card}>
-          <div className="border-b border-[#f3f4f6] px-5 py-4">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Your Vault</h2>
+          <div className="flex items-center justify-between border-b border-[#f3f4f6] px-5 py-4">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Phone Numbers</h2>
+            <Link
+              href="/personal/numbers"
+              className="text-[12px] font-semibold text-[#2563eb] hover:underline"
+            >
+              View All Numbers &gt;
+            </Link>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] px-5 py-3">
-            <VaultModeTabs
-              active={modeFilter}
-              onChange={(v) => {
-                setModeFilter(v);
-                setPage(1);
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <PersonalMockSelect
-                className="h-8 text-[12px]"
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as SortKey)}
-              >
-                <option value="recent">Recently Added</option>
-                <option value="name">Friendly Name</option>
-                <option value="cost">Monthly Cost</option>
-              </PersonalMockSelect>
-              <button
-                type="button"
-                aria-label="Filter local numbers"
-                className={cn(
-                  "flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold transition",
-                  localOnly
-                    ? "border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
-                    : "border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]",
-                )}
-                onClick={() => {
-                  setLocalOnly((v) => !v);
-                  if (!localOnly) setTollFreeOnly(false);
-                  setPage(1);
-                }}
-              >
-                <Filter className="h-3.5 w-3.5" />
-                Local
-              </button>
-              <button
-                type="button"
-                aria-label="Filter toll-free numbers"
-                className={cn(
-                  "flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold transition",
-                  tollFreeOnly
-                    ? "border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
-                    : "border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]",
-                )}
-                onClick={() => {
-                  setTollFreeOnly((v) => !v);
-                  if (!tollFreeOnly) setLocalOnly(false);
-                  setPage(1);
-                }}
-              >
-                <Filter className="h-3.5 w-3.5" />
-                Toll-Free
-              </button>
-            </div>
-          </div>
-
           <div className="p-5">
             {filtered.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className={pm.muted}>No numbers in your vault yet.</p>
+              <div className="py-10 text-center">
+                <p className={pm.muted}>No numbers match your filters.</p>
                 <Link
-                  href={addToVaultHref}
-                  className="mt-3 text-[13px] font-semibold text-[#6366f1] hover:underline"
+                  href="/personal/numbers/premium"
+                  className="mt-3 text-[13px] font-semibold text-[#2563eb] hover:underline"
                 >
-                  {activeToPark.length > 0
-                    ? "Park a number from My Numbers"
-                    : "Find a number to vault"}
+                  Add a number
                 </Link>
               </div>
             ) : (
               <div className="overflow-x-auto -mx-5 px-5">
-                <table className="w-full min-w-[1040px] text-left text-[13px]">
+                <table className="w-full min-w-[960px] text-left text-[13px]">
                   <thead>
                     <tr className="border-b border-[#f3f4f6] text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                      <th className="pb-3 pr-3">Phone Number</th>
-                      <th className="pb-3 pr-3">Friendly Name</th>
-                      <th className="pb-3 pr-3">Type</th>
-                      <th className="pb-3 pr-3">Incoming Mode</th>
-                      <th className="pb-3 pr-3">Monthly Cost</th>
-                      <th className="pb-3 pr-3">Next Renewal</th>
-                      <th className="pb-3 pr-3">Status</th>
-                      <th className="pb-3 pr-3">Unread VM</th>
-                      <th className="pb-3 pr-3">Last Activity</th>
+                      <th className="pb-3 pr-4">Number</th>
+                      <th className="pb-3 pr-4">Status</th>
+                      <th className="pb-3 pr-4">Configuration</th>
+                      <th className="pb-3 pr-4">Usage Stats</th>
                       <th className="pb-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#f3f4f6]">
                     {paginated.map((n) => {
-                      const status = vaultRowStatus(n);
-                      const unread = unreadVm[n.id] ?? 0;
+                      const status = hubStatus(n, portOutIds);
+                      const usage = hubSummary.usageByNumberId[n.id] ?? { minutes: 0, calls: 0 };
+                      const spark = [
+                        Math.max(1, usage.calls),
+                        Math.max(1, usage.minutes),
+                        usage.calls + 1,
+                        usage.minutes + 2,
+                        usage.calls,
+                      ];
                       return (
                         <tr key={n.id} className="group">
-                          <td className="py-3 pr-3">
-                            <button
-                              type="button"
-                              className="font-semibold text-[#6366f1] hover:underline"
-                              onClick={() => openManage(n.id)}
-                            >
-                              {formatPhone(n.number)}
-                            </button>
-                          </td>
-                          <td className="py-3 pr-3 text-[#374151]">
-                            {n.friendlyName || "—"}
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">{n.type}</td>
-                          <td className="py-3 pr-3">
-                            <span className="inline-flex items-center gap-1.5 text-[#374151]">
-                              <ModeIcon mode={n.vaultIncomingMode} />
-                              {vaultModeLabel(n.vaultIncomingMode)}
-                            </span>
-                          </td>
-                          <td className="py-3 pr-3 font-medium text-[#111827]">
-                            ${n.monthlyCost.toFixed(2)}
-                          </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">
-                            {nextRenewalDate(n.parkedSince)}
-                          </td>
-                          <td className="py-3 pr-3">
-                            <PersonalMockPill tone={status.tone}>{status.label}</PersonalMockPill>
-                            {status.sub ? (
-                              <p className="mt-0.5 text-[10px] font-medium text-[#ea580c]">
-                                {status.sub}
-                              </p>
-                            ) : null}
-                          </td>
-                          <td className="py-3 pr-3">
-                            {unread > 0 ? (
-                              <span
-                                className="inline-flex rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[11px] font-semibold text-[#374151]"
-                              >
-                                {unread}
+                          <td className="py-3.5 pr-4">
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+                                <Phone className="h-4 w-4" />
                               </span>
-                            ) : (
-                              <span className="text-[#9ca3af]">0</span>
-                            )}
+                              <div>
+                                <p className="font-semibold text-[#111827]">
+                                  {formatPhone(n.number)}
+                                </p>
+                                <p className="text-[11px] text-[#9ca3af]">
+                                  {providerLabel(n.provider)}
+                                </p>
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-3 pr-3 text-[#6b7280]">
-                            {formatVaultDate(n.parkedSince)}
+                          <td className="py-3.5 pr-4">
+                            <PersonalMockPill tone={hubStatusPillTone(status)}>
+                              {hubStatusLabel(status)}
+                            </PersonalMockPill>
                           </td>
-                          <td className="py-3 text-right">
+                          <td className="py-3.5 pr-4 text-[#6b7280]">
+                            {configurationLabel(n, status)}
+                          </td>
+                          <td className="py-3.5 pr-4">
+                            <div className="flex items-center gap-3">
+                              <PersonalMockSparkline
+                                points={spark}
+                                color="#6366f1"
+                                className="h-6 w-16"
+                              />
+                              <span className="text-[12px] text-[#6b7280]">
+                                {usage.minutes} min · {usage.calls} calls
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 text-right">
                             <div className="flex justify-end items-center gap-1">
                               <PersonalMockBtn
                                 variant="outline"
-                                className="h-8 px-3 text-[12px]"
-                                onClick={() => openManage(n.id)}
+                                className="h-8 px-3 text-[12px] !border-[#2563eb] !text-[#2563eb]"
+                                onClick={() => handleManage(n)}
                               >
                                 Manage
                               </PersonalMockBtn>
@@ -713,23 +572,33 @@ export function PersonalVaultUI({
                                       href={`/personal/numbers/${n.id}`}
                                       className="block px-3 py-2 hover:bg-[#f9fafb]"
                                     >
-                                      Edit number details
+                                      Number details
                                     </Link>
-                                    <button
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left hover:bg-[#f9fafb]"
-                                      onClick={() => openManage(n.id)}
-                                    >
-                                      Manage vault settings
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left hover:bg-[#f9fafb]"
-                                      disabled={busy === n.id}
-                                      onClick={() => reactivateNumber(n.id)}
-                                    >
-                                      Reactivate number
-                                    </button>
+                                    {status === "vault" ? (
+                                      <button
+                                        type="button"
+                                        className="block w-full px-3 py-2 text-left hover:bg-[#f9fafb]"
+                                        onClick={() => openManage(n.id)}
+                                      >
+                                        Vault settings
+                                      </button>
+                                    ) : null}
+                                    {status === "forward" ? (
+                                      <Link
+                                        href={`/personal/forwarding?numberId=${n.id}`}
+                                        className="block px-3 py-2 hover:bg-[#f9fafb]"
+                                      >
+                                        Forwarding settings
+                                      </Link>
+                                    ) : null}
+                                    {status === "ported" ? (
+                                      <Link
+                                        href={`/personal/porting?tab=out&numberId=${n.id}`}
+                                        className="block px-3 py-2 hover:bg-[#f9fafb]"
+                                      >
+                                        Port-out status
+                                      </Link>
+                                    ) : null}
                                   </div>
                                 ) : null}
                               </div>
@@ -741,88 +610,61 @@ export function PersonalVaultUI({
                   </tbody>
                 </table>
                 <PersonalMockPagination
-                  showing={
-                    filtered.length === 0
-                      ? "No results"
-                      : `Showing ${pageStart} to ${pageEnd} of ${filtered.length} results`
-                  }
+                  showing={`Showing ${pageStart} to ${pageEnd} of ${filtered.length} numbers`}
                   total={filtered.length}
                   page={pageSafe}
                   pages={totalPages}
+                  pageSizeLabel={`${pageSize} / page`}
                   onPageChange={setPage}
                 />
+                <p className="mt-2 text-[11px] text-[#9ca3af]">
+                  Showing {paginated.length} of {hubSummary.totalNumbers} numbers. See more at the
+                  bottom of the page.
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <PersonalMockSection title="Recent Vault Activity">
-            {activity.length === 0 ? (
-              <p className={pm.muted}>No vault activity yet.</p>
-            ) : (
-              <>
-                <ul className="space-y-3">
-                  {activity.map((a) => (
-                    <li key={a.id} className="flex items-start gap-3 text-[13px]">
-                      <ActivityIcon kind={a.icon} />
-                      <div>
-                        <p className="text-[#111827]">{a.text}</p>
-                        <p className="text-[11px] text-[#9ca3af]">
-                          {a.by ? `by ${a.by} · ` : ""}
-                          {a.at}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/personal/activity"
-                  className="mt-4 inline-block text-[12px] font-semibold text-[#6366f1] hover:underline"
-                >
-                  View all activity →
-                </Link>
-              </>
-            )}
-          </PersonalMockSection>
-
-          <PersonalMockSection title="Number Protection">
-            {protectionNumber ? (
-              <div className="space-y-5">
-                <div>
-                  <PersonalMockToggle
-                    label="Port-out Lock"
-                    checked={portLocked}
-                    onChange={(v) => togglePortLock(v)}
-                  />
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-[#6b7280]">
-                    Prevent unauthorized porting of your numbers to another carrier.
-                  </p>
-                </div>
-                <div>
-                  <PersonalMockToggle
-                    label="Verification Required"
-                    checked={callScreening}
-                    onChange={(v) => toggleCallScreening(v)}
-                  />
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-[#6b7280]">
-                    Require extra verification steps before sensitive number changes.
-                  </p>
-                </div>
-                <div className="flex gap-3 rounded-lg border border-[#e0e7ff] bg-[#eef2ff] p-3">
-                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[#6366f1]" />
-                  <p className="text-[12px] leading-relaxed text-[#4338ca]">
-                    Your numbers are protected with enterprise-grade security.{" "}
-                    <Link href="/help" className="font-semibold text-[#6366f1] hover:underline">
-                      Learn more
-                    </Link>
-                  </p>
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Recent Actions</h2>
+            <Link
+              href="/personal/activity"
+              className="text-[12px] font-semibold text-[#2563eb] hover:underline"
+            >
+              See all activity &gt;
+            </Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {hubSummary.recentActions.map((action) => (
+              <div key={action.id} className={cn(pm.card, "p-4")}>
+                <div className="flex items-start gap-3">
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                      recentActionIcon(action.tone),
+                    )}
+                  >
+                    {action.kind === "number_added" ? (
+                      <Plus className="h-4 w-4" />
+                    ) : action.kind === "ported_out" ? (
+                      <PhoneOutgoing className="h-4 w-4" />
+                    ) : action.kind === "payment" ? (
+                      <Shield className="h-4 w-4" />
+                    ) : (
+                      <Pencil className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-[#111827]">{action.title}</p>
+                    <p className="text-[12px] font-medium text-[#2563eb]">{action.detail}</p>
+                    <p className="mt-1 text-[11px] text-[#9ca3af]">{action.atLabel}</p>
+                  </div>
                 </div>
               </div>
-            ) : (
-              <p className={pm.muted}>Vault a number to configure protection.</p>
-            )}
-          </PersonalMockSection>
+            ))}
+          </div>
         </div>
       </PersonalMockPage>
 

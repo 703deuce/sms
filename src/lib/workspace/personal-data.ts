@@ -13,6 +13,7 @@ import {
   readPersonalSettings,
 } from "@/lib/workspace/personal-service";
 import { loadPhoneNumbers } from "@/lib/workspace-data";
+import { formatPhone } from "@/lib/utils";
 
 export type PersonalNumberRow = PhoneNumber & {
   serviceState: string;
@@ -511,4 +512,250 @@ export async function loadBusinessWorkspacesForUser(userId: string) {
       id: m.workspace.id,
       name: m.workspace.name,
     }));
+}
+
+export type VaultHubUsage = {
+  minutes: number;
+  calls: number;
+};
+
+export type VaultRecentAction = {
+  id: string;
+  kind: "number_added" | "ported_out" | "config_changed" | "payment";
+  title: string;
+  detail: string;
+  atLabel: string;
+  tone: "green" | "red" | "blue" | "yellow";
+};
+
+export type VaultHubSummary = {
+  totalNumbers: number;
+  totalDeltaWeek: number;
+  vaulted: number;
+  vaultedDeltaWeek: number;
+  forwarding: number;
+  forwardingDeltaWeek: number;
+  incomingCalls7d: number;
+  incomingCallsTrendPct: number;
+  portedOut: number;
+  portedOutLabel: string;
+  usageByNumberId: Record<string, VaultHubUsage>;
+  recentActions: VaultRecentAction[];
+  activePortOutNumberIds: string[];
+};
+
+function formatRecentAt(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (hours < 1) return "Just now";
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+export async function loadVaultHubSummary(workspaceId: string): Promise<VaultHubSummary> {
+  const prisma = getPrisma();
+  const numbers = await loadPersonalNumbers(workspaceId);
+  const usage = await loadPersonalUsage(workspaceId);
+  type PhoneNumberMeta = { id: string; createdAt: Date; updatedAt: Date };
+  const numberMeta: PhoneNumberMeta[] = await prisma.phoneNumber.findMany({
+    where: { workspaceId },
+    select: { id: true, createdAt: true, updatedAt: true },
+  });
+  const metaById = new Map<string, PhoneNumberMeta>(numberMeta.map((m) => [m.id, m]));
+
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const weekAgo = new Date(now - weekMs);
+  const twoWeeksAgo = new Date(now - 2 * weekMs);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+  const numbersCreatedThisWeek = numbers.filter((n) => {
+    const created = metaById.get(n.id)?.createdAt;
+    return created && created.getTime() >= weekAgo.getTime();
+  }).length;
+  const numbersCreatedPriorWeek = numbers.filter((n) => {
+    const created = metaById.get(n.id)?.createdAt;
+    if (!created) return false;
+    const t = created.getTime();
+    return t >= twoWeeksAgo.getTime() && t < weekAgo.getTime();
+  }).length;
+
+  const isVaulted = (n: PersonalNumberRow) =>
+    n.serviceState === "PARKED" || n.serviceState === "PARKED_VOICEMAIL";
+  const isForwarding = (n: PersonalNumberRow) =>
+    n.forwardingEnabled || n.serviceState === "FORWARDING";
+  const vaulted = numbers.filter(isVaulted).length;
+  const vaultedThisWeek = numbers.filter(
+    (n) => isVaulted(n) && n.parkedSince && new Date(n.parkedSince) >= weekAgo,
+  ).length;
+  const vaultedPriorWeek = numbers.filter((n) => {
+    if (!isVaulted(n) || !n.parkedSince) return false;
+    const t = new Date(n.parkedSince).getTime();
+    return t >= twoWeeksAgo.getTime() && t < weekAgo.getTime();
+  }).length;
+
+  const forwarding = numbers.filter(isForwarding).length;
+  const forwardingThisWeek = numbers.filter((n) => {
+    if (!isForwarding(n)) return false;
+    const updated = metaById.get(n.id)?.updatedAt;
+    return updated && updated.getTime() >= weekAgo.getTime();
+  }).length;
+  const forwardingPriorWeek = numbers.filter((n) => {
+    if (!isForwarding(n)) return false;
+    const updated = metaById.get(n.id)?.updatedAt;
+    if (!updated) return false;
+    const t = updated.getTime();
+    return t >= twoWeeksAgo.getTime() && t < weekAgo.getTime();
+  }).length;
+
+  const inbound7d = await prisma.humanCall.count({
+    where: { workspaceId, direction: "inbound", startedAt: { gte: weekAgo } },
+  });
+  const inboundPrior7d = await prisma.humanCall.count({
+    where: {
+      workspaceId,
+      direction: "inbound",
+      startedAt: { gte: twoWeeksAgo, lt: weekAgo },
+    },
+  });
+  const incomingCallsTrendPct =
+    inboundPrior7d > 0
+      ? Math.round(((inbound7d - inboundPrior7d) / inboundPrior7d) * 100)
+      : inbound7d > 0
+        ? 100
+        : 0;
+
+  const { listCustomerPortOutRequests } = await import("@/lib/numbers/port-out-service");
+  const portOutRows = await listCustomerPortOutRequests(workspaceId);
+  const activePortStatuses = new Set([
+    "submitted",
+    "in_progress",
+    "pending",
+    "foc_confirmed",
+    "completed",
+  ]);
+  const activePortOuts = portOutRows.filter(
+    (p: { status: string }) => activePortStatuses.has(p.status),
+  );
+  const activePortOutNumberIds = activePortOuts.map(
+    (p: { phoneNumberId: string }) => p.phoneNumberId,
+  );
+
+  const callGroups: Array<{ to: string; _count: { _all: number } }> = await prisma.humanCall.groupBy({
+    by: ["to"],
+    where: {
+      workspaceId,
+      direction: "inbound",
+      startedAt: { gte: monthStart },
+    },
+    _count: { _all: true },
+  });
+  const callsByE164 = new Map<string, number>(
+    callGroups.map((g: { to: string; _count: { _all: number } }) => [g.to, g._count._all]),
+  );
+
+  const usageByNumberId: Record<string, VaultHubUsage> = {};
+  for (const n of numbers) {
+    usageByNumberId[n.id] = {
+      minutes: usage.perNumber.find((p) => p.numberId === n.id)?.forwardingMinutes ?? 0,
+      calls: callsByE164.get(n.number) ?? 0,
+    };
+  }
+
+  const recentActions: VaultRecentAction[] = [];
+
+  const newestNumbers = [...numbers]
+    .sort((a, b) => {
+      const ad = metaById.get(a.id)?.createdAt?.getTime() ?? 0;
+      const bd = metaById.get(b.id)?.createdAt?.getTime() ?? 0;
+      return bd - ad;
+    })
+    .slice(0, 2);
+  for (const n of newestNumbers) {
+    const created = metaById.get(n.id)?.createdAt;
+    recentActions.push({
+      id: `add-${n.id}`,
+      kind: "number_added",
+      title: "New number added",
+      detail: formatPhone(n.number),
+      atLabel: created ? formatRecentAt(created) : "Recently",
+      tone: "green",
+    });
+  }
+
+  for (const p of activePortOuts.slice(0, 2)) {
+    recentActions.push({
+      id: `port-out-${p.id}`,
+      kind: "ported_out",
+      title: "Number ported out",
+      detail: formatPhone(p.phone),
+      atLabel: p.initiatedAt ? formatRecentAt(new Date(p.initiatedAt)) : "Recently",
+      tone: "red",
+    });
+  }
+
+  const audits = await prisma.auditLog.findMany({
+    where: {
+      workspaceId,
+      event: { in: ["number.park", "number.reactivate", "number.port_status"] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 3,
+  });
+  for (const a of audits) {
+    recentActions.push({
+      id: `audit-${a.id}`,
+      kind: "config_changed",
+      title:
+        a.event === "number.park"
+          ? "Number vaulted"
+          : a.event === "number.reactivate"
+            ? "Number reactivated"
+            : "Configuration changed",
+      detail: a.detail || "Number settings updated",
+      atLabel: formatRecentAt(a.createdAt),
+      tone: "blue",
+    });
+  }
+
+  const ledger = await prisma.creditLedgerEntry.findMany({
+    where: { workspaceId, type: "credit" },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+  });
+  if (ledger[0]) {
+    recentActions.push({
+      id: `pay-${ledger[0].id}`,
+      kind: "payment",
+      title: "Payment successful",
+      detail: ledger[0].description || "Account credit",
+      atLabel: formatRecentAt(ledger[0].createdAt),
+      tone: "yellow",
+    });
+  }
+
+  recentActions.sort((a, b) => {
+    // rough sort by recency label — prefer items with "ago"
+    const score = (label: string) =>
+      label.includes("ago") ? Date.now() : new Date(label).getTime() || 0;
+    return score(b.atLabel) - score(a.atLabel);
+  });
+
+  return {
+    totalNumbers: numbers.length,
+    totalDeltaWeek: numbersCreatedThisWeek - numbersCreatedPriorWeek,
+    vaulted,
+    vaultedDeltaWeek: vaultedThisWeek - vaultedPriorWeek,
+    forwarding,
+    forwardingDeltaWeek: forwardingThisWeek - forwardingPriorWeek,
+    incomingCalls7d: inbound7d,
+    incomingCallsTrendPct,
+    portedOut: activePortOuts.length,
+    portedOutLabel: activePortOuts.length > 0 ? "Active transfers" : "Standard",
+    usageByNumberId,
+    recentActions: recentActions.slice(0, 4),
+    activePortOutNumberIds,
+  };
 }

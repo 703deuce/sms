@@ -7,11 +7,13 @@ export function PersonalMockSparkline({
   color = "#6366f1",
   width = 64,
   height = 24,
+  className,
 }: {
   points: number[];
   color?: string;
   width?: number;
   height?: number;
+  className?: string;
 }) {
   if (points.length < 2) return null;
   const min = Math.min(...points);
@@ -25,7 +27,13 @@ export function PersonalMockSparkline({
     })
     .join(" ");
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden>
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      className={className}
+      aria-hidden
+    >
       <polyline
         fill="none"
         stroke={color}

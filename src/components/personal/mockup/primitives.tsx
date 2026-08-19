@@ -68,6 +68,8 @@ export function PersonalMockKpi({
   iconClass = "bg-[#eef2ff] text-[#6366f1]",
   trend,
   trendLabel,
+  deltaText,
+  deltaTone,
   valueClassName,
 }: {
   label: string;
@@ -77,6 +79,8 @@ export function PersonalMockKpi({
   iconClass?: string;
   trend?: number;
   trendLabel?: string;
+  deltaText?: string;
+  deltaTone?: "green" | "red" | "gray";
   valueClassName?: string;
 }) {
   return (
@@ -103,7 +107,19 @@ export function PersonalMockKpi({
             {value}
           </p>
           {sub ? <p className="mt-1 text-[12px] leading-snug text-[#6b7280]">{sub}</p> : null}
-          {trend != null ? (
+          {deltaText ? (
+            <p
+              className={cn(
+                "mt-1 text-[11px] font-medium",
+                deltaTone === "green" && "text-[#059669]",
+                deltaTone === "red" && "text-[#dc2626]",
+                (deltaTone === "gray" || !deltaTone) && "text-[#6b7280]",
+              )}
+            >
+              {deltaText}
+            </p>
+          ) : null}
+          {trend != null && !deltaText ? (
             <p
               className={cn(
                 "mt-1 text-[11px] font-semibold",
