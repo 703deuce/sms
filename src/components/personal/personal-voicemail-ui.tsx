@@ -982,7 +982,11 @@ export function PersonalVoicemailUI({
                 <p className="text-[12px] font-semibold text-[#111827]">Transcript</p>
                 {selected.transcript ? (
                   <p className="mt-2 text-[13px] leading-relaxed text-[#374151]">
-                    {selected.transcript}
+                    {selected.transcript === "Transcription processing…" ? (
+                      <span className="text-[#6b7280] italic">{selected.transcript}</span>
+                    ) : (
+                      selected.transcript
+                    )}
                   </p>
                 ) : (
                   <p className="mt-2 text-[13px] text-[#9ca3af]">Transcription not available.</p>

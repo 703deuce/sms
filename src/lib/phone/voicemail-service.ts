@@ -30,11 +30,25 @@ async function resolvePhoneNumberIdForVoicemail(
 export async function startVoicemailRecordingOnCall(input: {
   telnyxCallControlId: string;
   humanCallId: string;
+  transcriptionEnabled?: boolean;
 }) {
   if (!isTelnyxPhoneConfigured()) return;
+  const enableTranscription = input.transcriptionEnabled !== false;
   await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/record_start`, {
     method: "POST",
-    body: { format: "mp3", channels: "single", play_beep: true, max_length: 180 },
+    body: {
+      format: "mp3",
+      channels: "single",
+      play_beep: true,
+      max_length: 180,
+      ...(enableTranscription
+        ? {
+            transcription: true,
+            transcription_engine: "B",
+            transcription_language: "en",
+          }
+        : {}),
+    },
   }).catch((err) => {
     console.warn("[voicemail] record_start failed", {
       humanCallId: input.humanCallId,
@@ -105,7 +119,11 @@ export async function handleVoicemailGreetingMediaEnded(input: {
     input.eventType === "call.playback.ended" ||
     input.eventType === "call.speak.ended"
   ) {
-    await startVoicemailRecordingOnCall({ telnyxCallControlId, humanCallId });
+    await startVoicemailRecordingOnCall({
+      telnyxCallControlId,
+      humanCallId,
+      transcriptionEnabled: clientState.transcriptionEnabled !== false,
+    });
     return { handled: true as const, kind: "voicemail_recording_started" };
   }
 
@@ -244,6 +262,7 @@ export async function leaveVoicemailOnCall(input: {
       phoneNumberId,
       playUrl: playback.playUrl,
       sayText: playback.sayText,
+      transcriptionEnabled: box.transcriptionEnabled !== false,
     });
 
     if (playback.playUrl) {
@@ -281,6 +300,7 @@ export async function leaveVoicemailOnCall(input: {
           await startVoicemailRecordingOnCall({
             telnyxCallControlId: input.telnyxCallControlId,
             humanCallId: input.humanCallId,
+            transcriptionEnabled: box.transcriptionEnabled !== false,
           });
         }
       }
@@ -303,6 +323,7 @@ export async function leaveVoicemailOnCall(input: {
       await startVoicemailRecordingOnCall({
         telnyxCallControlId: input.telnyxCallControlId,
         humanCallId: input.humanCallId,
+        transcriptionEnabled: box.transcriptionEnabled !== false,
       });
     }
   }
@@ -338,7 +359,7 @@ export async function listVoicemailMessages(workspaceId: string, boxId?: string)
 }
 
 /**
- * Telnyx voicemail: attach recording then transcribe via Transovo Whisper path.
+ * Telnyx voicemail: attach recording, mark transcription processing, optionally Whisper fallback.
  * Twilio numbers must use twilio-voicemail-pipeline (Twilio transcription).
  */
 export async function attachVoicemailRecordingAndTranscribe(input: {
@@ -348,6 +369,8 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
   recordingUrl: string;
   durationSeconds?: number | null;
   upstreamProvider?: "telnyx" | "twilio";
+  /** When true, skip Whisper and wait for Telnyx call.recording.transcription.saved */
+  awaitNativeTranscription?: boolean;
 }) {
   if (input.upstreamProvider === "twilio") {
     throw new Error("Twilio voicemails must use the Twilio transcription pipeline");
@@ -372,11 +395,20 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
     where: { id: msg.boxId, workspaceId: input.workspaceId },
   });
 
+  const {
+    TRANSCRIPTION_PROCESSING,
+    markVoicemailTranscriptionProcessing,
+  } = await import("./telnyx-voicemail-pipeline");
+
   const updated = await prisma.voicemailMessage.update({
     where: { id: msg.id },
     data: {
       recordingUrl: input.recordingUrl,
       durationSeconds: input.durationSeconds ?? msg.durationSeconds,
+      ...(box?.transcriptionEnabled !== false &&
+      (!msg.transcriptText || msg.transcriptText.startsWith("[Transcription"))
+        ? { transcriptText: TRANSCRIPTION_PROCESSING }
+        : {}),
     },
   });
 
@@ -389,7 +421,8 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
     try {
       const { sendTransactionalEmail } = await import("@/lib/email/brevo");
       const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
-      const transcriptBlock = updated.transcriptText
+      const transcriptBlock = updated.transcriptText &&
+        updated.transcriptText !== TRANSCRIPTION_PROCESSING
         ? `<p><strong>Transcript:</strong> ${updated.transcriptText}</p>`
         : "";
       const recordingLink = appUrl
@@ -416,32 +449,66 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
   }
 
   if (!box?.transcriptionEnabled) return updated;
-  if (updated.transcriptText && !updated.transcriptText.startsWith("[Transcription")) return updated;
+  if (updated.transcriptText && !updated.transcriptText.startsWith("[Transcription") &&
+      updated.transcriptText !== TRANSCRIPTION_PROCESSING) {
+    return updated;
+  }
 
+  if (input.humanCallId && box.transcriptionEnabled !== false) {
+    await markVoicemailTranscriptionProcessing({
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+    }).catch(() => undefined);
+  }
+
+  // Telnyx native transcription is requested on record_start; wait for webhook unless disabled.
+  if (input.awaitNativeTranscription !== false) {
+    return updated;
+  }
+
+  return fallbackWhisperTranscription({
+    workspaceId: input.workspaceId,
+    messageId: msg.id,
+    recordingUrl: input.recordingUrl,
+    notifyTargets,
+    boxName: box?.name,
+    fromE164: updated.fromE164,
+  });
+}
+
+async function fallbackWhisperTranscription(input: {
+  workspaceId: string;
+  messageId: string;
+  recordingUrl: string;
+  notifyTargets: string[];
+  boxName?: string | null;
+  fromE164?: string | null;
+}) {
+  const prisma = getPrisma();
   try {
     const { transcribeAudioUrl } = await import("./voicemail-transcribe");
     const transcript = await transcribeAudioUrl(input.recordingUrl);
     if (!transcript) {
       return prisma.voicemailMessage.update({
-        where: { id: msg.id },
+        where: { id: input.messageId },
         data: {
           transcriptText:
-            "[Transcription pending — set OPENAI_API_KEY to enable Whisper transcripts]",
+            "[Transcription pending — Telnyx transcription in progress or set OPENAI_API_KEY for Whisper fallback]",
         },
       });
     }
     const withTranscript = await prisma.voicemailMessage.update({
-      where: { id: msg.id },
+      where: { id: input.messageId },
       data: { transcriptText: transcript },
     });
-    if (notifyTargets.length > 0) {
+    if (input.notifyTargets.length > 0) {
       try {
         const { sendTransactionalEmail } = await import("@/lib/email/brevo");
         const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
-        for (const to of notifyTargets) {
+        for (const to of input.notifyTargets) {
           await sendTransactionalEmail({
             to: String(to),
-            subject: `Voicemail transcript from ${withTranscript.fromE164 || "unknown"}`,
+            subject: `Voicemail transcript from ${input.fromE164 || "unknown"}`,
             htmlContent: `<p>Transcript: ${transcript}</p>${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open inbox</a></p>` : ""}`,
             textContent: transcript,
           });
@@ -452,12 +519,43 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
     }
     return withTranscript;
   } catch (err) {
-    console.warn("[voicemail] transcription failed", err);
+    console.warn("[voicemail] Whisper fallback transcription failed", err);
     return prisma.voicemailMessage.update({
-      where: { id: msg.id },
+      where: { id: input.messageId },
       data: {
         transcriptText: `[Transcription failed: ${err instanceof Error ? err.message.slice(0, 120) : "error"}]`,
       },
     });
   }
+}
+
+export async function fallbackVoicemailWhisperIfStillPending(input: {
+  workspaceId: string;
+  humanCallId: string;
+  recordingUrl: string;
+}) {
+  const prisma = getPrisma();
+  const msg = await prisma.voicemailMessage.findFirst({
+    where: { workspaceId: input.workspaceId, humanCallId: input.humanCallId },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!msg?.recordingUrl) return null;
+
+  const { isTranscriptionPending } = await import("./telnyx-voicemail-pipeline");
+  if (!isTranscriptionPending(msg.transcriptText)) return msg;
+
+  const box = await prisma.voicemailBox.findFirst({ where: { id: msg.boxId } });
+  const notifyTargets = [
+    box?.emailNotify,
+    box?.secondaryEmailNotify,
+  ].filter((e): e is string => Boolean(e && String(e).trim()));
+
+  return fallbackWhisperTranscription({
+    workspaceId: input.workspaceId,
+    messageId: msg.id,
+    recordingUrl: input.recordingUrl || msg.recordingUrl,
+    notifyTargets,
+    boxName: box?.name,
+    fromE164: msg.fromE164,
+  });
 }

@@ -1,9 +1,6 @@
-import { PersonalUsageClient } from "@/components/personal/personal-usage-client";
-import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { redirect } from "next/navigation";
 
+/** Usage is surfaced under Billing for production launch — no standalone sidebar page. */
 export default async function PersonalUsagePage() {
-  const { workspaceId } = await requireWorkspaceContext();
-  const numbers = await loadPersonalNumbers(workspaceId);
-  return <PersonalUsageClient numbers={numbers} />;
+  redirect("/settings/billing");
 }
