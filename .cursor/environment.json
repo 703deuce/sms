@@ -1,0 +1,17 @@
+{
+  "name": "Transovo AI SMS",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "next-dev",
+      "command": "bash .cursor/run-dev.sh"
+    }
+  ],
+  "ports": [3000, 54321, 54322]
+}
