@@ -17,6 +17,7 @@ const publicExact = new Set([
   "/terms",
   "/acceptable-use",
   "/contact",
+  "/sms-marketing",
   "/maintenance",
 ]);
 
@@ -119,7 +120,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged-in users skip auth pages; landing (/) stays available for marketing/Telnyx review.
+  // Logged-in users skip auth pages; root (/) and /sms-marketing stay public for acquisition/marketing.
   if (session && authPages.has(pathname)) {
     const url = request.nextUrl.clone();
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;

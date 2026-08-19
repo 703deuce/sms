@@ -121,7 +121,7 @@ const ROUTES = [
   "/settings/data",
 ];
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup", "/privacy", "/terms", "/acceptable-use", "/contact", "/sms-opt-in"];
+const PUBLIC_ROUTES = ["/", "/sms-marketing", "/login", "/signup", "/privacy", "/terms", "/acceptable-use", "/contact", "/sms-opt-in"];
 
 const ERROR_PATTERNS = [
   /Application error/i,

@@ -1,0 +1,66 @@
+.numbers-landing {
+  --nl-navy: #1e3a5f;
+  --nl-blue: #6366f1;
+  --nl-muted: #6b7280;
+  --nl-bg: #ffffff;
+  --nl-alt: #f9fafb;
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+  color: #111827;
+  background: var(--nl-bg);
+}
+
+.numbers-landing .nl-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.numbers-landing .nl-section {
+  padding: 4rem 1.25rem;
+}
+
+.numbers-landing .nl-section-alt {
+  background: var(--nl-alt);
+}
+
+.numbers-landing .nl-container {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.numbers-landing .nl-trust-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.numbers-landing .nl-trust-pill svg {
+  color: #059669;
+}
+
+.numbers-landing .nl-step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  background: #eef2ff;
+  color: var(--nl-blue);
+}
+
+@media (max-width: 640px) {
+  .numbers-landing .nl-hero-title {
+    font-size: 1.75rem;
+  }
+}
+
+html:has(.numbers-landing) {
+  scroll-behavior: smooth;
+}

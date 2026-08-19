@@ -1,5 +1,6 @@
 "use client";
 
+import { BRAND_NAME } from "@/lib/brand";
 import Link from "next/link";
 import { useState } from "react";
 import "./landing.css";
@@ -317,9 +318,9 @@ export function LandingPage() {
     <div className="landing" id="top">
       <header className="lp-nav">
         <div className="lp-container lp-nav-inner">
-          <Link href="/" className="lp-logo">
+          <Link href="/sms-marketing" className="lp-logo">
             <LogoMark />
-            Transovo AI
+            {BRAND_NAME}
           </Link>
           <nav className="lp-nav-links" aria-label="Primary">
             {NAV.map((item) => (
@@ -376,7 +377,7 @@ export function LandingPage() {
               <h1>SMS Marketing for Small Businesses Made Simple</h1>
               <p className="lp-hero-copy">
                 SMS marketing for small businesses should make it easier to reach customers, not
-                create more work. Transovo AI gives you one place to send text campaigns, manage
+                create more work. {BRAND_NAME} gives you one place to send text campaigns, manage
                 replies, and follow up with leads. Reach customers through a channel they already
                 use every day.
               </p>
@@ -780,7 +781,7 @@ export function LandingPage() {
               <h2>Start Building Better Customer Conversations</h2>
               <p className="lp-lead">
                 Use SMS marketing to follow up faster, keep customers informed, and bring more
-                conversations into one place. Transovo AI makes business texting easier to manage.
+                conversations into one place. {BRAND_NAME} makes business texting easier to manage.
               </p>
               <Link href="/signup" className="lp-btn lp-btn-primary">
                 Get Started With Transovo
@@ -836,16 +837,16 @@ export function LandingPage() {
             <div>
               <div className="lp-logo">
                 <LogoMark />
-                Transovo AI
+                {BRAND_NAME}
               </div>
               <p className="lp-footer-tag">
-                SMS marketing and customer communication tools for small businesses. Transovo AI
+                SMS marketing and customer communication tools for small businesses. {BRAND_NAME}
                 LLC provides business messaging software for permission-based texting.
               </p>
               <p className="lp-support-note">
                 Support: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
                 <br />
-                Transovo AI LLC · Woodbridge, Virginia
+                {BRAND_NAME} LLC · Woodbridge, Virginia
               </p>
             </div>
             <div className="lp-footer-cols">
@@ -858,7 +859,7 @@ export function LandingPage() {
               </div>
               <div>
                 <h4>Company</h4>
-                <Link href="/">Home</Link>
+                <Link href="/sms-marketing">Home</Link>
                 <Link href="/contact">Contact</Link>
                 <Link href="/login">Log In</Link>
                 <Link href="/signup">Get Started</Link>
@@ -886,7 +887,7 @@ export function LandingPage() {
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
             </div>
             <p className="lp-footer-copy">
-              © 2026 Transovo AI LLC. Woodbridge, Virginia. All rights reserved.
+              © 2026 {BRAND_NAME} LLC. Woodbridge, Virginia. All rights reserved.
             </p>
           </div>
         </div>

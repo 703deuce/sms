@@ -35,6 +35,7 @@ const SKIP_PAGES = [
 
 const PUBLIC_PAGES = [
   "/",
+  "/sms-marketing",
   "/login",
   "/signup",
   "/privacy",
