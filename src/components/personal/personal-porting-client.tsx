@@ -174,10 +174,37 @@ export function PersonalPortingClient({
       return;
     }
     setChecking(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const valid = phones.every((p) => p.replace(/\D/g, "").length >= 10);
-    setEligibility({ checked: true, eligible: valid, count: phones.length });
-    setChecking(false);
+    setPortMessage(null);
+    try {
+      const res = await fetch("/api/numbers/port", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check", phones }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Portability check failed");
+      }
+      const data = json.data as {
+        eligible?: boolean;
+        count?: number;
+        results?: Array<{ phone: string; eligible: boolean; reason: string }>;
+      };
+      setEligibility({
+        checked: true,
+        eligible: Boolean(data.eligible),
+        count: data.count ?? phones.length,
+      });
+      const failed = (data.results || []).filter((r) => !r.eligible);
+      if (failed.length > 0) {
+        setPortMessage(failed.map((r) => `${r.phone}: ${r.reason}`).join(" · "));
+      }
+    } catch (e) {
+      setEligibility({ checked: true, eligible: false, count: phones.length });
+      setPortMessage(e instanceof Error ? e.message : "Portability check failed");
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function portAction(action: "unlock" | "lock" | "sync") {

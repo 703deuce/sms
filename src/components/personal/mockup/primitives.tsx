@@ -304,12 +304,16 @@ export function PersonalMockPagination({
   page = 1,
   pages = 1,
   pageSizeLabel = "10 / page",
+  onPageChange,
+  hideWhenSinglePage = true,
 }: {
   showing: string;
   total: number;
   page?: number;
   pages?: number;
   pageSizeLabel?: string;
+  onPageChange?: (page: number) => void;
+  hideWhenSinglePage?: boolean;
 }) {
   const pageItems = useMemo(() => {
     if (pages <= 9) {
@@ -321,13 +325,26 @@ export function PersonalMockPagination({
     return [1, 2, 3, "ellipsis", pages] as Array<number | "ellipsis">;
   }, [pages]);
 
+  if (hideWhenSinglePage && pages <= 1) {
+    return (
+      <div className="mt-4 text-[12px] text-[#6b7280]">
+        <span>{showing}</span>
+      </div>
+    );
+  }
+
+  const canPrev = page > 1;
+  const canNext = page < pages;
+
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#6b7280]">
       <span>{showing}</span>
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb]"
+          className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb] disabled:opacity-40"
+          disabled={!canPrev}
+          onClick={() => onPageChange?.(page - 1)}
         >
           ‹
         </button>
@@ -344,6 +361,7 @@ export function PersonalMockPagination({
                   ? "bg-[#6366f1] text-white"
                   : "border border-[#e5e7eb] hover:bg-[#f9fafb]",
               )}
+              onClick={() => onPageChange?.(p)}
             >
               {p}
             </button>
@@ -351,14 +369,27 @@ export function PersonalMockPagination({
         )}
         <button
           type="button"
-          className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb]"
+          className="rounded-md border border-[#e5e7eb] px-2 py-1 hover:bg-[#f9fafb] disabled:opacity-40"
+          disabled={!canNext}
+          onClick={() => onPageChange?.(page + 1)}
         >
           ›
         </button>
-        <PersonalMockSelect className="h-8 w-[96px] text-[12px]">
-          <option>{pageSizeLabel}</option>
-          <option>25 / page</option>
-        </PersonalMockSelect>
+        {onPageChange ? (
+          <PersonalMockSelect
+            className="h-8 w-[96px] text-[12px]"
+            value={pageSizeLabel}
+            onChange={() => undefined}
+            disabled
+          >
+            <option>{pageSizeLabel}</option>
+          </PersonalMockSelect>
+        ) : (
+          <PersonalMockSelect className="h-8 w-[96px] text-[12px]">
+            <option>{pageSizeLabel}</option>
+            <option>25 / page</option>
+          </PersonalMockSelect>
+        )}
       </div>
     </div>
   );

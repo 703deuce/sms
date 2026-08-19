@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import {
+  checkPortInPortability,
   createPortRequest,
   listPortRequests,
   updatePortDocuments,
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
     if ("error" in auth) return auth.error;
 
     const body = (await request.json()) as {
+      action?: string;
+      phones?: string[];
       phone?: string;
       currentCarrier?: string;
       accountNumber?: string;
@@ -36,6 +39,12 @@ export async function POST(request: Request) {
       notes?: string;
       temporaryForwardNumber?: string;
     };
+
+    if (body.action === "check") {
+      const phones = Array.isArray(body.phones) ? body.phones : [];
+      const data = await checkPortInPortability(auth.workspaceId, phones);
+      return NextResponse.json({ data });
+    }
 
     const phone = body.phone?.trim();
     if (!phone) {

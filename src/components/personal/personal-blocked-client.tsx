@@ -103,6 +103,7 @@ export function PersonalBlockedClient({
   );
   const [unavailableDraft, setUnavailableDraft] = useState(PERSONAL_UNAVAILABLE_MESSAGE);
   const [savingAction, setSavingAction] = useState(false);
+  const [blockedPage, setBlockedPage] = useState(1);
   const importRef = useRef<HTMLInputElement>(null);
 
   const searchParams = useSearchParams();
@@ -496,6 +497,18 @@ export function PersonalBlockedClient({
         };
       });
 
+  const blockedPageSize = 10;
+  const blockedPages = Math.max(1, Math.ceil(tableRows.length / blockedPageSize));
+  const blockedPageSafe = Math.min(blockedPage, blockedPages);
+  const paginatedTableRows = tableRows.slice(
+    (blockedPageSafe - 1) * blockedPageSize,
+    blockedPageSafe * blockedPageSize,
+  );
+
+  useEffect(() => {
+    setBlockedPage(1);
+  }, [scopeSegment, reasonFilter, selectedId, rows.length]);
+
   const displayKpis = useWireframe
     ? { total: 24, thisMonth: 7, thisMonthTrend: 16.7, callsBlocked: 63, callsTrend: 12.5, numbersProtected: 4 }
     : kpis;
@@ -642,7 +655,7 @@ export function PersonalBlockedClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f3f4f6]">
-                  {tableRows.map((r) => (
+                  {paginatedTableRows.map((r) => (
                       <tr key={r.id}>
                         <td className="py-3 pr-3 font-semibold text-[#2563eb]">
                           {formatPhone(r.phone)}
@@ -682,11 +695,20 @@ export function PersonalBlockedClient({
               <PersonalMockPagination
                 showing={
                   useWireframe
-                    ? "Showing 1 to 6 of 24 results"
-                    : `Showing ${tableRows.length} blocked caller${tableRows.length === 1 ? "" : "s"}`
+                    ? `Showing ${(blockedPageSafe - 1) * blockedPageSize + 1} to ${Math.min(
+                        blockedPageSafe * blockedPageSize,
+                        tableRows.length,
+                      )} of 24 results`
+                    : `Showing ${tableRows.length === 0 ? 0 : (blockedPageSafe - 1) * blockedPageSize + 1} to ${Math.min(
+                        blockedPageSafe * blockedPageSize,
+                        tableRows.length,
+                      )} of ${tableRows.length} blocked caller${tableRows.length === 1 ? "" : "s"}`
                 }
                 total={useWireframe ? 24 : tableRows.length}
-                pages={useWireframe ? 3 : 1}
+                pages={useWireframe ? 3 : blockedPages}
+                page={blockedPageSafe}
+                pageSizeLabel={`${blockedPageSize} / page`}
+                onPageChange={setBlockedPage}
               />
             </div>
           )}

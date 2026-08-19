@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { PersonalNumberRow, PersonalNumberStats } from "@/lib/workspace/personal-data";
 import { PERSONAL_VERIFICATION_WARNING } from "@/lib/numbers/personal-call-settings";
 import { formatPhone } from "@/lib/utils";
-import Link from "next/link";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -253,6 +253,7 @@ export function PersonalNumberDetailClient({
         </section>
       ) : null}
 
+      {!isNumbersPlatformOnlyLaunch() ? (
       <section className="surface rounded-xl p-5 space-y-3">
         <h3 className="text-sm font-semibold">Move to Business</h3>
         <p className="text-sm text-muted-foreground">
@@ -264,6 +265,7 @@ export function PersonalNumberDetailClient({
           <p className="text-xs text-muted-foreground">No business workspaces on this account.</p>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

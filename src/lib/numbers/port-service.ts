@@ -303,3 +303,139 @@ export async function updatePortDocuments(input: {
   });
   return hydratePort(updated);
 }
+
+export type PortInPortabilityResult = {
+  phone: string;
+  normalized: string | null;
+  eligible: boolean;
+  reason: string;
+  carrier?: string;
+  lineType?: string;
+};
+
+async function lookupTelnyxLineType(normalized: string): Promise<{
+  carrier?: string;
+  lineType?: string;
+} | null> {
+  const { getTelnyxApiKey } = await import("@/lib/messaging/telnyx/config");
+  if (!getTelnyxApiKey()) return null;
+  try {
+    const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+    const encoded = encodeURIComponent(normalized);
+    const res = await telnyxRequest<{
+      data?: { carrier?: { name?: string; type?: string } };
+    }>(`/number_lookup/${encoded}`, { query: { type: "carrier" } });
+    const carrier = res.data?.carrier;
+    if (!carrier) return null;
+    return { carrier: carrier.name, lineType: carrier.type };
+  } catch {
+    return null;
+  }
+}
+
+const ACTIVE_PORT_STATUSES = new Set([
+  "pending",
+  "submitted",
+  "in_progress",
+  "docs_needed",
+  "foc_confirmed",
+  "scheduled",
+]);
+
+/** Pre-submit portability check — format, duplicates, and optional Telnyx carrier lookup. */
+export async function checkPortInPortability(
+  workspaceId: string,
+  rawPhones: string[],
+): Promise<{
+  eligible: boolean;
+  count: number;
+  results: PortInPortabilityResult[];
+}> {
+  const prisma = getPrisma();
+  const results: PortInPortabilityResult[] = [];
+
+  for (const raw of rawPhones) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    let normalized: string | null = null;
+    try {
+      normalized = normalizeE164(trimmed);
+    } catch {
+      normalized = null;
+    }
+
+    if (!normalized || normalized.replace(/\D/g, "").length < 10) {
+      results.push({
+        phone: trimmed,
+        normalized: null,
+        eligible: false,
+        reason: "Enter a valid US phone number (10+ digits).",
+      });
+      continue;
+    }
+
+    const owned = await prisma.phoneNumber.findFirst({
+      where: { workspaceId, e164: normalized },
+      select: { id: true },
+    });
+    if (owned) {
+      results.push({
+        phone: trimmed,
+        normalized,
+        eligible: false,
+        reason: "This number is already on your Transovo account.",
+      });
+      continue;
+    }
+
+    const openPort = await prisma.portRequest.findFirst({
+      where: {
+        workspaceId,
+        phone: normalized,
+        status: { in: [...ACTIVE_PORT_STATUSES] },
+      },
+      select: { id: true, status: true },
+    });
+    if (openPort) {
+      results.push({
+        phone: trimmed,
+        normalized,
+        eligible: false,
+        reason: `A port request is already ${openPort.status.replace(/_/g, " ")} for this number.`,
+      });
+      continue;
+    }
+
+    const lookup = await lookupTelnyxLineType(normalized);
+    const lineType = lookup?.lineType?.toLowerCase() || "";
+    if (lineType.includes("invalid") || lineType.includes("unknown")) {
+      results.push({
+        phone: trimmed,
+        normalized,
+        eligible: false,
+        reason: "Carrier lookup could not verify this number.",
+        carrier: lookup?.carrier,
+        lineType: lookup?.lineType,
+      });
+      continue;
+    }
+
+    results.push({
+      phone: trimmed,
+      normalized,
+      eligible: true,
+      reason: lookup
+        ? `Format valid — ${lookup.carrier || "carrier"} (${lookup.lineType || "line"}). Final eligibility confirmed when you submit LOA and carrier bill.`
+        : "Format valid. Carrier eligibility is confirmed when you submit your port request with LOA and billing records.",
+      carrier: lookup?.carrier,
+      lineType: lookup?.lineType,
+    });
+  }
+
+  return {
+    eligible: results.length > 0 && results.every((r) => r.eligible),
+    count: results.length,
+    results,
+  };
+}

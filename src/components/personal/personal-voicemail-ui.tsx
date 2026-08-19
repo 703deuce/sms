@@ -150,8 +150,6 @@ export function PersonalVoicemailUI({
   const [voicemailEnabled, setVoicemailEnabled] = useState(true);
   const [autoTranscription, setAutoTranscription] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
-  const [includeAudio, setIncludeAudio] = useState(true);
-  const [includeTranscript, setIncludeTranscript] = useState(true);
   const [forwardEmail, setForwardEmail] = useState("");
   const [secondaryEmail, setSecondaryEmail] = useState("");
   const [inboxFilter, setInboxFilter] = useState<"All" | "Unread" | "Read">("All");
@@ -161,6 +159,7 @@ export function PersonalVoicemailUI({
   const [savingSettings, setSavingSettings] = useState(false);
   const [showGreetingEditor, setShowGreetingEditor] = useState(false);
   const greetingRef = useRef<HTMLDivElement>(null);
+  const greetingPreviewRef = useRef<HTMLAudioElement>(null);
 
   async function ensureVoicemailBoxId(): Promise<string | undefined> {
     if (numberId) {
@@ -219,6 +218,10 @@ export function PersonalVoicemailUI({
       setSelectedId(WIREFRAME_VOICEMAIL_MESSAGES[0].id);
     }
   }, [useWireframe, selectedId]);
+
+  useEffect(() => {
+    setInboxPage(1);
+  }, [inboxFilter, searchQuery, numberId]);
 
   const sourceMessages: VmMessage[] = useWireframe
     ? WIREFRAME_VOICEMAIL_MESSAGES.map((m) => ({
@@ -416,8 +419,37 @@ export function PersonalVoicemailUI({
     await persistGreeting({ greetingUrl: url });
   }
 
+  const managedNumber = numbers.find((n) => n.id === numberId) ?? numbers[0];
+  const managedSettings =
+    managedNumber?.settingsJson && typeof managedNumber.settingsJson === "object"
+      ? (managedNumber.settingsJson as Record<string, unknown>)
+      : {};
+  const forwardRingSeconds =
+    typeof managedSettings.forwardRingSeconds === "number"
+      ? managedSettings.forwardRingSeconds
+      : 20;
+  const forwardingEnabledLive = Boolean(managedNumber?.voiceForwardTo);
+
+  function openGreetingEditor() {
+    setShowGreetingEditor(true);
+    greetingRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function previewGreeting() {
+    const url = box?.greetingUrl;
+    if (!url) {
+      setSettingsMessage("Record or upload a greeting first.");
+      return;
+    }
+    const audio = greetingPreviewRef.current;
+    if (!audio) return;
+    audio.src = url;
+    audio.play().catch(() => setSettingsMessage("Could not play greeting audio."));
+  }
+
   const settingsSidebar = (
     <div className="space-y-4">
+      <audio ref={greetingPreviewRef} className="hidden" />
       <div className={pm.card + " space-y-3 p-4"}>
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-[15px] font-semibold text-[#111827]">Voicemail Greeting</h3>
@@ -427,24 +459,29 @@ export function PersonalVoicemailUI({
           {useWireframe ? "Main Line Greeting" : box?.greetingUrl ? "Custom audio greeting" : "Personal greeting"}
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <PersonalMockBtn variant="outline" className="text-[12px]">Preview Greeting</PersonalMockBtn>
-          <PersonalMockBtn variant="outline" className="text-[12px]">Change Greeting</PersonalMockBtn>
-          <PersonalMockBtn
-            variant="outline"
-            className="text-[12px]"
-            onClick={() => {
-              setShowGreetingEditor(true);
-              greetingRef.current?.scrollIntoView({ behavior: "smooth" });
-            }}
-          >
+          <PersonalMockBtn variant="outline" className="text-[12px]" onClick={previewGreeting}>
+            Preview Greeting
+          </PersonalMockBtn>
+          <PersonalMockBtn variant="outline" className="text-[12px]" onClick={openGreetingEditor}>
+            Change Greeting
+          </PersonalMockBtn>
+          <PersonalMockBtn variant="outline" className="text-[12px]" onClick={openGreetingEditor}>
             Record
           </PersonalMockBtn>
-          <PersonalMockBtn variant="outline" className="gap-1 text-[12px]">
+          <PersonalMockBtn
+            variant="outline"
+            className="gap-1 text-[12px]"
+            onClick={openGreetingEditor}
+          >
             <Upload className="h-3.5 w-3.5" />
             Upload
           </PersonalMockBtn>
         </div>
-        <PersonalMockBtn variant="outline" className="mt-2 w-full gap-1 text-[12px]">
+        <PersonalMockBtn
+          variant="outline"
+          className="mt-2 w-full gap-1 text-[12px]"
+          onClick={openGreetingEditor}
+        >
           <Wand2 className="h-3.5 w-3.5" />
           Generate
         </PersonalMockBtn>
@@ -483,16 +520,9 @@ export function PersonalVoicemailUI({
             onChange={(e) => setSecondaryEmail(e.target.value)}
           />
         </div>
-        <PersonalMockToggle
-          label="Include Audio Attachment"
-          checked={includeAudio}
-          onChange={setIncludeAudio}
-        />
-        <PersonalMockToggle
-          label="Include Transcript"
-          checked={includeTranscript}
-          onChange={setIncludeTranscript}
-        />
+        <p className="text-[11px] text-[#9ca3af]">
+          Email alerts include a recording link and transcript when auto-transcription is on.
+        </p>
       </div>
 
       <div className={pm.card + " space-y-2 p-4 text-[12px]"}>
@@ -504,13 +534,17 @@ export function PersonalVoicemailUI({
               ? WIREFRAME_VOICEMAIL_FORWARDING.forwardingEnabled
                 ? "Enabled"
                 : "Disabled"
-              : "Enabled"}
+              : forwardingEnabledLive
+                ? "Enabled"
+                : "Disabled"}
           </span>
         </div>
         <div className="flex justify-between">
           <span className="text-[#6b7280]">Ring time</span>
           <span className="font-medium text-[#111827]">
-            {useWireframe ? `${WIREFRAME_VOICEMAIL_FORWARDING.ringSeconds} seconds` : "25 seconds"}
+            {useWireframe
+              ? `${WIREFRAME_VOICEMAIL_FORWARDING.ringSeconds} seconds`
+              : `${forwardRingSeconds} seconds`}
           </span>
         </div>
         <div className="flex justify-between">
@@ -565,6 +599,15 @@ export function PersonalVoicemailUI({
       <button
         type="button"
         className="flex w-full items-center justify-center gap-1.5 text-[12px] font-semibold text-[#6366f1]"
+        onClick={() => {
+          if (!managedNumber?.number) {
+            setSettingsMessage("Add a number before testing voicemail.");
+            return;
+          }
+          setSettingsMessage(
+            `Call ${formatPhone(managedNumber.number)} from another phone. If forwarding is on, let it ring through to voicemail.`,
+          );
+        }}
       >
         <Phone className="h-3.5 w-3.5" />
         Test Voicemail
@@ -754,6 +797,7 @@ export function PersonalVoicemailUI({
                 page={inboxPage}
                 pages={inboxPages}
                 pageSizeLabel="5 / page"
+                onPageChange={setInboxPage}
               />
             </>
           )}

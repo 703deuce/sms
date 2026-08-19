@@ -84,6 +84,7 @@ export function BillingSettingsPanel() {
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
   const [personalMode, setPersonalMode] = useState(false);
+  const [forwardingMinutesUsed, setForwardingMinutesUsed] = useState<number | null>(null);
 
   function applyData(data: {
     metrics?: Metrics;
@@ -109,7 +110,16 @@ export function BillingSettingsPanel() {
     fetch("/api/workspace")
       .then((r) => r.json())
       .then((j) => {
-        if (j.data?.workspaceType === "PERSONAL") setPersonalMode(true);
+        if (j.data?.workspaceType === "PERSONAL") {
+          setPersonalMode(true);
+          fetch("/api/personal/usage")
+            .then((u) => u.json())
+            .then((usageJson) => {
+              const used = usageJson.data?.forwardingMinutesUsed;
+              if (typeof used === "number") setForwardingMinutesUsed(used);
+            })
+            .catch(() => undefined);
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -178,7 +188,14 @@ export function BillingSettingsPanel() {
           />
           <StatCard label="Credit balance" value={formatCurrency(balance)} />
           <StatCard label="Credits remaining" value={formatNumber(metrics.creditsRemaining)} />
-          <StatCard label="Sent this period" value={formatNumber(metrics.messagesSentPeriod)} />
+          <StatCard
+            label={personalMode ? "Forwarding minutes" : "Sent this period"}
+            value={
+              personalMode && forwardingMinutesUsed !== null
+                ? `${forwardingMinutesUsed} min`
+                : formatNumber(metrics.messagesSentPeriod)
+            }
+          />
         </div>
       ) : null}
 
@@ -392,8 +409,9 @@ export function BillingSettingsPanel() {
         )}
         {currentUsage ? (
           <p className="mt-4 text-xs text-muted-foreground">
-            Current period: {formatNumber(currentUsage.smsSegments)} SMS segments,{" "}
-            {formatNumber(currentUsage.mmsMessages)} MMS.
+            {personalMode
+              ? `Current period: ${forwardingMinutesUsed ?? 0} forwarding minutes on your Personal plan.`
+              : `Current period: ${formatNumber(currentUsage.smsSegments)} SMS segments, ${formatNumber(currentUsage.mmsMessages)} MMS.`}
           </p>
         ) : null}
       </Card>

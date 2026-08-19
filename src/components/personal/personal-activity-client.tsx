@@ -120,6 +120,7 @@ export function PersonalActivityClient({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [chartGranularity, setChartGranularity] = useState("Day");
   const [daysFilter, setDaysFilter] = useState(30);
+  const [tablePage, setTablePage] = useState(1);
   const numberId = searchParams.get("numberId") || initialNumberId || "";
 
   const load = useCallback(async () => {
@@ -203,6 +204,10 @@ export function PersonalActivityClient({
       );
     });
   }, [periodRows, outcomeFilter, handlingFilter, search]);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [outcomeFilter, handlingFilter, search, numberId, daysFilter]);
 
   const selected = filtered.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
 
@@ -344,11 +349,12 @@ export function PersonalActivityClient({
     downloadPersonalCsv(`call-activity-${daysFilter}d.csv`, headers, csvRows);
   }
 
-  const tablePageSize = 8;
+  const tablePageSize = useWireframe ? 8 : 10;
   const tableTotal = useWireframe ? WIREFRAME_ANALYTICS_KPIS.totalCalls : filtered.length;
-  const tablePages = useWireframe
-    ? Math.ceil(tableTotal / tablePageSize)
-    : Math.max(1, Math.ceil(filtered.length / 10));
+  const tablePages = Math.max(1, Math.ceil((useWireframe ? tableTotal : filtered.length) / tablePageSize));
+  const tablePageSafe = Math.min(tablePage, tablePages);
+  const tableSliceStart = (tablePageSafe - 1) * tablePageSize;
+  const tableSliceEnd = tableSliceStart + tablePageSize;
 
   return (
     <PersonalMockPage>
@@ -525,7 +531,7 @@ export function PersonalActivityClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f3f4f6]">
-                      {filtered.slice(0, useWireframe ? 8 : 10).map((r, rowIdx) => {
+                      {filtered.slice(tableSliceStart, tableSliceEnd).map((r, rowIdx) => {
                         const isSelected = selected?.id === r.id;
                         return (
                           <tr
@@ -601,12 +607,17 @@ export function PersonalActivityClient({
                 <PersonalMockPagination
                   showing={
                     useWireframe
-                      ? "Showing 1 to 8 of 1,284 calls"
-                      : `Showing 1 to ${Math.min(10, filtered.length)} of ${filtered.length} calls`
+                      ? `Showing ${tableSliceStart + 1} to ${Math.min(tableSliceEnd, tableTotal)} of ${tableTotal} calls`
+                      : `Showing ${filtered.length === 0 ? 0 : tableSliceStart + 1} to ${Math.min(
+                          tableSliceEnd,
+                          filtered.length,
+                        )} of ${filtered.length} calls`
                   }
                   total={tableTotal}
                   pages={tablePages}
-                  pageSizeLabel="10 / page"
+                  page={tablePageSafe}
+                  pageSizeLabel={`${tablePageSize} / page`}
+                  onPageChange={setTablePage}
                 />
               </>
             )}

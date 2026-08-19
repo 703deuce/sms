@@ -749,6 +749,7 @@ export function PersonalVaultUI({
                   total={filtered.length}
                   page={pageSafe}
                   pages={totalPages}
+                  onPageChange={setPage}
                 />
               </div>
             )}
