@@ -153,6 +153,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   emailToSmsAddress: "email_to_sms_addresses",
   paymentLink: "payment_links",
   portRequest: "PortRequest",
+  portOutRequest: "port_out_requests",
   humanCall: "human_calls",
   humanCallEvent: "human_call_events",
   pushSubscription: "push_subscriptions",
@@ -226,6 +227,7 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     user: { table: "User", fk: "userId" },
   },
   portRequest: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  portOutRequest: { workspace: { table: "Workspace", fk: "workspaceId" } },
   humanCall: { workspace: { table: "Workspace", fk: "workspaceId" } },
   humanCallEvent: {
     workspace: { table: "Workspace", fk: "workspaceId" },

@@ -627,8 +627,18 @@ export async function loadVaultHubSummary(workspaceId: string): Promise<VaultHub
         ? 100
         : 0;
 
-  const { listCustomerPortOutRequests } = await import("@/lib/numbers/port-out-service");
-  const portOutRows = await listCustomerPortOutRequests(workspaceId);
+  const portOutRows = await prisma.portOutRequest.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      phoneNumberId: true,
+      phone: true,
+      status: true,
+      initiatedAt: true,
+    },
+  });
   const activePortStatuses = new Set([
     "submitted",
     "in_progress",
@@ -636,12 +646,8 @@ export async function loadVaultHubSummary(workspaceId: string): Promise<VaultHub
     "foc_confirmed",
     "completed",
   ]);
-  const activePortOuts = portOutRows.filter(
-    (p: { status: string }) => activePortStatuses.has(p.status),
-  );
-  const activePortOutNumberIds = activePortOuts.map(
-    (p: { phoneNumberId: string }) => p.phoneNumberId,
-  );
+  const activePortOuts = portOutRows.filter((p) => activePortStatuses.has(p.status));
+  const activePortOutNumberIds = activePortOuts.map((p) => p.phoneNumberId);
 
   const callGroups: Array<{ to: string; _count: { _all: number } }> = await prisma.humanCall.groupBy({
     by: ["to"],
@@ -721,7 +727,7 @@ export async function loadVaultHubSummary(workspaceId: string): Promise<VaultHub
   }
 
   const ledger = await prisma.creditLedgerEntry.findMany({
-    where: { workspaceId, type: "credit" },
+    where: { workspaceId, source: "purchase" },
     orderBy: { createdAt: "desc" },
     take: 1,
   });
