@@ -40,18 +40,24 @@ export function PersonalMockHeader({
   description,
   actions,
   filters,
+  titleClassName,
+  descriptionClassName,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   filters?: ReactNode;
+  titleClassName?: string;
+  descriptionClassName?: string;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className={pm.title}>{title}</h1>
-          {description ? <p className={pm.subtitle}>{description}</p> : null}
+          <h1 className={cn(pm.title, titleClassName)}>{title}</h1>
+          {description ? (
+            <p className={cn(pm.subtitle, descriptionClassName)}>{description}</p>
+          ) : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
@@ -71,6 +77,8 @@ export function PersonalMockKpi({
   deltaText,
   deltaTone,
   valueClassName,
+  className,
+  iconWrapClassName,
 }: {
   label: string;
   value: string | number;
@@ -82,22 +90,25 @@ export function PersonalMockKpi({
   deltaText?: string;
   deltaTone?: "green" | "red" | "gray";
   valueClassName?: string;
+  className?: string;
+  iconWrapClassName?: string;
 }) {
   return (
-    <div className={cn(pm.card, "p-4")}>
-      <div className="flex items-center gap-4">
+    <div className={cn(pm.card, "p-4", className)}>
+      <div className="flex items-center gap-3.5">
         {Icon ? (
           <div
             className={cn(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
               iconClass,
+              iconWrapClassName,
             )}
           >
             <Icon className="h-5 w-5" strokeWidth={2} />
           </div>
         ) : null}
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium leading-snug text-[#6b7280]">{label}</p>
+          <p className="text-[13px] font-medium leading-snug text-[#6b7280]">{label}</p>
           <p
             className={cn(
               "mt-0.5 text-[28px] font-bold leading-none tracking-tight text-[#111827]",

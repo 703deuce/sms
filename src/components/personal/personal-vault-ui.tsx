@@ -7,6 +7,7 @@ import { runPersonalNumberAction } from "@/lib/personal/client-actions";
 import { formatPhone, cn } from "@/lib/utils";
 import {
   ArrowRightLeft,
+  Banknote,
   Columns3,
   Download,
   Filter,
@@ -322,24 +323,30 @@ export function PersonalVaultUI({
         <PersonalMockHeader
           title="Number Vault"
           description="Manage and monitor your phone numbers here."
+          titleClassName="text-[26px] leading-tight"
+          descriptionClassName="text-[13px] text-[#6b7280]"
           actions={
-            <Link href="/personal/numbers/premium">
-              <PersonalMockBtn className="!bg-[#1e40af] hover:!bg-[#1e3a8a]">
-                <Plus className="h-4 w-4" />
-                Add New Number
-              </PersonalMockBtn>
+            <Link
+              href="/personal/numbers/premium"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#1e40af] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#1e3a8a]"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              Add New Number
             </Link>
           }
         />
 
         {error ? <p className="text-[13px] text-rose-600">{error}</p> : null}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <PersonalMockKpi
+            className="p-5"
             label="Total Numbers"
             value={hubSummary.totalNumbers}
             icon={Phone}
             iconClass="bg-[#eff6ff] text-[#2563eb]"
+            iconWrapClassName="h-10 w-10"
+            valueClassName="text-[32px]"
             deltaText={weekDeltaText(hubSummary.totalDeltaWeek)}
             deltaTone={
               hubSummary.totalDeltaWeek > 0
@@ -350,10 +357,13 @@ export function PersonalVaultUI({
             }
           />
           <PersonalMockKpi
+            className="p-5"
             label="Vaulted"
             value={hubSummary.vaulted}
             icon={Shield}
             iconClass="bg-[#fff7ed] text-[#ea580c]"
+            iconWrapClassName="h-10 w-10"
+            valueClassName="text-[32px]"
             deltaText={weekDeltaText(hubSummary.vaultedDeltaWeek)}
             deltaTone={
               hubSummary.vaultedDeltaWeek > 0
@@ -364,38 +374,47 @@ export function PersonalVaultUI({
             }
           />
           <PersonalMockKpi
+            className="p-5"
             label="Forwarding"
             value={hubSummary.forwarding}
             icon={PhoneForwarded}
             iconClass="bg-[#ecfdf5] text-[#059669]"
+            iconWrapClassName="h-10 w-10"
+            valueClassName="text-[32px]"
             deltaText={weekDeltaText(hubSummary.forwardingDeltaWeek)}
             deltaTone="gray"
           />
           <PersonalMockKpi
+            className="p-5"
             label="Incoming Calls"
             value={hubSummary.incomingCalls7d}
             icon={PhoneIncoming}
             iconClass="bg-[#f3e8ff] text-[#7c3aed]"
+            iconWrapClassName="h-10 w-10"
+            valueClassName="text-[32px]"
             deltaText={`${hubSummary.incomingCallsTrendPct >= 0 ? "+" : ""}${hubSummary.incomingCallsTrendPct}% from last week`}
             deltaTone={hubSummary.incomingCallsTrendPct >= 0 ? "green" : "red"}
           />
           <PersonalMockKpi
+            className="p-5"
             label="Ported Out"
             value={hubSummary.portedOut}
             icon={PhoneOutgoing}
             iconClass="bg-[#fef2f2] text-[#dc2626]"
+            iconWrapClassName="h-10 w-10"
+            valueClassName="text-[32px]"
             deltaText={hubSummary.portedOutLabel}
             deltaTone="gray"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[240px] flex-1 max-w-md">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-[420px]">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
             />
             <PersonalMockInput
-              className="h-10 w-full bg-white pl-9"
+              className="h-10 w-full border-[#e5e7eb] bg-white pl-9 shadow-sm"
               placeholder="Search numbers or status"
               value={search}
               onChange={(e) => {
@@ -404,20 +423,21 @@ export function PersonalVaultUI({
               }}
             />
           </div>
-          <PersonalMockSelect
-            className="h-10 w-[130px] text-[13px]"
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value as TypeFilter);
-              setPage(1);
-            }}
-          >
-            <option value="all">All Types</option>
-            <option value="local">Local</option>
-            <option value="tollfree">Toll-free</option>
-          </PersonalMockSelect>
-          <PersonalMockSelect
-            className="h-10 w-[140px] text-[13px]"
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <PersonalMockSelect
+              className="h-10 w-[130px] text-[13px] shadow-sm"
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value as TypeFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">All Types</option>
+              <option value="local">Local</option>
+              <option value="tollfree">Toll-free</option>
+            </PersonalMockSelect>
+            <PersonalMockSelect
+              className="h-10 w-[140px] text-[13px] shadow-sm"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value as StatusFilter);
@@ -429,9 +449,9 @@ export function PersonalVaultUI({
             <option value="Forward">Forward</option>
             <option value="Ported">Ported</option>
           </PersonalMockSelect>
-          <PersonalMockSelect
-            className="h-10 w-[140px] text-[13px]"
-            value={providerFilter}
+            <PersonalMockSelect
+              className="h-10 w-[140px] text-[13px] shadow-sm"
+              value={providerFilter}
             onChange={(e) => {
               setProviderFilter(e.target.value as ProviderFilter);
               setPage(1);
@@ -441,28 +461,29 @@ export function PersonalVaultUI({
             <option value="telnyx">Telnyx</option>
             <option value="twilio">Twilio</option>
           </PersonalMockSelect>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]"
-            aria-label="Filter"
-          >
-            <Filter className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]"
-            aria-label="Columns"
-          >
-            <Columns3 className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f9fafb]"
-            aria-label="Export"
-            onClick={() => router.push("/personal/numbers")}
-          >
-            <Download className="h-4 w-4" />
-          </button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] shadow-sm hover:bg-[#f9fafb]"
+              aria-label="Filter"
+            >
+              <Filter className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] shadow-sm hover:bg-[#f9fafb]"
+              aria-label="Columns"
+            >
+              <Columns3 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] shadow-sm hover:bg-[#f9fafb]"
+              aria-label="Export"
+              onClick={() => router.push("/personal/numbers")}
+            >
+              <Download className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className={pm.card}>
@@ -513,8 +534,8 @@ export function PersonalVaultUI({
                         <tr key={n.id} className="group">
                           <td className="py-3.5 pr-4">
                             <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
-                                <Phone className="h-4 w-4" />
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#2563eb]">
+                                <Phone className="h-3.5 w-3.5" strokeWidth={2.5} />
                               </span>
                               <div>
                                 <p className="font-semibold text-[#111827]">
@@ -538,8 +559,10 @@ export function PersonalVaultUI({
                             <div className="flex items-center gap-3">
                               <PersonalMockSparkline
                                 points={spark}
-                                color="#6366f1"
-                                className="h-6 w-16"
+                                color="#2563eb"
+                                width={56}
+                                height={22}
+                                className="shrink-0"
                               />
                               <span className="text-[12px] text-[#6b7280]">
                                 {usage.minutes} min · {usage.calls} calls
@@ -550,7 +573,7 @@ export function PersonalVaultUI({
                             <div className="flex justify-end items-center gap-1">
                               <PersonalMockBtn
                                 variant="outline"
-                                className="h-8 px-3 text-[12px] !border-[#2563eb] !text-[#2563eb]"
+                                className="h-8 px-3.5 text-[12px] font-semibold !border-[#2563eb] !bg-white !text-[#2563eb] hover:!bg-[#eff6ff]"
                                 onClick={() => handleManage(n)}
                               >
                                 Manage
@@ -609,17 +632,20 @@ export function PersonalVaultUI({
                     })}
                   </tbody>
                 </table>
-                <PersonalMockPagination
-                  showing={`Showing ${pageStart} to ${pageEnd} of ${filtered.length} numbers`}
-                  total={filtered.length}
-                  page={pageSafe}
-                  pages={totalPages}
-                  pageSizeLabel={`${pageSize} / page`}
-                  onPageChange={setPage}
-                />
-                <p className="mt-2 text-[11px] text-[#9ca3af]">
-                  Showing {paginated.length} of {hubSummary.totalNumbers} numbers. See more at the
-                  bottom of the page.
+                {totalPages > 1 ? (
+                  <PersonalMockPagination
+                    showing={`Showing ${pageStart} to ${pageEnd} of ${filtered.length} numbers`}
+                    total={filtered.length}
+                    page={pageSafe}
+                    pages={totalPages}
+                    pageSizeLabel={`${pageSize} / page`}
+                    onPageChange={setPage}
+                    hideWhenSinglePage={false}
+                  />
+                ) : null}
+                <p className="mt-3 text-[11px] text-[#9ca3af]">
+                  Showing {pageEnd} of {hubSummary.totalNumbers} numbers. See more at the bottom
+                  of the page.
                 </p>
               </div>
             )}
@@ -627,8 +653,8 @@ export function PersonalVaultUI({
         </div>
 
         <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Recent Actions</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-[16px] font-semibold text-[#111827]">Recent Actions</h2>
             <Link
               href="/personal/activity"
               className="text-[12px] font-semibold text-[#2563eb] hover:underline"
@@ -636,9 +662,9 @@ export function PersonalVaultUI({
               See all activity &gt;
             </Link>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {hubSummary.recentActions.map((action) => (
-              <div key={action.id} className={cn(pm.card, "p-4")}>
+              <div key={action.id} className={cn(pm.card, "p-4 shadow-sm")}>
                 <div className="flex items-start gap-3">
                   <span
                     className={cn(
@@ -651,7 +677,7 @@ export function PersonalVaultUI({
                     ) : action.kind === "ported_out" ? (
                       <PhoneOutgoing className="h-4 w-4" />
                     ) : action.kind === "payment" ? (
-                      <Shield className="h-4 w-4" />
+                      <Banknote className="h-4 w-4" />
                     ) : (
                       <Pencil className="h-4 w-4" />
                     )}
