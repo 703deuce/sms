@@ -205,7 +205,7 @@ Scenarios: `TEST-PORT-OUT-TELNYX-HAPPY`, `TEST-PORT-OUT-TELNYX-REJECT-RETRY`, `T
 5. **Port reality check:** 1 port-out per provider (optional 1 port-in each) — not 50.
 6. **Manual smoke:** iPhone + desktop on `/`, `/personal/*`, checkout, vault.
 7. **Monitoring:** Route error alerts to email/Slack you actually read.
-8. **Run browser smoke:** `node scripts/number-marketplace-browser-smoke.mjs https://transovo.ai`
+8. **Run browser smoke:** `node scripts/number-marketplace-browser-smoke.mjs https://YOUR_HOST`
 
 ---
 
