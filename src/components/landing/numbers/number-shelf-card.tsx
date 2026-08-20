@@ -1,6 +1,6 @@
 "use client";
 
-import { displayLaunchPrice, formatUsd } from "@/lib/premium-numbers/launch-pricing";
+import { formatUsd } from "@/lib/premium-numbers/launch-pricing";
 import type { PremiumNumberProductResult } from "@/lib/premium-numbers/product-api";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,6 @@ export function NumberShelfCard({
   loading?: boolean;
   onGetNumber: () => void;
 }) {
-  const pricing = displayLaunchPrice(result.premiumPriceCents, result.premiumPriceBand);
   const descriptor =
     result.cardBullets[0] ??
     result.memorabilityLabel ??
@@ -27,23 +26,17 @@ export function NumberShelfCard({
     impressionSent.current = true;
     trackNumbersLandingEvent("top_pick_impression", {
       phoneNumber: result.phoneNumber,
-      priceCents: pricing.priceCents,
+      priceCents: result.premiumPriceCents,
       band: result.premiumPriceBand,
     });
-  }, [result.phoneNumber, result.premiumPriceBand, pricing.priceCents]);
+  }, [result.phoneNumber, result.premiumPriceBand, result.premiumPriceCents]);
 
   return (
     <article className="nl-shelf-card">
-      {pricing.showLaunchBadge ? (
-        <span className="nl-shelf-launch-badge">50% Launch Price</span>
-      ) : null}
       <p className="nl-shelf-number">{result.vanityDisplay ?? result.displayNumber}</p>
       <p className="nl-shelf-descriptor">{descriptor}</p>
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="nl-shelf-price">{formatUsd(pricing.priceCents)}</span>
-        {pricing.listPriceCents ? (
-          <span className="nl-shelf-list-price">{formatUsd(pricing.listPriceCents)}</span>
-        ) : null}
+        <span className="nl-shelf-price">{formatUsd(result.premiumPriceCents)}</span>
       </div>
       <button
         type="button"

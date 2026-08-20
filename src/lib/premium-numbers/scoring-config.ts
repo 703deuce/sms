@@ -1,7 +1,4 @@
-/**
- * Tunable scoring weights — business match vs number quality blend.
- * Industry searches: final list rank = 70% business match + 30% number quality.
- */
+/** Tunable scoring weights. Pricing policy lives in premium-pricing.ts. */
 export const BUSINESS_MATCH_LIST_THRESHOLD = 55;
 export const MEMORABLE_NUMBER_QUALITY_THRESHOLD = 40;
 
@@ -42,20 +39,29 @@ export const SCORING_WEIGHTS = {
     areaCodeMarketDefault: 50,
   },
   numberQuality: {
-    exceptionalRepetition: 95,
-    strongRepeatedBlocks: 88,
-    last4AllIdentical: 78,
-    ends0000: 40,
-    ababOrRepeatedPair: 48,
-    sequence: 45,
-    roundEnding: 32,
-    shortPalindromeLast4: 22,
-    hiddenFullPalindrome: 12,
-    last3Identical: 18,
-    triplePrefix: 42,
-    chunkabilityMax: 22,
-    simplicityMax: 8,
-    wordPlusNumericBoost: 18,
+    exceptionalRepetition: 96,
+    fullSequence: 92,
+    strongRepeatedBlocks: 78,
+    last4AllIdentical: 68,
+    ends0000: 72,
+    ababOrRepeatedPair: 43,
+    aabb: 36,
+    abba: 32,
+    sequence: 42,
+    longSequence: 60,
+    roundEnding: 38,
+    shortPalindromeLast4: 30,
+    hiddenFullPalindrome: 36,
+    last3Identical: 38,
+    endingPair: 4,
+    twoPairs: 18,
+    triplePrefix: 22,
+    repeatedPrefixLine: 42,
+    mirroredPrefixLine: 30,
+    interiorTripleRhythm: 52,
+    areaCodeRelationshipMax: 4,
+    chunkabilityMax: 12,
+    simplicityMax: 5,
   },
   providerCost: {
     baselineMonthly: 1,

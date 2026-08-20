@@ -187,15 +187,24 @@ function buildTags(
   candidate: ScoredCandidate,
   mode: PremiumSearchMode,
   displayWord?: string,
+  priceLabel?: string,
+  listSection?: PremiumNumberProductResult["listSection"],
 ): string[] {
   const tags: string[] = [];
+  if (mode === "personal" && priceLabel) tags.push(priceLabel);
+  if (listSection === "top_pick") tags.push("Top Pick");
   const displayWordLen = displayWord ? normalizeWord(displayWord).length : 0;
   if (mode === "business" && candidate.businessMatchScore >= BUSINESS_MATCH_LIST_THRESHOLD) {
     tags.push("Smart Match");
     tags.push("Local");
   }
   if (displayWord) tags.push(displayWord);
-  if (candidate.numberQualityScore >= 80) tags.push("Highly Memorable");
+  const patternText = candidate.matchedPatterns.join(" ").toLowerCase();
+  if (/repeating|identical|triple|pair/.test(patternText)) tags.push("Repeating Digits");
+  if (/aabb|abab|abba|palindrome|mirrored/.test(patternText)) tags.push("Clean Pattern");
+  if (/sequence/.test(patternText)) tags.push("Nice Sequence");
+  if (candidate.numberQualityScore >= 64) tags.push("Very Memorable");
+  if (candidate.numberQualityScore >= 88) tags.push("Premium Pattern");
   if (displayWordLen >= 5) tags.push(`${displayWordLen}-letter word`);
   for (const p of candidate.matchedPatterns.slice(0, 1)) {
     if (p.toLowerCase().includes("repeater")) tags.push(p.replace(/\(.*\)/, "").trim());
@@ -262,7 +271,7 @@ export function toProductResult(
     premiumPriceBand: price.band,
     headlineLabel: buildHeadlineLabel(candidate, mode, displayWord),
     cardBullets: buildCardBullets(candidate, mode, areaCode ?? "", displayWord, wordPlacement),
-    tags: buildTags(candidate, mode, displayWord),
+    tags: buildTags(candidate, mode, displayWord, price.displayLabel, listSection),
     whyReasons: whyReasons(candidate),
     providerPremium,
     provider: candidate.provider ?? "telnyx",
@@ -301,10 +310,10 @@ export function buildProductSearchResponse(input: {
   const { mode, candidates, keywords } = input;
 
   if (mode === "personal") {
-    const topPicks = candidates
-      .filter((c) => c.numberQualityScore >= MEMORABLE_NUMBER_QUALITY_THRESHOLD)
-      .slice(0, 24)
-      .map((c) => toProductResult(c, mode, keywords, "top_pick", input.areaCode));
+    const quoted = candidates.map((c) =>
+      toProductResult(c, mode, keywords, "top_pick", input.areaCode),
+    );
+    const topPicks = merchandisePersonalResults(quoted, { limit: 24 });
 
     return {
       mode,
@@ -365,6 +374,96 @@ export function buildProductSearchResponse(input: {
     memorableAlternatives,
     searchLogId: input.searchLogId,
   };
+}
+
+export type PersonalMerchandisingOptions = {
+  limit?: number;
+  maxPriceCents?: number;
+};
+
+/**
+ * Consumer shelf order: useful/relevant source order plus an affordable opening
+ * assortment. Prices are never rewritten by this helper.
+ */
+export function merchandisePersonalResults(
+  results: PremiumNumberProductResult[],
+  options: PersonalMerchandisingOptions = {},
+): PremiumNumberProductResult[] {
+  const limit = options.limit ?? results.length;
+  const eligible = results.filter(
+    (result) => options.maxPriceCents == null || result.premiumPriceCents <= options.maxPriceCents,
+  );
+  const picked: PremiumNumberProductResult[] = [];
+  const seen = new Set<string>();
+  const take = (predicate: (result: PremiumNumberProductResult) => boolean, count: number) => {
+    for (const result of eligible) {
+      if (count <= 0) break;
+      if (seen.has(result.phoneNumber) || !predicate(result)) continue;
+      picked.push(result);
+      seen.add(result.phoneNumber);
+      count -= 1;
+    }
+  };
+
+  take((r) => r.premiumPriceCents === 499, 1);
+  take((r) => r.premiumPriceCents === 799, 1);
+  take((r) => r.premiumPriceCents === 999, 1);
+  take((r) => r.premiumPriceCents === 1499, 1);
+  take((r) => r.premiumPriceCents >= 1999, 1);
+
+  const visualFamily = (result: PremiumNumberProductResult): string => {
+    const text = result.patterns.join(" ").toLowerCase();
+    if (/sequence|ascending|descending/.test(text)) return "sequence";
+    if (/palindrome|mirrored|abba/.test(text)) return "mirror";
+    if (/0000|thousand|round/.test(text)) return "round";
+    if (/repeat|identical|triple|pair|aabb|abab/.test(text)) return "repeat";
+    return `ordinary:${result.phoneNumber.slice(-2)}`;
+  };
+  const patternFamilies = new Set<string>();
+  for (const result of picked) {
+    patternFamilies.add(visualFamily(result));
+  }
+  for (const result of eligible) {
+    if (picked.length >= limit) break;
+    if (seen.has(result.phoneNumber)) continue;
+    const family = visualFamily(result);
+    if (family && patternFamilies.has(family) && eligible.length - seen.size > limit - picked.length) {
+      continue;
+    }
+    picked.push(result);
+    seen.add(result.phoneNumber);
+    if (family) patternFamilies.add(family);
+  }
+  for (const result of eligible) {
+    if (picked.length >= limit) break;
+    if (!seen.has(result.phoneNumber)) picked.push(result);
+  }
+  return picked.slice(0, limit);
+}
+
+export function buildMaxPriceCollection(
+  results: PremiumNumberProductResult[],
+  maxPriceCents: 500 | 1000 | 1500 | 2000 | number,
+  limit = results.length,
+): PremiumNumberProductResult[] {
+  return merchandisePersonalResults(results, { maxPriceCents, limit });
+}
+
+export function buildPatternCollection(
+  results: PremiumNumberProductResult[],
+  pattern: "repeating" | "sequence" | "palindrome" | "round",
+  limit = results.length,
+): PremiumNumberProductResult[] {
+  const terms: Record<typeof pattern, RegExp> = {
+    repeating: /repeat|identical|pair|aabb|abab/i,
+    sequence: /sequence|ascending|descending/i,
+    palindrome: /palindrome|mirrored|abba/i,
+    round: /0000|thousand|round/i,
+  };
+  return merchandisePersonalResults(
+    results.filter((result) => result.patterns.some((label) => terms[pattern].test(label))),
+    { limit },
+  );
 }
 
 /** Industry labels for the searchable dropdown. */

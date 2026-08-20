@@ -79,6 +79,8 @@ export type PersonalSearchPreferences = {
 };
 
 export type ScoringSearchContext = {
+  /** Explicitly prevents personal/general searches from receiving business inflation. */
+  mode?: "personal" | "business";
   requestedAreaCodes?: string[];
   industry?: string;
   /** User-supplied keywords — unlock stronger 3-letter matches when listed. */

@@ -1,6 +1,7 @@
 import { buildKeywordEntries } from "./industry-keywords";
-import { scoreCandidate, sortCandidates } from "./scoring";
+import { scoreCandidate } from "./scoring";
 import { SCORING_WEIGHTS } from "./scoring-config";
+import { quotePremiumPrice } from "./premium-pricing";
 import { runCombinedInventorySearches } from "./combined-inventory-search";
 import { parsePhoneDigits } from "./keypad";
 import type { ProviderSearchAttempt } from "@/lib/numbers/providers/types";
@@ -59,10 +60,15 @@ function patternsForPreferences(preferences: PersonalPreference[]): string[] {
 
 function sortPersonalCandidates(candidates: ScoredCandidate[]): ScoredCandidate[] {
   return [...candidates].sort((a, b) => {
-    if (b.numberQualityScore !== a.numberQualityScore) {
-      return b.numberQualityScore - a.numberQualityScore;
-    }
-    if (b.score !== a.score) return b.score - a.score;
+    const rank = (candidate: ScoredCandidate) => {
+      const price = quotePremiumPrice(candidate, "personal").premiumPriceCents;
+      const affordability =
+        price <= 499 ? 15 : price <= 799 ? 12 : price <= 999 ? 10 : price <= 1499 ? 7 : price <= 1999 ? 3 : 0;
+      return candidate.numberQualityScore * 0.4 + (candidate.personalMatchScore ?? 0) * 0.45 + affordability;
+    };
+    const rankDelta = rank(b) - rank(a);
+    if (rankDelta !== 0) return rankDelta;
+    if (b.numberQualityScore !== a.numberQualityScore) return b.numberQualityScore - a.numberQualityScore;
     return a.formattedNumber.localeCompare(b.formattedNumber);
   });
 }
@@ -137,6 +143,7 @@ export async function searchPremiumNumbersPersonal(input: {
           rawTelnyx: raw.raw,
           provider: raw.provider,
           providerReference: raw.providerReference,
+          searchContext: { mode: "personal", requestedAreaCodes: areaCodes },
         }),
       )
       .filter((c): c is ScoredCandidate => c !== null);
@@ -231,6 +238,7 @@ export async function searchPremiumNumbersPersonal(input: {
         rawTelnyx: raw.raw,
         provider: raw.provider,
         providerReference: raw.providerReference,
+        searchContext: { mode: "personal", requestedAreaCodes: areaCodes },
       }),
     )
     .filter((c): c is ScoredCandidate => c !== null);

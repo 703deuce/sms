@@ -1,9 +1,11 @@
 import { getPrisma } from "@/lib/db";
-import { buildProductSearchResponse } from "@/lib/premium-numbers/product-api";
+import {
+  buildProductSearchResponse,
+  merchandisePersonalResults,
+} from "@/lib/premium-numbers/product-api";
 import type { PremiumNumberProductResult } from "@/lib/premium-numbers/product-api";
 import { getPublicLandingSearchContext } from "@/lib/premium-numbers/public-landing-context";
 import { serializeResultsForLog } from "@/lib/premium-numbers/reservation-service";
-import { searchPremiumNumbers } from "@/lib/premium-numbers/premium-number-search";
 import { searchPremiumNumbersPersonal } from "@/lib/premium-numbers/personal-search";
 
 type ShelfCacheEntry = {
@@ -31,70 +33,11 @@ export function invalidatePopularShelfNumber(phoneNumber: string) {
   }
 }
 
-function targetPriceBucket(cents: number): "499" | "999" | "1499" | "1999" | "2999plus" {
-  if (cents <= 499) return "499";
-  if (cents <= 999) return "999";
-  if (cents <= 1499) return "1499";
-  if (cents <= 1999) return "1999";
-  return "2999plus";
-}
-
-const BUCKET_TARGETS: Record<string, number> = {
-  "499": 3,
-  "999": 4,
-  "1499": 2,
-  "1999": 1,
-  "2999plus": 1,
-};
-
 function diversifyShelf(candidates: PremiumNumberProductResult[]): PremiumNumberProductResult[] {
-  const personal = candidates.filter((c) => !c.displayWord);
-  const business = candidates.filter((c) => Boolean(c.displayWord));
-
-  const buckets: Record<string, PremiumNumberProductResult[]> = {
-    "499": [],
-    "999": [],
-    "1499": [],
-    "1999": [],
-    "2999plus": [],
-  };
-
-  for (const c of personal) {
-    buckets[targetPriceBucket(c.premiumPriceCents)].push(c);
-  }
-
-  const picked: PremiumNumberProductResult[] = [];
-  const seen = new Set<string>();
-
-  for (const [bucket, target] of Object.entries(BUCKET_TARGETS)) {
-    const pool = buckets[bucket] ?? [];
-    let count = 0;
-    for (const item of pool) {
-      if (count >= target) break;
-      if (seen.has(item.phoneNumber) || removedFromShelves.has(item.phoneNumber)) continue;
-      seen.add(item.phoneNumber);
-      picked.push(item);
-      count++;
-    }
-  }
-
-  // Fill to ~10 personal if short
-  for (const c of personal) {
-    if (picked.length >= 10) break;
-    if (seen.has(c.phoneNumber) || removedFromShelves.has(c.phoneNumber)) continue;
-    seen.add(c.phoneNumber);
-    picked.push(c);
-  }
-
-  // Add up to 2 business vanity
-  for (const b of business) {
-    if (picked.filter((p) => p.displayWord).length >= 2) break;
-    if (seen.has(b.phoneNumber) || removedFromShelves.has(b.phoneNumber)) continue;
-    seen.add(b.phoneNumber);
-    picked.push(b);
-  }
-
-  return picked.slice(0, 12);
+  return merchandisePersonalResults(
+    candidates.filter((candidate) => !removedFromShelves.has(candidate.phoneNumber)),
+    { limit: 12 },
+  );
 }
 
 async function fetchPersonalPoolForAreaCodes(areaCodes: string[]): Promise<PremiumNumberProductResult[]> {
@@ -160,31 +103,7 @@ export async function getPopularInventory(
       ? await fetchNationwidePool(areaCodes)
       : await fetchPersonalPoolForAreaCodes(areaCodes);
 
-  let businessResults: PremiumNumberProductResult[] = [];
-  try {
-    const biz = await searchPremiumNumbers({
-      areaCode: areaCodes[0],
-      areaCodes: areaCodes.slice(0, 3),
-      industry: "services",
-      customKeywords: ["LAW", "ROOF", "MOVE", "HOME"],
-      matchStyle: "both",
-      limit: 20,
-    });
-    const product = buildProductSearchResponse({
-      mode: "business",
-      areaCode: areaCodes[0],
-      industry: biz.industry,
-      status: biz.status,
-      message: biz.message,
-      candidates: biz.candidates,
-      keywords: biz.keywords,
-    });
-    businessResults = [...product.bestMatches, ...product.memorableAlternatives].slice(0, 6);
-  } catch {
-    // business vanity optional for shelf
-  }
-
-  const pool = [...personalPool, ...businessResults].filter(
+  const pool = personalPool.filter(
     (r) => !removedFromShelves.has(r.phoneNumber),
   );
 

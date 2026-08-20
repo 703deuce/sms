@@ -22,7 +22,7 @@ export type ReservePremiumNumberResult = {
   error?: string;
 };
 
-type StoredResultRow = {
+export type StoredResultRow = {
   phoneNumber: string;
   premiumPriceCents: number;
   premiumPriceBand?: string;
@@ -33,6 +33,14 @@ type StoredResultRow = {
   provider?: "telnyx" | "twilio";
   providerReference?: string | null;
 };
+
+/** Immutable logged quote consumed by reservation and, through it, checkout. */
+export function findCheckoutAuthoritativeQuote(
+  storedResults: StoredResultRow[],
+  phoneNumber: string,
+): StoredResultRow | undefined {
+  return storedResults.find((result) => result.phoneNumber === phoneNumber);
+}
 
 export async function reservePremiumNumber(
   input: ReservePremiumNumberInput,
@@ -46,7 +54,7 @@ export async function reservePremiumNumber(
   }
 
   const stored = (log.resultsJson as StoredResultRow[] | null) ?? [];
-  const match = stored.find((r) => r.phoneNumber === input.phoneNumber);
+  const match = findCheckoutAuthoritativeQuote(stored, input.phoneNumber);
   if (!match) {
     return {
       ok: false,

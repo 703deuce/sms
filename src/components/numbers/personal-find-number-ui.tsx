@@ -603,7 +603,6 @@ export function PersonalFindNumberClient({
     searchResponse?.businessMatchCount ??
     bestMatches.filter((r) => r.numberQualityScore >= 75).length;
 
-  const bestScore = bestMatches[0]?.numberQualityScore ?? 0;
 
   function buildSearchStateFromManual(): NumberSearchState {
     return manualFormToSearchState({
@@ -1374,7 +1373,6 @@ export function PersonalFindNumberClient({
             industry={summaryIndustry}
             searchIntent={summarySearchIntent}
             numberType={summaryNumberType}
-            bestScore={bestScore}
             hasResults={Boolean(searchResponse)}
           />
           {!isPublic ? (
@@ -1429,34 +1427,6 @@ function IntentToggle({
   );
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const r = 18;
-  const c = 2 * Math.PI * r;
-  const offset = c - (pct / 100) * c;
-  return (
-    <div className="relative h-12 w-12 shrink-0">
-      <svg className="h-12 w-12 -rotate-90" viewBox="0 0 44 44" aria-hidden>
-        <circle cx="22" cy="22" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
-        <circle
-          cx="22"
-          cy="22"
-          r={r}
-          fill="none"
-          stroke="#059669"
-          strokeWidth="4"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#111827]">
-        {score}/100
-      </span>
-    </div>
-  );
-}
-
 function resolveBadge(result: PremiumNumberProductResult): string | null {
   if (
     result.displayWord &&
@@ -1468,7 +1438,7 @@ function resolveBadge(result: PremiumNumberProductResult): string | null {
   if (result.displayWord && result.wordPlacement === "embedded") {
     return "WORD + PATTERN";
   }
-  if (result.premiumPriceBand === "exceptional" || result.numberQualityScore >= 80) {
+  if (result.premiumPriceBand === "personal_3999" || result.numberQualityScore >= 80) {
     return "BEST MATCH";
   }
   if (result.businessMatchScore >= 55) {
@@ -1548,9 +1518,12 @@ function FindNumberCard({
           <p className="mt-0.5 text-[13px] font-medium text-[#9ca3af]">{subNumber}</p>
         ) : null}
 
-        <div className="mt-3 flex items-center gap-3">
-          <p className="text-[12px] font-semibold text-[#6b7280]">TransOvo Score</p>
-          <ScoreRing score={result.numberQualityScore} />
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {result.tags.map((tag) => (
+            <span key={tag} className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+              {tag}
+            </span>
+          ))}
         </div>
 
         {bullets.length > 0 ? (
@@ -1630,8 +1603,8 @@ function MoreMatchRow({
         <p className="text-[12px] text-[#9ca3af]">{result.displayNumber}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[12px] font-bold text-[#059669]">
-          {result.numberQualityScore}/100
+        <span className="text-[12px] font-semibold text-[#059669]">
+          {result.tags[0] ?? result.memorabilityLabel}
         </span>
         <button
           type="button"
@@ -1654,14 +1627,12 @@ function SearchSummaryCard({
   industry,
   searchIntent,
   numberType,
-  bestScore,
   hasResults,
 }: {
   areaCodes: string[];
   industry: string;
   searchIntent: SearchIntent;
   numberType: NumberType;
-  bestScore: number;
   hasResults: boolean;
 }) {
   const intentLabel =
@@ -1694,10 +1665,9 @@ function SearchSummaryCard({
           </dd>
         </div>
       </dl>
-      {hasResults && bestScore > 0 ? (
+      {hasResults ? (
         <div className="mt-3 rounded-lg border border-[#bbf7d0] bg-[#ecfdf5] px-3 py-2 text-center">
-          <p className="text-[11px] font-medium text-[#047857]">Best Score</p>
-          <p className="text-[18px] font-bold text-[#059669]">{bestScore}/100</p>
+          <p className="text-[12px] font-semibold text-[#047857]">Top matches selected for you</p>
         </div>
       ) : null}
     </div>

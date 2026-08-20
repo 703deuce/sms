@@ -6,10 +6,9 @@ import type {
   TelnyxCost,
 } from "./types";
 import { commercialSemanticScoreForWords } from "./commercial-semantic";
-import { formatUsPhone, parsePhoneDigits, splitUsLocalNumber } from "./keypad";
+import { formatUsPhone, parsePhoneDigits, splitUsLocalNumber, wordToKeypadDigits } from "./keypad";
 import {
   detectNumericPatterns,
-  isIndependentNumericPattern,
   simplicityScore,
 } from "./pattern-detect";
 import {
@@ -49,28 +48,29 @@ export function scoreCandidate(input: {
   const wordMatches = dedupeWordMatches(findWordMatches(subscriber, input.keywords), subscriber);
   const patterns = detectNumericPatterns(subscriber);
 
-  const business = computeBusinessMatch(
-    wordMatches,
-    areaCode,
-    input.searchContext,
-  );
+  const isBusinessContext = input.searchContext?.mode !== "personal";
+  const business = isBusinessContext
+    ? computeBusinessMatch(wordMatches, areaCode, input.searchContext)
+    : { score: 0, reasons: [], localFitScore: 0, areaCodeMarketScore: 0 };
   const numberQuality = computeNumberQuality(
     subscriber,
+    areaCode,
     patterns,
-    wordMatches,
     providerCostSignals(input.telnyxCost, input.rawTelnyx),
   );
-  const commercialSemanticScore = capDimension(
-    commercialSemanticScoreForWords(wordMatches.map((m) => m.word)),
-  );
+  const commercialSemanticScore = isBusinessContext
+    ? capDimension(commercialSemanticScoreForWords(wordMatches.map((m) => m.word)))
+    : 0;
 
-  const personalMatchScore = input.searchContext?.personalPreferences
+  const personalMatchScore = input.searchContext?.mode === "personal"
     ? capDimension(computePersonalMatch(digits10, subscriber, input.searchContext))
     : undefined;
 
   const businessMatchScore = capDimension(business.score);
   const numberQualityScore = capDimension(numberQuality.score);
-  const score = blendScores(businessMatchScore, numberQualityScore);
+  const score = isBusinessContext
+    ? blendScores(businessMatchScore, numberQualityScore)
+    : capDimension(numberQualityScore * 0.8 + (personalMatchScore ?? 0) * 0.2);
 
   const providerSignals = providerCostSignals(input.telnyxCost, input.rawTelnyx);
 
@@ -186,8 +186,8 @@ function computeBusinessMatch(
 
 function computeNumberQuality(
   subscriber: string,
+  areaCode: string,
   patterns: ReturnType<typeof detectNumericPatterns>,
-  wordMatches: WordMatch[],
   providerSignals: { premiumFlag: boolean; costSignal: boolean },
 ): { score: number; reasons: ScoringReason[] } {
   const reasons: ScoringReason[] = [];
@@ -204,30 +204,39 @@ function computeNumberQuality(
     reasons.push({ label: "Digit simplicity (few unique digits)", points: simplicity });
   }
 
+  const areaRelationship = computeAreaCodeRelationship(areaCode, subscriber);
+  if (areaRelationship.points > 0) {
+    score += areaRelationship.points;
+    reasons.push(areaRelationship);
+  }
+
   if (providerSignals.premiumFlag) {
     reasons.push({ label: "Provider premium flag", points: 0 });
   } else if (providerSignals.costSignal) {
-    const pts = SCORING_WEIGHTS.providerCost.premiumSignal;
-    score += pts;
-    reasons.push({ label: "Provider cost corroboration (minor)", points: pts });
-  }
-
-  const strongWord = wordMatches.some(
-    (m) =>
-      (m.placement === "exact_ending" || m.placement === "beginning") &&
-      m.digitLength >= 4 &&
-      m.tier === "PRIMARY",
-  );
-  const independentNumeric = patterns.some(isIndependentNumericPattern);
-  if (strongWord && independentNumeric) {
-    score += SCORING_WEIGHTS.numberQuality.wordPlusNumericBoost;
-    reasons.push({
-      label: "Hybrid: strong commercial word plus memorable numeric pattern",
-      points: SCORING_WEIGHTS.numberQuality.wordPlusNumericBoost,
-    });
+    reasons.push({ label: "Provider cost signal", points: 0 });
   }
 
   return { score, reasons };
+}
+
+function computeAreaCodeRelationship(
+  areaCode: string,
+  subscriber: string,
+): ScoringReason {
+  const max = SCORING_WEIGHTS.numberQuality.areaCodeRelationshipMax;
+  const exchange = subscriber.slice(0, 3);
+  const lineEnd = subscriber.slice(-3);
+  if (exchange === areaCode || lineEnd === areaCode) {
+    return { label: "Local digits visibly repeat the area code", points: max };
+  }
+  if (exchange === areaCode.split("").reverse().join("")) {
+    return { label: "Local exchange mirrors the area code", points: Math.max(1, max - 1) };
+  }
+  const rotations = [areaCode.slice(1) + areaCode[0], areaCode[2] + areaCode.slice(0, 2)];
+  if (rotations.includes(exchange)) {
+    return { label: "Local exchange complements the area code", points: Math.max(1, max - 2) };
+  }
+  return { label: "", points: 0 };
 }
 
 function providerCostSignals(
@@ -427,26 +436,26 @@ function computePersonalMatch(
   searchContext: ScoringSearchContext,
 ): number {
   const prefs = searchContext.personalPreferences;
-  if (!prefs) return 0;
   let score = 0;
   const areaCode = digits10.slice(0, 3);
 
-  if (prefs.requestedAreaCodes?.includes(areaCode)) score += 25;
+  const requestedAreaCodes = prefs?.requestedAreaCodes ?? searchContext.requestedAreaCodes;
+  if (requestedAreaCodes?.includes(areaCode)) score += 10;
 
-  for (const ending of prefs.requestedEndingDigits ?? []) {
+  for (const ending of prefs?.requestedEndingDigits ?? []) {
     if (subscriber.endsWith(ending)) score += 20;
   }
 
-  for (const fav of prefs.favoriteDigits ?? []) {
+  for (const fav of prefs?.favoriteDigits ?? []) {
     if (subscriber.includes(fav)) score += 10;
   }
 
-  for (const date of [...(prefs.birthdayDigits ?? []), ...(prefs.anniversaryDigits ?? [])]) {
+  for (const date of [...(prefs?.birthdayDigits ?? []), ...(prefs?.anniversaryDigits ?? [])]) {
     if (subscriber.includes(date)) score += 15;
   }
 
-  for (const token of prefs.nameTokens ?? []) {
-    const digits = token.replace(/\D/g, "");
+  for (const token of prefs?.nameTokens ?? []) {
+    const digits = /\D/.test(token) ? wordToKeypadDigits(token) : token.replace(/\D/g, "");
     if (digits.length >= 3 && subscriber.includes(digits)) score += 12;
   }
 

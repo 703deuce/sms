@@ -13,175 +13,144 @@ function reverseDigits(s: string): string {
   return s.split("").reverse().join("");
 }
 
-function isAbabOrRepeatedPair(last4: string): boolean {
-  return /^(\d{2})\1$/.test(last4) || /^(\d)(\d)\1\2$/.test(last4);
+function pattern(
+  id: string,
+  label: string,
+  points: number,
+  strength: DetectedPattern["strength"],
+  family: DetectedPattern["family"],
+  patternFamily: string,
+): DetectedPattern {
+  return { id, label, points, strength, family, patternFamily };
 }
 
-function isRoundEnding(last4: string): boolean {
-  return last4 === "1000" || last4 === "2000" || last4 === "5000";
+function longestSequence(subscriber: string): {
+  length: number;
+  direction: "ascending" | "descending";
+  start: number;
+  end: number;
+} | null {
+  let best: {
+    length: number;
+    direction: "ascending" | "descending";
+    start: number;
+    end: number;
+  } | null = null;
+  for (const direction of ["ascending", "descending"] as const) {
+    let length = 1;
+    for (let i = 1; i < subscriber.length; i++) {
+      const delta = Number(subscriber[i]) - Number(subscriber[i - 1]);
+      if (delta === (direction === "ascending" ? 1 : -1)) {
+        length += 1;
+        if (!best || length > best.length) {
+          best = { length, direction, start: i - length + 1, end: i };
+        }
+      } else {
+        length = 1;
+      }
+    }
+  }
+  return best && best.length >= 4 ? best : null;
 }
 
-function hasStrongRepeatedBlocks(subscriber: string): boolean {
-  // AAA_BBBB, AAAA_BBB, or majority repeated digit runs.
-  const runs = subscriber.match(/(\d)\1+/g) ?? [];
-  const covered = runs.reduce((sum, r) => sum + r.length, 0);
-  return covered >= 5 && runs.some((r) => r.length >= 3);
-}
-
-function fullPalindromeHasVisualRhythm(subscriber: string): boolean {
-  if (subscriber !== reverseDigits(subscriber)) return false;
-  const last4 = subscriber.slice(-4);
-  if (/^(\d)\1{3}$/.test(last4) || isAbabOrRepeatedPair(last4)) return true;
-  if (last4 === reverseDigits(last4) && last4.length === 4) return true;
-  return /^(\d)\1{2}/.test(subscriber.slice(0, 3));
-}
-
-/** One primary human-salient numeric pattern — no overlapping tail/full bonuses. */
+/**
+ * Pick one ending/full-number structure. Related patterns are deliberately
+ * mutually exclusive so 0000 is not also billed as a quadruple, pair and two pairs.
+ */
 function detectPrimaryNumericPattern(subscriber: string): DetectedPattern | null {
   const nq = SCORING_WEIGHTS.numberQuality;
   const last4 = subscriber.slice(-4);
   const last3 = subscriber.slice(-3);
+  const last2 = subscriber.slice(-2);
+  const sequence = longestSequence(subscriber);
 
   if (/^(\d)\1{6}$/.test(subscriber)) {
-    return {
-      id: "exceptional_repetition",
-      label: "Exceptional digit repetition (full subscriber)",
-      points: nq.exceptionalRepetition,
-      strength: "strong",
-      family: "primary",
-      patternFamily: "full_repetition",
-    };
+    return pattern("exceptional_repetition", "Full-number repeating digits", nq.exceptionalRepetition, "strong", "primary", "full_repetition");
   }
 
-  if (hasStrongRepeatedBlocks(subscriber) && !/^(\d)\1{6}$/.test(subscriber)) {
-    return {
-      id: "strong_repeated_blocks",
-      label: "Strong repeated digit blocks across subscriber",
-      points: nq.strongRepeatedBlocks,
-      strength: "strong",
-      family: "primary",
-      patternFamily: "repeated_blocks",
-    };
-  }
-
-  if (/^(\d)\1{3}$/.test(last4)) {
-    return {
-      id: "last4_identical",
-      label: `Four identical ending digits (${last4})`,
-      points: nq.last4AllIdentical,
-      strength: "strong",
-      family: "primary",
-      patternFamily: "last4_identical",
-    };
+  if (subscriber === "1234567" || subscriber === "7654321") {
+    return pattern("full_sequence", `Full ${subscriber === "1234567" ? "ascending" : "descending"} sequence`, nq.fullSequence, "strong", "primary", "sequence");
   }
 
   if (last4 === "0000") {
-    return {
-      id: "ends_0000",
-      label: "Ends in 0000",
-      points: nq.ends0000,
-      strength: "medium",
-      family: "primary",
-      patternFamily: "round_block",
-    };
+    return pattern("ends_0000", "Ends in 0000", nq.ends0000, "strong", "primary", "round_block");
   }
 
-  if (isAbabOrRepeatedPair(last4)) {
-    return {
-      id: "abab_pair",
-      label: `Repeating pair (${last4})`,
-      points: nq.ababOrRepeatedPair,
-      strength: "medium",
-      family: "primary",
-      patternFamily: "repeating_pair",
-    };
+  if (/^(\d)\1{3}$/.test(last4)) {
+    return pattern("last4_identical", `Four identical ending digits (${last4})`, nq.last4AllIdentical, "strong", "primary", "quadruple");
   }
 
-  if (last4 === "1234" || last4 === "4321") {
-    return {
-      id: "sequence",
-      label: `Simple sequence (${last4})`,
-      points: nq.sequence,
-      strength: "medium",
-      family: "primary",
-      patternFamily: "sequence",
-    };
+  if (/^[1-9]000$/.test(last4)) {
+    return pattern("ends_x000", `Round thousand ending (${last4})`, nq.roundEnding, "medium", "primary", "round_block");
   }
 
-  if (isRoundEnding(last4)) {
-    return {
-      id: "round_ending",
-      label: `Round ending (${last4})`,
-      points: nq.roundEnding,
-      strength: "medium",
-      family: "primary",
-      patternFamily: "round_block",
-    };
+  if (/^(\d)(\d)\1\2$/.test(last4) && last4[0] !== last4[1]) {
+    return pattern("abab", `ABAB repeating pattern (${last4})`, nq.ababOrRepeatedPair, "medium", "primary", "abab");
   }
 
-  if (last4 === reverseDigits(last4) && last4.length === 4) {
-    return {
-      id: "palindrome_last4",
-      label: `Short palindrome ending (${last4})`,
-      points: nq.shortPalindromeLast4,
-      strength: "weak",
-      family: "primary",
-      patternFamily: "short_palindrome",
-    };
+  if (/^(\d)\1(\d)\2$/.test(last4) && last4[0] !== last4[2]) {
+    return pattern("aabb", `AABB paired pattern (${last4})`, nq.aabb, "medium", "primary", "aabb");
   }
 
-  if (subscriber === reverseDigits(subscriber)) {
-    const points = fullPalindromeHasVisualRhythm(subscriber)
-      ? nq.shortPalindromeLast4
-      : nq.hiddenFullPalindrome;
-    return {
-      id: "full_palindrome",
-      label: fullPalindromeHasVisualRhythm(subscriber)
-        ? "Full subscriber palindrome with visual rhythm"
-        : "Full subscriber palindrome (subtle)",
-      points,
-      strength: "weak",
-      family: "primary",
-      patternFamily: "full_palindrome",
-    };
+  if (/^(\d)(\d)\2\1$/.test(last4) && last4[0] !== last4[1]) {
+    return pattern("abba", `ABBA mirrored pattern (${last4})`, nq.abba, "medium", "primary", "abba");
+  }
+
+  if (sequence) {
+    const atEnding = sequence.end === subscriber.length - 1;
+    const points = atEnding
+      ? sequence.length >= 5
+        ? nq.longSequence
+        : nq.sequence
+      : Math.round((sequence.length >= 5 ? nq.longSequence : nq.sequence) / 3);
+    return pattern("sequence", `${sequence.direction === "ascending" ? "Ascending" : "Descending"} ${sequence.length}-digit sequence`, points, points >= nq.sequence ? "medium" : "weak", "primary", "sequence");
   }
 
   if (/^(\d)\1{2}$/.test(last3)) {
-    return {
-      id: "last3_identical",
-      label: `Last three identical (${last3})`,
-      points: nq.last3Identical,
-      strength: "weak",
-      family: "primary",
-      patternFamily: "last3_identical",
-    };
+    return pattern("last3_identical", `Triple ending digits (${last3})`, nq.last3Identical, "medium", "primary", "triple");
   }
 
-  if (/000$/.test(subscriber) && !last4.endsWith("0000")) {
-    return {
-      id: "ends_x000",
-      label: "Ends in X000",
-      points: nq.roundEnding,
-      strength: "weak",
-      family: "primary",
-      patternFamily: "round_block",
-    };
+  if (last4 === reverseDigits(last4)) {
+    return pattern("palindrome_last4", `Palindrome ending (${last4})`, nq.shortPalindromeLast4, "medium", "primary", "short_palindrome");
+  }
+
+  const adjacentPairs = subscriber.match(/(\d)\1/g) ?? [];
+  if (adjacentPairs.length >= 2) {
+    return pattern("two_pairs", "Two repeating digit pairs", nq.twoPairs, "weak", "primary", "two_pairs");
+  }
+
+  if (/^(\d)\1$/.test(last2)) {
+    return pattern("ending_pair", `Repeating ending pair (${last2})`, nq.endingPair, "weak", "primary", "ending_pair");
   }
 
   return null;
 }
 
-function detectPrefixPattern(subscriber: string): DetectedPattern | null {
+function detectWholeNumberInteraction(subscriber: string): DetectedPattern | null {
+  const nq = SCORING_WEIGHTS.numberQuality;
   const first3 = subscriber.slice(0, 3);
+  const last3 = subscriber.slice(-3);
+  if (/^(\d)(\d)\1\2{3}\1$/.test(subscriber)) {
+    return pattern(
+      "interior_triple_rhythm",
+      "Framed interior triple with full-number rhythm",
+      nq.interiorTripleRhythm,
+      "strong",
+      "prefix",
+      "interior_triple_rhythm",
+    );
+  }
+  if (first3 === last3) {
+    return pattern("repeated_prefix_line", `Repeated prefix and line block (${first3})`, nq.repeatedPrefixLine, "strong", "prefix", "repeated_prefix_line");
+  }
+  if (subscriber === reverseDigits(subscriber)) {
+    return pattern("full_palindrome", "Full subscriber palindrome", nq.hiddenFullPalindrome, "medium", "prefix", "full_palindrome");
+  }
+  if (first3 === reverseDigits(last3)) {
+    return pattern("mirrored_prefix_line", "Mirrored prefix and line digits", nq.mirroredPrefixLine, "medium", "prefix", "mirrored_prefix_line");
+  }
   if (/^(\d)\1{2}$/.test(first3)) {
-    return {
-      id: "triple_prefix",
-      label: `Triple repeating prefix (${first3})`,
-      points: SCORING_WEIGHTS.numberQuality.triplePrefix,
-      strength: "medium",
-      family: "prefix",
-      patternFamily: "triple_prefix",
-    };
+    return pattern("triple_prefix", `Triple exchange prefix (${first3})`, nq.triplePrefix, "weak", "prefix", "triple_prefix");
   }
   return null;
 }
@@ -194,17 +163,15 @@ export function chunkabilityScore(subscriber: string): { points: number; label: 
   const last4 = subscriber.slice(-4);
   const first3 = subscriber.slice(0, 3);
 
-  if (/^(\d)\1{3}$/.test(last4)) points += 14;
-  else if (isAbabOrRepeatedPair(last4)) points += 10;
-  else if (last4 === "1234" || last4 === "4321") points += 8;
-
-  if (/^(\d)\1{2}$/.test(first3)) points += 6;
+  if (/^(\d)\1{3}$/.test(last4)) points += 6;
+  else if (/^(\d)(\d)\1\2$/.test(last4)) points += 5;
+  else if (/^(\d)\1(\d)\2$/.test(last4) || /^(\d)(\d)\2\1$/.test(last4)) points += 4;
 
   const uniqueCount = new Set(subscriber.split("")).size;
-  if (uniqueCount <= 2) points += 6;
-  else if (uniqueCount === 3) points += 3;
+  if (uniqueCount <= 2) points += 5;
+  else if (uniqueCount === 3) points += 2;
 
-  if (/^(\d)\1/.test(subscriber) && /^(\d)\1/.test(last4)) points += 4;
+  if (first3 === subscriber.slice(-3)) points += 4;
 
   points = Math.min(max, points);
   if (points <= 0) return { points: 0, label: "" };
@@ -225,7 +192,7 @@ export function detectNumericPatterns(subscriber: string): DetectedPattern[] {
   const primary = detectPrimaryNumericPattern(subscriber);
   if (primary) patterns.push(primary);
 
-  const prefix = detectPrefixPattern(subscriber);
+  const prefix = detectWholeNumberInteraction(subscriber);
   if (prefix) patterns.push(prefix);
 
   const chunk = chunkabilityScore(subscriber);

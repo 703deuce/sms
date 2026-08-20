@@ -142,6 +142,7 @@ function scoreRawInventory(
         provider: raw.provider,
         providerReference: raw.providerReference,
         searchContext: {
+          mode: "business",
           requestedAreaCodes: input.areaCodes,
           industry: input.inferredIndustry,
           explicitKeywords: [
