@@ -145,7 +145,7 @@
   align-items: start;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 900px) {
   .numbers-landing .nb-nav-links {
     display: flex;
   }
@@ -617,7 +617,7 @@
   gap: 2rem;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 900px) {
   .numbers-landing .nb-why-grid {
     grid-template-columns: 1.2fr 0.8fr;
     align-items: start;

@@ -4,7 +4,6 @@ import { LandingHeroSearch } from "@/components/landing/numbers/landing-hero-sea
 import { LandingSearchResults } from "@/components/landing/numbers/landing-search-results";
 import { LandingTopPicksNearYou } from "@/components/landing/numbers/landing-top-picks-near-you";
 import { useLandingReserve } from "@/components/landing/numbers/use-landing-reserve";
-import { BRAND_NAME } from "@/lib/brand";
 import type { PremiumSearchProductResponse } from "@/lib/premium-numbers/product-api";
 import Link from "next/link";
 import { Check, Download, Search, Star } from "lucide-react";
@@ -51,7 +50,7 @@ export function NumbersLandingPage() {
         <div className="nb-container nb-nav-inner">
           <Link href="/" className="nb-logo">
             <LogoMark />
-            <span>{BRAND_NAME}</span>
+            <span>FindNumber.ai</span>
           </Link>
           <nav className="nb-nav-links">
             {NAV.map((item) =>
@@ -332,7 +331,7 @@ export function NumbersLandingPage() {
         <div className="nb-container nb-footer-bottom">
           <div className="nb-footer-brand">
             <LogoMark />
-            <span>{BRAND_NAME}</span>
+            <span>FindNumber.ai</span>
           </div>
           <div className="nb-footer-social">
             {["F", "X", "I", "L"].map((network) => (
@@ -342,7 +341,7 @@ export function NumbersLandingPage() {
             ))}
           </div>
           <p className="nb-footer-copy">
-            © {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.
+            © {new Date().getFullYear()} FindNumber.ai. All rights reserved.
           </p>
         </div>
       </footer>
