@@ -1,9 +1,9 @@
 "use client";
 
-import { LandingHeroSearch } from "@/components/landing/numbers/landing-hero-search";
 import { LandingSearchResults } from "@/components/landing/numbers/landing-search-results";
 import { LandingTopPicksNearYou } from "@/components/landing/numbers/landing-top-picks-near-you";
 import { useLandingReserve } from "@/components/landing/numbers/use-landing-reserve";
+import { PersonalFindNumberClient } from "@/components/numbers/personal-find-number-ui";
 import type { PremiumSearchProductResponse } from "@/lib/premium-numbers/product-api";
 import Link from "next/link";
 import {
@@ -160,11 +160,14 @@ export function NumbersLandingPage() {
             </div>
           </div>
           <div className="nb-hero-search-wrap">
-            <LandingHeroSearch
-              onResults={(data) => {
-                setSearchResponse(data);
-              }}
-              onSearching={setSearchLoading}
+            <PersonalFindNumberClient
+              workspaceId="public-landing"
+              publicLanding={{}}
+              hidePageHeader
+              hidePublicSidebar
+              searchCardOnly
+              onSearchResults={setSearchResponse}
+              onSearchingChange={setSearchLoading}
             />
             {searchLoading ? <p className="nb-hero-search-loading">Searching inventory…</p> : null}
           </div>

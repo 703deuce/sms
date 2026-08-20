@@ -166,11 +166,17 @@ export function PersonalFindNumberClient({
   publicLanding,
   hidePageHeader = false,
   hidePublicSidebar = false,
+  searchCardOnly = false,
+  onSearchResults,
+  onSearchingChange,
 }: {
   workspaceId: string;
   publicLanding?: PublicLandingConfig;
   hidePageHeader?: boolean;
   hidePublicSidebar?: boolean;
+  searchCardOnly?: boolean;
+  onSearchResults?: (response: PremiumSearchProductResponse | null) => void;
+  onSearchingChange?: (searching: boolean) => void;
 }) {
   const router = useRouter();
   const isPublic = Boolean(publicLanding);
@@ -217,6 +223,14 @@ export function PersonalFindNumberClient({
   const [checkout, setCheckout] = useState<PremiumCheckoutState | null>(null);
   const [success, setSuccess] = useState<PremiumCheckoutState | null>(null);
   const [shelfSearchLogId, setShelfSearchLogId] = useState(publicLanding?.shelfSearchLogId);
+
+  useEffect(() => {
+    onSearchResults?.(searchResponse);
+  }, [onSearchResults, searchResponse]);
+
+  useEffect(() => {
+    onSearchingChange?.(loading || searchingMore);
+  }, [loading, onSearchingChange, searchingMore]);
 
   const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
   const keywordTags = useMemo(() => splitKeywordInput(suggestedKeywords), [suggestedKeywords]);
@@ -1150,7 +1164,8 @@ export function PersonalFindNumberClient({
             )}
           </div>
 
-
+          {!searchCardOnly ? (
+            <>
           {searchResponse && searchDurationSec != null ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#bbf7d0] bg-[#ecfdf5] px-4 py-3 text-[13px]">
               <span className="flex items-center gap-2 font-medium text-[#047857]">
@@ -1322,9 +1337,11 @@ export function PersonalFindNumberClient({
               </p>
             </div>
           ) : null}
+            </>
+          ) : null}
         </div>
 
-        {!isPublic || !hidePublicSidebar ? (
+        {!searchCardOnly && (!isPublic || !hidePublicSidebar) ? (
         <aside className="w-full shrink-0 space-y-4 xl:w-[300px]">
           <SearchSummaryCard
             areaCodes={summaryAreaCodes}
@@ -1343,7 +1360,7 @@ export function PersonalFindNumberClient({
         ) : null}
       </div>
 
-      {checkout && !success ? (
+      {!searchCardOnly && checkout && !success ? (
         <PremiumCheckoutModal
           state={checkout}
           workspaceId={workspaceId}

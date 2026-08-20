@@ -151,9 +151,13 @@
   }
 
   .numbers-landing .nb-hero-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 3rem;
+    grid-template-columns: 0.9fr 1.35fr;
+    gap: 2rem;
   }
+}
+
+.numbers-landing .nb-hero-search-wrap > div {
+  max-width: none;
 }
 
 .numbers-landing .nb-hero-title {
