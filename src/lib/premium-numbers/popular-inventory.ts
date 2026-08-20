@@ -5,7 +5,6 @@ import { getPublicLandingSearchContext } from "@/lib/premium-numbers/public-land
 import { serializeResultsForLog } from "@/lib/premium-numbers/reservation-service";
 import { searchPremiumNumbers } from "@/lib/premium-numbers/premium-number-search";
 import { searchPremiumNumbersPersonal } from "@/lib/premium-numbers/personal-search";
-import type { PremiumSearchMode } from "@/lib/premium-numbers/premium-pricing";
 
 type ShelfCacheEntry = {
   items: PremiumNumberProductResult[];
@@ -40,7 +39,6 @@ function targetPriceBucket(cents: number): "499" | "999" | "1499" | "1999" | "29
   return "2999plus";
 }
 
-/** Merchandising mix guidance — not hard quotas. */
 const BUCKET_TARGETS: Record<string, number> = {
   "499": 3,
   "999": 4,
