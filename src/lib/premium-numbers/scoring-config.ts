@@ -44,15 +44,18 @@ export const SCORING_WEIGHTS = {
     strongRepeatedBlocks: 78,
     last4AllIdentical: 68,
     ends0000: 72,
-    ababOrRepeatedPair: 43,
-    aabb: 36,
-    abba: 32,
-    sequence: 42,
-    longSequence: 60,
-    roundEnding: 38,
-    shortPalindromeLast4: 30,
+  /** ABAB/XYXY endings are noticeable but common — base weight stays in $7.99 tier. */
+    ababOrRepeatedPair: 18,
+    /** AABB/XXYY endings — base in $7.99; whole-number bonuses can reach $9.99–$14.99. */
+    aabb: 16,
+    /** ABBA is more distinctive; base near $9.99 with bonuses toward $14.99. */
+    abba: 30,
+    sequence: 28,
+    longSequence: 48,
+    roundEnding: 28,
+    shortPalindromeLast4: 26,
     hiddenFullPalindrome: 36,
-    last3Identical: 38,
+    last3Identical: 36,
     endingPair: 4,
     twoPairs: 18,
     triplePrefix: 22,
@@ -62,6 +65,11 @@ export const SCORING_WEIGHTS = {
     areaCodeRelationshipMax: 4,
     chunkabilityMax: 12,
     simplicityMax: 5,
+    /** Prefix-line patterns add modest value when a salient ending already exists. */
+    prefixDiminishWhenPrimary: 0.4,
+    /** Bonus when multiple different doubled digits appear across the full subscriber. */
+    multiDoubledDigitBonus: 10,
+    prefixEndingInteractionMax: 12,
   },
   providerCost: {
     baselineMonthly: 1,

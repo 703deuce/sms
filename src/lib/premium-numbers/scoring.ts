@@ -184,6 +184,64 @@ function computeBusinessMatch(
   return { score, reasons, localFitScore, areaCodeMarketScore };
 }
 
+function computePrefixEndingInteraction(
+  subscriber: string,
+  primaryPattern?: ReturnType<typeof detectNumericPatterns>[number],
+): ScoringReason {
+  if (primaryPattern?.id === "two_pairs") {
+    return { label: "", points: 0 };
+  }
+  const max = SCORING_WEIGHTS.numberQuality.prefixEndingInteractionMax;
+  const exchange = subscriber.slice(0, 3);
+  const last4 = subscriber.slice(-4);
+  let points = 0;
+  const notes: string[] = [];
+
+  if (/(\d)\1/.test(exchange) && exchange[0] === exchange[1]) {
+    points += 5;
+    notes.push("paired exchange");
+  }
+
+  if (/^(\d)(\d)\1\2$/.test(last4) && exchange[0] === exchange[1]) {
+    points += 4;
+    notes.push("paired exchange frames ABAB ending");
+  }
+
+  const exchangeDoubles = new Set((exchange.match(/(\d)\1/g) ?? []).map((m) => m[0]));
+  const endingDoubles = new Set((last4.match(/(\d)\1/g) ?? []).map((m) => m[0]));
+  for (const digit of exchangeDoubles) {
+    if (endingDoubles.has(digit)) {
+      points += 8;
+      notes.push(`matching ${digit} rhythm across prefix and line`);
+      break;
+    }
+  }
+
+  if (
+    exchange[0] === last4[0] &&
+    exchange.length >= 3 &&
+    exchange[2] === last4[1]
+  ) {
+    points += 6;
+    notes.push("exchange and line share leading digit rhythm");
+  }
+
+  if (points <= 0) return { label: "", points: 0 };
+  return {
+    label: `Prefix complements ending (${notes.join(", ")})`,
+    points: Math.min(max, points),
+  };
+}
+
+function computeMultiDoubledDigitBonus(subscriber: string): ScoringReason {
+  const doubledDigits = new Set((subscriber.match(/(\d)\1/g) ?? []).map((m) => m[0]));
+  if (doubledDigits.size < 2) return { label: "", points: 0 };
+  return {
+    label: "Multiple repeated-digit groups across the number",
+    points: SCORING_WEIGHTS.numberQuality.multiDoubledDigitBonus,
+  };
+}
+
 function computeNumberQuality(
   subscriber: string,
   areaCode: string,
@@ -192,10 +250,37 @@ function computeNumberQuality(
 ): { score: number; reasons: ScoringReason[] } {
   const reasons: ScoringReason[] = [];
   let score = 0;
+  const primaryPattern = patterns.find((pattern) => pattern.family === "primary");
 
   for (const pattern of patterns) {
-    score += pattern.points;
-    reasons.push({ label: pattern.label, points: pattern.points });
+    let points = pattern.points;
+    if (
+      pattern.family === "prefix" &&
+      primaryPattern &&
+      primaryPattern.strength !== "weak"
+    ) {
+      points = Math.round(
+        points * SCORING_WEIGHTS.numberQuality.prefixDiminishWhenPrimary,
+      );
+    }
+    if (points <= 0) continue;
+    score += points;
+    reasons.push({ label: pattern.label, points });
+  }
+
+  const prefixInteraction = computePrefixEndingInteraction(subscriber, primaryPattern);
+  if (prefixInteraction.points > 0) {
+    score += prefixInteraction.points;
+    reasons.push(prefixInteraction);
+  }
+
+  const multiDoubled = computeMultiDoubledDigitBonus(subscriber);
+  if (
+    multiDoubled.points > 0 &&
+    primaryPattern?.id !== "two_pairs"
+  ) {
+    score += multiDoubled.points;
+    reasons.push(multiDoubled);
   }
 
   const simplicity = simplicityScore(subscriber);

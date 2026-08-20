@@ -195,8 +195,20 @@ export function detectNumericPatterns(subscriber: string): DetectedPattern[] {
   const prefix = detectWholeNumberInteraction(subscriber);
   if (prefix) patterns.push(prefix);
 
+  const redundantChunkFamilies = new Set([
+    "abab",
+    "aabb",
+    "abba",
+    "ending_pair",
+    "two_pairs",
+    "quadruple",
+    "triple",
+  ]);
   const chunk = chunkabilityScore(subscriber);
-  if (chunk.points > 0) {
+  if (
+    chunk.points > 0 &&
+    !(primary && redundantChunkFamilies.has(primary.patternFamily))
+  ) {
     patterns.push({
       id: "chunkability",
       label: chunk.label,

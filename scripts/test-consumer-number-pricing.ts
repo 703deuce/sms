@@ -138,6 +138,12 @@ const pricingCases: Array<{
   { label: "full ascending sequence", subscriber: "1234567", exact: 3999 },
   { label: "2727 guardrail", subscriber: "5812727", min: 799, max: 1499 },
   { label: "2200 guardrail", subscriber: "5812200", min: 799, max: 1499 },
+  { label: "spec 2727", subscriber: "4282727", exact: 799 },
+  { label: "spec 2233", subscriber: "8812233", min: 799, max: 999 },
+  { label: "spec 2525", subscriber: "4452525", exact: 999 },
+  { label: "spec 3300", subscriber: "6833300", exact: 999 },
+  { label: "spec 6600", subscriber: "6066600", exact: 1499 },
+  { label: "spec 1221", subscriber: "4881221", exact: 1499 },
 ];
 const pricedExamples = pricingCases.map((row) => {
   const candidate = personal(row.subscriber);
@@ -267,11 +273,11 @@ const total = [...distribution.values()].reduce((sum, count) => sum + count, 0);
 const high = (distribution.get(2999) ?? 0) + (distribution.get(3999) ?? 0);
 assert(high / total < 0.02, "$29.99 must be uncommon and $39.99 rare");
 assert((distribution.get(3999) ?? 0) / total < 0.002, "$39.99 must be rare");
-const cluster = [499, 799, 999, 1499, 1999].reduce(
+const consumerTiers = [499, 799, 999, 1499, 1999].reduce(
   (sum, price) => sum + (distribution.get(price) ?? 0),
   0,
 );
-assert(cluster / total > 0.98, "ordinary personal inventory clusters in consumer tiers");
+assert(consumerTiers / total > 0.98, "ordinary personal inventory stays in consumer tiers");
 
 console.log("consumer-number-pricing tests passed");
 console.log(
