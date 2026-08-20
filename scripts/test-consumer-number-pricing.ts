@@ -205,12 +205,16 @@ const merchandisingCandidates = [
 const products = merchandisingCandidates.map((candidate) =>
   toProductResult(candidate, "personal", [], "top_pick", "703"),
 );
-const merchandise = merchandisePersonalResults(products, { limit: 7 });
+const merchandise = merchandisePersonalResults([expensiveProduct, ...products], { limit: 7 });
 const openingPrices = merchandise.slice(0, 5).map((item) => item.premiumPriceCents);
 assert(openingPrices[0] === 499, "merchandising opens with $4.99 when available");
 assert(openingPrices.includes(799) && openingPrices.includes(999), "merchandising includes $7.99/$9.99");
 assert(openingPrices.includes(1499), "merchandising includes $14.99");
 assert(openingPrices.filter((price) => price >= 1999).length <= 1, "opening has at most one $19.99+ item");
+assert(
+  merchandise.every((item) => item.premiumPriceCents <= 3999),
+  "provider-cost outliers must not displace available consumer-tier inventory",
+);
 assert(buildMaxPriceCollection(products, 1000).every((item) => item.premiumPriceCents <= 1000), "max-price helper");
 
 const homepage = buildProductSearchResponse({

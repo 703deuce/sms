@@ -393,10 +393,15 @@ export function merchandisePersonalResults(
   const eligible = results.filter(
     (result) => options.maxPriceCents == null || result.premiumPriceCents <= options.maxPriceCents,
   );
+  const consumerInventory = eligible.filter((result) => result.premiumPriceCents <= 3999);
   const picked: PremiumNumberProductResult[] = [];
   const seen = new Set<string>();
-  const take = (predicate: (result: PremiumNumberProductResult) => boolean, count: number) => {
-    for (const result of eligible) {
+  const take = (
+    pool: PremiumNumberProductResult[],
+    predicate: (result: PremiumNumberProductResult) => boolean,
+    count: number,
+  ) => {
+    for (const result of pool) {
       if (count <= 0) break;
       if (seen.has(result.phoneNumber) || !predicate(result)) continue;
       picked.push(result);
@@ -405,11 +410,15 @@ export function merchandisePersonalResults(
     }
   };
 
-  take((r) => r.premiumPriceCents === 499, 1);
-  take((r) => r.premiumPriceCents === 799, 1);
-  take((r) => r.premiumPriceCents === 999, 1);
-  take((r) => r.premiumPriceCents === 1499, 1);
-  take((r) => r.premiumPriceCents >= 1999, 1);
+  take(consumerInventory, (r) => r.premiumPriceCents === 499, 1);
+  take(consumerInventory, (r) => r.premiumPriceCents === 799, 1);
+  take(consumerInventory, (r) => r.premiumPriceCents === 999, 1);
+  take(consumerInventory, (r) => r.premiumPriceCents === 1499, 1);
+  take(
+    consumerInventory,
+    (r) => r.premiumPriceCents >= 1999 && r.premiumPriceCents <= 3999,
+    1,
+  );
 
   const visualFamily = (result: PremiumNumberProductResult): string => {
     const text = result.patterns.join(" ").toLowerCase();
@@ -423,17 +432,27 @@ export function merchandisePersonalResults(
   for (const result of picked) {
     patternFamilies.add(visualFamily(result));
   }
-  for (const result of eligible) {
+  for (const result of consumerInventory) {
     if (picked.length >= limit) break;
     if (seen.has(result.phoneNumber)) continue;
     const family = visualFamily(result);
-    if (family && patternFamilies.has(family) && eligible.length - seen.size > limit - picked.length) {
+    if (
+      family &&
+      patternFamilies.has(family) &&
+      consumerInventory.length - seen.size > limit - picked.length
+    ) {
       continue;
     }
     picked.push(result);
     seen.add(result.phoneNumber);
     if (family) patternFamilies.add(family);
   }
+  for (const result of consumerInventory) {
+    if (picked.length >= limit) break;
+    if (!seen.has(result.phoneNumber)) picked.push(result);
+  }
+  // Provider-cost outliers are valid inventory, but only fill a shelf when
+  // there are not enough consumer-tier choices.
   for (const result of eligible) {
     if (picked.length >= limit) break;
     if (!seen.has(result.phoneNumber)) picked.push(result);
