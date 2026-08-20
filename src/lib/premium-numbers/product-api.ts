@@ -348,15 +348,17 @@ export function buildProductSearchResponse(input: {
     .slice(0, 24)
     .map((c) => toProductResult(c, mode, keywords, "business_match", input.areaCode));
 
-  const memorableAlternatives = candidates
-    .filter(
-      (c) =>
-        c.businessMatchScore < BUSINESS_MATCH_LIST_THRESHOLD &&
-        c.numberQualityScore >= MEMORABLE_NUMBER_QUALITY_THRESHOLD,
-    )
-    .sort((a, b) => b.numberQualityScore - a.numberQualityScore)
-    .slice(0, 24)
-    .map((c) => toProductResult(c, mode, keywords, "memorable_alternative", input.areaCode));
+  const memorableAlternatives = merchandisePersonalResults(
+    candidates
+      .filter(
+        (c) =>
+          c.businessMatchScore < BUSINESS_MATCH_LIST_THRESHOLD &&
+          c.numberQualityScore >= MEMORABLE_NUMBER_QUALITY_THRESHOLD,
+      )
+      .sort((a, b) => b.numberQualityScore - a.numberQualityScore)
+      .map((c) => toProductResult(c, mode, keywords, "memorable_alternative", input.areaCode)),
+    { limit: 24 },
+  );
 
   const displayedCount = businessMatches.length + memorableAlternatives.length;
 

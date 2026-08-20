@@ -97,6 +97,24 @@ assert(personalRoof.businessMatchScore === 0, "personal context must not receive
 const businessProduct = toProductResult(businessRoof, "business", roofKeywords, "business_match", "703");
 assert(businessProduct.premiumPriceCents >= 4900, "clear commercial words retain business pricing");
 
+const businessAlternatives = merchandisePersonalResults(
+  [
+    toProductResult(personal("7884444", { upfrontCost: "$2.00", monthlyCost: "$10.00" }), "business", [], "memorable_alternative", "703"),
+    toProductResult(personal("6002525"), "business", [], "memorable_alternative", "703"),
+    toProductResult(personal("6964242"), "business", [], "memorable_alternative", "703"),
+    toProductResult(personal("7594747"), "business", [], "memorable_alternative", "703"),
+  ],
+  { limit: 4 },
+);
+assert(
+  businessAlternatives.slice(0, 3).every((item) => item.premiumPriceCents <= 3999),
+  "business memorable alternatives prefer consumer tiers before provider-cost outliers",
+);
+assert(
+  businessAlternatives.at(-1)?.premiumPriceCents === 15999,
+  "provider-cost outliers remain available but move to the back",
+);
+
 const pricingCases: Array<{
   label: string;
   subscriber: string;
