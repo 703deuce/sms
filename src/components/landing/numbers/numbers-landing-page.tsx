@@ -7,17 +7,7 @@ import { useLandingReserve } from "@/components/landing/numbers/use-landing-rese
 import { BRAND_NAME } from "@/lib/brand";
 import type { PremiumSearchProductResponse } from "@/lib/premium-numbers/product-api";
 import Link from "next/link";
-import {
-  Briefcase,
-  Check,
-  Globe,
-  Phone,
-  Plus,
-  Shield,
-  Smartphone,
-  Star,
-  Zap,
-} from "lucide-react";
+import { Check, Download, Search, Star } from "lucide-react";
 import { useState } from "react";
 import "./numbers-landing.css";
 
@@ -30,55 +20,12 @@ const NAV = [
   { href: "/contact", label: "Help" },
 ];
 
-const FAQS = [
-  {
-    q: "How does the process work?",
-    a: "Search for your desired number, complete the purchase securely online, and we'll immediately provide you with the account details and PIN needed to port it to any carrier of your choice.",
-  },
-  {
-    q: "Can I use my number with any provider?",
-    a: "Yes! Numbers purchased from us can be ported to all major US mobile carriers, VoIP services, landline providers, or used directly on our platform.",
-  },
-  {
-    q: "Are there any hidden fees?",
-    a: "No. The price you see is the one-time purchase price. There are no ongoing subscription fees or hidden transfer charges unless you choose optional call forwarding or parking plans.",
-  },
-  {
-    q: "How long does porting take?",
-    a: "Most mobile carrier ports complete within 1 to 3 business days. Landline and VoIP transfers may take 3 to 7 business days depending on the losing and gaining carrier.",
-  },
-  {
-    q: "What if I can't port my number?",
-    a: "We offer a 100% money-back guarantee. If you are unable to port your number within 30 days due to technical or carrier limitations, we will issue a full refund.",
-  },
-  {
-    q: "Can I reserve a number without transferring it right away?",
-    a: "Yes. You can keep your number parked safely in your account for as long as you need until you're ready to port or activate it.",
-  },
-];
-
-const TESTIMONIALS = [
-  {
-    name: "Sarah Jenkins",
-    role: "Real Estate Agent",
-    quote: "Found the perfect local number for my real estate business in under 5 minutes. The porting process was seamless, and my clients remember my number immediately.",
-  },
-  {
-    name: "Michael Chang",
-    role: "Startup Founder",
-    quote: "Securing a vanity toll-free number gave our business instant credibility. The setup was effortless and the support team walked us through every step.",
-  },
-  {
-    name: "David Ross",
-    role: "Contractor",
-    quote: "Having an easy-to-remember repeating digit number has significantly increased the call volume on our local marketing campaigns. Highly recommended!",
-  },
-];
+const CARRIERS = ["AT&T", "Verizon", "T-Mobile", "Mint Mobile", "Cricket", "Metro"];
 
 function LogoMark() {
   return (
-    <span className="fn-logo-circle" aria-hidden>
-      <Phone className="h-3.5 w-3.5 text-white" />
+    <span className="nb-logo-mark" aria-hidden>
+      T
     </span>
   );
 }
@@ -94,18 +41,19 @@ export function NumbersLandingPage() {
   const [searchLoading, setSearchLoading] = useState(false);
 
   function handleGetNumber(item: Parameters<typeof reserveNumber>[0]) {
-    void reserveNumber(item, searchResponse?.searchLogId ?? shelfSearchLogId);
+    const logId = searchResponse?.searchLogId ?? shelfSearchLogId;
+    void reserveNumber(item, logId);
   }
 
   return (
     <div className="numbers-landing">
-      <header className="fn-nav">
-        <div className="fn-container fn-nav-row">
-          <Link href="/" className="fn-logo">
+      <header className="nb-nav">
+        <div className="nb-container nb-nav-inner">
+          <Link href="/" className="nb-logo">
             <LogoMark />
-            <span>FindNumber.ai</span>
+            <span>{BRAND_NAME}</span>
           </Link>
-          <nav className="fn-nav-links">
+          <nav className="nb-nav-links">
             {NAV.map((item) =>
               item.href.startsWith("#") ? (
                 <a key={item.label} href={item.href}>
@@ -117,58 +65,59 @@ export function NumbersLandingPage() {
                 </Link>
               ),
             )}
+            <button type="button" className="nb-nav-search" onClick={focusLandingSearch} aria-label="Search">
+              <Search className="h-4 w-4" />
+            </button>
           </nav>
-          <div className="fn-nav-actions">
-            <Link href="/login" className="fn-login-link">
-              Sign In
-            </Link>
-            <Link href="/login" className="fn-btn-primary fn-btn-cta-nav">
-              GET STARTED
-            </Link>
-          </div>
+          <Link href="/login" className="nb-btn-primary nb-btn-nav">
+            Get Started
+          </Link>
         </div>
       </header>
 
-      <section id="search" className="fn-hero">
-        <div className="fn-container fn-hero-grid">
-          <div className="fn-hero-left">
-            <h1 className="fn-hero-title">Choose a phone number you&apos;ll actually remember.</h1>
-            <p className="fn-hero-text">
-              Reflect your identity or business with a memorable number from the largest marketplace.
-              Search, claim, and take it to any carrier you choose.
+      <section id="search" className="nb-hero">
+        <div className="nb-container nb-hero-grid">
+          <div className="nb-hero-copy">
+            <h1 className="nb-hero-title">Choose a phone number you&apos;ll actually remember.</h1>
+            <p className="nb-hero-subtitle">
+              Don&apos;t settle for a random phone number. Build your brand and be more accessible with
+              a custom phone number from the world&apos;s largest marketplace.
             </p>
-            <ul className="fn-checklist">
-              {[
-                "Pick your own digits",
-                "Works on any device or provider",
-                "No contracts or hidden fees",
-              ].map((item) => (
-                <li key={item}>
-                  <Check className="h-4 w-4" strokeWidth={3} />
-                  {item}
-                </li>
-              ))}
+            <ul className="nb-hero-checklist">
+              {["Texting & calling", "Port to your favorite carrier", "World-class customer service"].map(
+                (item) => (
+                  <li key={item}>
+                    <Check className="h-4 w-4" strokeWidth={3} />
+                    {item}
+                  </li>
+                ),
+              )}
             </ul>
-            <div className="fn-hero-btns">
-              <button type="button" className="fn-btn-primary" onClick={focusLandingSearch}>
-                Get Started
+            <div className="nb-hero-actions">
+              <button type="button" className="nb-btn-primary" onClick={focusLandingSearch}>
+                Search Now
               </button>
-              <a href="#how-it-works" className="fn-btn-outline">
-                How it Works
+              <a href="#pricing" className="nb-btn-outline">
+                See Pricing
               </a>
             </div>
-            <div className="fn-reviews">
-              <div className="fn-stars">
+            <div className="nb-hero-reviews">
+              <span className="nb-stars">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="h-3.5 w-3.5 fill-[#f59e0b] text-[#f59e0b]" />
+                  <Star key={i} className="h-4 w-4 fill-[#f97316] text-[#f97316]" />
                 ))}
-              </div>
-              <span>Rated 4.8/5 by 20,000+ happy customers</span>
+              </span>
+              <span>4.8 out of 5 based on 2,500+ reviews</span>
             </div>
           </div>
-          <div className="fn-hero-right">
-            <LandingHeroSearch onResults={setSearchResponse} onSearching={setSearchLoading} />
-            {searchLoading ? <p className="fn-muted fn-hero-loading">Searching…</p> : null}
+          <div className="nb-hero-search-wrap">
+            <LandingHeroSearch
+              onResults={(data) => {
+                setSearchResponse(data);
+              }}
+              onSearching={setSearchLoading}
+            />
+            {searchLoading ? <p className="nb-hero-search-loading">Searching inventory…</p> : null}
           </div>
         </div>
       </section>
@@ -179,279 +128,222 @@ export function NumbersLandingPage() {
         reserving={reserving}
       />
 
+      {reserveError ? (
+        <div className="nb-container">
+          <p className="nb-inline-error">{reserveError}</p>
+        </div>
+      ) : null}
+
       <LandingSearchResults
         response={searchResponse}
         reserving={reserving}
         onGetNumber={handleGetNumber}
       />
 
-      {reserveError ? (
-        <div className="fn-container">
-          <p className="fn-error">{reserveError}</p>
+      <section className="nb-carriers">
+        <div className="nb-container nb-carriers-row">
+          {CARRIERS.map((name) => (
+            <span key={name} className="nb-carrier-logo">
+              {name}
+            </span>
+          ))}
         </div>
-      ) : null}
+      </section>
 
-      <section id="how-it-works" className="fn-section fn-how-section">
-        <div className="fn-container fn-how-center">
-          <h2 className="fn-h2">How it works</h2>
-          <p className="fn-subhead">Simple steps to claim your perfect number in minutes.</p>
-          <div className="fn-how-steps">
+      <section id="how-it-works" className="nb-section nb-how">
+        <div className="nb-container nb-how-inner">
+          <h2 className="nb-section-title nb-section-title-center">How it works</h2>
+          <div className="nb-how-steps">
             {[
               {
                 n: 1,
                 title: "Search",
-                body: "Filter by area code, digits, keywords, or memorable patterns.",
+                body: "Enter a name, word, or number to find your perfect match.",
               },
-              {
-                n: 2,
-                title: "Claim",
-                body: "Reserve your number with transparent, one-time pricing.",
-              },
+              { n: 2, title: "Buy", body: "Add it to your cart and check out." },
               {
                 n: 3,
-                title: "Transfer & Use",
-                body: "Port to any carrier of your choice or park it securely with us.",
+                title: "Port or forward",
+                body: "Move your number to your current provider or use it with our service.",
               },
-            ].map((step, i) => (
-              <div key={step.n} className="fn-how-step">
-                <div className="fn-how-circle">{step.n}</div>
+            ].map((step) => (
+              <div key={step.n} className="nb-how-step">
+                <div className="nb-how-step-num">{step.n}</div>
                 <h3>{step.title}</h3>
                 <p>{step.body}</p>
-                {i < 2 ? <div className="fn-how-dots" aria-hidden /> : null}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="fn-section fn-features-section">
-        <div className="fn-container fn-features-grid">
-          <div className="fn-features-four">
+      <section className="nb-section nb-why">
+        <div className="nb-container nb-why-grid">
+          <div className="nb-features-grid">
             {[
-              {
-                icon: Globe,
-                title: "Extensive Inventory",
-                body: "Access millions of memorable numbers across the US.",
-              },
-              {
-                icon: Zap,
-                title: "Fast Transfer",
-                body: "Quickly port your number to any major carrier.",
-              },
-              {
-                icon: Smartphone,
-                title: "Instant Activation",
-                body: "Get up and running with your new number in minutes.",
-              },
-              {
-                icon: Shield,
-                title: "Secure Process",
-                body: "Guaranteed safe ownership transfer with 100% money-back guarantee.",
-              },
-            ].map(({ icon: Icon, title, body }) => (
-              <div key={title} className="fn-feature-item">
-                <Icon className="h-6 w-6 text-[#2563eb]" />
+              { title: "Largest inventory", body: "Millions of local and toll-free numbers." },
+              { title: "Fast porting", body: "Transfer to your carrier with guided support." },
+              { title: "No hidden fees", body: "Transparent one-time pricing at checkout." },
+              { title: "Mobile app", body: "Manage forwarding and voicemail on the go." },
+            ].map(({ title, body }) => (
+              <div key={title} className="nb-feature-card">
                 <h3>{title}</h3>
                 <p>{body}</p>
               </div>
             ))}
           </div>
-          <div className="fn-guarantee-box">
-            <Shield className="fn-guarantee-shield" />
-            <h3>The FindNumber.ai Guarantee</h3>
-            <p className="fn-guarantee-desc">
-              We stand behind every number we sell. If you experience any issues porting your number to your chosen carrier, our dedicated support team will make it right or provide a full refund.
-            </p>
+          <div className="nb-promo-box">
+            <h3>We make phone numbers simple.</h3>
             <ul>
-              <li>100% Number Portability</li>
-              <li>30-Day Money-Back Guarantee</li>
-              <li>Dedicated Support Assistance</li>
+              <li>Buy once — no monthly number rental surprises</li>
+              <li>30-day portability guarantee</li>
+              <li>AI-powered search finds patterns fast</li>
+              <li>Keep your current carrier and plan</li>
             </ul>
-          </div>
-        </div>
-      </section>
-
-      <section id="business" className="fn-section fn-usecases">
-        <div className="fn-container fn-usecases-grid">
-          <div className="fn-usecase-card">
-            <div className="fn-usecase-header">
-              <Smartphone className="fn-usecase-icon" />
-              <h3>Personal Use</h3>
-            </div>
-            <p>Pick digits that reflect you — memorable, local, and easy to share with friends and family. Keep it forever on any mobile carrier.</p>
-            <ul className="fn-usecase-list">
-              <li>Easy-to-remember family & personal numbers</li>
-              <li>Port directly to Verizon, AT&T, T-Mobile & more</li>
-              <li>No monthly fees or commitments</li>
-            </ul>
-            <button type="button" className="fn-link-btn" onClick={focusLandingSearch}>
-              Find a personal number →
-            </button>
-          </div>
-          <div className="fn-usecase-card">
-            <div className="fn-usecase-header">
-              <Briefcase className="fn-usecase-icon" />
-              <h3>Business Use</h3>
-            </div>
-            <p>Give customers a number they remember. Vanity numbers and repetitive patterns build instant trust and brand recognition.</p>
-            <ul className="fn-usecase-list">
-              <li>Toll-free 800 & local area code vanity options</li>
-              <li>Increase response rates on ads and campaigns</li>
-              <li>Full ownership and instant forwarding support</li>
-            </ul>
-            <button type="button" className="fn-link-btn" onClick={focusLandingSearch}>
-              Explore business numbers →
+            <button type="button" className="nb-btn-white" onClick={focusLandingSearch}>
+              Search Now
             </button>
           </div>
         </div>
       </section>
 
-      <section className="fn-section fn-social-section">
-        <div className="fn-container fn-social-grid">
-          <div>
-            <h2 className="fn-h2">What our customers say about us</h2>
-            <div className="fn-testimonials">
-              {TESTIMONIALS.map((t) => (
-                <blockquote key={t.name} className="fn-testimonial">
-                  <div className="fn-stars">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} className="h-3.5 w-3.5 fill-[#f59e0b] text-[#f59e0b]" />
-                    ))}
-                  </div>
-                  <p>&ldquo;{t.quote}&rdquo;</p>
-                  <footer>
-                    <strong>{t.name}</strong>
-                    {t.role ? <span> • {t.role}</span> : null}
-                  </footer>
-                </blockquote>
-              ))}
-            </div>
+      <section id="business" className="nb-section nb-secondary-blocks">
+        <div className="nb-container nb-secondary-grid">
+          <div className="nb-secondary-card">
+            <p className="nb-secondary-label">Mobile App Coming Soon</p>
+            <h3>Manage your number anywhere</h3>
+            <p className="nb-muted">Forward calls, set voicemail, and port — from your phone.</p>
+            <div className="nb-phone-mock" aria-hidden />
           </div>
-          <div className="fn-app-block">
-            <h2 className="fn-h2">Modern apps and tools</h2>
-            <p className="fn-muted">Manage call forwarding, voicemail, SMS, and number porting from any device.</p>
-            <div className="fn-app-preview">
-              <div className="fn-app-phone-frame">
-                <div className="fn-app-screen">
-                  <div className="fn-app-screen-header">
-                    <span className="fn-app-dot red" />
-                    <span className="fn-app-dot yellow" />
-                    <span className="fn-app-dot green" />
-                  </div>
-                  <div className="fn-app-screen-body">
-                    <div className="fn-app-chip">Active Number</div>
-                    <div className="fn-app-number-mock">(571) 390-0000</div>
-                    <div className="fn-app-status">● Live Call Forwarding</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <button type="button" className="fn-btn-primary fn-btn-app" onClick={focusLandingSearch}>
-              EXPLORE ALL TOOLS
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section id="pricing" className="fn-section fn-faq-section">
-        <div className="fn-container fn-faq-wrap">
-          <h2 className="fn-h2 fn-h2-center">Frequently Asked Questions</h2>
-          <div className="fn-faq-list">
-            {FAQS.map((faq) => (
-              <details key={faq.q} className="fn-faq-item">
-                <summary>
-                  {faq.q}
-                  <Plus className="fn-faq-plus h-4 w-4" />
-                </summary>
-                <p>{faq.a}</p>
-              </details>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="fn-final-cta">
-        <div className="fn-container fn-final-cta-inner">
-          <div className="fn-final-cta-text">
-            <h2>Ready to find a number you&apos;ll remember?</h2>
-            <p className="fn-final-cta-sub">Search our vast inventory of local, toll-free, and memorable vanity numbers today.</p>
-          </div>
-          <button type="button" className="fn-btn-white" onClick={focusLandingSearch}>
-            GET STARTED NOW
-          </button>
-        </div>
-      </section>
-
-      <footer className="fn-footer">
-        <div className="fn-container fn-footer-top">
-          <div className="fn-footer-brand-row">
-            <Link href="/" className="fn-logo fn-logo-footer">
-              <LogoMark />
-              <span>FindNumber.ai</span>
+          <div className="nb-secondary-card">
+            <p className="nb-secondary-label">Business Solutions</p>
+            <h3>Built for teams that need memorable numbers</h3>
+            <p className="nb-muted">Vanity numbers, bulk search, and porting for your brand.</p>
+            <Link href="/contact" className="nb-link-arrow">
+              Talk to sales →
             </Link>
-            <div className="fn-footer-social">
-              {["f", "in", "t", "m"].map((s) => (
-                <span key={s} className="fn-social-dot">
-                  {s}
-                </span>
-              ))}
-            </div>
           </div>
-          <div className="fn-footer-cols">
+        </div>
+      </section>
+
+      <section id="pricing" className="nb-section nb-pricing-strip">
+        <div className="nb-container nb-pricing-inner">
+          <h2 className="nb-section-title">Simple pricing</h2>
+          <div className="nb-pricing-row">
             {[
-              {
-                label: "Company",
-                links: [
-                  ["About", "/contact"],
-                  ["Careers", "/contact"],
-                  ["Contact", "/contact"],
-                ],
-              },
-              {
-                label: "Services",
-                links: [
-                  ["Find a Number", "#search"],
-                  ["Port a Number", "/personal/porting"],
-                  ["Business Numbers", "#business"],
-                  ["Toll-Free Numbers", "#search"],
-                ],
-              },
-              {
-                label: "Support",
-                links: [
-                  ["Help Center", "/contact"],
-                  ["Porting Guide", "/personal/porting"],
-                  ["Pricing & FAQs", "#pricing"],
-                ],
-              },
-              {
-                label: "Legal",
-                links: [
-                  ["Privacy Policy", "/privacy"],
-                  ["Terms of Service", "/terms"],
-                  ["SMS Marketing", "/sms-marketing"],
-                ],
-              },
-            ].map((col) => (
-              <div key={col.label}>
-                <p className="fn-footer-label">{col.label}</p>
-                <ul>
-                  {col.links.map(([label, href]) => (
-                    <li key={label}>
-                      {href.startsWith("#") ? (
-                        <a href={href}>{label}</a>
-                      ) : (
-                        <Link href={href}>{label}</Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              { tier: "Choice", price: "From $4.99" },
+              { tier: "Memorable", price: "$9.99 – $19.99" },
+              { tier: "Premium", price: "From $29.99" },
+              { tier: "Business Vanity", price: "Custom" },
+            ].map(({ tier, price }) => (
+              <div key={tier} className="nb-pricing-chip">
+                <strong>{tier}</strong>
+                <span>{price}</span>
               </div>
             ))}
           </div>
         </div>
-        <div className="fn-footer-copy">
-          © {new Date().getFullYear()} FindNumber.ai. All rights reserved.
+      </section>
+
+      <footer className="nb-footer">
+        <div className="nb-container nb-footer-share">
+          <h3>Help your friends find your number</h3>
+          <div className="nb-social-share">
+            {["F", "X", "I", "L"].map((network) => (
+              <span key={network} className="nb-social-btn" aria-hidden>
+                {network}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="nb-container nb-footer-account">
+          <div>
+            <h3>Manage your account</h3>
+            <p className="nb-muted">Sign in to reserve numbers and track ports.</p>
+          </div>
+          <Link href="/login" className="nb-btn-outline nb-btn-dark-outline">
+            <Download className="h-4 w-4" />
+            Sign In
+          </Link>
+        </div>
+
+        <div className="nb-container nb-footer-links-grid">
+          {[
+            {
+              label: "Help",
+              links: [
+                ["FAQ", "/contact"],
+                ["Porting", "/personal/porting"],
+                ["Support", "/contact"],
+              ],
+            },
+            {
+              label: "Search",
+              links: [
+                ["Local", "#search"],
+                ["Toll-Free", "#search"],
+                ["Vanity", "#search"],
+              ],
+            },
+            {
+              label: "About",
+              links: [
+                ["Company", "/contact"],
+                ["Careers", "/contact"],
+                ["Contact", "/contact"],
+              ],
+            },
+            {
+              label: "Legal",
+              links: [
+                ["Privacy", "/privacy"],
+                ["Terms", "/terms"],
+                ["SMS Marketing", "/sms-marketing"],
+              ],
+            },
+          ].map((col) => (
+            <div key={col.label}>
+              <p className="nb-footer-col-label">{col.label}</p>
+              <ul>
+                {col.links.map(([label, href]) => (
+                  <li key={label}>
+                    {href.startsWith("#") ? (
+                      <a href={href}>{label}</a>
+                    ) : (
+                      <Link href={href}>{label}</Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <section className="nb-footer-cta">
+          <div className="nb-container nb-footer-cta-inner">
+            <h2>Ready to find a number you&apos;ll actually love?</h2>
+            <button type="button" className="nb-btn-primary" onClick={focusLandingSearch}>
+              Search Now
+            </button>
+          </div>
+        </section>
+
+        <div className="nb-container nb-footer-bottom">
+          <div className="nb-footer-brand">
+            <LogoMark />
+            <span>{BRAND_NAME}</span>
+          </div>
+          <div className="nb-footer-social">
+            {["F", "X", "I", "L"].map((network) => (
+              <span key={network} className="nb-social-btn nb-social-btn-sm" aria-hidden>
+                {network}
+              </span>
+            ))}
+          </div>
+          <p className="nb-footer-copy">
+            © {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>
