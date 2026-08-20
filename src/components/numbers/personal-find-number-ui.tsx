@@ -64,7 +64,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BRAND_NAME } from "@/lib/brand";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
 import { runPublicNumberSearch } from "@/lib/premium-numbers/public-find-number-client-search";
@@ -212,6 +212,7 @@ export function PersonalFindNumberClient({
     createDefaultNumberSearchState(),
   );
 
+  const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchingMore, setSearchingMore] = useState(false);
   const [searchDurationSec, setSearchDurationSec] = useState<number | null>(null);
@@ -223,6 +224,20 @@ export function PersonalFindNumberClient({
   const [checkout, setCheckout] = useState<PremiumCheckoutState | null>(null);
   const [success, setSuccess] = useState<PremiumCheckoutState | null>(null);
   const [shelfSearchLogId, setShelfSearchLogId] = useState(publicLanding?.shelfSearchLogId);
+  const areaCodesInputRef = useRef<HTMLInputElement>(null);
+  const industryInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const hydratedAreaCodes = areaCodesInputRef.current?.value.replace(/[^\d,\s]/g, "");
+    const hydratedIndustry = industryInputRef.current?.value;
+    if (hydratedAreaCodes !== undefined) {
+      setAreaCodesInput((current) => (hydratedAreaCodes === current ? current : hydratedAreaCodes));
+    }
+    if (hydratedIndustry !== undefined) {
+      setIndustry((current) => (hydratedIndustry === current ? current : hydratedIndustry));
+    }
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     onSearchResults?.(searchResponse);
@@ -789,7 +804,16 @@ export function PersonalFindNumberClient({
   }
 
   return (
-    <div className="mx-auto max-w-[1320px]">
+    <div className="relative mx-auto max-w-[1320px]" aria-busy={!hydrated}>
+      {!hydrated ? (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-white/95 text-sm font-medium text-[#6b7280]"
+          role="status"
+        >
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Preparing number search…
+        </div>
+      ) : null}
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-5">
           {!hidePageHeader ? (
@@ -991,6 +1015,7 @@ export function PersonalFindNumberClient({
               <div>
                 <p className="mb-2 text-[12px] font-semibold text-[#374151]">Area Codes</p>
                 <Input
+                  ref={areaCodesInputRef}
                   value={areaCodesInput}
                   onChange={(e) =>
                     setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
@@ -1036,6 +1061,7 @@ export function PersonalFindNumberClient({
                   </p>
                   <div className="relative">
                     <Input
+                      ref={industryInputRef}
                       value={industry}
                       onChange={(e) => setIndustry(e.target.value)}
                       placeholder="electrician"

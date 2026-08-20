@@ -38,6 +38,7 @@
     "audit:dual-provider-search": "tsx scripts/audit-dual-provider-live-search.ts",
     "test:personal-menu-apis": "node scripts/test-personal-menu-apis.mjs",
     "test:personal-dual-backend": "node scripts/verify-personal-dual-backend.mjs",
+    "test:homepage-number-search-hydration": "node scripts/test-homepage-number-search-hydration.mjs",
     "stage:personal-dual": "node scripts/stage-personal-dual-provider.mjs",
     "test:automation-builder": "tsx scripts/test-automation-builder.ts",
     "test:automation-e2e": "tsx scripts/test-automation-e2e.ts",
