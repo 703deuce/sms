@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { chromium } from "playwright";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
+const isProductionTarget = /transovo\.ai/i.test(baseUrl);
 const configuredChromePath = process.env.CHROME_PATH ?? "/usr/local/bin/google-chrome";
 const executablePath = existsSync(configuredChromePath)
   ? configuredChromePath
@@ -21,6 +22,29 @@ const expectedRequestBody = {
   suggestedKeywords: [],
   extraKeywords: [],
 };
+
+function attachRuntimeGuards(page, label) {
+  const consoleErrors = [];
+  const pageErrors = [];
+
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push(`${label}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    pageErrors.push(`${label}: ${error.message}`);
+  });
+
+  return () => {
+    assert.equal(
+      consoleErrors.length,
+      0,
+      `unexpected console errors:\n${consoleErrors.join("\n")}`,
+    );
+    assert.equal(pageErrors.length, 0, `unexpected page errors:\n${pageErrors.join("\n")}`);
+  };
+}
 
 async function mockSearch(page, responseDelayMs = 0) {
   let requestBody = null;
@@ -48,46 +72,62 @@ async function mockSearch(page, responseDelayMs = 0) {
   return () => requestBody;
 }
 
+async function assertProductionHomepageSurface(page) {
+  const html = await page.content();
+  assert.match(html, /\$4\.99|Starting at \$4\.99/i, "homepage should surface personal pricing anchor");
+  assert.match(html, /Top Picks|Near You|Get This Number/i, "homepage should render Top Picks section");
+  assert.match(html, /30-day portability guarantee|30-Day Portability Guarantee/i);
+}
+
 try {
-  const delayedPage = await browser.newPage();
-  await delayedPage.route(/\/_next\/static\/.*\.js/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    await route.continue();
-  });
-  const getDelayedRequestBody = await mockSearch(delayedPage);
+  if (!isProductionTarget) {
+    const delayedPage = await browser.newPage();
+    const assertDelayedRuntime = attachRuntimeGuards(delayedPage, "delayed-hydration");
+    let delayedStaticChunks = 0;
+    await delayedPage.route(/\/_next\/static\/.*\.js/, async (route) => {
+      if (delayedStaticChunks < 4) {
+        delayedStaticChunks += 1;
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+      await route.continue();
+    });
+    const getDelayedRequestBody = await mockSearch(delayedPage);
 
-  await delayedPage.goto(`${baseUrl}/?hydration-regression=delayed`, {
-    waitUntil: "domcontentloaded",
-    timeout: 120_000,
-  });
+    await delayedPage.goto(`${baseUrl}/?hydration-regression=delayed`, {
+      waitUntil: "domcontentloaded",
+      timeout: 120_000,
+    });
 
-  const delayedAreaCodeInput = delayedPage.locator('input[placeholder="571"]');
-  const delayedIndustryInput = delayedPage.locator('input[placeholder="electrician"]');
-  const delayedSubmitButton = delayedPage.getByRole("button", { name: "Find My Numbers" });
-  const delayedHydrationStatus = delayedPage.getByText("Preparing number search…");
+    const delayedAreaCodeInput = delayedPage.locator('input[placeholder="571"]');
+    const delayedIndustryInput = delayedPage.locator('input[placeholder="electrician"]');
+    const delayedSubmitButton = delayedPage.getByRole("button", { name: "Find My Numbers" });
+    const delayedHydrationStatus = delayedPage.getByText("Preparing number search…");
 
-  await delayedHydrationStatus.waitFor();
-  await delayedAreaCodeInput.evaluate((input) => {
-    input.value = "571";
-  });
-  await delayedIndustryInput.evaluate((input) => {
-    input.value = "electrician";
-  });
-  assert.equal(await delayedSubmitButton.isDisabled(), true, "test must interact before hydration");
+    await delayedHydrationStatus.waitFor();
+    await delayedAreaCodeInput.evaluate((input) => {
+      input.value = "571";
+    });
+    await delayedIndustryInput.evaluate((input) => {
+      input.value = "electrician";
+    });
+    assert.equal(await delayedSubmitButton.isDisabled(), true, "test must interact before hydration");
 
-  await delayedHydrationStatus.waitFor({
-    state: "hidden",
-    timeout: 15_000,
-  });
-  assert.equal(await delayedAreaCodeInput.inputValue(), "571");
-  assert.equal(await delayedIndustryInput.inputValue(), "electrician");
-  assert.equal(await delayedSubmitButton.isEnabled(), true);
-  await delayedSubmitButton.click();
-  await delayedPage.getByText("No numbers matched your search. Try different filters.").waitFor();
-  assert.deepEqual(getDelayedRequestBody(), expectedRequestBody);
-  await delayedPage.close();
+    await delayedHydrationStatus.waitFor({
+      state: "hidden",
+      timeout: 15_000,
+    });
+    assert.equal(await delayedAreaCodeInput.inputValue(), "571");
+    assert.equal(await delayedIndustryInput.inputValue(), "electrician");
+    assert.equal(await delayedSubmitButton.isEnabled(), true);
+    await delayedSubmitButton.click();
+    await delayedPage.getByText("No numbers matched your search. Try different filters.").waitFor();
+    assert.deepEqual(getDelayedRequestBody(), expectedRequestBody);
+    assertDelayedRuntime();
+    await delayedPage.close();
+  }
 
   const browserPage = await browser.newPage();
+  const assertBrowserRuntime = attachRuntimeGuards(browserPage, "trusted-input");
   await browserPage.addInitScript(() => {
     window.__numberSearchInputEvents = [];
     document.addEventListener(
@@ -151,9 +191,20 @@ try {
   await browserPage.getByRole("button", { name: "Searching…" }).waitFor();
   await browserPage.getByText("No numbers matched your search. Try different filters.").waitFor();
   assert.deepEqual(getBrowserRequestBody(), expectedRequestBody);
+  assertBrowserRuntime();
+  await browserPage.close();
+
+  if (isProductionTarget) {
+    const surfacePage = await browser.newPage();
+    const assertSurfaceRuntime = attachRuntimeGuards(surfacePage, "production-surface");
+    await surfacePage.goto(baseUrl, { waitUntil: "networkidle", timeout: 120_000 });
+    await assertProductionHomepageSurface(surfacePage);
+    assertSurfaceRuntime();
+    await surfacePage.close();
+  }
 
   console.log(
-    "PASS homepage number search handles delayed hydration and trusted post-hydration interaction",
+    `PASS homepage number search handles delayed hydration and trusted post-hydration interaction (${baseUrl})`,
   );
 } finally {
   await browser.close();

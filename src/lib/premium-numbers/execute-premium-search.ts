@@ -82,6 +82,26 @@ export async function executePremiumSearch(
 
   let keywordEntries: ReturnType<typeof buildKeywordEntries> = [];
 
+  const persistSnapshotResults = (
+    product: PremiumSearchProductResponse,
+    logId?: string,
+  ) => {
+    if (!logId) return;
+    const snapshotResults = [
+      ...product.bestMatches,
+      ...product.memorableAlternatives,
+      ...(product.topPicks ?? []),
+    ];
+    void prisma.premiumNumberSearchLog
+      .update({
+        where: { id: logId },
+        data: { resultsJson: serializeResultsForLog(snapshotResults) },
+      })
+      .catch(() => {
+        /* log may not exist yet for brand-new searches */
+      });
+  };
+
   const emitSnapshot = (
     candidates: PremiumSearchResult["candidates"],
     status: PremiumSearchResult["status"],
@@ -101,6 +121,7 @@ export async function executePremiumSearch(
       keywords: keywordEntries,
       searchLogId,
     });
+    persistSnapshotResults(product, searchLogId);
     const snapshot: PremiumSearchSnapshot = {
       ...product,
       searchLogId,

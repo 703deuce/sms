@@ -11,6 +11,41 @@ export function getIntegrationAppUrl(): string {
   return raw.replace(/\/$/, "");
 }
 
+function isInternalHost(hostname: string): boolean {
+  const host = hostname.split(":")[0].toLowerCase();
+  return host === "0.0.0.0" || host === "127.0.0.1" || host === "localhost";
+}
+
+function isUsableConfiguredAppUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (isInternalHost(parsed.hostname)) return false;
+    if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Prefer configured APP_URL; fall back to proxy headers when docker/internal origin is configured. */
+export function resolvePublicAppUrl(request?: Request): string {
+  const configured = getIntegrationAppUrl();
+  if (isUsableConfiguredAppUrl(configured)) return configured;
+
+  if (request) {
+    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const host = forwardedHost || request.headers.get("host")?.trim();
+    const proto =
+      request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+      (process.env.NODE_ENV === "production" ? "https" : "http");
+    if (host && !isInternalHost(host.split(":")[0])) {
+      return `${proto}://${host}`.replace(/\/$/, "");
+    }
+  }
+
+  return configured;
+}
+
 export function externalOAuthCallbackUrl(provider: string): string {
   return `${getIntegrationAppUrl()}/api/integrations/native/${provider}/callback`;
 }

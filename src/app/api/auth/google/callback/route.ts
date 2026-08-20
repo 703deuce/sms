@@ -6,6 +6,7 @@ import {
   parseGoogleAuthState,
   sanitizeNextPath,
 } from "@/lib/auth/google-oauth";
+import { resolvePublicAppUrl } from "@/lib/integrations/framework/app-url";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 
 export async function GET(request: Request) {
@@ -13,9 +14,10 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const stateRaw = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
+  const appOrigin = resolvePublicAppUrl(request);
 
   const fallbackNext = sanitizeNextPath(null);
-  const loginUrl = new URL("/login", url.origin);
+  const loginUrl = new URL("/login", appOrigin);
   loginUrl.searchParams.set("next", fallbackNext);
 
   if (oauthError) {
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
       isAdmin: false,
     };
 
-    const res = NextResponse.redirect(new URL(nextPath, url.origin));
+    const res = NextResponse.redirect(new URL(nextPath, appOrigin));
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
       path: "/",

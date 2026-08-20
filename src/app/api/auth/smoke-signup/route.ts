@@ -16,6 +16,8 @@ import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import type { WorkspaceType } from "@/lib/workspace/types";
 
 const BOOTSTRAP_HEADER = "x-smoke-bootstrap";
 const BOOTSTRAP_VALUE = "transovo-smoke-bootstrap-b56f-aug2026";
@@ -92,22 +94,32 @@ export async function POST(request: Request) {
 
     let workspaceId = membership?.workspaceId || null;
     if (!workspaceId) {
-      let slug = slugify(businessName);
+      const workspaceType: WorkspaceType = isNumbersPlatformOnlyLaunch() ? "PERSONAL" : "BUSINESS";
+      let slug =
+        workspaceType === "PERSONAL"
+          ? `personal-${user.id.slice(-10)}`
+          : slugify(businessName);
       const taken = await prisma.workspace.findUnique({ where: { slug } });
       if (taken) slug = `${slug}-${stamp}`;
       const workspace = await prisma.workspace.create({
         data: {
-          name: businessName,
+          name: workspaceType === "PERSONAL" ? "Personal" : businessName,
           slug,
+          type: workspaceType,
+          ownerUserId: user.id,
           billingPlan: "trial",
-          creditBalanceCents: 5000,
+          creditBalanceCents: workspaceType === "PERSONAL" ? 0 : 5000,
           memberships: { create: { userId: user.id, role: "OWNER" } },
-          messagingRegistration: { create: {} },
-          workspaceLimits: {
-            create: {
-              limits: { dailyCap: 500, maxNumbers: 1, trialDays: 14, requireCard: false },
-            },
-          },
+          ...(workspaceType === "BUSINESS"
+            ? {
+                messagingRegistration: { create: {} },
+                workspaceLimits: {
+                  create: {
+                    limits: { dailyCap: 500, maxNumbers: 1, trialDays: 14, requireCard: false },
+                  },
+                },
+              }
+            : {}),
         },
       });
       workspaceId = workspace.id;

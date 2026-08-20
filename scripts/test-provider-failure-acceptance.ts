@@ -9,6 +9,10 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+if (!process.env.NUMBER_SEARCH_ACCEPTANCE_INJECT) {
+  process.env.NUMBER_SEARCH_ACCEPTANCE_INJECT = "1";
+}
+
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { acceptanceInjectEnabled } from "../src/lib/numbers/providers/acceptance-inject";

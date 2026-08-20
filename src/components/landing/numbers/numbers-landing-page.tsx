@@ -108,7 +108,7 @@ export function NumbersLandingPage() {
         <div className="nb-container nb-nav-inner">
           <Link href="/" className="nb-logo">
             <LogoMark />
-            <span>FindNumber.ai</span>
+            <span>Transovo AI</span>
           </Link>
           <nav className="nb-nav-links">
             {NAV.map((item) =>

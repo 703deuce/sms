@@ -64,7 +64,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BRAND_NAME } from "@/lib/brand";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
 import { isPortInHiddenAtLaunch } from "@/lib/workspace/platform-launch";
@@ -231,13 +231,13 @@ export function PersonalFindNumberClient({
   const areaCodesInputRef = useRef<HTMLInputElement>(null);
   const industryInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const hydratedAreaCodes = areaCodesInputRef.current?.value.replace(/[^\d,\s]/g, "");
-    const hydratedIndustry = industryInputRef.current?.value;
-    if (hydratedAreaCodes !== undefined) {
+  useLayoutEffect(() => {
+    const hydratedAreaCodes = areaCodesInputRef.current?.value.replace(/[^\d,\s]/g, "") ?? "";
+    const hydratedIndustry = industryInputRef.current?.value ?? "";
+    if (hydratedAreaCodes) {
       setAreaCodesInput((current) => (hydratedAreaCodes === current ? current : hydratedAreaCodes));
     }
-    if (hydratedIndustry !== undefined) {
+    if (hydratedIndustry) {
       setIndustry((current) => (hydratedIndustry === current ? current : hydratedIndustry));
     }
     setHydrated(true);
@@ -564,6 +564,10 @@ export function PersonalFindNumberClient({
   async function onGetNumber(result: PremiumNumberProductResult) {
     const activeSearchLogId = searchResponse?.searchLogId ?? shelfSearchLogId;
     if (!activeSearchLogId) return;
+    if (searchingMore || searchResponse?.searchStatus === "searching") {
+      setReserveError("Still scanning inventory — wait a moment before reserving this number.");
+      return;
+    }
     const reserveSearchMode = searchIntent === "business_keyword" ? "business" : "personal";
     setReserving(result.phoneNumber);
     setReserveError("");
@@ -1079,7 +1083,9 @@ export function PersonalFindNumberClient({
                 <p className="mb-2 text-[12px] font-semibold text-[#374151]">Area Codes</p>
                 <Input
                   ref={areaCodesInputRef}
-                  value={areaCodesInput}
+                  {...(hydrated
+                    ? { value: areaCodesInput }
+                    : { defaultValue: areaCodesInput })}
                   onChange={(e) =>
                     setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
                   }
@@ -1125,7 +1131,7 @@ export function PersonalFindNumberClient({
                   <div className="relative">
                     <Input
                       ref={industryInputRef}
-                      value={industry}
+                      {...(hydrated ? { value: industry } : { defaultValue: industry })}
                       onChange={(e) => setIndustry(e.target.value)}
                       placeholder="electrician"
                       className="h-10 rounded-lg border-[#e5e7eb] bg-white pr-10 text-[14px]"
