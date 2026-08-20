@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { BRAND_NAME } from "@/lib/brand";
 import { PersonalFindNumberClient } from "@/components/numbers/personal-find-number-ui";
-import type { PremiumNumberProductResult } from "@/lib/premium-numbers/product-api";
 import {
   ArrowRight,
   Briefcase,
@@ -71,15 +70,7 @@ export function focusLandingSearch() {
   document.getElementById("find-number-search")?.scrollIntoView({ behavior: "smooth" });
 }
 
-export function NumbersLandingPage({
-  initialTopPicks,
-  defaultAreaCodes,
-  shelfSearchLogId,
-}: {
-  initialTopPicks: PremiumNumberProductResult[];
-  defaultAreaCodes: string[];
-  shelfSearchLogId?: string;
-}) {
+export function NumbersLandingPage() {
   return (
     <div className="numbers-landing min-h-screen">
       <header className="nl-nav">
@@ -122,11 +113,7 @@ export function NumbersLandingPage({
             <PersonalFindNumberClient
               workspaceId="public-landing"
               hidePageHeader
-              publicLanding={{
-                initialTopPicks,
-                defaultAreaCodes,
-                shelfSearchLogId,
-              }}
+              publicLanding={{}}
             />
           </div>
         </div>

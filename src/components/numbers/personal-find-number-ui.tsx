@@ -50,6 +50,7 @@ import {
   Home,
   LayoutList,
   Lightbulb,
+  Loader2,
   MapPin,
   Phone,
   RefreshCw,
@@ -156,9 +157,15 @@ function formatMonthlyService(cents: number): string {
 }
 
 export type PublicLandingConfig = {
-  initialTopPicks: PremiumNumberProductResult[];
+  initialTopPicks?: PremiumNumberProductResult[];
   shelfSearchLogId?: string;
-  defaultAreaCodes: string[];
+  defaultAreaCodes?: string[];
+};
+
+type DetectedVisitorMarket = {
+  metroLabel: string;
+  likelyAreaCodes: string[];
+  confidence: "high" | "medium" | "low";
 };
 
 export function PersonalFindNumberClient({
@@ -179,7 +186,7 @@ export function PersonalFindNumberClient({
 
   const [numberType, setNumberType] = useState<NumberType>("local");
   const [areaCodesInput, setAreaCodesInput] = useState(
-    publicLanding?.defaultAreaCodes.join(", ") ?? "",
+    publicLanding?.defaultAreaCodes?.join(", ") ?? "",
   );
   const [tollFreePrefix, setTollFreePrefix] = useState<TollFreePrefix>("all");
   const [searchIntent, setSearchIntent] = useState<SearchIntent>("business_keyword");
@@ -217,20 +224,73 @@ export function PersonalFindNumberClient({
   const [topPicks, setTopPicks] = useState<PremiumNumberProductResult[]>(
     publicLanding?.initialTopPicks ?? [],
   );
+  const [topPicksLoading, setTopPicksLoading] = useState(
+    isPublic && !publicLanding?.initialTopPicks?.length,
+  );
+  const [topPicksError, setTopPicksError] = useState("");
+  const [detectedMarket, setDetectedMarket] = useState<DetectedVisitorMarket | null>(null);
   const [shelfSearchLogId, setShelfSearchLogId] = useState(publicLanding?.shelfSearchLogId);
 
   useEffect(() => {
-    if (!isPublic || topPicks.length > 0) return;
+    if (!isPublic || publicLanding?.initialTopPicks?.length) return;
+
+    let cancelled = false;
+    setTopPicksLoading(true);
+    setTopPicksError("");
+
     fetch("/api/public/numbers/top-picks")
       .then((r) => r.json())
-      .then((data: { items?: PremiumNumberProductResult[]; searchLogId?: string }) => {
-        if (data.items?.length) setTopPicks(data.items);
-        if (data.searchLogId) setShelfSearchLogId(data.searchLogId);
-      })
+      .then(
+        (data: {
+          items?: PremiumNumberProductResult[];
+          searchLogId?: string;
+          market?: {
+            metroLabel?: string;
+            likelyAreaCodes?: string[];
+            confidence?: "high" | "medium" | "low";
+          };
+          error?: string;
+        }) => {
+          if (cancelled) return;
+          if (data.error) {
+            setTopPicksError(data.error);
+            return;
+          }
+          if (data.items?.length) setTopPicks(data.items);
+          if (data.searchLogId) setShelfSearchLogId(data.searchLogId);
+          if (data.market?.likelyAreaCodes?.length) {
+            setDetectedMarket({
+              metroLabel: data.market.metroLabel ?? "your area",
+              likelyAreaCodes: data.market.likelyAreaCodes,
+              confidence: data.market.confidence ?? "low",
+            });
+            setAreaCodesInput((prev) =>
+              prev.trim() ? prev : data.market!.likelyAreaCodes!.join(", "),
+            );
+          }
+        },
+      )
       .catch(() => {
-        /* shelf unavailable */
+        if (!cancelled) {
+          setTopPicksError("Could not load picks for your area. Try searching above.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTopPicksLoading(false);
       });
-  }, [isPublic, topPicks.length]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPublic, publicLanding?.initialTopPicks?.length]);
+
+  const popularPicksSubtitle = topPicksLoading
+    ? "Finding numbers in your area…"
+    : detectedMarket && detectedMarket.confidence !== "low"
+      ? `Hand-picked near ${detectedMarket.metroLabel}.`
+      : detectedMarket
+        ? `Showing picks for ${detectedMarket.metroLabel} area codes.`
+        : "Hand-picked for you — explore by city.";
 
   const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
   const keywordTags = useMemo(() => splitKeywordInput(suggestedKeywords), [suggestedKeywords]);
@@ -995,7 +1055,7 @@ export function PersonalFindNumberClient({
                   onChange={(e) =>
                     setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
                   }
-                  placeholder="571"
+                  placeholder={topPicksLoading && isPublic ? "Detecting your area…" : "571"}
                   className="h-10 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                 />
               </div>
@@ -1169,29 +1229,41 @@ export function PersonalFindNumberClient({
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 className="text-[22px] font-bold text-[#111827]">Popular Picks Today</h2>
-                  <p className="mt-1 text-[14px] text-[#6b7280]">
-                    Hand-picked for you — explore by city.
+                  <p
+                    className={cn(
+                      "mt-1 text-[14px]",
+                      topPicksLoading ? "flex items-center gap-2 text-[#6366f1]" : "text-[#6b7280]",
+                    )}
+                  >
+                    {topPicksLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        {popularPicksSubtitle}
+                      </>
+                    ) : (
+                      popularPicksSubtitle
+                    )}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={onSeeAllPicks}
-                  disabled={loading || parsedAreaCodes.length === 0}
+                  disabled={loading || topPicksLoading || parsedAreaCodes.length === 0}
                   className="text-[13px] font-semibold text-[#6366f1] hover:underline disabled:opacity-50"
                 >
                   See all picks →
                 </button>
               </div>
-              {loading && !topPicks.length ? (
+              {topPicksLoading ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {Array.from({ length: 8 }).map((_, i) => (
+                  {Array.from({ length: 12 }).map((_, i) => (
                     <div
                       key={i}
-                      className="h-[180px] animate-pulse rounded-xl border border-[#e5e7eb] bg-[#f3f4f6]"
+                      className="h-[108px] animate-pulse rounded-xl border border-[#e5e7eb] bg-[#f3f4f6]"
                     />
                   ))}
                 </div>
-              ) : (
+              ) : topPicks.length > 0 ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   {topPicks.map((item) => (
                     <NumberShelfCard
@@ -1202,14 +1274,14 @@ export function PersonalFindNumberClient({
                     />
                   ))}
                 </div>
-              )}
-              {!loading && !topPicks.length ? (
+              ) : (
                 <div className={cn(pm.card, "border-dashed p-6 text-center")}>
                   <p className="text-[14px] text-[#6b7280]">
-                    Enter an area code above and search to browse live inventory.
+                    {topPicksError ||
+                      "Enter an area code above and search to browse live inventory."}
                   </p>
                 </div>
-              ) : null}
+              )}
             </section>
           ) : null}
 
