@@ -6,7 +6,17 @@ import { LandingTopPicksNearYou } from "@/components/landing/numbers/landing-top
 import { useLandingReserve } from "@/components/landing/numbers/use-landing-reserve";
 import type { PremiumSearchProductResponse } from "@/lib/premium-numbers/product-api";
 import Link from "next/link";
-import { Check, Download, Search, Star } from "lucide-react";
+import {
+  Briefcase,
+  Check,
+  Globe,
+  Plus,
+  Search,
+  Shield,
+  Smartphone,
+  Star,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
 import "./numbers-landing.css";
 
@@ -20,6 +30,46 @@ const NAV = [
 ];
 
 const CARRIERS = ["AT&T", "Verizon", "T-Mobile", "Mint Mobile", "Cricket", "Metro"];
+
+const TESTIMONIALS = [
+  {
+    name: "Sarah M.",
+    role: "Real Estate Agent",
+    quote: "I found a number my clients actually remember. The transfer was quick and painless.",
+  },
+  {
+    name: "James T.",
+    role: "Small Business Owner",
+    quote: "The clear pricing and memorable search tools made choosing our business number easy.",
+  },
+];
+
+const FAQS = [
+  {
+    q: "How does the process work?",
+    a: "Search, purchase your favorite number, then port it to your carrier or use our forwarding tools.",
+  },
+  {
+    q: "Can I use my number with any provider?",
+    a: "Most local and toll-free numbers can be ported to major US carriers and supported VoIP providers.",
+  },
+  {
+    q: "Are there any hidden fees?",
+    a: "No. The marketplace price is shown before checkout, and optional services are clearly separated.",
+  },
+  {
+    q: "How long does porting take?",
+    a: "Many mobile ports complete within a few business days; timing varies by number type and carrier.",
+  },
+  {
+    q: "What if I can't port my number?",
+    a: "Start your port within 30 days and our support team will help or apply the portability guarantee.",
+  },
+  {
+    q: "Can I reserve a number without transferring it right away?",
+    a: "Yes. You can securely hold your number until you are ready to activate or port it.",
+  },
+];
 
 function LogoMark() {
   return (
@@ -180,24 +230,26 @@ export function NumbersLandingPage() {
         <div className="nb-container nb-why-grid">
           <div className="nb-features-grid">
             {[
-              { title: "Largest inventory", body: "Millions of local and toll-free numbers." },
-              { title: "Fast porting", body: "Transfer to your carrier with guided support." },
-              { title: "No hidden fees", body: "Transparent one-time pricing at checkout." },
-              { title: "Mobile app", body: "Manage forwarding and voicemail on the go." },
-            ].map(({ title, body }) => (
+              { icon: Globe, title: "Extensive inventory", body: "Millions of local and toll-free numbers." },
+              { icon: Zap, title: "Fast transfer", body: "Transfer to your carrier with guided support." },
+              { icon: Smartphone, title: "Instant activation", body: "Reserve online and get started quickly." },
+              { icon: Shield, title: "Secure process", body: "Protected checkout and verified inventory." },
+            ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="nb-feature-card">
+                <Icon className="nb-feature-icon" />
                 <h3>{title}</h3>
                 <p>{body}</p>
               </div>
             ))}
           </div>
           <div className="nb-promo-box">
-            <h3>We make phone numbers simple.</h3>
+            <Shield className="nb-promo-icon" />
+            <h3>The FindNumber.ai Guarantee</h3>
             <ul>
-              <li>Buy once — no monthly number rental surprises</li>
+              <li>Secure checkout</li>
+              <li>Instant number ownership</li>
               <li>30-day portability guarantee</li>
-              <li>AI-powered search finds patterns fast</li>
-              <li>Keep your current carrier and plan</li>
+              <li>Transparent pricing — no hidden fees</li>
             </ul>
             <button type="button" className="nb-btn-white" onClick={focusLandingSearch}>
               Search Now
@@ -209,88 +261,128 @@ export function NumbersLandingPage() {
       <section id="business" className="nb-section nb-secondary-blocks">
         <div className="nb-container nb-secondary-grid">
           <div className="nb-secondary-card">
-            <p className="nb-secondary-label">Mobile App Coming Soon</p>
-            <h3>Manage your number anywhere</h3>
-            <p className="nb-muted">Forward calls, set voicemail, and port — from your phone.</p>
-            <div className="nb-phone-mock" aria-hidden />
+            <div className="nb-usecase-heading">
+              <Smartphone className="nb-usecase-icon" />
+              <h3>Personal Use</h3>
+            </div>
+            <p className="nb-muted">
+              Pick digits that reflect you — memorable, local, and easy to share with friends and family.
+            </p>
+            <ul className="nb-usecase-list">
+              <li>Easy-to-remember personal numbers</li>
+              <li>Port to your current mobile carrier</li>
+              <li>No contracts or hidden fees</li>
+            </ul>
+            <button type="button" className="nb-link-button" onClick={focusLandingSearch}>
+              Find a personal number →
+            </button>
           </div>
           <div className="nb-secondary-card">
-            <p className="nb-secondary-label">Business Solutions</p>
-            <h3>Built for teams that need memorable numbers</h3>
-            <p className="nb-muted">Vanity numbers, bulk search, and porting for your brand.</p>
-            <Link href="/contact" className="nb-link-arrow">
-              Talk to sales →
-            </Link>
+            <div className="nb-usecase-heading">
+              <Briefcase className="nb-usecase-icon" />
+              <h3>Business Use</h3>
+            </div>
+            <p className="nb-muted">
+              Give customers a number they remember. Vanity and keyword numbers make your brand stand out.
+            </p>
+            <ul className="nb-usecase-list">
+              <li>Local and toll-free vanity options</li>
+              <li>Memorable numbers for every campaign</li>
+              <li>Forward calls or port to your provider</li>
+            </ul>
+            <button type="button" className="nb-link-button" onClick={focusLandingSearch}>
+              Explore business numbers →
+            </button>
           </div>
         </div>
       </section>
 
-      <section id="pricing" className="nb-section nb-pricing-strip">
-        <div className="nb-container nb-pricing-inner">
-          <h2 className="nb-section-title">Simple pricing</h2>
-          <div className="nb-pricing-row">
-            {[
-              { tier: "Choice", price: "From $4.99" },
-              { tier: "Memorable", price: "$9.99 – $19.99" },
-              { tier: "Premium", price: "From $29.99" },
-              { tier: "Business Vanity", price: "Custom" },
-            ].map(({ tier, price }) => (
-              <div key={tier} className="nb-pricing-chip">
-                <strong>{tier}</strong>
-                <span>{price}</span>
-              </div>
+      <section className="nb-section nb-social-proof">
+        <div className="nb-container nb-social-grid">
+          <div>
+            <h2 className="nb-section-title">What our customers say about us</h2>
+            <div className="nb-testimonials">
+              {TESTIMONIALS.map((testimonial) => (
+                <blockquote key={testimonial.name} className="nb-testimonial">
+                  <div className="nb-stars">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <Star key={index} className="h-3.5 w-3.5 fill-[#f97316] text-[#f97316]" />
+                    ))}
+                  </div>
+                  <p>&ldquo;{testimonial.quote}&rdquo;</p>
+                  <footer>
+                    <strong>{testimonial.name}</strong>
+                    <span>{testimonial.role}</span>
+                  </footer>
+                </blockquote>
+              ))}
+            </div>
+          </div>
+          <div className="nb-tools-card">
+            <h2 className="nb-section-title">Modern apps and tools</h2>
+            <p className="nb-muted">Manage forwarding, voicemail, and ports from anywhere.</p>
+            <div className="nb-phone-mock" aria-hidden />
+            <button type="button" className="nb-btn-primary nb-tools-button" onClick={focusLandingSearch}>
+              Explore all tools
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="nb-section nb-faq-section">
+        <div className="nb-container nb-faq-wrap">
+          <h2 className="nb-section-title nb-section-title-center">Frequently Asked Questions</h2>
+          <div className="nb-faq-list">
+            {FAQS.map((faq) => (
+              <details key={faq.q} className="nb-faq-item">
+                <summary>
+                  {faq.q}
+                  <Plus className="h-4 w-4" />
+                </summary>
+                <p>{faq.a}</p>
+              </details>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="nb-footer-cta">
+        <div className="nb-container nb-footer-cta-inner nb-footer-cta-row">
+          <div>
+            <h2>Ready to find a number you&apos;ll remember?</h2>
+            <p>Search local, toll-free, and memorable vanity numbers today.</p>
+          </div>
+          <button type="button" className="nb-btn-primary" onClick={focusLandingSearch}>
+            Get Started Now
+          </button>
         </div>
       </section>
 
       <footer className="nb-footer">
-        <div className="nb-container nb-footer-share">
-          <h3>Help your friends find your number</h3>
-          <div className="nb-social-share">
-            {["F", "X", "I", "L"].map((network) => (
-              <span key={network} className="nb-social-btn" aria-hidden>
-                {network}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="nb-container nb-footer-account">
-          <div>
-            <h3>Manage your account</h3>
-            <p className="nb-muted">Sign in to reserve numbers and track ports.</p>
-          </div>
-          <Link href="/login" className="nb-btn-outline nb-btn-dark-outline">
-            <Download className="h-4 w-4" />
-            Sign In
-          </Link>
-        </div>
-
         <div className="nb-container nb-footer-links-grid">
           {[
             {
-              label: "Help",
+              label: "Company",
               links: [
-                ["FAQ", "/contact"],
-                ["Porting", "/personal/porting"],
-                ["Support", "/contact"],
-              ],
-            },
-            {
-              label: "Search",
-              links: [
-                ["Local", "#search"],
-                ["Toll-Free", "#search"],
-                ["Vanity", "#search"],
-              ],
-            },
-            {
-              label: "About",
-              links: [
-                ["Company", "/contact"],
+                ["About", "/contact"],
                 ["Careers", "/contact"],
                 ["Contact", "/contact"],
+              ],
+            },
+            {
+              label: "Services",
+              links: [
+                ["Find a Number", "#search"],
+                ["Port a Number", "/personal/porting"],
+                ["Business Numbers", "#business"],
+              ],
+            },
+            {
+              label: "Support",
+              links: [
+                ["Help Center", "/contact"],
+                ["Porting Help", "/personal/porting"],
+                ["FAQ", "#pricing"],
               ],
             },
             {
@@ -318,15 +410,6 @@ export function NumbersLandingPage() {
             </div>
           ))}
         </div>
-
-        <section className="nb-footer-cta">
-          <div className="nb-container nb-footer-cta-inner">
-            <h2>Ready to find a number you&apos;ll actually love?</h2>
-            <button type="button" className="nb-btn-primary" onClick={focusLandingSearch}>
-              Search Now
-            </button>
-          </div>
-        </section>
 
         <div className="nb-container nb-footer-bottom">
           <div className="nb-footer-brand">
