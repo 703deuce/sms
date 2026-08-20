@@ -202,7 +202,7 @@ export function BillingSettingsPanel() {
 
       {personalMode ? (
         <p className="mb-6 text-sm text-muted-foreground">
-          <Link href="/personal/usage" className="font-semibold text-primary hover:underline">
+          <Link href="/settings/billing" className="font-semibold text-primary hover:underline">
             View full usage breakdown
           </Link>
           {" "}

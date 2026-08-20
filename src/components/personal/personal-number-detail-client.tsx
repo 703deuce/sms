@@ -169,7 +169,7 @@ export function PersonalNumberDetailClient({
           label="Usage"
           value={`${stats.forwardingMinutes} min`}
           sub="forwarded this period"
-          href="/personal/usage"
+          href="/settings/billing"
         />
         <StatTile
           label="Calls"

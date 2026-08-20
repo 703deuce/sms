@@ -1,3 +1,16 @@
+import {
+  isTranscriptionPending,
+  isTranscriptionFailed,
+  TRANSCRIPTION_PROCESSING,
+} from "@/lib/phone/telnyx-voicemail-pipeline";
+
+export function formatTranscriptForDisplay(text: string | null | undefined): string | null {
+  if (!text) return null;
+  if (isTranscriptionPending(text)) return TRANSCRIPTION_PROCESSING;
+  if (isTranscriptionFailed(text)) return text;
+  return text;
+}
+
 export type PersonalVoicemailMessage = {
   id: string;
   callerNumber: string;
@@ -33,7 +46,7 @@ export function mapVoicemailMessage(row: {
     durationSec: row.durationSeconds ?? 0,
     createdAt:
       row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
-    transcript: row.transcriptText,
+    transcript: formatTranscriptForDisplay(row.transcriptText),
     readAt: row.isRead ? new Date().toISOString() : null,
     boxId: row.boxId,
   };

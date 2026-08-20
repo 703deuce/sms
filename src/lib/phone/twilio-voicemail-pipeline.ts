@@ -3,6 +3,7 @@
  */
 import { getPrisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
+import { TRANSCRIPTION_PROCESSING } from "@/lib/phone/telnyx-voicemail-pipeline";
 
 export async function ensureVoicemailMessageForHumanCall(input: {
   workspaceId: string;
@@ -65,11 +66,16 @@ export async function attachTwilioVoicemailRecording(input: {
     }));
   if (!msg) return null;
 
+  const box = await prisma.voicemailBox.findFirst({ where: { id: msg.boxId } });
+
   const updated = await prisma.voicemailMessage.update({
     where: { id: msg.id },
     data: {
       recordingUrl: input.recordingUrl,
       durationSeconds: input.durationSeconds ?? msg.durationSeconds,
+      ...(box?.transcriptionEnabled !== false && !msg.transcriptText
+        ? { transcriptText: TRANSCRIPTION_PROCESSING }
+        : {}),
     },
   });
 

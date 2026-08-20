@@ -542,7 +542,7 @@ export function Sidebar({
               Help Center
             </Link>
             <Link
-              href="/settings/billing"
+              href="/settings"
               className="block rounded-md px-2.5 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-[#f3f4f6]"
               onClick={onClose}
             >

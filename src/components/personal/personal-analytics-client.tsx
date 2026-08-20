@@ -388,7 +388,7 @@ export function PersonalAnalyticsClient({
           <PersonalMockSection
             title="Insights"
             action={
-              <Link href="/personal/usage" className="text-[12px] font-semibold text-[#6366f1]">
+              <Link href="/settings/billing" className="text-[12px] font-semibold text-[#6366f1]">
                 View all
               </Link>
             }
@@ -423,7 +423,7 @@ export function PersonalAnalyticsClient({
           <PersonalMockSection
             title="Usage"
             action={
-              <Link href="/personal/usage" className="text-[12px] font-semibold text-[#6366f1]">
+              <Link href="/settings/billing" className="text-[12px] font-semibold text-[#6366f1]">
                 View all
               </Link>
             }

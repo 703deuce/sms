@@ -1647,7 +1647,55 @@ export async function processHumanCallWebhookEvent(input: {
         humanCallId: call.id,
         recordingUrl,
         durationSeconds: duration ? Math.round(duration / 1000) : null,
+        awaitNativeTranscription: true,
       }).catch((err) => console.warn("[phone] voicemail transcript failed", err));
+    }
+  }
+  if (input.eventType === "call.recording.transcription.saved") {
+    const isVoicemail =
+      call.status === "voicemail" ||
+      String(call.disposition || "").startsWith("voicemail:");
+    if (isVoicemail) {
+      const {
+        parseTelnyxRecordingTranscriptionPayload,
+        applyTelnyxVoicemailTranscription,
+      } = await import("./telnyx-voicemail-pipeline");
+      const parsed = parseTelnyxRecordingTranscriptionPayload(input.eventPayload);
+      if (parsed?.transcript) {
+        patch.transcriptText = parsed.transcript;
+        await applyTelnyxVoicemailTranscription({
+          workspaceId: call.workspaceId,
+          humanCallId: call.id,
+          transcriptText: parsed.transcript,
+          transcriptionId: parsed.transcriptionId,
+        }).catch((err) => console.warn("[phone] Telnyx VM transcription apply failed", err));
+      }
+    }
+  }
+  if (input.eventType === "call.recording.error") {
+    const isVoicemail =
+      call.status === "voicemail" ||
+      String(call.disposition || "").startsWith("voicemail:");
+    if (isVoicemail) {
+      const recordingUrl =
+        (patch.recordingUrl as string | null) ||
+        call.recordingUrl ||
+        null;
+      const { fallbackVoicemailWhisperIfStillPending } = await import("./voicemail-service");
+      const { markVoicemailTranscriptionFailed } = await import("./telnyx-voicemail-pipeline");
+      const reason = String(input.eventPayload.reason || input.eventPayload.detail || "recording error");
+      await markVoicemailTranscriptionFailed({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        reason,
+      }).catch(() => undefined);
+      if (recordingUrl) {
+        await fallbackVoicemailWhisperIfStillPending({
+          workspaceId: call.workspaceId,
+          humanCallId: call.id,
+          recordingUrl,
+        }).catch(() => undefined);
+      }
     }
   }
   if (input.eventType === "call.transcription" || input.eventType === "call.transcription.received") {
