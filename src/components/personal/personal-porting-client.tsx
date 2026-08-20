@@ -5,6 +5,7 @@ import { PersonalPortOutFlow } from "@/components/personal/personal-port-out-flo
 import { EmptyState } from "@/components/ui/empty-state";
 import { personalPortInStatusLabel } from "@/lib/numbers/port-constants";
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
+import { isPortInHiddenAtLaunch } from "@/lib/workspace/platform-launch";
 import {
   WIREFRAME_PORT_IN_STEPS,
   WIREFRAME_PORT_IN_STEPPER,
@@ -101,7 +102,8 @@ export function PersonalPortingClient({
   }>;
 }) {
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") === "out" ? "out" : "in";
+  const hidePortIn = isPortInHiddenAtLaunch();
+  const initialTab = hidePortIn || searchParams.get("tab") === "out" ? "out" : "in";
   const [tab, setTab] = useState<"in" | "out">(initialTab);
   const initialNumberId = searchParams.get("numberId") || numbers[0]?.id || "";
   const [selectedId, setSelectedId] = useState(initialNumberId);
@@ -471,15 +473,19 @@ export function PersonalPortingClient({
       </div>
 
       <PersonalMockTabs
-        tabs={[
-          { id: "in", label: "Port In", icon: ArrowDownToLine },
-          { id: "out", label: "Port Out", icon: ArrowUpFromLine },
-        ]}
+        tabs={
+          hidePortIn
+            ? [{ id: "out", label: "Port Out", icon: ArrowUpFromLine }]
+            : [
+                { id: "in", label: "Port In", icon: ArrowDownToLine },
+                { id: "out", label: "Port Out", icon: ArrowUpFromLine },
+              ]
+        }
         active={tab}
         onChange={(id) => setTab(id as "in" | "out")}
       />
 
-      {tab === "in" ? (
+      {!hidePortIn && tab === "in" ? (
         <div className="space-y-6">
           <div className={cn(pm.card, "p-5 space-y-5")}>
             <PersonalMockHorizontalStepper steps={WIREFRAME_PORT_IN_STEPPER} activeIndex={portInStep} />

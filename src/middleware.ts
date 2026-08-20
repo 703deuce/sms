@@ -3,7 +3,11 @@ import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
 } from "@/lib/workspace/capabilities";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import {
+  isNumbersPlatformOnlyLaunch,
+  isPortInHiddenAtLaunch,
+  isSmsMarketingHiddenAtLaunch,
+} from "@/lib/workspace/platform-launch";
 
 const WORKSPACE_TYPE_COOKIE = "transovo_workspace_type";
 
@@ -41,6 +45,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/integrations/shopify/webhook")) return true;
   if (pathname.startsWith("/api/integrations/salesforce/webhook")) return true;
   if (pathname.startsWith("/api/integrations/google/") && pathname.includes("/callback")) return true;
+  if (pathname === "/api/auth/google/callback") return true;
   // Native integrations: OAuth provider redirects + inbound webhooks (no browser session).
   if (
     pathname.startsWith("/api/integrations/native/") &&
@@ -83,6 +88,22 @@ function isPublicPath(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isSmsMarketingHiddenAtLaunch() && pathname === "/sms-marketing") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  if (isPortInHiddenAtLaunch() && pathname === "/personal/porting") {
+    const tab = request.nextUrl.searchParams.get("tab");
+    if (!tab || tab === "in") {
+      const url = request.nextUrl.clone();
+      url.searchParams.set("tab", "out");
+      return NextResponse.redirect(url);
+    }
+  }
+
   const session = request.cookies.get("transovo_session")?.value;
   const isPublic = isPublicPath(pathname);
   const isApiAuth = pathname.startsWith("/api/auth");
@@ -120,12 +141,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged-in users skip auth pages; root (/) and /sms-marketing stay public for acquisition/marketing.
+  // Logged-in users skip auth pages; respect checkout `next` when present.
   if (session && authPages.has(pathname)) {
+    const next = request.nextUrl.searchParams.get("next");
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      return NextResponse.redirect(new URL(next, request.nextUrl.origin));
+    }
     const url = request.nextUrl.clone();
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
     url.pathname =
       isNumbersPlatformOnlyLaunch() || wsType === "PERSONAL" ? "/personal" : "/outcomes";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

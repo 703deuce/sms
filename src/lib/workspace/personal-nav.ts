@@ -13,7 +13,7 @@ import {
 import type { NavItem } from "@/lib/nav";
 import { buildSmartRoutingNavChildren } from "@/lib/solutions-nav";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
-import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
+import { isPortInHiddenAtLaunch, isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 
 export type PersonalNavOptions = {
   smartRoutingFlowId?: string | null;
@@ -31,7 +31,9 @@ export function buildPersonalNav(options?: PersonalNavOptions): NavItem[] {
     { label: "Voicemail", href: "/personal/voicemail", icon: Voicemail },
     { label: "Call Activity", href: "/personal/activity", icon: Activity },
     { label: "Analytics", href: "/personal/analytics", icon: BarChart3 },
-    { label: "Porting", href: "/personal/porting", icon: ArrowRightLeft },
+    ...(isPortInHiddenAtLaunch()
+      ? [{ label: "Port Out", href: "/personal/porting?tab=out", icon: ArrowRightLeft }]
+      : [{ label: "Porting", href: "/personal/porting", icon: ArrowRightLeft }]),
     { label: "Billing", href: "/settings/billing", icon: CreditCard },
   ];
 

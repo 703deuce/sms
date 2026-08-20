@@ -19,6 +19,7 @@ const commands = [
   ["npx", ["tsx", "scripts/test-voicemail-greeting-playback.ts"]],
   ["npx", ["tsx", "scripts/test-personal-actions.ts"]],
   ["npx", ["tsx", "scripts/test-workspace-split.ts"]],
+  ["npx", ["tsx", "scripts/test-number-marketplace-launch-scope.ts"]],
 ];
 
 const results = [];

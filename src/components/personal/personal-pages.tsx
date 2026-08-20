@@ -4,6 +4,7 @@ import { PersonalParkButton, KeepWithTransovoButton } from "@/components/persona
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { PersonalOverviewActivityRow, PersonalNumberRow } from "@/lib/workspace/personal-data";
+import { isPortInHiddenAtLaunch } from "@/lib/workspace/platform-launch";
 import { formatPhone } from "@/lib/utils";
 import { ArrowRight, Phone, Sparkles, Vault } from "lucide-react";
 import Link from "next/link";
@@ -65,7 +66,11 @@ export function PersonalOverviewClient({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickAction href="/personal/numbers/find" label="Get a Number" icon={Phone} />
           <QuickAction href="/personal/numbers/premium" label="Find Premium Number" icon={Sparkles} />
-          <QuickAction href="/personal/porting" label="Port In My Number" icon={ArrowRight} />
+          {isPortInHiddenAtLaunch() ? (
+            <QuickAction href="/personal/porting?tab=out" label="Port Out Number" icon={ArrowRight} />
+          ) : (
+            <QuickAction href="/personal/porting" label="Port In My Number" icon={ArrowRight} />
+          )}
           <QuickAction href="/personal/vault" label="Park a Number" icon={Vault} />
         </div>
       </section>

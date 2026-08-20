@@ -63,10 +63,11 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BRAND_NAME } from "@/lib/brand";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
+import { isPortInHiddenAtLaunch } from "@/lib/workspace/platform-launch";
 import { runPublicNumberSearch } from "@/lib/premium-numbers/public-find-number-client-search";
 import { FindNumberAiPanel } from "./find-number-ai-panel";
 import {
@@ -179,6 +180,8 @@ export function PersonalFindNumberClient({
   onSearchingChange?: (searching: boolean) => void;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pendingReservationId = searchParams.get("reservation");
   const isPublic = Boolean(publicLanding);
   const searchEndpoint = isPublic ? "/api/public/numbers/search" : "/api/numbers/premium/search";
   const suggestKeywordsEndpoint = isPublic
@@ -224,6 +227,7 @@ export function PersonalFindNumberClient({
   const [checkout, setCheckout] = useState<PremiumCheckoutState | null>(null);
   const [success, setSuccess] = useState<PremiumCheckoutState | null>(null);
   const [shelfSearchLogId, setShelfSearchLogId] = useState(publicLanding?.shelfSearchLogId);
+  const [resumeReservationError, setResumeReservationError] = useState("");
   const areaCodesInputRef = useRef<HTMLInputElement>(null);
   const industryInputRef = useRef<HTMLInputElement>(null);
 
@@ -246,6 +250,64 @@ export function PersonalFindNumberClient({
   useEffect(() => {
     onSearchingChange?.(loading || searchingMore);
   }, [loading, onSearchingChange, searchingMore]);
+
+  useEffect(() => {
+    if (isPublic || !pendingReservationId || checkout || success) return;
+    let cancelled = false;
+
+    async function resumeCheckout() {
+      setResumeReservationError("");
+      try {
+        const claimRes = await fetch(
+          `/api/numbers/premium/reservation/${pendingReservationId}/claim?workspaceId=${workspaceId}`,
+          { method: "POST" },
+        );
+        const claimData = await claimRes.json();
+        if (!claimRes.ok) {
+          throw new Error(claimData.error || "Could not resume your reservation");
+        }
+
+        const res = await fetch(
+          `/api/numbers/premium/reservation/${pendingReservationId}?workspaceId=${workspaceId}`,
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Reservation not found");
+
+        if (cancelled) return;
+        if (!data.reservationExpiresAt || !pendingReservationId) {
+          throw new Error("Reservation did not return an expiration time");
+        }
+
+        setCheckout({
+          reservationId: pendingReservationId,
+          phoneNumber: data.phoneNumber,
+          vanityDisplay: data.vanityDisplay,
+          displayNumber: data.displayNumber,
+          premiumPriceCents: data.premiumPriceCents,
+          expiresAt: data.reservationExpiresAt,
+        });
+        router.replace("/personal/numbers/premium", { scroll: false });
+      } catch (err) {
+        if (!cancelled) {
+          setResumeReservationError(
+            err instanceof Error ? err.message : "Could not resume checkout",
+          );
+        }
+      }
+    }
+
+    void resumeCheckout();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    checkout,
+    isPublic,
+    pendingReservationId,
+    router,
+    success,
+    workspaceId,
+  ]);
 
   const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
   const keywordTags = useMemo(() => splitKeywordInput(suggestedKeywords), [suggestedKeywords]);
@@ -931,17 +993,19 @@ export function PersonalFindNumberClient({
                         Personalize & Portability
                       </h3>
                       <div className="mt-3 space-y-3">
-                        <label className="flex items-start gap-2 text-[12px] text-[#374151]">
-                          <input
-                            type="checkbox"
-                            checked={wantPorting}
-                            onChange={(e) => setWantPorting(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 rounded border-[#d1d5db] text-[#6366f1]"
-                          />
-                          <span>
-                            Do you have a personal number you&apos;d like to use? (Porting)
-                          </span>
-                        </label>
+                        {!isPortInHiddenAtLaunch() ? (
+                          <label className="flex items-start gap-2 text-[12px] text-[#374151]">
+                            <input
+                              type="checkbox"
+                              checked={wantPorting}
+                              onChange={(e) => setWantPorting(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 rounded border-[#d1d5db] text-[#6366f1]"
+                            />
+                            <span>
+                              Do you have a personal number you&apos;d like to use? (Porting)
+                            </span>
+                          </label>
+                        ) : null}
                         <label className="flex items-start gap-2 text-[12px] text-[#374151]">
                           <input
                             type="checkbox"
@@ -952,7 +1016,7 @@ export function PersonalFindNumberClient({
                           <span>Are you looking for a vanity number?</span>
                         </label>
                       </div>
-                      {wantPorting ? (
+                      {wantPorting && !isPortInHiddenAtLaunch() ? (
                         <Link
                           href="/personal/porting"
                           className="mt-3 inline-block text-[12px] font-semibold text-[#6366f1] hover:underline"
@@ -1218,7 +1282,9 @@ export function PersonalFindNumberClient({
           ) : null}
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {reserveError ? <p className="text-sm text-red-600">{reserveError}</p> : null}
+          {reserveError || resumeReservationError ? (
+            <p className="text-sm text-red-600">{reserveError || resumeReservationError}</p>
+          ) : null}
           {searchingMore ? (
             <p className="text-[13px] text-[#6b7280]">Still searching for more numbers…</p>
           ) : null}

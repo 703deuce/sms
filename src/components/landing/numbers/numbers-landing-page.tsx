@@ -5,6 +5,10 @@ import { LandingTopPicksNearYou } from "@/components/landing/numbers/landing-top
 import { useLandingReserve } from "@/components/landing/numbers/use-landing-reserve";
 import { PersonalFindNumberClient } from "@/components/numbers/personal-find-number-ui";
 import type { PremiumSearchProductResponse } from "@/lib/premium-numbers/product-api";
+import {
+  isPortInHiddenAtLaunch,
+  isSmsMarketingHiddenAtLaunch,
+} from "@/lib/workspace/platform-launch";
 import Link from "next/link";
 import {
   Briefcase,
@@ -22,7 +26,9 @@ import "./numbers-landing.css";
 
 const NAV = [
   { href: "#search", label: "Buy a Number" },
-  { href: "/personal/porting", label: "Port a Number" },
+  ...(isPortInHiddenAtLaunch()
+    ? [{ href: "/personal/porting?tab=out", label: "Port Out" }]
+    : [{ href: "/personal/porting", label: "Port a Number" }]),
   { href: "#business", label: "Business Solutions" },
   { href: "#pricing", label: "Pricing" },
   { href: "/contact", label: "Resources" },
@@ -376,7 +382,9 @@ export function NumbersLandingPage() {
               label: "Services",
               links: [
                 ["Find a Number", "#search"],
-                ["Port a Number", "/personal/porting"],
+                ...(isPortInHiddenAtLaunch()
+                  ? [["Port Out", "/personal/porting?tab=out"]]
+                  : [["Port a Number", "/personal/porting"]]),
                 ["Business Numbers", "#business"],
               ],
             },
@@ -384,7 +392,9 @@ export function NumbersLandingPage() {
               label: "Support",
               links: [
                 ["Help Center", "/contact"],
-                ["Porting Help", "/personal/porting"],
+                ...(isPortInHiddenAtLaunch()
+                  ? [["Port Out Help", "/personal/porting?tab=out"]]
+                  : [["Porting Help", "/personal/porting"]]),
                 ["FAQ", "#pricing"],
               ],
             },
@@ -393,7 +403,7 @@ export function NumbersLandingPage() {
               links: [
                 ["Privacy", "/privacy"],
                 ["Terms", "/terms"],
-                ["SMS Marketing", "/sms-marketing"],
+                ...(isSmsMarketingHiddenAtLaunch() ? [] : [["SMS Marketing", "/sms-marketing"]]),
               ],
             },
           ].map((col) => (
