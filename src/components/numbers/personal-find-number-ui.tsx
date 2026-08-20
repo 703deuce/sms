@@ -65,7 +65,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { NumberShelfCard } from "@/components/landing/numbers/number-shelf-card";
+import { TopPicksSection } from "@/components/landing/numbers/top-picks-section";
 import { BRAND_NAME } from "@/lib/brand";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
 import { runPublicNumberSearch } from "@/lib/premium-numbers/public-find-number-client-search";
@@ -162,20 +162,16 @@ export type PublicLandingConfig = {
   defaultAreaCodes?: string[];
 };
 
-type DetectedVisitorMarket = {
-  metroLabel: string;
-  likelyAreaCodes: string[];
-  confidence: "high" | "medium" | "low";
-};
-
 export function PersonalFindNumberClient({
   workspaceId,
   publicLanding,
   hidePageHeader = false,
+  hidePublicSidebar = false,
 }: {
   workspaceId: string;
   publicLanding?: PublicLandingConfig;
   hidePageHeader?: boolean;
+  hidePublicSidebar?: boolean;
 }) {
   const router = useRouter();
   const isPublic = Boolean(publicLanding);
@@ -218,79 +214,10 @@ export function PersonalFindNumberClient({
   const [error, setError] = useState("");
   const [searchResponse, setSearchResponse] = useState<PremiumSearchProductResponse | null>(null);
   const [reserving, setReserving] = useState<string | null>(null);
+  const [reserveError, setReserveError] = useState("");
   const [checkout, setCheckout] = useState<PremiumCheckoutState | null>(null);
   const [success, setSuccess] = useState<PremiumCheckoutState | null>(null);
-  const [reserveError, setReserveError] = useState("");
-  const [topPicks, setTopPicks] = useState<PremiumNumberProductResult[]>(
-    publicLanding?.initialTopPicks ?? [],
-  );
-  const [topPicksLoading, setTopPicksLoading] = useState(
-    isPublic && !publicLanding?.initialTopPicks?.length,
-  );
-  const [topPicksError, setTopPicksError] = useState("");
-  const [detectedMarket, setDetectedMarket] = useState<DetectedVisitorMarket | null>(null);
   const [shelfSearchLogId, setShelfSearchLogId] = useState(publicLanding?.shelfSearchLogId);
-
-  useEffect(() => {
-    if (!isPublic || publicLanding?.initialTopPicks?.length) return;
-
-    let cancelled = false;
-    setTopPicksLoading(true);
-    setTopPicksError("");
-
-    fetch("/api/public/numbers/top-picks")
-      .then((r) => r.json())
-      .then(
-        (data: {
-          items?: PremiumNumberProductResult[];
-          searchLogId?: string;
-          market?: {
-            metroLabel?: string;
-            likelyAreaCodes?: string[];
-            confidence?: "high" | "medium" | "low";
-          };
-          error?: string;
-        }) => {
-          if (cancelled) return;
-          if (data.error) {
-            setTopPicksError(data.error);
-            return;
-          }
-          if (data.items?.length) setTopPicks(data.items);
-          if (data.searchLogId) setShelfSearchLogId(data.searchLogId);
-          if (data.market?.likelyAreaCodes?.length) {
-            setDetectedMarket({
-              metroLabel: data.market.metroLabel ?? "your area",
-              likelyAreaCodes: data.market.likelyAreaCodes,
-              confidence: data.market.confidence ?? "low",
-            });
-            setAreaCodesInput((prev) =>
-              prev.trim() ? prev : data.market!.likelyAreaCodes!.join(", "),
-            );
-          }
-        },
-      )
-      .catch(() => {
-        if (!cancelled) {
-          setTopPicksError("Could not load picks for your area. Try searching above.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setTopPicksLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isPublic, publicLanding?.initialTopPicks?.length]);
-
-  const popularPicksSubtitle = topPicksLoading
-    ? "Finding numbers in your area…"
-    : detectedMarket && detectedMarket.confidence !== "low"
-      ? `Hand-picked near ${detectedMarket.metroLabel}.`
-      : detectedMarket
-        ? `Showing picks for ${detectedMarket.metroLabel} area codes.`
-        : "Hand-picked for you — explore by city.";
 
   const parsedAreaCodes = useMemo(() => parseAreaCodesInput(areaCodesInput), [areaCodesInput]);
   const keywordTags = useMemo(() => splitKeywordInput(suggestedKeywords), [suggestedKeywords]);
@@ -849,7 +776,7 @@ export function PersonalFindNumberClient({
   }
 
   return (
-    <div className="mx-auto max-w-[1320px]" id={isPublic ? "find-number-search" : undefined}>
+    <div className="mx-auto max-w-[1320px]">
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-5">
           {!hidePageHeader ? (
@@ -1055,7 +982,7 @@ export function PersonalFindNumberClient({
                   onChange={(e) =>
                     setAreaCodesInput(e.target.value.replace(/[^\d,\s]/g, ""))
                   }
-                  placeholder={topPicksLoading && isPublic ? "Detecting your area…" : "571"}
+                  placeholder="571"
                   className="h-10 rounded-lg border-[#e5e7eb] bg-white text-[14px]"
                 />
               </div>
@@ -1225,64 +1152,14 @@ export function PersonalFindNumberClient({
           </div>
 
           {isPublic && !searchResponse && !success ? (
-            <section className="space-y-4">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-[22px] font-bold text-[#111827]">Popular Picks Today</h2>
-                  <p
-                    className={cn(
-                      "mt-1 text-[14px]",
-                      topPicksLoading ? "flex items-center gap-2 text-[#6366f1]" : "text-[#6b7280]",
-                    )}
-                  >
-                    {topPicksLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        {popularPicksSubtitle}
-                      </>
-                    ) : (
-                      popularPicksSubtitle
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onSeeAllPicks}
-                  disabled={loading || topPicksLoading || parsedAreaCodes.length === 0}
-                  className="text-[13px] font-semibold text-[#6366f1] hover:underline disabled:opacity-50"
-                >
-                  See all picks →
-                </button>
-              </div>
-              {topPicksLoading ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-[108px] animate-pulse rounded-xl border border-[#e5e7eb] bg-[#f3f4f6]"
-                    />
-                  ))}
-                </div>
-              ) : topPicks.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {topPicks.map((item) => (
-                    <NumberShelfCard
-                      key={item.phoneNumber}
-                      result={item}
-                      loading={reserving === item.phoneNumber}
-                      onGetNumber={() => onGetNumber(item)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className={cn(pm.card, "border-dashed p-6 text-center")}>
-                  <p className="text-[14px] text-[#6b7280]">
-                    {topPicksError ||
-                      "Enter an area code above and search to browse live inventory."}
-                  </p>
-                </div>
-              )}
-            </section>
+            <TopPicksSection
+              onShelfSearchLogId={setShelfSearchLogId}
+              onAreaCodesDetected={(codes) => {
+                setAreaCodesInput((prev) => (prev.trim() ? prev : codes.join(", ")));
+              }}
+              onGetNumber={onGetNumber}
+              reserving={reserving}
+            />
           ) : null}
 
           {searchResponse && searchDurationSec != null ? (
@@ -1458,6 +1335,7 @@ export function PersonalFindNumberClient({
           ) : null}
         </div>
 
+        {!isPublic || !hidePublicSidebar ? (
         <aside className="w-full shrink-0 space-y-4 xl:w-[300px]">
           <SearchSummaryCard
             areaCodes={summaryAreaCodes}
@@ -1473,6 +1351,7 @@ export function PersonalFindNumberClient({
           <HowItWorksCard />
           {!isPublic ? <WhyTransovoCard /> : null}
         </aside>
+        ) : null}
       </div>
 
       {checkout && !success ? (

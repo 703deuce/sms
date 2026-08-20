@@ -2,25 +2,28 @@
 
 import Link from "next/link";
 import { BRAND_NAME } from "@/lib/brand";
+import { LandingAiPrompts } from "@/components/landing/numbers/landing-ai-prompts";
 import { PersonalFindNumberClient } from "@/components/numbers/personal-find-number-ui";
 import {
   ArrowRight,
-  Briefcase,
-  Globe,
+  BadgeCheck,
+  Check,
+  MessageSquare,
   PhoneForwarded,
   Search,
   Shield,
+  ShoppingBag,
   Sparkles,
-  Users,
+  Zap,
 } from "lucide-react";
 import "./numbers-landing.css";
 
 const NAV = [
   { href: "#search", label: "Find a Number" },
-  { href: "/personal/porting", label: "Port a Number" },
-  { href: "/contact", label: "Enterprise Solutions" },
+  { href: "#how-it-works", label: "How It Works" },
+  { href: "#personal-business", label: "Business Numbers" },
+  { href: "#porting", label: "Porting" },
   { href: "#pricing", label: "Pricing" },
-  { href: "/contact", label: "Support" },
 ];
 
 const FAQS = [
@@ -34,27 +37,11 @@ const FAQS = [
   },
   {
     q: "How long does a transfer take?",
-    a: "Timing depends on your carrier and number type. Many mobile ports complete within a few business days, but we do not guarantee a fixed timeline.",
+    a: "Timing depends on your carrier and number type. Many mobile ports complete within a few business days.",
   },
   {
     q: "Can I keep it with Transovo?",
-    a: "Yes. Your number can remain in the Number Vault. Forwarding and voicemail may also be available in your account.",
-  },
-  {
-    q: "What if my carrier can't take the number?",
-    a: "Start your transfer within 30 days. If your receiving carrier confirms it cannot accept the number because of a genuine portability or coverage limitation, the purchase is covered by the Transovo Portability Guarantee.",
-  },
-  {
-    q: "Do I have to transfer it immediately?",
-    a: "No. Your purchased number includes up to 30 days protected with Transovo while you prepare your transfer.",
-  },
-  {
-    q: "Can I search for specific digits?",
-    a: `Yes. Search by area code, digits, patterns, words, or ask ${BRAND_NAME} in plain English.`,
-  },
-  {
-    q: "Are these numbers actually available?",
-    a: "Yes. Results come from live carrier inventory, with final availability confirmed again before reservation or purchase.",
+    a: "Yes. Your number can remain in the Number Vault with forwarding and voicemail options.",
   },
 ];
 
@@ -74,24 +61,24 @@ export function NumbersLandingPage() {
   return (
     <div className="numbers-landing min-h-screen">
       <header className="nl-nav">
-        <div className="nl-container flex h-[72px] items-center justify-between gap-4 px-6">
+        <div className="nl-container h-[72px] px-6">
           <Link href="/" className="nl-logo flex items-center gap-2.5 font-bold text-[#0f172a]">
             <LogoMark />
             {BRAND_NAME}
           </Link>
-          <nav className="nl-nav-links hidden items-center gap-7 text-[14px] font-medium text-[#475569] lg:flex">
+          <nav className="nl-nav-links hidden items-center gap-8 text-[14px] font-medium text-[#475569] lg:flex">
             {NAV.map((item) => (
-              <Link key={item.label} href={item.href} className="hover:text-[#1e3a5f]">
+              <a key={item.href} href={item.href} className="hover:text-[#1e3a5f]">
                 {item.label}
-              </Link>
+              </a>
             ))}
           </nav>
-          <div className="flex items-center gap-4">
+          <div className="nl-nav-actions">
             <Link href="/login" className="hidden text-[14px] font-semibold text-[#334155] sm:block">
-              Sign in
+              Sign In
             </Link>
             <button type="button" onClick={focusLandingSearch} className="nl-btn-primary">
-              Get started
+              Find My Number
             </button>
           </div>
         </div>
@@ -104,164 +91,192 @@ export function NumbersLandingPage() {
               Choose a phone number you&apos;ll actually remember.
             </h1>
             <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-[#64748b]">
-              Search millions of available phone numbers from every area code and prefix. Pick a
-              number that stands out and fits your brand or personality.
+              Search millions of available personal and business phone numbers. Find one you like,
+              buy it, and take it to your current carrier.
             </p>
+            <div className="mt-6 flex flex-wrap gap-5">
+              {[
+                { icon: Zap, label: "50% Launch Pricing" },
+                { icon: Shield, label: "30-Day Portability Guarantee" },
+                { icon: BadgeCheck, label: "Easy Port-Out" },
+              ].map(({ icon: Icon, label }) => (
+                <span key={label} className="nl-trust-pill">
+                  <Icon className="h-4 w-4 text-[#2563eb]" strokeWidth={2.5} />
+                  {label}
+                </span>
+              ))}
+            </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]" id="find-number-search">
             <PersonalFindNumberClient
               workspaceId="public-landing"
               hidePageHeader
+              hidePublicSidebar
               publicLanding={{}}
             />
+            <LandingAiPrompts />
           </div>
         </div>
       </section>
 
-      <section className="nl-steps-bar">
-        <div className="nl-container grid gap-8 px-6 md:grid-cols-3">
+      <section className="nl-trust-strip">
+        <div className="nl-container grid gap-6 px-6 md:grid-cols-3">
           {[
             {
-              icon: Search,
-              title: "Search & find your perfect number",
-              body: "Enter area code, digits, patterns, or ask AI in plain English.",
-            },
-            {
-              icon: Shield,
-              title: "Reserve with a low one-time fee",
-              body: "Choose an available number and secure it instantly at checkout.",
+              icon: ShoppingBag,
+              title: "Buy It",
+              body: "Secure your number instantly with transparent pricing and no hidden fees.",
             },
             {
               icon: PhoneForwarded,
-              title: "Quick activation & porting support",
-              body: "Transfer to your carrier or keep it protected in your Number Vault.",
+              title: "Take It With You",
+              body: "Use it with your current carrier. Keep your service. Keep your plan.",
+            },
+            {
+              icon: Shield,
+              title: "Port With Confidence",
+              body: "If you initiate a transfer within 30 days and your receiving carrier genuinely can't accept the number, your purchase is covered — we'll refund you in full.",
             },
           ].map(({ icon: Icon, title, body }) => (
-            <div key={title} className="flex flex-col items-center text-center">
-              <div className="nl-step-circle">
-                <Icon className="h-6 w-6" />
+            <div key={title} className="nl-trust-card">
+              <div className="nl-trust-card-icon">
+                <Icon className="h-5 w-5" />
               </div>
-              <h3 className="mt-4 text-[15px] font-bold text-[#0f172a]">{title}</h3>
-              <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-[#64748b]">{body}</p>
+              <h3 className="mt-4 text-[17px] font-bold text-[#0f172a]">{title}</h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-[#64748b]">{body}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section id="how-it-works" className="nl-section">
-        <div className="nl-container grid gap-10 px-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="nl-category-card">
-              <p className="text-[12px] font-bold uppercase tracking-wide text-[#6366f1]">
-                Personal Numbers
-              </p>
-              <h3 className="mt-2 text-[22px] font-bold leading-snug text-[#0f172a]">
-                Pick a number you actually like.
-              </h3>
-              <p className="mt-4 text-[14px] leading-relaxed text-[#64748b]">
-                Find clean endings, repeating numbers, favorite digits, specific area codes and
-                memorable patterns.
-              </p>
-              <button
-                type="button"
-                onClick={focusLandingSearch}
-                className="nl-btn-primary mt-6 w-full sm:w-auto"
-              >
-                Find a Personal Number
-              </button>
-            </div>
-            <div className="nl-category-card">
-              <p className="text-[12px] font-bold uppercase tracking-wide text-[#6366f1]">
-                Business Vanity
-              </p>
-              <h3 className="mt-2 text-[22px] font-bold leading-snug text-[#0f172a]">
-                Give customers a number they remember.
-              </h3>
-              <p className="mt-4 text-[14px] leading-relaxed text-[#64748b]">
-                Find numbers built around your company, industry or advertising message.
-              </p>
-              <button
-                type="button"
-                onClick={focusLandingSearch}
-                className="mt-6 inline-flex items-center gap-2 text-[14px] font-semibold text-[#6366f1] hover:underline"
-              >
-                Browse by Word
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="nl-social-proof">
-              <Users className="h-5 w-5 text-[#6366f1]" />
-              <p className="text-[15px] font-semibold text-[#0f172a]">
-                Over 500,000+ businesses and individuals trust {BRAND_NAME}.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                { title: "Real Estate Agents", icon: Briefcase },
-                { title: "Sales Professionals", icon: Globe },
-                { title: "VIP / Unique", icon: Sparkles },
-              ].map(({ title, icon: Icon }) => (
-                <div key={title} className="nl-industry-chip">
-                  <Icon className="h-4 w-4 text-[#6366f1]" />
-                  <span>{title}</span>
+        <div className="nl-container px-6">
+          <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <h2 className="text-[28px] font-bold text-[#0f172a]">How it works</h2>
+              <div className="nl-steps-flow mt-8">
+                {[
+                  { n: 1, title: "Find it", body: "Search by area code, digits, or words." },
+                  { n: 2, title: "Buy it", body: "Reserve your number with one-time pricing." },
+                  { n: 3, title: "Take it anywhere", body: "Port to your carrier or keep with us." },
+                ].map((step, i) => (
+                  <div key={step.n} className="nl-step-flow-item">
+                    <div className="nl-step-flow-num">{step.n}</div>
+                    <div>
+                      <p className="font-bold text-[#0f172a]">{step.title}</p>
+                      <p className="mt-1 text-[13px] text-[#64748b]">{step.body}</p>
+                    </div>
+                    {i < 2 ? <div className="nl-step-flow-arrow" aria-hidden /> : null}
+                  </div>
+                ))}
+              </div>
+              <div id="personal-business" className="mt-10 grid gap-4 sm:grid-cols-2">
+                <div className="nl-category-card">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-[#2563eb]">
+                    Personal Numbers
+                  </p>
+                  <h3 className="mt-2 text-[20px] font-bold text-[#0f172a]">
+                    Pick a number you actually like.
+                  </h3>
+                  <button type="button" onClick={focusLandingSearch} className="nl-btn-primary mt-5">
+                    Find Your Personal Number
+                  </button>
                 </div>
-              ))}
+                <div className="nl-category-card">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-[#2563eb]">
+                    Business Vanity
+                  </p>
+                  <h3 className="mt-2 text-[20px] font-bold text-[#0f172a]">
+                    Give customers a number they remember.
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={focusLandingSearch}
+                    className="mt-5 inline-flex items-center gap-2 text-[14px] font-semibold text-[#2563eb] hover:underline"
+                  >
+                    Explore Business Numbers
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div id="pricing" className="nl-pricing-mini">
+            <div className="nl-ai-preview">
               <p className="text-[12px] font-bold uppercase tracking-wide text-[#94a3b8]">
-                Pricing tiers
+                Can&apos;t find the right number?
               </p>
-              <ul className="mt-3 space-y-2 text-[14px] text-[#334155]">
-                <li>
-                  <strong>$14.99/mo</strong> Starter
-                </li>
-                <li>
-                  <strong>$29.99/mo</strong> Business
-                </li>
-                <li>
-                  <strong>$79.99/mo</strong> Pro
-                </li>
-              </ul>
+              <h3 className="mt-2 text-[22px] font-bold text-[#0f172a]">Ask {BRAND_NAME}</h3>
+              <div className="mt-5 space-y-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-[13px]">
+                <p>
+                  <span className="font-semibold text-[#2563eb]">You:</span> I want an easy 571 number
+                  with lots of 7s under $20.
+                </p>
+                <p>
+                  <span className="font-semibold text-[#2563eb]">{BRAND_NAME}:</span> I found several
+                  available matches. Here are the strongest options.
+                </p>
+              </div>
+              <button type="button" onClick={focusLandingSearch} className="nl-btn-secondary mt-5">
+                <Sparkles className="h-4 w-4" />
+                Ask {BRAND_NAME}
+              </button>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="nl-section-alt nl-section">
-        <div className="nl-container max-w-3xl px-6 text-center">
-          <h2 className="text-[28px] font-bold text-[#0f172a]">No rush to transfer it today.</h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-[#64748b]">
-            Your purchased number can remain protected with Transovo for up to 30 days while you
-            prepare your transfer. Transfer it anytime during that period, or keep it in your
-            Number Vault afterward.
-          </p>
-        </div>
-      </section>
-
-      <section id="porting" className="nl-section">
-        <div className="nl-container flex flex-col items-center px-6 text-center">
-          <div className="nl-guarantee-icon">
-            <Shield className="h-8 w-8" />
+      <section id="pricing" className="nl-section-alt nl-section">
+        <div className="nl-container px-6 text-center">
+          <h2 className="text-[32px] font-bold text-[#0f172a]">
+            Better numbers don&apos;t have to cost a fortune.
+          </h2>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { tier: "Choice", price: "Starting at $4.99" },
+              { tier: "Nice & Memorable", price: "Usually $9.99–$19.99" },
+              { tier: "Premium", price: "Rare standout numbers from $29.99+" },
+              { tier: "Business Vanity", price: "Priced by word, pattern & availability" },
+            ].map(({ tier, price }) => (
+              <div key={tier} className="nl-price-card">
+                <p className="text-[14px] font-bold text-[#2563eb]">{tier}</p>
+                <p className="mt-3 text-[16px] font-semibold text-[#0f172a]">{price}</p>
+              </div>
+            ))}
           </div>
-          <h2 className="mt-5 text-[32px] font-bold text-[#0f172a]">30-Day Portability Guarantee</h2>
-          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#64748b]">
-            Start your transfer within 30 days. If your receiving carrier ultimately confirms that it
-            cannot accept the number because of a genuine portability or coverage limitation, you
-            can return the number for a refund of the purchase price.
-          </p>
-          <Link href="/personal/porting" className="mt-6 text-[15px] font-semibold text-[#6366f1] hover:underline">
-            Learn About Porting
-          </Link>
         </div>
       </section>
 
-      <section className="nl-section-alt nl-section">
+      <section id="porting" className="nl-guarantee-banner">
+        <div className="nl-container px-6 text-center">
+          <h2 className="text-[28px] font-bold text-white">30-Day Portability Guarantee</h2>
+          <p className="mx-auto mt-4 max-w-3xl text-[15px] leading-relaxed text-white/90">
+            Start your transfer within 30 days. If your receiving carrier ultimately confirms that it
+            cannot accept the number because of a genuine portability or coverage limitation, you can
+            return the number for a refund of the purchase price.
+          </p>
+          <div className="nl-guarantee-points mx-auto max-w-4xl">
+            {[
+              "Buy with confidence — transparent one-time pricing.",
+              "Port to your carrier or keep it with us.",
+              "Full purchase refund if portability fails for covered reasons.",
+            ].map((point) => (
+              <div key={point} className="nl-guarantee-point">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-white" strokeWidth={2.5} />
+                <span>{point}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="nl-section">
         <div className="nl-container max-w-3xl px-6">
-          <h2 className="text-center text-[32px] font-bold text-[#0f172a]">FAQ</h2>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-[28px] font-bold text-[#0f172a]">Common Questions</h2>
+            <Link href="/contact" className="text-[14px] font-semibold text-[#2563eb] hover:underline">
+              View all FAQs
+            </Link>
+          </div>
           <div className="mt-8 space-y-3">
             {FAQS.map((faq) => (
               <details key={faq.q} className="nl-faq-item">
@@ -275,68 +290,89 @@ export function NumbersLandingPage() {
 
       <section className="nl-final-cta">
         <div className="nl-container px-6 text-center">
-          <h2 className="text-[32px] font-bold text-white">
-            Ready to get started? Your new phone number is waiting.
-          </h2>
+          <h2 className="text-[32px] font-bold text-white">Your next phone number is waiting.</h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <button type="button" onClick={focusLandingSearch} className="nl-btn-white">
-              Get Started Now
+              Find My Number
             </button>
-            <Link href="/contact" className="nl-btn-outline-white">
-              Contact Sales
-            </Link>
+            <button type="button" onClick={focusLandingSearch} className="nl-btn-outline-white">
+              <MessageSquare className="h-4 w-4" />
+              Ask {BRAND_NAME}
+            </button>
           </div>
         </div>
       </section>
 
-      <footer className="nl-footer">
-        <div className="nl-container grid gap-10 px-6 sm:grid-cols-2 lg:grid-cols-4">
+      <footer className="nl-footer-dark">
+        <div className="nl-container grid gap-10 px-6 sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <div className="flex items-center gap-2 font-bold text-[#0f172a]">
+            <div className="flex items-center gap-2 font-bold text-white">
               <LogoMark />
               {BRAND_NAME}
             </div>
-            <p className="mt-4 text-[14px] leading-relaxed text-[#64748b]">
-              Choose a better phone number. Buy it. Take it with you.
-            </p>
             <div className="nl-social-row mt-5">
-              {["Facebook", "X", "Instagram", "LinkedIn"].map((network) => (
-                <span key={network} className="nl-social-icon" aria-label={network}>
-                  {network[0]}
+              {["F", "X", "I", "L"].map((network) => (
+                <span key={network} className="nl-social-icon-dark" aria-hidden>
+                  {network}
                 </span>
               ))}
             </div>
           </div>
-          <div>
-            <p className="nl-footer-label">Products</p>
-            <ul className="nl-footer-links">
-              <li><a href="#search">Find a Number</a></li>
-              <li><Link href="/personal/porting">Port a Number</Link></li>
-              <li><Link href="/sms-marketing">SMS Marketing</Link></li>
-            </ul>
-          </div>
-          <div>
-            <p className="nl-footer-label">Company</p>
-            <ul className="nl-footer-links">
-              <li><Link href="/contact">About</Link></li>
-              <li><Link href="/contact">Careers</Link></li>
-              <li><Link href="/contact">Contact</Link></li>
-            </ul>
-          </div>
-          <div>
-            <p className="nl-footer-label">Legal</p>
-            <ul className="nl-footer-links">
-              <li><Link href="/privacy">Privacy</Link></li>
-              <li><Link href="/terms">Terms</Link></li>
-              <li><Link href="/contact">Support</Link></li>
-            </ul>
-          </div>
+          {[
+            {
+              label: "Products",
+              links: [
+                ["Find a Number", "#search"],
+                ["Port a Number", "/personal/porting"],
+                ["SMS Marketing", "/sms-marketing"],
+              ],
+            },
+            {
+              label: "Company",
+              links: [
+                ["About", "/contact"],
+                ["Careers", "/contact"],
+                ["Contact", "/contact"],
+              ],
+            },
+            {
+              label: "Support",
+              links: [
+                ["Help Center", "/contact"],
+                ["Porting Help", "/personal/porting"],
+                ["Contact Support", "/contact"],
+              ],
+            },
+            {
+              label: "Legal",
+              links: [
+                ["Privacy", "/privacy"],
+                ["Terms", "/terms"],
+                ["Support", "/contact"],
+              ],
+            },
+          ].map((col) => (
+            <div key={col.label}>
+              <p className="nl-footer-label-dark">{col.label}</p>
+              <ul className="nl-footer-links-dark">
+                {col.links.map(([label, href]) => (
+                  <li key={label}>
+                    {href.startsWith("#") ? (
+                      <a href={href}>{label}</a>
+                    ) : (
+                      <Link href={href}>{label}</Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
         <div className="nl-container mt-10 flex flex-col items-center justify-between gap-3 px-6 pb-8 sm:flex-row">
-          <p className="text-[13px] text-[#94a3b8]">
+          <p className="text-[13px] text-white/60">
             © {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.
           </p>
-          <span className="nl-secure-badge">Secure Checkout</span>
+          <span className="nl-secure-badge-dark">30-Day Portability Guarantee</span>
         </div>
       </footer>
     </div>

@@ -4,7 +4,6 @@ import { displayLaunchPrice, formatUsd } from "@/lib/premium-numbers/launch-pric
 import type { PremiumNumberProductResult } from "@/lib/premium-numbers/product-api";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
 import { cn } from "@/lib/utils";
-import { ArrowRight } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 export function NumberShelfCard({
@@ -17,6 +16,10 @@ export function NumberShelfCard({
   onGetNumber: () => void;
 }) {
   const pricing = displayLaunchPrice(result.premiumPriceCents, result.premiumPriceBand);
+  const descriptor =
+    result.cardBullets[0] ??
+    result.memorabilityLabel ??
+    (result.displayWord ? `Great for ${result.displayWord.toLowerCase()}` : "Easy repeating pattern");
   const impressionSent = useRef(false);
 
   useEffect(() => {
@@ -30,17 +33,18 @@ export function NumberShelfCard({
   }, [result.phoneNumber, result.premiumPriceBand, pricing.priceCents]);
 
   return (
-    <article
-      className={cn(
-        "flex flex-col rounded-xl border border-[#e5e7eb] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-[#c7d2fe] hover:shadow-md",
-      )}
-    >
-      <p className="text-[18px] font-bold leading-tight tracking-tight text-[#111827] lg:text-[20px]">
-        {result.vanityDisplay ?? result.displayNumber}
-      </p>
-      <p className="mt-2 text-[13px] font-medium text-[#64748b]">
-        {formatUsd(pricing.priceCents)} one-time
-      </p>
+    <article className="nl-shelf-card">
+      {pricing.showLaunchBadge ? (
+        <span className="nl-shelf-launch-badge">50% Launch Price</span>
+      ) : null}
+      <p className="nl-shelf-number">{result.vanityDisplay ?? result.displayNumber}</p>
+      <p className="nl-shelf-descriptor">{descriptor}</p>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="nl-shelf-price">{formatUsd(pricing.priceCents)}</span>
+        {pricing.listPriceCents ? (
+          <span className="nl-shelf-list-price">{formatUsd(pricing.listPriceCents)}</span>
+        ) : null}
+      </div>
       <button
         type="button"
         disabled={loading}
@@ -48,10 +52,9 @@ export function NumberShelfCard({
           trackNumbersLandingEvent("top_pick_clicked", { phoneNumber: result.phoneNumber });
           onGetNumber();
         }}
-        className="mt-3 inline-flex items-center gap-1 text-[13px] font-semibold text-[#6366f1] hover:underline disabled:opacity-60"
+        className={cn("nl-shelf-cta", loading && "opacity-60")}
       >
-        {loading ? "Checking…" : "Buy this Number"}
-        {!loading ? <ArrowRight className="h-3.5 w-3.5" /> : null}
+        {loading ? "Checking…" : "Get This Number"}
       </button>
     </article>
   );

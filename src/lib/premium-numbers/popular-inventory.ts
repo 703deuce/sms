@@ -99,6 +99,43 @@ function diversifyShelf(candidates: PremiumNumberProductResult[]): PremiumNumber
   return picked.slice(0, 12);
 }
 
+async function fetchPersonalPoolForAreaCodes(areaCodes: string[]): Promise<PremiumNumberProductResult[]> {
+  const primary = areaCodes[0];
+  if (!primary) return [];
+
+  const personalResults = await searchPremiumNumbersPersonal({
+    areaCode: primary,
+    areaCodes,
+    preferences: ["surprise_me"],
+    limit: 60,
+  });
+
+  const personalProduct = buildProductSearchResponse({
+    mode: "personal",
+    areaCode: primary,
+    status: personalResults.status,
+    message: personalResults.message,
+    candidates: personalResults.candidates,
+    keywords: personalResults.keywords,
+  });
+
+  return [...(personalProduct.topPicks ?? []), ...(personalProduct.memorableAlternatives ?? [])];
+}
+
+async function fetchNationwidePool(areaCodes: string[]): Promise<PremiumNumberProductResult[]> {
+  const codes = areaCodes.slice(0, 6);
+  const perCode = await Promise.all(
+    codes.map(async (areaCode) => {
+      try {
+        return await fetchPersonalPoolForAreaCodes([areaCode]);
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return perCode.flat();
+}
+
 export type GetPopularInventoryInput = {
   areaCodes: string[];
   marketSlug: string;
@@ -117,21 +154,19 @@ export async function getPopularInventory(
     };
   }
 
-  const areaCodes = input.areaCodes.slice(0, 3);
+  const areaCodes = input.areaCodes.slice(0, input.marketSlug === "generic" ? 6 : 3);
   if (!areaCodes.length) return { items: [] };
 
-  const personalResults = await searchPremiumNumbersPersonal({
-    areaCode: areaCodes[0],
-    areaCodes,
-    preferences: ["surprise_me"],
-    limit: 60,
-  });
+  const personalPool =
+    input.marketSlug === "generic" && areaCodes.length > 1
+      ? await fetchNationwidePool(areaCodes)
+      : await fetchPersonalPoolForAreaCodes(areaCodes);
 
   let businessResults: PremiumNumberProductResult[] = [];
   try {
     const biz = await searchPremiumNumbers({
       areaCode: areaCodes[0],
-      areaCodes,
+      areaCodes: areaCodes.slice(0, 3),
       industry: "services",
       customKeywords: ["LAW", "ROOF", "MOVE", "HOME"],
       matchStyle: "both",
@@ -151,20 +186,9 @@ export async function getPopularInventory(
     // business vanity optional for shelf
   }
 
-  const personalProduct = buildProductSearchResponse({
-    mode: "personal",
-    areaCode: areaCodes[0],
-    status: personalResults.status,
-    message: personalResults.message,
-    candidates: personalResults.candidates,
-    keywords: personalResults.keywords,
-  });
-
-  const pool = [
-    ...(personalProduct.topPicks ?? []),
-    ...(personalProduct.memorableAlternatives ?? []),
-    ...businessResults,
-  ].filter((r) => !removedFromShelves.has(r.phoneNumber));
+  const pool = [...personalPool, ...businessResults].filter(
+    (r) => !removedFromShelves.has(r.phoneNumber),
+  );
 
   const shelf = diversifyShelf(pool);
 

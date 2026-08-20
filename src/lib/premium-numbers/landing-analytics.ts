@@ -6,6 +6,7 @@ export type NumbersLandingEvent =
   | "manual_search_started"
   | "ai_search_started"
   | "search_completed"
+  | "top_pick_localized"
   | "number_detail_viewed"
   | "number_reserve_clicked"
   | "reservation_created"

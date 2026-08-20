@@ -1,14 +1,11 @@
 .numbers-landing {
   --nl-navy: #1e3a5f;
-  --nl-navy-dark: #0f172a;
-  --nl-blue: #6366f1;
+  --nl-blue: #2563eb;
   --nl-muted: #64748b;
-  --nl-bg: #ffffff;
-  --nl-alt: #f8fafc;
   --nl-border: #e2e8f0;
   font-family: var(--font-plus-jakarta), system-ui, sans-serif;
-  color: var(--nl-navy-dark);
-  background: var(--nl-bg);
+  color: #0f172a;
+  background: #fff;
 }
 
 .numbers-landing .nl-container {
@@ -25,6 +22,27 @@
   backdrop-filter: blur(10px);
 }
 
+.numbers-landing .nl-nav .nl-container {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.numbers-landing .nl-nav .nl-logo {
+  justify-self: start;
+}
+
+.numbers-landing .nl-nav-links {
+  justify-self: center;
+}
+
+.numbers-landing .nl-nav-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .numbers-landing .nl-logo-mark {
   display: inline-flex;
   align-items: center;
@@ -32,7 +50,7 @@
   width: 2rem;
   height: 2rem;
   border-radius: 0.5rem;
-  background: linear-gradient(135deg, #6366f1, #1e3a5f);
+  background: linear-gradient(135deg, #2563eb, #1e3a5f);
   color: white;
   font-size: 0.875rem;
   font-weight: 800;
@@ -43,108 +61,198 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.625rem;
-  background: var(--nl-navy);
+  background: var(--nl-blue);
   color: white;
   padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  transition: background 0.15s ease;
 }
 
-.numbers-landing .nl-btn-primary:hover {
-  background: #152a45;
-}
-
-.numbers-landing .nl-btn-white {
+.numbers-landing .nl-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   border-radius: 0.625rem;
-  background: white;
-  color: var(--nl-navy);
+  background: var(--nl-blue);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.numbers-landing .nl-btn-white,
+.numbers-landing .nl-btn-outline-white {
+  border-radius: 0.625rem;
   padding: 0.875rem 1.5rem;
   font-size: 0.9375rem;
   font-weight: 600;
+}
+
+.numbers-landing .nl-btn-white {
+  background: white;
+  color: var(--nl-navy);
 }
 
 .numbers-landing .nl-btn-outline-white {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border-radius: 0.625rem;
   border: 1px solid rgba(255, 255, 255, 0.35);
   color: white;
-  padding: 0.875rem 1.5rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
 }
 
 .numbers-landing .nl-hero {
   padding: 2.5rem 0 1.5rem;
-  background: #ffffff;
 }
 
-.numbers-landing .nl-steps-bar {
-  padding: 3.5rem 0;
-  border-top: 1px solid var(--nl-border);
-  border-bottom: 1px solid var(--nl-border);
-  background: var(--nl-alt);
-}
-
-.numbers-landing .nl-step-circle {
-  display: flex;
+.numbers-landing .nl-trust-pill {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 4rem;
-  height: 4rem;
-  border-radius: 9999px;
-  background: #eef2ff;
-  color: var(--nl-blue);
-}
-
-.numbers-landing .nl-section {
-  padding: 4.5rem 0;
-}
-
-.numbers-landing .nl-section-alt {
-  background: var(--nl-alt);
-}
-
-.numbers-landing .nl-category-card,
-.numbers-landing .nl-pricing-mini,
-.numbers-landing .nl-social-proof {
-  border: 1px solid var(--nl-border);
-  border-radius: 1rem;
-  background: white;
-  padding: 1.5rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.numbers-landing .nl-social-proof {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.numbers-landing .nl-industry-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid var(--nl-border);
-  border-radius: 0.75rem;
-  background: white;
-  padding: 0.875rem;
+  gap: 0.45rem;
   font-size: 0.8125rem;
   font-weight: 600;
   color: #334155;
 }
 
-.numbers-landing .nl-guarantee-icon {
+.numbers-landing .nl-ai-prompts {
+  border: 1px solid var(--nl-border);
+  border-radius: 1rem;
+  background: #f8fafc;
+  padding: 1.25rem;
+  height: fit-content;
+}
+
+.numbers-landing .nl-ai-prompt-chip {
+  display: block;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--nl-border);
+  background: white;
+  padding: 0.75rem 0.875rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  color: #334155;
+}
+
+.numbers-landing .nl-trust-strip {
+  padding: 3.5rem 0;
+  background: #f8fafc;
+}
+
+.numbers-landing .nl-trust-card,
+.numbers-landing .nl-category-card,
+.numbers-landing .nl-price-card,
+.numbers-landing .nl-ai-preview {
+  border: 1px solid var(--nl-border);
+  border-radius: 1rem;
+  background: white;
+  padding: 1.5rem;
+}
+
+.numbers-landing .nl-trust-card-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 4.5rem;
-  height: 4.5rem;
-  border-radius: 9999px;
-  background: #eef2ff;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: #eff6ff;
   color: var(--nl-blue);
+}
+
+.numbers-landing .nl-section {
+  padding: 4rem 0;
+}
+
+.numbers-landing .nl-section-alt {
+  background: #f8fafc;
+}
+
+.numbers-landing .nl-steps-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.numbers-landing .nl-step-flow-item {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 160px;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.numbers-landing .nl-step-flow-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: #eff6ff;
+  color: var(--nl-blue);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.numbers-landing .nl-step-flow-arrow {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .numbers-landing .nl-step-flow-item {
+    padding-right: 1.5rem;
+  }
+
+  .numbers-landing .nl-step-flow-arrow {
+    display: block;
+    position: absolute;
+    right: 0.25rem;
+    top: 0.65rem;
+    width: 2rem;
+    height: 1px;
+    border-top: 2px dashed #cbd5e1;
+  }
+}
+
+.numbers-landing .nl-guarantee-points {
+  margin-top: 2rem;
+  display: grid;
+  gap: 1rem;
+  text-align: left;
+}
+
+@media (min-width: 768px) {
+  .numbers-landing .nl-guarantee-points {
+    grid-template-columns: repeat(3, 1fr);
+    text-align: center;
+  }
+}
+
+.numbers-landing .nl-guarantee-point {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+@media (min-width: 768px) {
+  .numbers-landing .nl-guarantee-point {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.numbers-landing .nl-guarantee-banner {
+  padding: 3.5rem 0;
+  background: var(--nl-blue);
+}
+
+.numbers-landing .nl-final-cta {
+  padding: 4rem 0;
+  background: var(--nl-navy);
 }
 
 .numbers-landing .nl-faq-item {
@@ -156,56 +264,36 @@
 
 .numbers-landing .nl-faq-item summary {
   cursor: pointer;
-  font-size: 0.9375rem;
   font-weight: 600;
   list-style: none;
 }
 
-.numbers-landing .nl-faq-item summary::-webkit-details-marker {
-  display: none;
-}
-
 .numbers-landing .nl-faq-item p {
   margin-top: 0.75rem;
-  font-size: 0.9375rem;
-  line-height: 1.6;
   color: var(--nl-muted);
+  line-height: 1.6;
 }
 
-.numbers-landing .nl-final-cta {
-  padding: 4.5rem 0;
-  background: var(--nl-navy);
+.numbers-landing .nl-footer-dark {
+  background: #0f172a;
+  padding: 3rem 0 0;
 }
 
-.numbers-landing .nl-footer {
-  border-top: 1px solid var(--nl-border);
-  padding-top: 3rem;
-  background: white;
-}
-
-.numbers-landing .nl-footer-label {
+.numbers-landing .nl-footer-label-dark {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.45);
 }
 
-.numbers-landing .nl-footer-links {
+.numbers-landing .nl-footer-links-dark {
   margin-top: 0.875rem;
 }
 
-.numbers-landing .nl-footer-links li + li {
-  margin-top: 0.5rem;
-}
-
-.numbers-landing .nl-footer-links a {
+.numbers-landing .nl-footer-links-dark a {
   font-size: 0.875rem;
-  color: #475569;
-}
-
-.numbers-landing .nl-footer-links a:hover {
-  color: var(--nl-blue);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .numbers-landing .nl-social-row {
@@ -213,38 +301,158 @@
   gap: 0.5rem;
 }
 
-.numbers-landing .nl-social-icon {
+.numbers-landing .nl-social-icon-dark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 2rem;
   height: 2rem;
   border-radius: 9999px;
-  border: 1px solid var(--nl-border);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 0.6875rem;
   font-weight: 700;
-  color: #64748b;
 }
 
-.numbers-landing .nl-secure-badge {
+.numbers-landing .nl-secure-badge-dark {
   border-radius: 9999px;
-  border: 1px solid var(--nl-border);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 0.375rem 0.875rem;
   font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Top picks shelf */
+.numbers-landing .nl-top-picks {
+  margin-top: 0.5rem;
+}
+
+.numbers-landing .nl-top-picks-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: #eff6ff;
+  color: var(--nl-blue);
+  font-size: 0.75rem;
+}
+
+.numbers-landing .nl-location-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--nl-border);
+  border-radius: 0.875rem;
+  background: #f8fafc;
+  padding: 0.75rem;
+}
+
+.numbers-landing .nl-location-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--nl-border);
+  background: white;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: #64748b;
+  color: #334155;
+}
+
+.numbers-landing .nl-location-input {
+  min-width: 0;
+  flex: 1;
+  border-radius: 0.625rem;
+  border: 1px solid var(--nl-border);
+  background: white;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+.numbers-landing .nl-location-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  background: var(--nl-blue);
+  color: white;
+}
+
+.numbers-landing .nl-shelf-skeleton {
+  height: 148px;
+  border-radius: 0.875rem;
+  border: 1px solid var(--nl-border);
+  background: #f3f4f6;
+  animation: pulse 2s infinite;
+}
+
+.numbers-landing .nl-shelf-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nl-border);
+  border-radius: 0.875rem;
+  background: white;
+  padding: 0.875rem;
+  min-height: 148px;
+}
+
+.numbers-landing .nl-shelf-launch-badge {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 0.375rem;
+  background: #ecfdf5;
+  color: #047857;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.numbers-landing .nl-shelf-number {
+  margin-top: 0.375rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.numbers-landing .nl-shelf-descriptor {
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--nl-muted);
+}
+
+.numbers-landing .nl-shelf-price {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--nl-blue);
+}
+
+.numbers-landing .nl-shelf-list-price {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+.numbers-landing .nl-shelf-cta {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--nl-blue);
 }
 
 @media (max-width: 640px) {
   .numbers-landing .nl-hero-title {
     font-size: 2rem;
   }
-
   .numbers-landing .nl-nav-links {
     display: none;
   }
-}
-
-html:has(.numbers-landing) {
-  scroll-behavior: smooth;
 }
