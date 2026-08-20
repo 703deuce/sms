@@ -1,6 +1,7 @@
 import { NumbersLandingPage } from "@/components/landing/numbers/numbers-landing-page";
 import { BRAND_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -17,5 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** Popular Picks + geo load client-side so the landing shell renders immediately. */
 export default function HomePage() {
-  return <NumbersLandingPage />;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" aria-busy="true" />}>
+      <NumbersLandingPage />
+    </Suspense>
+  );
 }
