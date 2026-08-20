@@ -1,19 +1,33 @@
 "use client";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 
 type WorkspaceChoice = "PERSONAL" | "BUSINESS";
 
 const numbersPlatformOnly = isNumbersPlatformOnlyLaunch();
 
-export default function SignupPage() {
+function reservationFromNext(nextPath: string | null): string | undefined {
+  if (!nextPath) return undefined;
+  try {
+    const url = new URL(nextPath, "http://local");
+    return url.searchParams.get("reservation") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function SignupForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  const nextPath = params.get("next") || (numbersPlatformOnly ? "/personal" : "/hire");
+  const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [phone, setPhone] = useState("");
@@ -50,9 +64,7 @@ export default function SignupPage() {
       setError(json.error || "Unable to create account.");
       return;
     }
-    router.push(
-      numbersPlatformOnly || workspaceType === "PERSONAL" ? "/personal" : "/hire",
-    );
+    router.push(nextPath);
     router.refresh();
   }
 
@@ -64,9 +76,22 @@ export default function SignupPage() {
         </p>
         <h1 className="mt-3 font-display text-xl font-semibold">Create your account</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {numbersPlatformOnly
-            ? "Buy numbers, forward calls, route with Smart Routing, and manage voicemail."
-            : "One account for Personal numbers or full business communications."}
+          {reservationId
+            ? "Sign in to finish checkout for your reserved number."
+            : numbersPlatformOnly
+              ? "Buy numbers, forward calls, route with Smart Routing, and manage voicemail."
+              : "One account for Personal numbers or full business communications."}
+        </p>
+      </div>
+
+      <GoogleSignInButton nextPath={nextPath} reservationId={reservationId} className="mb-4" />
+
+      <div className="relative mb-6">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <p className="relative mx-auto w-fit bg-background px-2 text-xs text-muted-foreground">
+          or continue with email
         </p>
       </div>
 
@@ -144,10 +169,21 @@ export default function SignupPage() {
       </form>
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-primary hover:underline">
+        <Link
+          href={nextPath !== "/personal" ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"}
+          className="font-medium text-primary hover:underline"
+        >
           Sign in
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }

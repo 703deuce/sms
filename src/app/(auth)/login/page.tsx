@@ -1,15 +1,31 @@
 "use client";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
+
+function reservationFromNext(nextPath: string | null): string | undefined {
+  if (!nextPath) return undefined;
+  try {
+    const url = new URL(nextPath, "http://local");
+    return url.searchParams.get("reservation") || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const defaultNext = isNumbersPlatformOnlyLaunch() ? "/personal" : "/dashboard";
+  const nextPath = params.get("next") || defaultNext;
+  const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
+  const oauthError = params.get("error");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [requires2fa, setRequires2fa] = useState(false);
@@ -39,31 +55,44 @@ function LoginForm() {
       setError(json.error || "Unable to sign in. Try again.");
       return;
     }
-    router.push(params.get("next") || "/dashboard");
+    router.push(nextPath);
     router.refresh();
   }
+
+  const displayOauthError =
+    oauthError && oauthError !== "google_not_configured"
+      ? oauthError.replace(/_/g, " ")
+      : "";
 
   return (
     <div className="surface rounded-2xl p-8">
       <div className="mb-8 text-center">
         <p className="font-display text-3xl font-semibold tracking-tight text-primary">
-          Transovo AI
+          Transovo
         </p>
         <h1 className="mt-3 font-display text-xl font-semibold">Welcome back</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sign in to manage campaigns, inbox, and compliance.
+          {reservationId
+            ? "Sign in to finish checkout for your reserved number."
+            : "Sign in to manage your numbers, forwarding, and voicemail."}
         </p>
       </div>
+
+      <GoogleSignInButton nextPath={nextPath} reservationId={reservationId} className="mb-4" />
+
+      <div className="relative mb-6">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <p className="relative mx-auto w-fit bg-background px-2 text-xs text-muted-foreground">
+          or sign in with email
+        </p>
+      </div>
+
       <form className="space-y-4" onSubmit={onSubmit}>
         <div>
-          <Label htmlFor="email">Work email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            required
-            placeholder="you@company.com"
-          />
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" name="email" type="email" required placeholder="you@email.com" />
         </div>
         <div>
           <Label htmlFor="password">Password</Label>
@@ -96,6 +125,7 @@ function LoginForm() {
             </p>
           </div>
         ) : null}
+        {displayOauthError ? <p className="text-sm text-danger">{displayOauthError}</p> : null}
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Signing in..." : requires2fa ? "Verify & sign in" : "Sign in"}
@@ -104,7 +134,7 @@ function LoginForm() {
       <div className="mt-6 border-t border-border pt-6">
         <h2 className="text-center text-sm font-semibold">Sign-in phone verification</h2>
         <p className="mb-4 mt-1 text-center text-xs text-muted-foreground">
-          Optionally confirm your mobile number with a one-time SMS code from Transovo AI. The
+          Optionally confirm your mobile number with a one-time SMS code from Transovo. The
           message is sent only after you request it.
         </p>
         <SmsOptIn />
@@ -112,7 +142,14 @@ function LoginForm() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         New to Transovo?{" "}
-        <Link href="/signup" className="font-medium text-primary hover:underline">
+        <Link
+          href={
+            nextPath !== defaultNext
+              ? `/signup?next=${encodeURIComponent(nextPath)}`
+              : "/signup"
+          }
+          className="font-medium text-primary hover:underline"
+        >
           Create an account
         </Link>
       </p>

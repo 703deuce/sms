@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import { getStripe } from "@/lib/stripe/client";
+import { emitMarketplaceAlert } from "@/lib/ops/marketplace-alerts";
 import { addCreditsFromStripe } from "@/lib/settings/billing";
 import { markPaymentLinkPaid } from "@/lib/payments/create-link";
 
@@ -170,6 +171,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   } catch (err) {
     console.error("[stripe/webhook]", err);
+    await emitMarketplaceAlert({
+      severity: "critical",
+      category: "stripe_webhook_failed",
+      message: "Stripe webhook processing failed",
+      error: err instanceof Error ? err.message : "Webhook failed",
+    });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Webhook failed" },
       { status: 400 },

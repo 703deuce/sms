@@ -221,3 +221,102 @@ export async function getPremiumReservation(
 
   return row;
 }
+
+const GUEST_RESERVATION_COOKIE = "transovo_guest_reservation";
+
+export type ClaimGuestPremiumReservationInput = {
+  reservationId: string;
+  targetWorkspaceId: string;
+  targetUserId: string;
+  guestCookieReservationId?: string | null;
+};
+
+export type ClaimGuestPremiumReservationResult =
+  | {
+      ok: true;
+      reservationId: string;
+      phoneNumber: string;
+      vanityDisplay?: string | null;
+      displayNumber?: string | null;
+      premiumPriceCents: number;
+      expiresAt?: string;
+    }
+  | { ok: false; error: string; status: "not_found" | "forbidden" | "expired" | "invalid" };
+
+/** Move a public-landing reservation onto the signed-in user's personal workspace. */
+export async function claimGuestPremiumReservation(
+  input: ClaimGuestPremiumReservationInput,
+): Promise<ClaimGuestPremiumReservationResult> {
+  const prisma = getPrisma();
+  const reservationId = input.reservationId.trim();
+  if (!reservationId) {
+    return { ok: false, error: "Reservation id required", status: "invalid" };
+  }
+
+  const row = await prisma.premiumNumberReservation.findUnique({
+    where: { id: reservationId },
+  });
+  if (!row) {
+    return { ok: false, error: "Reservation not found", status: "not_found" };
+  }
+
+  const { getPublicLandingSearchContext } = await import("./public-landing-context");
+  const publicCtx = await getPublicLandingSearchContext();
+  const onPublicWorkspace = row.workspaceId === publicCtx.workspaceId;
+  const alreadyOwned =
+    row.workspaceId === input.targetWorkspaceId && row.userId === input.targetUserId;
+
+  if (alreadyOwned) {
+    // Idempotent resume after OAuth redirect.
+  } else if (!onPublicWorkspace) {
+    return { ok: false, error: "Reservation is not available to claim", status: "forbidden" };
+  } else {
+    const cookieMatch =
+      !input.guestCookieReservationId || input.guestCookieReservationId === reservationId;
+    if (!cookieMatch) {
+      return { ok: false, error: "Reservation cookie mismatch", status: "forbidden" };
+    }
+  }
+
+  if (
+    row.reservationExpiresAt &&
+    row.reservationExpiresAt < new Date() &&
+    row.reservationStatus === "reserved"
+  ) {
+    await prisma.premiumNumberReservation.update({
+      where: { id: row.id },
+      data: { reservationStatus: "reservation_expired" },
+    });
+    return { ok: false, error: "Reservation expired — search again", status: "expired" };
+  }
+
+  if (row.reservationStatus !== "reserved" && row.reservationStatus !== "reserving") {
+    return {
+      ok: false,
+      error: `Reservation is ${row.reservationStatus}`,
+      status: "invalid",
+    };
+  }
+
+  if (!alreadyOwned) {
+    await prisma.premiumNumberReservation.update({
+      where: { id: row.id },
+      data: {
+        workspaceId: input.targetWorkspaceId,
+        userId: input.targetUserId,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    reservationId: row.id,
+    phoneNumber: row.phoneNumber,
+    vanityDisplay: row.vanityDisplay,
+    displayNumber: row.displayNumber,
+    premiumPriceCents: row.premiumPriceCents,
+    expiresAt: row.reservationExpiresAt?.toISOString(),
+  };
+}
+
+export { GUEST_RESERVATION_COOKIE };

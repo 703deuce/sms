@@ -7,6 +7,7 @@ import {
   getNumberPaymentProvider,
   type NumberPaymentConfirmResult,
 } from "@/lib/payments/number-payment-provider";
+import { emitMarketplaceAlert } from "@/lib/ops/marketplace-alerts";
 import { normalizeTelnyxError, type NormalizedTelnyxError } from "./telnyx-errors";
 
 export type CompletePremiumPurchaseInput = {
@@ -407,6 +408,16 @@ export async function completePremiumPurchase(
       where: { id: reservation.id, paymentStatus: "processing" },
       data: { paymentStatus: "failed", orderStatus: "none" },
     });
+    await emitMarketplaceAlert({
+      severity: "critical",
+      category: "payment_failed",
+      message: "Number purchase payment failed after reservation claim",
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      reservationId: reservation.id,
+      phoneNumber: reservation.phoneNumber,
+      error: err instanceof Error ? err.message : "Payment failed",
+    });
     return {
       ok: false,
       status: "payment_failed",
@@ -565,6 +576,18 @@ export async function completePremiumPurchase(
       completedAt: new Date().toISOString(),
       normalizedError: normalized,
       reservationId: reservation.id,
+    });
+    await emitMarketplaceAlert({
+      severity: "critical",
+      category: "number_purchase_failed",
+      message: "Provider number acquisition failed after payment",
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      reservationId: reservation.id,
+      phoneNumber: reservation.phoneNumber,
+      provider: upstreamProvider,
+      error:
+        normalized?.message ?? (err instanceof Error ? err.message : "Provider purchase failed"),
     });
     return {
       ok: false,

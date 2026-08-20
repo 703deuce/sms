@@ -32,7 +32,7 @@ import {
   Wand2,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import { PersonalFindNumberClient } from "./personal-find-number-ui";
 import {
   PremiumCheckoutModal,
@@ -78,7 +78,11 @@ export function PremiumNumbersPageClient({
   layout = "default",
 }: Props) {
   if (initialMode === "personal" && layout === "find-mockup") {
-    return <PersonalFindNumberClient workspaceId={workspaceId} />;
+    return (
+      <Suspense>
+        <PersonalFindNumberClient workspaceId={workspaceId} />
+      </Suspense>
+    );
   }
   const [mode, setMode] = useState<SearchMode>(initialMode);
   const [numberType, setNumberType] = useState<NumberType>("local");
