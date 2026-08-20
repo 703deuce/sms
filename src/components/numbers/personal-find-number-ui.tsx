@@ -65,7 +65,6 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { TopPicksSection } from "@/components/landing/numbers/top-picks-section";
 import { BRAND_NAME } from "@/lib/brand";
 import { trackNumbersLandingEvent } from "@/lib/premium-numbers/landing-analytics";
 import { runPublicNumberSearch } from "@/lib/premium-numbers/public-find-number-client-search";
@@ -1151,16 +1150,6 @@ export function PersonalFindNumberClient({
             )}
           </div>
 
-          {isPublic && !searchResponse && !success ? (
-            <TopPicksSection
-              onShelfSearchLogId={setShelfSearchLogId}
-              onAreaCodesDetected={(codes) => {
-                setAreaCodesInput((prev) => (prev.trim() ? prev : codes.join(", ")));
-              }}
-              onGetNumber={onGetNumber}
-              reserving={reserving}
-            />
-          ) : null}
 
           {searchResponse && searchDurationSec != null ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#bbf7d0] bg-[#ecfdf5] px-4 py-3 text-[13px]">
