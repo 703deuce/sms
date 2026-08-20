@@ -139,7 +139,7 @@ const pricingCases: Array<{
   { label: "2727 guardrail", subscriber: "5812727", min: 799, max: 1499 },
   { label: "2200 guardrail", subscriber: "5812200", min: 799, max: 1499 },
   { label: "spec 2727", subscriber: "4282727", exact: 799 },
-  { label: "spec 2233", subscriber: "8812233", min: 799, max: 999 },
+  { label: "spec 2233", subscriber: "8812233", exact: 999 },
   { label: "spec 2525", subscriber: "4452525", exact: 999 },
   { label: "spec 3300", subscriber: "6833300", exact: 999 },
   { label: "spec 6600", subscriber: "6066600", exact: 1499 },
