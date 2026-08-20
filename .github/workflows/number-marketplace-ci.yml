@@ -1,0 +1,30 @@
+name: Number Marketplace CI
+
+on:
+  push:
+    branches: [master, "cursor/**"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  number-marketplace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run test:consumer-number-pricing
+      - run: npm run test:vanity-number-scoring
+      - run: npm run test:dual-provider-search
+      - run: npm run test:provider-failure-acceptance
+      - run: npm run test:ai-number-concierge
+      - run: npm run test:ai-concierge-security
+      - run: npm run test:port-simulation-harness
+      - run: npm run test:number-product-lifecycle
+      - run: npx tsx scripts/test-port-out-production.ts
+      - run: npx tsx scripts/test-forward-screening.ts
+      - run: npx tsx scripts/test-voicemail-greeting-playback.ts

@@ -62,13 +62,16 @@ async function main() {
       parked: false,
       forwardingEnabled: true,
       forwardTargets: ["+15552220000"],
+      forwardRingSeconds: 20,
+      voicemailEnabled: true,
+      forwardUnansweredAction: "transovo_voicemail",
     },
   } as const;
   const forwardRoute = resolveNumberInboundRoute(forwardRow);
   assert.equal(forwardRoute.kind, "forward");
   if (forwardRoute.kind === "forward") {
     assert.deepEqual(forwardRoute.destinations, ["+15552220000"]);
-    assert.equal(forwardRoute.ringSeconds, 25);
+    assert.equal(forwardRoute.ringSeconds, 20);
   }
 
   const staleDisplayStateRow = {

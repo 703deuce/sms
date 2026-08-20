@@ -31,16 +31,18 @@ const NAV = [
 
 const CARRIERS = ["AT&T", "Verizon", "T-Mobile", "Mint Mobile", "Cricket", "Metro"];
 
-const TESTIMONIALS = [
+const TRUST_POINTS = [
   {
-    name: "Sarah M.",
-    role: "Real Estate Agent",
-    quote: "I found a number my clients actually remember. The transfer was quick and painless.",
+    title: "Starting at $4.99",
+    body: "Most numbers are ordinary carrier inventory priced for impulse buys — nicer patterns step up naturally.",
   },
   {
-    name: "James T.",
-    role: "Small Business Owner",
-    quote: "The clear pricing and memorable search tools made choosing our business number easy.",
+    title: "Keep your carrier",
+    body: "Buy the number you want, then port it to Verizon, AT&T, T-Mobile, and other supported carriers.",
+  },
+  {
+    title: "30-day portability guarantee",
+    body: "Start your port within 30 days. If your carrier rejects a qualifying transfer, we help or refund per policy.",
   },
 ];
 
@@ -303,30 +305,28 @@ export function NumbersLandingPage() {
       <section className="nb-section nb-social-proof">
         <div className="nb-container nb-social-grid">
           <div>
-            <h2 className="nb-section-title">What our customers say about us</h2>
+            <h2 className="nb-section-title">Why Transovo</h2>
             <div className="nb-testimonials">
-              {TESTIMONIALS.map((testimonial) => (
-                <blockquote key={testimonial.name} className="nb-testimonial">
-                  <div className="nb-stars">
-                    {Array.from({ length: 5 }).map((_, index) => (
-                      <Star key={index} className="h-3.5 w-3.5 fill-[#f97316] text-[#f97316]" />
-                    ))}
-                  </div>
-                  <p>&ldquo;{testimonial.quote}&rdquo;</p>
-                  <footer>
-                    <strong>{testimonial.name}</strong>
-                    <span>{testimonial.role}</span>
-                  </footer>
+              {TRUST_POINTS.map((point) => (
+                <blockquote key={point.title} className="nb-testimonial">
+                  <p>
+                    <strong>{point.title}.</strong> {point.body}
+                  </p>
                 </blockquote>
               ))}
             </div>
           </div>
           <div className="nb-tools-card">
-            <h2 className="nb-section-title">Modern apps and tools</h2>
-            <p className="nb-muted">Manage forwarding, voicemail, and ports from anywhere.</p>
-            <div className="nb-phone-mock" aria-hidden />
+            <h2 className="nb-section-title">Included with your number</h2>
+            <p className="nb-muted">Forwarding, voicemail, transcription, call activity, and port-out tools.</p>
+            <ul className="nb-usecase-list">
+              <li>Number Vault parking</li>
+              <li>Forward to your cell</li>
+              <li>Voicemail with transcription</li>
+              <li>Port-out credentials when you are ready</li>
+            </ul>
             <button type="button" className="nb-btn-primary nb-tools-button" onClick={focusLandingSearch}>
-              Explore all tools
+              Find your number
             </button>
           </div>
         </div>

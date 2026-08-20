@@ -241,16 +241,37 @@ async function testInventoryIntegrity(
     `final areaCodes=${state.areaCodes.join(",")} max=${state.maxPriceCents} searchLog=${lastProduct?.searchLogId}`,
   );
 
-  const wholesaleLeak = lastResults.some(
-    (r) => r.premiumPriceCents < 1000 && r.premiumPriceBand !== "normal",
+  const consumerBands = new Set([
+    "personal_499",
+    "personal_799",
+    "personal_999",
+    "personal_1499",
+    "personal_1999",
+    "personal_2999",
+    "personal_3999",
+    "good",
+    "strong",
+    "premium",
+    "exceptional",
+    "provider_floor",
+  ]);
+  const invalidBand = lastResults.find((r) => !consumerBands.has(String(r.premiumPriceBand || "")));
+  const suspiciousCheapPremium = lastResults.some(
+    (r) =>
+      (r.premiumPriceBand === "exceptional" ||
+        r.premiumPriceBand === "premium" ||
+        r.premiumPriceBand === "provider_floor") &&
+      r.premiumPriceCents < 1000,
   );
 
   recordGate(
     "Retail pricing integrity",
-    lastResults.length > 0 && !wholesaleLeak,
-    wholesaleLeak
-      ? "Suspected wholesale-tier price on a premium band result"
-      : `All ${lastResults.length} results use retail bands (min $${(Math.min(...lastResults.map((r) => r.premiumPriceCents)) / 100).toFixed(2)})`,
+    lastResults.length > 0 && !invalidBand && !suspiciousCheapPremium,
+    invalidBand
+      ? `Unknown price band: ${invalidBand.premiumPriceBand}`
+      : suspiciousCheapPremium
+        ? "Premium/provider-floor band priced below consumer retail minimum"
+        : `All ${lastResults.length} results use configured retail bands (min $${(Math.min(...lastResults.map((r) => r.premiumPriceCents)) / 100).toFixed(2)})`,
   );
 
   return { state, lastProduct, lastResults, sessionId, assistantTexts: [] as string[] };

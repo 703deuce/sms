@@ -103,6 +103,8 @@
     "test:vanity-number-scoring": "tsx scripts/test-vanity-number-scoring.ts",
     "test:consumer-number-pricing": "tsx scripts/test-consumer-number-pricing.ts",
     "audit:consumer-tier-quality": "tsx scripts/sample-tier-quality-audit.ts",
+    "test:port-simulation-harness": "tsx scripts/test-port-simulation-harness.ts",
+    "test:number-marketplace-production": "node scripts/run-number-marketplace-production-readiness.mjs",
     "test:vanity-numbers": "tsx scripts/test-vanity-numbers.ts",
     "export:vanity-market": "tsx scripts/export-vanity-market-batch.ts",
     "crm:live-readiness": "tsx scripts/crm-live-readiness.ts"
