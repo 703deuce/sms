@@ -171,8 +171,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged-in users skip auth pages; respect checkout `next` when present.
+  // Logged-in users skip auth pages; honor product onboarding and checkout `next`.
   if (session && authPages.has(pathname)) {
+    const product = request.nextUrl.searchParams.get("product")?.trim().toLowerCase();
+    if (product === "voice" || product === "numbers" || product === "sms") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/api/products/open";
+      url.search = `?product=${product}`;
+      return NextResponse.redirect(url);
+    }
     const next = request.nextUrl.searchParams.get("next");
     if (next && next.startsWith("/") && !next.startsWith("//")) {
       return NextResponse.redirect(new URL(next, request.nextUrl.origin));
@@ -210,15 +217,17 @@ export async function middleware(request: NextRequest) {
       if (wsType === "BUSINESS") hasVoice = true;
     }
 
-    const denied = productAccessDeniedRedirect(pathname, {
-      hasVoice,
-      hasSms,
-      hasNumbers,
-    });
+    const denied = productAccessDeniedRedirect(
+      pathname,
+      {
+        hasVoice,
+        hasSms,
+        hasNumbers,
+      },
+      { authenticated: true },
+    );
     if (denied) {
-      const url = request.nextUrl.clone();
-      url.pathname = denied;
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(new URL(denied, request.nextUrl.origin));
     }
 
     if (isNumbersPlatformOnlyLaunch() && isBusinessOnlyPath(pathname)) {

@@ -65,9 +65,12 @@ type ProductAccessFlags = Pick<UserProductAccess, "hasVoice" | "hasSms" | "hasNu
 export function productAccessDeniedRedirect(
   pathname: string,
   access: ProductAccessFlags,
+  options?: { authenticated?: boolean },
 ): string | null {
   if (isVoiceProductPath(pathname) && !access.hasVoice) {
-    return productOfferPath("voice");
+    return options?.authenticated
+      ? "/api/products/open?product=voice"
+      : productOfferPath("voice");
   }
   if (SMS_PREVIEW_ACCESS && isSmsProductPath(pathname) && !access.hasSms) {
     return null;

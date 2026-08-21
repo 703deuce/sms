@@ -23,7 +23,12 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   if (!session) {
     const loginUrl = new URL("/login", requestUrl.origin);
-    loginUrl.searchParams.set("next", "/app");
+    const product = requestUrl.searchParams.get("product");
+    if (product === "voice" || product === "numbers" || product === "sms") {
+      loginUrl.searchParams.set("next", `/api/products/open?product=${product}`);
+    } else {
+      loginUrl.searchParams.set("next", "/app");
+    }
     return NextResponse.redirect(loginUrl);
   }
 

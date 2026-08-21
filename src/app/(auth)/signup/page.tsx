@@ -23,10 +23,17 @@ function reservationFromNext(nextPath: string | null): string | undefined {
   }
 }
 
+function voiceProductNext(product: string | null): string | null {
+  if (product === "voice") return "/api/products/open?product=voice";
+  if (product === "numbers") return "/api/products/open?product=numbers";
+  return null;
+}
+
 function SignupForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const nextPath = params.get("next") || (numbersPlatformOnly ? "/personal" : "/hire");
+  const productNext = voiceProductNext(params.get("product"));
+  const nextPath = params.get("next") || productNext || (numbersPlatformOnly ? "/personal" : "/hire");
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { AgentTemplateSelect } from "@/components/receptionist/agent-template-select";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import {
   CapabilityCardCompact,
@@ -184,7 +185,21 @@ export function CapabilitiesStep({
       </WizardQuestionBlock>
 
       <div className="mt-4">
-        <WizardQuestionBlock number={2} title="How would they answer?">
+        <WizardQuestionBlock number={2} title="LiveKit agent template">
+          <AgentTemplateSelect
+            value={state.livekitAgentTemplate}
+            onChange={(livekitAgentTemplate) => patch({ livekitAgentTemplate })}
+          />
+          <p className="mt-2 text-xs text-[#6b7280]">
+            Choose which reference agent runs this receptionist — basic conversation, booking,
+            hotel, intake, transfer, or knowledge search. Your business info from step 1 is injected
+            into whichever template you pick.
+          </p>
+        </WizardQuestionBlock>
+      </div>
+
+      <div className="mt-4">
+        <WizardQuestionBlock number={3} title="How would they answer?">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {ANSWER_TIMING_OPTIONS.map((opt) => {
               const Icon = TIMING_ICONS[opt.id] || PhoneForwarded;
@@ -205,7 +220,7 @@ export function CapabilitiesStep({
 
       {showCollect ? (
         <div className="mt-4">
-          <WizardQuestionBlock number={3} title="What information should they collect?">
+          <WizardQuestionBlock number={4} title="What information should they collect?">
               <div className="grid gap-2 sm:grid-cols-2">
                 {advanced.callerFields.map((field) => (
                   <FieldChip

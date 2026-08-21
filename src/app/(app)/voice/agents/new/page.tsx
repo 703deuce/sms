@@ -63,6 +63,7 @@ export default function CreateReceptionistPage() {
           receptionistWizard: {
             ...state,
           },
+          livekitAgentTemplate: state.livekitAgentTemplate,
         },
       });
       const draftConfig = applyCompiledToVoiceConfig(prev, snapshot);

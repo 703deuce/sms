@@ -48,7 +48,7 @@ const QUICK_LINKS = [
   },
   {
     label: "Voice & Test",
-    description: "Choose a voice and run a live test call",
+    description: "Pick LiveKit template, choose voice, test call, assign number",
     href: (id: string) => `/voice/agents/${id}/voice-test`,
     icon: Phone,
   },

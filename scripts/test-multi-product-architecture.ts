@@ -120,6 +120,19 @@ assert.equal(
   "Voice paths gate without entitlement",
 );
 assert.equal(
+  productAccessDeniedRedirect(
+    "/dashboard",
+    {
+      hasVoice: false,
+      hasNumbers: true,
+      hasSms: false,
+    },
+    { authenticated: true },
+  ),
+  "/api/products/open?product=voice",
+  "Authenticated voice gate opens product workspace",
+);
+assert.equal(
   productAccessDeniedRedirect("/campaigns", {
     hasVoice: true,
     hasNumbers: false,

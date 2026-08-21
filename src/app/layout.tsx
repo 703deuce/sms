@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { BRAND_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -18,11 +19,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "SMS Marketing for Small Businesses | Transovo AI",
-    template: "%s · Transovo AI",
+    default: `${BRAND_NAME} — AI Receptionist`,
+    template: `%s · ${BRAND_NAME}`,
   },
   description:
-    "SMS marketing for small businesses made simple. Send promotions, follow up with leads, request reviews, and manage customer replies with Transovo AI.",
+    "AI phone receptionist for small businesses. Answer calls, take messages, book appointments, and transfer callers with natural voice AI.",
   manifest: "/manifest.webmanifest",
 };
 

@@ -18,11 +18,18 @@ function reservationFromNext(nextPath: string | null): string | undefined {
   }
 }
 
+function voiceProductNext(product: string | null): string | null {
+  if (product === "voice") return "/api/products/open?product=voice";
+  if (product === "numbers") return "/api/products/open?product=numbers";
+  return null;
+}
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const defaultNext = "/app";
-  const nextPath = params.get("next") || defaultNext;
+  const productNext = voiceProductNext(params.get("product"));
+  const nextPath = params.get("next") || productNext || defaultNext;
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const oauthError = params.get("error");
   const [error, setError] = useState("");
@@ -75,7 +82,9 @@ function LoginForm() {
         <p className="mt-1 text-sm text-muted-foreground">
           {reservationId
             ? "Sign in to finish checkout for your reserved number."
-            : "Sign in to manage your numbers, forwarding, and voicemail."}
+            : productNext
+              ? "Sign in to open your AI Receptionist workspace."
+              : "Sign in to manage your numbers, forwarding, and voicemail."}
         </p>
       </div>
 
