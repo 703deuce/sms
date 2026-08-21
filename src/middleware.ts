@@ -6,6 +6,25 @@ import {
 import { productAccessDeniedRedirect } from "@/lib/products/routing";
 import { isVoiceProductPath } from "@/lib/products/voice-routes";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
+
+function isInternalRequestHost(request: NextRequest): boolean {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.trim() || "";
+  const hostOnly = host.split(":")[0].toLowerCase();
+  return !hostOnly || hostOnly === "0.0.0.0" || hostOnly === "127.0.0.1" || hostOnly === "localhost";
+}
+
+/** Same-origin redirect when possible; only rewrite origin for docker bind addresses. */
+function siteRedirect(request: NextRequest, path: string) {
+  if (!isInternalRequestHost(request)) {
+    const url = request.nextUrl.clone();
+    const target = new URL(path, "http://local");
+    url.pathname = target.pathname;
+    url.search = target.search;
+    return NextResponse.redirect(url);
+  }
+  return NextResponse.redirect(publicRedirectUrl(path, request));
+}
 import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
@@ -176,13 +195,11 @@ export async function middleware(request: NextRequest) {
   if (session && authPages.has(pathname)) {
     const product = request.nextUrl.searchParams.get("product")?.trim().toLowerCase();
     if (product === "voice" || product === "numbers" || product === "sms") {
-      return NextResponse.redirect(
-        publicRedirectUrl(`/api/products/open?product=${product}`, request),
-      );
+      return siteRedirect(request, `/api/products/open?product=${product}`);
     }
     const next = request.nextUrl.searchParams.get("next");
     if (next && next.startsWith("/") && !next.startsWith("//")) {
-      return NextResponse.redirect(publicRedirectUrl(next, request));
+      return siteRedirect(request, next);
     }
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
@@ -191,11 +208,9 @@ export async function middleware(request: NextRequest) {
     const hasNumbers = productKeys.includes("numbers");
     const launchCount = [hasVoice, hasNumbers].filter(Boolean).length;
     if (launchCount === 1) {
-      return NextResponse.redirect(
-        publicRedirectUrl(hasVoice ? "/dashboard" : "/personal", request),
-      );
+      return siteRedirect(request, hasVoice ? "/dashboard" : "/personal");
     }
-    return NextResponse.redirect(publicRedirectUrl("/app", request));
+    return siteRedirect(request, "/app");
   }
 
   if (session && !isPublic) {
@@ -225,7 +240,7 @@ export async function middleware(request: NextRequest) {
       { authenticated: true },
     );
     if (denied) {
-      return NextResponse.redirect(publicRedirectUrl(denied, request));
+      return siteRedirect(request, denied);
     }
 
     if (isNumbersPlatformOnlyLaunch() && isBusinessOnlyPath(pathname)) {

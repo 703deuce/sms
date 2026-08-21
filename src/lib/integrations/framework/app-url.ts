@@ -4,10 +4,34 @@
  * and non-HTTPS values in production so the first usable public URL wins.
  */
 
+function normalizeConfiguredAppUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
 function configuredAppUrlCandidates(): string[] {
   return [process.env.APP_URL?.trim(), process.env.NEXT_PUBLIC_APP_URL?.trim()]
     .filter(Boolean)
-    .map((raw) => raw!.replace(/\/$/, ""));
+    .map((raw) => normalizeConfiguredAppUrl(raw!));
+}
+
+/** Public origin from reverse-proxy headers (never docker bind addresses). */
+function originFromRequestHeaders(request: Request): string | null {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.trim();
+  if (!host) return null;
+
+  const hostOnly = host.split(":")[0];
+  if (isInternalHost(hostOnly)) return null;
+
+  const proto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    (process.env.NODE_ENV === "production" ? "https" : "http");
+  const origin = `${proto}://${host}`.replace(/\/$/, "");
+  return isUsableConfiguredAppUrl(origin) ? origin : null;
 }
 
 export function getIntegrationAppUrl(): string {
@@ -34,21 +58,18 @@ function isUsableConfiguredAppUrl(url: string): boolean {
   }
 }
 
-/** First usable configured URL, then proxy headers, then localhost fallback. */
+/**
+ * Browser redirect origin: keep the host the user already reached when it is public,
+ * then fall back to configured APP_URL / NEXT_PUBLIC_APP_URL (for docker 0.0.0.0 binds).
+ */
 export function resolvePublicAppUrl(request?: Request): string {
-  for (const candidate of configuredAppUrlCandidates()) {
-    if (isUsableConfiguredAppUrl(candidate)) return candidate;
+  if (request) {
+    const fromRequest = originFromRequestHeaders(request);
+    if (fromRequest) return fromRequest;
   }
 
-  if (request) {
-    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-    const host = forwardedHost || request.headers.get("host")?.trim();
-    const proto =
-      request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
-      (process.env.NODE_ENV === "production" ? "https" : "http");
-    if (host && !isInternalHost(host.split(":")[0])) {
-      return `${proto}://${host}`.replace(/\/$/, "");
-    }
+  for (const candidate of configuredAppUrlCandidates()) {
+    if (isUsableConfiguredAppUrl(candidate)) return candidate;
   }
 
   if (process.env.NODE_ENV !== "production") {

@@ -1,3 +1,4 @@
+import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 import { createHmac, randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { getPrisma } from "@/lib/db";
@@ -13,10 +14,7 @@ import type { WorkspaceType } from "@/lib/workspace/types";
 const GOOGLE_AUTH_SCOPES = ["openid", "email", "profile"].join(" ");
 
 function appUrl() {
-  return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getIntegrationAppUrl();
 }
 
 function secret() {
