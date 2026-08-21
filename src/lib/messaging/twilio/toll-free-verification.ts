@@ -92,6 +92,52 @@ export async function submitTwilioTollFreeVerification(
   };
 }
 
+/** Update an editable toll-free verification (ACTION_REQUIRED resubmit). */
+export async function updateTwilioTollFreeVerification(
+  input: TwilioTfvSubmitInput & { verificationSid: string },
+): Promise<TwilioTfvSubmitResult> {
+  if (!isLiveMessagingAdapter()) {
+    return {
+      sid: input.verificationSid,
+      status: process.env.MOCK_TFV_AUTO_APPROVE === "1" ? "TWILIO_APPROVED" : "PENDING_REVIEW",
+      raw: { mock: true, sid: input.verificationSid, status: "PENDING_REVIEW", updated: true },
+    };
+  }
+
+  const client = requireSubaccountClient(input.reg);
+  const verification = await client.messaging.v1
+    .tollfreeVerifications(input.verificationSid)
+    .update({
+      businessName: input.businessName,
+      businessWebsite: input.businessWebsite,
+      notificationEmail: input.notificationEmail,
+      useCaseCategories: ["CUSTOMER_CARE"],
+      useCaseSummary: input.useCaseSummary,
+      productionMessageSample: input.productionMessageSample,
+      optInImageUrls: input.optInImageUrls.length
+        ? input.optInImageUrls
+        : [`${getAppBaseUrl()}/compliance`],
+      optInType: input.optInType,
+      messageVolume: input.messageVolume || "100",
+      businessStreetAddress: input.businessStreetAddress,
+      businessCity: input.businessCity,
+      businessStateProvinceRegion: input.businessStateProvinceRegion,
+      businessPostalCode: input.businessPostalCode,
+      businessCountry: input.businessCountry || "US",
+      businessContactFirstName: input.businessContactFirstName,
+      businessContactLastName: input.businessContactLastName,
+      businessContactEmail: input.businessContactEmail,
+      businessContactPhone: input.businessContactPhone,
+      additionalInformation: input.additionalInformation,
+    });
+
+  return {
+    sid: verification.sid,
+    status: String(verification.status || "PENDING_REVIEW"),
+    raw: verification as unknown as Record<string, unknown>,
+  };
+}
+
 export async function fetchTwilioTollFreeVerification(input: {
   reg: MessagingRegistration;
   verificationSid: string;

@@ -74,6 +74,7 @@ export async function GET() {
         approved: tfv.approved,
         record: tfv.record,
         trialE164: tfv.trialE164,
+        failureReason: tfv.record?.failureReason || null,
         submittedAt: state.tfvSubmittedAt,
         approvedAt: state.tfvApprovedAt,
         rejectedAt: state.tfvRejectedAt,

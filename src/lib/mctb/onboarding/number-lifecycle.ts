@@ -14,6 +14,15 @@ import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
 
 export const MCTB_NUMBER_HOLD_DAYS = 7;
+/** Days after TFN provision before releasing numbers from abandoned onboarding (no TFV submit). */
+export const MCTB_ABANDONED_ONBOARDING_DAYS = 14;
+
+const TFV_IN_FLIGHT_STATUSES = new Set([
+  "SUBMITTED",
+  "PENDING",
+  "APPROVED",
+  "ACTION_REQUIRED",
+]);
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -246,12 +255,120 @@ export async function processWorkspaceTollFreeReleases(limit = 50): Promise<{
   return { scanned: rows.length, released, errors };
 }
 
+/**
+ * Release TFNs from workspaces that provisioned a number but never submitted TFV.
+ * Skips workspaces with TFV pending/in-review/approved/action-required.
+ */
+export async function shouldReleaseAbandonedOnboardingNumber(
+  workspaceId: string,
+): Promise<boolean> {
+  if (await hasActiveMctbPaidEntitlement(workspaceId)) return false;
+
+  const prisma = getPrisma();
+  const ws = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: {
+      billingPlan: true,
+      stripeSubscriptionId: true,
+      workspaceLimits: { select: { limits: true } },
+      customFieldsConfig: true,
+    },
+  });
+  if (!ws) return false;
+
+  const plan = String(ws.billingPlan || "").toLowerCase();
+  if (plan === "trial" || plan === "trial_pending_card" || plan === "growth") return false;
+  if (ws.stripeSubscriptionId) return false;
+
+  const limits = asRecord(ws.workspaceLimits?.limits);
+  if (limits.trialNumberReleasedAt) return false;
+  if (limits.trialStartedAt || limits.trialEndsAt) return false;
+
+  const state = await loadMctbOnboardingState(workspaceId);
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
+  if (!workspaceNumber?.phoneNumberId) return false;
+
+  const { loadWorkspaceTfvForPhone } = await import("@/lib/mctb/tfv/store");
+  const tfv = await loadWorkspaceTfvForPhone(workspaceId, workspaceNumber.phoneNumberId);
+  if (tfv && TFV_IN_FLIGHT_STATUSES.has(tfv.status)) return false;
+  if (state.tfvSubmittedAt) return false;
+
+  const provisionedAt =
+    workspaceNumber.provisionedAt ||
+    state.funnelEvents?.MCTB_TRIAL_NUMBER_PROVISIONED ||
+    state.startedAt;
+  if (!provisionedAt) return false;
+
+  const cutoff = Date.now() - MCTB_ABANDONED_ONBOARDING_DAYS * 24 * 60 * 60 * 1000;
+  return new Date(provisionedAt).getTime() <= cutoff;
+}
+
+export async function processAbandonedOnboardingReleases(limit = 50): Promise<{
+  scanned: number;
+  released: number;
+  errors: string[];
+}> {
+  const prisma = getPrisma();
+  const rows = await prisma.workspace.findMany({
+    where: {
+      billingPlan: { in: ["onboarding", "expired"] },
+      workspaceLimits: { isNot: null },
+    },
+    select: { id: true },
+    take: limit,
+  });
+
+  const errors: string[] = [];
+  let released = 0;
+
+  for (const row of rows) {
+    const shouldRelease = await shouldReleaseAbandonedOnboardingNumber(row.id);
+    if (!shouldRelease) continue;
+
+    const state = await loadMctbOnboardingState(row.id);
+    const workspaceNumber = getWorkspaceTollFreeNumber(state);
+    const phoneNumberId = workspaceNumber?.phoneNumberId;
+    if (!phoneNumberId) continue;
+
+    const result = await releaseWorkspaceNumber(row.id, phoneNumberId);
+    if (result.ok) {
+      released += 1;
+      const limitsRow = await prisma.workspaceLimits.findUnique({
+        where: { workspaceId: row.id },
+        select: { limits: true },
+      });
+      const limits = asRecord(limitsRow?.limits);
+      const now = new Date().toISOString();
+      await prisma.workspaceLimits.update({
+        where: { workspaceId: row.id },
+        data: {
+          limits: {
+            ...limits,
+            trialNumberReleasedAt: now,
+            abandonedOnboardingReleasedAt: now,
+            abandonedOnboardingReleaseReason: "no_tfv_submitted",
+          },
+        },
+      });
+      await recordFunnelEvent(row.id, "MCTB_ABANDONED_ONBOARDING_RELEASED", {
+        phoneNumberId,
+        reason: "no_tfv_submitted",
+      }).catch(() => undefined);
+    } else if (result.error) {
+      errors.push(`${row.id}: ${result.error}`);
+    }
+  }
+
+  return { scanned: rows.length, released, errors };
+}
+
 export async function runMctbNumberLifecycleJobs(limit = 50) {
-  const [expired, releases] = await Promise.all([
+  const [expired, releases, abandoned] = await Promise.all([
     processExpiredMctbTrials(limit),
     processWorkspaceTollFreeReleases(limit),
+    processAbandonedOnboardingReleases(limit),
   ]);
-  return { expired, releases };
+  return { expired, releases, abandoned };
 }
 
 // Backward-compatible aliases

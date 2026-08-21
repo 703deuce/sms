@@ -150,7 +150,7 @@ export function shouldDedupeTfvSubmission(input: {
   existingSid?: string | null;
 }): boolean {
   if (!input.existingSid) return false;
-  return ["SUBMITTED", "PENDING", "APPROVED", "ACTION_REQUIRED"].includes(
+  return ["SUBMITTED", "PENDING", "APPROVED"].includes(
     input.existingStatus || "NOT_STARTED",
   );
 }

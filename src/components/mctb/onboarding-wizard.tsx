@@ -66,6 +66,7 @@ type OnboardingPayload = {
     status: string;
     approved: boolean;
     trialE164: string | null;
+    failureReason?: string | null;
   };
   carriers: CarrierForwardingGuide[];
 };
@@ -212,6 +213,8 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const selectedCarrier = data?.carriers.find((c) => c.id === carrier);
   const trialDisplay = data?.trialNumber.display;
   const tfvApproved = data?.tfv.approved || false;
+  const tfvActionRequired = data?.trialNumber.messagingVerificationStatus === "action_required";
+  const tfvFailureReason = data?.tfv.failureReason;
 
   if (loading) {
     return (
@@ -477,6 +480,15 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             <p className="mt-1 text-lg font-semibold">
               {data?.trialNumber.tfvStatusLabel || data?.tfv.status || "Not started"}
             </p>
+            {tfvActionRequired && tfvFailureReason ? (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950">
+                <p className="font-medium">Twilio needs an update before approval</p>
+                <p className="mt-1 whitespace-pre-wrap">{tfvFailureReason}</p>
+                <p className="mt-2 text-xs text-amber-800">
+                  Fix the highlighted details in Messaging Compliance, then resubmit below.
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {tfvApproved ? (
@@ -504,7 +516,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                   })()
                 }
               >
-                Submit toll-free verification
+                {tfvActionRequired ? "Resubmit verification" : "Submit toll-free verification"}
               </Button>
               <Link
                 href="/compliance"

@@ -5,6 +5,7 @@
  */
 import { getPrisma } from "@/lib/db";
 import { getTrialLimits } from "@/lib/platform-flags";
+import type { Prisma } from "@prisma/client";
 
 export type MctbServiceStatus =
   | "ACTIVE"
@@ -140,21 +141,122 @@ export async function clearMctbServiceSuspension(workspaceId: string): Promise<v
   await setMctbServiceStatus(workspaceId, "ACTIVE");
 }
 
-export async function recordTrialSmsSegmentUsage(
+export type TrialSmsReservationResult = {
+  reserved: boolean;
+  used: number;
+  limit: number | null;
+  reason?: "paid_unlimited" | "trial_sms_limit_reached";
+};
+
+/** Pure helper for unit tests — same limit check used by reservation. */
+export function canReserveTrialSmsSegments(
+  used: number,
+  limit: number,
+  segments: number,
+): boolean {
+  if (segments <= 0) return true;
+  return used + segments <= limit;
+}
+
+async function resolveTrialSmsSegmentLimit(workspaceId: string): Promise<number | null> {
+  const paid = await hasActiveMctbPaidEntitlement(workspaceId);
+  if (paid) return null;
+
+  const prisma = getPrisma();
+  const ws = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { billingPlan: true },
+  });
+  const plan = String(ws?.billingPlan || "").toLowerCase();
+  if (plan !== "trial" && plan !== "trial_pending_card") return null;
+
+  const trial = await getTrialLimits();
+  return trial.messages || 100;
+}
+
+/**
+ * Atomically reserve trial SMS segments before provider send.
+ * Counts at Twilio accept time; release on terminal send failure.
+ */
+export async function reserveTrialSmsSegments(
+  workspaceId: string,
+  segments: number,
+): Promise<TrialSmsReservationResult> {
+  if (segments <= 0) {
+    const entitlement = await getMctbEntitlement(workspaceId);
+    return {
+      reserved: true,
+      used: entitlement.trialSmsSegmentsUsed,
+      limit: entitlement.trialSmsSegmentLimit,
+    };
+  }
+
+  const limit = await resolveTrialSmsSegmentLimit(workspaceId);
+  if (limit == null) {
+    return { reserved: true, used: 0, limit: null, reason: "paid_unlimited" };
+  }
+
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const rows = await tx.$queryRaw<Array<{ limits: unknown }>>`
+      SELECT limits FROM workspace_limits WHERE workspace_id = ${workspaceId} FOR UPDATE
+    `;
+
+    const limits = asRecord(rows[0]?.limits);
+    const used = Number(limits.trialSmsSegmentsUsed || 0);
+
+    if (!canReserveTrialSmsSegments(used, limit, segments)) {
+      return { reserved: false, used, limit, reason: "trial_sms_limit_reached" };
+    }
+
+    const nextUsed = used + segments;
+    const nextLimits = { ...limits, trialSmsSegmentsUsed: nextUsed };
+
+    if (rows.length === 0) {
+      await tx.workspaceLimits.create({
+        data: { workspaceId, limits: nextLimits },
+      });
+    } else {
+      await tx.workspaceLimits.update({
+        where: { workspaceId },
+        data: { limits: nextLimits },
+      });
+    }
+
+    return { reserved: true, used: nextUsed, limit };
+  });
+}
+
+/** Release a prior reservation when Twilio send fails after reserve. */
+export async function releaseTrialSmsSegmentReservation(
   workspaceId: string,
   segments: number,
 ): Promise<void> {
   if (segments <= 0) return;
+
+  const limit = await resolveTrialSmsSegmentLimit(workspaceId);
+  if (limit == null) return;
+
   const prisma = getPrisma();
-  const row = await prisma.workspaceLimits.findUnique({
-    where: { workspaceId },
-    select: { limits: true },
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const rows = await tx.$queryRaw<Array<{ limits: unknown }>>`
+      SELECT limits FROM workspace_limits WHERE workspace_id = ${workspaceId} FOR UPDATE
+    `;
+    if (!rows.length) return;
+
+    const limits = asRecord(rows[0]?.limits);
+    const used = Math.max(0, Number(limits.trialSmsSegmentsUsed || 0) - segments);
+    await tx.workspaceLimits.update({
+      where: { workspaceId },
+      data: { limits: { ...limits, trialSmsSegmentsUsed: used } },
+    });
   });
-  const limits = asRecord(row?.limits);
-  const used = Number(limits.trialSmsSegmentsUsed || 0) + segments;
-  await prisma.workspaceLimits.upsert({
-    where: { workspaceId },
-    create: { workspaceId, limits: { trialSmsSegmentsUsed: used } },
-    update: { limits: { ...limits, trialSmsSegmentsUsed: used } },
-  });
+}
+
+/** @deprecated Use reserveTrialSmsSegments — kept for backward compatibility. */
+export async function recordTrialSmsSegmentUsage(
+  workspaceId: string,
+  segments: number,
+): Promise<void> {
+  await reserveTrialSmsSegments(workspaceId, segments);
 }

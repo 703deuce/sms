@@ -17,6 +17,7 @@ import {
   fetchTwilioTollFreeVerification,
   findTwilioTfvByExternalReference,
   submitTwilioTollFreeVerification,
+  updateTwilioTollFreeVerification,
 } from "@/lib/messaging/twilio/toll-free-verification";
 import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { applyTfvStatusUpdate } from "./state-update";
@@ -165,11 +166,17 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
     }
 
     const result =
-      prior ||
-      (await submitTwilioTollFreeVerification({
-        reg,
-        ...submissionPayload,
-      }));
+      existing?.status === "ACTION_REQUIRED" && existing.twilioVerificationSid
+        ? await updateTwilioTollFreeVerification({
+            reg,
+            verificationSid: existing.twilioVerificationSid,
+            ...submissionPayload,
+          })
+        : prior ||
+          (await submitTwilioTollFreeVerification({
+            reg,
+            ...submissionPayload,
+          }));
 
     const mapped = mapTwilioTfvFromProviderRecord(result.raw);
     const now = new Date().toISOString();
@@ -243,7 +250,10 @@ export async function syncTrialTollFreeVerification(workspaceId: string): Promis
       mappedStatus: remote.mapped,
       verificationSid: record.twilioVerificationSid,
       providerStatusRaw: remote.status,
-      rejectionReason: remote.mapped === "REJECTED" ? remote.status : null,
+      rejectionReason:
+        remote.mapped === "REJECTED" || remote.mapped === "ACTION_REQUIRED"
+          ? remote.status
+          : null,
     });
 
     return { ok: true, record: update.record };

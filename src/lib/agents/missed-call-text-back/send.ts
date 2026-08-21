@@ -5,6 +5,10 @@ import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
 import { resolveMctbSmsSender } from "./sms-sender";
 import { getDemoMessageBody } from "@/lib/mctb/onboarding/demo";
+import {
+  reserveTrialSmsSegments,
+  releaseTrialSmsSegmentReservation,
+} from "@/lib/mctb/entitlement";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   let out = template;
@@ -96,6 +100,23 @@ export async function executeMissedCallTextSend(input: {
     data: { status: "SENDING" },
   });
 
+  let trialReservation: { reserved: boolean; segments: number } | null = null;
+  if (!demoMode) {
+    const reservation = await reserveTrialSmsSegments(input.workspaceId, 1);
+    if (!reservation.reserved) {
+      await prisma.missedCallEvent.update({
+        where: { id: event.id },
+        data: {
+          status: "SUPPRESSED",
+          suppressionReason: "TRIAL_SMS_LIMIT",
+          eligible: false,
+        },
+      });
+      return { ok: false, reason: "TRIAL_SMS_LIMIT" };
+    }
+    trialReservation = { reserved: true, segments: 1 };
+  }
+
   const sender = await resolveMctbSmsSender({
     workspaceId: input.workspaceId,
     config,
@@ -108,6 +129,11 @@ export async function executeMissedCallTextSend(input: {
     resolvedSender = await resolvePlatformDemoSmsSender();
   }
   if (!resolvedSender?.e164) {
+    if (trialReservation?.reserved) {
+      await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
+        () => undefined,
+      );
+    }
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: { status: "FAILED", suppressionReason: "NOT_SMS_CAPABLE" },
@@ -162,13 +188,13 @@ export async function executeMissedCallTextSend(input: {
       await recordDemoTextSent(input.workspaceId).catch(() => undefined);
     }
 
-    if (!demoMode) {
-      const { recordTrialSmsSegmentUsage } = await import("@/lib/mctb/entitlement");
-      await recordTrialSmsSegmentUsage(input.workspaceId, 1).catch(() => undefined);
-    }
-
     return { ok: true, messageId, status: "queued" };
   } catch (err) {
+    if (trialReservation?.reserved) {
+      await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
+        () => undefined,
+      );
+    }
     const msg = err instanceof Error ? err.message : String(err);
     await prisma.missedCallEvent.update({
       where: { id: event.id },

@@ -7,6 +7,7 @@ import {
 } from "./classify";
 import { loadMissedCallTextConfig } from "./config";
 import { getMctbEntitlement } from "@/lib/mctb/entitlement";
+import { evaluateCallerIdForMctb } from "@/lib/mctb/spam-filter";
 import type { InboundCallClassification, MctbSuppressionReason } from "./types";
 
 export type EligibilityResult = {
@@ -107,6 +108,17 @@ export async function evaluateMissedCallTextEligibility(input: {
   }
   if (!caller || caller.length < 8) {
     return { eligible: false, reason: "INVALID_PHONE", classification };
+  }
+
+  if (config.suppressKnownSpam) {
+    const spam = evaluateCallerIdForMctb(caller);
+    if (spam.blocked) {
+      return {
+        eligible: false,
+        reason: spam.reason === "SPAM" ? "SPAM" : spam.reason || "UNKNOWN_CALLER",
+        classification,
+      };
+    }
   }
 
   const prisma = getPrisma();

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { loadAdminCustomerById } from "@/lib/admin-data";
+import { loadMctbSupportSnapshot } from "@/lib/mctb/admin/support-snapshot";
 import { loadDashboardMetrics } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { ArrowLeft, CreditCard, Shield, UserCog } from "lucide-react";
@@ -23,6 +24,7 @@ export default async function AdminCustomerDetailPage({
   }
 
   const metrics = await loadDashboardMetrics(id);
+  const mctbSnapshot = await loadMctbSupportSnapshot(id);
   const usageCost = customer.messages * 0.015;
   const telnyxCost = customer.messages * 0.0085;
 
@@ -70,6 +72,49 @@ export default async function AdminCustomerDetailPage({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <div className="mb-4 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            <CardTitle>MCTB Support Snapshot</CardTitle>
+          </div>
+          {mctbSnapshot ? (
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Toll-free</dt>
+                <dd className="font-mono text-right">{mctbSnapshot.tollFree.e164 || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">TFV</dt>
+                <dd>{mctbSnapshot.tfv.statusLabel}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Service</dt>
+                <dd>{mctbSnapshot.mctbServiceStatus}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Trial SMS</dt>
+                <dd>
+                  {mctbSnapshot.trialSmsSegmentsUsed}
+                  {mctbSnapshot.trialSmsSegmentLimit != null
+                    ? ` / ${mctbSnapshot.trialSmsSegmentLimit}`
+                    : ""}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Onboarding step</dt>
+                <dd>{mctbSnapshot.onboarding.currentStep}</dd>
+              </div>
+              {mctbSnapshot.tfv.failureReason ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950">
+                  TFV: {mctbSnapshot.tfv.failureReason}
+                </div>
+              ) : null}
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">No MCTB data for this workspace.</p>
+          )}
+        </Card>
+
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <Shield className="h-4 w-4 text-primary" />

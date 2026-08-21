@@ -22,6 +22,7 @@ export const MCTB_FUNNEL_EVENTS = [
   "MCTB_TRIAL_ACTIVATED",
   "MCTB_CHECKOUT_STARTED",
   "MCTB_PAID",
+  "MCTB_ABANDONED_ONBOARDING_RELEASED",
 ] as const;
 
 export type MctbFunnelEventKey = (typeof MCTB_FUNNEL_EVENTS)[number];
