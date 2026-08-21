@@ -212,6 +212,27 @@ async def run_inbound_session(ctx: JobContext) -> None:
         extra={"dispatchResolveMs": dispatch_resolve_ms, "bootstrapPath": bootstrap_path},
     )
 
+    if bootstrap_path in {"compiled", "bootstrap_inbound", "unknown"}:
+        log_event(
+            "slow_bootstrap_path_active",
+            call_id=call_id,
+            extra={
+                "bootstrapPath": bootstrap_path,
+                "dispatchResolveMs": dispatch_resolve_ms,
+                "message": (
+                    "Fast dispatch path NOT active — do not evaluate latency until "
+                    "bootstrapPath is dispatch_snapshot or snapshot and dispatchResolveMs < 1000"
+                ),
+                "toE164": to_e164,
+            },
+        )
+        logger.error(
+            "SLOW BOOTSTRAP PATH: bootstrapPath=%s dispatchResolveMs=%s — "
+            "republish agent and verify explicitDispatch snapshot before judging latency",
+            bootstrap_path,
+            dispatch_resolve_ms,
+        )
+
     await connect_task
     if not bootstrap.get("ok"):
         masking_task.cancel()
