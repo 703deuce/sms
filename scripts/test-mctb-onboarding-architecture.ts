@@ -11,8 +11,10 @@ import {
 import {
   formatDemoPhoneDisplay,
   getDemoMessageBody,
+  getPlatformDemoNumberE164,
   isPlatformDemoNumber,
 } from "../src/lib/mctb/onboarding/demo";
+import { MCTB_PLATFORM_DEMO_E164, MCTB_PLATFORM_DEMO_DISPLAY } from "../src/lib/mctb/onboarding/constants";
 import { MCTB_ONBOARDING_STEP_ORDER } from "../src/lib/mctb/onboarding/types";
 import { MCTB_CARRIER_GUIDES } from "../src/lib/mctb/onboarding/carriers";
 
@@ -34,7 +36,10 @@ assert.ok(afterBusiness.completedSteps.includes("business"));
 assert.equal(afterBusiness.currentStep, "configure");
 
 assert.match(getDemoMessageBody(), /Transovo Demo/i);
-assert.equal(formatDemoPhoneDisplay("+18005551234"), "1-800-555-1234");
+assert.equal(getPlatformDemoNumberE164(), "+18663464256");
+assert.equal(MCTB_PLATFORM_DEMO_DISPLAY, "1-866-346-4256");
+assert.equal(formatDemoPhoneDisplay("+18663464256"), "1-866-346-4256");
+assert.equal(isPlatformDemoNumber(MCTB_PLATFORM_DEMO_E164), true);
 assert.equal(isPlatformDemoNumber("+19999999999"), false);
 
 assert.ok(MCTB_CARRIER_GUIDES.length >= 8);

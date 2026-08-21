@@ -113,7 +113,10 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   let activeReg = reg;
 
   if (input.demoBypass) {
-    const demoWorkspaceId = process.env.PLATFORM_MCTB_DEMO_WORKSPACE_ID?.trim();
+    const { resolvePlatformDemoOwnerWorkspaceId } = await import(
+      "@/lib/mctb/onboarding/platform-demo"
+    );
+    const demoWorkspaceId = await resolvePlatformDemoOwnerWorkspaceId();
     if (demoWorkspaceId) {
       const demoReg = await getRegistrationByWorkspace(demoWorkspaceId);
       if (demoReg) {

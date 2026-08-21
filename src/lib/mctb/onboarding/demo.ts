@@ -7,19 +7,15 @@ import {
   type MctbOnboardingState,
 } from "./types";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
+import { MCTB_PLATFORM_DEMO_E164 } from "./constants";
 
 const DEMO_SESSION_TTL_MS = 30 * 60 * 1000;
 
-export function getPlatformDemoNumberE164(): string | null {
-  const raw =
-    process.env.PLATFORM_MCTB_DEMO_E164?.trim() ||
-    process.env.DEMO_MCTB_E164?.trim() ||
-    "";
-  if (!raw) return null;
+export function getPlatformDemoNumberE164(): string {
   try {
-    return normalizeE164(raw);
+    return normalizeE164(MCTB_PLATFORM_DEMO_E164);
   } catch {
-    return null;
+    return MCTB_PLATFORM_DEMO_E164;
   }
 }
 
@@ -32,10 +28,8 @@ export function formatDemoPhoneDisplay(e164: string): string {
 }
 
 export function isPlatformDemoNumber(businessE164: string): boolean {
-  const demo = getPlatformDemoNumberE164();
-  if (!demo) return false;
   try {
-    return normalizeE164(businessE164) === demo;
+    return normalizeE164(businessE164) === getPlatformDemoNumberE164();
   } catch {
     return false;
   }
@@ -96,11 +90,6 @@ export async function startDemoSession(input: {
   callerE164: string;
 }): Promise<{ demoNumberE164: string; session: MctbDemoSession }> {
   const demoNumberE164 = getPlatformDemoNumberE164();
-  if (!demoNumberE164) {
-    throw new Error(
-      "Demo number is not configured. Set PLATFORM_MCTB_DEMO_E164 in the environment.",
-    );
-  }
 
   const caller = normalizeE164(input.callerE164);
   const session: MctbDemoSession = {
@@ -211,9 +200,9 @@ export async function getDemoStatus(workspaceId: string) {
   const demoNumberE164 = getPlatformDemoNumberE164();
 
   return {
-    configured: Boolean(demoNumberE164),
+    configured: true,
     demoNumberE164,
-    demoNumberDisplay: demoNumberE164 ? formatDemoPhoneDisplay(demoNumberE164) : null,
+    demoNumberDisplay: formatDemoPhoneDisplay(demoNumberE164),
     session,
     checks: {
       missedCallDetected: Boolean(session?.callDetectedAt),

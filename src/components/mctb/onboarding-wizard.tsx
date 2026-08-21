@@ -322,7 +322,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             </div>
           </div>
 
-          {data?.demo.configured && data.demo.demoNumberDisplay ? (
+          {data?.demo.demoNumberDisplay ? (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
               <p className="text-sm font-medium text-muted-foreground">Call this number</p>
               <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary">
@@ -332,12 +332,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                 From the mobile number you verified at signup
               </p>
             </div>
-          ) : (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Demo number is not configured in this environment. Contact support or skip to
-              compliance setup.
-            </div>
-          )}
+          ) : null}
 
           <div className="space-y-2 rounded-lg border p-4">
             <StepCheck done={data?.demo.checks.missedCallDetected || false} label="Missed call detected" />
@@ -347,7 +342,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
           {!data?.demo.completed ? (
             <div className="flex flex-wrap gap-3">
-              <Button disabled={saving || !data?.demo.configured} onClick={() => void startDemo()}>
+              <Button disabled={saving} onClick={() => void startDemo()}>
                 <Phone className="mr-2 h-4 w-4" />
                 I&apos;m ready — start demo
               </Button>
