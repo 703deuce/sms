@@ -12,6 +12,10 @@ from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.prompt import resolve_agent_instructions
 from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.templates.session_factory import build_realtime_session
+from transovo_voice.templates.template_context import (
+    build_template_instructions,
+    resolve_greeting_instructions,
+)
 from transovo_voice.userdata import SessionUserData
 
 
@@ -49,16 +53,27 @@ class WarmTransferLabAgent(Agent):
 
         tools.append(explain_transfer)
         super().__init__(
-            instructions=(
-                "You are testing warm transfer. When the caller asks for a person, "
-                "use transfer_to_human after confirming."
+            instructions=build_template_instructions(
+                ud,
+                template_mode="livekit_warm_transfer",
+                template_role=(
+                    "You are in warm transfer lab mode. When the caller asks for a person, "
+                    "confirm and use transfer_to_human when available."
+                ),
+                fallback_instructions=(
+                    "You are testing warm transfer. When the caller asks for a person, "
+                    "use transfer_to_human after confirming."
+                ),
             ),
             tools=tools,
         )
 
     async def on_enter(self) -> None:
         await self.session.generate_reply(
-            instructions="Greet the caller and mention they can ask to speak with someone.",
+            instructions=resolve_greeting_instructions(
+                self._ud,
+                fallback="Greet the caller and mention they can ask to speak with someone.",
+            ),
         )
 
 

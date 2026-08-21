@@ -11,6 +11,10 @@ from livekit.agents.voice.events import RunContext
 
 from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.templates.session_factory import build_realtime_session
+from transovo_voice.templates.template_context import (
+    build_template_instructions,
+    resolve_greeting_instructions,
+)
 from transovo_voice.userdata import SessionUserData
 
 
@@ -75,24 +79,41 @@ class FrontDeskUserdata:
     slot_unavailable_count: int = 0
 
 
-class FrontDeskBookingAgent(Agent):
-    """Adapted from livekit/agents/examples/frontdesk/agent.py — FakeCalendar only."""
+_FALLBACK_ROLE = (
+    "You are a front desk voice assistant. Help callers book an appointment. "
+    "Call get_current_time before interpreting relative dates. "
+    "Use list_available_slots then schedule_appointment after the caller picks a time."
+)
+_TEMPLATE_ROLE = (
+    "You are in front desk booking lab mode. Help callers book appointments using "
+    "list_available_slots and schedule_appointment. Follow any booking rules in the "
+    "business configuration above."
+)
 
-    def __init__(self, *, timezone: str, now: Callable[[], datetime.datetime]) -> None:
+
+class FrontDeskBookingAgent(Agent):
+    """Front desk booking — wizard config + FakeCalendar scheduling tools."""
+
+    def __init__(self, *, ud: SessionUserData, timezone: str, now: Callable[[], datetime.datetime]) -> None:
         self.tz = ZoneInfo(timezone)
         self._now = now
+        self._ud = ud
         self._slots_map: dict[str, AvailableSlot] = {}
         super().__init__(
-            instructions=(
-                "You are a front desk voice assistant. Help callers book an appointment. "
-                "Call get_current_time before interpreting relative dates. "
-                "Use list_available_slots then schedule_appointment after the caller picks a time."
+            instructions=build_template_instructions(
+                ud,
+                template_mode="livekit_frontdesk_booking",
+                template_role=_TEMPLATE_ROLE,
+                fallback_instructions=_FALLBACK_ROLE,
             ),
         )
 
     async def on_enter(self) -> None:
         await self.session.generate_reply(
-            instructions="Welcome the caller and invite them to book an appointment.",
+            instructions=resolve_greeting_instructions(
+                self._ud,
+                fallback="Welcome the caller and invite them to book an appointment.",
+            ),
         )
 
     @function_tool
@@ -149,7 +170,7 @@ async def run_frontdesk_booking_template(ctx: JobContext, ud: SessionUserData) -
     fd_userdata = FrontDeskUserdata(cal=cal)
     session = build_realtime_session(ud, userdata=fd_userdata)
     await session.start(
-        agent=FrontDeskBookingAgent(timezone=tz, now=cal.now),
+        agent=FrontDeskBookingAgent(ud=ud, timezone=tz, now=cal.now),
         room=ctx.room,
         room_options=build_telephony_room_options(delete_room_on_close=True),
     )

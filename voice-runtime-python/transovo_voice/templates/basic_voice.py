@@ -6,25 +6,42 @@ from livekit.agents.voice.events import RunContext
 
 from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.templates.session_factory import build_realtime_session
+from transovo_voice.templates.template_context import (
+    build_template_instructions,
+    resolve_greeting_instructions,
+)
 from transovo_voice.userdata import SessionUserData
+
+_FALLBACK_ROLE = (
+    "You are a helpful voice assistant. Keep responses concise for phone conversation. "
+    "Do not use markdown or emojis."
+)
+_TEMPLATE_ROLE = (
+    "You are in basic voice lab mode. Have a natural conversation, answer questions using "
+    "the business context above, and stay concise for phone calls."
+)
 
 
 class BasicVoiceAgent(Agent):
-    """Minimal LiveKit basic_agent pattern — gpt-realtime, greet + weather tool."""
+    """Minimal LiveKit basic_agent pattern — uses wizard config when published."""
 
     def __init__(self, ud: SessionUserData) -> None:
-        business = ud.business_name or "Transovo"
         super().__init__(
-            instructions=(
-                f"You are a helpful voice assistant for {business}. "
-                "Keep responses concise for phone conversation. "
-                "Do not use markdown or emojis."
+            instructions=build_template_instructions(
+                ud,
+                template_mode="livekit_basic_voice",
+                template_role=_TEMPLATE_ROLE,
+                fallback_instructions=_FALLBACK_ROLE,
             ),
         )
+        self._ud = ud
 
     async def on_enter(self) -> None:
         await self.session.generate_reply(
-            instructions="Greet the caller briefly and ask how you can help.",
+            instructions=resolve_greeting_instructions(
+                self._ud,
+                fallback="Greet the caller briefly and ask how you can help.",
+            ),
         )
 
     @function_tool

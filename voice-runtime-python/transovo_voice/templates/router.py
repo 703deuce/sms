@@ -81,7 +81,7 @@ async def run_template(
         await run_hotel_receptionist_template(ctx, ud)
         return
     if resolved == "livekit_knowledge_rag":
-        await run_knowledge_rag_template(ctx, ud)
+        await run_knowledge_rag_template(ctx, ud, backend)
         return
     if resolved == COMPOSED_RECEPTIONIST_TEMPLATE:
         await run_transovo_receptionist_template(ctx, ud, backend)
