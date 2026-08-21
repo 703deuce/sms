@@ -23,7 +23,8 @@ export default function VoiceTestingPage() {
   const [result, setResult] = useState<string | null>(null);
   const [trace, setTrace] = useState<string>("");
   const [lastCallId, setLastCallId] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; status: string }>>([]);
+  const [templateId, setTemplateId] = useState("livekit_basic_voice");
 
   useEffect(() => {
     fetch("/api/voice/agents")
@@ -46,6 +47,12 @@ export default function VoiceTestingPage() {
       .then((j) => {
         setKnowledgeBases(j.data || []);
         if (j.data?.[0]) setKbId(j.data[0].id);
+      });
+    fetch("/api/voice/templates")
+      .then((r) => r.json())
+      .then((j) => {
+        setTemplates(j.data || []);
+        if (j.data?.[0]) setTemplateId(j.data[0].id);
       });
   }, []);
 
@@ -115,6 +122,27 @@ export default function VoiceTestingPage() {
     const json = await res.json();
     setTrace(JSON.stringify(json, null, 2));
     setResult(res.ok ? `Availability slots: ${(json.data?.slots || json.slots || []).length}` : json.error);
+  }
+
+  async function testTemplate() {
+    setRunning(true);
+    setResult(null);
+    setTrace("");
+    try {
+      const res = await fetch("/api/voice/templates/test-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId, templateId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setResult(`Template test started: ${json.data.templateName} (${json.data.templateId})`);
+      setTrace(JSON.stringify(json.data, null, 2));
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : "Template test failed");
+    } finally {
+      setRunning(false);
+    }
   }
 
   return (
@@ -217,6 +245,30 @@ export default function VoiceTestingPage() {
             Test booking availability
           </Button>
           <MicTestPanel />
+        </Card>
+
+        <Card className="space-y-4 p-5 lg:col-span-2">
+          <h2 className="font-medium">LiveKit template lab</h2>
+          <p className="text-sm text-muted-foreground">
+            Test official LiveKit-derived templates through the same Python worker used in production.
+          </p>
+          <div>
+            <Label>Template</Label>
+            <select
+              className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+            >
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.status})
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button disabled={running || !agentId} onClick={testTemplate}>
+            Start template browser test
+          </Button>
         </Card>
 
         <Card className="space-y-3 p-5 lg:col-span-2">

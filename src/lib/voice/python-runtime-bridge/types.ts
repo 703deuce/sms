@@ -20,6 +20,9 @@ export type PythonRuntimeBootstrapResult = {
   timezone: string;
   businessName: string;
   runtimeProfile: "generic_receptionist" | "real_estate" | "unsupported";
+  agentTemplate?: string;
+  agentTemplateVersion?: string;
+  runtime?: "livekit_python";
   receptionistCompiled?: ReceptionistCompiledSnapshot;
   compiledPrompt?: string;
   greeting?: string;

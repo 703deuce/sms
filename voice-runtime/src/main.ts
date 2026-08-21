@@ -9,7 +9,8 @@ import { resolveOutboundJob, runOutboundLeadQualificationEntry } from "./outboun
 dotenv.config();
 applyVoiceRuntimeEnvAliases();
 
-const AGENT_NAME = process.env.LIVEKIT_AGENT_NAME || "transovo-voice-runtime";
+const AGENT_NAME =
+  process.env.LIVEKIT_OUTBOUND_AGENT_NAME || "transovo-outbound-runtime";
 
 export default defineAgent<AnyRuntimeUserData>({
   entry: async (ctx) => {
@@ -19,7 +20,14 @@ export default defineAgent<AnyRuntimeUserData>({
       return;
     }
 
-    await runInboundEntry(ctx);
+    console.warn(
+      JSON.stringify({
+        service: "transovo-voice-runtime-ts",
+        event: "inbound_job_rejected",
+        room: ctx.room.name,
+        note: "Inbound calls must use Python worker transovo-voice-runtime only",
+      }),
+    );
   },
 });
 

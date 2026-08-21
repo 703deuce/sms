@@ -32,9 +32,11 @@ async def entrypoint(ctx: JobContext) -> None:
         log_event(
             "python_voice_outbound_skipped",
             room=ctx.room.name,
-            extra={"note": "use separate TypeScript outbound worker until Python outbound ships"},
+            extra={"note": "Outbound uses transovo-outbound-runtime TypeScript worker"},
         )
-        logger.warning("Outbound jobs require TypeScript runtime until Python outbound ships")
+        logger.warning(
+            "Outbound jobs use transovo-outbound-runtime — this Python worker is inbound-only",
+        )
         return
     await run_inbound_session(ctx)
 

@@ -372,5 +372,24 @@ def build_confirm_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
     return [confirm_booking, select_slot, *_faq_and_end_tools(agent, backend)]
 
 
+def build_all_receptionist_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
+    """Flat tool surface for transovo_receptionist_v1 — no phased update_tools()."""
+    seen: set[str] = set()
+    merged: list = []
+    for tool in (
+        build_idle_tools(agent, backend)
+        + build_availability_tools(agent, backend)
+        + build_slot_tools(agent, backend)
+        + build_confirm_tools(agent, backend)
+    ):
+        name = getattr(tool, "name", None) or getattr(tool, "__name__", None)
+        key = str(name) if name else id(tool)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(tool)
+    return merged
+
+
 def build_amy_tools(agent: AmyAgent, backend: TransovoBackend) -> list[llm.FunctionTool | llm.Toolset]:
     return build_idle_tools(agent, backend)

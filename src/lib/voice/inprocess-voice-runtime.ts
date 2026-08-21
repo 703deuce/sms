@@ -24,9 +24,7 @@ function hasVoiceRuntimeCredentials(): boolean {
   return true;
 }
 
-export function voiceRuntimeImpl(): "python" | "typescript" {
-  const raw = (process.env.VOICE_RUNTIME_IMPL || "python").trim().toLowerCase();
-  if (raw === "typescript" || raw === "ts") return "typescript";
+export function voiceRuntimeImpl(): "python" {
   return "python";
 }
 
@@ -71,25 +69,20 @@ async function resolveTypescriptSpawn(): Promise<{ command: string; args: string
 async function resolveVoiceRuntimeSpawn(): Promise<{
   command: string;
   args: string[];
-  impl: "python" | "typescript";
+  impl: "python";
 }> {
-  const requested = voiceRuntimeImpl();
-  if (requested === "python") {
-    const { existsSync } = await import("node:fs");
-    const venvPython = pythonVenvPath();
-    if (existsSync(venvPython)) {
-      return {
-        command: venvPython,
-        args: ["-m", "transovo_voice.main", "start"],
-        impl: "python",
-      };
-    }
-    console.warn(
-      "[voice-python] falling back to typescript worker — Python venv not found at runtime",
-    );
+  const { existsSync } = await import("node:fs");
+  const venvPython = pythonVenvPath();
+  if (existsSync(venvPython)) {
+    return {
+      command: venvPython,
+      args: ["-m", "transovo_voice.main", "start"],
+      impl: "python",
+    };
   }
-  const tsSpawn = await resolveTypescriptSpawn();
-  return { ...tsSpawn, impl: "typescript" };
+  throw new Error(
+    "Python voice runtime venv not found — inbound calls require voice-runtime-python/.venv",
+  );
 }
 
 function attachChildLogging(child: ChildProcess, prefix: string) {

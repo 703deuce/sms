@@ -18,6 +18,7 @@ export async function createLiveKitBrowserTestSession(input: {
   workspaceId: string;
   userId: string;
   agentId: string;
+  agentTemplate?: string;
 }): Promise<TestSessionResult> {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
@@ -59,6 +60,8 @@ export async function createLiveKitBrowserTestSession(input: {
     dispatchSource: "job_metadata" as const,
     livekitProfile: "frontdesk_realtime",
     browserTest: true,
+    agentTemplate: input.agentTemplate || "transovo_receptionist_v1",
+    runtime: "livekit_python",
   };
 
   const { AgentDispatchClient, AccessToken } = await import("livekit-server-sdk");

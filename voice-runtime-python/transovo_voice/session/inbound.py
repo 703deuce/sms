@@ -3,14 +3,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from livekit.agents import AgentSession, JobContext
+from livekit.agents import JobContext
 
-from transovo_voice.agent.amy import create_amy_agent
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.integrations.commit_client import drain_pending_provider_tasks
-from transovo_voice.session.realtime_config import build_realtime_model
-from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.tasks.protocols import is_phone_field
+from transovo_voice.templates.registry import DEFAULT_PRODUCTION_TEMPLATE, resolve_template_id
+from transovo_voice.templates.router import run_template
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData, TransferPolicy
 
@@ -63,7 +62,7 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
     )
     receptionist = ReceptionistCompiled(
         business_name=str(compiled_raw.get("businessName") or data.get("businessName") or ""),
-        agent_display_name=str(compiled_raw.get("agentDisplayName") or "Amy"),
+        agent_display_name=str(compiled_raw.get("agentDisplayName") or "Receptionist"),
         greeting=str(compiled_raw.get("greeting") or data.get("greeting") or ""),
         timezone=str(compiled_raw.get("timezone") or data.get("timezone") or "America/New_York"),
         compiled_prompt=str(compiled_raw.get("compiledPrompt") or data.get("compiledPrompt") or ""),
@@ -81,12 +80,8 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         to_e164=data.get("toE164"),
         agent_version_id=data.get("agentVersionId"),
         event_type_uri=data.get("eventTypeUri"),
-        sip_outbound_trunk_id=(
-            str(data.get("sipOutboundTrunkId") or "").strip() or None
-        ),
-        sip_caller_id_e164=(
-            str(data.get("sipCallerIdE164") or "").strip() or None
-        ),
+        sip_outbound_trunk_id=(str(data.get("sipOutboundTrunkId") or "").strip() or None),
+        sip_caller_id_e164=(str(data.get("sipCallerIdE164") or "").strip() or None),
         capabilities=capabilities,
         transfer_policy=transfer_policy,
         receptionist=receptionist,
@@ -97,19 +92,15 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         realtime_speed=data.get("realtimeSpeed"),
         runtime_profile=str(data.get("runtimeProfile") or "generic_receptionist"),
         enabled_builtin_tools=enabled_builtin_tools,
+        agent_template=str(data.get("agentTemplate") or DEFAULT_PRODUCTION_TEMPLATE),
     )
 
 
 def _prefill_caller_phone(ud: SessionUserData) -> None:
-    """Use ANI for phone manifest fields — LiveKit tasks still confirm when needed."""
     if not ud.caller_e164 or not ud.receptionist:
         return
     for field in ud.receptionist.field_manifest:
-        manifest = {
-            "id": field.id,
-            "label": field.label,
-            "type": field.type,
-        }
+        manifest = {"id": field.id, "label": field.label, "type": field.type}
         if is_phone_field(manifest) and not ud.collected_fields.get(field.id, "").strip():
             ud.collected_fields[field.id] = ud.caller_e164
 
@@ -133,7 +124,6 @@ async def run_inbound_session(ctx: JobContext) -> None:
     ctx.add_shutdown_callback(shutdown_backend)
 
     participant = await ctx.wait_for_participant()
-    # Connect early (frontdesk / hotel_receptionist pattern) once SIP participant exists.
     await ctx.connect()
 
     attrs = dict(participant.attributes or {})
@@ -151,42 +141,43 @@ async def run_inbound_session(ctx: JobContext) -> None:
         logger.error("bootstrap failed: %s", bootstrap.get("error"))
         return
 
-    api_version = bootstrap.get("apiVersion")
-    if api_version != 1:
-        log_event(
-            "bootstrap_api_version_mismatch",
-            room=ctx.room.name,
-            extra={"apiVersion": api_version, "expected": 1},
-        )
-        logger.error(
-            "Unsupported bootstrap apiVersion=%s (expected 1) — redeploy voice worker",
-            api_version,
-        )
+    if bootstrap.get("apiVersion") != 1:
+        logger.error("Unsupported bootstrap apiVersion=%s", bootstrap.get("apiVersion"))
         return
 
     ud = _userdata_from_bootstrap(bootstrap)
+    template_id = resolve_template_id(
+        str(bootstrap.get("agentTemplate") or ud.agent_template),
+        production=True,
+    )
+
     log_event(
         "call_started",
         call_id=ud.call_id,
         workspace_id=ud.workspace_id,
         agent_id=ud.agent_id,
         room=ctx.room.name,
-        extra={"runtimeProfile": ud.runtime_profile},
+        extra={
+            "runtime": "livekit_python",
+            "agent_template": template_id,
+            "runtimeProfile": ud.runtime_profile,
+        },
     )
 
-    if ud.runtime_profile != "generic_receptionist":
-        log_event(
-            "python_voice_profile_unsupported",
-            call_id=ud.call_id,
-            workspace_id=ud.workspace_id,
-            agent_id=ud.agent_id,
-            extra={"runtimeProfile": ud.runtime_profile},
-        )
-        logger.warning(
-            "Profile %s not supported by Python runtime — set VOICE_RUNTIME_IMPL=typescript",
-            ud.runtime_profile,
-        )
-        return
+    await backend.call(
+        "emit_event",
+        {
+            "workspaceId": ud.workspace_id,
+            "callId": ud.call_id,
+            "eventType": "runtime_template_selected",
+            "payload": {
+                "runtime": "livekit_python",
+                "agent_template": template_id,
+                "agent_template_version": "1",
+                "receptionist_id": ud.agent_id,
+            },
+        },
+    )
 
     _prefill_caller_phone(ud)
 
@@ -203,20 +194,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
     if persisted.get("ok") and persisted.get("fields"):
         ud.collected_fields = dict(persisted["fields"])
 
-    realtime_llm = build_realtime_model(
-        model=ud.realtime_model,
-        voice=ud.realtime_voice,
-        speed=ud.realtime_speed,
-    )
-
-    session = AgentSession(llm=realtime_llm, userdata=ud)
-    agent = create_amy_agent(ud, backend)
-
-    await session.start(
-        agent=agent,
-        room=ctx.room,
-        room_options=build_telephony_room_options(delete_room_on_close=not ud.can_transfer()),
-    )
+    await run_template(ctx, ud, backend, template_id=template_id)
 
     log_event(
         "worker_ready",
@@ -224,4 +202,5 @@ async def run_inbound_session(ctx: JobContext) -> None:
         workspace_id=ud.workspace_id,
         agent_id=ud.agent_id,
         room=ctx.room.name,
+        extra={"agent_template": template_id},
     )

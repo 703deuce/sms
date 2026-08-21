@@ -104,6 +104,7 @@ class SessionUserData:
     message_summary: str | None = None
     runtime_profile: str = "generic_receptionist"
     enabled_builtin_tools: list[str] = field(default_factory=list)
+    agent_template: str = "transovo_receptionist_v1"
     pending_provider_tasks: list[Any] = field(default_factory=list)
 
     def has_tool(self, tool_name: str) -> bool:

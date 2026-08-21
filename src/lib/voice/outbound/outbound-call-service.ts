@@ -11,13 +11,13 @@ import type {
   TelephonyOutcome,
 } from "./types";
 
-import { TRANSOVO_LIVEKIT_AGENT_NAME } from "@/lib/telephony/provisioning/config";
+import { TRANSOVO_OUTBOUND_AGENT_NAME } from "@/lib/telephony/provisioning/config";
 
 export const TRANSOVO_OUTBOUND_ROOM_PREFIX =
   process.env.LIVEKIT_OUTBOUND_ROOM_PREFIX?.trim() || "transovo-outbound-";
 
-/** @deprecated Outbound uses the same worker as inbound — LIVEKIT_AGENT_NAME */
-export const TRANSOVO_OUTBOUND_AGENT_NAME = TRANSOVO_LIVEKIT_AGENT_NAME;
+/** @deprecated Outbound uses dedicated outbound worker — not the inbound Python agent. */
+export const TRANSOVO_OUTBOUND_AGENT_NAME_EXPORT = TRANSOVO_OUTBOUND_AGENT_NAME;
 
 const E164_RE = /^\+[1-9]\d{6,14}$/;
 
@@ -189,7 +189,7 @@ export async function startOutboundLeadQualificationCall(input: {
       destinationE164,
       callerIdE164,
       roomName,
-      agentName: TRANSOVO_LIVEKIT_AGENT_NAME,
+      agentName: TRANSOVO_OUTBOUND_AGENT_NAME,
       realtimeVoice: jobMetadata.realtimeVoice || null,
     },
   }).catch(() => undefined);
@@ -203,7 +203,7 @@ export async function startOutboundLeadQualificationCall(input: {
   try {
     const dispatch = await dispatchClient.createDispatch(
       roomName,
-      TRANSOVO_LIVEKIT_AGENT_NAME,
+      TRANSOVO_OUTBOUND_AGENT_NAME,
       { metadata: JSON.stringify(jobMetadata) },
     );
     dispatchId = dispatch.id || null;

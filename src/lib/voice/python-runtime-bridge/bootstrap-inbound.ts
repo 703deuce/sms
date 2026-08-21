@@ -137,6 +137,15 @@ export async function bootstrapInboundForPython(
   if (isGeneric && receptionistCompiled) runtimeProfile = "generic_receptionist";
   else if (isRealEstate) runtimeProfile = "real_estate";
 
+  const jobTemplate =
+    typeof jobMetaRaw?.agentTemplate === "string" ? jobMetaRaw.agentTemplate.trim() : "";
+  const roomTemplate =
+    typeof roomMeta?.agentTemplate === "string" ? roomMeta.agentTemplate.trim() : "";
+  const agentTemplate =
+    jobTemplate ||
+    roomTemplate ||
+    (runtimeProfile === "generic_receptionist" ? "transovo_receptionist_v1" : "livekit_basic_voice");
+
   const realtimeAdvanced = advanced?.realtime as Record<string, unknown> | undefined;
   const calendarAdvanced = advanced?.calendar as Record<string, unknown> | undefined;
 
@@ -159,6 +168,9 @@ export async function bootstrapInboundForPython(
       routing.agentName ||
       "our office",
     runtimeProfile,
+    agentTemplate,
+    agentTemplateVersion: "1",
+    runtime: "livekit_python",
     receptionistCompiled: receptionistCompiled || undefined,
     compiledPrompt: receptionistCompiled?.compiledPrompt,
     greeting: receptionistCompiled?.greeting,
