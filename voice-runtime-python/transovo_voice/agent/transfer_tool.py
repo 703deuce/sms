@@ -10,6 +10,7 @@ from livekit.agents.llm.tool_context import ToolError, function_tool
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.integrations.backend_client import TransovoBackend
+from transovo_voice.templates.template_context import deliver_scripted_speech
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import SessionUserData, WorkflowState
 
@@ -102,7 +103,8 @@ def build_transfer_tool(
             extra={"destination": destination},
         )
 
-        await context.session.say(
+        await deliver_scripted_speech(
+            context.session,
             "Please hold while I connect you with someone who can help.",
             allow_interruptions=False,
         )
@@ -137,7 +139,8 @@ def build_transfer_tool(
             workflow=ud.workflow.value,
             extra={"supervisor": result.human_agent_identity},
         )
-        await context.session.say(
+        await deliver_scripted_speech(
+            context.session,
             "You're now connected with my colleague. I'll hang up now.",
             allow_interruptions=False,
         )

@@ -41,11 +41,10 @@ const hotel = readAgents("examples/hotel_receptionist/agent.py");
 assert.ok(main.includes("AgentServer"), "main uses AgentServer");
 assert.ok(main.includes("@server.rtc_session"), "main uses rtc_session decorator");
 
-// ctx.connect before session.start (frontdesk, hotel — not survey's late connect)
-assert.ok(
-  inbound.indexOf("await ctx.connect()") < inbound.indexOf("await session.start("),
-  "inbound: ctx.connect before session.start",
-);
+// ctx.connect in inbound; session.start in template modules
+const basicVoice = readSms("voice-runtime-python/transovo_voice/templates/basic_voice.py");
+assert.ok(inbound.includes("await ctx.connect()"), "inbound connects to room");
+assert.ok(basicVoice.includes("await session.start("), "template starts agent session");
 assert.ok(inbound.includes("wait_for_participant"), "inbound waits for SIP participant");
 assert.ok(inbound.includes("add_shutdown_callback"), "inbound registers shutdown callback");
 
@@ -87,11 +86,14 @@ assert.ok(tools.includes("EndCallTool"), "tools include EndCallTool");
 assert.ok(tools.includes("disallow_interruptions"), "confirm_booking uses disallow_interruptions before speech");
 
 const telephonyAudio = readSms("voice-runtime-python/transovo_voice/session/telephony_audio.py");
-assert.ok(telephonyAudio.includes("BVCTelephony"), "telephony audio uses BVCTelephony noise cancellation");
+const templateContext = readSms("voice-runtime-python/transovo_voice/templates/template_context.py");
+assert.ok(templateContext.includes("deliver_scripted_speech"), "template context has scripted speech helper");
 assert.ok(
-  inbound.includes("build_telephony_room_options"),
-  "inbound wires telephony room options",
+  templateContext.includes("session_uses_tts_say"),
+  "native realtime greeting must not rely on session.say without TTS",
 );
+assert.ok(telephonyAudio.includes("BVCTelephony"), "telephony audio uses BVCTelephony noise cancellation");
+assert.ok(basicVoice.includes("build_telephony_room_options"), "template wires telephony room options");
 
 // No TS legacy collection orchestration in Python
 assert.ok(!intake.includes("responseOwner"), "no TS responseOwner port");

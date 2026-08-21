@@ -145,16 +145,24 @@ async def run_inbound_session(ctx: JobContext) -> None:
     await ctx.connect()
 
     attrs = dict(participant.attributes or {})
-    bootstrap = await backend.call(
-        "bootstrap_inbound",
-        {
-            "roomName": ctx.room.name,
-            "participantIdentity": participant.identity,
-            "participantAttributes": attrs,
-            "jobMetadata": ctx.job.metadata,
-            "roomMetadata": ctx.room.metadata,
-        },
+    bootstrap_task = asyncio.create_task(
+        backend.call(
+            "bootstrap_inbound",
+            {
+                "roomName": ctx.room.name,
+                "participantIdentity": participant.identity,
+                "participantAttributes": attrs,
+                "jobMetadata": ctx.job.metadata,
+                "roomMetadata": ctx.room.metadata,
+            },
+        ),
     )
+    # Warm OpenAI realtime plugin while bootstrap round-trip is in flight.
+    try:
+        from livekit.plugins.openai.realtime import RealtimeModel  # noqa: F401
+    except ImportError:
+        pass
+    bootstrap = await bootstrap_task
     if not bootstrap.get("ok"):
         logger.error("bootstrap failed: %s", bootstrap.get("error"))
         return

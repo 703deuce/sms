@@ -47,8 +47,8 @@ def resolve_greeting_instructions(ud: SessionUserData, *, fallback: str) -> str:
     greeting = resolve_greeting_text(ud)
     if greeting:
         return (
-            "Say exactly this greeting to the caller (warm and natural): "
-            f"{greeting}"
+            "Say exactly the following, word for word, with no additions or changes:\n"
+            f'"{greeting}"'
         )
 
     business = resolved_business_name(ud)
@@ -60,6 +60,40 @@ def resolve_greeting_instructions(ud: SessionUserData, *, fallback: str) -> str:
     return fallback
 
 
+def session_uses_tts_say(session: object) -> bool:
+    """Half-cascade ElevenLabs sessions can use say(); native gpt-realtime cannot."""
+    tts = getattr(session, "tts", None)
+    if tts is None:
+        return False
+    try:
+        from livekit.agents import NOT_GIVEN
+
+        if tts is NOT_GIVEN:
+            return False
+    except ImportError:
+        pass
+    return True
+
+
+async def deliver_scripted_speech(
+    session: object,
+    text: str,
+    *,
+    allow_interruptions: bool = False,
+) -> None:
+    """Verbatim line — say() only when a TTS plugin is attached; else generate_reply."""
+    if session_uses_tts_say(session):
+        await session.say(text, allow_interruptions=allow_interruptions)  # type: ignore[attr-defined]
+        return
+    await session.generate_reply(  # type: ignore[attr-defined]
+        instructions=(
+            "Say exactly the following, word for word, with no additions or changes:\n"
+            f'"{text}"'
+        ),
+        allow_interruptions=allow_interruptions,
+    )
+
+
 async def deliver_template_greeting(
     session: object,
     ud: SessionUserData,
@@ -67,10 +101,10 @@ async def deliver_template_greeting(
     fallback: str,
     observability: object | None = None,
 ) -> None:
-    """Speak a configured greeting immediately; avoid an LLM round trip when text exists."""
+    """Proactive greeting on connect — must use generate_reply on native gpt-realtime."""
     greeting = resolve_greeting_text(ud)
     if greeting:
-        await session.say(greeting, allow_interruptions=True)  # type: ignore[attr-defined]
+        await deliver_scripted_speech(session, greeting, allow_interruptions=True)
     else:
         await session.generate_reply(  # type: ignore[attr-defined]
             instructions=resolve_greeting_instructions(ud, fallback=fallback),

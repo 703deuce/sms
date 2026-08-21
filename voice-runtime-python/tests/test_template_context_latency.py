@@ -1,8 +1,11 @@
 """Template context latency helpers."""
 from __future__ import annotations
 
+import asyncio
+
 from transovo_voice.templates.template_context import (
     build_template_instructions,
+    deliver_template_greeting,
     is_lab_livekit_template,
     resolve_greeting_text,
 )
@@ -57,8 +60,40 @@ def test_is_lab_template() -> None:
     assert is_lab_livekit_template("transovo_receptionist_v1") is False
 
 
+async def test_deliver_template_greeting_uses_generate_reply_on_native_realtime() -> None:
+    calls: dict[str, object] = {}
+
+    class FakeSession:
+        tts = None
+
+        async def generate_reply(self, **kwargs: object) -> None:
+            calls["generate_reply"] = kwargs
+
+        async def say(self, *_args: object, **_kwargs: object) -> None:
+            calls["say"] = True
+
+    ud = SessionUserData(
+        workspace_id="ws",
+        agent_id="agent",
+        call_id="call",
+        business_name="Test Co",
+        timezone="America/New_York",
+        greeting="Hi, thanks for calling Test Co.",
+    )
+    await deliver_template_greeting(
+        FakeSession(),
+        ud,
+        fallback="fallback greeting",
+    )
+    assert "generate_reply" in calls
+    assert "say" not in calls
+    instructions = str((calls["generate_reply"] or {}).get("instructions", ""))  # type: ignore[union-attr]
+    assert "Hi, thanks for calling Test Co." in instructions
+
+
 if __name__ == "__main__":
     test_lab_template_uses_slim_instructions()
     test_resolve_greeting_text_prefers_ud_greeting()
     test_is_lab_template()
+    asyncio.run(test_deliver_template_greeting_uses_generate_reply_on_native_realtime())
     print("test_template_context_latency: ok")
