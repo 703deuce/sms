@@ -7,6 +7,7 @@ import {
   type MctbOnboardingStep,
   MCTB_ONBOARDING_STEP_ORDER,
 } from "./types";
+import { normalizeWorkspaceTollFreeFields } from "@/lib/mctb/workspace-toll-free";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -27,6 +28,7 @@ export function defaultMctbOnboardingState(): MctbOnboardingState {
     messageTemplate: DEFAULT_ONBOARDING_MESSAGE,
     consentMode: "press_1",
     trialNumber: null,
+    workspaceTollFreeNumber: null,
     demoSession: null,
     liveTestSession: null,
     funnelEvents: {},
@@ -41,9 +43,11 @@ function normalizeStep(step: unknown): MctbOnboardingStep {
 export function parseMctbOnboardingState(raw: unknown): MctbOnboardingState {
   const stored = asRecord(asRecord(raw).mctbOnboarding);
   if (!stored.version) return defaultMctbOnboardingState();
+  const tollFreeFields = normalizeWorkspaceTollFreeFields(stored);
   return {
     ...defaultMctbOnboardingState(),
     ...(stored as unknown as MctbOnboardingState),
+    ...tollFreeFields,
     version: 2,
     currentStep: normalizeStep(stored.currentStep),
     completedSteps: Array.isArray(stored.completedSteps)
@@ -86,9 +90,17 @@ export async function saveMctbOnboardingState(
     select: { customFieldsConfig: true },
   });
   const current = parseMctbOnboardingState(ws?.customFieldsConfig);
+  const tollFreePatch =
+    patch.workspaceTollFreeNumber !== undefined || patch.trialNumber !== undefined
+      ? normalizeWorkspaceTollFreeFields({
+          workspaceTollFreeNumber: patch.workspaceTollFreeNumber ?? patch.trialNumber,
+          trialNumber: patch.trialNumber ?? patch.workspaceTollFreeNumber,
+        })
+      : {};
   const next: MctbOnboardingState = {
     ...current,
     ...patch,
+    ...tollFreePatch,
     completedSteps: patch.completedSteps ?? current.completedSteps,
     funnelEvents: { ...current.funnelEvents, ...(patch.funnelEvents || {}) },
   };

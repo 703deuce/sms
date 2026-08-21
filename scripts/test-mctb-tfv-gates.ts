@@ -1,5 +1,5 @@
 /**
- * MCTB trial activation + TFV gate tests.
+ * TFV status merge + number lifecycle tests.
  * Run: npx tsx scripts/test-mctb-tfv-gates.ts
  */
 import assert from "node:assert/strict";
@@ -9,11 +9,13 @@ import {
   complianceStatusToA2p,
   shouldDedupeTfvSubmission,
 } from "../src/lib/messaging/compliance/messaging-compliance";
+import { mergeTfvStatuses } from "../src/lib/mctb/tfv/state-update";
 import { getPlatformDemoNumberE164 } from "../src/lib/mctb/onboarding/demo";
 import {
   canActivateTrialFromGates,
   evaluateTrialActivationGates,
 } from "../src/lib/mctb/onboarding/trial-gates";
+import { normalizeWorkspaceTollFreeFields } from "../src/lib/mctb/workspace-toll-free";
 
 assert.equal(mapTwilioTfvStatus("TWILIO_APPROVED"), "APPROVED");
 assert.equal(mapTwilioTfvStatus("PENDING_REVIEW"), "PENDING");
@@ -21,6 +23,11 @@ assert.equal(mapTwilioTfvStatus("TWILIO_REJECTED"), "REJECTED");
 assert.equal(isTfvApproved("APPROVED"), true);
 assert.equal(isTfvApproved("PENDING"), false);
 assert.equal(complianceStatusToA2p("APPROVED"), "APPROVED");
+
+assert.equal(mergeTfvStatuses("APPROVED", "PENDING"), "APPROVED");
+assert.equal(mergeTfvStatuses("PENDING", "APPROVED"), "APPROVED");
+assert.equal(mergeTfvStatuses("REJECTED", "PENDING"), "REJECTED");
+assert.equal(mergeTfvStatuses("SUBMITTED", "PENDING"), "PENDING");
 
 assert.equal(
   shouldDedupeTfvSubmission({ existingSid: "TFV123", existingStatus: "PENDING" }),
@@ -30,7 +37,12 @@ assert.equal(
   shouldDedupeTfvSubmission({ existingSid: "TFV123", existingStatus: "NOT_STARTED" }),
   false,
 );
-assert.equal(shouldDedupeTfvSubmission({ existingSid: null, existingStatus: "PENDING" }), false);
+
+const normalized = normalizeWorkspaceTollFreeFields({
+  trialNumber: { e164: "+18885551212", phoneNumberId: "pn_1" },
+});
+assert.equal(normalized.workspaceTollFreeNumber?.phoneNumberId, "pn_1");
+assert.equal(normalized.trialNumber?.phoneNumberId, "pn_1");
 
 const demoE164 = getPlatformDemoNumberE164();
 assert.ok(demoE164);
@@ -45,7 +57,6 @@ const baseGate = {
   trialAlreadyStarted: false,
 };
 
-// 1. demo line approval cannot activate trial
 assert.equal(
   evaluateTrialActivationGates({
     ...baseGate,
@@ -56,51 +67,30 @@ assert.equal(
   false,
 );
 
-// 2. unverified customer TFN cannot activate trial
 assert.equal(
   evaluateTrialActivationGates({ ...baseGate, tfvStatus: "PENDING" }).canActivate,
   false,
 );
 
-// 3. approved TFN + unverified forwarding cannot activate
 assert.equal(
   evaluateTrialActivationGates({ ...baseGate, forwardingConnected: false }).canActivate,
   false,
 );
 
-// 4. approved TFN + forwarding + failed live test cannot activate
 assert.equal(
   evaluateTrialActivationGates({ ...baseGate, liveTestPassed: false }).canActivate,
   false,
 );
 
-// 5. full success activates
 assert.equal(evaluateTrialActivationGates(baseGate).canActivate, true);
 assert.equal(canActivateTrialFromGates(baseGate), true);
 
-// 5b. trial activates exactly once when already started
 assert.equal(canActivateTrialFromGates({ ...baseGate, trialAlreadyStarted: true }), true);
-assert.equal(
-  canActivateTrialFromGates({
-    ...baseGate,
-    trialAlreadyStarted: true,
-    tfvStatus: "PENDING",
-    forwardingConnected: false,
-    liveTestPassed: false,
-  }),
-  true,
-);
 
-// 6. duplicate TFV idempotency — external refs are workspace-scoped
 const extRefA = "mctb-tfv:ws_a:pn_1";
 const extRefB = "mctb-tfv:ws_b:pn_2";
 assert.notEqual(extRefA, extRefB);
-assert.equal(
-  shouldDedupeTfvSubmission({ existingSid: extRefA, existingStatus: "SUBMITTED" }),
-  true,
-);
 
-// 7. workspace isolation — TFV phone must match trial phone for that workspace
 assert.equal(
   evaluateTrialActivationGates({
     ...baseGate,

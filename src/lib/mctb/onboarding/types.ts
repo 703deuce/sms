@@ -75,6 +75,8 @@ export type MctbForwardingCarrier =
   | "comcast"
   | "other";
 
+export type MctbWorkspaceTollFreeInfo = MctbTrialNumberInfo;
+
 export type MctbOnboardingState = {
   version: 2;
   currentStep: MctbOnboardingStep;
@@ -85,7 +87,9 @@ export type MctbOnboardingState = {
   industry?: string | null;
   messageTemplate?: string | null;
   consentMode?: MctbConsentMode | null;
-  /** Customer's assigned Twilio toll-free trial number (workspace-owned). */
+  /** Workspace-owned Twilio toll-free number (provisioned during onboarding). */
+  workspaceTollFreeNumber?: MctbWorkspaceTollFreeInfo | null;
+  /** @deprecated Use workspaceTollFreeNumber — mirrored for backward compatibility. */
   trialNumber?: MctbTrialNumberInfo | null;
   demoSession?: MctbDemoSession | null;
   tfvSubmittedAt?: string | null;

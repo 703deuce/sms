@@ -28,15 +28,18 @@ export async function POST(request: Request) {
   try {
     const payload = await parseBody(request);
     const signature = request.headers.get("x-twilio-signature") || "";
-    if (signature) {
-      const token = getTwilioParentCredentials().authToken;
-      if (
-        token &&
-        !validateTwilioSignature(token, signature, request.url, payload) &&
-        isLiveMessagingAdapter()
-      ) {
+    const token = getTwilioParentCredentials().authToken;
+    const live = isLiveMessagingAdapter();
+
+    if (live) {
+      if (!token) {
+        return new NextResponse("Twilio auth not configured", { status: 500 });
+      }
+      if (!signature || !validateTwilioSignature(token, signature, request.url, payload)) {
         return new NextResponse("Invalid signature", { status: 403 });
       }
+    } else if (signature && token && !validateTwilioSignature(token, signature, request.url, payload)) {
+      return new NextResponse("Invalid signature", { status: 403 });
     }
 
     const result = await handleTwilioTfvWebhook({
@@ -44,7 +47,11 @@ export async function POST(request: Request) {
       status: payload.Status || payload.VerificationStatus,
       externalReferenceId: payload.ExternalReferenceId,
       tollfreePhoneNumberSid: payload.TollfreePhoneNumberSid || payload.PhoneNumberSid,
-      rejectionReason: payload.RejectionReason || payload.EditReason,
+      rejectionReason:
+        payload.RejectionReason ||
+        payload.EditReason ||
+        payload.RejectionReasons ||
+        payload.ErrorMessage,
     });
 
     return NextResponse.json({ ok: true, ...result });

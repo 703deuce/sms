@@ -842,8 +842,8 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       return scanIntegrationHealth(String(payload.workspaceId || ""));
     }
     case "mctb_trial_lifecycle": {
-      const { runMctbTrialLifecycleJobs } = await import("@/lib/mctb/onboarding/trial-hold");
-      return runMctbTrialLifecycleJobs(Number(payload.limit || 50));
+      const { runMctbNumberLifecycleJobs } = await import("@/lib/mctb/onboarding/number-lifecycle");
+      return runMctbNumberLifecycleJobs(Number(payload.limit || 50));
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);

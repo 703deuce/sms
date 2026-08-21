@@ -1,7 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/phone-switch";
 import type { TollFreeVerificationStatus } from "@/lib/messaging/compliance/messaging-compliance";
-import { loadTrialTfvForWorkspace } from "@/lib/mctb/tfv/store";
+import { loadWorkspaceTfvForPhone } from "@/lib/mctb/tfv/store";
+import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "./constants";
 import {
@@ -48,22 +49,24 @@ export async function getTrialNumberStatus(workspaceId: string) {
   const state = await loadMctbOnboardingState(workspaceId);
   const prisma = getPrisma();
 
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
+
   const resolveTfv = async (phoneNumberId: string) => {
-    const record = await loadTrialTfvForWorkspace(workspaceId, phoneNumberId);
+    const record = await loadWorkspaceTfvForPhone(workspaceId, phoneNumberId);
     return record
       ? mapTfvRecordToUiStatus(record.status)
       : ("not_started" as MctbTfvStatus);
   };
 
-  if (state.trialNumber?.e164) {
-    const tfvStatus = await resolveTfv(state.trialNumber.phoneNumberId);
+  if (workspaceNumber?.e164) {
+    const tfvStatus = await resolveTfv(workspaceNumber.phoneNumberId);
     return {
       provisioned: true,
       trialNumber: {
-        ...state.trialNumber,
+        ...workspaceNumber,
         messagingVerificationStatus: tfvStatus,
       },
-      display: formatPhoneDisplay(state.trialNumber.e164),
+      display: formatPhoneDisplay(workspaceNumber.e164),
       voiceStatus: "ready" as const,
       messagingVerificationStatus: tfvStatus,
       tfvStatusLabel: tfvStatusLabel(tfvStatus),
@@ -91,7 +94,7 @@ export async function getTrialNumberStatus(workspaceId: string) {
       messagingVerificationStatus: tfvStatus,
       provisionedAt: new Date().toISOString(),
     };
-    await saveMctbOnboardingState(workspaceId, { trialNumber: info });
+    await saveMctbOnboardingState(workspaceId, withWorkspaceTollFreeNumber(state, info));
     return {
       provisioned: true,
       trialNumber: info,
@@ -192,7 +195,7 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
       messageTemplate: undefined,
     });
 
-    const trialNumber: MctbTrialNumberInfo = {
+    const workspaceTollFree: MctbTrialNumberInfo = {
       e164: phoneRow.e164,
       phoneNumberId: phoneRow.id,
       provider: "twilio",
@@ -202,16 +205,20 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
       provisionedAt: new Date().toISOString(),
     };
 
-    let nextState = await saveMctbOnboardingState(workspaceId, { trialNumber });
+    const state = await loadMctbOnboardingState(workspaceId);
+    let nextState = await saveMctbOnboardingState(
+      workspaceId,
+      withWorkspaceTollFreeNumber(state, workspaceTollFree),
+    );
     nextState = markStepComplete(nextState, "trial_number");
     await saveMctbOnboardingState(workspaceId, nextState);
     await recordFunnelEvent(workspaceId, "MCTB_TRIAL_NUMBER_PROVISIONED", {
-      e164: trialNumber.e164,
-      phoneNumberId: trialNumber.phoneNumberId,
+      e164: workspaceTollFree.e164,
+      phoneNumberId: workspaceTollFree.phoneNumberId,
       provider: "twilio",
     });
 
-    return { ok: true, trialNumber };
+    return { ok: true, trialNumber: workspaceTollFree };
   } catch (err) {
     return {
       ok: false,

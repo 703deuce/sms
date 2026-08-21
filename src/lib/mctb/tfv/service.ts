@@ -1,6 +1,5 @@
 import { getPrisma } from "@/lib/db";
 import { getPlatformDemoNumberE164, isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
-import { mapTfvRecordToUiStatus } from "@/lib/mctb/onboarding/trial-number";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import {
@@ -17,8 +16,9 @@ import {
   findTwilioTfvByExternalReference,
   submitTwilioTollFreeVerification,
 } from "@/lib/messaging/twilio/toll-free-verification";
-import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
-import { loadTfvForPhoneNumber, loadTrialTfvForWorkspace, saveTfvForPhoneNumber } from "./store";
+import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
+import { applyTfvStatusUpdate } from "./state-update";
+import { loadTfvForPhoneNumber, loadWorkspaceTfvForPhone } from "./store";
 
 const DEFAULT_USE_CASE_SUMMARY =
   "When a consumer calls the business and the call is not answered, the consumer may receive one immediate SMS response acknowledging the missed call. No additional automated messages are sent unless the consumer replies.";
@@ -27,16 +27,16 @@ function externalReferenceId(workspaceId: string, phoneNumberId: string): string
   return `mctb-tfv:${workspaceId}:${phoneNumberId}`;
 }
 
-export async function resolveTrialPhoneForTfv(workspaceId: string) {
+export async function resolveWorkspaceTollFreePhoneForTfv(workspaceId: string) {
   const state = await loadMctbOnboardingState(workspaceId);
-  const trialPhoneNumberId = state.trialNumber?.phoneNumberId;
-  if (!trialPhoneNumberId) {
+  const phoneNumberId = getWorkspaceTollFreeNumber(state)?.phoneNumberId;
+  if (!phoneNumberId) {
     throw new Error("Assign your Transovo toll-free number before submitting verification.");
   }
 
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
-    where: { id: trialPhoneNumberId, workspaceId },
+    where: { id: phoneNumberId, workspaceId },
     select: {
       id: true,
       e164: true,
@@ -46,19 +46,22 @@ export async function resolveTrialPhoneForTfv(workspaceId: string) {
       status: true,
     },
   });
-  if (!phone) throw new Error("Trial phone number not found");
+  if (!phone) throw new Error("Workspace toll-free number not found");
   if (isPlatformDemoNumber(phone.e164) || phone.e164 === getPlatformDemoNumberE164()) {
     throw new Error("Platform demo numbers cannot be used for toll-free verification.");
   }
   if (!phone.twilioSid) {
-    throw new Error("Trial toll-free number is missing Twilio phone SID.");
+    throw new Error("Workspace toll-free number is missing Twilio phone SID.");
   }
   const type = String(phone.type || "").toLowerCase();
   if (!type.includes("toll")) {
-    throw new Error("Trial number must be a toll-free number for TFV.");
+    throw new Error("Workspace number must be toll-free for TFV.");
   }
   return phone;
 }
+
+/** @deprecated Use resolveWorkspaceTollFreePhoneForTfv */
+export const resolveTrialPhoneForTfv = resolveWorkspaceTollFreePhoneForTfv;
 
 function mapConsentToOptInType(consentMode: string | null | undefined): "VERBAL" | "WEB_FORM" {
   return consentMode === "existing_consent" ? "WEB_FORM" : "VERBAL";
@@ -66,23 +69,31 @@ function mapConsentToOptInType(consentMode: string | null | undefined): "VERBAL"
 
 export async function getTfvStatusForWorkspace(workspaceId: string) {
   const state = await loadMctbOnboardingState(workspaceId);
-  const trialPhoneNumberId = state.trialNumber?.phoneNumberId;
-  const record = await loadTrialTfvForWorkspace(workspaceId, trialPhoneNumberId);
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
+  const phoneNumberId = workspaceNumber?.phoneNumberId;
+  const record = await loadWorkspaceTfvForPhone(workspaceId, phoneNumberId);
   return {
     record,
     status: record?.status || ("NOT_STARTED" as TollFreeVerificationStatus),
     approved: isTfvApproved(record?.status || "NOT_STARTED"),
-    trialPhoneNumberId,
-    trialE164: state.trialNumber?.e164 || null,
+    phoneNumberId,
+    /** @deprecated use phoneNumberId */
+    trialPhoneNumberId: phoneNumberId,
+    e164: workspaceNumber?.e164 || null,
+    /** @deprecated use e164 */
+    trialE164: workspaceNumber?.e164 || null,
   };
 }
 
-/** True only when the workspace's assigned trial TFN has Twilio TFV APPROVED. */
-export async function isTrialTfvApproved(workspaceId: string): Promise<boolean> {
-  const { approved, trialPhoneNumberId } = await getTfvStatusForWorkspace(workspaceId);
-  if (!trialPhoneNumberId) return false;
+/** True only when the workspace toll-free number has Twilio TFV APPROVED. */
+export async function isWorkspaceTfvApproved(workspaceId: string): Promise<boolean> {
+  const { approved, phoneNumberId } = await getTfvStatusForWorkspace(workspaceId);
+  if (!phoneNumberId) return false;
   return approved;
 }
+
+/** @deprecated Use isWorkspaceTfvApproved */
+export const isTrialTfvApproved = isWorkspaceTfvApproved;
 
 export async function submitTrialTollFreeVerification(workspaceId: string): Promise<{
   ok: boolean;
@@ -91,7 +102,7 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
   deduped?: boolean;
 }> {
   try {
-    const phone = await resolveTrialPhoneForTfv(workspaceId);
+    const phone = await resolveWorkspaceTollFreePhoneForTfv(workspaceId);
     const existing = await loadTfvForPhoneNumber(phone.id);
     if (
       shouldDedupeTfvSubmission({
@@ -163,39 +174,31 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
 
     const mapped = mapTwilioTfvStatus(result.status);
     const now = new Date().toISOString();
-    const record: TollFreeVerificationRecord = {
+    const initialStatus: TollFreeVerificationStatus =
+      mapped === "APPROVED"
+        ? "APPROVED"
+        : mapped === "REJECTED"
+          ? "REJECTED"
+          : mapped === "PENDING"
+            ? "PENDING"
+            : "SUBMITTED";
+
+    const update = await applyTfvStatusUpdate({
+      source: "submit",
       workspaceId,
       phoneNumberId: phone.id,
       phoneE164: phone.e164,
-      provider: "twilio",
-      status: mapped === "APPROVED" ? "APPROVED" : mapped === "REJECTED" ? "REJECTED" : "SUBMITTED",
-      twilioVerificationSid: result.sid,
       externalReferenceId: extRef,
-      submissionSnapshot: submissionPayload,
+      mappedStatus: initialStatus,
+      verificationSid: result.sid,
       providerStatusRaw: result.status,
+      submissionSnapshot: submissionPayload,
       submittedAt: now,
-      approvedAt: mapped === "APPROVED" ? now : null,
-      rejectedAt: mapped === "REJECTED" ? now : null,
-      actionRequiredAt: mapped === "ACTION_REQUIRED" ? now : null,
-      failureReason: null,
-      lastSyncedAt: now,
-    };
+      rejectionReason: null,
+    });
 
-    if (mapped === "PENDING") record.status = "PENDING";
-
-    await saveTfvForPhoneNumber(record);
-
-    const uiStatus = mapTfvRecordToUiStatus(record.status);
     await saveMctbOnboardingState(workspaceId, {
-      tfvSubmittedAt: now,
-      currentStep: mapped === "APPROVED" ? "connect" : "pending",
-      trialNumber: state.trialNumber
-        ? {
-            ...state.trialNumber,
-            messagingVerificationStatus: uiStatus,
-            verificationId: result.sid,
-          }
-        : state.trialNumber,
+      currentStep: update.record.status === "APPROVED" ? "connect" : "pending",
     });
 
     await recordFunnelEvent(workspaceId, "MCTB_TFV_SUBMITTED", {
@@ -203,11 +206,7 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
       phoneNumberId: phone.id,
     });
 
-    if (mapped === "APPROVED") {
-      await applyTfvApproval(workspaceId, record);
-    }
-
-    return { ok: true, record, deduped: Boolean(prior) };
+    return { ok: true, record: update.record, deduped: Boolean(prior) };
   } catch (err) {
     return {
       ok: false,
@@ -222,7 +221,7 @@ export async function syncTrialTollFreeVerification(workspaceId: string): Promis
   error?: string;
 }> {
   try {
-    const phone = await resolveTrialPhoneForTfv(workspaceId);
+    const phone = await resolveWorkspaceTollFreePhoneForTfv(workspaceId);
     const record = await loadTfvForPhoneNumber(phone.id);
     if (!record?.twilioVerificationSid) {
       return { ok: true, record: record || undefined };
@@ -236,78 +235,24 @@ export async function syncTrialTollFreeVerification(workspaceId: string): Promis
       verificationSid: record.twilioVerificationSid,
     });
 
-    const now = new Date().toISOString();
-    const next: TollFreeVerificationRecord = {
-      ...record,
-      status: remote.mapped,
+    const update = await applyTfvStatusUpdate({
+      source: "poll",
+      workspaceId,
+      phoneNumberId: phone.id,
+      phoneE164: phone.e164,
+      externalReferenceId: record.externalReferenceId,
+      mappedStatus: remote.mapped,
+      verificationSid: record.twilioVerificationSid,
       providerStatusRaw: remote.status,
-      lastSyncedAt: now,
-      approvedAt: remote.mapped === "APPROVED" ? record.approvedAt || now : record.approvedAt,
-      rejectedAt: remote.mapped === "REJECTED" ? record.rejectedAt || now : record.rejectedAt,
-      actionRequiredAt:
-        remote.mapped === "ACTION_REQUIRED" ? record.actionRequiredAt || now : record.actionRequiredAt,
-    };
+      rejectionReason: remote.mapped === "REJECTED" ? remote.status : null,
+    });
 
-    await saveTfvForPhoneNumber(next);
-
-    const state = await loadMctbOnboardingState(workspaceId);
-    if (state.trialNumber) {
-      await saveMctbOnboardingState(workspaceId, {
-        trialNumber: {
-          ...state.trialNumber,
-          messagingVerificationStatus: mapTfvRecordToUiStatus(next.status),
-          verificationId: next.twilioVerificationSid,
-        },
-      });
-    }
-
-    if (remote.mapped === "APPROVED") {
-      await applyTfvApproval(workspaceId, next);
-    } else if (remote.mapped === "REJECTED") {
-      await saveMctbOnboardingState(workspaceId, { tfvRejectedAt: now });
-      await recordFunnelEvent(workspaceId, "MCTB_TFV_REJECTED", { reason: remote.status });
-    }
-
-    return { ok: true, record: next };
+    return { ok: true, record: update.record };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "TFV sync failed",
     };
-  }
-}
-
-async function applyTfvApproval(workspaceId: string, record: TollFreeVerificationRecord) {
-  const state = await loadMctbOnboardingState(workspaceId);
-  if (state.trialNumber?.phoneNumberId !== record.phoneNumberId) return;
-
-  const now = new Date().toISOString();
-  await saveMctbOnboardingState(workspaceId, {
-    tfvApprovedAt: now,
-    currentStep: state.currentStep === "pending" ? "connect" : state.currentStep,
-    trialNumber: state.trialNumber
-      ? {
-          ...state.trialNumber,
-          messagingVerificationStatus: "approved",
-          verificationId: record.twilioVerificationSid,
-        }
-      : state.trialNumber,
-  });
-
-  const prisma = getPrisma();
-  await prisma.messagingRegistration.updateMany({
-    where: { workspaceId },
-    data: {
-      registrationApprovedAt: new Date(now),
-      messagingEnabled: true,
-    },
-  });
-
-  if (!state.funnelEvents?.MCTB_TFV_APPROVED) {
-    await recordFunnelEvent(workspaceId, "MCTB_TFV_APPROVED", {
-      verificationSid: record.twilioVerificationSid,
-      phoneNumberId: record.phoneNumberId,
-    });
   }
 }
 
@@ -318,59 +263,62 @@ export async function handleTwilioTfvWebhook(input: {
   tollfreePhoneNumberSid?: string;
   rejectionReason?: string;
 }) {
-  if (!input.verificationSid && !input.externalReferenceId) return { matched: false };
+  if (!input.verificationSid && !input.externalReferenceId) {
+    return { matched: false, reason: "missing_identifiers" };
+  }
 
   const prisma = getPrisma();
-  let phone = input.tollfreePhoneNumberSid
-    ? await prisma.phoneNumber.findFirst({
-        where: { twilioSid: input.tollfreePhoneNumberSid },
-      })
-    : null;
+  let workspaceId: string | null = null;
+  let phoneNumberId: string | null = null;
 
-  if (!phone && input.externalReferenceId?.startsWith("mctb-tfv:")) {
+  if (input.externalReferenceId?.startsWith("mctb-tfv:")) {
     const parts = input.externalReferenceId.split(":");
-    const phoneNumberId = parts[2];
-    const workspaceId = parts[1];
-    if (phoneNumberId && workspaceId) {
-      phone = await prisma.phoneNumber.findFirst({
-        where: { id: phoneNumberId, workspaceId },
-      });
-    }
+    workspaceId = parts[1] || null;
+    phoneNumberId = parts[2] || null;
   }
 
-  if (!phone) return { matched: false };
+  if (!workspaceId || !phoneNumberId) {
+    return { matched: false, reason: "invalid_external_reference" };
+  }
+
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId, workspaceId },
+  });
+  if (!phone) return { matched: false, reason: "phone_not_found" };
+
+  if (
+    input.tollfreePhoneNumberSid &&
+    phone.twilioSid &&
+    input.tollfreePhoneNumberSid !== phone.twilioSid
+  ) {
+    return { matched: false, reason: "phone_sid_mismatch" };
+  }
+
+  const state = await loadMctbOnboardingState(workspaceId);
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
+  if (workspaceNumber?.phoneNumberId && workspaceNumber.phoneNumberId !== phone.id) {
+    return { matched: false, reason: "not_workspace_primary_number" };
+  }
 
   const mapped = mapTwilioTfvStatus(input.status);
-  const now = new Date().toISOString();
-  const existing = await loadTfvForPhoneNumber(phone.id);
-  const record: TollFreeVerificationRecord = {
-    workspaceId: phone.workspaceId,
+  const update = await applyTfvStatusUpdate({
+    source: "webhook",
+    workspaceId,
     phoneNumberId: phone.id,
     phoneE164: phone.e164,
-    provider: "twilio",
-    status: mapped,
-    twilioVerificationSid: input.verificationSid || existing?.twilioVerificationSid,
-    externalReferenceId: existing?.externalReferenceId || externalReferenceId(phone.workspaceId, phone.id),
-    submissionSnapshot: existing?.submissionSnapshot,
+    externalReferenceId: externalReferenceId(workspaceId, phone.id),
+    mappedStatus: mapped,
+    verificationSid: input.verificationSid,
     providerStatusRaw: input.status || null,
-    submittedAt: existing?.submittedAt || now,
-    approvedAt: mapped === "APPROVED" ? now : existing?.approvedAt,
-    rejectedAt: mapped === "REJECTED" ? now : existing?.rejectedAt,
-    actionRequiredAt: mapped === "ACTION_REQUIRED" ? now : existing?.actionRequiredAt,
-    failureReason: input.rejectionReason || existing?.failureReason,
-    lastSyncedAt: now,
+    rejectionReason: input.rejectionReason || null,
+  });
+
+  return {
+    matched: true,
+    workspaceId,
+    status: update.record.status,
+    applied: update.applied,
+    skipped: update.skipped,
+    statusChanged: update.statusChanged,
   };
-
-  await saveTfvForPhoneNumber(record);
-
-  if (mapped === "APPROVED") {
-    await applyTfvApproval(phone.workspaceId, record);
-  } else if (mapped === "REJECTED") {
-    await saveMctbOnboardingState(phone.workspaceId, { tfvRejectedAt: now });
-    await recordFunnelEvent(phone.workspaceId, "MCTB_TFV_REJECTED", {
-      reason: input.rejectionReason || input.status,
-    });
-  }
-
-  return { matched: true, workspaceId: phone.workspaceId, status: mapped };
 }

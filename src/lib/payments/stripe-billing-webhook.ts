@@ -8,6 +8,8 @@ import {
   resolveMarketplaceTransactionType,
 } from "@/lib/payments/stripe-marketplace-metadata";
 
+const PAID_MCTB_PLANS = new Set(["growth", "pro", "enterprise", "starter", "business", "scale"]);
+
 export async function updateWorkspacePlanFromSubscription(subscription: Stripe.Subscription) {
   const metadata = (subscription.metadata || {}) as Record<string, string>;
   if (isMarketplaceSubscriptionMetadata(metadata)) {
@@ -49,12 +51,15 @@ export async function updateWorkspacePlanFromSubscription(subscription: Stripe.S
     },
   });
 
-  if (
-    (billingPlan === "canceled" || billingPlan === "suspended") &&
+  const lifecycle = await import("@/lib/mctb/onboarding/number-lifecycle");
+
+  if (active && PAID_MCTB_PLANS.has(billingPlan)) {
+    await lifecycle.retainWorkspaceTollFreeOnPaidConversion(workspace.id).catch(() => undefined);
+  } else if (
+    (billingPlan === "canceled" || billingPlan === "suspended" || billingPlan === "expired") &&
     (previousPlan === "trial" || previousPlan === "trial_pending_card")
   ) {
-    const { markTrialEnded } = await import("@/lib/mctb/onboarding/trial-hold");
-    await markTrialEnded(workspace.id).catch(() => undefined);
+    await lifecycle.markMctbTrialEndedWithoutPayment(workspace.id).catch(() => undefined);
   }
 }
 
@@ -102,6 +107,10 @@ export async function handleBillingCheckoutSessionCompleted(session: Stripe.Chec
         billingPlan: metadata.plan || "growth",
       },
     });
+    const { retainWorkspaceTollFreeOnPaidConversion } = await import(
+      "@/lib/mctb/onboarding/number-lifecycle"
+    );
+    await retainWorkspaceTollFreeOnPaidConversion(metadata.workspaceId).catch(() => undefined);
   }
 }
 

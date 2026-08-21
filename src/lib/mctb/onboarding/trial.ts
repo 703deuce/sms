@@ -3,6 +3,7 @@ import { getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
+import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { evaluateTrialActivationGates } from "./trial-gates";
 import { MCTB_ONBOARDING_STEP_ORDER } from "./types";
 
@@ -25,12 +26,13 @@ export async function getTrialActivationRequirements(
   workspaceId: string,
 ): Promise<TrialActivationRequirements> {
   const state = await loadMctbOnboardingState(workspaceId);
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
   const tfv = await getTfvStatusForWorkspace(workspaceId);
 
   const gate = evaluateTrialActivationGates({
-    trialPhoneE164: state.trialNumber?.e164 || null,
-    trialPhoneNumberId: state.trialNumber?.phoneNumberId || null,
-    tfvPhoneNumberId: tfv.trialPhoneNumberId ?? null,
+    trialPhoneE164: workspaceNumber?.e164 || null,
+    trialPhoneNumberId: workspaceNumber?.phoneNumberId || null,
+    tfvPhoneNumberId: tfv.phoneNumberId ?? null,
     tfvStatus: tfv.status,
     forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
     liveTestPassed: Boolean(state.liveTestPassedAt),
@@ -67,11 +69,12 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
   }
 
   const state = await loadMctbOnboardingState(workspaceId);
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
   const tfv = await getTfvStatusForWorkspace(workspaceId);
   const gate = evaluateTrialActivationGates({
-    trialPhoneE164: state.trialNumber?.e164 || null,
-    trialPhoneNumberId: state.trialNumber?.phoneNumberId || null,
-    tfvPhoneNumberId: tfv.trialPhoneNumberId ?? null,
+    trialPhoneE164: workspaceNumber?.e164 || null,
+    trialPhoneNumberId: workspaceNumber?.phoneNumberId || null,
+    tfvPhoneNumberId: tfv.phoneNumberId ?? null,
     tfvStatus: tfv.status,
     forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
     liveTestPassed: Boolean(state.liveTestPassedAt),

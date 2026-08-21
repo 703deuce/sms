@@ -99,12 +99,15 @@ export async function saveTfvForPhoneNumber(
   return record;
 }
 
-export async function loadTrialTfvForWorkspace(
+export async function loadWorkspaceTfvForPhone(
   workspaceId: string,
-  trialPhoneNumberId: string | null | undefined,
+  phoneNumberId: string | null | undefined,
 ): Promise<TollFreeVerificationRecord | null> {
-  if (!trialPhoneNumberId) return null;
-  const record = await loadTfvForPhoneNumber(trialPhoneNumberId);
+  if (!phoneNumberId) return null;
+  const record = await loadTfvForPhoneNumber(phoneNumberId);
   if (!record || record.workspaceId !== workspaceId) return null;
   return record;
 }
+
+/** @deprecated Use loadWorkspaceTfvForPhone */
+export const loadTrialTfvForWorkspace = loadWorkspaceTfvForPhone;
