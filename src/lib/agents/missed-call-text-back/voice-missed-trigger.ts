@@ -71,8 +71,21 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
   const targetWorkspaceId = demoWorkspaceId || call.workspaceId;
   const isDemo = Boolean(demoWorkspaceId);
 
-  if (!isDemo && (await activeSmartRoutingOnNumber(call.workspaceId, call.phoneNumberId))) {
-    return { triggered: false, reason: "smart_routing_active" };
+  if (!isDemo) {
+    const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
+    const consentMode = await loadMctbConsentMode(targetWorkspaceId);
+    const smartRouting = await activeSmartRoutingOnNumber(call.workspaceId, call.phoneNumberId);
+
+    if (consentMode === "press_1") {
+      if (smartRouting) {
+        return { triggered: false, reason: "smart_routing_active" };
+      }
+      return { triggered: false, reason: "consent_prompt_not_published" };
+    }
+
+    if (smartRouting) {
+      return { triggered: false, reason: "smart_routing_active" };
+    }
   }
 
   const config = await loadMissedCallTextConfig(targetWorkspaceId);

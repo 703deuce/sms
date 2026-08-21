@@ -1,0 +1,223 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { GreetingVoicePicker } from "@/components/smart-routing/greeting-voice-picker";
+import { cn } from "@/lib/utils";
+import { Loader2, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+type ConsentPromptStatus = {
+  config: {
+    scriptText: string;
+    voiceId: string;
+    speed: number;
+    audioAssetId: string | null;
+    audioStatus: "none" | "ready" | "stale";
+    publishedAt: string | null;
+    lastGeneratedAt: string | null;
+  };
+  isPublished: boolean;
+  canPublish: boolean;
+  publishBlockReason: string | null;
+  playbackUrl: string | null;
+};
+
+type Props = {
+  disabled?: boolean;
+};
+
+export function MctbConsentPromptEditor({ disabled = false }: Props) {
+  const [status, setStatus] = useState<ConsentPromptStatus | null>(null);
+  const [scriptText, setScriptText] = useState("");
+  const [voiceId, setVoiceId] = useState("");
+  const [speed] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/mctb/consent-prompt", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to load consent prompt");
+      const data = json.data as ConsentPromptStatus;
+      setStatus(data);
+      setScriptText(data.config.scriptText);
+      setVoiceId(data.config.voiceId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function saveDraft() {
+    setBusy("save");
+    setError(null);
+    try {
+      const res = await fetch("/api/mctb/consent-prompt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scriptText, voiceId, speed }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function generateAudio() {
+    setBusy("generate");
+    setError(null);
+    try {
+      await saveDraft();
+      const res = await fetch("/api/mctb/consent-prompt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "generate", scriptText, voiceId, speed }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Audio generation failed");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publish() {
+    setBusy("publish");
+    setError(null);
+    try {
+      const res = await fetch("/api/mctb/consent-prompt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "publish" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Publish failed");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Publish failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading consent prompt…
+      </div>
+    );
+  }
+
+  const audioStatus = status?.config.audioStatus || "none";
+  const stale = audioStatus === "stale";
+
+  return (
+    <div className="space-y-4 rounded-xl border border-[#e5e7eb] bg-[#fafafa] p-4">
+      <div>
+        <p className="text-[14px] font-semibold text-[#111827]">What callers will hear</p>
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          Write your Press-1 disclosure. We generate static audio once — live calls play the saved
+          recording (no runtime text-to-speech).
+        </p>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-[12px] font-semibold text-[#374151]">Spoken consent script</span>
+        <textarea
+          className="min-h-[110px] w-full rounded-lg border border-[#D1D5DB] bg-white px-3 py-2 text-[14px]"
+          value={scriptText}
+          disabled={disabled}
+          onChange={(e) => setScriptText(e.target.value)}
+          onBlur={() => void saveDraft()}
+        />
+      </label>
+
+      <div>
+        <p className="mb-2 text-[12px] font-semibold text-[#374151]">Voice</p>
+        <GreetingVoicePicker
+          value={voiceId}
+          previewText={scriptText}
+          speed={speed}
+          onChange={setVoiceId}
+          onVoiceChange={() => void saveDraft()}
+        />
+      </div>
+
+      {stale ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+          Script or voice changed — regenerate audio before publishing.
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled || busy !== null}
+          onClick={() => void generateAudio()}
+        >
+          {busy === "generate" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Generate audio
+        </Button>
+        {status?.playbackUrl ? (
+          <a
+            href={status.playbackUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-[13px] font-medium",
+              disabled && "pointer-events-none opacity-50",
+            )}
+          >
+            <Volume2 className="h-4 w-4" />
+            Preview
+          </a>
+        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          disabled={disabled || busy !== null || !status?.canPublish}
+          onClick={() => void publish()}
+        >
+          {busy === "publish" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Publish for live calls
+        </Button>
+      </div>
+
+      <div className="grid gap-2 text-[12px] text-[#4b5563] sm:grid-cols-2">
+        <div className="rounded-lg border bg-white p-3">
+          <p className="font-semibold text-[#111827]">When caller presses 1</p>
+          <p className="mt-1">✓ Send missed-call recovery text</p>
+        </div>
+        <div className="rounded-lg border bg-white p-3">
+          <p className="font-semibold text-[#111827]">No response / wrong key</p>
+          <p className="mt-1">No text is sent</p>
+        </div>
+      </div>
+
+      <p className="text-[12px] text-muted-foreground">
+        {status?.isPublished
+          ? `Published audio active${status.config.publishedAt ? ` · ${new Date(status.config.publishedAt).toLocaleString()}` : ""}`
+          : status?.publishBlockReason || "Generate and publish audio before Verified Consent goes live."}
+      </p>
+
+      {error ? <p className="text-[12px] text-red-600">{error}</p> : null}
+    </div>
+  );
+}

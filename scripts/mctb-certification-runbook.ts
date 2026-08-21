@@ -74,9 +74,21 @@ export const CERTIFICATION_PASSES: Record<
   3: {
     title: "Pass 3 — Real Messaging Certification",
     goal: "Prove both consent modes, SMS lifecycle, STOP/START, idempotency, and owner notifications.",
-    matrixIds: ["E-01", "E-03", "F-03", "M-03", "M-04", "X-05"],
+    matrixIds: [
+      "E-01",
+      "E-03",
+      "F-03",
+      "M-03",
+      "M-04",
+      "X-05",
+      "CP-11",
+      "CP-12",
+      "CP-13",
+      "CP-17",
+    ],
     checklist: [
-      "Press-1 path: missed → consent prompt → Press 1 → SMS → verify consent audit record.",
+      "Press-1 path: publish consent audio in Setup → missed → consent prompt plays → Press 1 → SMS.",
+      "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion.",
       "Negative: no key, Press 2, hangup, double Press 1, repeat call inside cooldown.",
       "Existing Consent path: fresh workspace → attestation → no Press-1 → missed → immediate SMS.",
       "Confirm consentMode = existing_consent in DB and TFV payload used Existing Consent copy.",

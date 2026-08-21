@@ -484,7 +484,12 @@ export async function handleTwilioGatherCallback(sessionId: string, digit: strin
         businessNumber: session.calledNumber,
         callSessionId: sessionId,
         affirmativeInput: d,
-        promptAssetId: String(node.config.promptAssetId ?? ""),
+        promptAssetId: String(node.config.promptAssetId ?? node.config.audioAssetId ?? ""),
+        promptVersion: String(node.config.promptVersion ?? ""),
+        metadata: {
+          promptScriptHash: node.config.promptScriptHash ?? null,
+          promptText: node.config.promptText ?? null,
+        },
       });
       if (!duplicate && !session.isTest) {
         await triggerMissedCallTextFromConsent({

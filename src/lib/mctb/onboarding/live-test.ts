@@ -127,10 +127,20 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     }
   }
 
-  const consentCompleted =
-    state.consentMode === "existing_consent" ||
-    Boolean(session?.consentCompletedAt) ||
-    missedCall;
+  let consentCompleted = state.consentMode === "existing_consent";
+  if (!consentCompleted && state.consentMode === "press_1") {
+    const consentEvent = await prisma.smartRoutingSmsConsentEvent.findFirst({
+      where: {
+        workspaceId,
+        callerNumber: event.callerE164,
+        consentedAt: { gte: since },
+      },
+      orderBy: { consentedAt: "desc" },
+    });
+    consentCompleted = Boolean(consentEvent || session?.consentCompletedAt);
+  } else if (!consentCompleted) {
+    consentCompleted = Boolean(session?.consentCompletedAt);
+  }
 
   const passed = missedCall && textSent && consentCompleted;
 

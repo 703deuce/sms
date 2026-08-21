@@ -251,17 +251,29 @@ export async function executeNode(input: {
       }
       case "SMS_CONSENT": {
         const digit = String(node.config.consentDigit ?? "1");
+        const { resolvePromptPlayback } = await import("./prompt-playback");
+        const playback = await resolvePromptPlayback(session.workspaceId, node.config);
         const prompt = String(
           node.config.promptText ??
             "Sorry we missed your call. Press 1 and we'll text you now.",
         );
-        await gatherUsingSpeak({
-          callControlId: controlId,
-          text: prompt,
-          validDigits: digit,
-          clientState: { ...clientBase, awaiting: "sms_consent" },
-          sessionId: input.sessionId,
-        });
+        if (playback.playUrl) {
+          await gatherUsingAudio({
+            callControlId: controlId,
+            audioUrl: playback.playUrl,
+            validDigits: digit,
+            clientState: { ...clientBase, awaiting: "sms_consent" },
+            sessionId: input.sessionId,
+          });
+        } else {
+          await gatherUsingSpeak({
+            callControlId: controlId,
+            text: playback.sayText || prompt,
+            validDigits: digit,
+            clientState: { ...clientBase, awaiting: "sms_consent" },
+            sessionId: input.sessionId,
+          });
+        }
         await updateSessionState(input.sessionId, {
           currentNodeId: node.id,
           stateJson: { ...state, awaitingEvent: "sms_consent" },
@@ -422,7 +434,12 @@ export async function handleGatherResult(input: {
         businessNumber: session.calledNumber,
         callSessionId: input.sessionId,
         affirmativeInput: digit,
-        promptAssetId: String(node.config.promptAssetId ?? ""),
+        promptAssetId: String(node.config.promptAssetId ?? node.config.audioAssetId ?? ""),
+        promptVersion: String(node.config.promptVersion ?? ""),
+        metadata: {
+          promptScriptHash: node.config.promptScriptHash ?? null,
+          promptText: node.config.promptText ?? null,
+        },
       });
       if (!duplicate && !session.isTest) {
         await triggerMissedCallTextFromConsent({

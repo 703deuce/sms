@@ -218,6 +218,11 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
       provider: "twilio",
     });
 
+    const { initMctbConsentPromptForWorkspace } = await import(
+      "@/lib/mctb/consent-prompt/service"
+    );
+    await initMctbConsentPromptForWorkspace(workspaceId).catch(() => undefined);
+
     return { ok: true, trialNumber: workspaceTollFree };
   } catch (err) {
     return {

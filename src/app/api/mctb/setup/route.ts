@@ -240,6 +240,11 @@ export async function POST(req: Request) {
         },
       },
     });
+
+    if (body.consentMode) {
+      const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
+      await syncMctbConsentRouting(workspaceId, session.userId).catch(() => undefined);
+    }
   }
 
   return NextResponse.json({

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
 
 type PhoneOption = {
   id: string;
@@ -326,6 +327,19 @@ export function MctbSetupView() {
                 </button>
               ))}
             </div>
+
+            {consentMode === "press_1" ? (
+              <MctbConsentPromptEditor />
+            ) : (
+              <div className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-4 text-[12px] text-[#4b5563]">
+                <p className="font-semibold text-[#111827]">Existing Consent selected</p>
+                <p className="mt-1">
+                  No Press-1 voice prompt is played on missed calls. You certify that callers already
+                  have permission to receive your recovery texts.
+                </p>
+              </div>
+            )}
+
             <div className="rounded-lg bg-[#f9fafb] p-3 text-[12px] text-[#4b5563]">
               <p className="font-semibold text-[#111827]">Messaging use case (for toll-free verification)</p>
               <p className="mt-1">{data?.prefills.campaignDescription}</p>
