@@ -13,7 +13,7 @@ export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
     label: "Verizon",
     steps: [
       "Open the My Verizon app or dial *72 from your business phone.",
-      "Enter your Transovo forwarding number when prompted.",
+      "Enter your Transovo forwarding number (YOUR_TRANSOVO_NUMBER) when prompted.",
       "Choose conditional forwarding (forward when busy / no answer).",
       "Save and test by calling your business line without answering.",
     ],

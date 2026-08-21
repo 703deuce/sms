@@ -2,7 +2,9 @@ import { getPrisma } from "@/lib/db";
 import { getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
+import { deriveTfvStatus } from "./trial-number";
 import type { MctbOnboardingState } from "./types";
+import { MCTB_ONBOARDING_STEP_ORDER } from "./types";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -11,8 +13,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 export type TrialActivationRequirements = {
-  complianceApproved: boolean;
-  numberConnected: boolean;
+  tfvApproved: boolean;
+  forwardingConnected: boolean;
   liveTestPassed: boolean;
   missing: string[];
 };
@@ -21,36 +23,44 @@ export async function getTrialActivationRequirements(
   workspaceId: string,
 ): Promise<TrialActivationRequirements> {
   const prisma = getPrisma();
-  const [state, reg, phoneCount] = await Promise.all([
-    loadMctbOnboardingState(workspaceId),
+  const state = await loadMctbOnboardingState(workspaceId);
+  const trialPhoneNumberId = state.trialNumber?.phoneNumberId;
+
+  const [reg, trialPn] = await Promise.all([
     prisma.messagingRegistration.findUnique({ where: { workspaceId } }),
-    prisma.phoneNumber.count({
-      where: { workspaceId, status: { not: "Released" } },
-    }),
+    trialPhoneNumberId
+      ? prisma.phoneNumber.findFirst({
+          where: { id: trialPhoneNumberId, workspaceId },
+          select: { a2pStatus: true, e164: true },
+        })
+      : null,
   ]);
 
-  const brandOk = ["APPROVED", "VERIFIED"].includes(
-    String(reg?.brandStatus || "").toUpperCase(),
+  const tfvStatus = deriveTfvStatus({
+    a2pStatus: trialPn?.a2pStatus,
+    numberStatus: reg?.numberStatus,
+    overallStatus: reg?.overallStatus,
+    registrationSubmittedAt: reg?.registrationSubmittedAt,
+    registrationApprovedAt: reg?.registrationApprovedAt,
+    registrationFailureReason: reg?.registrationFailureReason,
+  });
+
+  const tfvApproved = Boolean(
+    state.tfvApprovedAt || tfvStatus === "approved",
   );
-  const campaignOk = ["APPROVED", "VERIFIED"].includes(
-    String(reg?.campaignStatus || "").toUpperCase(),
-  );
-  const complianceApproved = Boolean(
-    state.complianceApprovedAt || (brandOk && campaignOk && reg?.registrationApprovedAt),
-  );
-  const numberConnected = Boolean(
-    state.forwardingConnectedAt || state.businessNumberE164 || phoneCount > 0,
+  const forwardingConnected = Boolean(
+    state.forwardingConnectedAt && state.businessNumberE164,
   );
   const liveTestPassed = Boolean(state.liveTestPassedAt);
 
   const missing: string[] = [];
-  if (!complianceApproved) missing.push("compliance_approved");
-  if (!numberConnected) missing.push("number_connected");
+  if (!tfvApproved) missing.push("tfv_approved");
+  if (!forwardingConnected) missing.push("forwarding_connected");
   if (!liveTestPassed) missing.push("live_test_passed");
 
   return {
-    complianceApproved,
-    numberConnected,
+    tfvApproved,
+    forwardingConnected,
     liveTestPassed,
     missing,
   };
@@ -128,19 +138,9 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
   await saveMctbOnboardingState(workspaceId, {
     trialActivatedAt: startedAt.toISOString(),
     currentStep: "complete",
-    completedSteps: [
-      "business",
-      "configure",
-      "consent",
-      "demo",
-      "compliance",
-      "pending",
-      "connect",
-      "live_test",
-      "complete",
-    ] as MctbOnboardingState["completedSteps"],
+    completedSteps: [...MCTB_ONBOARDING_STEP_ORDER],
   });
-  await recordFunnelEvent(workspaceId, "trial_activated", {
+  await recordFunnelEvent(workspaceId, "MCTB_TRIAL_ACTIVATED", {
     trialStartedAt: startedAt.toISOString(),
     trialEndsAt: endsAt.toISOString(),
   });

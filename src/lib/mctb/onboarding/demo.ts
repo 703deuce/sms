@@ -103,7 +103,7 @@ export async function startDemoSession(input: {
     demoSession: session,
     currentStep: "demo",
   });
-  await recordFunnelEvent(input.workspaceId, "demo_started", {
+  await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_STARTED", {
     demoNumberE164,
     callerE164: caller,
   });
@@ -127,7 +127,7 @@ export async function recordDemoCallDetected(input: {
       missedCallEventId: input.missedCallEventId || session.missedCallEventId,
     },
   });
-  await recordFunnelEvent(input.workspaceId, "demo_call_detected", {
+  await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_CALL_DETECTED", {
     missedCallEventId: input.missedCallEventId,
   });
 }
@@ -147,10 +147,11 @@ export async function recordDemoTextSent(workspaceId: string): Promise<void> {
     completedSteps: (state.completedSteps.includes("demo")
       ? state.completedSteps
       : [...state.completedSteps, "demo"]) as MctbOnboardingState["completedSteps"],
-    currentStep: state.currentStep === "demo" ? ("compliance" as const) : state.currentStep,
+    currentStep: state.currentStep === "demo" ? ("tfv" as const) : state.currentStep,
   };
   await saveMctbOnboardingState(workspaceId, nextState);
-  await recordFunnelEvent(workspaceId, "demo_text_sent");
+  await recordFunnelEvent(workspaceId, "MCTB_DEMO_TEXT_SENT");
+  await recordFunnelEvent(workspaceId, "MCTB_DEMO_COMPLETED").catch(() => undefined);
 }
 
 export async function recordDemoReplyReceived(workspaceId: string): Promise<void> {
@@ -170,9 +171,10 @@ export async function recordDemoReplyReceived(workspaceId: string): Promise<void
     completedSteps: state.completedSteps.includes("demo")
       ? state.completedSteps
       : [...state.completedSteps, "demo"],
-    currentStep: state.currentStep === "demo" ? "compliance" : state.currentStep,
+    currentStep: state.currentStep === "demo" ? "tfv" : state.currentStep,
   });
-  await recordFunnelEvent(workspaceId, "demo_reply_received");
+  await recordFunnelEvent(workspaceId, "MCTB_DEMO_REPLY_RECEIVED");
+  await recordFunnelEvent(workspaceId, "MCTB_DEMO_COMPLETED");
 }
 
 export function getDemoMessageBody(): string {
@@ -205,7 +207,8 @@ export async function getDemoStatus(workspaceId: string) {
     demoNumberDisplay: formatDemoPhoneDisplay(demoNumberE164),
     session,
     checks: {
-      missedCallDetected: Boolean(session?.callDetectedAt),
+      callDetected: Boolean(session?.callDetectedAt),
+      missedCall: Boolean(session?.callDetectedAt),
       textDelivered: Boolean(session?.textSentAt),
       replyReceived: Boolean(session?.replyReceivedAt),
     },

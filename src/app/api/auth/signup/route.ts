@@ -196,6 +196,13 @@ export async function POST(request: Request) {
     );
     await updateProductIntent(user.id, productIntent);
 
+    if (workspaceType === "BUSINESS" && productIntent === "voice") {
+      const { recordFunnelEvent } = await import("@/lib/mctb/onboarding/state");
+      await recordFunnelEvent(workspace.id, "MCTB_SIGNUP_COMPLETED", {
+        product: "mctb",
+      }).catch(() => undefined);
+    }
+
     const access = await getUserProductAccess(user.id);
 
     const session = {

@@ -1,15 +1,35 @@
 export type MctbOnboardingStep =
   | "business"
+  | "trial_number"
   | "configure"
   | "consent"
   | "demo"
-  | "compliance"
+  | "tfv"
   | "pending"
   | "connect"
   | "live_test"
   | "complete";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
+
+export type MctbTfvStatus =
+  | "not_started"
+  | "submitted"
+  | "in_review"
+  | "approved"
+  | "action_required"
+  | "rejected";
+
+export type MctbTrialNumberInfo = {
+  e164: string;
+  phoneNumberId: string;
+  provider: "twilio";
+  numberType: "toll_free";
+  voiceStatus: "ready" | "pending";
+  messagingVerificationStatus: MctbTfvStatus;
+  verificationId?: string | null;
+  provisionedAt: string;
+};
 
 export type MctbDemoSessionStatus =
   | "idle"
@@ -23,12 +43,25 @@ export type MctbDemoSessionStatus =
 export type MctbDemoSession = {
   status: MctbDemoSessionStatus;
   callerE164: string;
+  /** Platform-owned pre-approved demo number — NOT the customer's trial TFN. */
   demoNumberE164: string;
   startedAt: string;
   callDetectedAt?: string | null;
   textSentAt?: string | null;
   replyReceivedAt?: string | null;
   completedAt?: string | null;
+  missedCallEventId?: string | null;
+};
+
+export type MctbLiveTestSession = {
+  startedAt: string;
+  businessNumberE164?: string | null;
+  callDetectedAt?: string | null;
+  missedCallAt?: string | null;
+  consentCompletedAt?: string | null;
+  textSentAt?: string | null;
+  replyReceivedAt?: string | null;
+  passedAt?: string | null;
   missedCallEventId?: string | null;
 };
 
@@ -43,20 +76,26 @@ export type MctbForwardingCarrier =
   | "other";
 
 export type MctbOnboardingState = {
-  version: 1;
+  version: 2;
   currentStep: MctbOnboardingStep;
   completedSteps: MctbOnboardingStep[];
   startedAt: string;
   businessName?: string | null;
+  websiteUrl?: string | null;
   industry?: string | null;
   messageTemplate?: string | null;
   consentMode?: MctbConsentMode | null;
+  /** Customer's assigned Twilio toll-free trial number (workspace-owned). */
+  trialNumber?: MctbTrialNumberInfo | null;
   demoSession?: MctbDemoSession | null;
-  complianceSubmittedAt?: string | null;
-  complianceApprovedAt?: string | null;
+  tfvSubmittedAt?: string | null;
+  tfvApprovedAt?: string | null;
+  tfvRejectedAt?: string | null;
   forwardingCarrier?: MctbForwardingCarrier | null;
+  /** Customer's advertised business line (forwards to trial TFN). */
   businessNumberE164?: string | null;
   forwardingConnectedAt?: string | null;
+  liveTestSession?: MctbLiveTestSession | null;
   liveTestPassedAt?: string | null;
   trialActivatedAt?: string | null;
   funnelEvents?: Record<string, string>;
@@ -64,10 +103,11 @@ export type MctbOnboardingState = {
 
 export const MCTB_ONBOARDING_STEP_ORDER: MctbOnboardingStep[] = [
   "business",
+  "trial_number",
   "configure",
   "consent",
   "demo",
-  "compliance",
+  "tfv",
   "pending",
   "connect",
   "live_test",
@@ -76,12 +116,13 @@ export const MCTB_ONBOARDING_STEP_ORDER: MctbOnboardingStep[] = [
 
 export const MCTB_ONBOARDING_STEP_LABELS: Record<MctbOnboardingStep, string> = {
   business: "Business info",
-  configure: "Missed-call text",
+  trial_number: "Your Transovo number",
+  configure: "Text-back message",
   consent: "Consent method",
-  demo: "See it work",
-  compliance: "Business verification",
+  demo: "See how it works",
+  tfv: "Toll-free verification",
   pending: "Verification pending",
-  connect: "Connect your number",
+  connect: "Connect your business line",
   live_test: "Live test",
   complete: "Trial active",
 };

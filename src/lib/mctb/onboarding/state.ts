@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { emitPlatformEvent } from "@/lib/platform/events";
+import type { MctbFunnelEventKey } from "./funnel";
 import {
   DEFAULT_ONBOARDING_MESSAGE,
   type MctbOnboardingState,
@@ -13,17 +14,28 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+const LEGACY_STEP_MAP: Record<string, MctbOnboardingStep> = {
+  compliance: "tfv",
+};
+
 export function defaultMctbOnboardingState(): MctbOnboardingState {
   return {
-    version: 1,
+    version: 2,
     currentStep: "business",
     completedSteps: [],
     startedAt: new Date().toISOString(),
     messageTemplate: DEFAULT_ONBOARDING_MESSAGE,
     consentMode: "press_1",
+    trialNumber: null,
     demoSession: null,
+    liveTestSession: null,
     funnelEvents: {},
   };
+}
+
+function normalizeStep(step: unknown): MctbOnboardingStep {
+  const raw = String(step || "business");
+  return LEGACY_STEP_MAP[raw] || (raw as MctbOnboardingStep);
 }
 
 export function parseMctbOnboardingState(raw: unknown): MctbOnboardingState {
@@ -32,14 +44,24 @@ export function parseMctbOnboardingState(raw: unknown): MctbOnboardingState {
   return {
     ...defaultMctbOnboardingState(),
     ...(stored as unknown as MctbOnboardingState),
-    version: 1,
+    version: 2,
+    currentStep: normalizeStep(stored.currentStep),
     completedSteps: Array.isArray(stored.completedSteps)
-      ? (stored.completedSteps as MctbOnboardingStep[])
+      ? (stored.completedSteps as string[]).map(normalizeStep)
       : [],
     funnelEvents:
       stored.funnelEvents && typeof stored.funnelEvents === "object"
         ? (stored.funnelEvents as Record<string, string>)
         : {},
+    // Migrate legacy compliance timestamps
+    tfvSubmittedAt:
+      (stored.tfvSubmittedAt as string) ||
+      (stored.complianceSubmittedAt as string) ||
+      null,
+    tfvApprovedAt:
+      (stored.tfvApprovedAt as string) ||
+      (stored.complianceApprovedAt as string) ||
+      null,
   };
 }
 
@@ -102,7 +124,7 @@ export function markStepComplete(
 
 export async function recordFunnelEvent(
   workspaceId: string,
-  eventKey: string,
+  eventKey: MctbFunnelEventKey,
   payload?: Record<string, unknown>,
 ): Promise<MctbOnboardingState> {
   const state = await loadMctbOnboardingState(workspaceId);
@@ -117,9 +139,9 @@ export async function recordFunnelEvent(
 
   await emitPlatformEvent({
     workspaceId,
-    type: `MCTB_ONBOARDING_${eventKey.toUpperCase()}`,
-    payload: { eventKey, ...(payload || {}) },
-    idempotencyKey: `mctb-onboarding:${workspaceId}:${eventKey}`,
+    type: eventKey,
+    payload: { ...(payload || {}) },
+    idempotencyKey: `mctb-funnel:${workspaceId}:${eventKey}`,
   }).catch(() => undefined);
 
   return next;

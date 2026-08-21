@@ -10,6 +10,7 @@ import type {
   MctbForwardingCarrier,
   MctbOnboardingState,
   MctbOnboardingStep,
+  MctbTfvStatus,
 } from "@/lib/mctb/onboarding/types";
 import {
   CheckCircle2,
@@ -29,30 +30,44 @@ type OnboardingPayload = {
   steps: MctbOnboardingStep[];
   stepLabels: Record<MctbOnboardingStep, string>;
   demo: {
-    configured: boolean;
-    demoNumberE164: string | null;
     demoNumberDisplay: string | null;
+    label?: string;
+    description?: string;
     checks: {
-      missedCallDetected: boolean;
+      callDetected: boolean;
+      missedCall: boolean;
       textDelivered: boolean;
       replyReceived: boolean;
     };
     completed: boolean;
-    expired: boolean;
   };
-  compliance: {
-    requiredActions: string[];
-    brandStatus: string;
-    campaignStatus: string;
-    approved: boolean;
+  trialNumber: {
+    provisioned: boolean;
+    display: string | null;
+    voiceStatus: string | null;
+    messagingVerificationStatus: MctbTfvStatus;
+    tfvStatusLabel: string;
+  };
+  liveTest: {
+    started: boolean;
+    passed: boolean;
+    checks: {
+      callDetected: boolean;
+      missedCall: boolean;
+      consentCompleted: boolean;
+      textSent: boolean;
+      textDelivered: boolean;
+      replyReceived: boolean;
+    };
+    trialNumberE164: string | null;
+    businessNumberE164: string | null;
+  };
+  tfv: {
+    status: MctbTfvStatus;
+    statusLabel: string;
+    approvedAt?: string | null;
   };
   carriers: CarrierForwardingGuide[];
-  trialRequirements: {
-    complianceApproved: boolean;
-    numberConnected: boolean;
-    liveTestPassed: boolean;
-    missing: string[];
-  };
 };
 
 const DEFAULT_MESSAGE =
@@ -83,6 +98,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [businessName, setBusinessName] = useState(initialBusinessName);
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
@@ -100,6 +116,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     if (json.state) {
       setData(json);
       if (json.state.businessName) setBusinessName(json.state.businessName);
+      if (json.state.websiteUrl) setWebsiteUrl(json.state.websiteUrl);
       if (json.state.messageTemplate) setMessageTemplate(json.state.messageTemplate);
       if (json.state.consentMode) setConsentMode(json.state.consentMode);
       if (json.state.forwardingCarrier) setCarrier(json.state.forwardingCarrier);
@@ -113,6 +130,27 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   }, [load]);
 
   useEffect(() => {
+    if (step !== "trial_number" || data?.trialNumber.provisioned) return;
+    void (async () => {
+      setSaving(true);
+      try {
+        const res = await fetch("/api/mctb/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "provision_trial_number" }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Could not assign your number");
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Number assignment failed");
+      } finally {
+        setSaving(false);
+      }
+    })();
+  }, [step, data?.trialNumber.provisioned, load]);
+
+  useEffect(() => {
     if (step !== "demo") return;
     const timer = setInterval(() => {
       void fetch("/api/mctb/demo", { cache: "no-store" })
@@ -123,14 +161,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             prev
               ? {
                   ...prev,
-                  demo: {
-                    ...prev.demo,
-                    checks: j.data.checks,
-                    completed: j.data.completed,
-                    expired: j.data.expired,
-                    demoNumberDisplay: j.data.demoNumberDisplay,
-                    configured: j.data.configured,
-                  },
+                  demo: { ...prev.demo, ...j.data },
                 }
               : prev,
           );
@@ -138,6 +169,28 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
         })
         .catch(() => undefined);
     }, 2500);
+    return () => clearInterval(timer);
+  }, [step, load]);
+
+  useEffect(() => {
+    if (step !== "live_test") return;
+    void fetch("/api/mctb/live-test", { method: "POST" }).catch(() => undefined);
+    const timer = setInterval(() => {
+      void fetch("/api/mctb/live-test", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => {
+          if (!j.data) return;
+          setData((prev) => (prev ? { ...prev, liveTest: j.data } : prev));
+          if (j.data.passed) void load();
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [step, load]);
+
+  useEffect(() => {
+    if (step !== "pending" && step !== "tfv") return;
+    const timer = setInterval(() => void load(), 15000);
     return () => clearInterval(timer);
   }, [step, load]);
 
@@ -152,7 +205,6 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
-      if (json.state) setData((prev) => (prev ? { ...prev, state: json.state } : prev));
       await load();
       return json;
     } catch (err) {
@@ -179,6 +231,8 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   }
 
   const selectedCarrier = data?.carriers.find((c) => c.id === carrier);
+  const trialDisplay = data?.trialNumber.display;
+  const tfvApproved = data?.tfv.status === "approved";
 
   if (loading) {
     return (
@@ -193,10 +247,10 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       <div>
         <p className="text-sm font-medium text-primary">Missed Call Text Back</p>
         <h1 className="font-display text-2xl font-semibold tracking-tight">
-          See it work before you connect your number
+          Set up missed-call recovery for your business
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Step {stepIndex + 1} of {data?.steps.length || 9}: {data?.stepLabels[step]}
+          Step {stepIndex + 1} of {data?.steps.length || 10}: {data?.stepLabels[step]}
         </p>
       </div>
 
@@ -226,7 +280,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
       {step === "business" ? (
         <Card className="space-y-4 p-6">
-          <h2 className="text-lg font-semibold">Tell us about your business</h2>
+          <h2 className="text-lg font-semibold">Business information</h2>
           <div className="space-y-2">
             <Label htmlFor="businessName">Business name</Label>
             <Input
@@ -236,20 +290,66 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               placeholder="Acme Plumbing"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="website">Website (optional)</Label>
+            <Input
+              id="website"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https://acmeplumbing.com"
+            />
+          </div>
           <Button
             disabled={!businessName.trim() || saving}
-            onClick={() => void post({ businessName: businessName.trim() })}
+            onClick={() =>
+              void post({ businessName: businessName.trim(), websiteUrl: websiteUrl.trim() })
+            }
           >
             Continue
           </Button>
         </Card>
       ) : null}
 
+      {step === "trial_number" ? (
+        <Card className="space-y-4 p-6">
+          <h2 className="text-lg font-semibold">Your Transovo number</h2>
+          <p className="text-sm text-muted-foreground">
+            Every trial gets its own Twilio toll-free number for missed-call text back.
+          </p>
+          {saving || !data?.trialNumber.provisioned ? (
+            <div className="flex items-center gap-3 rounded-lg border p-4 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Assigning your toll-free number…
+            </div>
+          ) : (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
+              <p className="text-sm font-medium text-muted-foreground">Your Transovo number</p>
+              <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary">
+                {trialDisplay}
+              </p>
+              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                <div className="rounded-lg border bg-background p-3">
+                  <p className="text-muted-foreground">Voice</p>
+                  <p className="font-medium text-emerald-700">Ready</p>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <p className="text-muted-foreground">Text messaging</p>
+                  <p className="font-medium">Verification required</p>
+                </div>
+              </div>
+            </div>
+          )}
+          {data?.trialNumber.provisioned ? (
+            <Button onClick={() => void post({ step: "configure" })}>Continue</Button>
+          ) : null}
+        </Card>
+      ) : null}
+
       {step === "configure" ? (
         <Card className="space-y-4 p-6">
-          <h2 className="text-lg font-semibold">Configure your missed-call text</h2>
+          <h2 className="text-lg font-semibold">Configure text back</h2>
           <p className="text-sm text-muted-foreground">
-            This is the message customers receive when you miss a call. You can customize it later.
+            This message is sent when you miss a call on {trialDisplay || "your Transovo number"}.
           </p>
           <div className="space-y-2">
             <Label htmlFor="message">Recovery message</Label>
@@ -271,19 +371,20 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
       {step === "consent" ? (
         <Card className="space-y-4 p-6">
-          <h2 className="text-lg font-semibold">How will customers consent to texts?</h2>
+          <h2 className="text-lg font-semibold">Consent method</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {(
               [
                 {
                   id: "press_1" as const,
-                  title: "Press 1 Verified Consent",
+                  title: "Verified Call Consent",
+                  badge: "Recommended",
                   desc: "Caller hears a disclosure and presses 1 to receive the follow-up text.",
                 },
                 {
                   id: "existing_consent" as const,
-                  title: "Existing Consent",
-                  desc: "You already have documented consent (e.g. web form, prior relationship).",
+                  title: "I Already Have Consent",
+                  desc: "You have documented consent (web form, prior relationship, etc.) and attest to it.",
                 },
               ] as const
             ).map((opt) => (
@@ -298,7 +399,14 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                     : "border-border hover:border-primary/40",
                 )}
               >
-                <p className="font-medium">{opt.title}</p>
+                <p className="font-medium">
+                  {opt.title}
+                  {"badge" in opt && opt.badge ? (
+                    <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                      {opt.badge}
+                    </span>
+                  ) : null}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">{opt.desc}</p>
               </button>
             ))}
@@ -314,29 +422,30 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <div className="flex items-start gap-3">
             <Sparkles className="mt-0.5 h-5 w-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold">Test Missed Call Text Back</h2>
+              <h2 className="text-lg font-semibold">See how Missed Call Text Back works</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Call our demo number from your mobile. Let it ring — nobody will answer. You&apos;ll
-                receive a demo text within seconds.
+                {data?.demo.description ||
+                  "Call Transovo's pre-approved demo line — not your assigned trial number."}
               </p>
             </div>
           </div>
 
-          {data?.demo.demoNumberDisplay ? (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
-              <p className="text-sm font-medium text-muted-foreground">Call this number</p>
-              <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary">
-                {data.demo.demoNumberDisplay}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                From the mobile number you verified at signup
-              </p>
-            </div>
-          ) : null}
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
+            <p className="text-sm font-medium text-muted-foreground">
+              {data?.demo.label || "Approved Transovo Demo Number"}
+            </p>
+            <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary">
+              {data?.demo.demoNumberDisplay}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Call from your verified mobile. Let it ring — nobody will answer.
+            </p>
+          </div>
 
           <div className="space-y-2 rounded-lg border p-4">
-            <StepCheck done={data?.demo.checks.missedCallDetected || false} label="Missed call detected" />
-            <StepCheck done={data?.demo.checks.textDelivered || false} label="Text delivered" />
+            <StepCheck done={data?.demo.checks.callDetected || false} label="Call detected" />
+            <StepCheck done={data?.demo.checks.missedCall || false} label="Missed call" />
+            <StepCheck done={data?.demo.checks.textDelivered || false} label="Text received" />
             <StepCheck done={data?.demo.checks.replyReceived || false} label="Reply received" />
           </div>
 
@@ -347,7 +456,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                 I&apos;m ready — start demo
               </Button>
               {data?.demo.checks.textDelivered ? (
-                <p className="text-sm text-muted-foreground self-center">
+                <p className="self-center text-sm text-muted-foreground">
                   Reply to the text to complete the demo.
                 </p>
               ) : null}
@@ -355,65 +464,62 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           ) : (
             <div className="space-y-3">
               <p className="text-sm font-medium text-emerald-800">
-                Your test worked. That&apos;s what your customers will experience.
+                That&apos;s what your customers will experience.
               </p>
-              <Button onClick={() => void post({ step: "compliance" })}>Continue to verification</Button>
+              <Button onClick={() => void post({ step: "tfv" })}>
+                Activate texting on your number
+              </Button>
             </div>
           )}
         </Card>
       ) : null}
 
-      {step === "compliance" || step === "pending" ? (
+      {step === "tfv" || step === "pending" ? (
         <Card className="space-y-4 p-6">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
             <div>
               <h2 className="text-lg font-semibold">
-                {data?.compliance.approved
-                  ? "Your messaging is approved"
-                  : "Ready to use this on your business calls?"}
+                {tfvApproved ? "Your number is ready" : "Activate texting on your number"}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Mobile carriers require your business texting to be verified first. You don&apos;t
-                need to configure call forwarding yet.
+                Twilio Toll-Free Verification for {trialDisplay || "your assigned number"}. This
+                does not use your demo line and does not start your 14-day trial yet.
               </p>
             </div>
           </div>
 
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground">Brand</p>
-              <p className="font-medium">{data?.compliance.brandStatus}</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground">Campaign</p>
-              <p className="font-medium">{data?.compliance.campaignStatus}</p>
-            </div>
+          <div className="rounded-lg border p-4 text-sm">
+            <p className="text-muted-foreground">Toll-free verification status</p>
+            <p className="mt-1 text-lg font-semibold">{data?.tfv.statusLabel}</p>
           </div>
 
-          {data?.compliance.approved ? (
-            <Button onClick={() => void post({ step: "connect" })}>Connect your business number</Button>
+          {tfvApproved ? (
+            <Button onClick={() => void post({ step: "connect" })}>
+              Connect your business calls
+            </Button>
           ) : (
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/compliance"
                 className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
-                onClick={() => void post({ complianceSubmitted: true })}
+                onClick={() => void post({ tfvSubmitted: true })}
               >
-                Submit verification
+                Submit toll-free verification
               </Link>
               <Link
                 href="/compliance"
                 className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium"
               >
-                Open compliance center
+                Open verification center
               </Link>
             </div>
           )}
 
-          {step === "pending" && !data?.compliance.approved ? (
+          {step === "pending" && !tfvApproved ? (
             <p className="text-sm text-muted-foreground">
-              Verification is pending. You can connect your business number now or after approval.
+              Your number is being verified for texting. You can edit setup or configure forwarding
+              early — but your trial clock hasn&apos;t started.
             </p>
           ) : null}
         </Card>
@@ -424,20 +530,29 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <div className="flex items-start gap-3">
             <PhoneMissed className="mt-0.5 h-5 w-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold">Connect your business number</h2>
+              <h2 className="text-lg font-semibold">Connect your existing business number</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Set up conditional call forwarding so missed calls on your real business line trigger
-                Transovo.
+                You keep advertising your business line. When it isn&apos;t answered, forward missed
+                calls to your Transovo toll-free number ({trialDisplay}).
               </p>
             </div>
           </div>
 
+          <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+            <p>
+              <span className="font-medium">Example:</span> Customers call{" "}
+              <span className="font-mono">{businessNumber || "540-555-1234"}</span> → no answer →
+              forwards to <span className="font-mono">{trialDisplay}</span> → Transovo sends the
+              recovery text.
+            </p>
+          </div>
+
           <div className="space-y-2">
-            <Label>Your business phone number</Label>
+            <Label>Your advertised business phone number</Label>
             <Input
               value={businessNumber}
               onChange={(e) => setBusinessNumber(e.target.value)}
-              placeholder="+1 (555) 123-4567"
+              placeholder="(540) 555-1234"
             />
           </div>
 
@@ -465,19 +580,20 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           {selectedCarrier ? (
             <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
               {selectedCarrier.steps.map((s) => (
-                <li key={s}>{s}</li>
+                <li key={s}>
+                  {s.replace("YOUR_TRANSOVO_NUMBER", trialDisplay || "your Transovo number")}
+                </li>
               ))}
             </ol>
           ) : null}
 
           <Button
-            disabled={saving}
+            disabled={saving || !businessNumber.trim()}
             onClick={() =>
               void post({
                 forwardingCarrier: carrier,
                 businessNumberE164: businessNumber,
                 forwardingConnected: true,
-                step: "live_test",
               })
             }
           >
@@ -488,32 +604,56 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
       {step === "live_test" ? (
         <Card className="space-y-4 p-6">
-          <h2 className="text-lg font-semibold">Test your connection</h2>
+          <h2 className="text-lg font-semibold">Real live test</h2>
           <p className="text-sm text-muted-foreground">
-            Call your business number from another phone. Don&apos;t answer. Transovo should detect
-            the missed call and send your approved recovery text.
+            Call your business number ({businessNumber || "your line"}) from another phone.
+            Don&apos;t answer. We&apos;ll detect the miss on {trialDisplay} and send your verified
+            recovery text automatically.
           </p>
-          <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>Call {businessNumber || "your business number"} from a different phone.</li>
-            <li>Let it ring without answering.</li>
-            <li>Confirm you receive the recovery text on the caller phone.</li>
-            <li>Reply to confirm two-way texting works.</li>
-          </ol>
-          <Button
-            disabled={saving}
-            onClick={() => void post({ liveTestPassed: true })}
-          >
-            Test passed — start my trial
-          </Button>
+
+          <div className="space-y-2 rounded-lg border p-4">
+            <StepCheck
+              done={data?.liveTest.checks.callDetected || false}
+              label="Call arrived on your Transovo number"
+            />
+            <StepCheck
+              done={data?.liveTest.checks.missedCall || false}
+              label="Classified as missed"
+            />
+            <StepCheck
+              done={data?.liveTest.checks.consentCompleted || false}
+              label="Consent completed (if required)"
+            />
+            <StepCheck done={data?.liveTest.checks.textSent || false} label="SMS sent" />
+            <StepCheck
+              done={data?.liveTest.checks.textDelivered || false}
+              label="SMS delivered"
+            />
+            <StepCheck
+              done={data?.liveTest.checks.replyReceived || false}
+              label="Reply received in Transovo"
+            />
+          </div>
+
+          {data?.liveTest.passed ? (
+            <p className="text-sm font-medium text-emerald-800">
+              Live test passed. Starting your 14-day trial…
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Waiting for your test call… checks update automatically.
+            </p>
+          )}
         </Card>
       ) : null}
 
       {step === "complete" ? (
         <Card className="space-y-4 p-6 text-center">
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-          <h2 className="text-xl font-semibold">Your 14-day trial starts now</h2>
+          <h2 className="text-xl font-semibold">Your 14-day free trial starts now</h2>
           <p className="text-sm text-muted-foreground">
-            Missed Call Text Back is live on your business number. Day 1 of 14 begins today.
+            Missed Call Text Back is live. Day 1 of 14 begins today — not while you were waiting on
+            verification.
           </p>
           <Button onClick={() => router.push("/dashboard")}>Go to dashboard</Button>
         </Card>
