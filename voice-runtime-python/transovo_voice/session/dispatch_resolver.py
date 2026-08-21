@@ -198,7 +198,8 @@ async def resolve_inbound_bootstrap(
     call_id: str,
     from_e164: str | None,
     to_e164: str | None,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str, int]:
+    """Returns (bootstrap, bootstrap_path, http_requests). http_requests is 0 on dispatch_local."""
     local = try_local_dispatch_bootstrap(
         job_metadata=job_metadata,
         room_metadata=room_metadata,
@@ -208,7 +209,7 @@ async def resolve_inbound_bootstrap(
         to_e164=to_e164,
     )
     if local and local.get("ok"):
-        return local, "dispatch_local"
+        return local, "dispatch_local", 0
 
     dispatch = await backend.call(
         "resolve_dispatch_snapshot",
@@ -224,7 +225,7 @@ async def resolve_inbound_bootstrap(
     if dispatch.get("ok"):
         dispatch["callId"] = call_id
         path = str(dispatch.get("bootstrapPath") or "dispatch_snapshot")
-        return dispatch, path
+        return dispatch, path, 1
 
     logger.warning(
         "resolve_dispatch_snapshot failed (%s, code=%s); falling back to bootstrap_inbound",
@@ -243,4 +244,4 @@ async def resolve_inbound_bootstrap(
         },
     )
     legacy["callId"] = call_id
-    return legacy, str(legacy.get("bootstrapPath") or "bootstrap_inbound")
+    return legacy, str(legacy.get("bootstrapPath") or "bootstrap_inbound"), 2

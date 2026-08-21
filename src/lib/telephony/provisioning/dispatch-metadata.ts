@@ -13,7 +13,7 @@ export type ExplicitDispatchMetadata = RoomMetadata & {
   livekitProfile?: string;
   publishedVersionId?: string;
   agentTemplate?: string;
-  dispatchSource?: "phone_provision" | "sip_metadata" | "job_metadata" | "did_lookup";
+  dispatchSource?: "phone_provision" | "sip_metadata" | "job_metadata" | "did_lookup" | "livekit_job_metadata";
   pythonRuntimeBootstrapSnapshot?: PythonRuntimeBootstrapSnapshot;
 };
 

@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
 import { ensureSharedDispatchRule, pruneStaleDispatchRules } from "./livekit/dispatch";
+import { syncDidDispatchRuleSnapshot } from "./livekit/dispatch-snapshot-sync";
 import { fullResetLiveKitSipIngress } from "./livekit/full-reset";
 import { patchInboundTrunkE164Formats } from "./livekit/patch-trunk-e164";
 import {
@@ -60,6 +61,9 @@ function readProvision(settingsJson: unknown): TelephonyProvisionRecord {
       : undefined,
     livekitDispatchRuleId: prov.livekitDispatchRuleId
       ? String(prov.livekitDispatchRuleId)
+      : undefined,
+    livekitDidDispatchRuleId: prov.livekitDidDispatchRuleId
+      ? String(prov.livekitDidDispatchRuleId)
       : undefined,
     livekitOutboundTrunkId: prov.livekitOutboundTrunkId
       ? String(prov.livekitOutboundTrunkId)
@@ -220,6 +224,32 @@ export async function ensureNumberProvisioned(
     });
     actions.push(...dispatchActions);
 
+    let livekitDidDispatchRuleId: string | undefined;
+    let explicitDispatchPatch: Record<string, unknown> | undefined;
+    if (input.agentId) {
+      const dispatchMetadata = await buildDispatchMetadataForAgent({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        toE164: phone.e164,
+        publishedVersionId: input.publishedVersionId,
+        publishedConfig: input.publishedConfig,
+      });
+      explicitDispatchPatch = explicitDispatchPatchForPhoneSettings(dispatchMetadata);
+      try {
+        const synced = await syncDidDispatchRuleSnapshot({
+          e164: phone.e164,
+          trunkId,
+          dispatchMetadata,
+        });
+        actions.push(...synced.actions);
+        livekitDidDispatchRuleId = synced.ruleId;
+      } catch (syncErr) {
+        const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+        actions.push(`livekit_did_dispatch_snapshot_failed:${msg}`);
+        console.error("[telephony] LiveKit did dispatch snapshot sync failed", syncErr);
+      }
+    }
+
     let livekitOutboundTrunkId: string | undefined;
     try {
       const { trunk: outboundTrunk, actions: outboundActions } =
@@ -238,19 +268,10 @@ export async function ensureNumberProvisioned(
       telnyxFqdnId: fqdnId,
       livekitInboundTrunkId: trunkId,
       livekitDispatchRuleId: rule.sipDispatchRuleId,
+      livekitDidDispatchRuleId,
       livekitOutboundTrunkId,
       lastError: null,
-      ...(input.agentId
-        ? explicitDispatchPatchForPhoneSettings(
-            await buildDispatchMetadataForAgent({
-              workspaceId: input.workspaceId,
-              agentId: input.agentId,
-              toE164: phone.e164,
-              publishedVersionId: input.publishedVersionId,
-              publishedConfig: input.publishedConfig,
-            }),
-          )
-        : {}),
+      ...(explicitDispatchPatch || {}),
     });
 
     return {

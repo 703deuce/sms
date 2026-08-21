@@ -72,6 +72,12 @@ class StartupTimeline:
             out["agentSessionStartBeginMs"] = phases["agent_session_start_begin"]
         if "agent_session_started" in phases:
             out["agentSessionStartedMs"] = phases["agent_session_started"]
+        if "openai_realtime_connected" in phases:
+            out["openaiRealtimeConnectedMs"] = phases["openai_realtime_connected"]
+        if "greeting_generate_reply_begin" in phases:
+            out["greetingRequestedMs"] = phases["greeting_generate_reply_begin"]
+        if "snapshot_parsed" in phases:
+            out["snapshotParsedMs"] = phases["snapshot_parsed"]
         if "first_model_audio" in phases:
             out["firstModelAudioMs"] = phases["first_model_audio"]
         if "first_model_audio" in phases and "participant_joined" in phases:

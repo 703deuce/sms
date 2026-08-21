@@ -14,6 +14,8 @@ export type TelephonyProvisionRecord = {
   telnyxFqdnId?: string;
   livekitInboundTrunkId?: string;
   livekitDispatchRuleId?: string;
+  /** Per-DID LiveKit dispatch rule with embedded runtime snapshot for zero-HTTP bootstrap. */
+  livekitDidDispatchRuleId?: string;
   /** Shared platform outbound trunk id (same for all tenants; caller ID varies per call). */
   livekitOutboundTrunkId?: string;
   explicitDispatch?: {

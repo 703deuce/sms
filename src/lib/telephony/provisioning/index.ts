@@ -55,6 +55,11 @@ export {
 export { inspectLiveKitSipRouting, diagnoseLiveKitSipIssues } from "./livekit/inspect";
 
 export { ensureSharedDispatchRule } from "./livekit/dispatch";
+export {
+  buildLiveKitAgentJobMetadata,
+  findDidDispatchRuleByName,
+  syncDidDispatchRuleSnapshot,
+} from "./livekit/dispatch-snapshot-sync";
 export { ensureSharedInboundTrunk } from "./livekit/trunk";
 export {
   ensureLiveKitOutboundTrunk,

@@ -17,9 +17,11 @@ import {
 import { loadExplicitDispatchForDid } from "@/lib/telephony/provisioning/dispatch-metadata";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 
-const AGENT_ID = (process.env.AGENT_ID || "cmt33t45w6s5i213o34702e2r").trim();
+const AGENT_ID = (process.env.REPUBLISH_AGENT_ID || process.env.AGENT_ID || "cmt33t45w6s5i213o34702e2r").trim();
 const TO_E164 = (process.env.TO_E164 || "+18663464256").trim();
-const WORKSPACE_ID = (process.env.WORKSPACE_ID || "cmt2zyg4l43373s0f146b442h").trim();
+const WORKSPACE_ID = (
+  process.env.REPUBLISH_WORKSPACE_ID || "cmt2zyg4l43373s0f146b442h"
+).trim();
 
 async function main() {
   const prisma = getPrisma();
@@ -83,9 +85,12 @@ async function main() {
 
   console.log("\nPASS — ready for latency test call.");
   console.log("On call, require:");
-  console.log("  bootstrapPath: dispatch_snapshot (or snapshot)");
-  console.log("  dispatchResolveMs < 1000 (target 200–500ms)");
-  console.log(`  NO slow_bootstrap_path_active log`);
+  console.log("  bootstrapPath: dispatch_local");
+  console.log("  bootstrapHttpRequests: 0");
+  console.log("  dispatchResolveMs: ~0-5ms (local metadata parse only)");
+  console.log("  NO slow_bootstrap_path_active log");
+  console.log("\nIf bootstrapPath is dispatch_snapshot, run:");
+  console.log("  REPUBLISH_WORKSPACE_ID=cmt2zyg4l43373s0f146b442h npx tsx scripts/sync-livekit-dispatch-snapshot-866.ts");
 }
 
 main().catch((err) => {

@@ -61,7 +61,8 @@ async function main() {
     throw new Error(`DID routes to ${didDispatch.agentId}, expected ${AGENT_ID}`);
   }
 
-  console.log("\nReady for test call — expect bootstrapPath: dispatch_snapshot");
+  console.log("\nReady for test call — expect bootstrapPath: dispatch_local (zero HTTP)");
+  console.log("If still dispatch_snapshot, run scripts/sync-livekit-dispatch-snapshot-866.ts");
 }
 
 main().catch((err) => {

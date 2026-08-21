@@ -153,7 +153,7 @@ class CallObservability:
             "userToAgentResponseMs": user_to_agent_ms,
             "responseMsFromCallStart": response_ms_from_start,
             "responseSource": source,
-            "proactive": proactive or user_to_agent_ms is None,
+            "proactive": proactive,
         }
         for metric_key, record_key in (
             ("e2e_latency", "e2eLatencyMs"),
@@ -286,10 +286,13 @@ class CallObservability:
                 summary["bootstrapPath"] = startup["bootstrapPath"]
             for key in (
                 "participantJoinedMs",
+                "snapshotParsedMs",
                 "routingMetadataParsedMs",
                 "configReadyMs",
                 "agentSessionStartBeginMs",
                 "agentSessionStartedMs",
+                "openaiRealtimeConnectedMs",
+                "greetingRequestedMs",
                 "firstModelAudioMs",
                 "participantJoinedToFirstModelAudioMs",
             ):
@@ -326,6 +329,7 @@ class CallObservability:
                 return
             now = time.perf_counter()
             self._last_user_speech_at = now
+            self._last_user_stopped_speaking_at = time.time()
             if self._first_user_speech_at is None:
                 self._first_user_speech_at = now
             self._user_turn_count += 1
@@ -357,9 +361,15 @@ class CallObservability:
             if role != "assistant":
                 return
 
-            proactive = metrics.get("e2e_latency") is None and (
-                self._last_user_stopped_speaking_at is None or self._agent_turn_count == 0
-            )
+            is_first_agent_turn = self._agent_turn_count == 0
+            proactive = is_first_agent_turn
+            if not proactive:
+                if metrics.get("e2e_latency") is not None:
+                    proactive = False
+                elif self._user_turn_count > 0 or self._last_user_stopped_speaking_at is not None:
+                    proactive = False
+                else:
+                    proactive = True
             asyncio.create_task(
                 self.record_turn_response(
                     source="conversation_item_added",

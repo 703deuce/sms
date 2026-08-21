@@ -36,6 +36,8 @@ async def start_realtime_session(
 ) -> None:
     if observability is not None:
         await observability.mark_startup_phase("agent_session_start_begin")
+        await observability.mark_startup_phase("openai_realtime_connect_begin")
     await session.start(agent=agent, room=room, room_options=room_options)  # type: ignore[arg-type]
     if observability is not None:
         await observability.mark_startup_phase("agent_session_started")
+        await observability.mark_startup_phase("openai_realtime_connected")

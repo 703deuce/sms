@@ -179,7 +179,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
     masking_task = asyncio.create_task(_connect_and_optional_masking_audio())
 
     dispatch_resolve_started = time.perf_counter()
-    bootstrap, bootstrap_path = await resolve_inbound_bootstrap(
+    bootstrap, bootstrap_path, bootstrap_http_requests = await resolve_inbound_bootstrap(
         backend,
         room_name=ctx.room.name,
         participant_identity=participant.identity,
@@ -193,23 +193,37 @@ async def run_inbound_session(ctx: JobContext) -> None:
     dispatch_resolve_ms = int((time.perf_counter() - dispatch_resolve_started) * 1000)
     bootstrap["callId"] = call_id
     startup_timeline.set_dispatch_resolve_ms(dispatch_resolve_ms, path=bootstrap_path)
+    if bootstrap_path == "dispatch_local":
+        startup_timeline.mark(
+            "snapshot_parsed",
+            extra={"bootstrapPath": bootstrap_path, "httpRequests": 0},
+        )
     log_event(
         "dispatch_bootstrap_resolved",
         call_id=call_id,
         extra={
             "bootstrapPath": bootstrap_path,
             "dispatchResolveMs": dispatch_resolve_ms,
+            "bootstrapHttpRequests": bootstrap_http_requests,
             "toE164": to_e164,
             "fromE164": from_e164,
         },
     )
     startup_timeline.mark(
         "routing_metadata_parsed",
-        extra={"dispatchResolveMs": dispatch_resolve_ms, "bootstrapPath": bootstrap_path},
+        extra={
+            "dispatchResolveMs": dispatch_resolve_ms,
+            "bootstrapPath": bootstrap_path,
+            "bootstrapHttpRequests": bootstrap_http_requests,
+        },
     )
     startup_timeline.mark(
         "config_ready",
-        extra={"dispatchResolveMs": dispatch_resolve_ms, "bootstrapPath": bootstrap_path},
+        extra={
+            "dispatchResolveMs": dispatch_resolve_ms,
+            "bootstrapPath": bootstrap_path,
+            "bootstrapHttpRequests": bootstrap_http_requests,
+        },
     )
 
     if bootstrap_path in {"compiled", "bootstrap_inbound", "unknown"}:
@@ -219,16 +233,25 @@ async def run_inbound_session(ctx: JobContext) -> None:
             extra={
                 "bootstrapPath": bootstrap_path,
                 "dispatchResolveMs": dispatch_resolve_ms,
+                "bootstrapHttpRequests": bootstrap_http_requests,
                 "message": (
-                    "Fast dispatch path NOT active — do not evaluate latency until "
-                    "bootstrapPath is dispatch_snapshot or snapshot and dispatchResolveMs < 1000"
+                    "Legacy bootstrap path active — republish agent and verify LiveKit "
+                    "did dispatch snapshot for zero-HTTP startup (bootstrapPath=dispatch_local)"
                 ),
                 "toE164": to_e164,
             },
         )
         logger.error(
-            "SLOW BOOTSTRAP PATH: bootstrapPath=%s dispatchResolveMs=%s — "
-            "republish agent and verify explicitDispatch snapshot before judging latency",
+            "SLOW BOOTSTRAP PATH: bootstrapPath=%s dispatchResolveMs=%s httpRequests=%s — "
+            "stamp runtime snapshot into LiveKit did dispatch rule metadata",
+            bootstrap_path,
+            dispatch_resolve_ms,
+            bootstrap_http_requests,
+        )
+    elif bootstrap_path == "dispatch_snapshot":
+        logger.warning(
+            "HTTP dispatch snapshot fallback active: bootstrapPath=%s dispatchResolveMs=%s — "
+            "sync LiveKit did dispatch rule to reach dispatch_local",
             bootstrap_path,
             dispatch_resolve_ms,
         )
@@ -284,6 +307,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
             "runtimeProfile": ud.runtime_profile,
             "dispatchResolveMs": dispatch_resolve_ms,
             "bootstrapPath": bootstrap_path,
+            "bootstrapHttpRequests": bootstrap_http_requests,
             "startupPhases": startup_timeline.snapshot(),
         },
     )

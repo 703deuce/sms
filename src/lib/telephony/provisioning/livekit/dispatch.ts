@@ -6,6 +6,7 @@ import {
   TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
 } from "../config";
+import { isTransovoDidDispatchRuleName } from "./dispatch-snapshot-sync";
 import { getLiveKitSipClient } from "./client";
 
 export async function findDispatchRuleByName(
@@ -99,6 +100,7 @@ export async function pruneStaleDispatchRules(keepRuleId?: string): Promise<{ ac
     if (!ruleId) continue;
     if (keepRuleId && ruleId === keepRuleId) continue;
     if (rule.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) continue;
+    if (isTransovoDidDispatchRuleName(rule.name)) continue;
     await client.deleteSipDispatchRule(ruleId);
     actions.push(`livekit_deleted_dispatch_rule_${rule.name || ruleId}`);
   }
