@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { resolvePlatformOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 
 type TransferPolicy = {
   destinationE164?: string;
@@ -28,6 +29,8 @@ export async function resolveTransferForPython(input: {
       destinationE164?: string;
       warmTransfer: boolean;
       takeMessageOnFailure: boolean;
+      sipOutboundTrunkId?: string | null;
+      sipCallerIdE164?: string | null;
     }
   | { ok: false; error: string; code?: string }
 > {
@@ -64,11 +67,21 @@ export async function resolveTransferForPython(input: {
     };
   }
 
+  const prisma = getPrisma();
+  const call = await prisma.voiceCall.findFirst({
+    where: { id: input.callId, workspaceId: input.workspaceId },
+    select: { toE164: true },
+  });
+  const callerIdE164 = call?.toE164?.trim() || null;
+  const sipOutboundTrunkId = await resolvePlatformOutboundTrunkId({ callerIdE164 });
+
   return {
     ok: true,
     allowed: true,
     destinationE164: destination,
     warmTransfer: policy.warmTransfer !== false,
     takeMessageOnFailure: policy.takeMessageOnFailure !== false,
+    sipOutboundTrunkId,
+    sipCallerIdE164: callerIdE164,
   };
 }

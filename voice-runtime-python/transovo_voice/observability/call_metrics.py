@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from livekit.agents import AgentSession
 
 from transovo_voice.integrations.backend_client import TransovoBackend
+from transovo_voice.observability.startup_timeline import StartupTimeline
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import SessionUserData
 
@@ -21,6 +22,18 @@ def _is_final_transcript(ev: Any) -> bool:
     if isinstance(ev, dict):
         return bool(ev.get("is_final", True))
     return True
+
+
+def _metric_ms(metrics: dict[str, Any] | None, key: str) -> int | None:
+    if not metrics:
+        return None
+    value = metrics.get(key)
+    if value is None:
+        return None
+    try:
+        return int(float(value) * 1000)
+    except (TypeError, ValueError):
+        return None
 
 
 def _transcript_preview(ev: Any, *, max_len: int = 120) -> str | None:
@@ -45,11 +58,13 @@ class CallObservability:
         backend: TransovoBackend,
         template_id: str,
         job_started_at: float,
+        startup_timeline: StartupTimeline | None = None,
     ) -> None:
         self._ud = ud
         self._backend = backend
         self._template_id = template_id
         self._job_started_at = job_started_at
+        self._startup_timeline = startup_timeline
         self._bootstrap_ms: int | None = None
         self._worker_ready_ms: int | None = None
         self._first_user_speech_at: float | None = None
@@ -59,6 +74,25 @@ class CallObservability:
         self._user_turn_count = 0
         self._agent_turn_count = 0
         self._turn_records: list[dict[str, Any]] = []
+        self._first_agent_speaking_recorded = False
+        self._accepting_user_speech = False
+        self._last_user_stopped_speaking_at: float | None = None
+        self._first_model_audio_ms: int | None = None
+
+    def attach_startup_timeline(self, timeline: StartupTimeline) -> None:
+        self._startup_timeline = timeline
+
+    async def mark_startup_phase(self, phase: str, *, extra: dict[str, Any] | None = None) -> None:
+        if self._startup_timeline is None:
+            return
+        ms = self._startup_timeline.mark(phase, extra=extra)
+        asyncio.create_task(
+            self._record(
+                "startup_phase",
+                metrics={"phase": phase, "msFromJobStart": ms, **(extra or {})},
+                latency_ms=ms,
+            ),
+        )
 
     async def mark_bootstrap_complete(self) -> None:
         self._bootstrap_ms = int((time.perf_counter() - self._job_started_at) * 1000)
@@ -89,23 +123,48 @@ class CallObservability:
         """Backward-compatible alias — records as turn 1 when speech events did not fire."""
         await self.record_turn_response(source=source, proactive=True)
 
-    async def record_turn_response(self, *, source: str, proactive: bool = False) -> None:
+    async def record_turn_response(
+        self,
+        *,
+        source: str,
+        proactive: bool = False,
+        lk_metrics: dict[str, Any] | None = None,
+    ) -> None:
         now = time.perf_counter()
+        now_wall = time.time()
         self._agent_turn_count += 1
         turn_number = self._agent_turn_count
 
+        e2e_ms = _metric_ms(lk_metrics, "e2e_latency")
+        playback_ms = _metric_ms(lk_metrics, "playback_latency")
         user_to_agent_ms: int | None = None
-        if not proactive and self._last_user_speech_at is not None:
-            user_to_agent_ms = int((now - self._last_user_speech_at) * 1000)
+        user_to_first_audio_ms: int | None = None
+        if e2e_ms is not None:
+            user_to_agent_ms = e2e_ms
+            user_to_first_audio_ms = e2e_ms + (playback_ms or 0)
+        elif not proactive and self._last_user_stopped_speaking_at is not None:
+            user_to_agent_ms = int((now_wall - self._last_user_stopped_speaking_at) * 1000)
 
         response_ms_from_start = int((now - self._job_started_at) * 1000)
         turn_record: dict[str, Any] = {
             "turnNumber": turn_number,
+            "userEndOfSpeechToAgentStartMs": user_to_agent_ms,
+            "userEndOfSpeechToFirstAudioMs": user_to_first_audio_ms,
             "userToAgentResponseMs": user_to_agent_ms,
             "responseMsFromCallStart": response_ms_from_start,
             "responseSource": source,
             "proactive": proactive or user_to_agent_ms is None,
         }
+        for metric_key, record_key in (
+            ("e2e_latency", "e2eLatencyMs"),
+            ("llm_node_ttft", "llmNodeTtftMs"),
+            ("tts_node_ttfb", "ttsNodeTtfbMs"),
+            ("llm_node_ttfs", "llmNodeTtfsMs"),
+            ("playback_latency", "playbackLatencyMs"),
+        ):
+            metric_value = _metric_ms(lk_metrics, metric_key)
+            if metric_value is not None:
+                turn_record[record_key] = metric_value
         self._turn_records.append(turn_record)
 
         log_event(
@@ -115,6 +174,8 @@ class CallObservability:
             agent_id=self._ud.agent_id,
             extra={
                 "turnNumber": turn_number,
+                "userEndOfSpeechToAgentStartMs": user_to_agent_ms,
+                "userEndOfSpeechToFirstAudioMs": user_to_first_audio_ms,
                 "userToAgentResponseMs": user_to_agent_ms,
                 "responseSource": source,
                 "agent_template": self._template_id,
@@ -184,9 +245,14 @@ class CallObservability:
 
     def _turn_summary_metrics(self) -> dict[str, Any]:
         user_latencies = [
-            int(row["userToAgentResponseMs"])
+            int(row["userEndOfSpeechToAgentStartMs"])
             for row in self._turn_records
-            if row.get("userToAgentResponseMs") is not None
+            if row.get("userEndOfSpeechToAgentStartMs") is not None and not row.get("proactive")
+        ]
+        first_audio_latencies = [
+            int(row["userEndOfSpeechToFirstAudioMs"])
+            for row in self._turn_records
+            if row.get("userEndOfSpeechToFirstAudioMs") is not None and not row.get("proactive")
         ]
         summary: dict[str, Any] = {
             "turnCount": len(self._turn_records),
@@ -194,10 +260,46 @@ class CallObservability:
             "turnLatencies": self._turn_records[-50:],
         }
         if user_latencies:
-            summary["avgUserToAgentResponseMs"] = round(sum(user_latencies) / len(user_latencies))
-            summary["maxUserToAgentResponseMs"] = max(user_latencies)
-            summary["minUserToAgentResponseMs"] = min(user_latencies)
-            summary["lastUserToAgentResponseMs"] = user_latencies[-1]
+            summary["avgUserEndOfSpeechToAgentStartMs"] = round(sum(user_latencies) / len(user_latencies))
+            summary["maxUserEndOfSpeechToAgentStartMs"] = max(user_latencies)
+            summary["minUserEndOfSpeechToAgentStartMs"] = min(user_latencies)
+            summary["lastUserEndOfSpeechToAgentStartMs"] = user_latencies[-1]
+            summary["avgUserToAgentResponseMs"] = summary["avgUserEndOfSpeechToAgentStartMs"]
+            summary["maxUserToAgentResponseMs"] = summary["maxUserEndOfSpeechToAgentStartMs"]
+            summary["minUserToAgentResponseMs"] = summary["minUserEndOfSpeechToAgentStartMs"]
+            summary["lastUserToAgentResponseMs"] = summary["lastUserEndOfSpeechToAgentStartMs"]
+        if first_audio_latencies:
+            summary["avgUserEndOfSpeechToFirstAudioMs"] = round(
+                sum(first_audio_latencies) / len(first_audio_latencies),
+            )
+            summary["maxUserEndOfSpeechToFirstAudioMs"] = max(first_audio_latencies)
+            summary["minUserEndOfSpeechToFirstAudioMs"] = min(first_audio_latencies)
+            summary["lastUserEndOfSpeechToFirstAudioMs"] = first_audio_latencies[-1]
+        if self._startup_timeline is not None:
+            startup = self._startup_timeline.snapshot()
+            summary["startupPhases"] = startup.get("phases", {})
+            if startup.get("dispatchResolveMs") is not None:
+                summary["dispatchResolveMs"] = startup["dispatchResolveMs"]
+            if startup.get("bootstrapHttpMs") is not None:
+                summary["bootstrapHttpMs"] = startup["bootstrapHttpMs"]
+            if startup.get("bootstrapPath"):
+                summary["bootstrapPath"] = startup["bootstrapPath"]
+            for key in (
+                "participantJoinedMs",
+                "routingMetadataParsedMs",
+                "configReadyMs",
+                "agentSessionStartBeginMs",
+                "agentSessionStartedMs",
+                "firstModelAudioMs",
+                "participantJoinedToFirstModelAudioMs",
+            ):
+                if startup.get(key) is not None:
+                    summary[key] = startup[key]
+            if startup.get("maskingAudioMs") is not None:
+                summary["maskingAudioMs"] = startup["maskingAudioMs"]
+                summary["maskingAudioTemporary"] = True
+        if self._first_model_audio_ms is not None:
+            summary["firstModelAudioMs"] = self._first_model_audio_ms
         return summary
 
     async def finalize(self) -> None:
@@ -218,6 +320,8 @@ class CallObservability:
     def attach_session(self, session: "AgentSession") -> None:
         @session.on("user_input_transcribed")
         def _on_user_input(ev: Any) -> None:
+            if not self._accepting_user_speech:
+                return
             if not _is_final_transcript(ev):
                 return
             now = time.perf_counter()
@@ -236,13 +340,74 @@ class CallObservability:
                 ),
             )
 
-        @session.on("agent_speech_committed")
-        def _on_agent_speech(_ev: Any) -> None:
-            proactive = self._last_user_speech_at is None and self._agent_turn_count == 0
+        @session.on("conversation_item_added")
+        def _on_conversation_item(ev: Any) -> None:
+            item = getattr(ev, "item", None)
+            role = getattr(item, "role", None)
+            metrics = getattr(item, "metrics", None) or {}
+            if not isinstance(metrics, dict):
+                metrics = dict(metrics) if metrics else {}
+
+            if role == "user":
+                stopped = metrics.get("stopped_speaking_at")
+                if isinstance(stopped, (int, float)):
+                    self._last_user_stopped_speaking_at = float(stopped)
+                return
+
+            if role != "assistant":
+                return
+
+            proactive = metrics.get("e2e_latency") is None and (
+                self._last_user_stopped_speaking_at is None or self._agent_turn_count == 0
+            )
             asyncio.create_task(
                 self.record_turn_response(
-                    source="agent_speech_committed",
+                    source="conversation_item_added",
                     proactive=proactive,
+                    lk_metrics=metrics,
+                ),
+            )
+
+        @session.on("agent_state_changed")
+        def _on_agent_state(ev: Any) -> None:
+            if getattr(ev, "new_state", None) != "speaking":
+                return
+
+            now = time.perf_counter()
+            if not self._first_agent_speaking_recorded:
+                self._first_agent_speaking_recorded = True
+                self._accepting_user_speech = True
+                ms = int((now - self._job_started_at) * 1000)
+                self._first_model_audio_ms = ms
+                if self._startup_timeline is not None:
+                    self._startup_timeline.mark("first_model_audio")
+                asyncio.create_task(
+                    self._record(
+                        "first_model_audio",
+                        metrics={
+                            "firstModelAudioMs": ms,
+                            "bootstrapMs": self._bootstrap_ms,
+                            "workerReadyMs": self._worker_ready_ms,
+                            "agentTemplate": self._template_id,
+                        },
+                        latency_ms=ms,
+                    ),
+                )
+                return
+
+            if self._last_user_stopped_speaking_at is None:
+                return
+
+            user_end_to_first_audio_ms = int((time.time() - self._last_user_stopped_speaking_at) * 1000)
+            asyncio.create_task(
+                self._record(
+                    "turn_first_audio",
+                    metrics={
+                        "userEndOfSpeechToFirstAudioMs": user_end_to_first_audio_ms,
+                        "userTurnCount": self._user_turn_count,
+                        "agentTurnCount": self._agent_turn_count,
+                    },
+                    latency_ms=user_end_to_first_audio_ms,
                 ),
             )
 

@@ -71,11 +71,13 @@ def build_transfer_tool(
             )
 
         sip_trunk_id = (
-            (ud.sip_outbound_trunk_id or "").strip()
+            (str(resolution.get("sipOutboundTrunkId") or "").strip())
+            or (ud.sip_outbound_trunk_id or "").strip()
             or os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK", "").strip()
         )
         sip_number = (
-            (ud.sip_caller_id_e164 or "").strip()
+            (str(resolution.get("sipCallerIdE164") or "").strip())
+            or (ud.sip_caller_id_e164 or "").strip()
             or os.getenv("LIVEKIT_SIP_NUMBER", "").strip()
             or None
         )

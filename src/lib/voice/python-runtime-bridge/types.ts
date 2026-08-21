@@ -6,6 +6,17 @@ export type PythonRuntimeBootstrapInput = {
   participantAttributes?: Record<string, string>;
   jobMetadata?: string | Record<string, unknown> | null;
   roomMetadata?: string | Record<string, unknown> | null;
+  /** Client-generated call id — voiceCall row may be persisted separately. */
+  predeterminedCallId?: string;
+};
+
+export type ResolveDispatchSnapshotInput = {
+  participantIdentity?: string;
+  participantAttributes?: Record<string, string>;
+  jobMetadata?: string | Record<string, unknown> | null;
+  roomMetadata?: string | Record<string, unknown> | null;
+  fromE164?: string;
+  toE164?: string;
 };
 
 export type PythonRuntimeBootstrapResult = {
@@ -32,6 +43,24 @@ export type PythonRuntimeBootstrapResult = {
   eventTypeUri?: string | null;
   sipOutboundTrunkId?: string | null;
   sipCallerIdE164?: string | null;
+  bootstrapPath?:
+    | "dispatch_local"
+    | "dispatch_snapshot"
+    | "snapshot"
+    | "compiled"
+    | "bootstrap_inbound";
+  bootstrapProfileMs?: number;
+};
+
+export type PersistInboundCallInput = {
+  callId: string;
+  workspaceId: string;
+  agentId: string;
+  agentVersionId?: string;
+  fromE164?: string;
+  toE164?: string;
+  livekitRoomName?: string;
+  livekitParticipantId?: string;
 };
 
 export type PythonRuntimeError = {

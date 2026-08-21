@@ -102,7 +102,8 @@ async def deliver_template_greeting(
     observability: object | None = None,
 ) -> None:
     """Proactive greeting on connect — must use generate_reply on native gpt-realtime."""
-    _ = observability
+    if observability is not None and hasattr(observability, "mark_startup_phase"):
+        await observability.mark_startup_phase("greeting_generate_reply_begin")  # type: ignore[union-attr]
     greeting = resolve_greeting_text(ud)
     if greeting:
         await deliver_scripted_speech(session, greeting, allow_interruptions=True)
@@ -110,6 +111,8 @@ async def deliver_template_greeting(
         await session.generate_reply(  # type: ignore[attr-defined]
             instructions=resolve_greeting_instructions(ud, fallback=fallback),
         )
+    if observability is not None and hasattr(observability, "mark_startup_phase"):
+        await observability.mark_startup_phase("greeting_generate_reply_complete")  # type: ignore[union-attr]
 
 
 def build_minimal_user_context(ud: SessionUserData) -> str:

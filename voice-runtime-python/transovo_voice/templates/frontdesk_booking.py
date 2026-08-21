@@ -11,7 +11,7 @@ from livekit.agents.voice.events import RunContext
 
 from transovo_voice.observability.call_metrics import CallObservability
 from transovo_voice.session.telephony_audio import build_telephony_room_options
-from transovo_voice.templates.session_factory import build_realtime_session
+from transovo_voice.templates.session_factory import build_realtime_session, start_realtime_session
 from transovo_voice.templates.template_context import (
     build_template_instructions,
     deliver_template_greeting,
@@ -119,6 +119,7 @@ class FrontDeskBookingAgent(Agent):
 
     async def on_enter(self) -> None:
         if self._observability is not None:
+            await self._observability.mark_startup_phase("on_enter_begin")
             await self._observability.mark_worker_ready()
         await deliver_template_greeting(
             self.session,
@@ -187,7 +188,8 @@ async def run_frontdesk_booking_template(
     session = build_realtime_session(ud, userdata=fd_userdata)
     if observability is not None:
         observability.attach_session(session)
-    await session.start(
+    await start_realtime_session(
+        session,
         agent=FrontDeskBookingAgent(
             ud=ud,
             timezone=tz,
@@ -196,4 +198,5 @@ async def run_frontdesk_booking_template(
         ),
         room=ctx.room,
         room_options=build_telephony_room_options(delete_room_on_close=True),
+        observability=observability,
     )

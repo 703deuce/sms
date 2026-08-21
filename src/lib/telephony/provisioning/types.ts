@@ -22,6 +22,7 @@ export type TelephonyProvisionRecord = {
     publishedVersionId?: string;
     livekitProfile?: string;
     agentTemplate?: string;
+    pythonRuntimeBootstrapSnapshot?: Record<string, unknown>;
     updatedAt?: string;
   };
   lastProvisionedAt?: string;
@@ -33,6 +34,8 @@ export type EnsureNumberProvisionedInput = {
   workspaceId: string;
   phoneNumberId: string;
   agentId?: string | null;
+  publishedVersionId?: string | null;
+  publishedConfig?: import("@/lib/voice/types").VoiceAgentConfig;
   /** Force LiveKit even when global provider is telnyx */
   routingMode?: VoiceRoutingMode;
 };

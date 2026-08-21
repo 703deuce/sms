@@ -2,6 +2,11 @@ import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { livekitProfileFromConfig } from "@/lib/voice/frontdesk/agent-config";
 import { getLiveKitAgentTemplateFromAdvanced } from "@/lib/voice/templates/agent-template-config";
+import {
+  buildPythonRuntimeBootstrapSnapshot,
+  PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY,
+  type PythonRuntimeBootstrapSnapshot,
+} from "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot";
 import type { RoomMetadata } from "./metadata";
 
 export type ExplicitDispatchMetadata = RoomMetadata & {
@@ -9,6 +14,7 @@ export type ExplicitDispatchMetadata = RoomMetadata & {
   publishedVersionId?: string;
   agentTemplate?: string;
   dispatchSource?: "phone_provision" | "sip_metadata" | "job_metadata" | "did_lookup";
+  pythonRuntimeBootstrapSnapshot?: PythonRuntimeBootstrapSnapshot;
 };
 
 export function buildExplicitDispatchMetadata(input: {
@@ -20,6 +26,7 @@ export function buildExplicitDispatchMetadata(input: {
   fromE164?: string | null;
   toE164?: string | null;
   dispatchSource: ExplicitDispatchMetadata["dispatchSource"];
+  pythonRuntimeBootstrapSnapshot?: PythonRuntimeBootstrapSnapshot | null;
 }): ExplicitDispatchMetadata {
   return {
     workspaceId: input.workspaceId,
@@ -30,6 +37,7 @@ export function buildExplicitDispatchMetadata(input: {
     fromE164: input.fromE164 || undefined,
     toE164: input.toE164 || undefined,
     dispatchSource: input.dispatchSource,
+    pythonRuntimeBootstrapSnapshot: input.pythonRuntimeBootstrapSnapshot || undefined,
   };
 }
 
@@ -62,6 +70,11 @@ export async function loadExplicitDispatchForDid(
   if (stored && typeof stored === "object") {
     const row = stored as Record<string, unknown>;
     if (row.workspaceId && row.agentId) {
+      const snapshotRaw = row[PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY];
+      const snapshot =
+        snapshotRaw && typeof snapshotRaw === "object"
+          ? (snapshotRaw as PythonRuntimeBootstrapSnapshot)
+          : undefined;
       return {
         workspaceId: String(row.workspaceId),
         agentId: String(row.agentId),
@@ -72,6 +85,8 @@ export async function loadExplicitDispatchForDid(
         agentTemplate: row.agentTemplate ? String(row.agentTemplate) : undefined,
         toE164: phone.e164,
         dispatchSource: "phone_provision",
+        pythonRuntimeBootstrapSnapshot:
+          snapshot?.snapshotVersion === 1 && snapshot.apiVersion === 1 ? snapshot : undefined,
       };
     }
   }
@@ -87,6 +102,11 @@ export async function loadExplicitDispatchForDid(
   if (!assignment) return null;
 
   const config = parseVoiceAgentConfig(assignment.draftConfig);
+  const snapshot = buildPythonRuntimeBootstrapSnapshot(config, {
+    workspaceId: phone.workspaceId,
+    agentId: assignment.id,
+    agentName: undefined,
+  });
   return buildExplicitDispatchMetadata({
     workspaceId: phone.workspaceId,
     agentId: assignment.id,
@@ -97,6 +117,7 @@ export async function loadExplicitDispatchForDid(
     ),
     toE164: phone.e164,
     dispatchSource: "did_lookup",
+    pythonRuntimeBootstrapSnapshot: snapshot,
   });
 }
 
@@ -120,6 +141,12 @@ export function mergeExplicitDispatchMetadata(
     if ("agentTemplate" in source && source.agentTemplate) {
       merged.agentTemplate = source.agentTemplate;
     }
+    if (
+      "pythonRuntimeBootstrapSnapshot" in source &&
+      source.pythonRuntimeBootstrapSnapshot
+    ) {
+      merged.pythonRuntimeBootstrapSnapshot = source.pythonRuntimeBootstrapSnapshot;
+    }
     if ("dispatchSource" in source && source.dispatchSource) {
       merged.dispatchSource = source.dispatchSource;
     }
@@ -138,6 +165,11 @@ export function explicitDispatchPatchForPhoneSettings(
       publishedVersionId: metadata.publishedVersionId,
       livekitProfile: metadata.livekitProfile,
       agentTemplate: metadata.agentTemplate,
+      ...(metadata.pythonRuntimeBootstrapSnapshot
+        ? {
+            [PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY]: metadata.pythonRuntimeBootstrapSnapshot,
+          }
+        : {}),
       updatedAt: new Date().toISOString(),
     },
   };

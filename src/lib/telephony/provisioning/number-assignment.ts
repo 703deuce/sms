@@ -107,23 +107,48 @@ async function buildDispatchMetadataForAgent(input: {
   workspaceId: string;
   agentId: string;
   toE164: string;
+  publishedVersionId?: string | null;
+  publishedConfig?: import("@/lib/voice/types").VoiceAgentConfig;
 }) {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
     where: { id: input.agentId, workspaceId: input.workspaceId },
-    select: { publishedVersionId: true, draftConfig: true },
+    select: { publishedVersionId: true, draftConfig: true, name: true },
   });
-  const config = parseVoiceAgentConfig(agent?.draftConfig);
+  let config = input.publishedConfig;
+  if (!config) {
+    if (input.publishedVersionId || agent?.publishedVersionId) {
+      const versionId = input.publishedVersionId || agent?.publishedVersionId;
+      const ver = versionId
+        ? await prisma.voiceAgentVersion.findFirst({
+            where: { id: versionId, workspaceId: input.workspaceId },
+            select: { config: true },
+          })
+        : null;
+      config = parseVoiceAgentConfig(ver?.config || agent?.draftConfig);
+    } else {
+      config = parseVoiceAgentConfig(agent?.draftConfig);
+    }
+  }
+  const { buildPythonRuntimeBootstrapSnapshot } = await import(
+    "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot"
+  );
+  const snapshot = buildPythonRuntimeBootstrapSnapshot(config, {
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    agentName: agent?.name || undefined,
+  });
   return buildExplicitDispatchMetadata({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
-    publishedVersionId: agent?.publishedVersionId,
+    publishedVersionId: input.publishedVersionId || agent?.publishedVersionId,
     livekitProfile: livekitProfileFromConfig(config.advanced as Record<string, unknown>),
     agentTemplate: getLiveKitAgentTemplateFromAdvanced(
       config.advanced as Record<string, unknown>,
     ),
     toE164: input.toE164,
     dispatchSource: "phone_provision",
+    pythonRuntimeBootstrapSnapshot: snapshot,
   });
 }
 
@@ -221,6 +246,8 @@ export async function ensureNumberProvisioned(
               workspaceId: input.workspaceId,
               agentId: input.agentId,
               toE164: phone.e164,
+              publishedVersionId: input.publishedVersionId,
+              publishedConfig: input.publishedConfig,
             }),
           )
         : {}),

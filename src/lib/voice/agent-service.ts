@@ -376,7 +376,13 @@ export async function publishVoiceAgent(
     throw err;
   });
   const { recompileReceptionistFromDraft } = await import("./receptionist/recompile");
-  const config = recompileReceptionistFromDraft(applied.config);
+  const { attachPythonRuntimeBootstrapSnapshot } = await import(
+    "./python-runtime-bridge/build-bootstrap-snapshot"
+  );
+  const config = attachPythonRuntimeBootstrapSnapshot(
+    recompileReceptionistFromDraft(applied.config),
+    { workspaceId, agentId, agentName: agent.name },
+  );
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone:
       !config.identity?.directions?.length ||
@@ -510,6 +516,8 @@ export async function publishVoiceAgent(
       phoneNumberId: updated.phoneNumberId,
       agentId,
       routingMode: "livekit_sip",
+      publishedVersionId: versionRow.id,
+      publishedConfig: config,
     });
     if (!(livekitProvision as { ok?: boolean }).ok) {
       const detail =

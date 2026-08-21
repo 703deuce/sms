@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 
 type VoiceRuntimeAction =
   | "bootstrap_inbound"
+  | "resolve_dispatch_snapshot"
+  | "persist_inbound_call"
   | "persist_intake_fields"
   | "persist_message"
   | "resolve_transfer"
@@ -92,6 +94,22 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/bootstrap-inbound"
         );
         result = await bootstrapInboundForPython(payload as never);
+        break;
+      }
+
+      case "resolve_dispatch_snapshot": {
+        const { resolveDispatchSnapshotForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/resolve-dispatch-snapshot"
+        );
+        result = await resolveDispatchSnapshotForPython(payload as never);
+        break;
+      }
+
+      case "persist_inbound_call": {
+        const { persistInboundCallForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/persist-inbound-call"
+        );
+        result = await persistInboundCallForPython(payload as never);
         break;
       }
 

@@ -18,6 +18,16 @@ export function mergeTurnLatency(
     : [];
   const nextRow = {
     turnNumber,
+    userEndOfSpeechToAgentStartMs:
+      typeof metrics.userEndOfSpeechToAgentStartMs === "number"
+        ? metrics.userEndOfSpeechToAgentStartMs
+        : typeof metrics.userToAgentResponseMs === "number"
+          ? metrics.userToAgentResponseMs
+          : null,
+    userEndOfSpeechToFirstAudioMs:
+      typeof metrics.userEndOfSpeechToFirstAudioMs === "number"
+        ? metrics.userEndOfSpeechToFirstAudioMs
+        : null,
     userToAgentResponseMs:
       typeof metrics.userToAgentResponseMs === "number" ? metrics.userToAgentResponseMs : null,
     responseMsFromCallStart:
@@ -34,7 +44,7 @@ export function mergeTurnLatency(
     .slice(-MAX_TURN_ROWS);
 
   const userLatencies = turnLatencies
-    .map((row) => row.userToAgentResponseMs)
+    .map((row) => row.userEndOfSpeechToAgentStartMs ?? row.userToAgentResponseMs)
     .filter((value): value is number => typeof value === "number");
 
   const merged: Record<string, unknown> = {

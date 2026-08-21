@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
+from uuid import uuid4
 
 from livekit.agents import JobContext
 
@@ -10,8 +12,11 @@ from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.integrations.commit_client import drain_pending_provider_tasks
 from transovo_voice.tasks.protocols import is_phone_field
 from transovo_voice.observability.call_metrics import CallObservability
+from transovo_voice.observability.startup_timeline import StartupTimeline, startup_masking_audio_enabled
+from transovo_voice.session.dispatch_resolver import extract_call_numbers, resolve_inbound_bootstrap
 from transovo_voice.templates.registry import DEFAULT_ACTIVE_TEMPLATE, resolve_template_id
 from transovo_voice.templates.router import run_template
+from transovo_voice.session.startup_audio import DEFAULT_IMMEDIATE_ANSWER, play_immediate_answer
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData, TransferPolicy
 
@@ -123,7 +128,9 @@ async def run_inbound_session(ctx: JobContext) -> None:
     backend = TransovoBackend()
     ud: SessionUserData | None = None
     observability: CallObservability | None = None
-    job_started_at = __import__("time").perf_counter()
+    job_started_at = time.perf_counter()
+    startup_timeline = StartupTimeline(job_started_at)
+    startup_timeline.mark("job_received")
 
     async def shutdown_backend() -> None:
         if observability is not None:
@@ -142,32 +149,67 @@ async def run_inbound_session(ctx: JobContext) -> None:
     ctx.add_shutdown_callback(shutdown_backend)
 
     participant = await ctx.wait_for_participant()
-    await ctx.connect()
+    startup_timeline.mark("participant_joined")
 
     attrs = dict(participant.attributes or {})
-    bootstrap_task = asyncio.create_task(
-        backend.call(
-            "bootstrap_inbound",
-            {
-                "roomName": ctx.room.name,
-                "participantIdentity": participant.identity,
-                "participantAttributes": attrs,
-                "jobMetadata": ctx.job.metadata,
-                "roomMetadata": ctx.room.metadata,
-            },
-        ),
-    )
-    # Warm OpenAI realtime plugin while bootstrap round-trip is in flight.
+    call_id = str(uuid4())
+    from_e164, to_e164 = extract_call_numbers(attrs, ctx.room.metadata, participant.identity)
+
+    connect_task = asyncio.create_task(ctx.connect())
     try:
         from livekit.plugins.openai.realtime import RealtimeModel  # noqa: F401
     except ImportError:
         pass
-    bootstrap = await bootstrap_task
+
+    async def _connect_and_optional_masking_audio() -> None:
+        await connect_task
+        startup_timeline.mark("room_connected")
+        if not startup_masking_audio_enabled():
+            return
+        startup_timeline.mark("masking_audio_begin", extra={"temporary": True})
+        masking_ms = await play_immediate_answer(
+            ctx.room,
+            phrase=DEFAULT_IMMEDIATE_ANSWER,
+            temporary=True,
+        )
+        if masking_ms is not None:
+            startup_timeline.set_masking_audio_ms(masking_ms)
+            startup_timeline.mark("masking_audio_complete", extra={"temporary": True, "maskingAudioMs": masking_ms})
+
+    masking_task = asyncio.create_task(_connect_and_optional_masking_audio())
+
+    dispatch_resolve_started = time.perf_counter()
+    bootstrap, bootstrap_path = await resolve_inbound_bootstrap(
+        backend,
+        room_name=ctx.room.name,
+        participant_identity=participant.identity,
+        participant_attributes=attrs,
+        job_metadata=ctx.job.metadata,
+        room_metadata=ctx.room.metadata,
+        call_id=call_id,
+        from_e164=from_e164,
+        to_e164=to_e164,
+    )
+    dispatch_resolve_ms = int((time.perf_counter() - dispatch_resolve_started) * 1000)
+    bootstrap["callId"] = call_id
+    startup_timeline.set_dispatch_resolve_ms(dispatch_resolve_ms, path=bootstrap_path)
+    startup_timeline.mark(
+        "routing_metadata_parsed",
+        extra={"dispatchResolveMs": dispatch_resolve_ms, "bootstrapPath": bootstrap_path},
+    )
+    startup_timeline.mark(
+        "config_ready",
+        extra={"dispatchResolveMs": dispatch_resolve_ms, "bootstrapPath": bootstrap_path},
+    )
+
+    await connect_task
     if not bootstrap.get("ok"):
-        logger.error("bootstrap failed: %s", bootstrap.get("error"))
+        masking_task.cancel()
+        logger.error("inbound bootstrap failed: %s", bootstrap.get("error"))
         return
 
     if bootstrap.get("apiVersion") != 1:
+        masking_task.cancel()
         logger.error("Unsupported bootstrap apiVersion=%s", bootstrap.get("apiVersion"))
         return
 
@@ -180,8 +222,24 @@ async def run_inbound_session(ctx: JobContext) -> None:
         backend=backend,
         template_id=template_id,
         job_started_at=job_started_at,
+        startup_timeline=startup_timeline,
     )
     await observability.mark_bootstrap_complete()
+
+    _fire_backend_call(
+        backend,
+        "persist_inbound_call",
+        {
+            "callId": ud.call_id,
+            "workspaceId": ud.workspace_id,
+            "agentId": ud.agent_id,
+            "agentVersionId": ud.agent_version_id,
+            "fromE164": ud.caller_e164,
+            "toE164": ud.to_e164,
+            "livekitRoomName": ctx.room.name,
+            "livekitParticipantId": participant.identity,
+        },
+    )
 
     log_event(
         "call_started",
@@ -193,6 +251,9 @@ async def run_inbound_session(ctx: JobContext) -> None:
             "runtime": "livekit_python",
             "agent_template": template_id,
             "runtimeProfile": ud.runtime_profile,
+            "dispatchResolveMs": dispatch_resolve_ms,
+            "bootstrapPath": bootstrap_path,
+            "startupPhases": startup_timeline.snapshot(),
         },
     )
 
