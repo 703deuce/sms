@@ -6,6 +6,7 @@ import {
   classifyInboundCallOutcome,
 } from "./classify";
 import { loadMissedCallTextConfig } from "./config";
+import { getMctbEntitlement } from "@/lib/mctb/entitlement";
 import type { InboundCallClassification, MctbSuppressionReason } from "./types";
 
 export type EligibilityResult = {
@@ -65,6 +66,18 @@ export async function evaluateMissedCallTextEligibility(input: {
 
   if (!config.enabled) {
     return { eligible: false, reason: "FEATURE_DISABLED", classification };
+  }
+
+  const entitlement = await getMctbEntitlement(input.workspaceId);
+  if (!entitlement.canSendAutomaticRecovery) {
+    return {
+      eligible: false,
+      reason:
+        entitlement.reason === "trial_sms_limit_reached"
+          ? "TRIAL_SMS_LIMIT"
+          : "ENTITLEMENT_SUSPENDED",
+      classification,
+    };
   }
 
   if (classification === "outbound" || classification === "answered") {

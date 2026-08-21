@@ -3,41 +3,22 @@
  * The subscription may be in trial; the toll-free number is workspace-owned and permanent on paid conversion.
  */
 import { getPrisma } from "@/lib/db";
-import { updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { getTrialLimits } from "@/lib/platform-flags";
+import {
+  clearMctbServiceSuspension,
+  hasActiveMctbPaidEntitlement,
+  setMctbServiceStatus,
+} from "@/lib/mctb/entitlement";
 import { loadMctbOnboardingState, recordFunnelEvent } from "@/lib/mctb/onboarding/state";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
 
 export const MCTB_NUMBER_HOLD_DAYS = 7;
 
-const PAID_MCTB_PLANS = new Set([
-  "growth",
-  "pro",
-  "enterprise",
-  "starter",
-  "business",
-  "scale",
-]);
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-export async function hasActiveMctbPaidEntitlement(workspaceId: string): Promise<boolean> {
-  const prisma = getPrisma();
-  const ws = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { billingPlan: true, stripeSubscriptionId: true },
-  });
-  if (!ws) return false;
-  const plan = String(ws.billingPlan || "").toLowerCase();
-  if (PAID_MCTB_PLANS.has(plan)) return true;
-  if (ws.stripeSubscriptionId && plan !== "canceled" && plan !== "suspended" && plan !== "expired") {
-    return true;
-  }
-  return false;
 }
 
 /** Paid conversion — retain TFN, cancel hold/release timers, preserve TFV + forwarding + history. */
@@ -72,6 +53,7 @@ export async function retainWorkspaceTollFreeOnPaidConversion(workspaceId: strin
   });
 
   await recordFunnelEvent(workspaceId, "MCTB_PAID", { retainedNumber: true }).catch(() => undefined);
+  await clearMctbServiceSuspension(workspaceId).catch(() => undefined);
 }
 
 /**
@@ -117,12 +99,7 @@ export async function markMctbTrialEndedWithoutPayment(workspaceId: string) {
 }
 
 export async function pauseMctbService(workspaceId: string) {
-  await updateMissedCallTextConfig({
-    workspaceId,
-    patch: { enabled: false },
-    actor: "system",
-    source: "mctb_trial_expired",
-  }).catch(() => undefined);
+  await setMctbServiceStatus(workspaceId, "SUSPENDED_TRIAL_EXPIRED");
 }
 
 export async function isWorkspaceTollFreeInHoldWindow(workspaceId: string): Promise<boolean> {
@@ -153,9 +130,17 @@ export async function shouldReleaseWorkspaceTollFreeNumber(workspaceId: string):
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
-    select: { billingPlan: true, workspaceLimits: true },
+    select: { billingPlan: true, stripeSubscriptionId: true, workspaceLimits: true },
   });
   if (!ws) return false;
+
+  // Bias toward retention when billing state is ambiguous.
+  if (ws.stripeSubscriptionId) {
+    const plan = String(ws.billingPlan || "").toLowerCase();
+    if (plan !== "canceled" && plan !== "expired" && plan !== "suspended") {
+      return false;
+    }
+  }
 
   const plan = String(ws.billingPlan || "").toLowerCase();
   if (plan === "trial" || plan === "onboarding" || plan === "growth") return false;

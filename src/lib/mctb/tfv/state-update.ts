@@ -144,6 +144,10 @@ export async function applyTfvStatusUpdate(
 
   if (statusChanged && mergedStatus === "APPROVED") {
     await applyTfvApprovalSideEffects(input.workspaceId, record);
+  } else if (statusChanged && mergedStatus === "ACTION_REQUIRED") {
+    await recordFunnelEvent(input.workspaceId, "MCTB_TFV_ACTION_REQUIRED", {
+      reason: record.failureReason || record.providerStatusRaw,
+    });
   } else if (statusChanged && mergedStatus === "REJECTED") {
     await recordFunnelEvent(input.workspaceId, "MCTB_TFV_REJECTED", {
       reason: record.failureReason || record.providerStatusRaw,

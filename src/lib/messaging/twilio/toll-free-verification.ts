@@ -3,7 +3,7 @@ import { getPrisma } from "@/lib/db";
 import { isLiveMessagingAdapter, getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { decryptSecret } from "@/lib/messaging/crypto";
 import { getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
-import { mapTwilioTfvStatus } from "@/lib/messaging/compliance/messaging-compliance";
+import { mapTwilioTfvFromProviderRecord, mapTwilioTfvStatus } from "@/lib/messaging/compliance/messaging-compliance";
 
 export type TwilioTfvSubmitInput = {
   reg: MessagingRegistration;
@@ -104,11 +104,12 @@ export async function fetchTwilioTollFreeVerification(input: {
 
   const client = requireSubaccountClient(input.reg);
   const verification = await client.messaging.v1.tollfreeVerifications(input.verificationSid).fetch();
+  const raw = verification as unknown as Record<string, unknown>;
   const status = String(verification.status || "");
   return {
     status,
-    mapped: mapTwilioTfvStatus(status),
-    raw: verification as unknown as Record<string, unknown>,
+    mapped: mapTwilioTfvFromProviderRecord(raw),
+    raw,
   };
 }
 

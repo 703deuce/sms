@@ -20,6 +20,13 @@ import { normalizeWorkspaceTollFreeFields } from "../src/lib/mctb/workspace-toll
 assert.equal(mapTwilioTfvStatus("TWILIO_APPROVED"), "APPROVED");
 assert.equal(mapTwilioTfvStatus("PENDING_REVIEW"), "PENDING");
 assert.equal(mapTwilioTfvStatus("TWILIO_REJECTED"), "REJECTED");
+assert.equal(
+  mapTwilioTfvStatus("TWILIO_REJECTED", {
+    editExpiration: new Date(Date.now() + 86400000).toISOString(),
+  }),
+  "ACTION_REQUIRED",
+);
+assert.equal(mapTwilioTfvStatus("IN_REVIEW"), "PENDING");
 assert.equal(isTfvApproved("APPROVED"), true);
 assert.equal(isTfvApproved("PENDING"), false);
 assert.equal(complianceStatusToA2p("APPROVED"), "APPROVED");

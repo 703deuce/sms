@@ -4,11 +4,13 @@ import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } f
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import {
   isTfvApproved,
+  mapTwilioTfvFromProviderRecord,
   mapTwilioTfvStatus,
   shouldDedupeTfvSubmission,
   type TollFreeVerificationRecord,
   type TollFreeVerificationStatus,
 } from "@/lib/messaging/compliance/messaging-compliance";
+import { buildTfvSubmissionPayload } from "@/lib/mctb/tfv/payload";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import {
@@ -19,9 +21,6 @@ import {
 import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { applyTfvStatusUpdate } from "./state-update";
 import { loadTfvForPhoneNumber, loadWorkspaceTfvForPhone } from "./store";
-
-const DEFAULT_USE_CASE_SUMMARY =
-  "When a consumer calls the business and the call is not answered, the consumer may receive one immediate SMS response acknowledging the missed call. No additional automated messages are sent unless the consumer replies.";
 
 function externalReferenceId(workspaceId: string, phoneNumberId: string): string {
   return `mctb-tfv:${workspaceId}:${phoneNumberId}`;
@@ -62,10 +61,6 @@ export async function resolveWorkspaceTollFreePhoneForTfv(workspaceId: string) {
 
 /** @deprecated Use resolveWorkspaceTollFreePhoneForTfv */
 export const resolveTrialPhoneForTfv = resolveWorkspaceTollFreePhoneForTfv;
-
-function mapConsentToOptInType(consentMode: string | null | undefined): "VERBAL" | "WEB_FORM" {
-  return consentMode === "existing_consent" ? "WEB_FORM" : "VERBAL";
-}
 
 export async function getTfvStatusForWorkspace(workspaceId: string) {
   const state = await loadMctbOnboardingState(workspaceId);
@@ -134,15 +129,23 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
       throw new Error("Business website is required before toll-free verification.");
     }
 
+    const consentPayload = buildTfvSubmissionPayload({
+      reg,
+      businessName: reg.legalBusinessName || state.businessName || "Business",
+      businessWebsite,
+      notificationEmail: reg.contactEmail || "",
+      messageTemplate: mctbConfig.messageTemplate || state.messageTemplate || "",
+      consentMode: state.consentMode,
+      tollfreePhoneNumberSid: phone.twilioSid!,
+      externalReferenceId: extRef,
+    });
+
     const submissionPayload = {
       businessName: reg.legalBusinessName || state.businessName || "Business",
       businessWebsite,
       notificationEmail: reg.contactEmail || "",
-      useCaseSummary: reg.useCaseDescription || DEFAULT_USE_CASE_SUMMARY,
-      productionMessageSample: mctbConfig.messageTemplate || state.messageTemplate || DEFAULT_USE_CASE_SUMMARY,
-      optInType: mapConsentToOptInType(state.consentMode),
-      optInImageUrls: reg.optInFormUrl ? [reg.optInFormUrl] : [],
-      messageVolume: reg.messageVolume || "100",
+      ...consentPayload,
+      optInType: consentPayload.optInType,
       tollfreePhoneNumberSid: phone.twilioSid!,
       externalReferenceId: extRef,
       businessStreetAddress: reg.street || undefined,
@@ -154,10 +157,6 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
       businessContactLastName: reg.contactLastName || undefined,
       businessContactEmail: reg.contactEmail || undefined,
       businessContactPhone: reg.contactPhone || undefined,
-      additionalInformation:
-        state.consentMode === "press_1"
-          ? "Caller hears SMS disclosure and presses 1 to consent to missed-call follow-up."
-          : "Business attests to existing consent for missed-call follow-up texts.",
       customerProfileSid: reg.secondaryProfileSid || undefined,
     };
 
@@ -172,7 +171,7 @@ export async function submitTrialTollFreeVerification(workspaceId: string): Prom
         ...submissionPayload,
       }));
 
-    const mapped = mapTwilioTfvStatus(result.status);
+    const mapped = mapTwilioTfvFromProviderRecord(result.raw);
     const now = new Date().toISOString();
     const initialStatus: TollFreeVerificationStatus =
       mapped === "APPROVED"
@@ -300,7 +299,15 @@ export async function handleTwilioTfvWebhook(input: {
     return { matched: false, reason: "not_workspace_primary_number" };
   }
 
-  const mapped = mapTwilioTfvStatus(input.status);
+  const mapped = mapTwilioTfvStatus(input.status, {
+    rejectionReason: input.rejectionReason,
+    editExpiration:
+      (input as { editExpiration?: string }).editExpiration ||
+      (input as { edit_expiration?: string }).edit_expiration,
+    editAllowed:
+      (input as { editAllowed?: boolean }).editAllowed ??
+      (input as { edit_allowed?: boolean }).edit_allowed,
+  });
   const update = await applyTfvStatusUpdate({
     source: "webhook",
     workspaceId,

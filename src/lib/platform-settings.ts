@@ -53,7 +53,7 @@ const DEFAULT_FEATURE_FLAGS: PlatformFeatureFlag[] = [
 
 const DEFAULT_TRIAL: PlatformTrialLimits = {
   days: 14,
-  messages: 500,
+  messages: 100,
   numbers: 1,
   credits: 25,
   requireCard: false,

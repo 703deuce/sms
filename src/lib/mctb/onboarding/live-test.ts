@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { isPlatformDemoNumber } from "./demo";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
+import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 
 export type LiveTestChecks = {
   callDetected: boolean;
@@ -30,17 +31,19 @@ export async function startLiveTestSession(workspaceId: string): Promise<void> {
     },
     currentStep: "live_test",
   });
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
   await recordFunnelEvent(workspaceId, "MCTB_LIVE_TEST_STARTED", {
     businessNumberE164: state.businessNumberE164,
-    trialNumberE164: state.trialNumber?.e164,
+    trialNumberE164: workspaceNumber?.e164,
   });
 }
 
 /** Auto-detect live test progress on the customer's assigned trial toll-free number. */
 export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestStatus> {
   const state = await loadMctbOnboardingState(workspaceId);
-  const trialE164 = state.trialNumber?.e164 || null;
-  const trialPhoneNumberId = state.trialNumber?.phoneNumberId || null;
+  const workspaceNumber = getWorkspaceTollFreeNumber(state);
+  const trialE164 = workspaceNumber?.e164 || null;
+  const trialPhoneNumberId = workspaceNumber?.phoneNumberId || null;
   const session = state.liveTestSession;
   const started = Boolean(session?.startedAt);
 
@@ -129,7 +132,7 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     Boolean(session?.consentCompletedAt) ||
     missedCall;
 
-  const passed = missedCall && textDelivered && replyReceived;
+  const passed = missedCall && textSent && consentCompleted;
 
   if (passed && !state.liveTestPassedAt) {
     await markLiveTestPassed(workspaceId, event.id);

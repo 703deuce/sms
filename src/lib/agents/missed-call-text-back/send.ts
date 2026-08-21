@@ -162,6 +162,11 @@ export async function executeMissedCallTextSend(input: {
       await recordDemoTextSent(input.workspaceId).catch(() => undefined);
     }
 
+    if (!demoMode) {
+      const { recordTrialSmsSegmentUsage } = await import("@/lib/mctb/entitlement");
+      await recordTrialSmsSegmentUsage(input.workspaceId, 1).catch(() => undefined);
+    }
+
     return { ok: true, messageId, status: "queued" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
