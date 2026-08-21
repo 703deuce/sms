@@ -3,7 +3,6 @@
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -29,9 +28,16 @@ export default function VoiceConversationsPage() {
     <div>
       <PageHeader
         title="Conversations"
-        description="Unified call threads per contact."
+        description="Talk to callers who replied to your missed-call text back messages."
+        actions={
+          <Link
+            href="/inbox"
+            className="inline-flex h-9 items-center rounded-[10px] border border-[#e5e7eb] bg-white px-4 text-[13px] font-semibold text-[#374151] hover:bg-[#f9fafb]"
+          >
+            Open SMS inbox
+          </Link>
+        }
       />
-      <VoiceSubNav />
       <Card className="overflow-hidden p-0">
         <Table>
           <THead>
@@ -58,7 +64,16 @@ export default function VoiceConversationsPage() {
               </TR>
             ))}
             {!rows.length && (
-              <TR><TD colSpan={5} className="text-muted-foreground">No conversations yet.</TD></TR>
+              <TR>
+                <TD colSpan={5} className="text-muted-foreground">
+                  No conversations yet. When someone replies to a missed-call text, threads
+                  appear here and in{" "}
+                  <Link href="/inbox" className="font-semibold text-primary underline">
+                    Inbox
+                  </Link>
+                  .
+                </TD>
+              </TR>
             )}
           </TBody>
         </Table>

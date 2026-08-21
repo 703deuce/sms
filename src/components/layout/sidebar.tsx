@@ -3,7 +3,6 @@
 import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
 import {
-  isReceptionistSectionPath,
   isSmartRoutingSectionPathExport,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
@@ -146,7 +145,13 @@ function bestExpandedKey(
       score = Math.max(score, base);
     }
 
-    if (item.label === "Receptionist" && isReceptionistSectionPath(pathname)) {
+    if (item.label === "Setup" && pathname.startsWith("/voice/setup")) {
+      score = Math.max(score, 60_000);
+    }
+    if (item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls")) {
+      score = Math.max(score, 60_000);
+    }
+    if (item.label === "Compliance" && pathname.startsWith("/compliance")) {
       score = Math.max(score, 60_000);
     }
 
@@ -383,11 +388,12 @@ export function Sidebar({
         {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
-          const receptionistOwned =
-            item.label === "Receptionist" && isReceptionistSectionPath(pathname);
-          const callsOwned =
-            item.label === "Calls" &&
-            (pathname === "/voice/calls" || pathname.startsWith("/voice/calls/"));
+          const setupOwned =
+            item.label === "Setup" && pathname.startsWith("/voice/setup");
+          const missedCallsOwned =
+            item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls");
+          const complianceOwned =
+            item.label === "Compliance" && pathname.startsWith("/compliance");
           const smartRoutingOwned =
             item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
           const expandKey = itemExpandKey(item);
@@ -405,8 +411,9 @@ export function Sidebar({
             item.label === "Settings" &&
             (pathname === "/settings" || pathname.startsWith("/settings/"));
           const ownedOutcome =
-            receptionistOwned ||
-            callsOwned ||
+            setupOwned ||
+            missedCallsOwned ||
+            complianceOwned ||
             smartRoutingOwned ||
             growOwned ||
             smsNumbersOwned ||

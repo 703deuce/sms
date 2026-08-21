@@ -1,34 +1,24 @@
 import {
-  AudioLines,
   BarChart3,
-  BookOpen,
   Hash,
-  HelpCircle,
   LayoutDashboard,
-  PhoneCall,
+  MessageSquare,
+  PhoneMissed,
   Puzzle,
   Settings,
+  ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
-import { buildReceptionistNavChildren } from "@/lib/solutions-nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
 };
 
 /**
- * AI Receptionist — primary launch sidebar.
- * Sub-pages live under Receptionist, Calls, Knowledge, etc.
+ * Missed Call Text Back — primary product sidebar.
  */
-export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
-  const agentId =
-    options.primaryVoiceAgentId != null && options.primaryVoiceAgentId !== ""
-      ? options.primaryVoiceAgentId
-      : null;
-  const receptionistHref = agentId
-    ? `/voice/agents/${agentId}/about`
-    : "/voice/receptionist";
-
+export function buildVoiceNav(_options: VoiceNavOptions = {}): NavItem[] {
   return [
     {
       label: "Dashboard",
@@ -36,41 +26,51 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       icon: LayoutDashboard,
       sectionLabel: "Main",
     },
-    { label: "Calls", href: "/voice/calls", icon: PhoneCall, emphasize: true },
     {
-      label: "Receptionist",
-      href: receptionistHref,
-      icon: AudioLines,
-      children: buildReceptionistNavChildren(agentId),
+      label: "Conversations",
+      href: "/voice/conversations",
+      icon: MessageSquare,
     },
-    { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
+    {
+      label: "Missed Calls",
+      href: "/voice/missed-calls",
+      icon: PhoneMissed,
+    },
+    {
+      label: "Setup",
+      href: "/voice/setup",
+      icon: SlidersHorizontal,
+    },
     {
       label: "Numbers",
       href: "/voice/numbers",
       icon: Hash,
       sectionLabel: "Manage",
     },
-    { label: "Integrations", href: "/integrations", icon: Puzzle },
+    {
+      label: "Compliance",
+      href: "/compliance",
+      icon: ShieldCheck,
+    },
     { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
+    { label: "Integrations", href: "/integrations", icon: Puzzle },
     {
       label: "Settings",
       href: "/settings/business",
       icon: Settings,
       sectionLabel: "Account",
     },
-    { label: "Help", href: "/contact", icon: HelpCircle },
   ];
 }
 
 export function getVoicePageTitle(pathname: string): string {
   if (pathname === "/dashboard" || pathname === "/outcomes") return "";
-  if (pathname.startsWith("/voice/calls")) return "Calls";
-  if (pathname.startsWith("/voice/receptionist")) return "Receptionist";
-  if (pathname.startsWith("/voice/agents")) return "Receptionist";
-  if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
+  if (pathname.startsWith("/voice/conversations")) return "Conversations";
+  if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
+  if (pathname.startsWith("/voice/setup")) return "Setup";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/voice/analytics")) return "Analytics";
-  if (pathname.startsWith("/voice/settings")) return "Settings";
+  if (pathname.startsWith("/compliance")) return "Messaging Compliance";
   if (pathname.startsWith("/integrations")) return "Integrations";
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/contact")) return "Help";
@@ -80,8 +80,8 @@ export function getVoicePageTitle(pathname: string): string {
 export function buildVoiceMobileNav() {
   return [
     { label: "Home", href: "/dashboard" },
-    { label: "Calls", href: "/voice/calls" },
-    { label: "Receptionist", href: "/voice/receptionist" },
-    { label: "Knowledge", href: "/voice/knowledge" },
+    { label: "Chats", href: "/voice/conversations" },
+    { label: "Missed", href: "/voice/missed-calls" },
+    { label: "Setup", href: "/voice/setup" },
   ];
 }

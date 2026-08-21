@@ -1,0 +1,240 @@
+import { NextResponse } from "next/server";
+import { getActiveWorkspaceId, getSession } from "@/lib/auth";
+import { getPrisma } from "@/lib/db";
+import {
+  loadMissedCallTextConfig,
+  updateMissedCallTextConfig,
+} from "@/lib/agents/missed-call-text-back/config";
+import { loadMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
+import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
+import type { MissedCallTextBackConfig } from "@/lib/solutions/missed-call-text-back/types";
+import {
+  deriveRequiredActions,
+  phoneNumbersSummary,
+  tollFreeSummary,
+} from "@/lib/compliance-helpers";
+import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
+
+export type MctbConsentMode = "press_1" | "existing_consent";
+
+export type MctbSetupPayload = {
+  phoneNumberId: string | null;
+  smsPhoneNumberId?: string | null;
+  enabled?: boolean;
+  triggerRules?: {
+    noAnswer?: boolean;
+    busy?: boolean;
+    rejected?: boolean;
+    timeout?: boolean;
+    voicemail?: boolean;
+    afterHours?: boolean;
+  };
+  messageTemplate?: string;
+  delaySeconds?: number;
+  consentMode?: MctbConsentMode;
+  businessHoursOnly?: boolean;
+  allowedStartTime?: string | null;
+  allowedEndTime?: string | null;
+  timezone?: string;
+  cooldownMinutes?: number;
+  replyNotifications?: boolean;
+  activate?: boolean;
+};
+
+const DEFAULT_CAMPAIGN_DESCRIPTION =
+  "When a consumer calls the business and the call is not answered, the consumer may receive one immediate SMS response acknowledging the missed call. No additional automated messages are sent unless the consumer replies.";
+
+const PRESS_1_CONSENT =
+  "During the inbound call, the consumer hears an SMS disclosure and presses 1 to consent to receiving the missed-call follow-up message.";
+
+export async function GET() {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const workspaceId = await getActiveWorkspaceId();
+  const prisma = getPrisma();
+
+  const ws = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { settingsJson: true },
+  });
+  const mctbSettings =
+    ws?.settingsJson &&
+    typeof ws.settingsJson === "object" &&
+    (ws.settingsJson as Record<string, unknown>).mctb &&
+    typeof (ws.settingsJson as Record<string, unknown>).mctb === "object"
+      ? ((ws.settingsJson as Record<string, unknown>).mctb as Record<string, unknown>)
+      : {};
+
+  const [runtime, solution, phoneNumbers, compliance, reg] = await Promise.all([
+    loadMissedCallTextConfig(workspaceId),
+    loadMissedCallTextBack(workspaceId),
+    prisma.phoneNumber.findMany({
+      where: { workspaceId },
+      orderBy: { e164: "asc" },
+      select: { id: true, e164: true, friendlyName: true, type: true, a2pStatus: true, status: true },
+    }),
+    loadComplianceOverview(workspaceId),
+    loadPhoneNumbers(workspaceId),
+  ]);
+
+  const requiredActions = deriveRequiredActions(compliance.registration, reg);
+  const messagingReady =
+    requiredActions.length === 0 &&
+    phoneNumbers.some((n: { a2pStatus?: string | null }) => String(n.a2pStatus).toLowerCase() === "approved");
+
+  const setupMeta =
+    solution?.config && typeof solution.config === "object"
+      ? (solution.config as Record<string, unknown>)
+      : {};
+
+  return NextResponse.json({
+    data: {
+      runtime,
+      solution: solution
+        ? {
+            setupId: solution.setupId,
+            flowId: solution.flowId,
+            status: solution.status,
+            config: solution.config,
+          }
+        : null,
+      phoneNumbers,
+      compliance: {
+        messagingReady,
+        requiredActions,
+        phoneSummary: phoneNumbersSummary(reg),
+        tollFreeSummary: tollFreeSummary(reg),
+        brandStatus: compliance.registration?.brandStatus || "Not started",
+        campaignStatus: compliance.registration?.campaignStatus || "Not started",
+      },
+      prefills: {
+        campaignDescription: DEFAULT_CAMPAIGN_DESCRIPTION,
+        press1Consent: PRESS_1_CONSENT,
+      },
+      consentMode:
+        (mctbSettings.consentMode as MctbConsentMode | undefined) ||
+        (setupMeta.consentMode as MctbConsentMode | undefined) ||
+        "press_1",
+    },
+  });
+}
+
+export async function POST(req: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const workspaceId = await getActiveWorkspaceId();
+  const body = (await req.json().catch(() => ({}))) as MctbSetupPayload;
+  const prisma = getPrisma();
+
+  const runtimeResult = await updateMissedCallTextConfig({
+    workspaceId,
+    patch: {
+      enabled: body.enabled,
+      delay_seconds: body.delaySeconds,
+      initial_message: body.messageTemplate,
+      phone_number_id: body.phoneNumberId,
+      sms_phone_number_id: body.smsPhoneNumberId,
+      cooldown_minutes: body.cooldownMinutes,
+      trigger_rules: body.triggerRules
+        ? {
+            no_answer: body.triggerRules.noAnswer,
+            busy: body.triggerRules.busy,
+            rejected: body.triggerRules.rejected,
+            timeout: body.triggerRules.timeout,
+            voicemail: body.triggerRules.voicemail,
+          }
+        : undefined,
+      quiet_hours: body.businessHoursOnly
+        ? {
+            enabled: true,
+            start: body.allowedStartTime || undefined,
+            end: body.allowedEndTime || undefined,
+          }
+        : undefined,
+    },
+    actor: session.userId,
+    source: "mctb_setup_page",
+  });
+
+  if (
+    body.businessHoursOnly !== undefined ||
+    body.allowedStartTime !== undefined ||
+    body.allowedEndTime !== undefined ||
+    body.timezone !== undefined
+  ) {
+    await prisma.missedCallTextConfig.update({
+      where: { workspaceId },
+      data: {
+        ...(body.businessHoursOnly !== undefined
+          ? { businessHoursOnly: body.businessHoursOnly }
+          : {}),
+        ...(body.allowedStartTime !== undefined
+          ? { allowedStartTime: body.allowedStartTime }
+          : {}),
+        ...(body.allowedEndTime !== undefined
+          ? { allowedEndTime: body.allowedEndTime }
+          : {}),
+        ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      },
+    });
+  }
+
+  const existing = await loadMissedCallTextBack(workspaceId);
+  const baseConfig = (existing?.config || {}) as MissedCallTextBackConfig;
+  const solutionConfig: MissedCallTextBackConfig & {
+    consentMode?: MctbConsentMode;
+    replyNotifications?: boolean;
+  } = {
+    ...baseConfig,
+    phoneNumberId: body.phoneNumberId ?? baseConfig.phoneNumberId,
+    firstMessage: body.messageTemplate ?? baseConfig.firstMessage,
+    initialDelaySeconds: body.delaySeconds ?? baseConfig.initialDelaySeconds ?? 0,
+    consentMode: body.consentMode,
+    replyNotifications: body.replyNotifications,
+    activate: body.activate ?? true,
+  };
+
+  const saved = await saveMissedCallTextBack(workspaceId, {
+    ...solutionConfig,
+    setupId: existing?.setupId || undefined,
+    activate: body.activate ?? true,
+  });
+
+  if (body.consentMode || body.replyNotifications !== undefined) {
+    const ws = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settingsJson: true },
+    });
+    const settings =
+      ws?.settingsJson && typeof ws.settingsJson === "object"
+        ? (ws.settingsJson as Record<string, unknown>)
+        : {};
+    const mctb =
+      settings.mctb && typeof settings.mctb === "object"
+        ? (settings.mctb as Record<string, unknown>)
+        : {};
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        settingsJson: {
+          ...settings,
+          mctb: {
+            ...mctb,
+            ...(body.consentMode ? { consentMode: body.consentMode } : {}),
+            ...(body.replyNotifications !== undefined
+              ? { replyNotifications: body.replyNotifications }
+              : {}),
+          },
+        } as object,
+      },
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    data: {
+      runtime: runtimeResult.config,
+      solution: saved,
+    },
+  });
+}

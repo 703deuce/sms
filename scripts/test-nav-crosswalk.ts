@@ -75,10 +75,11 @@ for (const category of solutionCategories) {
 // Launch sidebar matches simplified AI Receptionist nav.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/dashboard"), "Dashboard required");
-assert.ok(solutionsHrefs.has("/voice/receptionist"), "Receptionist required");
-assert.ok(solutionsHrefs.has("/voice/calls"), "Calls required");
-assert.ok(solutionsHrefs.has("/voice/knowledge"), "Knowledge required");
-assert.ok(solutionsHrefs.has("/voice/numbers"), "Receptionist numbers required");
+assert.ok(solutionsHrefs.has("/voice/conversations"), "Conversations required");
+assert.ok(solutionsHrefs.has("/voice/missed-calls"), "Missed Calls required");
+assert.ok(solutionsHrefs.has("/voice/setup"), "Setup required");
+assert.ok(solutionsHrefs.has("/voice/numbers"), "Numbers required");
+assert.ok(solutionsHrefs.has("/compliance"), "Compliance required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
 assert.ok(solutionsHrefs.has("/voice/analytics"), "Analytics required");
 assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
@@ -87,19 +88,19 @@ assert.ok(!solutionsHrefs.has("/smart-routing"), "Smart Routing hidden from laun
 
 const expectedTopLevel = [
   "Dashboard",
-  "Calls",
-  "Receptionist",
-  "Knowledge",
+  "Conversations",
+  "Missed Calls",
+  "Setup",
   "Numbers",
-  "Integrations",
+  "Compliance",
   "Analytics",
+  "Integrations",
   "Settings",
-  "Help",
 ];
 assert.deepEqual(
   solutionsNav.map((item) => item.label),
   expectedTopLevel,
-  "Launch sidebar top-level labels must match AI Receptionist product mockup",
+  "Launch sidebar top-level labels must match MCTB product nav",
 );
 
 for (const slug of solutionsLaunchSlugs()) {
@@ -155,8 +156,8 @@ const withInstances = buildSolutionsNav({
 });
 const withInstanceHrefs = new Set(collectNavHrefs(withInstances));
 assert.ok(
-  withInstanceHrefs.has(`/voice/agents/a2/about`),
-  "Launch nav should deep-link receptionist setup for the primary agent",
+  withInstanceHrefs.has("/voice/setup"),
+  "Launch nav should include Setup for product configuration",
 );
 
 console.log(

@@ -1,0 +1,466 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+type PhoneOption = {
+  id: string;
+  e164: string;
+  friendlyName: string | null;
+  type?: string | null;
+  a2pStatus?: string | null;
+};
+
+type SetupData = {
+  runtime: {
+    enabled: boolean;
+    phoneNumberId: string | null;
+    smsPhoneNumberId: string | null;
+    messageTemplate: string;
+    delaySeconds: number;
+    sendAfterNoAnswer: boolean;
+    sendAfterBusy: boolean;
+    sendAfterRejected: boolean;
+    sendAfterTimeout: boolean;
+    sendAfterVoicemail: boolean;
+    businessHoursOnly: boolean;
+    allowedStartTime: string | null;
+    allowedEndTime: string | null;
+    timezone: string;
+    cooldownMinutes: number;
+    conversationEnabled: boolean;
+  };
+  consentMode: "press_1" | "existing_consent";
+  phoneNumbers: PhoneOption[];
+  compliance: {
+    messagingReady: boolean;
+    requiredActions: string[];
+    brandStatus: string;
+    campaignStatus: string;
+  };
+  prefills: {
+    campaignDescription: string;
+    press1Consent: string;
+  };
+  solution: { setupId: string | null; status: string } | null;
+};
+
+const SECTIONS = [
+  { id: "number", title: "1. Choose the number" },
+  { id: "triggers", title: "2. What counts as missed" },
+  { id: "message", title: "3. Text-back message" },
+  { id: "consent", title: "4. Consent method" },
+  { id: "hours", title: "5. Business hours" },
+  { id: "cooldown", title: "6. Cooldown" },
+  { id: "replies", title: "7. Reply handling" },
+  { id: "test", title: "8. Test" },
+] as const;
+
+function fmtPhone(e164: string) {
+  const d = e164.replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) {
+    return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
+  }
+  return e164;
+}
+
+export function MctbSetupView() {
+  const [data, setData] = useState<SetupData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
+  const [messageTemplate, setMessageTemplate] = useState("");
+  const [delaySeconds, setDelaySeconds] = useState(0);
+  const [consentMode, setConsentMode] = useState<"press_1" | "existing_consent">("press_1");
+  const [triggers, setTriggers] = useState({
+    noAnswer: true,
+    busy: true,
+    rejected: true,
+    timeout: true,
+    voicemail: false,
+    afterHours: false,
+  });
+  const [businessHoursOnly, setBusinessHoursOnly] = useState(false);
+  const [allowedStartTime, setAllowedStartTime] = useState("09:00");
+  const [allowedEndTime, setAllowedEndTime] = useState("17:00");
+  const [timezone, setTimezone] = useState("America/New_York");
+  const [cooldownMinutes, setCooldownMinutes] = useState(60);
+  const [replyNotifications, setReplyNotifications] = useState(true);
+  const [enabled, setEnabled] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/mctb/setup", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to load setup");
+      const payload = json.data as SetupData;
+      setData(payload);
+      const r = payload.runtime;
+      setPhoneNumberId(r.phoneNumberId);
+      setMessageTemplate(r.messageTemplate);
+      setDelaySeconds(r.delaySeconds);
+      setConsentMode(payload.consentMode);
+      setTriggers({
+        noAnswer: r.sendAfterNoAnswer,
+        busy: r.sendAfterBusy,
+        rejected: r.sendAfterRejected,
+        timeout: r.sendAfterTimeout,
+        voicemail: r.sendAfterVoicemail,
+        afterHours: r.businessHoursOnly,
+      });
+      setBusinessHoursOnly(r.businessHoursOnly);
+      setAllowedStartTime(r.allowedStartTime || "09:00");
+      setAllowedEndTime(r.allowedEndTime || "17:00");
+      setTimezone(r.timezone);
+      setCooldownMinutes(r.cooldownMinutes);
+      setReplyNotifications(r.conversationEnabled);
+      setEnabled(r.enabled);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const selectedNumber = useMemo(
+    () => data?.phoneNumbers.find((n) => n.id === phoneNumberId) || null,
+    [data?.phoneNumbers, phoneNumberId],
+  );
+
+  const previewMessage = useMemo(() => {
+    const name = selectedNumber?.friendlyName || "Your Business";
+    return messageTemplate.replace(/\{\{customer\.firstName\}\}/g, "there").replace(
+      /\{\{business\.name\}\}/g,
+      name,
+    );
+  }, [messageTemplate, selectedNumber]);
+
+  async function save(activate: boolean) {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/mctb/setup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          phoneNumberId,
+          enabled,
+          messageTemplate,
+          delaySeconds,
+          consentMode,
+          cooldownMinutes,
+          replyNotifications,
+          businessHoursOnly,
+          allowedStartTime: businessHoursOnly ? allowedStartTime : null,
+          allowedEndTime: businessHoursOnly ? allowedEndTime : null,
+          timezone,
+          triggerRules: triggers,
+          activate,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+      setSaved(true);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="voice-card px-6 py-16 text-center text-sm text-muted-foreground">
+        Loading setup…
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
+          Setup
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Configure how missed-call text back works for your business number — triggers, message,
+          consent, hours, and testing.
+        </p>
+      </div>
+
+      {!data?.compliance.messagingReady ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-950">
+          <p className="font-semibold">Messaging setup incomplete</p>
+          <p className="mt-1">
+            Complete verification before missed-call text back can go live.{" "}
+            <Link href="/compliance" className="font-semibold text-amber-900 underline">
+              Open Messaging Compliance →
+            </Link>
+          </p>
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+        <nav className="hidden space-y-1 lg:block">
+          {SECTIONS.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="block rounded-lg px-3 py-2 text-[13px] font-medium text-[#4b5563] hover:bg-[#f3f4f6]"
+            >
+              {s.title}
+            </a>
+          ))}
+        </nav>
+
+        <div className="space-y-5">
+          <Card id="number" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Choose the number</h2>
+            <p className="text-[13px] text-muted-foreground">
+              Which business number should use missed-call recovery?
+            </p>
+            <select
+              className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
+              value={phoneNumberId || ""}
+              onChange={(e) => setPhoneNumberId(e.target.value || null)}
+            >
+              <option value="">Select a number…</option>
+              {(data?.phoneNumbers || []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.friendlyName ? `${n.friendlyName} · ` : ""}
+                  {fmtPhone(n.e164)}
+                </option>
+              ))}
+            </select>
+            <Link href="/voice/numbers" className="text-[13px] font-semibold text-primary hover:underline">
+              Manage numbers →
+            </Link>
+          </Card>
+
+          <Card id="triggers" className="scroll-mt-24 space-y-3 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">What counts as missed</h2>
+            {(
+              [
+                ["noAnswer", "No answer"],
+                ["busy", "Busy"],
+                ["rejected", "Rejected"],
+                ["timeout", "Ring timeout"],
+                ["voicemail", "Voicemail"],
+                ["afterHours", "After hours (when outside business hours)"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-[13px] text-[#374151]">
+                <input
+                  type="checkbox"
+                  checked={triggers[key]}
+                  onChange={(e) => setTriggers((t) => ({ ...t, [key]: e.target.checked }))}
+                />
+                {label}
+              </label>
+            ))}
+          </Card>
+
+          <Card id="message" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Text-back message</h2>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-[#374151]">First SMS</span>
+              <textarea
+                className="min-h-[100px] w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-[14px]"
+                value={messageTemplate}
+                onChange={(e) => setMessageTemplate(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-[#374151]">
+                Delay before sending (seconds)
+              </span>
+              <input
+                type="number"
+                min={0}
+                className="h-10 w-full max-w-[200px] rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
+                value={delaySeconds}
+                onChange={(e) => setDelaySeconds(Number(e.target.value || 0))}
+              />
+            </label>
+            <div className="rounded-lg bg-[#f9fafb] p-3 text-[13px] text-[#374151]">
+              <p className="font-semibold text-[#111827]">Preview</p>
+              <p className="mt-1 whitespace-pre-wrap">{previewMessage}</p>
+            </div>
+          </Card>
+
+          <Card id="consent" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Consent method</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  ["press_1", "Verified Consent", "Caller presses 1 during the disclosure"],
+                  ["existing_consent", "Existing Consent", "You certify prior permission exists"],
+                ] as const
+              ).map(([mode, title, desc]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setConsentMode(mode)}
+                  className={cn(
+                    "rounded-xl border p-4 text-left transition",
+                    consentMode === mode
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                      : "border-[#e5e7eb] hover:border-[#d1d5db]",
+                  )}
+                >
+                  <p className="text-[14px] font-semibold text-[#111827]">{title}</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{desc}</p>
+                </button>
+              ))}
+            </div>
+            <div className="rounded-lg bg-[#f9fafb] p-3 text-[12px] text-[#4b5563]">
+              <p className="font-semibold text-[#111827]">Campaign use case (prefilled for A2P)</p>
+              <p className="mt-1">{data?.prefills.campaignDescription}</p>
+              <p className="mt-3 font-semibold text-[#111827]">Opt-in description</p>
+              <p className="mt-1">
+                {consentMode === "press_1"
+                  ? data?.prefills.press1Consent
+                  : "Describe how callers previously opted in to receive texts from your business."}
+              </p>
+              <Link href="/compliance/campaign" className="mt-2 inline-block font-semibold text-primary">
+                Edit in Messaging Compliance →
+              </Link>
+            </div>
+          </Card>
+
+          <Card id="hours" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Business hours</h2>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={businessHoursOnly}
+                onChange={(e) => setBusinessHoursOnly(e.target.checked)}
+              />
+              Only send during business hours
+            </label>
+            {businessHoursOnly ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block space-y-1">
+                  <span className="text-[12px] font-semibold">Start</span>
+                  <input
+                    type="time"
+                    className="h-10 w-full rounded-lg border px-3 text-[14px]"
+                    value={allowedStartTime}
+                    onChange={(e) => setAllowedStartTime(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[12px] font-semibold">End</span>
+                  <input
+                    type="time"
+                    className="h-10 w-full rounded-lg border px-3 text-[14px]"
+                    value={allowedEndTime}
+                    onChange={(e) => setAllowedEndTime(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[12px] font-semibold">Timezone</span>
+                  <input
+                    className="h-10 w-full rounded-lg border px-3 text-[14px]"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
+          </Card>
+
+          <Card id="cooldown" className="scroll-mt-24 space-y-3 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Cooldown</h2>
+            <p className="text-[13px] text-muted-foreground">
+              Prevent multiple texts if the same person calls repeatedly.
+            </p>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold">Cooldown (minutes)</span>
+              <input
+                type="number"
+                min={0}
+                className="h-10 w-full max-w-[200px] rounded-lg border px-3 text-[14px]"
+                value={cooldownMinutes}
+                onChange={(e) => setCooldownMinutes(Number(e.target.value || 0))}
+              />
+            </label>
+          </Card>
+
+          <Card id="replies" className="scroll-mt-24 space-y-3 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Reply handling</h2>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={replyNotifications}
+                onChange={(e) => setReplyNotifications(e.target.checked)}
+              />
+              Route replies to Conversations and notify your team
+            </label>
+            <Link href="/voice/conversations" className="text-[13px] font-semibold text-primary hover:underline">
+              Open Conversations →
+            </Link>
+          </Card>
+
+          <Card id="test" className="scroll-mt-24 space-y-3 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Test</h2>
+            <p className="text-[13px] text-muted-foreground">
+              Call your business number, let it ring without answering, complete consent if
+              required, and confirm the SMS and conversation thread appear.
+            </p>
+            {selectedNumber ? (
+              <p className="text-[14px] font-semibold text-[#111827]">
+                Test number: {fmtPhone(selectedNumber.e164)}
+              </p>
+            ) : (
+              <p className="text-[13px] text-rose-600">Select a number above before testing.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Link href="/voice/missed-calls">
+                <Button variant="outline">View missed call log</Button>
+              </Link>
+              <Link href="/voice/conversations">
+                <Button variant="outline">View conversations</Button>
+              </Link>
+            </div>
+          </Card>
+
+          {error ? <p className="text-[13px] font-medium text-rose-600">{error}</p> : null}
+          {saved ? (
+            <p className="text-[13px] font-medium text-violet-700">Setup saved.</p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2 pb-8">
+            <Button disabled={saving} onClick={() => save(true)}>
+              {saving ? "Saving…" : enabled ? "Save & activate" : "Save & activate"}
+            </Button>
+            <Button variant="outline" disabled={saving} onClick={() => save(false)}>
+              Save draft
+            </Button>
+            <label className="ml-2 flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+              Enabled
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

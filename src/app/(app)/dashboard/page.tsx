@@ -1,6 +1,5 @@
-import { OperationalDashboardView } from "@/components/outcomes/operational-dashboard-view";
+import { MctbDashboardView } from "@/components/mctb/dashboard-view";
 import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
-import { loadOperationalDashboardData } from "@/lib/outcomes/operational-dashboard";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 
 function parseRange(raw: string | undefined): DashboardDateRange {
@@ -8,19 +7,14 @@ function parseRange(raw: string | undefined): DashboardDateRange {
   return "7d";
 }
 
-/** AI Receptionist primary dashboard — real call metrics and recent activity. */
-export default async function AiReceptionistDashboardPage({
+/** Missed Call Text Back — operational dashboard. */
+export default async function MctbDashboardPage({
   searchParams,
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
-  const { workspaceId, session } = await requireWorkspaceContext();
+  const { session } = await requireWorkspaceContext();
   const params = await searchParams;
   const range = parseRange(params.range);
-  const data = await loadOperationalDashboardData(
-    workspaceId,
-    session.name,
-    range,
-  );
-  return <OperationalDashboardView initialData={data} />;
+  return <MctbDashboardView userName={session.name} range={range} />;
 }

@@ -152,8 +152,8 @@ export default async function ComplianceOverviewPage() {
   return (
     <div className="space-y-5">
       <SectionHeader
-        title="Compliance"
-        description="A2P registration, consents, and messaging compliance for your account."
+        title="Messaging Compliance"
+        description="10DLC and toll-free verification so missed-call text back can send SMS legally."
         icon={ShieldCheck}
         iconTone="bg-violet-50 text-violet-600"
         actions={

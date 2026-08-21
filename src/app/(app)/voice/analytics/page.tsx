@@ -2,7 +2,6 @@
 
 import { Card, StatCard } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import { formatNumber } from "@/lib/utils";
 import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -59,7 +58,7 @@ export default function VoiceAnalyticsPage() {
     <div>
       <PageHeader
         title="Analytics"
-        description="Inbound/outbound, answer rates, bookings, transfers, sentiment, and cost."
+        description="Missed calls, texts sent, reply rates, and recovery performance."
         actions={
           <div className="flex flex-wrap gap-2">
             <select
@@ -95,8 +94,6 @@ export default function VoiceAnalyticsPage() {
           </div>
         }
       />
-      <VoiceSubNav />
-
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total calls" value={formatNumber(data?.totalCalls ?? 0)} />
         <StatCard label="Answer rate" value={`${Math.round((data?.answerRate ?? 0) * 100)}%`} />
