@@ -270,17 +270,49 @@ export async function ensureProductWorkspace(
 ): Promise<{ workspaceId: string; workspaceType: WorkspaceType }> {
   const prisma = getPrisma();
   const preferredType: WorkspaceType = product === "numbers" ? "PERSONAL" : "BUSINESS";
-  const existing = await prisma.membership.findFirst({
+  const memberships = await prisma.membership.findMany({
     where: { userId, workspace: { type: preferredType } },
     include: { workspace: { select: { id: true, type: true } } },
   });
 
-  if (existing) {
-    await ensureWorkspaceEntitlements(existing.workspaceId);
+  if (memberships.length) {
+    let best = memberships[0] as (typeof memberships)[number];
+    let bestCount = -1;
+    for (const m of memberships) {
+      const count = await prisma.phoneNumber.count({ where: { workspaceId: m.workspaceId } });
+      if (count > bestCount) {
+        best = m;
+        bestCount = count;
+      }
+    }
+    await ensureWorkspaceEntitlements(best.workspaceId);
     return {
-      workspaceId: existing.workspaceId,
-      workspaceType: existing.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+      workspaceId: best.workspaceId,
+      workspaceType: best.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
     };
+  }
+
+  const ownedWithNumbers = await prisma.workspace.findFirst({
+    where: { ownerUserId: userId, type: preferredType },
+    select: { id: true, type: true },
+  });
+  if (ownedWithNumbers) {
+    const count = await prisma.phoneNumber.count({ where: { workspaceId: ownedWithNumbers.id } });
+    if (count > 0) {
+      const existingMembership = await prisma.membership.findFirst({
+        where: { userId, workspaceId: ownedWithNumbers.id },
+      });
+      if (!existingMembership) {
+        await prisma.membership.create({
+          data: { userId, workspaceId: ownedWithNumbers.id, role: "OWNER" },
+        });
+      }
+      await ensureWorkspaceEntitlements(ownedWithNumbers.id);
+      return {
+        workspaceId: ownedWithNumbers.id,
+        workspaceType: ownedWithNumbers.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+      };
+    }
   }
 
   const workspace = await createWorkspaceForUser(
