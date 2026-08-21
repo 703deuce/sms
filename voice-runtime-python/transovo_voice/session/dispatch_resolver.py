@@ -227,8 +227,9 @@ async def resolve_inbound_bootstrap(
         return dispatch, path
 
     logger.warning(
-        "resolve_dispatch_snapshot failed (%s); falling back to bootstrap_inbound",
+        "resolve_dispatch_snapshot failed (%s, code=%s); falling back to bootstrap_inbound",
         dispatch.get("error"),
+        dispatch.get("code"),
     )
     legacy = await backend.call(
         "bootstrap_inbound",

@@ -193,6 +193,16 @@ async def run_inbound_session(ctx: JobContext) -> None:
     dispatch_resolve_ms = int((time.perf_counter() - dispatch_resolve_started) * 1000)
     bootstrap["callId"] = call_id
     startup_timeline.set_dispatch_resolve_ms(dispatch_resolve_ms, path=bootstrap_path)
+    log_event(
+        "dispatch_bootstrap_resolved",
+        call_id=call_id,
+        extra={
+            "bootstrapPath": bootstrap_path,
+            "dispatchResolveMs": dispatch_resolve_ms,
+            "toE164": to_e164,
+            "fromE164": from_e164,
+        },
+    )
     startup_timeline.mark(
         "routing_metadata_parsed",
         extra={"dispatchResolveMs": dispatch_resolve_ms, "bootstrapPath": bootstrap_path},

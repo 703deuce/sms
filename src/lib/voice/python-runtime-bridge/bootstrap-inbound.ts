@@ -18,7 +18,10 @@ import {
   isLabLiveKitTemplate,
   slimReceptionistCompiledForBootstrap,
 } from "@/lib/voice/python-runtime-bridge/bootstrap-payload";
-import { getPythonRuntimeBootstrapSnapshot } from "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot";
+import {
+  buildPythonRuntimeBootstrapSnapshot,
+  getPythonRuntimeBootstrapSnapshot,
+} from "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot";
 import type { PythonRuntimeBootstrapInput, PythonRuntimeBootstrapResult, PythonRuntimeError } from "./types";
 
 function parseJobMetadata(raw: PythonRuntimeBootstrapInput["jobMetadata"]): Record<string, unknown> | null {
@@ -246,9 +249,15 @@ export async function bootstrapInboundForPython(
   ]);
   mark("parallel_call_create_config", t);
 
-  const snapshot = getPythonRuntimeBootstrapSnapshot(
-    loaded.config.advanced as Record<string, unknown> | undefined,
-  );
+  const snapshot =
+    getPythonRuntimeBootstrapSnapshot(
+      loaded.config.advanced as Record<string, unknown> | undefined,
+    ) ||
+    buildPythonRuntimeBootstrapSnapshot(loaded.config, {
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      agentName: routing.agentName,
+    });
   let result: PythonRuntimeBootstrapResult;
 
   if (snapshot) {

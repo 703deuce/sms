@@ -7,6 +7,7 @@ import {
   type RoomMetadata,
 } from "@/lib/telephony/provisioning";
 import {
+  buildPythonRuntimeBootstrapSnapshot,
   getPythonRuntimeBootstrapSnapshot,
   PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY,
   type PythonRuntimeBootstrapSnapshot,
@@ -214,9 +215,13 @@ export async function resolveDispatchSnapshotForPython(
       agentId: explicit.agentId,
       agentVersionId: explicit.publishedVersionId,
     });
-    const snapshot = getPythonRuntimeBootstrapSnapshot(
-      loaded.config.advanced as Record<string, unknown> | undefined,
-    );
+    const advanced = loaded.config.advanced as Record<string, unknown> | undefined;
+    let snapshot =
+      getPythonRuntimeBootstrapSnapshot(advanced) ||
+      buildPythonRuntimeBootstrapSnapshot(loaded.config, {
+        workspaceId: explicit.workspaceId,
+        agentId: explicit.agentId,
+      });
     if (snapshot) {
       return buildBootstrapFromSnapshot({
         snapshot,
@@ -228,6 +233,18 @@ export async function resolveDispatchSnapshotForPython(
       });
     }
   }
+
+  console.log(
+    JSON.stringify({
+      service: "transovo-web",
+      event: "resolve_dispatch_snapshot_miss",
+      toE164: normalizedTo || null,
+      explicitAgentId: explicit?.agentId || null,
+      explicitWorkspaceId: explicit?.workspaceId || null,
+      dispatchSource: explicit?.dispatchSource || null,
+      timestamp: new Date().toISOString(),
+    }),
+  );
 
   return {
     ok: false,
