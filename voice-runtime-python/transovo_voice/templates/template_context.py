@@ -102,16 +102,13 @@ async def deliver_template_greeting(
     observability: object | None = None,
 ) -> None:
     """Proactive greeting on connect — must use generate_reply on native gpt-realtime."""
+    _ = observability
     greeting = resolve_greeting_text(ud)
     if greeting:
         await deliver_scripted_speech(session, greeting, allow_interruptions=True)
     else:
         await session.generate_reply(  # type: ignore[attr-defined]
             instructions=resolve_greeting_instructions(ud, fallback=fallback),
-        )
-    if observability is not None:
-        asyncio.create_task(
-            observability.mark_first_agent_response(source="greeting"),  # type: ignore[attr-defined]
         )
 
 

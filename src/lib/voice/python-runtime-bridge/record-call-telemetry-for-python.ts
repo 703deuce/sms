@@ -3,6 +3,87 @@ import type { Prisma } from "@/lib/domain";
 import { appendTraceEvent } from "@/lib/voice/workflow-engine/trace";
 
 const METRICS_KEY = "livekitCallMetrics";
+const MAX_TURN_ROWS = 50;
+
+export function mergeTurnLatency(
+  prev: Record<string, unknown>,
+  metrics: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!metrics) return prev;
+  const turnNumber = metrics.turnNumber;
+  if (typeof turnNumber !== "number") return prev;
+
+  const existing = Array.isArray(prev.turnLatencies)
+    ? (prev.turnLatencies as Record<string, unknown>[])
+    : [];
+  const nextRow = {
+    turnNumber,
+    userToAgentResponseMs:
+      typeof metrics.userToAgentResponseMs === "number" ? metrics.userToAgentResponseMs : null,
+    responseMsFromCallStart:
+      typeof metrics.responseMsFromCallStart === "number"
+        ? metrics.responseMsFromCallStart
+        : null,
+    responseSource:
+      typeof metrics.responseSource === "string" ? metrics.responseSource : undefined,
+    proactive: metrics.proactive === true,
+    at: new Date().toISOString(),
+  };
+  const turnLatencies = [...existing.filter((row) => row.turnNumber !== turnNumber), nextRow]
+    .sort((a, b) => Number(a.turnNumber) - Number(b.turnNumber))
+    .slice(-MAX_TURN_ROWS);
+
+  const userLatencies = turnLatencies
+    .map((row) => row.userToAgentResponseMs)
+    .filter((value): value is number => typeof value === "number");
+
+  const merged: Record<string, unknown> = {
+    ...prev,
+    turnCount: turnLatencies.length,
+    turnLatencies,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (userLatencies.length) {
+    merged.avgUserToAgentResponseMs = Math.round(
+      userLatencies.reduce((sum, value) => sum + value, 0) / userLatencies.length,
+    );
+    merged.maxUserToAgentResponseMs = Math.max(...userLatencies);
+    merged.minUserToAgentResponseMs = Math.min(...userLatencies);
+    merged.lastUserToAgentResponseMs = userLatencies[userLatencies.length - 1];
+  }
+
+  if (typeof metrics.userTurnCount === "number") {
+    merged.userTurnCount = metrics.userTurnCount;
+  }
+
+  return merged;
+}
+
+function mergeCallMetrics(
+  prev: Record<string, unknown>,
+  kind: string,
+  metrics: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (kind === "turn_response") {
+    return mergeTurnLatency(prev, metrics);
+  }
+  if (kind === "call_summary" && metrics?.turnLatencies) {
+    return {
+      ...prev,
+      ...metrics,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  if (metrics && Object.keys(metrics).length) {
+    return {
+      ...prev,
+      ...metrics,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  return prev;
+}
 
 async function persistToolExecution(input: {
   workspaceId: string;
@@ -74,19 +155,16 @@ export async function recordCallTelemetryForPython(input: {
     select: { id: true, metadata: true },
   });
 
-  if (call && input.metrics && Object.keys(input.metrics).length) {
+  if (call && (input.metrics || input.kind === "turn_response")) {
     const meta = (call.metadata || {}) as Record<string, unknown>;
     const prev = (meta[METRICS_KEY] || {}) as Record<string, unknown>;
+    const nextMetrics = mergeCallMetrics(prev, input.kind, input.metrics);
     await prisma.voiceCall.update({
       where: { id: call.id },
       data: {
         metadata: {
           ...meta,
-          [METRICS_KEY]: {
-            ...prev,
-            ...input.metrics,
-            updatedAt: new Date().toISOString(),
-          },
+          [METRICS_KEY]: nextMetrics,
         },
       },
     });
