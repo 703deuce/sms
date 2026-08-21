@@ -3,10 +3,6 @@ import { requireLiveKitEnv } from "@/lib/voice/runtime-provider/config";
 export const TRANSOVO_LIVEKIT_AGENT_NAME =
   process.env.LIVEKIT_AGENT_NAME?.trim() || "transovo-voice-runtime";
 
-/** Outbound-only TypeScript worker — must NOT register the inbound agent name. */
-export const TRANSOVO_OUTBOUND_AGENT_NAME =
-  process.env.LIVEKIT_OUTBOUND_AGENT_NAME?.trim() || "transovo-outbound-runtime";
-
 export const TRANSOVO_LIVEKIT_TRUNK_NAME =
   process.env.LIVEKIT_INBOUND_TRUNK_NAME?.trim() || "transovo-telnyx-inbound";
 

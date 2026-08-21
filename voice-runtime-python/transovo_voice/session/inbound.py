@@ -148,7 +148,6 @@ async def run_inbound_session(ctx: JobContext) -> None:
     ud = _userdata_from_bootstrap(bootstrap)
     template_id = resolve_template_id(
         str(bootstrap.get("agentTemplate") or ud.agent_template),
-        production=True,
     )
 
     log_event(

@@ -11,13 +11,11 @@ import type {
   TelephonyOutcome,
 } from "./types";
 
-import { TRANSOVO_OUTBOUND_AGENT_NAME } from "@/lib/telephony/provisioning/config";
-
 export const TRANSOVO_OUTBOUND_ROOM_PREFIX =
   process.env.LIVEKIT_OUTBOUND_ROOM_PREFIX?.trim() || "transovo-outbound-";
 
-/** @deprecated Outbound uses dedicated outbound worker — not the inbound Python agent. */
-export const TRANSOVO_OUTBOUND_AGENT_NAME_EXPORT = TRANSOVO_OUTBOUND_AGENT_NAME;
+const OUTBOUND_VOICE_DISABLED =
+  process.env.OUTBOUND_VOICE_ENABLED !== "1" && process.env.OUTBOUND_VOICE_ENABLED !== "true";
 
 const E164_RE = /^\+[1-9]\d{6,14}$/;
 
@@ -101,6 +99,12 @@ export async function startOutboundLeadQualificationCall(input: {
   /** Per-call OpenAI Realtime native voice (marin, coral, etc.). */
   realtimeVoice?: string;
 }): Promise<OutboundCallStartResult> {
+  if (OUTBOUND_VOICE_DISABLED) {
+    throw new Error(
+      "Outbound AI voice is disabled during the LiveKit Python rebuild. Inbound template testing uses livekit_basic_voice.",
+    );
+  }
+
   if (input.isTest && input.requireTestModeEnv !== false) {
     assertOutboundTestModeEnabled();
   }
@@ -189,7 +193,7 @@ export async function startOutboundLeadQualificationCall(input: {
       destinationE164,
       callerIdE164,
       roomName,
-      agentName: TRANSOVO_OUTBOUND_AGENT_NAME,
+      agentName: "disabled",
       realtimeVoice: jobMetadata.realtimeVoice || null,
     },
   }).catch(() => undefined);
@@ -203,7 +207,7 @@ export async function startOutboundLeadQualificationCall(input: {
   try {
     const dispatch = await dispatchClient.createDispatch(
       roomName,
-      TRANSOVO_OUTBOUND_AGENT_NAME,
+      "outbound-disabled",
       { metadata: JSON.stringify(jobMetadata) },
     );
     dispatchId = dispatch.id || null;

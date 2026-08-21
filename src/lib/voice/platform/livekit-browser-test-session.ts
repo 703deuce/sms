@@ -60,7 +60,7 @@ export async function createLiveKitBrowserTestSession(input: {
     dispatchSource: "job_metadata" as const,
     livekitProfile: "frontdesk_realtime",
     browserTest: true,
-    agentTemplate: input.agentTemplate || "transovo_receptionist_v1",
+    agentTemplate: input.agentTemplate || "livekit_basic_voice",
     runtime: "livekit_python",
   };
 

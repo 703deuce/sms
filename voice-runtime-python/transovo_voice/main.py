@@ -32,11 +32,9 @@ async def entrypoint(ctx: JobContext) -> None:
         log_event(
             "python_voice_outbound_skipped",
             room=ctx.room.name,
-            extra={"note": "Outbound uses transovo-outbound-runtime TypeScript worker"},
+            extra={"note": "Outbound AI voice disabled during clean-room rebuild"},
         )
-        logger.warning(
-            "Outbound jobs use transovo-outbound-runtime — this Python worker is inbound-only",
-        )
+        logger.warning("Outbound jobs are disabled — inbound template testing only")
         return
     await run_inbound_session(ctx)
 

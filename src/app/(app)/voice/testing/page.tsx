@@ -250,7 +250,9 @@ export default function VoiceTestingPage() {
         <Card className="space-y-4 p-5 lg:col-span-2">
           <h2 className="font-medium">LiveKit template lab</h2>
           <p className="text-sm text-muted-foreground">
-            Test official LiveKit-derived templates through the same Python worker used in production.
+            Test official LiveKit-derived templates through the Python worker. First test:{" "}
+            <strong>livekit_basic_voice</strong>. The composed receptionist is blocked until
+            reference templates are VERIFIED.
           </p>
           <div>
             <Label>Template</Label>

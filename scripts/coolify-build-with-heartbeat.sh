@@ -45,13 +45,7 @@ if [[ ! -f .next/standalone/server.js ]]; then
 fi
 
 bundle_typescript_voice_runtime() {
-  local dest_root="$1"
-  if [[ ! -d voice-runtime/src ]]; then
-    return 0
-  fi
-  echo "[coolify-build] bundling TypeScript voice runtime fallback into ${dest_root}"
-  mkdir -p "${dest_root}/voice-runtime"
-  cp -a voice-runtime/src "${dest_root}/voice-runtime/src"
+  echo "[coolify-build] skipping TypeScript voice runtime bundle (Python-only voice worker)"
 }
 
 # Standalone server runs from .next/standalone — copy assets only (no Python bundle).

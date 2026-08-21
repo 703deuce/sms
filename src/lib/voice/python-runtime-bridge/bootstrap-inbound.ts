@@ -141,10 +141,9 @@ export async function bootstrapInboundForPython(
     typeof jobMetaRaw?.agentTemplate === "string" ? jobMetaRaw.agentTemplate.trim() : "";
   const roomTemplate =
     typeof roomMeta?.agentTemplate === "string" ? roomMeta.agentTemplate.trim() : "";
-  const agentTemplate =
-    jobTemplate ||
-    roomTemplate ||
-    (runtimeProfile === "generic_receptionist" ? "transovo_receptionist_v1" : "livekit_basic_voice");
+  const envTemplate = process.env.VOICE_ACTIVE_TEMPLATE?.trim() || "";
+  const defaultTemplate = "livekit_basic_voice";
+  const agentTemplate = jobTemplate || roomTemplate || envTemplate || defaultTemplate;
 
   const realtimeAdvanced = advanced?.realtime as Record<string, unknown> | undefined;
   const calendarAdvanced = advanced?.calendar as Record<string, unknown> | undefined;

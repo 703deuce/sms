@@ -21,6 +21,18 @@ export async function POST(request: Request) {
   if (!template) {
     return NextResponse.json({ error: "Unknown template" }, { status: 400 });
   }
+  if (
+    templateId === "transovo_receptionist_v1" &&
+    process.env.ALLOW_COMPOSED_RECEPTIONIST !== "1"
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "transovo_receptionist_v1 is COMPOSED_UNVERIFIED — verify reference templates first or set ALLOW_COMPOSED_RECEPTIONIST=1",
+      },
+      { status: 403 },
+    );
+  }
 
   const prisma = getPrisma();
   const agent = body.agentId
