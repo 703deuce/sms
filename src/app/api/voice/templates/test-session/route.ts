@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { getAgentTemplate } from "@/lib/voice/templates/catalog";
-import { createLiveKitBrowserTestSession } from "@/lib/voice/platform/livekit-browser-test-session";
+import { requireSession } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { createLiveKitBrowserTestSession } from "@/lib/voice/platform/livekit-browser-test-session";
+import { getAgentTemplate } from "@/lib/voice/templates/catalog";
 
 /** Start a browser test using a specific internal LiveKit template. */
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireSession();
+  if ("error" in auth) return auth.error;
 
   const body = (await request.json()) as {
     agentId?: string;
@@ -37,10 +35,10 @@ export async function POST(request: Request) {
   const prisma = getPrisma();
   const agent = body.agentId
     ? await prisma.voiceAgent.findFirst({
-        where: { id: body.agentId, workspaceId: session.workspaceId },
+        where: { id: body.agentId, workspaceId: auth.workspaceId },
       })
     : await prisma.voiceAgent.findFirst({
-        where: { workspaceId: session.workspaceId },
+        where: { workspaceId: auth.workspaceId },
         orderBy: { updatedAt: "desc" },
       });
 
@@ -49,8 +47,8 @@ export async function POST(request: Request) {
   }
 
   const result = await createLiveKitBrowserTestSession({
-    workspaceId: session.workspaceId,
-    userId: session.userId,
+    workspaceId: auth.workspaceId,
+    userId: auth.session.userId,
     agentId: agent.id,
     agentTemplate: templateId,
   });
@@ -61,7 +59,15 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     data: {
-      ...result.data,
+      sessionId: result.sessionId,
+      agentId: result.agentId,
+      telnyxAssistantId: result.telnyxAssistantId,
+      webrtc: result.webrtc,
+      voice: result.voice,
+      synced: result.synced,
+      expiresAt: result.expiresAt,
+      testVariables: result.testVariables,
+      livekit: result.livekit,
       templateId,
       templateName: template.name,
       runtime: "livekit_python",

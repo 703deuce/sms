@@ -25,6 +25,7 @@ export default function VoiceTestingPage() {
   const [lastCallId, setLastCallId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [templateId, setTemplateId] = useState("livekit_basic_voice");
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     fetch("/api/voice/agents")
