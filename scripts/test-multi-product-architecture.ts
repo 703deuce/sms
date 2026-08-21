@@ -104,7 +104,7 @@ assert.ok(numbersHrefs.includes("/personal/vault"), "Numbers nav includes vault"
 assert.ok(voiceHrefs.includes("/voice/setup"), "Voice nav includes Setup");
 assert.ok(voiceLabels.includes("Conversations"), "Voice nav includes Conversations");
 assert.ok(voiceLabels.includes("Missed Calls"), "Voice nav includes Missed Calls");
-assert.ok(voiceLabels.includes("Compliance"), "Voice nav includes Compliance");
+assert.ok(voiceLabels.includes("Messaging Compliance"), "Voice nav includes Messaging Compliance");
 assert.ok(!voiceLabels.includes("Receptionist"), "Receptionist removed from voice nav");
 assert.ok(!voiceLabels.includes("Knowledge"), "Knowledge removed from voice nav");
 assert.ok(!voiceLabels.includes("Automations"), "Automations hidden from voice nav");

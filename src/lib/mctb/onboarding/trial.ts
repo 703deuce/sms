@@ -2,8 +2,8 @@ import { getPrisma } from "@/lib/db";
 import { getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
-import { deriveTfvStatus } from "./trial-number";
-import type { MctbOnboardingState } from "./types";
+import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
+import { evaluateTrialActivationGates } from "./trial-gates";
 import { MCTB_ONBOARDING_STEP_ORDER } from "./types";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -17,52 +17,32 @@ export type TrialActivationRequirements = {
   forwardingConnected: boolean;
   liveTestPassed: boolean;
   missing: string[];
+  /** @deprecated use tfvApproved */
+  complianceApproved?: boolean;
 };
 
 export async function getTrialActivationRequirements(
   workspaceId: string,
 ): Promise<TrialActivationRequirements> {
-  const prisma = getPrisma();
   const state = await loadMctbOnboardingState(workspaceId);
-  const trialPhoneNumberId = state.trialNumber?.phoneNumberId;
+  const tfv = await getTfvStatusForWorkspace(workspaceId);
 
-  const [reg, trialPn] = await Promise.all([
-    prisma.messagingRegistration.findUnique({ where: { workspaceId } }),
-    trialPhoneNumberId
-      ? prisma.phoneNumber.findFirst({
-          where: { id: trialPhoneNumberId, workspaceId },
-          select: { a2pStatus: true, e164: true },
-        })
-      : null,
-  ]);
-
-  const tfvStatus = deriveTfvStatus({
-    a2pStatus: trialPn?.a2pStatus,
-    numberStatus: reg?.numberStatus,
-    overallStatus: reg?.overallStatus,
-    registrationSubmittedAt: reg?.registrationSubmittedAt,
-    registrationApprovedAt: reg?.registrationApprovedAt,
-    registrationFailureReason: reg?.registrationFailureReason,
+  const gate = evaluateTrialActivationGates({
+    trialPhoneE164: state.trialNumber?.e164 || null,
+    trialPhoneNumberId: state.trialNumber?.phoneNumberId || null,
+    tfvPhoneNumberId: tfv.trialPhoneNumberId ?? null,
+    tfvStatus: tfv.status,
+    forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
+    liveTestPassed: Boolean(state.liveTestPassedAt),
+    trialAlreadyStarted: false,
   });
 
-  const tfvApproved = Boolean(
-    state.tfvApprovedAt || tfvStatus === "approved",
-  );
-  const forwardingConnected = Boolean(
-    state.forwardingConnectedAt && state.businessNumberE164,
-  );
-  const liveTestPassed = Boolean(state.liveTestPassedAt);
-
-  const missing: string[] = [];
-  if (!tfvApproved) missing.push("tfv_approved");
-  if (!forwardingConnected) missing.push("forwarding_connected");
-  if (!liveTestPassed) missing.push("live_test_passed");
-
   return {
-    tfvApproved,
-    forwardingConnected,
-    liveTestPassed,
-    missing,
+    tfvApproved: tfv.approved,
+    forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
+    liveTestPassed: Boolean(state.liveTestPassedAt),
+    missing: gate.missing,
+    complianceApproved: tfv.approved,
   };
 }
 
@@ -86,9 +66,20 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
     }
   }
 
-  const reqs = await getTrialActivationRequirements(workspaceId);
-  if (reqs.missing.length > 0) {
-    return { ok: false, reason: reqs.missing.join(",") };
+  const state = await loadMctbOnboardingState(workspaceId);
+  const tfv = await getTfvStatusForWorkspace(workspaceId);
+  const gate = evaluateTrialActivationGates({
+    trialPhoneE164: state.trialNumber?.e164 || null,
+    trialPhoneNumberId: state.trialNumber?.phoneNumberId || null,
+    tfvPhoneNumberId: tfv.trialPhoneNumberId ?? null,
+    tfvStatus: tfv.status,
+    forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
+    liveTestPassed: Boolean(state.liveTestPassedAt),
+    trialAlreadyStarted: false,
+  });
+
+  if (!gate.canActivate) {
+    return { ok: false, reason: gate.missing.join(",") };
   }
 
   const trial = await getTrialLimits();

@@ -841,6 +841,10 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { scanIntegrationHealth } = await import("@/lib/integrations/framework/alerts");
       return scanIntegrationHealth(String(payload.workspaceId || ""));
     }
+    case "mctb_trial_lifecycle": {
+      const { runMctbTrialLifecycleJobs } = await import("@/lib/mctb/onboarding/trial-hold");
+      return runMctbTrialLifecycleJobs(Number(payload.limit || 50));
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -896,6 +900,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { hourKey },
     idempotencyKey: `crm-scheduled-tick:${hourKey}`,
+  });
+  await enqueueJob({
+    jobType: "mctb_trial_lifecycle",
+    queueName: "maintenance",
+    payload: { hourKey, limit: 50 },
+    idempotencyKey: `mctb-trial-lifecycle:${hourKey}`,
   });
 
   // Calendly / appointment "starting soon" automation windows (every minute drain).

@@ -1,5 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/phone-switch";
+import type { TollFreeVerificationStatus } from "@/lib/messaging/compliance/messaging-compliance";
+import { loadTrialTfvForWorkspace } from "@/lib/mctb/tfv/store";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "./constants";
 import {
@@ -23,56 +25,44 @@ function pickTrialAreaCode(): string {
   return codes[Math.floor(Math.random() * codes.length)]!;
 }
 
-export function deriveTfvStatus(input: {
-  a2pStatus?: string | null;
-  numberStatus?: string | null;
-  overallStatus?: string | null;
-  registrationSubmittedAt?: Date | null;
-  registrationApprovedAt?: Date | null;
-  registrationFailureReason?: string | null;
-}): MctbTfvStatus {
-  const a2p = String(input.a2pStatus || "").toLowerCase();
-  if (a2p === "approved" || input.registrationApprovedAt) return "approved";
-  if (input.registrationFailureReason) return "rejected";
-  if (input.registrationSubmittedAt) {
-    const ns = String(input.numberStatus || "").toLowerCase();
-    const os = String(input.overallStatus || "").toLowerCase();
-    if (ns === "action_required" || os === "action_required") return "action_required";
-    return "in_review";
+export function mapTfvRecordToUiStatus(status: TollFreeVerificationStatus): MctbTfvStatus {
+  switch (status) {
+    case "DRAFT":
+      return "not_started";
+    case "SUBMITTED":
+      return "submitted";
+    case "PENDING":
+      return "in_review";
+    case "APPROVED":
+      return "approved";
+    case "ACTION_REQUIRED":
+      return "action_required";
+    case "REJECTED":
+      return "rejected";
+    default:
+      return "not_started";
   }
-  return "not_started";
 }
 
 export async function getTrialNumberStatus(workspaceId: string) {
   const state = await loadMctbOnboardingState(workspaceId);
   const prisma = getPrisma();
 
+  const resolveTfv = async (phoneNumberId: string) => {
+    const record = await loadTrialTfvForWorkspace(workspaceId, phoneNumberId);
+    return record
+      ? mapTfvRecordToUiStatus(record.status)
+      : ("not_started" as MctbTfvStatus);
+  };
+
   if (state.trialNumber?.e164) {
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { workspaceId, id: state.trialNumber.phoneNumberId },
-      select: { e164: true, a2pStatus: true, status: true },
-    });
-    const reg = await prisma.messagingRegistration.findUnique({
-      where: { workspaceId },
-      select: {
-        numberStatus: true,
-        overallStatus: true,
-        registrationSubmittedAt: true,
-        registrationApprovedAt: true,
-        registrationFailureReason: true,
-      },
-    });
-    const tfvStatus = deriveTfvStatus({
-      a2pStatus: pn?.a2pStatus,
-      numberStatus: reg?.numberStatus,
-      overallStatus: reg?.overallStatus,
-      registrationSubmittedAt: reg?.registrationSubmittedAt,
-      registrationApprovedAt: reg?.registrationApprovedAt,
-      registrationFailureReason: reg?.registrationFailureReason,
-    });
+    const tfvStatus = await resolveTfv(state.trialNumber.phoneNumberId);
     return {
       provisioned: true,
-      trialNumber: state.trialNumber,
+      trialNumber: {
+        ...state.trialNumber,
+        messagingVerificationStatus: tfvStatus,
+      },
       display: formatPhoneDisplay(state.trialNumber.e164),
       voiceStatus: "ready" as const,
       messagingVerificationStatus: tfvStatus,
@@ -87,17 +77,18 @@ export async function getTrialNumberStatus(workspaceId: string) {
       status: { not: "Released" },
     },
     orderBy: { purchasedAt: "desc" },
-    select: { id: true, e164: true, a2pStatus: true, provider: true },
+    select: { id: true, e164: true, provider: true },
   });
 
   if (existingPn) {
+    const tfvStatus = await resolveTfv(existingPn.id);
     const info: MctbTrialNumberInfo = {
       e164: existingPn.e164,
       phoneNumberId: existingPn.id,
       provider: "twilio",
       numberType: "toll_free",
       voiceStatus: "ready",
-      messagingVerificationStatus: deriveTfvStatus({ a2pStatus: existingPn.a2pStatus }),
+      messagingVerificationStatus: tfvStatus,
       provisionedAt: new Date().toISOString(),
     };
     await saveMctbOnboardingState(workspaceId, { trialNumber: info });
@@ -106,8 +97,8 @@ export async function getTrialNumberStatus(workspaceId: string) {
       trialNumber: info,
       display: formatPhoneDisplay(info.e164),
       voiceStatus: "ready" as const,
-      messagingVerificationStatus: info.messagingVerificationStatus,
-      tfvStatusLabel: tfvStatusLabel(info.messagingVerificationStatus),
+      messagingVerificationStatus: tfvStatus,
+      tfvStatusLabel: tfvStatusLabel(tfvStatus),
     };
   }
 
@@ -178,11 +169,20 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
     const prisma = getPrisma();
     const phoneRow = await prisma.phoneNumber.findFirst({
       where: { workspaceId, e164: purchasedE164 },
-      select: { id: true, e164: true, a2pStatus: true },
+      select: { id: true, e164: true },
     });
     if (!phoneRow) {
       throw new Error("Trial number purchase succeeded but phone record missing");
     }
+
+    await prisma.phoneNumber.update({
+      where: { id: phoneRow.id },
+      data: {
+        settingsJson: {
+          messagingCompliance: { type: "TOLL_FREE_VERIFICATION", status: "NOT_STARTED" },
+        },
+      },
+    });
 
     await activateJohnOnPhoneNumber({
       workspaceId,
@@ -202,9 +202,9 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
       provisionedAt: new Date().toISOString(),
     };
 
-    let state = await saveMctbOnboardingState(workspaceId, { trialNumber });
-    state = markStepComplete(state, "trial_number");
-    await saveMctbOnboardingState(workspaceId, state);
+    let nextState = await saveMctbOnboardingState(workspaceId, { trialNumber });
+    nextState = markStepComplete(nextState, "trial_number");
+    await saveMctbOnboardingState(workspaceId, nextState);
     await recordFunnelEvent(workspaceId, "MCTB_TRIAL_NUMBER_PROVISIONED", {
       e164: trialNumber.e164,
       phoneNumberId: trialNumber.phoneNumberId,

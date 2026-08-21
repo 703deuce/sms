@@ -1,5 +1,6 @@
 import type { MessagingRegistration } from "@/lib/domain";
 import type { PhoneNumber } from "@/lib/types";
+import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
 
 export function deriveRequiredActions(
   reg: MessagingRegistration | null | undefined,
@@ -12,12 +13,24 @@ export function deriveRequiredActions(
   if (samples.length < 2) actions.push("Provide 2 additional sample messages");
   if (!reg?.optInDescription) actions.push("Confirm opt-in disclosure on website form");
   if (numbers.length === 0 && !reg?.phoneE164) actions.push("Purchase or assign a phone number");
-  const pendingA2p = numbers.some((n) => n.a2pStatus !== "Approved");
-  if (numbers.length > 0 && pendingA2p) actions.push("Complete A2P registration for all numbers");
-  if ((reg?.brandStatus || "").toLowerCase() !== "approved") {
+
+  const tollFree = numbers.filter((n) => String(n.type || "").toLowerCase().includes("toll"));
+  const local = numbers.filter((n) => !String(n.type || "").toLowerCase().includes("toll"));
+
+  if (tollFree.length > 0) {
+    const pendingTfv = tollFree.some((n) => !isPhoneMessagingApproved(n));
+    if (pendingTfv) actions.push("Complete toll-free verification for trial numbers");
+  }
+
+  if (local.length > 0) {
+    const pendingA2p = local.some((n) => !isPhoneMessagingApproved(n));
+    if (pendingA2p) actions.push("Complete A2P registration for local numbers");
+  }
+
+  if ((reg?.brandStatus || "").toLowerCase() !== "approved" && local.length > 0) {
     actions.push("Complete brand registration review");
   }
-  if ((reg?.campaignStatus || "").toLowerCase() !== "approved") {
+  if ((reg?.campaignStatus || "").toLowerCase() !== "approved" && local.length > 0) {
     actions.push("Submit campaign registration for carrier review");
   }
   return actions;
@@ -26,15 +39,15 @@ export function deriveRequiredActions(
 export function phoneNumbersSummary(numbers: PhoneNumber[]): string {
   if (numbers.length === 0) return "No numbers";
   const active = numbers.filter((n) => n.status === "Active").length;
-  const pending = numbers.filter((n) => n.a2pStatus === "Pending").length;
+  const pending = numbers.filter((n) => !isPhoneMessagingApproved(n)).length;
   if (pending > 0) return `${active} active · ${pending} pending`;
   return `${active} active`;
 }
 
 export function tollFreeSummary(numbers: PhoneNumber[]): string {
-  const tollFree = numbers.filter((n) => n.type === "Toll-free");
+  const tollFree = numbers.filter((n) => String(n.type || "").toLowerCase().includes("toll"));
   if (tollFree.length === 0) return "None";
-  const approved = tollFree.every((n) => n.a2pStatus === "Approved");
+  const approved = tollFree.every((n) => isPhoneMessagingApproved(n));
   return approved ? "Verified" : "Pending";
 }
 

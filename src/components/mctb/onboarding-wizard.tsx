@@ -63,9 +63,9 @@ type OnboardingPayload = {
     businessNumberE164: string | null;
   };
   tfv: {
-    status: MctbTfvStatus;
-    statusLabel: string;
-    approvedAt?: string | null;
+    status: string;
+    approved: boolean;
+    trialE164: string | null;
   };
   carriers: CarrierForwardingGuide[];
 };
@@ -128,27 +128,6 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (step !== "trial_number" || data?.trialNumber.provisioned) return;
-    void (async () => {
-      setSaving(true);
-      try {
-        const res = await fetch("/api/mctb/onboarding", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "provision_trial_number" }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Could not assign your number");
-        await load();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Number assignment failed");
-      } finally {
-        setSaving(false);
-      }
-    })();
-  }, [step, data?.trialNumber.provisioned, load]);
 
   useEffect(() => {
     if (step !== "demo") return;
@@ -232,7 +211,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
   const selectedCarrier = data?.carriers.find((c) => c.id === carrier);
   const trialDisplay = data?.trialNumber.display;
-  const tfvApproved = data?.tfv.status === "approved";
+  const tfvApproved = data?.tfv.approved || false;
 
   if (loading) {
     return (
@@ -318,8 +297,12 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           </p>
           {saving || !data?.trialNumber.provisioned ? (
             <div className="flex items-center gap-3 rounded-lg border p-4 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Assigning your toll-free number…
+              {!data?.trialNumber.provisioned ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Assigning your toll-free number…
+                </>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
@@ -491,7 +474,9 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
           <div className="rounded-lg border p-4 text-sm">
             <p className="text-muted-foreground">Toll-free verification status</p>
-            <p className="mt-1 text-lg font-semibold">{data?.tfv.statusLabel}</p>
+            <p className="mt-1 text-lg font-semibold">
+              {data?.trialNumber.tfvStatusLabel || data?.tfv.status || "Not started"}
+            </p>
           </div>
 
           {tfvApproved ? (
@@ -500,18 +485,32 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             </Button>
           ) : (
             <div className="flex flex-wrap gap-3">
-              <Link
-                href="/compliance"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
-                onClick={() => void post({ tfvSubmitted: true })}
+              <Button
+                disabled={saving}
+                onClick={() =>
+                  void (async () => {
+                    setSaving(true);
+                    setError(null);
+                    try {
+                      const res = await fetch("/api/mctb/tfv", { method: "POST" });
+                      const json = await res.json();
+                      if (!res.ok) throw new Error(json.error || "Submit failed");
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Submit failed");
+                    } finally {
+                      setSaving(false);
+                    }
+                  })()
+                }
               >
                 Submit toll-free verification
-              </Link>
+              </Button>
               <Link
                 href="/compliance"
                 className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium"
               >
-                Open verification center
+                Complete business details
               </Link>
             </div>
           )}

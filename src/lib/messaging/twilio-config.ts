@@ -51,6 +51,7 @@ export function getWebhookUrls() {
     inbound: `${base}/api/twilio/inbound`,
     messageStatus: `${base}/api/twilio/message-status`,
     complianceStatus: `${base}/api/twilio/compliance-status`,
+    tollFreeVerification: `${base}/api/twilio/toll-free-verification`,
   };
 }
 

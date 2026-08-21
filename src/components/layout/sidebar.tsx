@@ -355,7 +355,7 @@ export function Sidebar({
               </span>
               {!realtorMode && !currentProduct && !isLauncher ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  AI Receptionist + Numbers
+                  Missed Call Text Back
                 </span>
               ) : null}
             </span>
@@ -372,11 +372,11 @@ export function Sidebar({
         ) : null}
         {(currentProduct === "voice" || currentProduct === null) && !collapsed ? (
           <Link
-            href="/voice/receptionist"
+            href="/onboarding/mctb"
             onClick={onClose}
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
           >
-            Test Receptionist
+            Finish Setup
           </Link>
         ) : null}
         {(currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) && !collapsed ? (
@@ -393,7 +393,7 @@ export function Sidebar({
           const missedCallsOwned =
             item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls");
           const complianceOwned =
-            item.label === "Compliance" && pathname.startsWith("/compliance");
+            item.label === "Messaging Compliance" && pathname.startsWith("/compliance");
           const smartRoutingOwned =
             item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
           const expandKey = itemExpandKey(item);
@@ -575,7 +575,7 @@ export function Sidebar({
 
         {!collapsed && !realtorMode && currentProduct === "numbers" ? (
           <div className="mx-2 mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
-            <p className="text-[11px] font-semibold text-[#111827]">Need an AI receptionist?</p>
+            <p className="text-[11px] font-semibold text-[#111827]">Need Missed Call Text Back?</p>
             <Link
               href="/api/products/open?product=voice"
               onClick={() => {

@@ -3,10 +3,6 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
-import {
-  MCTB_PLATFORM_DEMO_DISPLAY,
-  MCTB_PLATFORM_DEMO_LABEL,
-} from "@/lib/mctb/onboarding/constants";
 import { getDemoStatus } from "@/lib/mctb/onboarding/demo";
 import { getLiveTestStatus } from "@/lib/mctb/onboarding/live-test";
 import {
@@ -24,9 +20,16 @@ import {
 import {
   getTrialNumberStatus,
   provisionTrialTollFreeNumber,
-  tfvStatusLabel,
 } from "@/lib/mctb/onboarding/trial-number";
+import {
+  getTfvStatusForWorkspace,
+  syncTrialTollFreeVerification,
+} from "@/lib/mctb/tfv/service";
 import { MCTB_CARRIER_GUIDES } from "@/lib/mctb/onboarding/carriers";
+import {
+  MCTB_PLATFORM_DEMO_DISPLAY,
+  MCTB_PLATFORM_DEMO_LABEL,
+} from "@/lib/mctb/onboarding/constants";
 import {
   MCTB_ONBOARDING_STEP_LABELS,
   MCTB_ONBOARDING_STEP_ORDER,
@@ -40,19 +43,17 @@ export async function GET() {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs] = await Promise.all([
+    await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
+
+    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv] = await Promise.all([
       loadMctbOnboardingState(auth.workspaceId),
       getDemoStatus(auth.workspaceId),
       getTrialNumberStatus(auth.workspaceId),
       getLiveTestStatus(auth.workspaceId),
       getTrialInfo(auth.workspaceId),
       getTrialActivationRequirements(auth.workspaceId),
+      getTfvStatusForWorkspace(auth.workspaceId),
     ]);
-
-    const prisma = getPrisma();
-    const reg = await prisma.messagingRegistration.findUnique({
-      where: { workspaceId: auth.workspaceId },
-    });
 
     return NextResponse.json({
       state,
@@ -62,21 +63,23 @@ export async function GET() {
         ...demo,
         label: MCTB_PLATFORM_DEMO_LABEL,
         description:
-          "This is Transovo's pre-approved demo line — not your assigned trial number.",
+          "Transovo's pre-approved demo line — separate from your assigned trial toll-free number.",
       },
       trialNumber,
       liveTest,
       trial: trialInfo,
       trialRequirements: trialReqs,
       tfv: {
-        status: trialNumber.messagingVerificationStatus,
-        statusLabel: trialNumber.tfvStatusLabel,
+        status: tfv.status,
+        approved: tfv.approved,
+        record: tfv.record,
+        trialE164: tfv.trialE164,
         submittedAt: state.tfvSubmittedAt,
         approvedAt: state.tfvApprovedAt,
         rejectedAt: state.tfvRejectedAt,
-        registrationSubmittedAt: reg?.registrationSubmittedAt?.toISOString() || null,
       },
       carriers: MCTB_CARRIER_GUIDES,
+      platformDemoDisplay: MCTB_PLATFORM_DEMO_DISPLAY,
     });
   } catch (err) {
     return jsonError(err, 500);
@@ -99,7 +102,6 @@ export async function POST(req: Request) {
       forwardingCarrier?: MctbForwardingCarrier;
       businessNumberE164?: string;
       forwardingConnected?: boolean;
-      tfvSubmitted?: boolean;
     };
 
     const prisma = getPrisma();
@@ -136,6 +138,15 @@ export async function POST(req: Request) {
       state = markStepComplete(state, "business");
       await saveMctbOnboardingState(auth.workspaceId, state);
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
+
+      const provision = await provisionTrialTollFreeNumber(auth.workspaceId);
+      if (!provision.ok) {
+        return NextResponse.json(
+          { error: provision.error || "Could not assign trial number", state },
+          { status: 400 },
+        );
+      }
+      state = await loadMctbOnboardingState(auth.workspaceId);
     }
 
     if (body.messageTemplate) {
@@ -186,16 +197,6 @@ export async function POST(req: Request) {
       });
     }
 
-    if (body.tfvSubmitted) {
-      state = await saveMctbOnboardingState(auth.workspaceId, {
-        tfvSubmittedAt: new Date().toISOString(),
-        currentStep: "pending",
-      });
-      state = markStepComplete(state, "tfv");
-      await saveMctbOnboardingState(auth.workspaceId, state);
-      await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_SUBMITTED");
-    }
-
     if (body.forwardingCarrier || body.businessNumberE164) {
       const isStarting = Boolean(body.businessNumberE164 && !state.forwardingConnectedAt);
       state = await saveMctbOnboardingState(auth.workspaceId, {
@@ -218,40 +219,18 @@ export async function POST(req: Request) {
       await saveMctbOnboardingState(auth.workspaceId, state);
     }
 
-    if (body.step) {
+    if (body.step === "tfv") {
+      await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_STARTED");
+      state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: "tfv" });
+    } else if (body.step) {
       state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: body.step });
-      if (body.step === "tfv") {
-        await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_STARTED");
-      }
     }
 
-    // Sync TFV approval for customer's assigned trial toll-free (not the platform demo number)
-    const trialStatus = await getTrialNumberStatus(auth.workspaceId);
-    if (
-      trialStatus.messagingVerificationStatus === "approved" &&
-      !state.tfvApprovedAt
-    ) {
-      state = await saveMctbOnboardingState(auth.workspaceId, {
-        tfvApprovedAt: new Date().toISOString(),
-        currentStep: state.currentStep === "pending" ? "connect" : state.currentStep,
-      });
-      state = markStepComplete(state, "pending");
-      await saveMctbOnboardingState(auth.workspaceId, state);
-      await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_APPROVED");
-    } else if (
-      trialStatus.messagingVerificationStatus === "rejected" &&
-      !state.tfvRejectedAt
-    ) {
-      await saveMctbOnboardingState(auth.workspaceId, {
-        tfvRejectedAt: new Date().toISOString(),
-      });
-      await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_REJECTED");
-    }
+    await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
     return NextResponse.json({
       ok: true,
       state: state.version ? state : defaultMctbOnboardingState(),
-      platformDemoDisplay: MCTB_PLATFORM_DEMO_DISPLAY,
     });
   } catch (err) {
     return jsonError(err, 500);

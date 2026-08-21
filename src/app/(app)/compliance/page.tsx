@@ -153,7 +153,7 @@ export default async function ComplianceOverviewPage() {
     <div className="space-y-5">
       <SectionHeader
         title="Messaging Compliance"
-        description="10DLC and toll-free verification so missed-call text back can send SMS legally."
+        description="Toll-free verification for missed-call text back SMS."
         icon={ShieldCheck}
         iconTone="bg-violet-50 text-violet-600"
         actions={
@@ -181,20 +181,20 @@ export default async function ComplianceOverviewPage() {
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <div>
               <p className="text-[13px] font-semibold text-amber-950">
-                A2P registration is pending
+                Messaging compliance is pending
               </p>
               <p className="mt-0.5 text-[12px] text-amber-900/80">
-                Complete brand and campaign registration before high-volume sending.
-                Unregistered traffic may be filtered or blocked by carriers.
+                Complete toll-free verification for your trial number, or finish brand and campaign
+                registration for local numbers before high-volume sending.
               </p>
             </div>
           </div>
-          <Link href="/compliance/campaign">
+          <Link href="/compliance/business">
             <Button
               variant="outline"
               className="h-9 rounded-[10px] border-amber-300 bg-white text-[13px]"
             >
-              Register campaign
+              Complete compliance
             </Button>
           </Link>
         </div>

@@ -92,7 +92,7 @@ const expectedTopLevel = [
   "Missed Calls",
   "Setup",
   "Numbers",
-  "Compliance",
+  "Messaging Compliance",
   "Analytics",
   "Integrations",
   "Settings",

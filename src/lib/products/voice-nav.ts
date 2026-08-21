@@ -48,7 +48,7 @@ export function buildVoiceNav(_options: VoiceNavOptions = {}): NavItem[] {
       sectionLabel: "Manage",
     },
     {
-      label: "Compliance",
+      label: "Messaging Compliance",
       href: "/compliance",
       icon: ShieldCheck,
     },

@@ -129,7 +129,7 @@ function SignupForm() {
           >
             <p className="font-semibold">Business</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              AI receptionist, Smart Routing, SMS, and automations.
+              Missed Call Text Back, Conversations, Numbers, and messaging compliance.
             </p>
           </button>
         </div>

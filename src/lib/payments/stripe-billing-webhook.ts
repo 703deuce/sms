@@ -40,6 +40,7 @@ export async function updateWorkspacePlanFromSubscription(subscription: Stripe.S
   }
 
   const active = status === "active" || status === "trialing" || status === "past_due";
+  const previousPlan = String(workspace.billingPlan || "").toLowerCase();
   await prisma.workspace.update({
     where: { id: workspace.id },
     data: {
@@ -47,6 +48,14 @@ export async function updateWorkspacePlanFromSubscription(subscription: Stripe.S
       stripeSubscriptionId: active ? subscription.id : null,
     },
   });
+
+  if (
+    (billingPlan === "canceled" || billingPlan === "suspended") &&
+    (previousPlan === "trial" || previousPlan === "trial_pending_card")
+  ) {
+    const { markTrialEnded } = await import("@/lib/mctb/onboarding/trial-hold");
+    await markTrialEnded(workspace.id).catch(() => undefined);
+  }
 }
 
 export async function handleBillingCheckoutSessionCompleted(session: Stripe.Checkout.Session) {

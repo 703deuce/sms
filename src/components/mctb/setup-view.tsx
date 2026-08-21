@@ -327,7 +327,7 @@ export function MctbSetupView() {
               ))}
             </div>
             <div className="rounded-lg bg-[#f9fafb] p-3 text-[12px] text-[#4b5563]">
-              <p className="font-semibold text-[#111827]">Campaign use case (prefilled for A2P)</p>
+              <p className="font-semibold text-[#111827]">Messaging use case (for toll-free verification)</p>
               <p className="mt-1">{data?.prefills.campaignDescription}</p>
               <p className="mt-3 font-semibold text-[#111827]">Opt-in description</p>
               <p className="mt-1">

@@ -13,6 +13,7 @@ import {
   phoneNumbersSummary,
   tollFreeSummary,
 } from "@/lib/compliance-helpers";
+import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
@@ -72,7 +73,15 @@ export async function GET() {
     prisma.phoneNumber.findMany({
       where: { workspaceId },
       orderBy: { e164: "asc" },
-      select: { id: true, e164: true, friendlyName: true, type: true, a2pStatus: true, status: true },
+      select: {
+        id: true,
+        e164: true,
+        friendlyName: true,
+        type: true,
+        a2pStatus: true,
+        status: true,
+        settingsJson: true,
+      },
     }),
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId),
@@ -81,7 +90,9 @@ export async function GET() {
   const requiredActions = deriveRequiredActions(compliance.registration, reg);
   const messagingReady =
     requiredActions.length === 0 &&
-    phoneNumbers.some((n: { a2pStatus?: string | null }) => String(n.a2pStatus).toLowerCase() === "approved");
+    phoneNumbers.some((n: { settingsJson?: unknown; a2pStatus?: string | null; type?: string | null }) =>
+      isPhoneMessagingApproved(n),
+    );
 
   const setupMeta =
     solution?.config && typeof solution.config === "object"

@@ -196,7 +196,7 @@ export function MctbDashboardView({ userName, range }: DashboardProps) {
               { label: "Connect a business number", done: !needsSetup, href: "/voice/numbers" },
               { label: "Configure missed-call setup", done: !needsSetup, href: "/voice/setup" },
               {
-                label: "Complete A2P / toll-free verification",
+                label: "Complete toll-free verification",
                 done: !needsCompliance,
                 href: "/compliance",
               },
