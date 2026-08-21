@@ -5,6 +5,7 @@ import {
 } from "@/lib/products/entitlements";
 import { productAccessDeniedRedirect } from "@/lib/products/routing";
 import { isVoiceProductPath } from "@/lib/products/voice-routes";
+import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
@@ -175,14 +176,13 @@ export async function middleware(request: NextRequest) {
   if (session && authPages.has(pathname)) {
     const product = request.nextUrl.searchParams.get("product")?.trim().toLowerCase();
     if (product === "voice" || product === "numbers" || product === "sms") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/api/products/open";
-      url.search = `?product=${product}`;
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(
+        publicRedirectUrl(`/api/products/open?product=${product}`, request),
+      );
     }
     const next = request.nextUrl.searchParams.get("next");
     if (next && next.startsWith("/") && !next.startsWith("//")) {
-      return NextResponse.redirect(new URL(next, request.nextUrl.origin));
+      return NextResponse.redirect(publicRedirectUrl(next, request));
     }
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
@@ -190,14 +190,12 @@ export async function middleware(request: NextRequest) {
     const hasVoice = productKeys.includes("voice");
     const hasNumbers = productKeys.includes("numbers");
     const launchCount = [hasVoice, hasNumbers].filter(Boolean).length;
-    const url = request.nextUrl.clone();
     if (launchCount === 1) {
-      url.pathname = hasVoice ? "/dashboard" : "/personal";
-    } else {
-      url.pathname = "/app";
+      return NextResponse.redirect(
+        publicRedirectUrl(hasVoice ? "/dashboard" : "/personal", request),
+      );
     }
-    url.search = "";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(publicRedirectUrl("/app", request));
   }
 
   if (session && !isPublic) {
@@ -227,7 +225,7 @@ export async function middleware(request: NextRequest) {
       { authenticated: true },
     );
     if (denied) {
-      return NextResponse.redirect(new URL(denied, request.nextUrl.origin));
+      return NextResponse.redirect(publicRedirectUrl(denied, request));
     }
 
     if (isNumbersPlatformOnlyLaunch() && isBusinessOnlyPath(pathname)) {

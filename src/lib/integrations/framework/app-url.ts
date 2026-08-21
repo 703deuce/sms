@@ -43,7 +43,17 @@ export function resolvePublicAppUrl(request?: Request): string {
     }
   }
 
-  return configured;
+  if (process.env.NODE_ENV !== "production") {
+    return "http://localhost:3000";
+  }
+
+  // Never send browsers to docker bind addresses like 0.0.0.0 when APP_URL is mis-set.
+  return "http://localhost:3000";
+}
+
+/** Build an absolute redirect URL using the public site origin (never 0.0.0.0). */
+export function publicRedirectUrl(path: string, request?: Request): URL {
+  return new URL(path, `${resolvePublicAppUrl(request)}/`);
 }
 
 export function externalOAuthCallbackUrl(provider: string): string {
@@ -101,7 +111,11 @@ export function getIntegrationEnvHealth(): IntegrationEnvHealth {
 
   return {
     appUrl: {
-      status: !hasApp ? "missing" : /^https?:\/\//i.test(appUrl) ? "configured" : "invalid_format",
+      status: !hasApp
+        ? "missing"
+        : isUsableConfiguredAppUrl(appUrl)
+          ? "configured"
+          : "invalid_format",
       value: appUrl,
     },
     encryptionKey: {
@@ -111,7 +125,11 @@ export function getIntegrationEnvHealth(): IntegrationEnvHealth {
       status: process.env.DATABASE_URL?.trim() ? "configured" : "missing",
     },
     productionHttps: {
-      status: !isProd ? "n/a" : appUrl.startsWith("https://") ? "ok" : "invalid_format",
+      status: !isProd
+        ? "n/a"
+        : isUsableConfiguredAppUrl(appUrl)
+          ? "ok"
+          : "invalid_format",
     },
     oauth,
   };

@@ -9,6 +9,7 @@ import { productHomePath, type ProductKey } from "@/lib/products/types";
 import { applyProductAccessCookie, updateLastActiveProduct } from "@/lib/products/session";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
+import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 
 function parseProduct(raw: string | null): ProductKey | null {
   const normalized = raw?.trim().toLowerCase();
@@ -20,10 +21,9 @@ function parseProduct(raw: string | null): ProductKey | null {
 /** Switch workspace + cookies, then redirect into the requested product app. */
 export async function GET(request: Request) {
   const session = await getSession();
-  const requestUrl = new URL(request.url);
   if (!session) {
-    const loginUrl = new URL("/login", requestUrl.origin);
-    const product = requestUrl.searchParams.get("product");
+    const loginUrl = publicRedirectUrl("/login", request);
+    const product = new URL(request.url).searchParams.get("product");
     if (product === "voice" || product === "numbers" || product === "sms") {
       loginUrl.searchParams.set("next", `/api/products/open?product=${product}`);
     } else {
@@ -32,9 +32,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const product = parseProduct(requestUrl.searchParams.get("product"));
+  const product = parseProduct(new URL(request.url).searchParams.get("product"));
   if (!product) {
-    return NextResponse.redirect(new URL("/app", requestUrl.origin));
+    return NextResponse.redirect(publicRedirectUrl("/app", request));
   }
 
   const workspace = await ensureProductWorkspace(session.userId, product);
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
   await updateLastActiveProduct(session.userId, product);
   const access = await getUserProductAccess(session.userId);
 
-  const res = NextResponse.redirect(new URL(productHomePath(product), requestUrl.origin));
+  const res = NextResponse.redirect(publicRedirectUrl(productHomePath(product), request));
   applyWorkspaceCookies(
     res,
     workspace.workspaceId,
