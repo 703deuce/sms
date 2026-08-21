@@ -15,6 +15,7 @@ import {
   Settings,
   AudioLines,
   ClipboardList,
+  PhoneCall,
   type LucideIcon,
 } from "lucide-react";
 
@@ -466,8 +467,9 @@ export const appNav: NavItem[] = [
 ];
 
 export const mobilePrimaryNav = [
-  { label: "Home", href: "/outcomes", icon: LayoutDashboard },
-  { label: "Receptionist", href: "/voice/agents", icon: AudioLines },
+  { label: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Calls", href: "/voice/calls", icon: PhoneCall },
+  { label: "Receptionist", href: "/voice/receptionist", icon: AudioLines },
 ];
 
 export const adminNav: NavItem[] = [

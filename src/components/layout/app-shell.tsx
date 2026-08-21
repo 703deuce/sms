@@ -8,8 +8,9 @@ import { ProductActivityTracker } from "@/components/products/product-activity-t
 import { getPageTitle } from "@/lib/nav";
 import { getRealtorPageTitle } from "@/lib/realtor/nav";
 import { getCurrentProduct } from "@/lib/products/context";
-import { isSmsShellRoute } from "@/lib/products/sms-routes";
+import { isVoiceShellRoute } from "@/lib/products/voice-routes";
 import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
+import { getVoicePageTitle } from "@/lib/products/voice-nav";
 import { getSmsPageTitle } from "@/lib/products/sms-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
@@ -33,6 +34,7 @@ export function AppShell({
   outcomeInstances = {},
   primaryVoiceAgentId = null,
   realtorMode = false,
+  hasVoice = false,
   hasSms = false,
   hasNumbers = false,
 }: {
@@ -50,6 +52,7 @@ export function AppShell({
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
+  hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
 }) {
@@ -58,7 +61,7 @@ export function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const resolvedProduct = getCurrentProduct(pathname);
   const currentProduct: CurrentProduct =
-    resolvedProduct ?? (isSmsShellRoute(pathname) ? "sms" : null);
+    resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const hideChromeTitle =
     realtorMode &&
@@ -69,18 +72,13 @@ export function AppShell({
     ? ""
     : isLauncher
       ? "Your Transovo Products"
-      : pathname === "/outcomes" ||
-          pathname === "/systems" ||
-          pathname === "/agents" ||
-          pathname.startsWith("/agents/")
-        ? ""
-        : realtorMode
-          ? getRealtorPageTitle(pathname) ?? ""
-          : currentProduct === "numbers"
-            ? getNumbersPageTitle(pathname)
-            : currentProduct === "sms"
-              ? getSmsPageTitle(pathname)
-              : getPageTitle(pathname);
+      : currentProduct === "numbers"
+        ? getNumbersPageTitle(pathname)
+        : currentProduct === "voice"
+          ? getVoicePageTitle(pathname)
+          : currentProduct === "sms"
+            ? getSmsPageTitle(pathname)
+            : getPageTitle(pathname);
 
   return (
     <div className="product-theme min-h-screen bg-background">
@@ -100,6 +98,7 @@ export function AppShell({
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
           creditsRemaining={metrics.creditsRemaining}
+          hasVoice={hasVoice}
           hasSms={hasSms}
           hasNumbers={hasNumbers}
         />
@@ -132,6 +131,7 @@ export function AppShell({
             activeFromNumberId={activeFromNumberId}
             unreadNotifications={unreadNotifications}
             onMenuClick={() => setMenuOpen(true)}
+            hasVoice={hasVoice}
             hasSms={hasSms}
             hasNumbers={hasNumbers}
           />

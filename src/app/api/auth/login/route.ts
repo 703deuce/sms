@@ -77,11 +77,13 @@ export async function POST(request: Request) {
     const access = await getUserProductAccess(user.id);
     const preferredProduct =
       preferredProductFromPath(body.next || "") ??
-      (access.hasNumbers && !access.hasSms
+      (access.hasNumbers && !access.hasVoice
         ? "numbers"
-        : access.hasSms
-          ? "sms"
-          : "numbers");
+        : access.hasVoice
+          ? "voice"
+          : access.hasNumbers
+            ? "numbers"
+            : "voice");
 
     const resolvedWorkspace = await resolveWorkspaceForProduct(user.id, preferredProduct);
     const membership =

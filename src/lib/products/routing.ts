@@ -3,12 +3,14 @@ import {
   isSmsProductPath,
   productOfferPath,
 } from "@/lib/products/paths";
+import { isVoiceProductPath } from "@/lib/products/voice-routes";
 import { activeProductKeys } from "@/lib/products/entitlements";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
+import { isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
-/** Temporary testing flag — authenticated users can browse SMS without entitlement. */
-export const SMS_PREVIEW_ACCESS = true;
+/** Standalone SMS preview disabled — SMS is add-on infrastructure only at launch. */
+export const SMS_PREVIEW_ACCESS = false;
 
 function isSafeNextPath(next: string | null | undefined): next is string {
   if (!next?.trim()) return false;
@@ -29,10 +31,14 @@ export function resolvePostLoginPath(
   const next = options?.nextPath;
   if (isSafeNextPath(next)) return next;
 
-  const active = activeProductKeys(access);
+  const active = activeProductKeys(access).filter(
+    (key) => !(isSmsStandaloneHidden() && key === "sms"),
+  );
 
   if (active.length === 0) {
-    if (access.productIntent) return productHomePath(access.productIntent);
+    if (access.productIntent && !(isSmsStandaloneHidden() && access.productIntent === "sms")) {
+      return productHomePath(access.productIntent);
+    }
     return "/app";
   }
 
@@ -42,20 +48,32 @@ export function resolvePostLoginPath(
 
   if (options?.forceLauncher) return "/app";
 
-  if (access.lastActiveProduct && active.includes(access.lastActiveProduct)) {
+  if (
+    access.lastActiveProduct &&
+    active.includes(access.lastActiveProduct) &&
+    !(isSmsStandaloneHidden() && access.lastActiveProduct === "sms")
+  ) {
     return productHomePath(access.lastActiveProduct);
   }
 
   return "/app";
 }
 
+type ProductAccessFlags = Pick<UserProductAccess, "hasVoice" | "hasSms" | "hasNumbers">;
+
 /** Middleware redirect when user hits a product route without entitlement. */
 export function productAccessDeniedRedirect(
   pathname: string,
-  access: Pick<UserProductAccess, "hasSms" | "hasNumbers">,
+  access: ProductAccessFlags,
 ): string | null {
+  if (isVoiceProductPath(pathname) && !access.hasVoice) {
+    return productOfferPath("voice");
+  }
   if (SMS_PREVIEW_ACCESS && isSmsProductPath(pathname) && !access.hasSms) {
     return null;
+  }
+  if (isSmsStandaloneHidden() && isSmsProductPath(pathname)) {
+    return access.hasVoice ? productHomePath("voice") : "/app";
   }
   if (isSmsProductPath(pathname) && !access.hasSms) {
     return productOfferPath("sms");
@@ -69,6 +87,7 @@ export function productAccessDeniedRedirect(
 /** Workspace selection after login for a given product context. */
 export function preferredProductFromPath(pathname: string): ProductKey | null {
   if (isNumbersProductPath(pathname)) return "numbers";
+  if (isVoiceProductPath(pathname)) return "voice";
   if (isSmsProductPath(pathname)) return "sms";
   return null;
 }

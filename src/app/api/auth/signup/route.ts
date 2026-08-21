@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     const productIntent: ProductKey =
       body.productIntent ??
       pathIntent ??
-      (body.workspaceType === "PERSONAL" ? "numbers" : "sms");
+      (body.workspaceType === "PERSONAL" ? "numbers" : "voice");
     const workspaceType: WorkspaceType =
       productIntent === "numbers" || body.workspaceType === "PERSONAL"
         ? "PERSONAL"
@@ -169,7 +169,11 @@ export async function POST(request: Request) {
 
     await grantProductEntitlement(
       workspace.id,
-      productIntent === "numbers" ? "numbers" : "sms",
+      productIntent === "numbers"
+        ? "numbers"
+        : productIntent === "sms"
+          ? "sms"
+          : "voice",
     );
     await updateProductIntent(user.id, productIntent);
 

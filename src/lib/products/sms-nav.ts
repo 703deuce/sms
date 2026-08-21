@@ -25,16 +25,11 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
 
   return [
     {
-      label: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      sectionLabel: "Main",
-    },
-    {
       label: "Inbox",
       href: "/inbox",
       icon: Inbox,
       badge: inboxBadge > 0 ? inboxBadge : undefined,
+      sectionLabel: "Main",
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Contacts", href: "/contacts", icon: Users },

@@ -8,10 +8,12 @@ import {
 import { productHomePath, type ProductKey } from "@/lib/products/types";
 import { applyProductAccessCookie, updateLastActiveProduct } from "@/lib/products/session";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
+import { isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
 function parseProduct(raw: string | null): ProductKey | null {
   const normalized = raw?.trim().toLowerCase();
-  if (normalized === "sms" || normalized === "numbers") return normalized;
+  if (normalized === "voice" || normalized === "numbers") return normalized;
+  if (!isSmsStandaloneHidden() && normalized === "sms") return normalized;
   return null;
 }
 
@@ -32,11 +34,12 @@ export async function GET(request: Request) {
 
   const workspace = await ensureProductWorkspace(session.userId, product);
 
-  // Testing: grant trial SMS access when opening SMS without an active entitlement.
-  if (product === "sms") {
-    await grantProductEntitlement(workspace.workspaceId, "sms", "trial");
-  } else {
+  if (product === "voice") {
+    await grantProductEntitlement(workspace.workspaceId, "voice", "active");
+  } else if (product === "numbers") {
     await grantProductEntitlement(workspace.workspaceId, "numbers", "active");
+  } else if (product === "sms") {
+    await grantProductEntitlement(workspace.workspaceId, "sms", "trial");
   }
 
   await updateLastActiveProduct(session.userId, product);

@@ -50,6 +50,7 @@ export function Header({
   activeFromNumberId,
   unreadNotifications = 0,
   onMenuClick,
+  hasVoice = false,
   hasSms = false,
   hasNumbers = false,
 }: {
@@ -66,6 +67,7 @@ export function Header({
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
   onMenuClick: () => void;
+  hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
 }) {
@@ -218,23 +220,13 @@ export function Header({
           />
         ) : null}
 
-        {!isLauncher && currentProduct === "sms" ? (
-          <WorkspaceSwitcher
-            workspaceId={workspaceId}
-            workspaceName={workspaceName || "Workspace"}
-            workspaceType={workspaceType}
-            workspaces={workspaces}
-            className="shrink-0"
-          />
-        ) : null}
-
         {currentProduct && !isLauncher ? (
           <span className="hidden shrink-0 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
             {productContextLabel(currentProduct)}
           </span>
         ) : null}
 
-        {title && currentProduct === "sms" ? (
+        {title && (currentProduct === "sms" || currentProduct === "voice") ? (
           <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
             {title}
           </h1>
@@ -243,6 +235,15 @@ export function Header({
         )}
 
         <div className="flex-1" />
+
+        {currentProduct === "voice" ? (
+          <Link
+            href="/voice/receptionist"
+            className="hidden h-9 items-center gap-1.5 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
+          >
+            Test Receptionist
+          </Link>
+        ) : null}
 
         {currentProduct === "sms" ? (
           <SmsCreateMenu variant="header" className="hidden sm:block" />

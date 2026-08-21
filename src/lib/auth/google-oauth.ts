@@ -215,7 +215,13 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
   if (memberships.length) {
     const access = await getUserProductAccess(user.id);
     const preferred: ProductKey =
-      access.hasNumbers && !access.hasSms ? "numbers" : access.hasSms ? "sms" : "numbers";
+      access.hasNumbers && !access.hasVoice
+        ? "numbers"
+        : access.hasVoice
+          ? "voice"
+          : access.hasNumbers
+            ? "numbers"
+            : "voice";
     const membership =
       memberships.find(
         (m: { workspace: { type: string } }) =>

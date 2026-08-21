@@ -58,6 +58,7 @@ export default async function AppLayout({
       outcomeInstances={outcomeInstances}
       primaryVoiceAgentId={primaryVoiceAgentId}
       realtorMode={false}
+      hasVoice={productAccess.hasVoice}
       hasSms={productAccess.hasSms}
       hasNumbers={productAccess.hasNumbers}
     >

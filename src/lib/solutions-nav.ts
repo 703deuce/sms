@@ -1,16 +1,5 @@
-import {
-  AudioLines,
-  Calendar,
-  GitBranch,
-  Hash,
-  LayoutDashboard,
-  PhoneCall,
-  Puzzle,
-  Settings,
-  ShieldCheck,
-  Workflow,
-} from "lucide-react";
-import type { NavChild, NavItem } from "@/lib/nav";
+import { buildVoiceNav } from "@/lib/products/voice-nav";
+import type { NavItem } from "@/lib/nav";
 import {
   isSmartRoutingSectionPath,
   smartRoutingFlowIdFromPath,
@@ -49,7 +38,8 @@ export function isSmartRoutingSectionPathExport(pathname: string): boolean {
   return isSmartRoutingSectionPath(pathname);
 }
 
-export function buildSmartRoutingNavChildren(flowId?: string | null): NavChild[] {
+/** Legacy smart-routing nav — hidden from primary launch sidebar. */
+export function buildSmartRoutingNavChildren(flowId?: string | null) {
   const fid = flowId ?? null;
   return [
     { label: "Overview", href: "/smart-routing" },
@@ -70,13 +60,14 @@ export function buildSmartRoutingNavChildren(flowId?: string | null): NavChild[]
   ];
 }
 
-export function buildReceptionistNavChildren(agentId?: string | null): NavChild[] {
+/** Legacy receptionist submenu — hidden from primary launch sidebar. */
+export function buildReceptionistNavChildren(agentId?: string | null) {
   const landing = "/voice/receptionist";
   const agentsList = "/voice/agents";
   if (!agentId) {
     return [
       { label: "Overview", href: landing },
-      { label: "My Agents", href: agentsList },
+      { label: "My Receptionists", href: agentsList },
       { label: "About Your Receptionist", href: "/voice/agents/new" },
       { label: "What It Should Do", href: agentsList },
       { label: "Connect Integrations", href: agentsList },
@@ -86,7 +77,7 @@ export function buildReceptionistNavChildren(agentId?: string | null): NavChild[
   }
   return [
     { label: "Overview", href: landing },
-    { label: "My Agents", href: agentsList },
+    { label: "My Receptionists", href: agentsList },
     { label: "About Your Receptionist", href: `/voice/agents/${agentId}/about` },
     { label: "What It Should Do", href: `/voice/agents/${agentId}/capabilities` },
     { label: "Connect Integrations", href: `/voice/agents/${agentId}/integrations` },
@@ -95,84 +86,9 @@ export function buildReceptionistNavChildren(agentId?: string | null): NavChild[
   ];
 }
 
+/** Primary AI Receptionist product nav. */
 export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
-  const agentId =
-    options.primaryVoiceAgentId != null && options.primaryVoiceAgentId !== ""
-      ? options.primaryVoiceAgentId
-      : null;
-  const smartRoutingFlowId =
-    options.primarySmartRoutingFlowId != null && options.primarySmartRoutingFlowId !== ""
-      ? options.primarySmartRoutingFlowId
-      : null;
-  return [
-    { label: "Dashboard", href: "/outcomes", icon: LayoutDashboard },
-    {
-      label: "AI Receptionist",
-      href: "/voice/receptionist",
-      icon: AudioLines,
-      children: buildReceptionistNavChildren(agentId),
-    },
-    { label: "Calls", href: "/voice/calls", icon: PhoneCall, emphasize: true },
-    {
-      label: "Smart Routing",
-      href: "/smart-routing",
-      icon: GitBranch,
-      children: buildSmartRoutingNavChildren(smartRoutingFlowId),
-    },
-    {
-      label: "Automations",
-      href: "/automations",
-      icon: Workflow,
-      children: [
-        { label: "Flows", href: "/automations" },
-        { label: "Templates", href: "/automations/templates" },
-        { label: "Logs", href: "/automations/logs" },
-      ],
-    },
-    {
-      label: "Appointments",
-      href: "/integrations/native/appointments",
-      icon: Calendar,
-      children: [
-        { label: "Bookings", href: "/integrations/native/appointments" },
-        { label: "Calendars", href: "/voice/calendars" },
-      ],
-    },
-    {
-      label: "Phone Numbers",
-      href: "/numbers",
-      icon: Hash,
-      children: [
-        { label: "My Numbers", href: "/numbers" },
-        { label: "Buy Number", href: "/numbers/buy" },
-        { label: "Premium Numbers", href: "/numbers/premium", badge: "NEW" },
-        { label: "Port Number", href: "/numbers/port" },
-      ],
-    },
-    {
-      label: "Compliance",
-      href: "/compliance",
-      icon: ShieldCheck,
-      children: [
-        { label: "A2P Registration", href: "/compliance" },
-        { label: "Consent & Opt-Outs", href: "/compliance/consent" },
-      ],
-    },
-    { label: "Integrations", href: "/integrations", icon: Puzzle },
-    {
-      label: "Settings",
-      href: "/settings/business",
-      icon: Settings,
-      children: [
-        { label: "Business", href: "/settings/business" },
-        { label: "Messaging", href: "/settings/messaging" },
-        { label: "Notifications", href: "/settings/notifications" },
-        { label: "Usage & Billing", href: "/reports/usage" },
-        { label: "Security", href: "/settings/security" },
-        { label: "Team", href: "/settings/users" },
-      ],
-    },
-  ];
+  return buildVoiceNav({ primaryVoiceAgentId: options.primaryVoiceAgentId ?? null });
 }
 
 /** Launch sidebar — simplified product nav. */
@@ -188,5 +104,7 @@ export const appSolutionsNav = solutionsNav;
 
 /** Primary launch outcome slugs surfaced in the simplified sidebar. */
 export function solutionsLaunchSlugs(): string[] {
-  return ["smart-routing"];
+  return ["voice-receptionist"];
 }
+
+export { smartRoutingFlowIdFromPath };

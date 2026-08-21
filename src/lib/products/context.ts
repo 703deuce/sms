@@ -6,9 +6,27 @@ export function getCurrentProduct(pathname: string): CurrentProduct {
 }
 
 export function productContextLabel(product: ProductKey): string {
-  return product === "sms" ? "SMS" : product === "numbers" ? "Numbers" : "Voice";
+  switch (product) {
+    case "voice":
+      return "AI Receptionist";
+    case "sms":
+      return "SMS";
+    case "numbers":
+      return "Numbers";
+    default:
+      return product;
+  }
 }
 
 export function productLogoHome(product: ProductKey): string {
-  return product === "sms" ? "/dashboard" : product === "numbers" ? "/personal" : "/app";
+  switch (product) {
+    case "voice":
+      return "/dashboard";
+    case "numbers":
+      return "/personal";
+    case "sms":
+      return "/inbox";
+    default:
+      return "/app";
+  }
 }

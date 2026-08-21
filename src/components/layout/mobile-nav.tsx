@@ -2,19 +2,20 @@
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
-import { mobilePrimaryNav } from "@/lib/nav";
-import type { CurrentProduct } from "@/lib/products/types";
+import { buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Inbox, Megaphone, MoreHorizontal, Users } from "lucide-react";
+import {
+  AudioLines,
+  BookOpen,
+  LayoutDashboard,
+  MoreHorizontal,
+  PhoneCall,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { CurrentProduct } from "@/lib/products/types";
 
-const smsMobileNav = [
-  { label: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
-  { label: "Campaigns", href: "/campaigns", icon: Megaphone },
-  { label: "Contacts", href: "/contacts", icon: Users },
-];
+const voiceMobileIcons = [LayoutDashboard, PhoneCall, AudioLines, BookOpen];
 
 export function MobileNav({
   onMore,
@@ -26,18 +27,22 @@ export function MobileNav({
   currentProduct?: CurrentProduct;
 }) {
   const pathname = usePathname();
+  const voiceItems = buildVoiceMobileNav().map((item, i) => ({
+    ...item,
+    icon: voiceMobileIcons[i] ?? LayoutDashboard,
+  }));
   const numbersItems = buildNumbersMobileNav().map((item, i) => ({
     ...item,
-    icon: mobilePrimaryNav[i]?.icon ?? LayoutDashboard,
+    icon: voiceMobileIcons[i] ?? LayoutDashboard,
   }));
 
   const items = realtorMode
     ? buildRealtorMobileNav()
     : currentProduct === "numbers"
       ? numbersItems
-      : currentProduct === "sms"
-        ? smsMobileNav
-        : mobilePrimaryNav;
+      : currentProduct === "voice" || currentProduct === null
+        ? voiceItems
+        : voiceItems;
 
   return (
     <>

@@ -2,20 +2,19 @@
 
 import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
-import { buildProductNav,
+import {
   isReceptionistSectionPath,
   isSmartRoutingSectionPathExport,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
-import { smartRoutingFlowIdFromPath } from "@/lib/smart-routing/display";
-import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildSmsNav } from "@/lib/products/sms-nav";
+import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { productLogoHome, productContextLabel } from "@/lib/products/context";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
-import type { CurrentProduct } from "@/lib/products/types";
+import { productLabel } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
@@ -254,6 +253,7 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
   creditsRemaining,
+  hasVoice = false,
   hasSms = false,
   hasNumbers = false,
 }: {
@@ -270,6 +270,7 @@ export function Sidebar({
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   creditsRemaining?: number;
+  hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
 }) {
@@ -286,14 +287,10 @@ export function Sidebar({
     if (currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) {
       return buildSmsNav({ inboxBadge });
     }
-    const pathAgentId = voiceAgentIdFromPath(pathname);
-    const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
-    const smartRoutingFlowId = smartRoutingFlowIdFromPath(pathname) ?? null;
-    return buildProductNav({
-      primaryVoiceAgentId: agentId,
-      primarySmartRoutingFlowId: smartRoutingFlowId,
-      inboxBadge,
-    });
+    if (currentProduct === "voice" || hasVoice) {
+      return buildVoiceNav({ primaryVoiceAgentId: primaryVoiceAgentId ?? null });
+    }
+    return buildVoiceNav({ primaryVoiceAgentId: primaryVoiceAgentId ?? null });
   }, [
     primaryVoiceAgentId,
     pathname,
@@ -301,6 +298,7 @@ export function Sidebar({
     currentProduct,
     isLauncher,
     inboxBadge,
+    hasVoice,
     hasSms,
   ]);
 
@@ -355,7 +353,7 @@ export function Sidebar({
               </span>
               {!realtorMode && !currentProduct && !isLauncher ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  AI receptionist + SMS
+                  AI Receptionist + Numbers
                 </span>
               ) : null}
             </span>
@@ -368,6 +366,15 @@ export function Sidebar({
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
           >
             + Add Line
+          </Link>
+        ) : null}
+        {(currentProduct === "voice" || currentProduct === null) && !collapsed ? (
+          <Link
+            href="/voice/receptionist"
+            onClick={onClose}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
+          >
+            Test Receptionist
           </Link>
         ) : null}
         {(currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) && !collapsed ? (
@@ -564,21 +571,21 @@ export function Sidebar({
 
         {!collapsed && !realtorMode && currentProduct === "numbers" ? (
           <div className="mx-2 mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
-            <p className="text-[11px] font-semibold text-[#111827]">Need business texting?</p>
+            <p className="text-[11px] font-semibold text-[#111827]">Need an AI receptionist?</p>
             <Link
-              href="/sms-marketing"
+              href="/api/products/open?product=voice"
               onClick={() => {
-                trackCrossSellClicked("numbers", "sms");
+                trackCrossSellClicked("numbers", "voice");
                 onClose?.();
               }}
               className="mt-2 inline-block text-[11px] font-semibold text-[#6366f1]"
             >
-              Explore Transovo SMS
+              Try {productLabel("voice")}
             </Link>
           </div>
         ) : null}
 
-        {currentProduct === "sms" && !hasNumbers && !collapsed ? (
+        {currentProduct === "voice" && !hasNumbers && !collapsed ? (
           <div className="mx-2 mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
             <p className="text-[11px] font-semibold text-[#111827]">
               Want a memorable business number?
@@ -586,12 +593,12 @@ export function Sidebar({
             <Link
               href="/personal/numbers/premium"
               onClick={() => {
-                trackCrossSellClicked("sms", "numbers");
+                trackCrossSellClicked("voice", "numbers");
                 onClose?.();
               }}
               className="mt-2 inline-block text-[11px] font-semibold text-[#6366f1]"
             >
-              Find one with Transovo Numbers
+              Browse {productLabel("numbers")}
             </Link>
           </div>
         ) : null}

@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Hash, MessageSquare, ArrowRight } from "lucide-react";
+import { AudioLines, Hash, ArrowRight } from "lucide-react";
 import { getSession } from "@/lib/auth";
+import { BRAND_NAME } from "@/lib/brand";
 import { getUserProductAccess } from "@/lib/products/entitlements";
+import { productLabel } from "@/lib/products/types";
 import { redirect } from "next/navigation";
 
 export default async function ProductLauncherPage() {
@@ -9,31 +11,31 @@ export default async function ProductLauncherPage() {
   if (!session) redirect("/login?next=/app");
 
   const access = await getUserProductAccess(session.userId);
-  const hasSms = access.hasSms;
+  const hasVoice = access.hasVoice;
   const hasNumbers = access.hasNumbers;
 
   return (
     <div className="mx-auto max-w-3xl py-8">
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Your Transovo Products
+          Your {BRAND_NAME} Products
         </h1>
         <p className="mt-2 text-muted-foreground">Choose what you&apos;d like to manage.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <ProductCard
-          icon={<MessageSquare className="h-6 w-6" />}
-          title="Transovo SMS"
-          description="Business texting, campaigns, automations, and customer conversations."
-          href="/api/products/open?product=sms"
-          actionLabel="Open SMS"
-          entitled={hasSms}
+          icon={<AudioLines className="h-6 w-6" />}
+          title={productLabel("voice")}
+          description="Answer calls, help customers, take messages, transfer callers, and book appointments with AI."
+          href="/api/products/open?product=voice"
+          actionLabel="Open AI Receptionist"
+          entitled={hasVoice}
         />
         <ProductCard
           icon={<Hash className="h-6 w-6" />}
-          title="Transovo Numbers"
-          description="Find, manage, forward, vault, and transfer your phone numbers."
+          title={`${BRAND_NAME} Numbers`}
+          description="Find and manage memorable phone numbers."
           href={
             hasNumbers
               ? "/api/products/open?product=numbers"
@@ -77,7 +79,7 @@ function ProductCard({
         <ArrowRight className="h-4 w-4" />
       </Link>
       {!entitled ? (
-        <p className="mt-2 text-xs text-muted-foreground">Get started with Transovo {title.split(" ")[1]}</p>
+        <p className="mt-2 text-xs text-muted-foreground">Get started with {title}</p>
       ) : null}
     </div>
   );

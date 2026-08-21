@@ -4,7 +4,13 @@
  */
 export const NUMBERS_PLATFORM_ONLY = false;
 
-/** Smart Routing routes/APIs remain; nav and v1 CTAs hide until AI receptionist launch. */
+/** AI Receptionist is the primary Transovo launch product. */
+export const VOICE_PRIMARY_LAUNCH = true;
+
+/** Standalone SMS platform hidden from primary nav/launcher — infrastructure preserved. */
+export const SMS_STANDALONE_HIDDEN = true;
+
+/** Smart Routing routes/APIs remain; nav hidden at AI Receptionist launch. */
 export const SMART_ROUTING_IN_V1_NAV = false;
 
 /** Legacy SMS marketing landing — hidden at numbers v1 launch. */
@@ -27,4 +33,12 @@ export function isSmsMarketingHiddenAtLaunch(): boolean {
 
 export function isPortInHiddenAtLaunch(): boolean {
   return NUMBERS_PLATFORM_ONLY && HIDE_PORT_IN_AT_LAUNCH;
+}
+
+export function isVoicePrimaryLaunch(): boolean {
+  return VOICE_PRIMARY_LAUNCH;
+}
+
+export function isSmsStandaloneHidden(): boolean {
+  return SMS_STANDALONE_HIDDEN;
 }

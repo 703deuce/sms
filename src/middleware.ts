@@ -3,8 +3,8 @@ import {
   parseProductAccessCookie,
   PRODUCT_ACCESS_COOKIE,
 } from "@/lib/products/entitlements";
-import { productAccessDeniedRedirect, SMS_PREVIEW_ACCESS } from "@/lib/products/routing";
-import { isSmsProductPath } from "@/lib/products/paths";
+import { productAccessDeniedRedirect } from "@/lib/products/routing";
+import { isVoiceProductPath } from "@/lib/products/voice-routes";
 import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
@@ -122,7 +122,15 @@ export async function middleware(request: NextRequest) {
   // Legacy /sms/* prefix → flat SMS routes (deep links, marketing CTAs).
   if (pathname === "/sms" || pathname.startsWith("/sms/")) {
     const url = request.nextUrl.clone();
-    url.pathname = pathname === "/sms" ? "/dashboard" : pathname.slice(4) || "/dashboard";
+    url.pathname = pathname === "/sms" ? "/inbox" : pathname.slice(4) || "/inbox";
+    return NextResponse.redirect(url);
+  }
+
+  // Consolidate legacy outcomes dashboard under /dashboard.
+  if (pathname === "/outcomes" || pathname.startsWith("/outcomes/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    url.search = request.nextUrl.search;
     return NextResponse.redirect(url);
   }
 
@@ -172,15 +180,12 @@ export async function middleware(request: NextRequest) {
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
     );
-    const hasSms = productKeys.includes("sms");
+    const hasVoice = productKeys.includes("voice");
     const hasNumbers = productKeys.includes("numbers");
+    const launchCount = [hasVoice, hasNumbers].filter(Boolean).length;
     const url = request.nextUrl.clone();
-    if (hasSms && !hasNumbers) {
-      url.pathname = "/dashboard";
-    } else if (hasNumbers && !hasSms) {
-      url.pathname = "/personal";
-    } else if (hasSms && hasNumbers) {
-      url.pathname = "/app";
+    if (launchCount === 1) {
+      url.pathname = hasVoice ? "/dashboard" : "/personal";
     } else {
       url.pathname = "/app";
     }
@@ -193,18 +198,20 @@ export async function middleware(request: NextRequest) {
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
     );
+    let hasVoice = productKeys.includes("voice");
     let hasSms = productKeys.includes("sms");
     let hasNumbers = productKeys.includes("numbers");
 
     // Fallback for sessions before product cookie exists.
     if (!productKeys.length) {
       hasNumbers = wsType === "PERSONAL" || isNumbersPlatformOnlyLaunch();
-      hasSms = wsType === "BUSINESS" && !isNumbersPlatformOnlyLaunch();
+      hasVoice = wsType === "BUSINESS" && !isNumbersPlatformOnlyLaunch();
       if (wsType === "PERSONAL") hasNumbers = true;
-      if (wsType === "BUSINESS") hasSms = true;
+      if (wsType === "BUSINESS") hasVoice = true;
     }
 
     const denied = productAccessDeniedRedirect(pathname, {
+      hasVoice,
       hasSms,
       hasNumbers,
     });
@@ -220,8 +227,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     if (wsType === "PERSONAL" && isBusinessOnlyPath(pathname)) {
-      if (SMS_PREVIEW_ACCESS && isSmsProductPath(pathname)) {
-        // Allow SMS preview while workspace cookie catches up after /api/products/open.
+      if (isVoiceProductPath(pathname)) {
+        // Voice preview while workspace cookie catches up after /api/products/open.
       } else {
         const url = request.nextUrl.clone();
         url.pathname = "/personal";
@@ -234,7 +241,7 @@ export async function middleware(request: NextRequest) {
       isPersonalOnlyPath(pathname)
     ) {
       const url = request.nextUrl.clone();
-      url.pathname = "/outcomes";
+      url.pathname = "/dashboard";
       return NextResponse.redirect(url);
     }
   }

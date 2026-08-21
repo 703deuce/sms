@@ -5,14 +5,12 @@ import {
   isSmsShellRoute,
   SMS_APP_ROUTE_PREFIXES,
 } from "@/lib/products/sms-routes";
+import { isVoiceProductPath } from "@/lib/products/voice-routes";
 
 /** Shared account routes — not product-specific. */
 export const SHARED_ACCOUNT_PATH_PREFIXES = [
   "/app",
-  "/settings",
   "/onboarding",
-  "/contact",
-  "/getting-started",
 ] as const;
 
 /** @deprecated use SMS_APP_ROUTE_PREFIXES from sms-routes.ts */
@@ -26,11 +24,12 @@ export const NUMBERS_PRODUCT_PATH_PREFIXES = [
   "/my-numbers",
 ] as const;
 
-/** Routes that require SMS entitlement. */
+/** Routes that require SMS entitlement (hidden standalone product). */
 export function isSmsProductPath(pathname: string): boolean {
   if (pathname.startsWith("/sms/") || pathname === "/sms") return true;
   if (pathname.startsWith("/personal")) return false;
   if (isNumbersMarketplacePath(pathname)) return false;
+  if (isVoiceProductPath(pathname)) return false;
   if (SHARED_ACCOUNT_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return false;
   }
@@ -48,6 +47,7 @@ export function isNumbersProductPath(pathname: string): boolean {
 /** Resolve which product context a pathname belongs to. */
 export function resolveProductFromPath(pathname: string): CurrentProduct {
   if (isNumbersProductPath(pathname)) return "numbers";
+  if (isVoiceProductPath(pathname)) return "voice";
   if (isSmsProductPath(pathname)) return "sms";
   return null;
 }
@@ -68,12 +68,12 @@ export function appProductKeyToPrisma(key: ProductKey): "SMS" | "NUMBERS" | "VOI
 /** Offer/onboarding page when user lacks product access. */
 export function productOfferPath(product: ProductKey): string {
   switch (product) {
+    case "voice":
+      return "/signup?product=voice";
     case "sms":
       return "/sms-marketing";
     case "numbers":
       return "/personal/numbers/premium";
-    case "voice":
-      return "/hire";
     default:
       return "/app";
   }

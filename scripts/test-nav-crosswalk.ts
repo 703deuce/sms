@@ -12,7 +12,6 @@ import {
 } from "../src/lib/nav";
 import { outcomeSolutions } from "../src/lib/outcomes/registry";
 import {
-  buildReceptionistNavChildren,
   buildSolutionsNav,
   solutionsLaunchSlugs,
   solutionsNav,
@@ -73,53 +72,35 @@ for (const category of solutionCategories) {
   }
 }
 
-// Launch sidebar matches simplified product nav.
+// Launch sidebar matches simplified AI Receptionist nav.
 const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
-assert.ok(solutionsHrefs.has("/outcomes"), "Dashboard required");
-assert.ok(solutionsHrefs.has("/voice/receptionist"), "AI Receptionist landing required");
-assert.ok(solutionsHrefs.has("/voice/agents"), "My Agents required");
-assert.ok(solutionsHrefs.has("/smart-routing"), "Smart Routing required");
-assert.ok(solutionsHrefs.has("/smart-routing/new"), "Smart Routing create flow required");
-assert.ok(solutionsHrefs.has("/smart-routing/audio"), "Smart Routing audio required");
-assert.ok(solutionsHrefs.has("/automations"), "Automations required");
-assert.ok(solutionsHrefs.has("/integrations/native/appointments"), "Appointments required");
-assert.ok(solutionsHrefs.has("/voice/calendars"), "Calendars required");
-assert.ok(solutionsHrefs.has("/numbers"), "Phone Numbers required");
-assert.ok(solutionsHrefs.has("/numbers/buy"), "Buy Number required");
-assert.ok(solutionsHrefs.has("/compliance"), "Compliance required");
+assert.ok(solutionsHrefs.has("/dashboard"), "Dashboard required");
+assert.ok(solutionsHrefs.has("/voice/receptionist"), "Receptionist required");
+assert.ok(solutionsHrefs.has("/voice/calls"), "Calls required");
+assert.ok(solutionsHrefs.has("/voice/knowledge"), "Knowledge required");
+assert.ok(solutionsHrefs.has("/voice/numbers"), "Receptionist numbers required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
+assert.ok(solutionsHrefs.has("/voice/analytics"), "Analytics required");
 assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
-assert.ok(solutionsHrefs.has("/reports/usage"), "Usage & Billing required");
+assert.ok(!solutionsHrefs.has("/automations"), "Automations hidden from launch nav");
+assert.ok(!solutionsHrefs.has("/smart-routing"), "Smart Routing hidden from launch nav");
 
 const expectedTopLevel = [
   "Dashboard",
-  "AI Receptionist",
   "Calls",
-  "Smart Routing",
-  "Automations",
-  "Appointments",
-  "Phone Numbers",
-  "Compliance",
+  "Receptionist",
+  "Knowledge",
+  "Numbers",
   "Integrations",
+  "Analytics",
   "Settings",
+  "Help",
 ];
 assert.deepEqual(
   solutionsNav.map((item) => item.label),
   expectedTopLevel,
-  "Launch sidebar top-level labels must match the product mockup",
+  "Launch sidebar top-level labels must match AI Receptionist product mockup",
 );
-
-const receptionistNav = solutionsNav.find((item) => item.label === "AI Receptionist");
-assert.ok(receptionistNav, "AI Receptionist nav item required");
-assert.ok(receptionistNav?.children?.length, "AI Receptionist must expose wizard shortcuts");
-assert.deepEqual(
-  receptionistNav?.children?.map((c) => c.label),
-  buildReceptionistNavChildren(null).map((c) => c.label),
-  "AI Receptionist submenu labels must match wizard shortcuts",
-);
-
-const smartRoutingNav = solutionsNav.find((item) => item.label === "Smart Routing");
-assert.ok(smartRoutingNav?.children?.length, "Smart Routing submenu required");
 
 for (const slug of solutionsLaunchSlugs()) {
   const reachable = [...solutionsHrefs].some((href) => href.includes(`/outcomes/${slug}`));
@@ -174,12 +155,8 @@ const withInstances = buildSolutionsNav({
 });
 const withInstanceHrefs = new Set(collectNavHrefs(withInstances));
 assert.ok(
-  withInstanceHrefs.has(`/voice/agents/a2/capabilities`),
-  "Launch nav should deep-link wizard steps for the primary agent",
-);
-assert.ok(
-  !withInstanceHrefs.has("/voice/agents/a2"),
-  "Launch nav should not surface bare instance shortcuts",
+  withInstanceHrefs.has(`/voice/agents/a2/about`),
+  "Launch nav should deep-link receptionist setup for the primary agent",
 );
 
 console.log(

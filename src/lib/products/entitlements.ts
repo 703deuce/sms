@@ -37,7 +37,7 @@ export function defaultEntitlementsForWorkspaceType(
   if (workspaceType === "PERSONAL") {
     return [{ productKey: "numbers", status: "active" }];
   }
-  return [{ productKey: "sms", status: "active" }];
+  return [{ productKey: "voice", status: "active" }];
 }
 
 /** Ensure workspace has baseline product entitlements (idempotent). */
@@ -122,6 +122,9 @@ export async function getUserProductAccess(userId: string): Promise<UserProductA
     deactivatedAt: null,
   }));
 
+  const hasVoice = products.some(
+    (p) => p.productKey === "voice" && isActiveEntitlement(p.status),
+  );
   const hasSms = products.some((p) => p.productKey === "sms" && isActiveEntitlement(p.status));
   const hasNumbers = products.some(
     (p) => p.productKey === "numbers" && isActiveEntitlement(p.status),
@@ -136,6 +139,7 @@ export async function getUserProductAccess(userId: string): Promise<UserProductA
 
   return {
     products,
+    hasVoice,
     hasSms,
     hasNumbers,
     lastActiveProduct: lastActive,
@@ -235,8 +239,9 @@ export function activeProductKeys(access: UserProductAccess): ProductKey[] {
     .map((p) => p.productKey);
   if (fromProducts.length) return fromProducts;
   const keys: ProductKey[] = [];
-  if (access.hasSms) keys.push("sms");
+  if (access.hasVoice) keys.push("voice");
   if (access.hasNumbers) keys.push("numbers");
+  if (access.hasSms) keys.push("sms");
   return keys;
 }
 
@@ -250,11 +255,13 @@ export function assertProductAccess(
   product: ProductKey,
 ): { ok: true } | { ok: false; redirect: string } {
   const entitled =
-    product === "sms"
-      ? access.hasSms
-      : product === "numbers"
-        ? access.hasNumbers
-        : false;
+    product === "voice"
+      ? access.hasVoice
+      : product === "sms"
+        ? access.hasSms
+        : product === "numbers"
+          ? access.hasNumbers
+          : false;
   if (entitled) return { ok: true };
   return { ok: false, redirect: productOfferPath(product) };
 }
