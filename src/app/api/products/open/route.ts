@@ -50,7 +50,14 @@ export async function GET(request: Request) {
   await updateLastActiveProduct(session.userId, product);
   const access = await getUserProductAccess(session.userId);
 
-  const res = NextResponse.redirect(publicRedirectUrl(productHomePath(product), request));
+  const requestUrl = new URL(request.url);
+  const nextRaw = requestUrl.searchParams.get("next")?.trim();
+  const redirectPath =
+    nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//") && !nextRaw.startsWith("/login")
+      ? nextRaw
+      : productHomePath(product);
+
+  const res = NextResponse.redirect(publicRedirectUrl(redirectPath, request));
   applyWorkspaceCookies(
     res,
     workspace.workspaceId,

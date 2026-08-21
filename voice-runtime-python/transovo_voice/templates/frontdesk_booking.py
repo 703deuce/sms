@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from livekit.agents import Agent, JobContext, ToolError, function_tool
 from livekit.agents.voice.events import RunContext
 
+from transovo_voice.observability.call_metrics import CallObservability
 from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.templates.session_factory import build_realtime_session
 from transovo_voice.templates.template_context import (
@@ -94,10 +95,18 @@ _TEMPLATE_ROLE = (
 class FrontDeskBookingAgent(Agent):
     """Front desk booking — wizard config + FakeCalendar scheduling tools."""
 
-    def __init__(self, *, ud: SessionUserData, timezone: str, now: Callable[[], datetime.datetime]) -> None:
+    def __init__(
+        self,
+        *,
+        ud: SessionUserData,
+        timezone: str,
+        now: Callable[[], datetime.datetime],
+        observability: CallObservability | None = None,
+    ) -> None:
         self.tz = ZoneInfo(timezone)
         self._now = now
         self._ud = ud
+        self._observability = observability
         self._slots_map: dict[str, AvailableSlot] = {}
         super().__init__(
             instructions=build_template_instructions(
@@ -109,12 +118,16 @@ class FrontDeskBookingAgent(Agent):
         )
 
     async def on_enter(self) -> None:
+        if self._observability is not None:
+            await self._observability.mark_worker_ready()
         await self.session.generate_reply(
             instructions=resolve_greeting_instructions(
                 self._ud,
                 fallback="Welcome the caller and invite them to book an appointment.",
             ),
         )
+        if self._observability is not None:
+            await self._observability.mark_first_agent_response(source="greeting")
 
     @function_tool
     async def get_current_time(self) -> str:
@@ -163,14 +176,26 @@ class FrontDeskBookingAgent(Agent):
         return f"The appointment was successfully scheduled for {local.strftime('%A, %B %d, %Y at %H:%M %Z')}."
 
 
-async def run_frontdesk_booking_template(ctx: JobContext, ud: SessionUserData) -> None:
+async def run_frontdesk_booking_template(
+    ctx: JobContext,
+    ud: SessionUserData,
+    *,
+    observability: CallObservability | None = None,
+) -> None:
     tz = ud.timezone or "America/New_York"
     cal = FakeCalendar(timezone=tz, _now=lambda: datetime.datetime.now(ZoneInfo(tz)))
     await cal.initialize()
     fd_userdata = FrontDeskUserdata(cal=cal)
     session = build_realtime_session(ud, userdata=fd_userdata)
+    if observability is not None:
+        observability.attach_session(session)
     await session.start(
-        agent=FrontDeskBookingAgent(ud=ud, timezone=tz, now=cal.now),
+        agent=FrontDeskBookingAgent(
+            ud=ud,
+            timezone=tz,
+            now=cal.now,
+            observability=observability,
+        ),
         room=ctx.room,
         room_options=build_telephony_room_options(delete_room_on_close=True),
     )

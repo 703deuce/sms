@@ -5,6 +5,7 @@ import os
 from livekit.agents import JobContext
 
 from transovo_voice.integrations.backend_client import TransovoBackend
+from transovo_voice.observability.call_metrics import CallObservability
 from transovo_voice.telemetry import log_event
 from transovo_voice.templates.basic_voice import run_basic_voice_template
 from transovo_voice.templates.frontdesk_booking import run_frontdesk_booking_template
@@ -33,6 +34,7 @@ async def run_template(
     backend: TransovoBackend,
     *,
     template_id: str,
+    observability: CallObservability | None = None,
 ) -> None:
     resolved = resolve_template_id(template_id)
     status = template_runtime_status(resolved)
@@ -66,10 +68,10 @@ async def run_template(
     )
 
     if resolved == "livekit_basic_voice":
-        await run_basic_voice_template(ctx, ud)
+        await run_basic_voice_template(ctx, ud, observability=observability)
         return
     if resolved == "livekit_frontdesk_booking":
-        await run_frontdesk_booking_template(ctx, ud)
+        await run_frontdesk_booking_template(ctx, ud, observability=observability)
         return
     if resolved == "livekit_warm_transfer":
         await run_warm_transfer_template(ctx, ud, backend)

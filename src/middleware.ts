@@ -6,6 +6,15 @@ import {
 import { productAccessDeniedRedirect } from "@/lib/products/routing";
 import { isVoiceProductPath } from "@/lib/products/voice-routes";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
+import {
+  isBusinessOnlyPath,
+  isPersonalOnlyPath,
+} from "@/lib/workspace/capabilities";
+import {
+  isNumbersPlatformOnlyLaunch,
+  isPortInHiddenAtLaunch,
+  isSmsMarketingHiddenAtLaunch,
+} from "@/lib/workspace/platform-launch";
 
 function isInternalRequestHost(request: NextRequest): boolean {
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
@@ -25,15 +34,6 @@ function siteRedirect(request: NextRequest, path: string) {
   }
   return NextResponse.redirect(publicRedirectUrl(path, request));
 }
-import {
-  isBusinessOnlyPath,
-  isPersonalOnlyPath,
-} from "@/lib/workspace/capabilities";
-import {
-  isNumbersPlatformOnlyLaunch,
-  isPortInHiddenAtLaunch,
-  isSmsMarketingHiddenAtLaunch,
-} from "@/lib/workspace/platform-launch";
 
 const WORKSPACE_TYPE_COOKIE = "transovo_workspace_type";
 
@@ -228,6 +228,10 @@ export async function middleware(request: NextRequest) {
       hasVoice = wsType === "BUSINESS" && !isNumbersPlatformOnlyLaunch();
       if (wsType === "PERSONAL") hasNumbers = true;
       if (wsType === "BUSINESS") hasVoice = true;
+    } else {
+      // Partial cookie (e.g. numbers-only) while business workspace cookie is active.
+      if (!hasVoice && wsType === "BUSINESS") hasVoice = true;
+      if (!hasNumbers && wsType === "PERSONAL") hasNumbers = true;
     }
 
     const denied = productAccessDeniedRedirect(
@@ -240,6 +244,13 @@ export async function middleware(request: NextRequest) {
       { authenticated: true },
     );
     if (denied) {
+      if (denied.startsWith("/api/products/open")) {
+        const target = new URL(denied, "http://local");
+        if (!target.searchParams.get("next")) {
+          target.searchParams.set("next", pathname);
+        }
+        return siteRedirect(request, `${target.pathname}${target.search}`);
+      }
       return siteRedirect(request, denied);
     }
 

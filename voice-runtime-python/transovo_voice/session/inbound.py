@@ -8,6 +8,7 @@ from livekit.agents import JobContext
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.integrations.commit_client import drain_pending_provider_tasks
 from transovo_voice.tasks.protocols import is_phone_field
+from transovo_voice.observability.call_metrics import CallObservability
 from transovo_voice.templates.registry import DEFAULT_ACTIVE_TEMPLATE, resolve_template_id
 from transovo_voice.templates.router import run_template
 from transovo_voice.telemetry import log_event
@@ -108,8 +109,12 @@ def _prefill_caller_phone(ud: SessionUserData) -> None:
 async def run_inbound_session(ctx: JobContext) -> None:
     backend = TransovoBackend()
     ud: SessionUserData | None = None
+    observability: CallObservability | None = None
+    job_started_at = __import__("time").perf_counter()
 
     async def shutdown_backend() -> None:
+        if observability is not None:
+            await observability.finalize()
         if ud is not None:
             await drain_pending_provider_tasks(ud)
         await backend.close()
@@ -149,6 +154,13 @@ async def run_inbound_session(ctx: JobContext) -> None:
     template_id = resolve_template_id(
         str(bootstrap.get("agentTemplate") or ud.agent_template),
     )
+    observability = CallObservability(
+        ud=ud,
+        backend=backend,
+        template_id=template_id,
+        job_started_at=job_started_at,
+    )
+    await observability.mark_bootstrap_complete()
 
     log_event(
         "call_started",
@@ -193,13 +205,4 @@ async def run_inbound_session(ctx: JobContext) -> None:
     if persisted.get("ok") and persisted.get("fields"):
         ud.collected_fields = dict(persisted["fields"])
 
-    await run_template(ctx, ud, backend, template_id=template_id)
-
-    log_event(
-        "worker_ready",
-        call_id=ud.call_id,
-        workspace_id=ud.workspace_id,
-        agent_id=ud.agent_id,
-        room=ctx.room.name,
-        extra={"agent_template": template_id},
-    )
+    await run_template(ctx, ud, backend, template_id=template_id, observability=observability)

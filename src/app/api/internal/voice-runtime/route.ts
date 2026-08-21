@@ -16,7 +16,8 @@ type VoiceRuntimeAction =
   | "reschedule_booking"
   | "find_appointments"
   | "business_answer"
-  | "emit_event";
+  | "emit_event"
+  | "record_call_telemetry";
 
 function logInternalVoice(
   event: string,
@@ -179,6 +180,14 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/emit-voice-event-for-python"
         );
         result = await emitVoiceRuntimeEvent(payload as never);
+        break;
+      }
+
+      case "record_call_telemetry": {
+        const { recordCallTelemetryForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/record-call-telemetry-for-python"
+        );
+        result = await recordCallTelemetryForPython(payload as never);
         break;
       }
 
