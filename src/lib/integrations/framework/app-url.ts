@@ -1,14 +1,21 @@
 /**
  * Authoritative public origin for OAuth callbacks and webhook URLs.
- * Prefer APP_URL; fall back to NEXT_PUBLIC_APP_URL for local/dev parity.
+ * Reads APP_URL and NEXT_PUBLIC_APP_URL; skips docker bind addresses (0.0.0.0)
+ * and non-HTTPS values in production so the first usable public URL wins.
  */
 
+function configuredAppUrlCandidates(): string[] {
+  return [process.env.APP_URL?.trim(), process.env.NEXT_PUBLIC_APP_URL?.trim()]
+    .filter(Boolean)
+    .map((raw) => raw!.replace(/\/$/, ""));
+}
+
 export function getIntegrationAppUrl(): string {
-  const raw =
-    process.env.APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    "http://localhost:3000";
-  return raw.replace(/\/$/, "");
+  const candidates = configuredAppUrlCandidates();
+  for (const candidate of candidates) {
+    if (isUsableConfiguredAppUrl(candidate)) return candidate;
+  }
+  return candidates[0] || "http://localhost:3000";
 }
 
 function isInternalHost(hostname: string): boolean {
@@ -27,10 +34,11 @@ function isUsableConfiguredAppUrl(url: string): boolean {
   }
 }
 
-/** Prefer configured APP_URL; fall back to proxy headers when docker/internal origin is configured. */
+/** First usable configured URL, then proxy headers, then localhost fallback. */
 export function resolvePublicAppUrl(request?: Request): string {
-  const configured = getIntegrationAppUrl();
-  if (isUsableConfiguredAppUrl(configured)) return configured;
+  for (const candidate of configuredAppUrlCandidates()) {
+    if (isUsableConfiguredAppUrl(candidate)) return candidate;
+  }
 
   if (request) {
     const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();

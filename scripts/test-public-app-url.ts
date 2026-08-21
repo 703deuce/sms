@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  getIntegrationAppUrl,
   publicRedirectUrl,
   resolvePublicAppUrl,
 } from "@/lib/integrations/framework/app-url";
@@ -9,8 +10,11 @@ const prevPublic = process.env.NEXT_PUBLIC_APP_URL;
 const prevNodeEnv = process.env.NODE_ENV;
 
 process.env.APP_URL = "https://0.0.0.0:3000"; // pragma: allowlist secret
-delete process.env.NEXT_PUBLIC_APP_URL;
+process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
 process.env.NODE_ENV = "production";
+
+assert.equal(resolvePublicAppUrl(), "https://app.example.com");
+assert.equal(getIntegrationAppUrl(), "https://app.example.com");
 
 const request = new Request("http://0.0.0.0:3000/api/products/open?product=voice", {
   headers: {
@@ -23,6 +27,8 @@ const request = new Request("http://0.0.0.0:3000/api/products/open?product=voice
 assert.equal(resolvePublicAppUrl(request), "https://app.example.com");
 assert.equal(publicRedirectUrl("/dashboard", request).href, "https://app.example.com/dashboard");
 
+delete process.env.NEXT_PUBLIC_APP_URL;
+assert.equal(resolvePublicAppUrl(request), "https://app.example.com");
 process.env.APP_URL = "https://app.example.com"; // pragma: allowlist secret
 assert.equal(resolvePublicAppUrl(), "https://app.example.com");
 
