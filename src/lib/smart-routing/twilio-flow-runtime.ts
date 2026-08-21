@@ -308,7 +308,14 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           return { twiml: twiml(parts.join("")), awaiting: "voicemail" };
         }
         case "SMS_CONSENT": {
-          const playback = await resolvePromptPlayback(session.workspaceId, node.config);
+          const { resolveSmsConsentPlayback, promptToTwimlInner, escapeXml } = await import(
+            "./prompt-playback"
+          );
+          const playback = await resolveSmsConsentPlayback(session.workspaceId, node.config);
+          if (playback.failClosed) {
+            await finalizeSession(sessionId, "consent_playback_failed");
+            return { twiml: twiml("<Hangup/>") };
+          }
           const action = smartRoutingCallbackUrl({
             sessionId,
             event: "gather",
@@ -316,6 +323,7 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           const inner =
             promptToTwimlInner(playback) ||
             `<Say>${escapeXml("Sorry we missed your call. Press 1 and we'll text you now.")}</Say>`;
+          // Twilio Gather accepts DTMF during <Play> (barge-in) — Press 1 during or after prompt.
           parts.push(
             `<Gather numDigits="1" timeout="10" action="${escapeXml(action)}" method="POST">${inner}</Gather><Hangup/>`,
           );

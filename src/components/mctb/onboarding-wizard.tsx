@@ -397,6 +397,15 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               </button>
             ))}
           </div>
+          {consentMode === "press_1" ? (
+            <p className="text-sm text-muted-foreground">
+              After onboarding, customize your spoken Press-1 script and generate audio in{" "}
+              <Link href="/voice/setup" className="font-medium text-primary hover:underline">
+                Setup → Verified Call Consent
+              </Link>
+              . Live calls play your saved recording before collecting Press 1.
+            </p>
+          ) : null}
           <Button disabled={saving} onClick={() => void post({ consentMode })}>
             Continue
           </Button>

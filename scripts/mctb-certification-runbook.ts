@@ -17,6 +17,16 @@ import {
 
 export type CertificationPass = 1 | 2 | 3 | 4;
 
+export const CERTIFICATION_EXECUTION_ORDER = [
+  "1. Twilio TFN + real TFV submission and approval (Pass 1)",
+  "2. Real conditional forwarding + ANI preservation (Pass 2)",
+  "3. Real Press-1 flow using published consent audio (Pass 3 / CP-11–17)",
+  "4. Real Existing Consent flow (Pass 3 / F-03 / CP-18)",
+  "5. Real inbound/outbound SMS + STOP/START (Pass 3)",
+  "6. Real trial → expiration → Stripe paid conversion (Pass 4)",
+  "7. Full fresh-signup browser smoke test — no DB intervention (Pass 4 / UI-02)",
+] as const;
+
 export const CERTIFICATION_PASSES: Record<
   CertificationPass,
   { title: string; goal: string; matrixIds: string[]; checklist: string[] }
@@ -88,7 +98,15 @@ export const CERTIFICATION_PASSES: Record<
     ],
     checklist: [
       "Press-1 path: publish consent audio in Setup → missed → consent prompt plays → Press 1 → SMS.",
-      "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion.",
+      "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion + promptScriptHash.",
+      "Press-1 edge cases (before marking CP complete):",
+      "  • Edit script after publish → Setup shows stale/unpublished; live calls still use last publish until re-published",
+      "  • Regenerate with different voice → new asset ID; re-publish; call plays new audio",
+      "  • curl playback URL from outside browser (Twilio must reach /api/public/smart-routing-audio/{id})",
+      "  • Press 1 during prompt playback (barge-in) — should still count as consent",
+      "  • Press 1 only after prompt — should count",
+      "  • Delete/missing MP3 on disk → call fails closed (no SMS, session consent_playback_failed)",
+      "  • Audit row promptText/hash matches published flow version for that call",
       "Negative: no key, Press 2, hangup, double Press 1, repeat call inside cooldown.",
       "Existing Consent path: fresh workspace → attestation → no Press-1 → missed → immediate SMS.",
       "Confirm consentMode = existing_consent in DB and TFV payload used Existing Consent copy.",
@@ -214,6 +232,9 @@ if (args.includes("--sheet")) {
 } else if (args.includes("--summary")) {
   printPassSummary();
 } else {
+  console.log("\n── Recommended execution order ──\n");
+  for (const step of CERTIFICATION_EXECUTION_ORDER) console.log(`  ${step}`);
+  console.log("");
   for (const pass of [1, 2, 3, 4] as CertificationPass[]) printPass(pass);
   printCarrierSheet();
   printPassSummary();

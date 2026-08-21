@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getAudioAsset, resolveAudioUrlForAsset } from "./media-service";
+import { applyConsentPlaybackFailClosed } from "@/lib/mctb/consent-prompt/playback-policy";
 
 export type PromptPlayback = {
   playUrl?: string;
@@ -43,6 +44,18 @@ export function promptToTwimlInner(playback: PromptPlayback): string {
     return `<Say>${escapeXml(playback.sayText)}</Say>`;
   }
   return "";
+}
+
+/**
+ * Resolve SMS consent playback. When a published audio asset is configured but
+ * unreachable, returns failClosed so callers cannot consent via TTS fallback.
+ */
+export async function resolveSmsConsentPlayback(
+  workspaceId: string,
+  config: Record<string, unknown>,
+): Promise<PromptPlayback & { failClosed?: boolean }> {
+  const playback = await resolvePromptPlayback(workspaceId, config);
+  return applyConsentPlaybackFailClosed(config, playback);
 }
 
 export function escapeXml(value: string): string {

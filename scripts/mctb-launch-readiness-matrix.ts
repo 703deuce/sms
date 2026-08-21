@@ -548,9 +548,9 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
     id: "CP-16",
     phase: "Consent",
     area: "Resilience",
-    requirement: "ElevenLabs generation failure keeps last published audio; clear retry error",
-    status: "IMPLEMENTED",
-    evidence: "publish requires regen; prior published flow remains until new publish",
+    requirement: "ElevenLabs generation failure keeps last published audio; missing asset fails closed (no SMS)",
+    status: "AUTOMATED_TEST_PASSED",
+    evidence: "resolveSmsConsentPlayback failClosed + test-mctb-consent-prompt.ts",
   },
   {
     id: "CP-17",

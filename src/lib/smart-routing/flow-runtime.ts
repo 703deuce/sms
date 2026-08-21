@@ -251,8 +251,14 @@ export async function executeNode(input: {
       }
       case "SMS_CONSENT": {
         const digit = String(node.config.consentDigit ?? "1");
-        const { resolvePromptPlayback } = await import("./prompt-playback");
-        const playback = await resolvePromptPlayback(session.workspaceId, node.config);
+        const { resolveSmsConsentPlayback } = await import("./prompt-playback");
+        const playback = await resolveSmsConsentPlayback(session.workspaceId, node.config);
+        if (playback.failClosed) {
+          await hangupCall(controlId, input.sessionId);
+          await finalizeSession(input.sessionId, "consent_playback_failed");
+          await completeNodeExecution(execution.id, { error: "consent_playback_failed" });
+          return { done: true };
+        }
         const prompt = String(
           node.config.promptText ??
             "Sorry we missed your call. Press 1 and we'll text you now.",
