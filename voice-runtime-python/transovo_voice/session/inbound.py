@@ -8,7 +8,7 @@ from livekit.agents import JobContext
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.integrations.commit_client import drain_pending_provider_tasks
 from transovo_voice.tasks.protocols import is_phone_field
-from transovo_voice.templates.registry import DEFAULT_PRODUCTION_TEMPLATE, resolve_template_id
+from transovo_voice.templates.registry import DEFAULT_ACTIVE_TEMPLATE, resolve_template_id
 from transovo_voice.templates.router import run_template
 from transovo_voice.telemetry import log_event
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData, TransferPolicy
@@ -92,7 +92,7 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         realtime_speed=data.get("realtimeSpeed"),
         runtime_profile=str(data.get("runtimeProfile") or "generic_receptionist"),
         enabled_builtin_tools=enabled_builtin_tools,
-        agent_template=str(data.get("agentTemplate") or DEFAULT_PRODUCTION_TEMPLATE),
+        agent_template=str(data.get("agentTemplate") or DEFAULT_ACTIVE_TEMPLATE),
     )
 
 
