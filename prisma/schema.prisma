@@ -120,7 +120,6 @@ model User {
   premiumNumberReservations PremiumNumberReservation[]
   premiumNumberSearchLogs   PremiumNumberSearchLog[]
   numberServiceSubscriptions NumberServiceSubscription[]
-  marketplaceStripeRefunds  MarketplaceStripeRefund[]
   inAppNotifications  InAppNotification[]
   invitesSent         WorkspaceInvite[] @relation("InviteSender")
   ownedWorkspaces     Workspace[] @relation("WorkspaceOwner")
