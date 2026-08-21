@@ -94,7 +94,7 @@ Customers, A2P queue, billing, support tickets, platform settings (plans, flags,
 | `/api/sms/send` | One-off SMS |
 | `/api/telnyx/messaging` | Telnyx SMS webhook |
 | `/api/telnyx/voice` | Telnyx Call Control webhook |
-| `/api/payments/stripe/webhook` | Stripe billing + text-to-pay |
+| `/api/webhooks/stripe` | Stripe billing, text-to-pay, premium number purchases |
 | `/api/jobs/process` | Cron job drain |
 
 ## Project structure

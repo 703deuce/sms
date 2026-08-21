@@ -17,6 +17,12 @@ export type CompletePremiumPurchaseInput = {
   idempotencyKey?: string;
   /** When true, payment + validation run but Telnyx order is skipped (automated tests). */
   dryRunProviderPurchase?: boolean;
+  /** Stripe webhook already collected payment — skip inline payment provider confirm. */
+  confirmedStripePayment?: {
+    paymentId: string;
+    stripeSessionId: string;
+    stripePaymentIntentId?: string | null;
+  };
 };
 
 export type CompletePremiumPurchaseResult = {
@@ -383,26 +389,45 @@ export async function completePremiumPurchase(
 
   let payment: NumberPaymentConfirmResult | null = null;
   try {
-    const paymentProvider = getNumberPaymentProvider();
-    payment = await paymentProvider.confirm({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      reservationId: reservation.id,
-      phoneNumber: reservation.phoneNumber,
-      amountCents: reservation.premiumPriceCents,
-      idempotencyKey,
-    });
-    logPurchaseEvent({
-      operationId,
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      provider: paymentProvider.name,
-      action: "payment_confirm",
-      status: "success",
-      startedAt,
-      completedAt: new Date().toISOString(),
-      reservationId: reservation.id,
-    });
+    if (input.confirmedStripePayment) {
+      payment = {
+        ok: true,
+        paymentId: input.confirmedStripePayment.paymentId,
+        provider: "stripe",
+      };
+      logPurchaseEvent({
+        operationId,
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        provider: "stripe",
+        action: "payment_confirm",
+        status: "success",
+        startedAt,
+        completedAt: new Date().toISOString(),
+        reservationId: reservation.id,
+      });
+    } else {
+      const paymentProvider = getNumberPaymentProvider();
+      payment = await paymentProvider.confirm({
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        reservationId: reservation.id,
+        phoneNumber: reservation.phoneNumber,
+        amountCents: reservation.premiumPriceCents,
+        idempotencyKey,
+      });
+      logPurchaseEvent({
+        operationId,
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        provider: paymentProvider.name,
+        action: "payment_confirm",
+        status: "success",
+        startedAt,
+        completedAt: new Date().toISOString(),
+        reservationId: reservation.id,
+      });
+    }
   } catch (err) {
     await prisma.premiumNumberReservation.updateMany({
       where: { id: reservation.id, paymentStatus: "processing" },

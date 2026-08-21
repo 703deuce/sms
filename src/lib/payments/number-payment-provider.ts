@@ -1,7 +1,7 @@
 /**
  * Isolated payment gate for number purchases.
- * Replace testPaymentProvider.confirm with stripePaymentProvider.confirm later —
- * number provisioning orchestration stays unchanged.
+ * Stripe checkout sessions use createPremiumNumberCheckoutSession(); provisioning
+ * completes asynchronously via /api/webhooks/stripe.
  */
 
 export type NumberPaymentConfirmInput = {
@@ -35,11 +35,13 @@ export const testPaymentProvider: NumberPaymentProvider = {
   },
 };
 
-/** Placeholder — real Stripe integration lands here later. */
+/** Use createPremiumNumberCheckoutSession() + webhook completion — not inline confirm. */
 export const stripePaymentProvider: NumberPaymentProvider = {
   name: "stripe",
   async confirm(_input) {
-    throw new Error("Stripe number checkout is not enabled yet");
+    throw new Error(
+      "Stripe number checkout uses Checkout redirect; call createPremiumNumberCheckoutSession and complete purchase via /api/webhooks/stripe",
+    );
   },
 };
 
