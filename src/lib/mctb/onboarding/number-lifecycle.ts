@@ -12,6 +12,8 @@ import {
 import { loadMctbOnboardingState, recordFunnelEvent } from "@/lib/mctb/onboarding/state";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
+import { recordNumberReleaseAudit } from "@/lib/mctb/number-release-audit";
+import { processAbandonedOnboardingReminders } from "@/lib/mctb/onboarding/abandoned-reminders";
 
 export const MCTB_NUMBER_HOLD_DAYS = 7;
 /** Days after TFN provision before releasing numbers from abandoned onboarding (no TFV submit). */
@@ -164,6 +166,38 @@ export async function shouldReleaseWorkspaceTollFreeNumber(workspaceId: string):
   return new Date(holdUntil).getTime() <= Date.now();
 }
 
+async function auditReleasedNumber(
+  workspaceId: string,
+  phoneNumberId: string,
+  reason: import("@/lib/mctb/number-release-audit").NumberReleaseReason,
+): Promise<void> {
+  const prisma = getPrisma();
+  const [ws, pn] = await Promise.all([
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { billingPlan: true, stripeSubscriptionId: true, workspaceLimits: true },
+    }),
+    prisma.phoneNumber.findUnique({
+      where: { id: phoneNumberId },
+      select: { e164: true, twilioSid: true, provider: true },
+    }),
+  ]);
+  if (!pn) return;
+  const limits = asRecord(ws?.workspaceLimits?.limits);
+  await recordNumberReleaseAudit({
+    workspaceId,
+    phoneNumberId,
+    e164: pn.e164,
+    twilioSid: pn.twilioSid,
+    provider: pn.provider,
+    reason,
+    billingPlan: ws?.billingPlan,
+    stripeSubscriptionId: ws?.stripeSubscriptionId,
+    mctbServiceStatus: String(limits.mctbServiceStatus || ""),
+    releasedBy: "system",
+  });
+}
+
 /** End unpaid trials — pause service and start hold window. Never releases numbers here. */
 export async function processExpiredMctbTrials(limit = 50): Promise<{
   scanned: number;
@@ -233,6 +267,7 @@ export async function processWorkspaceTollFreeReleases(limit = 50): Promise<{
     const result = await releaseWorkspaceNumber(row.id, phoneNumberId);
     if (result.ok) {
       released += 1;
+      await auditReleasedNumber(row.id, phoneNumberId, "trial_hold_expired");
       const limitsRow = await prisma.workspaceLimits.findUnique({
         where: { workspaceId: row.id },
         select: { limits: true },
@@ -333,6 +368,7 @@ export async function processAbandonedOnboardingReleases(limit = 50): Promise<{
     const result = await releaseWorkspaceNumber(row.id, phoneNumberId);
     if (result.ok) {
       released += 1;
+      await auditReleasedNumber(row.id, phoneNumberId, "abandoned_onboarding");
       const limitsRow = await prisma.workspaceLimits.findUnique({
         where: { workspaceId: row.id },
         select: { limits: true },
@@ -363,12 +399,13 @@ export async function processAbandonedOnboardingReleases(limit = 50): Promise<{
 }
 
 export async function runMctbNumberLifecycleJobs(limit = 50) {
-  const [expired, releases, abandoned] = await Promise.all([
+  const [expired, releases, abandoned, reminders] = await Promise.all([
     processExpiredMctbTrials(limit),
     processWorkspaceTollFreeReleases(limit),
     processAbandonedOnboardingReleases(limit),
+    processAbandonedOnboardingReminders(limit),
   ]);
-  return { expired, releases, abandoned };
+  return { expired, releases, abandoned, reminders };
 }
 
 // Backward-compatible aliases

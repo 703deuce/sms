@@ -18,6 +18,8 @@ export type ReadinessStatus =
 export type MatrixItem = {
   id: string;
   phase: string;
+  /** Certification pass (1–4) for manual/live items; omit for automated-only rows */
+  certPass?: 1 | 2 | 3 | 4;
   area: string;
   requirement: string;
   status: ReadinessStatus;
@@ -37,6 +39,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "A-02",
     phase: "A",
+    certPass: 1,
     area: "TFN Provision",
     requirement: "Number exists in Twilio with correct subaccount ownership",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -61,6 +64,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "A-05",
     phase: "A",
+    certPass: 1,
     area: "TFN Provision",
     requirement: "Two workspaces cannot receive the same number; 10 parallel cannot collide",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -69,6 +73,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "A-06",
     phase: "A",
+    certPass: 1,
     area: "TFV Submit",
     requirement: "Real TFV submission with field-by-field Twilio vs Transovo comparison",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -79,6 +84,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "B-01",
     phase: "B",
+    certPass: 1,
     area: "TFV Sync",
     requirement: "Submitted → Pending/In Review → Approved syncs without DB edits",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -87,6 +93,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "B-02",
     phase: "B",
+    certPass: 1,
     area: "TFV Sync",
     requirement: "Twilio Event Streams / notification subscription configured",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -177,6 +184,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "C-06",
     phase: "C",
+    certPass: 2,
     area: "Demo",
     requirement: "Full demo call → SMS → reply → browser update E2E",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -187,6 +195,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "D-01",
     phase: "D",
+    certPass: 2,
     area: "Forwarding",
     requirement: "Original caller ANI survives conditional forward (all major carriers)",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -195,6 +204,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "D-02",
     phase: "D",
+    certPass: 2,
     area: "Forwarding",
     requirement: "Disposition matrix: no-answer, busy, rejected, after-hours, early hangup, blocked CID",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -213,6 +223,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "E-01",
     phase: "E",
+    certPass: 3,
     area: "Consent",
     requirement: "Full event chain CALL_RECEIVED → CONSENT_RECORDED → SMS_SENT → DELIVERED",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -229,6 +240,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "E-03",
     phase: "E",
+    certPass: 3,
     area: "Consent",
     requirement: "No key / Press 2 / hangup → no SMS; double Press 1 → one consent",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -255,6 +267,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "F-03",
     phase: "F",
+    certPass: 3,
     area: "Existing Consent",
     requirement: "Full Existing Consent production smoke (no DB hacks)",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -281,6 +294,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "M-03",
     phase: "Messaging",
+    certPass: 3,
     area: "Inbound",
     requirement: "Caller reply → workspace resolved → conversation stored → unread/notification",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -289,6 +303,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "M-04",
     phase: "Messaging",
+    certPass: 3,
     area: "STOP/START",
     requirement: "STOP blocks next recovery; START re-enables",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -331,6 +346,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "T-04",
     phase: "Trial",
+    certPass: 2,
     area: "Expiry",
     requirement: "Forwarded calls after trial expiry do not trap caller",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -347,6 +363,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "T-06",
     phase: "Trial",
+    certPass: 4,
     area: "Paid Conversion",
     requirement: "Checkout retains same TFN, TFV, forwarding, conversations, settings",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -357,6 +374,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "S-01",
     phase: "Stripe",
+    certPass: 4,
     area: "Billing",
     requirement: "Checkout → active subscription → entitlement active → hold cleared",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
@@ -409,10 +427,55 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
   {
     id: "UI-02",
     phase: "UI",
+    certPass: 4,
     area: "Smoke",
     requirement: "Fresh signup → paid E2E without DB hacks (Press-1 path)",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
     evidence: "Final production gate",
+  },
+
+  // ── Explicit certification / ops gaps ───────────────────────────────────
+  {
+    id: "X-01",
+    phase: "P0",
+    area: "Abandoned Onboarding",
+    requirement: "Reminder before abandoned TFN cleanup (not silent release)",
+    status: "IMPLEMENTED",
+    evidence: "abandoned-reminders.ts — in-app notice 3 days before 14-day release",
+  },
+  {
+    id: "X-02",
+    phase: "P0",
+    area: "Provider Reconciliation",
+    requirement: "Daily job compares Transovo TFN inventory vs Twilio subaccount numbers",
+    status: "IMPLEMENTED",
+    evidence: "provider-reconciliation.ts + mctb_provider_reconciliation job",
+  },
+  {
+    id: "X-03",
+    phase: "P0",
+    area: "Number Release Audit",
+    requirement: "Every release logs SID, E.164, workspace, reason, billing state, timestamp",
+    status: "IMPLEMENTED",
+    evidence: "number-release-audit.ts + workspaceLimits.numberReleaseAudit",
+  },
+  {
+    id: "X-04",
+    phase: "Polish",
+    certPass: 3,
+    area: "MMS",
+    requirement: "Inbound MMS shows sensible inbox message (V1: attachment notice, not silent drop)",
+    status: "IMPLEMENTED",
+    evidence: "inbound-process.ts formatInboundMessageBody — live MMS reply test still required",
+  },
+  {
+    id: "X-05",
+    phase: "Polish",
+    certPass: 3,
+    area: "Notifications",
+    requirement: "Owner notified on inbound reply (email + in-app; SMS alert if enabled)",
+    status: "MANUAL_HUMAN_TEST_REQUIRED",
+    evidence: "in-app + push wired; live test required in Pass 3",
   },
 
   // ── Remaining polish (not blocking architecture) ────────────────────────
@@ -428,9 +491,9 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
     id: "R-02",
     phase: "Polish",
     area: "MMS",
-    requirement: "Inbound MMS policy defined (support or reject)",
+    requirement: "Inbound MMS product policy locked (full support vs V1 notice-only)",
     status: "IMPLEMENTED",
-    evidence: "Not decided — document before launch",
+    evidence: "V1: attachment notice in inbox; full MMS preview deferred",
   },
   {
     id: "R-03",
@@ -486,12 +549,29 @@ function printMatrix(matrix: MatrixItem[]) {
   }
 
   console.log("\n═══ MCTB Launch Readiness Matrix ═══\n");
+  console.log("Certification passes: npx tsx scripts/mctb-certification-runbook.ts\n");
+
   for (const [phase, items] of [...byPhase.entries()].sort()) {
     console.log(`── Phase ${phase} ──`);
     for (const item of items) {
+      const pass = item.certPass ? ` P${item.certPass}` : "";
       const status = item.status.padEnd(28);
-      console.log(`  [${status}] ${item.id} ${item.requirement}`);
+      console.log(`  [${status}]${pass} ${item.id} ${item.requirement}`);
       if (item.evidence) console.log(`    ↳ ${item.evidence}`);
+    }
+    console.log("");
+  }
+
+  const manualByPass = new Map<number, number>();
+  for (const item of matrix) {
+    if (item.status === "MANUAL_HUMAN_TEST_REQUIRED" && item.certPass) {
+      manualByPass.set(item.certPass, (manualByPass.get(item.certPass) || 0) + 1);
+    }
+  }
+  if (manualByPass.size) {
+    console.log("── Manual items by certification pass ──");
+    for (const [pass, count] of [...manualByPass.entries()].sort()) {
+      console.log(`  Pass ${pass}: ${count} items`);
     }
     console.log("");
   }
@@ -505,8 +585,9 @@ function printMatrix(matrix: MatrixItem[]) {
   }
   console.log(`  TOTAL: ${total}`);
   console.log(
-    "\nNote: LIVE_VERIFIED requires real Twilio/carrier/Stripe proof — none auto-marked.\n",
+    "\nNote: LIVE_VERIFIED requires real Twilio/carrier/Stripe proof.",
   );
+  console.log("Track results in scripts/mctb-certification-results.json\n");
 }
 
 function runAutomatedTests(): boolean {

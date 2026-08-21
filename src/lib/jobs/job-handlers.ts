@@ -845,6 +845,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { runMctbNumberLifecycleJobs } = await import("@/lib/mctb/onboarding/number-lifecycle");
       return runMctbNumberLifecycleJobs(Number(payload.limit || 50));
     }
+    case "mctb_provider_reconciliation": {
+      const { reconcileTwilioTollFreeInventory } = await import(
+        "@/lib/mctb/admin/provider-reconciliation"
+      );
+      return reconcileTwilioTollFreeInventory(Number(payload.limit || 100));
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -906,6 +912,13 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { hourKey, limit: 50 },
     idempotencyKey: `mctb-trial-lifecycle:${hourKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "mctb_provider_reconciliation",
+    queueName: "maintenance",
+    payload: { dayKey, limit: 100 },
+    idempotencyKey: `mctb-provider-reconciliation:${dayKey}`,
   });
 
   // Calendly / appointment "starting soon" automation windows (every minute drain).

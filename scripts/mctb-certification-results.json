@@ -1,0 +1,6 @@
+{
+  "updatedAt": null,
+  "verifiedBy": null,
+  "notes": "Set status to LIVE_VERIFIED only after real provider/carrier/Stripe proof. Run: npx tsx scripts/mctb-certification-runbook.ts",
+  "items": {}
+}
