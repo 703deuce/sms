@@ -193,16 +193,21 @@ class CallObservability:
             extra={"kind": kind, **(metrics or {}), "toolType": tool_type},
         )
 
-        try:
-            await self._backend.call("record_call_telemetry", payload)
-        except Exception as err:
-            log_event(
-                "call_telemetry_failed",
-                call_id=self._ud.call_id,
-                workspace_id=self._ud.workspace_id,
-                agent_id=self._ud.agent_id,
-                extra={"kind": kind, "error": str(err)},
-            )
+        import asyncio
+
+        async def _send() -> None:
+            try:
+                await self._backend.call("record_call_telemetry", payload)
+            except Exception as err:
+                log_event(
+                    "call_telemetry_failed",
+                    call_id=self._ud.call_id,
+                    workspace_id=self._ud.workspace_id,
+                    agent_id=self._ud.agent_id,
+                    extra={"kind": kind, "error": str(err)},
+                )
+
+        asyncio.create_task(_send())
 
 
 def observe_tool(

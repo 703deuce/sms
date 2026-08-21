@@ -10,6 +10,11 @@ import {
   type ReceptionistDraftInput,
 } from "./compile";
 import { getReceptionistCompiledFromAdvanced } from "./runtime";
+import {
+  getLiveKitAgentTemplateFromAdvanced,
+  LIVEKIT_AGENT_TEMPLATE_KEY,
+  normalizeAgentTemplateId,
+} from "@/lib/voice/templates/agent-template-config";
 
 /** Re-compile receptionist draft from wizard snapshot stored on advanced. */
 export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceAgentConfig {
@@ -60,12 +65,26 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
   };
 
   const snapshot = compileReceptionistConfig(draftInput);
-  const merged = applyCompiledToVoiceConfig(config, snapshot);
+  const merged = applyCompiledToVoiceConfig(config, snapshot, {
+    receptionistWizard: wizard,
+    [RECEPTIONIST_ADVANCED_KEY]: storedAdvanced ?? advanced?.[RECEPTIONIST_ADVANCED_KEY],
+    [LIVEKIT_AGENT_TEMPLATE_KEY]: normalizeAgentTemplateId(
+      getLiveKitAgentTemplateFromAdvanced(advanced),
+    ),
+  });
+  const livekitAgentTemplate = normalizeAgentTemplateId(
+    getLiveKitAgentTemplateFromAdvanced({
+      ...(merged.advanced as Record<string, unknown> | undefined),
+      receptionistWizard: wizard,
+      [LIVEKIT_AGENT_TEMPLATE_KEY]: advanced?.[LIVEKIT_AGENT_TEMPLATE_KEY],
+    }),
+  );
 
   return {
     ...merged,
     advanced: {
       ...(merged.advanced as object),
+      [LIVEKIT_AGENT_TEMPLATE_KEY]: livekitAgentTemplate,
       [RECEPTIONIST_ADVANCED_KEY]: storedAdvanced ?? advanced?.[RECEPTIONIST_ADVANCED_KEY],
       receptionistWizard: wizard,
       conversationBehavior: storedAdvanced?.conversationBehavior ?? advanced?.conversationBehavior,

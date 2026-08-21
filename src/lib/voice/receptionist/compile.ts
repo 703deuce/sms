@@ -8,6 +8,11 @@ import type {
 import { RECEPTIONIST_COMPILED_KEY } from "./types";
 import type { ReceptionistAdvancedSettings } from "@/lib/receptionist-wizard/advanced-types";
 import {
+  getLiveKitAgentTemplateFromAdvanced,
+  LIVEKIT_AGENT_TEMPLATE_KEY,
+  normalizeAgentTemplateId,
+} from "@/lib/voice/templates/agent-template-config";
+import {
   normalizeWizardVoiceToElevenLabs,
   RECEPTIONIST_TTS_MODEL,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
@@ -262,7 +267,15 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
 export function applyCompiledToVoiceConfig(
   base: VoiceAgentConfig,
   snapshot: ReceptionistCompiledSnapshot,
+  mergeAdvanced?: Record<string, unknown>,
 ): VoiceAgentConfig {
+  const mergedAdvanced = {
+    ...(base.advanced as Record<string, unknown> | undefined),
+    ...(mergeAdvanced || {}),
+  } as Record<string, unknown> | undefined;
+  const livekitAgentTemplate = normalizeAgentTemplateId(
+    getLiveKitAgentTemplateFromAdvanced(mergedAdvanced),
+  );
   const goals = snapshot.capabilities
     .map((c) => c.replace(/_/g, " "))
     .join(", ");
@@ -317,7 +330,7 @@ export function applyCompiledToVoiceConfig(
       business_timezone: snapshot.timezone,
     },
     advanced: {
-      ...(base.advanced as object),
+      ...(mergedAdvanced as object),
       livekitProfile: snapshot.livekitProfile,
       realtimeModel: snapshot.realtimeModel,
       realtimeOutputMode: snapshot.realtimeOutputMode,
@@ -328,8 +341,9 @@ export function applyCompiledToVoiceConfig(
         snapshot.realtimeOutputMode === "elevenlabs" ? snapshot.voiceId : undefined,
       ttsModel: snapshot.ttsModel,
       [RECEPTIONIST_COMPILED_KEY]: snapshot,
-      receptionistWizard: (base.advanced as Record<string, unknown> | undefined)?.receptionistWizard,
-      receptionistAdvanced: (base.advanced as Record<string, unknown> | undefined)?.receptionistAdvanced,
+      receptionistWizard: mergedAdvanced?.receptionistWizard,
+      receptionistAdvanced: mergedAdvanced?.receptionistAdvanced,
+      [LIVEKIT_AGENT_TEMPLATE_KEY]: livekitAgentTemplate,
     },
   };
 }
