@@ -2,17 +2,19 @@
 
 import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
-import {
-  buildProductNav,
+import { buildProductNav,
   isReceptionistSectionPath,
   isSmartRoutingSectionPathExport,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
 import { smartRoutingFlowIdFromPath } from "@/lib/smart-routing/display";
-import { buildRealtorNav } from "@/lib/realtor/nav";
-import { buildPersonalNav } from "@/lib/workspace/personal-nav";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
+import { buildRealtorNav } from "@/lib/realtor/nav";
+import { buildNumbersNav } from "@/lib/products/numbers-nav";
+import { buildSmsNav } from "@/lib/products/sms-nav";
+import { productLogoHome, productContextLabel } from "@/lib/products/context";
+import type { CurrentProduct } from "@/lib/products/types";
+import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -244,11 +246,14 @@ export function Sidebar({
   outcomeInstances = {},
   primaryVoiceAgentId = null,
   realtorMode = false,
-  personalMode = false,
+  currentProduct = null,
+  isLauncher = false,
   inboxBadge = 0,
   collapsed = false,
   onToggleCollapse,
   creditsRemaining,
+  hasSms = false,
+  hasNumbers = false,
 }: {
   userName: string;
   workspaceName?: string;
@@ -257,11 +262,14 @@ export function Sidebar({
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
-  personalMode?: boolean;
+  currentProduct?: CurrentProduct;
+  isLauncher?: boolean;
   inboxBadge?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   creditsRemaining?: number;
+  hasSms?: boolean;
+  hasNumbers?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -271,20 +279,18 @@ export function Sidebar({
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
-    if (personalMode) {
-      const smartRoutingFlowId = smartRoutingFlowIdFromPath(pathname) ?? null;
-      return buildPersonalNav({ smartRoutingFlowId });
-    }
+    if (isLauncher) return [];
+    if (currentProduct === "numbers") return buildNumbersNav();
+    if (currentProduct === "sms") return buildSmsNav({ inboxBadge });
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
-    const smartRoutingFlowId =
-      smartRoutingFlowIdFromPath(pathname) ?? null;
+    const smartRoutingFlowId = smartRoutingFlowIdFromPath(pathname) ?? null;
     return buildProductNav({
       primaryVoiceAgentId: agentId,
       primarySmartRoutingFlowId: smartRoutingFlowId,
       inboxBadge,
     });
-  }, [primaryVoiceAgentId, pathname, realtorMode, personalMode, inboxBadge]);
+  }, [primaryVoiceAgentId, pathname, realtorMode, currentProduct, isLauncher, inboxBadge]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
@@ -313,9 +319,11 @@ export function Sidebar({
           href={
             realtorMode
               ? "/realtor/dashboard"
-              : personalMode
-                ? "/personal"
-                : "/outcomes"
+              : isLauncher
+                ? "/app"
+                : currentProduct
+                  ? productLogoHome(currentProduct)
+                  : "/app"
           }
           className="flex items-start gap-2.5"
           onClick={onClose}
@@ -326,21 +334,22 @@ export function Sidebar({
           {!collapsed ? (
             <span>
               <span className="block text-[14px] font-bold tracking-[0.04em] text-[#111827]">
-                {realtorMode ? "TRANSOVO" : "TransOvo"}
+                {realtorMode ? "TRANSOVO" : "Transovo"}
+                {!realtorMode && currentProduct ? (
+                  <span className="ml-1.5 text-[11px] font-semibold text-sidebar-muted">
+                    / {productContextLabel(currentProduct)}
+                  </span>
+                ) : null}
               </span>
-              {!realtorMode ? (
+              {!realtorMode && !currentProduct && !isLauncher ? (
                 <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  {personalMode
-                    ? isNumbersPlatformOnlyLaunch()
-                      ? "Phone numbers platform"
-                      : "Your phone numbers"
-                    : "AI receptionist + SMS"}
+                  AI receptionist + SMS
                 </span>
               ) : null}
             </span>
           ) : null}
         </Link>
-        {personalMode && !collapsed ? (
+        {currentProduct === "numbers" && !collapsed ? (
           <Link
             href="/personal/numbers/premium"
             onClick={onClose}
@@ -364,14 +373,14 @@ export function Sidebar({
             item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
           const expandKey = itemExpandKey(item);
           const personalOverviewExactOnly =
-            personalMode && item.href === "/personal" && pathname !== "/personal";
+            currentProduct === "numbers" && item.href === "/personal" && pathname !== "/personal";
           const itemHrefActive =
             isNavHrefActive(pathname, search, item.href) && !personalOverviewExactOnly;
           const ownedOutcome =
             receptionistOwned ||
             callsOwned ||
             smartRoutingOwned ||
-            (personalMode && item.href === "/personal"
+            (currentProduct === "numbers" && item.href === "/personal"
               ? pathname === "/personal"
               : pathname.startsWith(`${hrefPath(item.href)}/`) ||
                 pathname === hrefPath(item.href));
@@ -412,7 +421,7 @@ export function Sidebar({
                 className={cn(
                   "group relative flex items-center rounded-[10px] transition",
                   active
-                    ? personalMode
+                    ? currentProduct === "numbers"
                       ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
                       : item.label === "Calls" || realtorMode
                         ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
@@ -420,7 +429,7 @@ export function Sidebar({
                     : "text-sidebar-foreground hover:bg-[#f3f4f6]",
                 )}
               >
-                {active && !realtorMode && !personalMode && item.label !== "Calls" ? (
+                {active && !realtorMode && currentProduct !== "numbers" && item.label !== "Calls" ? (
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
                 ) : null}
                 <Link
@@ -435,7 +444,7 @@ export function Sidebar({
                     className={cn(
                       "h-4 w-4 shrink-0",
                       active
-                        ? personalMode || item.label === "Calls" || realtorMode
+                        ? currentProduct === "numbers" || item.label === "Calls" || realtorMode
                           ? "text-white"
                           : "text-primary"
                         : "text-sidebar-muted group-hover:text-sidebar-foreground",
@@ -461,7 +470,7 @@ export function Sidebar({
                     className={cn(
                       "mr-1.5 rounded-md p-1.5 transition",
                       active
-                        ? personalMode || item.label === "Calls" || realtorMode
+                        ? currentProduct === "numbers" || item.label === "Calls" || realtorMode
                           ? "text-white hover:bg-white/15"
                           : "text-primary hover:bg-primary/10"
                         : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
@@ -526,13 +535,47 @@ export function Sidebar({
           );
         })}
 
-        {!collapsed && !realtorMode && !personalMode ? (
+        {!collapsed && !realtorMode && currentProduct === "sms" ? (
           <div className="mt-3 px-1">
             <PlanBalanceCard creditsRemaining={creditsRemaining} />
           </div>
         ) : null}
 
-        {personalMode && !collapsed ? (
+        {currentProduct === "numbers" && !hasSms && !collapsed ? (
+          <div className="mx-2 mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
+            <p className="text-[11px] font-semibold text-[#111827]">Need business texting?</p>
+            <Link
+              href="/sms-marketing"
+              onClick={() => {
+                trackCrossSellClicked("numbers", "sms");
+                onClose?.();
+              }}
+              className="mt-2 inline-block text-[11px] font-semibold text-[#6366f1]"
+            >
+              Explore Transovo SMS
+            </Link>
+          </div>
+        ) : null}
+
+        {currentProduct === "sms" && !hasNumbers && !collapsed ? (
+          <div className="mx-2 mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
+            <p className="text-[11px] font-semibold text-[#111827]">
+              Want a memorable business number?
+            </p>
+            <Link
+              href="/personal/numbers/premium"
+              onClick={() => {
+                trackCrossSellClicked("sms", "numbers");
+                onClose?.();
+              }}
+              className="mt-2 inline-block text-[11px] font-semibold text-[#6366f1]"
+            >
+              Find one with Transovo Numbers
+            </Link>
+          </div>
+        ) : null}
+
+        {currentProduct === "numbers" && !collapsed ? (
           <div className="mt-3 space-y-1 px-1">
             <Link
               href="/contact"
@@ -578,7 +621,13 @@ export function Sidebar({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] font-semibold text-[#111827]">{userName}</p>
                 <p className="truncate text-[10px] text-sidebar-muted">
-                  {personalMode ? "Personal" : realtorMode && workspaceName ? workspaceName : "Owner"}
+                  {currentProduct === "numbers"
+                    ? "Numbers"
+                    : currentProduct === "sms"
+                      ? "SMS"
+                      : realtorMode && workspaceName
+                        ? workspaceName
+                        : "Account"}
                 </p>
               </div>
             ) : null}

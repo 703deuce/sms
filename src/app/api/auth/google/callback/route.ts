@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+<<<<<<< HEAD
 import {
   exchangeGoogleAuthCode,
   findOrCreateUserFromGoogle,
@@ -7,7 +8,14 @@ import {
   sanitizeNextPath,
 } from "@/lib/auth/google-oauth";
 import { resolvePublicAppUrl } from "@/lib/integrations/framework/app-url";
+=======
+import { exchangeGoogleAuthCode, findOrCreateUserFromGoogle, parseGoogleAuthState, sanitizeNextPath } from "@/lib/auth/google-oauth";
+>>>>>>> dac47c96 (Implement multi-product architecture for Transovo SMS and Numbers)
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
+import { getUserProductAccess } from "@/lib/products/entitlements";
+import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
+import { applyProductAccessCookie } from "@/lib/products/session";
+import { resolveWorkspaceForProduct } from "@/lib/products/entitlements";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -47,6 +55,15 @@ export async function GET(request: Request) {
     }
 
     const account = await findOrCreateUserFromGoogle(profile);
+    const access = await getUserProductAccess(account.userId);
+    const pathProduct = preferredProductFromPath(nextPath);
+    const workspaceForProduct = pathProduct
+      ? await resolveWorkspaceForProduct(account.userId, pathProduct)
+      : null;
+    const workspaceId = workspaceForProduct?.workspaceId ?? account.workspaceId;
+    const workspaceType = workspaceForProduct?.workspaceType ?? account.workspaceType;
+    const redirectPath = resolvePostLoginPath(access, { nextPath });
+
     const session = {
       userId: account.userId,
       email: account.email,
@@ -54,14 +71,19 @@ export async function GET(request: Request) {
       isAdmin: false,
     };
 
+<<<<<<< HEAD
     const res = NextResponse.redirect(new URL(nextPath, appOrigin));
+=======
+    const res = NextResponse.redirect(new URL(redirectPath, url.origin));
+>>>>>>> dac47c96 (Implement multi-product architecture for Transovo SMS and Numbers)
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
       path: "/",
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });
-    applyWorkspaceCookies(res, account.workspaceId, account.workspaceType);
+    applyWorkspaceCookies(res, workspaceId, workspaceType === "PERSONAL" ? "PERSONAL" : "BUSINESS");
+    applyProductAccessCookie(res, access);
     return res;
   } catch (err) {
     loginUrl.searchParams.set("next", nextPath);

@@ -2,6 +2,7 @@ import "./product-theme.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
+import { getUserProductAccess } from "@/lib/products/entitlements";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
 import { getMaintenanceState } from "@/lib/platform-flags";
@@ -27,11 +28,13 @@ export default async function AppLayout({
 
   const workspaceId = await getActiveWorkspaceId();
   const workspaceType = await getActiveWorkspaceType();
-  const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow] = await Promise.all([
+  const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow, productAccess] =
+    await Promise.all([
     loadShellData(session.userId, workspaceId),
     loadOutcomeInstances(workspaceId),
     loadPrimaryVoiceAgentId(workspaceId),
     loadWorkspace(workspaceId),
+    getUserProductAccess(session.userId),
   ]);
   const workspaceName =
     (workspaceRow as { displayName?: string | null; name?: string } | null)?.displayName ||
@@ -55,6 +58,8 @@ export default async function AppLayout({
       outcomeInstances={outcomeInstances}
       primaryVoiceAgentId={primaryVoiceAgentId}
       realtorMode={false}
+      hasSms={productAccess.hasSms}
+      hasNumbers={productAccess.hasNumbers}
     >
       {children}
     </AppShell>

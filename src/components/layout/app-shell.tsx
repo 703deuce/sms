@@ -4,11 +4,14 @@ import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { RealtorHeader } from "@/components/realtor/realtor-header";
 import { Sidebar } from "@/components/layout/sidebar";
+import { ProductActivityTracker } from "@/components/products/product-activity-tracker";
 import { getPageTitle } from "@/lib/nav";
 import { getRealtorPageTitle } from "@/lib/realtor/nav";
-import { getPersonalPageTitle } from "@/lib/workspace/personal-nav";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import { getCurrentProduct } from "@/lib/products/context";
+import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
+import { getSmsPageTitle } from "@/lib/products/sms-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
+import type { CurrentProduct } from "@/lib/products/types";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { usePathname } from "next/navigation";
@@ -29,6 +32,8 @@ export function AppShell({
   outcomeInstances = {},
   primaryVoiceAgentId = null,
   realtorMode = false,
+  hasSms = false,
+  hasNumbers = false,
 }: {
   children: React.ReactNode;
   userName: string;
@@ -44,15 +49,14 @@ export function AppShell({
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
+  hasSms?: boolean;
+  hasNumbers?: boolean;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const personalMode =
-    isNumbersPlatformOnlyLaunch() ||
-    workspaceType === "PERSONAL" ||
-    pathname.startsWith("/personal") ||
-    pathname.startsWith("/smart-routing");
+  const currentProduct: CurrentProduct = getCurrentProduct(pathname);
+  const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const hideChromeTitle =
     realtorMode &&
     (pathname.startsWith("/realtor/setup") ||
@@ -60,19 +64,24 @@ export function AppShell({
       pathname.startsWith("/realtor/leads"));
   const title = hideChromeTitle
     ? ""
-    : pathname === "/outcomes" ||
-        pathname === "/systems" ||
-        pathname === "/agents" ||
-        pathname.startsWith("/agents/")
-      ? ""
-      : realtorMode
-        ? getRealtorPageTitle(pathname) ?? ""
-        : personalMode
-          ? getPersonalPageTitle(pathname)
-          : getPageTitle(pathname);
+    : isLauncher
+      ? "Your Transovo Products"
+      : pathname === "/outcomes" ||
+          pathname === "/systems" ||
+          pathname === "/agents" ||
+          pathname.startsWith("/agents/")
+        ? ""
+        : realtorMode
+          ? getRealtorPageTitle(pathname) ?? ""
+          : currentProduct === "numbers"
+            ? getNumbersPageTitle(pathname)
+            : currentProduct === "sms"
+              ? getSmsPageTitle(pathname)
+              : getPageTitle(pathname);
 
   return (
     <div className="product-theme min-h-screen bg-background">
+      <ProductActivityTracker />
       <Suspense fallback={null}>
         <Sidebar
           userName={userName}
@@ -82,11 +91,14 @@ export function AppShell({
           outcomeInstances={outcomeInstances}
           primaryVoiceAgentId={primaryVoiceAgentId}
           realtorMode={realtorMode}
-          personalMode={personalMode}
+          currentProduct={currentProduct}
+          isLauncher={isLauncher}
           inboxBadge={unreadNotifications}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
           creditsRemaining={metrics.creditsRemaining}
+          hasSms={hasSms}
+          hasNumbers={hasNumbers}
         />
       </Suspense>
       <div className={sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-[260px]"}>
@@ -110,17 +122,24 @@ export function AppShell({
             workspaceName={workspaceName || "Workspace"}
             workspaceType={workspaceType}
             workspaces={workspaces}
-            personalMode={personalMode}
+            currentProduct={currentProduct}
+            isLauncher={isLauncher}
             phoneNumbers={phoneNumbers}
             metrics={metrics}
             activeFromNumberId={activeFromNumberId}
             unreadNotifications={unreadNotifications}
             onMenuClick={() => setMenuOpen(true)}
+            hasSms={hasSms}
+            hasNumbers={hasNumbers}
           />
         )}
         <main className="px-4 pb-28 pt-5 lg:px-6 lg:pb-8">{children}</main>
       </div>
-      <MobileNav realtorMode={realtorMode} personalMode={personalMode} onMore={() => setMenuOpen(true)} />
+      <MobileNav
+        realtorMode={realtorMode}
+        currentProduct={currentProduct}
+        onMore={() => setMenuOpen(true)}
+      />
     </div>
   );
 }

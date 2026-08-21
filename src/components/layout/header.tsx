@@ -2,9 +2,10 @@
 
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
+import type { CurrentProduct } from "@/lib/products/types";
+import { productContextLabel } from "@/lib/products/context";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { WorkspaceModeToggle } from "@/components/workspace/workspace-mode-toggle";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { formatNumber, formatPhone } from "@/lib/utils";
 import {
   Bell,
@@ -43,12 +44,15 @@ export function Header({
   workspaceName,
   workspaceType = "BUSINESS",
   workspaces = [],
-  personalMode = false,
+  currentProduct = null,
+  isLauncher = false,
   phoneNumbers,
   metrics,
   activeFromNumberId,
   unreadNotifications = 0,
   onMenuClick,
+  hasSms = false,
+  hasNumbers = false,
 }: {
   title: string;
   userName: string;
@@ -56,12 +60,15 @@ export function Header({
   workspaceName?: string;
   workspaceType?: WorkspaceTypeCookie;
   workspaces?: Workspace[];
-  personalMode?: boolean;
+  currentProduct?: CurrentProduct;
+  isLauncher?: boolean;
   phoneNumbers: PhoneNumber[];
   metrics: DashboardMetrics;
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
   onMenuClick: () => void;
+  hasSms?: boolean;
+  hasNumbers?: boolean;
 }) {
   const router = useRouter();
   const [numberId, setNumberId] = useState(
@@ -204,7 +211,7 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        {!isNumbersPlatformOnlyLaunch() ? (
+        {!isLauncher && currentProduct !== "numbers" ? (
           <WorkspaceModeToggle
             workspaceId={workspaceId}
             workspaceType={workspaceType}
@@ -212,7 +219,7 @@ export function Header({
           />
         ) : null}
 
-        {!personalMode ? (
+        {!isLauncher && currentProduct === "sms" ? (
           <WorkspaceSwitcher
             workspaceId={workspaceId}
             workspaceName={workspaceName || "Workspace"}
@@ -222,7 +229,13 @@ export function Header({
           />
         ) : null}
 
-        {title && !personalMode ? (
+        {currentProduct && !isLauncher ? (
+          <span className="hidden shrink-0 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
+            {productContextLabel(currentProduct)}
+          </span>
+        ) : null}
+
+        {title && currentProduct === "sms" ? (
           <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
             {title}
           </h1>
@@ -232,7 +245,7 @@ export function Header({
 
         <div className="flex-1" />
 
-        {personalMode ? (
+        {currentProduct === "numbers" ? (
           <Link
             href="/personal/numbers/premium"
             className="hidden h-9 items-center gap-1.5 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
@@ -242,7 +255,7 @@ export function Header({
           </Link>
         ) : null}
 
-        {!personalMode ? (
+        {currentProduct === "sms" ? (
         <div className="mx-auto hidden w-full max-w-[440px] flex-1 md:block" ref={searchRef}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -284,7 +297,7 @@ export function Header({
         ) : null}
 
         <div className="flex items-center gap-2">
-          {!personalMode && phoneNumbers.length > 0 ? (
+          {!isLauncher && currentProduct === "sms" && phoneNumbers.length > 0 ? (
             <select
               className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"
               value={numberId}
@@ -299,7 +312,7 @@ export function Header({
             </select>
           ) : null}
 
-          {!personalMode ? (
+          {currentProduct === "sms" ? (
           <Link
             href="/settings/billing"
             className="hidden h-9 items-center gap-1.5 rounded-full bg-violet-50 px-3 text-[12px] font-semibold text-violet-700 ring-1 ring-violet-100 hover:bg-violet-100 sm:inline-flex"
@@ -389,13 +402,9 @@ export function Header({
             {accountOpen ? (
               <div className="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg">
                 {[
-                  { label: "Workspace", href: "/settings/workspaces" },
-                  { label: "Team", href: "/settings/users" },
-                  { label: "Usage & Credits", href: "/settings/limits" },
+                  { label: "Account Settings", href: "/settings/business" },
                   { label: "Billing", href: "/settings/billing" },
-                  { label: "Plan", href: "/settings/billing" },
-                  { label: "Notifications", href: "/settings/notifications" },
-                  { label: "Settings", href: "/settings/business" },
+                  { label: "All Transovo Products", href: "/app" },
                 ].map((item) => (
                   <Link
                     key={item.label}

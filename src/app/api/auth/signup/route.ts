@@ -3,7 +3,13 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import {
+  grantProductEntitlement,
+  getUserProductAccess,
+} from "@/lib/products/entitlements";
+import { preferredProductFromPath } from "@/lib/products/routing";
+import { applyProductAccessCookie, updateProductIntent } from "@/lib/products/session";
+import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
 import {
   PHONE_VERIFIED_COOKIE,
@@ -42,6 +48,8 @@ export async function POST(request: Request) {
       workspaceType?: WorkspaceType;
       phone?: string;
       stripePaymentMethodId?: string;
+      next?: string;
+      productIntent?: ProductKey;
     };
     if (!body.email || !body.password || !body.name) {
       return NextResponse.json({ error: "Name, email, and password required" }, { status: 400 });
@@ -72,9 +80,13 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hash(body.password, 10);
-    const workspaceType: WorkspaceType = isNumbersPlatformOnlyLaunch()
-      ? "PERSONAL"
-      : body.workspaceType === "PERSONAL"
+    const pathIntent = preferredProductFromPath(body.next || "");
+    const productIntent: ProductKey =
+      body.productIntent ??
+      pathIntent ??
+      (body.workspaceType === "PERSONAL" ? "numbers" : "sms");
+    const workspaceType: WorkspaceType =
+      productIntent === "numbers" || body.workspaceType === "PERSONAL"
         ? "PERSONAL"
         : "BUSINESS";
     const businessName =
@@ -155,6 +167,14 @@ export async function POST(request: Request) {
       }
     }
 
+    await grantProductEntitlement(
+      workspace.id,
+      productIntent === "numbers" ? "numbers" : "sms",
+    );
+    await updateProductIntent(user.id, productIntent);
+
+    const access = await getUserProductAccess(user.id);
+
     const session = {
       userId: user.id,
       email: user.email,
@@ -174,6 +194,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
     });
     applyWorkspaceCookies(res, workspace.id, workspaceType);
+    applyProductAccessCookie(res, access);
     return res;
   } catch (err) {
     console.error("[auth/signup]", err);

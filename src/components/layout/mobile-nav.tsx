@@ -1,32 +1,43 @@
 "use client";
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
+import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
 import { mobilePrimaryNav } from "@/lib/nav";
+import type { CurrentProduct } from "@/lib/products/types";
 import { cn } from "@/lib/utils";
-import { MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, Inbox, Megaphone, MoreHorizontal, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+const smsMobileNav = [
+  { label: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Inbox", href: "/inbox", icon: Inbox },
+  { label: "Campaigns", href: "/campaigns", icon: Megaphone },
+  { label: "Contacts", href: "/contacts", icon: Users },
+];
 
 export function MobileNav({
   onMore,
   realtorMode = false,
-  personalMode = false,
+  currentProduct = null,
 }: {
   onMore: () => void;
   realtorMode?: boolean;
-  personalMode?: boolean;
+  currentProduct?: CurrentProduct;
 }) {
   const pathname = usePathname();
+  const numbersItems = buildNumbersMobileNav().map((item, i) => ({
+    ...item,
+    icon: mobilePrimaryNav[i]?.icon ?? LayoutDashboard,
+  }));
+
   const items = realtorMode
     ? buildRealtorMobileNav()
-    : personalMode
-      ? [
-          { label: "Home", href: "/personal", icon: mobilePrimaryNav[0].icon },
-          { label: "Vault", href: "/personal/vault", icon: mobilePrimaryNav[0].icon },
-          { label: "Find", href: "/personal/numbers/premium", icon: mobilePrimaryNav[0].icon },
-          { label: "Activity", href: "/personal/activity", icon: mobilePrimaryNav[0].icon },
-        ]
-      : mobilePrimaryNav;
+    : currentProduct === "numbers"
+      ? numbersItems
+      : currentProduct === "sms"
+        ? smsMobileNav
+        : mobilePrimaryNav;
 
   return (
     <>

@@ -5,7 +5,12 @@ import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
 import { PHONE_VERIFIED_COOKIE, readVerifiedPhone } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import {
+  getUserProductAccess,
+  resolveWorkspaceForProduct,
+} from "@/lib/products/entitlements";
+import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
+import { applyProductAccessCookie } from "@/lib/products/session";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
@@ -15,6 +20,7 @@ export async function POST(request: Request) {
       email?: string;
       password?: string;
       totpCode?: string;
+      next?: string;
     };
     if (!body.email || !body.password) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
@@ -68,13 +74,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
     }
 
-    const membership = isNumbersPlatformOnlyLaunch()
-      ? memberships.find((m: { workspace: { type: string } }) => m.workspace.type === "PERSONAL") ??
-        memberships[0]
-      : memberships[0];
+    const access = await getUserProductAccess(user.id);
+    const preferredProduct =
+      preferredProductFromPath(body.next || "") ??
+      (access.hasNumbers && !access.hasSms
+        ? "numbers"
+        : access.hasSms
+          ? "sms"
+          : "numbers");
+
+    const resolvedWorkspace = await resolveWorkspaceForProduct(user.id, preferredProduct);
+    const membership =
+      resolvedWorkspace != null
+        ? memberships.find(
+            (m: { workspaceId: string }) => m.workspaceId === resolvedWorkspace.workspaceId,
+          ) ?? memberships[0]
+        : memberships[0];
 
     const workspaceType: WorkspaceType =
       membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
+
+    const redirectPath = resolvePostLoginPath(access, { nextPath: body.next });
 
     // If the user verified a mobile number on the sign-in page, attach it.
     const store = await cookies();
@@ -101,6 +121,7 @@ export async function POST(request: Request) {
       ok: true,
       workspaceId: membership.workspaceId,
       workspace: membership.workspace.name,
+      redirectPath,
     });
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
@@ -108,6 +129,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
     });
     applyWorkspaceCookies(res, membership.workspaceId, workspaceType);
+    applyProductAccessCookie(res, access);
     return res;
   } catch (err) {
     console.error("[auth/login]", err);

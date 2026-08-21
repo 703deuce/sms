@@ -1,7 +1,13 @@
 import { createHmac, randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { getPrisma } from "@/lib/db";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import {
+  ensureWorkspaceEntitlements,
+  getUserProductAccess,
+  grantProductEntitlement,
+} from "@/lib/products/entitlements";
+import { updateProductIntent } from "@/lib/products/session";
+import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
 const GOOGLE_AUTH_SCOPES = ["openid", "email", "profile"].join(" ");
@@ -93,7 +99,7 @@ export function parseGoogleAuthState(state: string): GoogleAuthState | null {
 export function sanitizeNextPath(nextPath?: string | null): string {
   const raw = (nextPath || "").trim();
   if (!raw.startsWith("/") || raw.startsWith("//")) {
-    return isNumbersPlatformOnlyLaunch() ? "/personal" : "/dashboard";
+    return "/app";
   }
   return raw;
 }
@@ -207,10 +213,15 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
   });
 
   if (memberships.length) {
-    const membership = isNumbersPlatformOnlyLaunch()
-      ? memberships.find((m: { workspace: { type: string } }) => m.workspace.type === "PERSONAL") ??
-        memberships[0]
-      : memberships[0];
+    const access = await getUserProductAccess(user.id);
+    const preferred: ProductKey =
+      access.hasNumbers && !access.hasSms ? "numbers" : access.hasSms ? "sms" : "numbers";
+    const membership =
+      memberships.find(
+        (m: { workspace: { type: string } }) =>
+          m.workspace.type === (preferred === "numbers" ? "PERSONAL" : "BUSINESS"),
+      ) ?? memberships[0];
+    await ensureWorkspaceEntitlements(membership.workspaceId);
     return {
       userId: user.id,
       email: user.email,
@@ -221,7 +232,7 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
     };
   }
 
-  const workspaceType: WorkspaceType = isNumbersPlatformOnlyLaunch() ? "PERSONAL" : "BUSINESS";
+  const workspaceType: WorkspaceType = "PERSONAL";
   const workspace = await prisma.workspace.create({
     data: {
       name: workspaceType === "PERSONAL" ? "Personal" : `${profile.name}'s Workspace`,
@@ -235,6 +246,9 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
       },
     },
   });
+
+  await grantProductEntitlement(workspace.id, "numbers");
+  await updateProductIntent(user.id, "numbers");
 
   return {
     userId: user.id,

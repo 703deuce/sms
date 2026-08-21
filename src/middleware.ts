@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  parseProductAccessCookie,
+  PRODUCT_ACCESS_COOKIE,
+} from "@/lib/products/entitlements";
+import { productAccessDeniedRedirect } from "@/lib/products/routing";
+import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
 } from "@/lib/workspace/capabilities";
@@ -23,6 +28,7 @@ const publicExact = new Set([
   "/contact",
   "/sms-marketing",
   "/maintenance",
+  "/app",
 ]);
 
 const authPages = new Set(["/login", "/signup", "/forgot-password"]);
@@ -105,6 +111,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Legacy /sms/* prefix → flat SMS routes (deep links, marketing CTAs).
+  if (pathname === "/sms" || pathname.startsWith("/sms/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === "/sms" ? "/dashboard" : pathname.slice(4) || "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
   const session = request.cookies.get("transovo_session")?.value;
   const isPublic = isPublicPath(pathname);
   const isApiAuth = pathname.startsWith("/api/auth");
@@ -148,16 +161,51 @@ export async function middleware(request: NextRequest) {
     if (next && next.startsWith("/") && !next.startsWith("//")) {
       return NextResponse.redirect(new URL(next, request.nextUrl.origin));
     }
+    const productKeys = parseProductAccessCookie(
+      request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
+    );
+    const hasSms = productKeys.includes("sms");
+    const hasNumbers = productKeys.includes("numbers");
     const url = request.nextUrl.clone();
-    const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
-    url.pathname =
-      isNumbersPlatformOnlyLaunch() || wsType === "PERSONAL" ? "/personal" : "/outcomes";
+    if (hasSms && !hasNumbers) {
+      url.pathname = "/dashboard";
+    } else if (hasNumbers && !hasSms) {
+      url.pathname = "/personal";
+    } else if (hasSms && hasNumbers) {
+      url.pathname = "/app";
+    } else {
+      url.pathname = "/app";
+    }
     url.search = "";
     return NextResponse.redirect(url);
   }
 
   if (session && !isPublic) {
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
+    const productKeys = parseProductAccessCookie(
+      request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
+    );
+    let hasSms = productKeys.includes("sms");
+    let hasNumbers = productKeys.includes("numbers");
+
+    // Fallback for sessions before product cookie exists.
+    if (!productKeys.length) {
+      hasNumbers = wsType === "PERSONAL" || isNumbersPlatformOnlyLaunch();
+      hasSms = wsType === "BUSINESS" && !isNumbersPlatformOnlyLaunch();
+      if (wsType === "PERSONAL") hasNumbers = true;
+      if (wsType === "BUSINESS") hasSms = true;
+    }
+
+    const denied = productAccessDeniedRedirect(pathname, {
+      hasSms,
+      hasNumbers,
+    });
+    if (denied) {
+      const url = request.nextUrl.clone();
+      url.pathname = denied;
+      return NextResponse.redirect(url);
+    }
+
     if (isNumbersPlatformOnlyLaunch() && isBusinessOnlyPath(pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/personal";

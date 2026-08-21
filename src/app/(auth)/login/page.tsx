@@ -4,7 +4,6 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
@@ -22,7 +21,7 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const defaultNext = isNumbersPlatformOnlyLaunch() ? "/personal" : "/dashboard";
+  const defaultNext = "/app";
   const nextPath = params.get("next") || defaultNext;
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const oauthError = params.get("error");
@@ -42,6 +41,7 @@ function LoginForm() {
         email: form.get("email"),
         password: form.get("password"),
         totpCode: form.get("totpCode") || undefined,
+        next: params.get("next") || undefined,
       }),
     });
     setLoading(false);
@@ -55,7 +55,8 @@ function LoginForm() {
       setError(json.error || "Unable to sign in. Try again.");
       return;
     }
-    router.push(nextPath);
+    const json = (await res.json().catch(() => ({}))) as { redirectPath?: string };
+    router.push(json.redirectPath || nextPath || "/app");
     router.refresh();
   }
 

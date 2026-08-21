@@ -100,6 +100,18 @@ enum WorkspaceType {
   BUSINESS
 }
 
+enum ProductKey {
+  SMS
+  NUMBERS
+  VOICE
+}
+
+enum ProductAccessStatus {
+  ACTIVE
+  INACTIVE
+  TRIAL
+}
+
 model User {
   id                  String       @id @default(cuid())
   email               String       @unique
@@ -111,6 +123,10 @@ model User {
   totpSecretEnc       String?
   totpEnabled         Boolean      @default(false)
   totpBackupCodes     String[]     @default([])
+  /// Last product the user opened (sms | numbers) for multi-product login routing.
+  lastActiveProduct   ProductKey?
+  /// Signup source / product intent preserved across authentication.
+  productIntent       ProductKey?
   deletionRequestedAt DateTime?
   createdAt           DateTime     @default(now())
   memberships         Membership[]
@@ -292,10 +308,27 @@ model Workspace {
   smartRoutingAudioAssets SmartRoutingAudioAsset[]
   smartRoutingCallSessions SmartRoutingCallSession[]
   smartRoutingSmsConsentEvents SmartRoutingSmsConsentEvent[]
+  productEntitlements ProductEntitlement[]
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId])
   @@index([type])
+}
+
+model ProductEntitlement {
+  id            String              @id @default(cuid())
+  workspaceId   String
+  productKey    ProductKey
+  status        ProductAccessStatus @default(ACTIVE)
+  activatedAt   DateTime?
+  deactivatedAt DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, productKey])
+  @@index([workspaceId])
+  @@index([productKey, status])
 }
 
 model SenderPool {

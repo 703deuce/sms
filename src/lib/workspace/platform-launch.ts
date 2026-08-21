@@ -1,9 +1,8 @@
 /**
- * Numbers platform v1 — Personal numbers surface (forwarding, voicemail, porting).
- * Smart Routing, Business workspace, AI receptionist, and messaging nav stay in code
- * but hidden from v1 menu until those products launch.
+ * Numbers platform v1 launch flags for marketing/hidden features.
+ * Product access is now driven by ProductEntitlement — not this flag alone.
  */
-export const NUMBERS_PLATFORM_ONLY = true;
+export const NUMBERS_PLATFORM_ONLY = false;
 
 /** Smart Routing routes/APIs remain; nav and v1 CTAs hide until AI receptionist launch. */
 export const SMART_ROUTING_IN_V1_NAV = false;
