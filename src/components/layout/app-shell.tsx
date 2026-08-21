@@ -8,6 +8,7 @@ import { ProductActivityTracker } from "@/components/products/product-activity-t
 import { getPageTitle } from "@/lib/nav";
 import { getRealtorPageTitle } from "@/lib/realtor/nav";
 import { getCurrentProduct } from "@/lib/products/context";
+import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
 import { getSmsPageTitle } from "@/lib/products/sms-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
@@ -55,7 +56,9 @@ export function AppShell({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const currentProduct: CurrentProduct = getCurrentProduct(pathname);
+  const resolvedProduct = getCurrentProduct(pathname);
+  const currentProduct: CurrentProduct =
+    resolvedProduct ?? (isSmsShellRoute(pathname) ? "sms" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const hideChromeTitle =
     realtorMode &&

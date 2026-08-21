@@ -12,7 +12,9 @@ import { voiceAgentIdFromPath } from "@/lib/voice/shell-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildSmsNav } from "@/lib/products/sms-nav";
+import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { productLogoHome, productContextLabel } from "@/lib/products/context";
+import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import type { CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
@@ -281,7 +283,9 @@ export function Sidebar({
     if (realtorMode) return buildRealtorNav(inboxBadge);
     if (isLauncher) return [];
     if (currentProduct === "numbers") return buildNumbersNav();
-    if (currentProduct === "sms") return buildSmsNav({ inboxBadge });
+    if (currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) {
+      return buildSmsNav({ inboxBadge });
+    }
     const pathAgentId = voiceAgentIdFromPath(pathname);
     const agentId = pathAgentId ?? primaryVoiceAgentId ?? null;
     const smartRoutingFlowId = smartRoutingFlowIdFromPath(pathname) ?? null;
@@ -290,7 +294,15 @@ export function Sidebar({
       primarySmartRoutingFlowId: smartRoutingFlowId,
       inboxBadge,
     });
-  }, [primaryVoiceAgentId, pathname, realtorMode, currentProduct, isLauncher, inboxBadge]);
+  }, [
+    primaryVoiceAgentId,
+    pathname,
+    realtorMode,
+    currentProduct,
+    isLauncher,
+    inboxBadge,
+    hasSms,
+  ]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
@@ -358,6 +370,9 @@ export function Sidebar({
             + Add Line
           </Link>
         ) : null}
+        {(currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) && !collapsed ? (
+          <SmsCreateMenu variant="sidebar" />
+        ) : null}
       </div>
 
       <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
@@ -376,10 +391,22 @@ export function Sidebar({
             currentProduct === "numbers" && item.href === "/personal" && pathname !== "/personal";
           const itemHrefActive =
             isNavHrefActive(pathname, search, item.href) && !personalOverviewExactOnly;
+          const growOwned = item.label === "Grow" && pathname.startsWith("/grow");
+          const smsNumbersOwned =
+            item.label === "Numbers" &&
+            pathname.startsWith("/numbers") &&
+            !pathname.startsWith("/numbers/premium") &&
+            !pathname.startsWith("/numbers/pools");
+          const settingsOwned =
+            item.label === "Settings" &&
+            (pathname === "/settings" || pathname.startsWith("/settings/"));
           const ownedOutcome =
             receptionistOwned ||
             callsOwned ||
             smartRoutingOwned ||
+            growOwned ||
+            smsNumbersOwned ||
+            settingsOwned ||
             (currentProduct === "numbers" && item.href === "/personal"
               ? pathname === "/personal"
               : pathname.startsWith(`${hrefPath(item.href)}/`) ||
@@ -535,13 +562,7 @@ export function Sidebar({
           );
         })}
 
-        {!collapsed && !realtorMode && currentProduct === "sms" ? (
-          <div className="mt-3 px-1">
-            <PlanBalanceCard creditsRemaining={creditsRemaining} />
-          </div>
-        ) : null}
-
-        {currentProduct === "numbers" && !hasSms && !collapsed ? (
+        {!collapsed && !realtorMode && currentProduct === "numbers" ? (
           <div className="mx-2 mt-3 rounded-xl border border-[#e6e8ef] bg-[#f5f3ff] p-3">
             <p className="text-[11px] font-semibold text-[#111827]">Need business texting?</p>
             <Link

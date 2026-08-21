@@ -111,6 +111,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Consolidate texting-number list under /numbers.
+  if (pathname === "/my-numbers" || pathname.startsWith("/my-numbers/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/my-numbers/, "/numbers") || "/numbers";
+    return NextResponse.redirect(url);
+  }
+
   // Legacy /sms/* prefix → flat SMS routes (deep links, marketing CTAs).
   if (pathname === "/sms" || pathname.startsWith("/sms/")) {
     const url = request.nextUrl.clone();

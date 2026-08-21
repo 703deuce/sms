@@ -1,4 +1,10 @@
 import type { CurrentProduct, ProductKey } from "@/lib/products/types";
+import {
+  isNumbersMarketplacePath,
+  isSmsLegacyHidden,
+  isSmsShellRoute,
+  SMS_APP_ROUTE_PREFIXES,
+} from "@/lib/products/sms-routes";
 
 /** Shared account routes — not product-specific. */
 export const SHARED_ACCOUNT_PATH_PREFIXES = [
@@ -9,34 +15,13 @@ export const SHARED_ACCOUNT_PATH_PREFIXES = [
   "/getting-started",
 ] as const;
 
-/** SMS product route prefixes (legacy flat routes + /sms alias). */
-export const SMS_PRODUCT_PATH_PREFIXES = [
-  "/sms",
-  "/dashboard",
-  "/inbox",
-  "/send",
-  "/campaigns",
-  "/templates",
-  "/contacts",
-  "/grow",
-  "/automations",
-  "/compliance",
-  "/company-brain",
-  "/integrations",
-  "/reports",
-  "/phone",
-  "/messaging",
-  "/hire",
-  "/outcomes",
-  "/systems",
-  "/agents",
-  "/voice",
-  "/surveys",
-] as const;
+/** @deprecated use SMS_APP_ROUTE_PREFIXES from sms-routes.ts */
+export const SMS_PRODUCT_PATH_PREFIXES = SMS_APP_ROUTE_PREFIXES;
 
 /** Numbers product route prefixes. */
 export const NUMBERS_PRODUCT_PATH_PREFIXES = [
-  "/numbers",
+  "/numbers/premium",
+  "/numbers/pools",
   "/personal",
   "/my-numbers",
 ] as const;
@@ -44,20 +29,19 @@ export const NUMBERS_PRODUCT_PATH_PREFIXES = [
 /** Routes that require SMS entitlement. */
 export function isSmsProductPath(pathname: string): boolean {
   if (pathname.startsWith("/sms/") || pathname === "/sms") return true;
-  if (pathname.startsWith("/numbers") || pathname.startsWith("/personal")) return false;
+  if (pathname.startsWith("/personal")) return false;
+  if (isNumbersMarketplacePath(pathname)) return false;
   if (SHARED_ACCOUNT_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return false;
   }
-  return SMS_PRODUCT_PATH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  return isSmsShellRoute(pathname);
 }
 
 /** Routes that require Numbers entitlement. */
 export function isNumbersProductPath(pathname: string): boolean {
-  if (pathname.startsWith("/numbers/") || pathname === "/numbers") return true;
+  if (isNumbersMarketplacePath(pathname)) return true;
   if (pathname === "/personal" || pathname.startsWith("/personal/")) return true;
-  if (pathname === "/my-numbers" || pathname.startsWith("/my-numbers/")) return true;
+  if (pathname === "/my-numbers" || pathname.startsWith("/my-numbers/")) return false;
   return false;
 }
 
@@ -94,3 +78,5 @@ export function productOfferPath(product: ProductKey): string {
       return "/app";
   }
 }
+
+export { isSmsLegacyHidden, isSmsShellRoute };

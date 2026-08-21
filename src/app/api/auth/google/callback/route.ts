@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
-<<<<<<< HEAD
 import {
   exchangeGoogleAuthCode,
   findOrCreateUserFromGoogle,
@@ -8,14 +7,13 @@ import {
   sanitizeNextPath,
 } from "@/lib/auth/google-oauth";
 import { resolvePublicAppUrl } from "@/lib/integrations/framework/app-url";
-=======
-import { exchangeGoogleAuthCode, findOrCreateUserFromGoogle, parseGoogleAuthState, sanitizeNextPath } from "@/lib/auth/google-oauth";
->>>>>>> dac47c96 (Implement multi-product architecture for Transovo SMS and Numbers)
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
-import { getUserProductAccess } from "@/lib/products/entitlements";
+import {
+  getUserProductAccess,
+  resolveWorkspaceForProduct,
+} from "@/lib/products/entitlements";
 import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
 import { applyProductAccessCookie } from "@/lib/products/session";
-import { resolveWorkspaceForProduct } from "@/lib/products/entitlements";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -71,11 +69,7 @@ export async function GET(request: Request) {
       isAdmin: false,
     };
 
-<<<<<<< HEAD
-    const res = NextResponse.redirect(new URL(nextPath, appOrigin));
-=======
-    const res = NextResponse.redirect(new URL(redirectPath, url.origin));
->>>>>>> dac47c96 (Implement multi-product architecture for Transovo SMS and Numbers)
+    const res = NextResponse.redirect(new URL(redirectPath, appOrigin));
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
       httpOnly: true,
       path: "/",

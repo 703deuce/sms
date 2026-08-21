@@ -4,15 +4,14 @@ import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
 import { productContextLabel } from "@/lib/products/context";
+import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { WorkspaceModeToggle } from "@/components/workspace/workspace-mode-toggle";
-import { formatNumber, formatPhone } from "@/lib/utils";
+import { formatPhone } from "@/lib/utils";
 import {
   Bell,
   CircleHelp,
-  Coins,
   Menu,
-  Plus,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -245,12 +244,15 @@ export function Header({
 
         <div className="flex-1" />
 
+        {currentProduct === "sms" ? (
+          <SmsCreateMenu variant="header" className="hidden sm:block" />
+        ) : null}
+
         {currentProduct === "numbers" ? (
           <Link
             href="/personal/numbers/premium"
             className="hidden h-9 items-center gap-1.5 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
           >
-            <Plus className="h-4 w-4" />
             Find a New Number
           </Link>
         ) : null}
@@ -310,16 +312,6 @@ export function Header({
                 </option>
               ))}
             </select>
-          ) : null}
-
-          {currentProduct === "sms" ? (
-          <Link
-            href="/settings/billing"
-            className="hidden h-9 items-center gap-1.5 rounded-full bg-violet-50 px-3 text-[12px] font-semibold text-violet-700 ring-1 ring-violet-100 hover:bg-violet-100 sm:inline-flex"
-          >
-            <Coins className="h-3.5 w-3.5" />
-            {formatNumber(metrics.creditsRemaining)} credits
-          </Link>
           ) : null}
 
           <div className="relative" ref={notifRef}>
