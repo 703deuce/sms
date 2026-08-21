@@ -213,6 +213,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   smartRoutingNodeExecution: "smart_routing_node_executions",
   smartRoutingCommandReceipt: "smart_routing_command_receipts",
   smartRoutingSmsConsentEvent: "smart_routing_sms_consent_events",
+  productEntitlement: "ProductEntitlement",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -485,9 +486,13 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   automationStepExecution: {
     execution: { table: "AutomationExecution", fk: "executionId" },
   },
+  productEntitlement: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
   workspace: {
     phoneNumbers: { table: "PhoneNumber", fk: "workspaceId", pk: "id" },
     messagingRegistration: { table: "messaging_registrations", fk: "workspaceId", pk: "id" },
+    productEntitlements: { table: "ProductEntitlement", fk: "workspaceId", pk: "id" },
   },
   smartRoutingFlow: {
     workspace: { table: "Workspace", fk: "workspaceId" },
@@ -983,6 +988,23 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       const { data } = await db.from("messaging_registrations").select("*").in("workspaceId", ids);
       const map = new Map((data ?? []).map((r) => [r.workspaceId as string, reviveRow(r as Row)]));
       out = out.map((r) => ({ ...r, messagingRegistration: map.get(r.id as string) ?? null }));
+      continue;
+    }
+
+    if (rel === "productEntitlements" && model === "workspace") {
+      const ids = out.map((r) => r.id as string);
+      const { data, error } = ids.length
+        ? await db.from("ProductEntitlement").select("*").in("workspaceId", ids)
+        : { data: [] as Row[], error: null };
+      if (error) throw new DbError(error.message, error.code);
+      const by = new Map<string, Row[]>();
+      for (const row of data ?? []) {
+        const revived = reviveRow(row as Row);
+        const list = by.get(revived.workspaceId as string) ?? [];
+        list.push(revived);
+        by.set(revived.workspaceId as string, list);
+      }
+      out = out.map((r) => ({ ...r, productEntitlements: by.get(r.id as string) ?? [] }));
       continue;
     }
 

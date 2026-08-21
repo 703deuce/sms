@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { DbError } from "@/lib/supabase/prisma-compat";
 import type { ProductAccessStatus, ProductKey, UserProductAccess } from "@/lib/products/types";
 import { isActiveEntitlement } from "@/lib/products/types";
 import {
@@ -10,6 +11,46 @@ import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
 export const PRODUCT_ACCESS_COOKIE = "transovo_product_access";
+
+function isProductEntitlementSchemaUnavailable(err: unknown): boolean {
+  if (!(err instanceof DbError)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("unknown model: productentitlement") ||
+    msg.includes("productentitlement") ||
+    msg.includes("lastactiveproduct") ||
+    msg.includes("productintent") ||
+    err.code === "PGRST204"
+  );
+}
+
+async function inferProductAccessFromWorkspaces(userId: string): Promise<UserProductAccess> {
+  const prisma = getPrisma();
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    include: { workspace: { select: { type: true } } },
+  });
+
+  let hasVoice = false;
+  let hasNumbers = false;
+  for (const m of memberships) {
+    const wsType = (m.workspace as { type?: string }).type;
+    if (wsType === "PERSONAL") hasNumbers = true;
+    if (wsType === "BUSINESS" || !wsType) hasVoice = true;
+  }
+  if (!memberships.length) {
+    hasVoice = true;
+  }
+
+  return {
+    products: [],
+    hasVoice,
+    hasSms: false,
+    hasNumbers,
+    lastActiveProduct: null,
+    productIntent: null,
+  };
+}
 
 function prismaStatusToApp(status: string): ProductAccessStatus {
   const s = status.toLowerCase();
@@ -43,35 +84,51 @@ export function defaultEntitlementsForWorkspaceType(
 /** Ensure workspace has baseline product entitlements (idempotent). */
 export async function ensureWorkspaceEntitlements(workspaceId: string): Promise<void> {
   const prisma = getPrisma();
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { type: true, productEntitlements: { select: { productKey: true } } },
-  });
-  if (!workspace) return;
-
-  const existing = new Set(
-    workspace.productEntitlements.map((e: { productKey: string }) => e.productKey),
-  );
-  const defaults = defaultEntitlementsForWorkspaceType(
-    workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
-  );
-
-  for (const def of defaults) {
-    const prismaKey = appProductKeyToPrisma(def.productKey);
-    if (existing.has(prismaKey)) continue;
-    await prisma.productEntitlement.create({
-      data: {
-        workspaceId,
-        productKey: prismaKey,
-        status: def.status.toUpperCase() as "ACTIVE" | "TRIAL" | "INACTIVE",
-        activatedAt: new Date(),
-      },
+  try {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { type: true, productEntitlements: { select: { productKey: true } } },
     });
+    if (!workspace) return;
+
+    const existing = new Set(
+      (workspace.productEntitlements ?? []).map((e: { productKey: string }) => e.productKey),
+    );
+    const defaults = defaultEntitlementsForWorkspaceType(
+      workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+    );
+
+    for (const def of defaults) {
+      const prismaKey = appProductKeyToPrisma(def.productKey);
+      if (existing.has(prismaKey)) continue;
+      await prisma.productEntitlement.create({
+        data: {
+          workspaceId,
+          productKey: prismaKey,
+          status: def.status.toUpperCase() as "ACTIVE" | "TRIAL" | "INACTIVE",
+          activatedAt: new Date(),
+        },
+      });
+    }
+  } catch (err) {
+    if (isProductEntitlementSchemaUnavailable(err)) return;
+    throw err;
   }
 }
 
 /** Aggregate product access across all workspaces the user belongs to. */
 export async function getUserProductAccess(userId: string): Promise<UserProductAccess> {
+  try {
+    return await loadUserProductAccess(userId);
+  } catch (err) {
+    if (isProductEntitlementSchemaUnavailable(err)) {
+      return inferProductAccessFromWorkspaces(userId);
+    }
+    throw err;
+  }
+}
+
+async function loadUserProductAccess(userId: string): Promise<UserProductAccess> {
   const prisma = getPrisma();
   const [user, memberships] = await Promise.all([
     prisma.user.findUnique({
@@ -102,7 +159,7 @@ export async function getUserProductAccess(userId: string): Promise<UserProductA
 
   const byProduct = new Map<ProductKey, ProductAccessStatus>();
   for (const m of refreshed) {
-    for (const ent of m.workspace.productEntitlements) {
+    for (const ent of m.workspace.productEntitlements ?? []) {
       const key = prismaProductKeyToApp(ent.productKey);
       if (!key) continue;
       const status = prismaStatusToApp(ent.status);
@@ -157,22 +214,27 @@ export async function grantProductEntitlement(
   const prismaKey = appProductKeyToPrisma(productKey);
   const prismaStatus = status.toUpperCase() as "ACTIVE" | "TRIAL" | "INACTIVE";
 
-  await prisma.productEntitlement.upsert({
-    where: {
-      workspaceId_productKey: { workspaceId, productKey: prismaKey },
-    },
-    create: {
-      workspaceId,
-      productKey: prismaKey,
-      status: prismaStatus,
-      activatedAt: status !== "inactive" ? new Date() : null,
-    },
-    update: {
-      status: prismaStatus,
-      activatedAt: status !== "inactive" ? new Date() : undefined,
-      deactivatedAt: status === "inactive" ? new Date() : null,
-    },
-  });
+  try {
+    await prisma.productEntitlement.upsert({
+      where: {
+        workspaceId_productKey: { workspaceId, productKey: prismaKey },
+      },
+      create: {
+        workspaceId,
+        productKey: prismaKey,
+        status: prismaStatus,
+        activatedAt: status !== "inactive" ? new Date() : null,
+      },
+      update: {
+        status: prismaStatus,
+        activatedAt: status !== "inactive" ? new Date() : undefined,
+        deactivatedAt: status === "inactive" ? new Date() : null,
+      },
+    });
+  } catch (err) {
+    if (isProductEntitlementSchemaUnavailable(err)) return;
+    throw err;
+  }
 }
 
 /** Pick workspace for a product (PERSONAL for numbers, BUSINESS for sms). */
