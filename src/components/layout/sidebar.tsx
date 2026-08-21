@@ -14,7 +14,7 @@ import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { productLogoHome, productContextLabel } from "@/lib/products/context";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
-import { productLabel } from "@/lib/products/types";
+import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
