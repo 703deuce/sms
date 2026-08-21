@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { getPrisma } from "@/lib/db";
 import { transitionNumberService } from "@/lib/numbers/state-service";
 import type { MarketplaceServiceKey } from "@/lib/payments/stripe-marketplace-metadata";
+import { subscriptionBillingPeriod } from "@/lib/payments/stripe-type-helpers";
 
 const ACTIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
 
@@ -64,12 +65,7 @@ export async function upsertNumberServiceSubscriptionFromStripe(
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
   const priceId = subscription.items.data[0]?.price?.id ?? null;
   const mappedStatus = mapStripeSubscriptionStatus(subscription.status);
-  const periodStart = subscription.current_period_start
-    ? new Date(subscription.current_period_start * 1000)
-    : null;
-  const periodEnd = subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000)
-    : null;
+  const { periodStart, periodEnd } = subscriptionBillingPeriod(subscription);
 
   const row = await prisma.numberServiceSubscription.upsert({
     where: { stripeSubscriptionId: subscription.id },

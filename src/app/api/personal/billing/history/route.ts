@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({
-      numberPurchases: numberPurchases.map((row) => ({
+      numberPurchases: numberPurchases.map((row: (typeof numberPurchases)[number]) => ({
         type: "number_purchase" as const,
         reservationId: row.id,
         phoneNumber: row.phoneNumber,
@@ -58,13 +58,16 @@ export async function GET(request: Request) {
         phoneNumberId: row.phoneNumberId,
         purchasedAt: row.updatedAt,
       })),
-      serviceSubscriptions: serviceSubscriptions.map((row) => ({
+      serviceSubscriptions: serviceSubscriptions.map((row: (typeof serviceSubscriptions)[number]) => ({
         type: "service_subscription" as const,
         id: row.id,
         service: row.productKey,
         displayName: row.product.displayName,
         phoneNumberId: row.phoneNumberId,
-        phoneNumber: row.phoneNumber.e164,
+        phoneNumber:
+          (row.phoneNumber as { e164?: string; number?: string }).e164 ??
+          (row.phoneNumber as { number?: string }).number ??
+          "",
         amountCents: row.product.amountCents,
         status: row.status,
         cancelAtPeriodEnd: row.cancelAtPeriodEnd,

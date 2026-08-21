@@ -3,6 +3,8 @@ import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { listMarketplaceBillingCatalog } from "@/lib/payments/marketplace-billing-catalog";
 
+type CatalogRow = Awaited<ReturnType<typeof listMarketplaceBillingCatalog>>[number];
+
 export async function GET(request: Request) {
   const auth = await requireSession();
   if (auth.error) return auth.error;
@@ -29,10 +31,13 @@ export async function GET(request: Request) {
     const catalog = await listMarketplaceBillingCatalog();
 
     return NextResponse.json({
-      subscriptions: subscriptions.map((row) => ({
+      subscriptions: subscriptions.map((row: (typeof subscriptions)[number]) => ({
         id: row.id,
         phoneNumberId: row.phoneNumberId,
-        phoneNumber: row.phoneNumber.e164,
+        phoneNumber:
+          (row.phoneNumber as { e164?: string; number?: string }).e164 ??
+          (row.phoneNumber as { number?: string }).number ??
+          "",
         service: row.productKey,
         displayName: row.product.displayName,
         amountCents: row.product.amountCents,
@@ -43,7 +48,7 @@ export async function GET(request: Request) {
         minutesUsedThisPeriod: row.minutesUsedThisPeriod,
         active: ["active", "trialing", "past_due"].includes(row.status),
       })),
-      catalog: catalog.map((row) => ({
+      catalog: catalog.map((row: CatalogRow) => ({
         productKey: row.productKey,
         displayName: row.displayName,
         description: row.description,

@@ -336,6 +336,16 @@ export async function loadPersonalAnalytics(
 
 export const PERSONAL_FORWARDING_MINUTE_LIMIT = 200;
 
+type ForwardingSubscriptionUsageRow = {
+  phoneNumberId: string;
+  includedMinutesPerPeriod: number | null;
+  minutesUsedThisPeriod: number;
+  usagePeriodStart: Date | null;
+  usagePeriodEnd: Date | null;
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+};
+
 export type PersonalUsageSummary = {
   forwardingMinutesUsed: number;
   forwardingMinutesLimit: number;
@@ -357,7 +367,7 @@ export async function loadPersonalUsage(
   const now = new Date();
   const numbers = await loadPersonalNumbers(workspaceId);
 
-  const forwardingSubs = await prisma.numberServiceSubscription.findMany({
+  const forwardingSubs = (await prisma.numberServiceSubscription.findMany({
     where: {
       workspaceId,
       productKey: "forwarding_200",
@@ -372,7 +382,7 @@ export async function loadPersonalUsage(
       currentPeriodStart: true,
       currentPeriodEnd: true,
     },
-  });
+  })) as ForwardingSubscriptionUsageRow[];
 
   const periodStart =
     forwardingSubs
@@ -424,9 +434,9 @@ export async function loadPersonalUsage(
     estimatedOverageMinutes: Math.max(0, forwardingMinutesUsed - limit),
     perNumber: numbers.map((n) => ({
       numberId: n.id,
-      e164: n.e164,
+      e164: n.number,
       forwardingMinutes: subscribedNumberIds.has(n.id)
-        ? Math.round((perNumberSeconds.get(n.e164) ?? 0) / 60)
+        ? Math.round((perNumberSeconds.get(n.number) ?? 0) / 60)
         : 0,
     })),
   };

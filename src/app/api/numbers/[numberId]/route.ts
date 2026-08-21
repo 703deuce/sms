@@ -5,6 +5,10 @@ import { mapPhoneNumber } from "@/lib/mappers";
 import { validateForwardingDestination } from "@/lib/numbers/forwarding-validation";
 import { applyPersonalCallSettingsToRow } from "@/lib/numbers/state-service";
 import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
+import {
+  personalCallSettingsNeedsForwardingSubscription,
+  requirePaidServiceSubscription,
+} from "@/lib/payments/marketplace-service-gate";
 
 const assignmentsInclude = {
   assignments: { include: { user: { select: { id: true, name: true } } } },

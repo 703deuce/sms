@@ -8,6 +8,7 @@ import {
   resetForwardingUsageForBillingPeriod,
   upsertNumberServiceSubscriptionFromStripe,
 } from "@/lib/payments/number-service-subscription";
+import { invoiceSubscriptionId } from "@/lib/payments/stripe-type-helpers";
 
 function subscriptionMetadata(subscription: Stripe.Subscription): Record<string, string> {
   return readStripeMetadata(subscription.metadata);
@@ -42,8 +43,7 @@ export async function handleMarketplaceSubscriptionCheckoutCompleted(session: St
 }
 
 export async function handleMarketplaceSubscriptionInvoicePaid(invoice: Stripe.Invoice) {
-  const subscriptionId =
-    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+  const subscriptionId = invoiceSubscriptionId(invoice);
   if (!subscriptionId) return { skipped: true as const };
 
   const stripe = getStripe();
@@ -62,8 +62,7 @@ export async function handleMarketplaceSubscriptionInvoicePaid(invoice: Stripe.I
 }
 
 export async function handleMarketplaceSubscriptionInvoiceFailed(invoice: Stripe.Invoice) {
-  const subscriptionId =
-    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+  const subscriptionId = invoiceSubscriptionId(invoice);
   if (!subscriptionId) return { skipped: true as const };
 
   const stripe = getStripe();

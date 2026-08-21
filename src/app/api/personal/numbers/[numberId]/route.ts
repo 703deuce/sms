@@ -54,7 +54,7 @@ export async function POST(
     let data;
     switch (action) {
       case "park": {
-        const blocked = await requirePaidService(auth.workspaceId, numberId, "vault");
+        const blocked = await requirePaidServiceSubscription(auth.workspaceId, numberId, "vault");
         if (blocked) return blocked;
         data = await parkPersonalNumber(auth.workspaceId, numberId);
         break;
@@ -66,7 +66,7 @@ export async function POST(
         data = await clearPortAwayWindow(auth.workspaceId, numberId);
         break;
       case "enable_voicemail": {
-        const blocked = await requirePaidService(auth.workspaceId, numberId, "voicemail");
+        const blocked = await requirePaidServiceSubscription(auth.workspaceId, numberId, "voicemail");
         if (blocked) return blocked;
         data = await setPersonalVoicemailEnabled(auth.workspaceId, numberId, true);
         break;

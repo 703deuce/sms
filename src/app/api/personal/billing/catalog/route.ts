@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireSession, resolveWorkspaceId, jsonError } from "@/lib/api-auth";
 import { listMarketplaceBillingCatalog } from "@/lib/payments/marketplace-billing-catalog";
 
+type CatalogRow = Awaited<ReturnType<typeof listMarketplaceBillingCatalog>>[number];
+
 export async function GET(request: Request) {
   const auth = await requireSession();
   if (auth.error) return auth.error;
@@ -12,7 +14,7 @@ export async function GET(request: Request) {
     void workspaceId;
     const catalog = await listMarketplaceBillingCatalog();
     return NextResponse.json({
-      catalog: catalog.map((row) => ({
+      catalog: catalog.map((row: CatalogRow) => ({
         productKey: row.productKey,
         displayName: row.displayName,
         description: row.description,

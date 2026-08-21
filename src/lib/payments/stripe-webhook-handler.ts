@@ -27,6 +27,7 @@ import {
   handleMarketplaceSubscriptionStripeEvent,
   isMarketplaceStripeSubscription,
 } from "@/lib/payments/stripe-service-subscription-webhook";
+import { invoiceSubscriptionId } from "@/lib/payments/stripe-type-helpers";
 
 type MinimalEvent = {
   id?: string;
@@ -80,8 +81,7 @@ async function routeSubscriptionEvent(subscription: Stripe.Subscription) {
 }
 
 async function routeInvoicePaid(invoice: Stripe.Invoice) {
-  const subscriptionId =
-    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+  const subscriptionId = invoiceSubscriptionId(invoice);
   if (subscriptionId) {
     const stripe = getStripe();
     if (stripe) {
@@ -100,8 +100,7 @@ async function routeInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function routeInvoiceFailed(invoice: Stripe.Invoice) {
-  const subscriptionId =
-    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+  const subscriptionId = invoiceSubscriptionId(invoice);
   if (subscriptionId) {
     const stripe = getStripe();
     if (stripe) {
@@ -119,7 +118,7 @@ async function routeInvoiceFailed(invoice: Stripe.Invoice) {
 }
 
 async function processStripeEvent(event: Stripe.Event) {
-  const obj = event.data.object as Record<string, unknown>;
+  const obj = event.data.object as unknown as Record<string, unknown>;
 
   switch (event.type) {
     case "checkout.session.completed":
