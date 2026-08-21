@@ -90,7 +90,7 @@ export function PremiumCheckoutModal({
         <div className="mt-4 rounded-lg bg-[#f5f3ff] p-4">
           <p className="text-[20px] font-bold">
             {formatPremiumPrice(state.premiumPriceCents)}
-            <span className="text-[12px] font-normal text-[#6b7280]"> one-time premium</span>
+          <p className="text-[12px] font-normal text-[#6b7280]"> one-time purchase</p>
           </p>
         </div>
         <p className="mt-4 text-[13px] text-[#6b7280]">
@@ -107,6 +107,23 @@ export function PremiumCheckoutModal({
               setPurchasing(true);
               setPurchaseError("");
               try {
+                const checkoutRes = await fetch("/api/numbers/premium/checkout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    workspaceId,
+                    reservationId: state.reservationId,
+                  }),
+                });
+                const checkoutData = await checkoutRes.json();
+                if (checkoutRes.ok && checkoutData.checkoutUrl) {
+                  window.location.href = checkoutData.checkoutUrl;
+                  return;
+                }
+                if (checkoutRes.status !== 409 || !checkoutData.testPayment) {
+                  throw new Error(checkoutData.error || "Checkout failed");
+                }
+
                 const res = await fetch("/api/numbers/premium/complete", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -128,7 +145,7 @@ export function PremiumCheckoutModal({
               }
             }}
           >
-            {purchasing ? "Purchasing…" : "Complete purchase (test payment)"}
+            {purchasing ? "Redirecting…" : "Complete one-time purchase"}
           </Button>
         </div>
         {purchaseError ? (

@@ -57,6 +57,7 @@ import {
   PersonalMockToggle,
   pm,
 } from "./mockup/primitives";
+import { PersonalServiceSubscribeBanner } from "./personal-service-subscribe-banner";
 
 type VmMessage = {
   id: string;
@@ -655,6 +656,14 @@ export function PersonalVoicemailUI({
                   selectClassName="h-10 w-full min-w-0 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
                 />
               </div>
+              {managingNumberId ? (
+                <div className="mt-3">
+                  <PersonalServiceSubscribeBanner
+                    phoneNumberId={managingNumberId}
+                    service="voicemail"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null
         }

@@ -119,6 +119,8 @@ model User {
   phoneAssignments    PhoneNumberAssignment[]
   premiumNumberReservations PremiumNumberReservation[]
   premiumNumberSearchLogs   PremiumNumberSearchLog[]
+  numberServiceSubscriptions NumberServiceSubscription[]
+  marketplaceStripeRefunds  MarketplaceStripeRefund[]
   inAppNotifications  InAppNotification[]
   invitesSent         WorkspaceInvite[] @relation("InviteSender")
   ownedWorkspaces     Workspace[] @relation("WorkspaceOwner")
@@ -150,6 +152,8 @@ model Workspace {
   phoneNumbers PhoneNumber[]
   premiumNumberReservations PremiumNumberReservation[]
   premiumNumberSearchLogs PremiumNumberSearchLog[]
+  numberServiceSubscriptions NumberServiceSubscription[]
+  marketplaceStripeRefunds  MarketplaceStripeRefund[]
   contacts    Contact[]
   lists       ContactList[]
   segments    Segment[]
@@ -346,6 +350,7 @@ model PhoneNumber {
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignments      PhoneNumberAssignment[]
   triggerDeployments TriggerDeployment[]
+  numberServiceSubscriptions NumberServiceSubscription[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -375,14 +380,107 @@ model PremiumNumberReservation {
   telnyxOrderId        String?
   phoneNumberId        String?
   searchLogId          String?
+  stripeSessionId      String?
+  stripePaymentIntentId String?
+  fulfillmentStatus    String    @default("none")
+  stripeRefundId       String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketplaceRefunds   MarketplaceStripeRefund[]
 
   @@index([workspaceId, phoneNumber])
   @@index([telnyxReservationId])
+  @@index([stripeSessionId])
   @@map("premium_number_reservations")
+}
+
+/// Fixed recurring marketplace services (Vault, Voicemail, Forwarding) synced to Stripe via API.
+model MarketplaceBillingProduct {
+  id                   String   @id @default(cuid())
+  productKey           String   @unique
+  displayName          String
+  description          String?
+  amountCents          Int
+  currency             String   @default("usd")
+  billingInterval      String   @default("month")
+  includedUsageMinutes Int?
+  stripeProductId      String?
+  stripePriceId        String?
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  subscriptions        NumberServiceSubscription[]
+  priceHistory         MarketplaceBillingPriceHistory[]
+
+  @@map("marketplace_billing_products")
+}
+
+/// Historical Stripe Price IDs — active catalog row points at current price for new purchases.
+model MarketplaceBillingPriceHistory {
+  id                    String   @id @default(cuid())
+  productId             String
+  stripePriceId         String   @unique
+  amountCents           Int
+  activeForNewPurchases Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  product               MarketplaceBillingProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+  @@map("marketplace_billing_price_history")
+}
+
+/// Per-number recurring service subscription (Vault / Voicemail / Forwarding).
+model NumberServiceSubscription {
+  id                       String   @id @default(cuid())
+  workspaceId              String
+  userId                   String
+  phoneNumberId            String
+  productKey               String
+  productId                String
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?  @unique
+  stripePriceId            String?
+  status                   String   @default("pending")
+  currentPeriodStart       DateTime?
+  currentPeriodEnd         DateTime?
+  cancelAtPeriodEnd        Boolean  @default(false)
+  includedMinutesPerPeriod Int?
+  minutesUsedThisPeriod    Int      @default(0)
+  usagePeriodStart         DateTime?
+  usagePeriodEnd           DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phoneNumber              PhoneNumber @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+  product                  MarketplaceBillingProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, phoneNumberId])
+  @@index([phoneNumberId, productKey])
+  @@index([stripeSubscriptionId])
+  @@map("number_service_subscriptions")
+}
+
+/// Stripe refund audit trail for marketplace purchases and service billing.
+model MarketplaceStripeRefund {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  reservationId         String?
+  phoneNumberId         String?
+  stripePaymentIntentId String?
+  stripeRefundId        String   @unique
+  amountCents           Int
+  reason                String
+  status                String   @default("succeeded")
+  createdAt             DateTime @default(now())
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reservation           PremiumNumberReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([reservationId])
+  @@map("marketplace_stripe_refunds")
 }
 
 model PremiumNumberSearchLog {

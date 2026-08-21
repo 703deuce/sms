@@ -587,7 +587,9 @@ export async function completePremiumPurchase(
       data: {
         paymentStatus:
           normalized?.outcome === "RECOVERABLE_FAILURE" ? "processing" : "failed",
-        orderStatus: "failed",
+        orderStatus: normalized?.outcome === "RECOVERABLE_FAILURE" ? "reconciliation" : "failed",
+        fulfillmentStatus:
+          normalized?.outcome === "RECOVERABLE_FAILURE" ? "reconciliation" : "failed",
       },
     });
     logPurchaseEvent({

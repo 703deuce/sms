@@ -27,11 +27,12 @@ ok("stripe webhook event list includes billing + marketplace", () => {
     "checkout.session.completed",
     "customer.subscription.updated",
     "invoice.paid",
+    "invoice.payment_failed",
     "payment_intent.payment_failed",
   ]) {
     assert.ok(events.includes(required as (typeof events)[number]), `missing ${required}`);
   }
-  assert.equal(events.length, 10);
+  assert.equal(events.length, 11);
 });
 
 if (process.exitCode) {

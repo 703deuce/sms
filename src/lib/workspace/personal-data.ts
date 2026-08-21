@@ -334,7 +334,7 @@ export async function loadPersonalAnalytics(
   };
 }
 
-export const PERSONAL_FORWARDING_MINUTE_LIMIT = 600;
+export const PERSONAL_FORWARDING_MINUTE_LIMIT = 200;
 
 export type PersonalUsageSummary = {
   forwardingMinutesUsed: number;
@@ -355,10 +355,39 @@ export async function loadPersonalUsage(
 ): Promise<PersonalUsageSummary> {
   const prisma = getPrisma();
   const now = new Date();
-  const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
   const numbers = await loadPersonalNumbers(workspaceId);
+
+  const forwardingSubs = await prisma.numberServiceSubscription.findMany({
+    where: {
+      workspaceId,
+      productKey: "forwarding_200",
+      status: { in: ["active", "trialing", "past_due"] },
+    },
+    select: {
+      phoneNumberId: true,
+      includedMinutesPerPeriod: true,
+      minutesUsedThisPeriod: true,
+      usagePeriodStart: true,
+      usagePeriodEnd: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+    },
+  });
+
+  const periodStart =
+    forwardingSubs
+      .map((s) => s.usagePeriodStart ?? s.currentPeriodStart)
+      .filter(Boolean)
+      .sort((a, b) => (a!.getTime() > b!.getTime() ? 1 : -1))[0] ??
+    new Date(now.getFullYear(), now.getMonth(), 1);
+  const periodEnd =
+    forwardingSubs
+      .map((s) => s.usagePeriodEnd ?? s.currentPeriodEnd)
+      .filter(Boolean)
+      .sort((a, b) => (a!.getTime() < b!.getTime() ? 1 : -1))[0] ??
+    new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  const subscribedNumberIds = new Set(forwardingSubs.map((s) => s.phoneNumberId));
   const calls = await prisma.humanCall.findMany({
     where: {
       workspaceId,
@@ -381,7 +410,10 @@ export async function loadPersonalUsage(
   }
 
   const forwardingMinutesUsed = Math.round(totalSeconds / 60);
-  const limit = PERSONAL_FORWARDING_MINUTE_LIMIT;
+  const limit = forwardingSubs.reduce(
+    (sum, sub) => sum + (sub.includedMinutesPerPeriod ?? PERSONAL_FORWARDING_MINUTE_LIMIT),
+    0,
+  );
 
   return {
     forwardingMinutesUsed,
@@ -392,8 +424,10 @@ export async function loadPersonalUsage(
     estimatedOverageMinutes: Math.max(0, forwardingMinutesUsed - limit),
     perNumber: numbers.map((n) => ({
       numberId: n.id,
-      e164: n.number,
-      forwardingMinutes: Math.round((perNumberSeconds.get(n.number) ?? 0) / 60),
+      e164: n.e164,
+      forwardingMinutes: subscribedNumberIds.has(n.id)
+        ? Math.round((perNumberSeconds.get(n.e164) ?? 0) / 60)
+        : 0,
     })),
   };
 }

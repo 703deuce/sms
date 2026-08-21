@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { PersonalMarketplaceBillingUI } from "@/components/personal/personal-marketplace-billing-ui";
 
-/** Billing is account-level — reuse settings billing. */
-export default function PersonalBillingRedirect() {
-  redirect("/settings/billing");
+export default function PersonalBillingPage() {
+  return <PersonalMarketplaceBillingUI />;
 }

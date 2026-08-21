@@ -56,6 +56,10 @@ const MODEL_TO_TABLE: Record<string, string> = {
   phoneNumber: "PhoneNumber",
   premiumNumberReservation: "premium_number_reservations",
   premiumNumberSearchLog: "premium_number_search_logs",
+  marketplaceBillingProduct: "marketplace_billing_products",
+  marketplaceBillingPriceHistory: "marketplace_billing_price_history",
+  numberServiceSubscription: "number_service_subscriptions",
+  marketplaceStripeRefund: "marketplace_stripe_refunds",
   contact: "Contact",
   contactList: "ContactList",
   contactListMember: "ContactListMember",
@@ -221,6 +225,24 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   premiumNumberReservation: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     user: { table: "User", fk: "userId" },
+    marketplaceRefunds: { table: "marketplace_stripe_refunds", fk: "reservationId" },
+  },
+  marketplaceBillingProduct: {
+    subscriptions: { table: "number_service_subscriptions", fk: "productId" },
+    priceHistory: { table: "marketplace_billing_price_history", fk: "productId" },
+  },
+  marketplaceBillingPriceHistory: {
+    product: { table: "marketplace_billing_products", fk: "productId" },
+  },
+  numberServiceSubscription: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    user: { table: "User", fk: "userId" },
+    phoneNumber: { table: "PhoneNumber", fk: "phoneNumberId" },
+    product: { table: "marketplace_billing_products", fk: "productId" },
+  },
+  marketplaceStripeRefund: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    reservation: { table: "premium_number_reservations", fk: "reservationId" },
   },
   premiumNumberSearchLog: {
     workspace: { table: "Workspace", fk: "workspaceId" },

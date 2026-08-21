@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
+  personalCallSettingsNeedsForwardingSubscription,
+  requirePaidServiceSubscription,
+} from "@/lib/payments/marketplace-service-gate";
+import {
   clearPortAwayWindow,
   parkPersonalNumber,
   reactivatePersonalNumber,
@@ -49,18 +53,24 @@ export async function POST(
 
     let data;
     switch (action) {
-      case "park":
+      case "park": {
+        const blocked = await requirePaidService(auth.workspaceId, numberId, "vault");
+        if (blocked) return blocked;
         data = await parkPersonalNumber(auth.workspaceId, numberId);
         break;
+      }
       case "reactivate":
         data = await reactivatePersonalNumber(auth.workspaceId, numberId);
         break;
       case "keep":
         data = await clearPortAwayWindow(auth.workspaceId, numberId);
         break;
-      case "enable_voicemail":
+      case "enable_voicemail": {
+        const blocked = await requirePaidService(auth.workspaceId, numberId, "voicemail");
+        if (blocked) return blocked;
         data = await setPersonalVoicemailEnabled(auth.workspaceId, numberId, true);
         break;
+      }
       case "disable_voicemail":
         data = await setPersonalVoicemailEnabled(auth.workspaceId, numberId, false);
         break;

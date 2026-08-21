@@ -39,6 +39,7 @@ import {
   PersonalMockSelect,
   pm,
 } from "./mockup/primitives";
+import { PersonalServiceSubscribeBanner } from "./personal-service-subscribe-banner";
 
 type SortKey = "recent" | "name" | "cost";
 type HubStatus = "vault" | "forward" | "ported";
@@ -724,6 +725,10 @@ export function PersonalVaultUI({
                   <PersonalMockPill tone="blue">Vaulted</PersonalMockPill>
                 </div>
               </div>
+
+              {managed ? (
+                <PersonalServiceSubscribeBanner phoneNumberId={managed.id} service="vault" />
+              ) : null}
 
               <dl className="space-y-2 text-[13px]">
                 <div className="flex justify-between gap-4">

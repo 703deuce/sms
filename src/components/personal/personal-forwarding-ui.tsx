@@ -50,6 +50,7 @@ import {
   PersonalMockSelect,
   pm,
 } from "./mockup/primitives";
+import { PersonalServiceSubscribeBanner } from "./personal-service-subscribe-banner";
 
 type FallbackAction = "voicemail" | "another_number" | "announcement" | "end";
 
@@ -498,6 +499,9 @@ export function PersonalForwardingUI({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 402 && json.code === "subscription_required") {
+          throw new Error("Subscribe to Call Forwarding ($9.99/month) before enabling forwarding.");
+        }
         throw new Error(typeof json.error === "string" ? json.error : "Could not save forwarding.");
       }
       setMessage("Forwarding saved.");
@@ -737,6 +741,11 @@ export function PersonalForwardingUI({
             selectClassName="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-[14px] font-semibold text-[#111827]"
           />
         </div>
+        {editId ? (
+          <div className="mt-3">
+            <PersonalServiceSubscribeBanner phoneNumberId={editId} service="forwarding_200" />
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

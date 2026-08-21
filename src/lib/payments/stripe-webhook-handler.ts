@@ -15,6 +15,18 @@ import {
   handlePremiumNumberPaymentIntentSucceeded,
   isPremiumNumberCheckoutMetadata,
 } from "@/lib/payments/stripe-number-purchase-webhook";
+import {
+  isMarketplaceSubscriptionMetadata,
+  isSaasBillingMetadata,
+  resolveMarketplaceTransactionType,
+} from "@/lib/payments/stripe-marketplace-metadata";
+import {
+  handleMarketplaceSubscriptionCheckoutCompleted,
+  handleMarketplaceSubscriptionInvoiceFailed,
+  handleMarketplaceSubscriptionInvoicePaid,
+  handleMarketplaceSubscriptionStripeEvent,
+  isMarketplaceStripeSubscription,
+} from "@/lib/payments/stripe-service-subscription-webhook";
 
 type MinimalEvent = {
   id?: string;
@@ -28,31 +40,82 @@ function metadataFromObject(obj: Record<string, unknown>): Record<string, string
   return raw as Record<string, string | undefined>;
 }
 
-function isPremiumNumberCheckoutSession(session: Stripe.Checkout.Session): boolean {
-  return isPremiumNumberCheckoutMetadata((session.metadata || {}) as Record<string, string>);
+function checkoutTransactionType(session: Stripe.Checkout.Session) {
+  return resolveMarketplaceTransactionType((session.metadata || {}) as Record<string, string>);
 }
 
 async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-  if (isPremiumNumberCheckoutSession(session)) {
+  const tx = checkoutTransactionType(session);
+  if (tx === "marketplace_number_purchase" || isPremiumNumberCheckoutMetadata(session.metadata as Record<string, string>)) {
     return handlePremiumNumberCheckoutSession(session);
   }
-  await handleBillingCheckoutSessionCompleted(session);
-  return { subsystem: "billing" as const };
+  if (tx === "marketplace_subscription" || isMarketplaceSubscriptionMetadata(session.metadata as Record<string, string>)) {
+    return handleMarketplaceSubscriptionCheckoutCompleted(session);
+  }
+  if (isSaasBillingMetadata(session.metadata as Record<string, string>)) {
+    await handleBillingCheckoutSessionCompleted(session);
+    return { subsystem: "saas_billing" as const };
+  }
+  return { subsystem: "none" as const, skipped: true };
 }
 
 async function routeCheckoutSessionAsyncSucceeded(session: Stripe.Checkout.Session) {
-  if (isPremiumNumberCheckoutSession(session)) {
-    return handlePremiumNumberCheckoutSession(session);
-  }
-  await handleBillingCheckoutSessionCompleted(session);
-  return { subsystem: "billing" as const };
+  return routeCheckoutSessionCompleted(session);
 }
 
 async function routeCheckoutSessionAsyncFailed(session: Stripe.Checkout.Session) {
-  if (isPremiumNumberCheckoutSession(session)) {
+  const tx = checkoutTransactionType(session);
+  if (tx === "marketplace_number_purchase") {
     return handlePremiumNumberCheckoutFailed(session);
   }
-  return { subsystem: "billing" as const, skipped: true };
+  return { subsystem: "none" as const, skipped: true };
+}
+
+async function routeSubscriptionEvent(subscription: Stripe.Subscription) {
+  if (isMarketplaceStripeSubscription(subscription)) {
+    return handleMarketplaceSubscriptionStripeEvent(subscription);
+  }
+  await updateWorkspacePlanFromSubscription(subscription);
+  return { subsystem: "saas_billing" as const };
+}
+
+async function routeInvoicePaid(invoice: Stripe.Invoice) {
+  const subscriptionId =
+    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+  if (subscriptionId) {
+    const stripe = getStripe();
+    if (stripe) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        if (isMarketplaceStripeSubscription(subscription)) {
+          return handleMarketplaceSubscriptionInvoicePaid(invoice);
+        }
+      } catch {
+        // fall through to SaaS billing invoice handler
+      }
+    }
+  }
+  await handleBillingInvoicePaid(invoice);
+  return { subsystem: "saas_billing" as const };
+}
+
+async function routeInvoiceFailed(invoice: Stripe.Invoice) {
+  const subscriptionId =
+    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+  if (subscriptionId) {
+    const stripe = getStripe();
+    if (stripe) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        if (isMarketplaceStripeSubscription(subscription)) {
+          return handleMarketplaceSubscriptionInvoiceFailed(invoice);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return { subsystem: "none" as const, skipped: true };
 }
 
 async function processStripeEvent(event: Stripe.Event) {
@@ -67,13 +130,13 @@ async function processStripeEvent(event: Stripe.Event) {
       return routeCheckoutSessionAsyncFailed(obj as unknown as Stripe.Checkout.Session);
     case "invoice.paid":
     case "invoice.payment_succeeded":
-      await handleBillingInvoicePaid(obj as unknown as Stripe.Invoice);
-      return { subsystem: "billing" as const };
+      return routeInvoicePaid(obj as unknown as Stripe.Invoice);
+    case "invoice.payment_failed":
+      return routeInvoiceFailed(obj as unknown as Stripe.Invoice);
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
-      await updateWorkspacePlanFromSubscription(obj as unknown as Stripe.Subscription);
-      return { subsystem: "billing" as const };
+      return routeSubscriptionEvent(obj as unknown as Stripe.Subscription);
     case "payment_intent.succeeded":
       if (isPremiumNumberCheckoutMetadata(metadataFromObject(obj))) {
         return handlePremiumNumberPaymentIntentSucceeded(obj as unknown as Stripe.PaymentIntent);
@@ -204,6 +267,7 @@ export const STRIPE_WEBHOOK_EVENT_TYPES = [
   "checkout.session.async_payment_failed",
   "invoice.paid",
   "invoice.payment_succeeded",
+  "invoice.payment_failed",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",

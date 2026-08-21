@@ -78,12 +78,26 @@ export async function PATCH(
     };
 
     if (body.personalCallSettings && workspace?.type === "PERSONAL") {
+      if (personalCallSettingsNeedsForwardingSubscription(body.personalCallSettings)) {
+        const blocked = await requirePaidServiceSubscription(
+          auth.workspaceId,
+          numberId,
+          "forwarding_200",
+        );
+        if (blocked) return blocked;
+      }
       const applied = applyPersonalCallSettingsToRow(existing, body.personalCallSettings);
       data.voiceForwardTo = applied.voiceForwardTo;
       data.settingsJson = applied.settingsJson;
     } else if (body.voiceForwardTo !== undefined) {
       const nextForward = body.voiceForwardTo?.trim() || null;
       if (nextForward) {
+        const blocked = await requirePaidServiceSubscription(
+          auth.workspaceId,
+          numberId,
+          "forwarding_200",
+        );
+        if (blocked) return blocked;
         const validated = validateForwardingDestination({
           destination: nextForward,
           numberE164: existing.e164,

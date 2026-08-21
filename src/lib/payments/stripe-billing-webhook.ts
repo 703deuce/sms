@@ -2,8 +2,20 @@ import type Stripe from "stripe";
 import { getPrisma } from "@/lib/db";
 import { addCreditsFromStripe } from "@/lib/settings/billing";
 import { markPaymentLinkPaid } from "@/lib/payments/create-link";
+import {
+  isMarketplaceSubscriptionMetadata,
+  isSaasBillingMetadata,
+  resolveMarketplaceTransactionType,
+} from "@/lib/payments/stripe-marketplace-metadata";
 
 export async function updateWorkspacePlanFromSubscription(subscription: Stripe.Subscription) {
+  const metadata = (subscription.metadata || {}) as Record<string, string>;
+  if (isMarketplaceSubscriptionMetadata(metadata)) {
+    return;
+  }
+  if (resolveMarketplaceTransactionType(metadata) === "marketplace_subscription") {
+    return;
+  }
   const prisma = getPrisma();
   const customerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
@@ -39,8 +51,9 @@ export async function updateWorkspacePlanFromSubscription(subscription: Stripe.S
 
 export async function handleBillingCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   const metadata = (session.metadata || {}) as Record<string, string>;
-
-  // 1) Hosted payment links created via create-link.ts (paymentLinkId in metadata).
+  if (!isSaasBillingMetadata(metadata)) {
+    return;
+  }
   if (session.id) {
     await markPaymentLinkPaid(session.id);
   }
@@ -85,6 +98,9 @@ export async function handleBillingCheckoutSessionCompleted(session: Stripe.Chec
 
 export async function handleBillingInvoicePaid(invoice: Stripe.Invoice) {
   const metadata = (invoice.metadata || {}) as Record<string, string>;
+  if (resolveMarketplaceTransactionType(metadata) === "marketplace_subscription") {
+    return;
+  }
   const configuredCents =
     Number(metadata.creditsCents || 0) ||
     Number(process.env.STRIPE_SUBSCRIPTION_CREDITS_CENTS || 0);
