@@ -61,11 +61,21 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
 >) {
   if (!isMissedInboundVoiceCall(call)) return { triggered: false, reason: "not_missed" };
 
-  if (await activeSmartRoutingOnNumber(call.workspaceId, call.phoneNumberId)) {
+  const { resolveOnboardingWorkspaceForDemoCall } = await import(
+    "@/lib/agents/missed-call-text-back/demo-bypass"
+  );
+  const demoWorkspaceId = await resolveOnboardingWorkspaceForDemoCall(
+    call.fromE164,
+    call.toE164,
+  );
+  const targetWorkspaceId = demoWorkspaceId || call.workspaceId;
+  const isDemo = Boolean(demoWorkspaceId);
+
+  if (!isDemo && (await activeSmartRoutingOnNumber(call.workspaceId, call.phoneNumberId))) {
     return { triggered: false, reason: "smart_routing_active" };
   }
 
-  const config = await loadMissedCallTextConfig(call.workspaceId);
+  const config = await loadMissedCallTextConfig(targetWorkspaceId);
   const classification = classifyInboundCallOutcome({
     direction: call.direction,
     status: call.status,
@@ -73,7 +83,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     answeredAt: call.answeredAt,
     voicemailDetected: call.voicemailDetected,
   });
-  if (!classificationTriggersMctb(classification, config)) {
+  if (!isDemo && !classificationTriggersMctb(classification, config)) {
     return { triggered: false, reason: "trigger_disabled", classification };
   }
 
@@ -81,13 +91,14 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     "@/lib/agents/missed-call-text-back/process"
   );
   const result = await processMissedInboundCall({
-    workspaceId: call.workspaceId,
+    workspaceId: targetWorkspaceId,
     callerE164: call.fromE164,
     businessE164: call.toE164,
     phoneNumberId: call.phoneNumberId,
     voiceCallId: call.id,
     contactId: call.contactId,
     providerCallId: call.telnyxCallControlId,
+    demoMode: isDemo,
     call: {
       direction: call.direction,
       status: call.status,
@@ -96,5 +107,5 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
       voicemailDetected: call.voicemailDetected,
     },
   });
-  return { triggered: true, result, classification };
+  return { triggered: true, result, classification, demoMode: isDemo };
 }

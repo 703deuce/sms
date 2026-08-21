@@ -45,9 +45,23 @@ export async function evaluateMissedCallTextEligibility(input: {
   phoneNumberId?: string | null;
   call: ClassifyInboundCallInput;
   idempotencyKey: string;
+  demoMode?: boolean;
 }): Promise<EligibilityResult> {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   const classification = classifyInboundCallOutcome(input.call);
+
+  if (input.demoMode) {
+    let caller = "";
+    try {
+      caller = normalizeE164(input.callerE164);
+    } catch {
+      return { eligible: false, reason: "INVALID_PHONE", classification };
+    }
+    if (!caller || caller.length < 8) {
+      return { eligible: false, reason: "INVALID_PHONE", classification };
+    }
+    return { eligible: true, reason: null, classification };
+  }
 
   if (!config.enabled) {
     return { eligible: false, reason: "FEATURE_DISABLED", classification };

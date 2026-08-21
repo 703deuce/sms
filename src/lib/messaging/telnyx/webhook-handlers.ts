@@ -67,6 +67,19 @@ export async function handleTelnyxInbound(payload: unknown) {
     return { ok: true as const, skipped: true as const, reason: "missing_from_or_to" };
   }
 
+  try {
+    const { isPlatformDemoNumber, resolveDemoWorkspaceForCaller, recordDemoReplyReceived } =
+      await import("@/lib/mctb/onboarding/demo");
+    if (isPlatformDemoNumber(parsed.to)) {
+      const match = await resolveDemoWorkspaceForCaller(parsed.from);
+      if (match) {
+        await recordDemoReplyReceived(match.workspaceId);
+      }
+    }
+  } catch (demoErr) {
+    console.warn("[telnyx/inbound] demo reply tracking failed", demoErr);
+  }
+
   const root = payload as { data?: { payload?: { messaging_profile_id?: string } } };
   const profileId = root?.data?.payload?.messaging_profile_id;
   const ctx = await resolveInboundContext(parsed.to, profileId);

@@ -132,8 +132,27 @@ export async function POST(request: Request) {
         slug,
         type: workspaceType,
         ownerUserId: user.id,
-        billingPlan: trial.requireCard ? "trial_pending_card" : "trial",
+        billingPlan:
+          workspaceType === "BUSINESS" && productIntent === "voice"
+            ? "onboarding"
+            : trial.requireCard
+              ? "trial_pending_card"
+              : "trial",
         creditBalanceCents: 0,
+        customFieldsConfig:
+          workspaceType === "BUSINESS" && productIntent === "voice"
+            ? {
+                mctbOnboarding: {
+                  version: 1,
+                  currentStep: "business",
+                  completedSteps: [],
+                  startedAt: new Date().toISOString(),
+                  messageTemplate: "Sorry we missed your call! Reply here and we'll get back to you shortly.",
+                  consentMode: "press_1",
+                  funnelEvents: { signup_completed: new Date().toISOString() },
+                },
+              }
+            : undefined,
         memberships: {
           create: { userId: user.id, role: "OWNER" },
         },
@@ -155,7 +174,7 @@ export async function POST(request: Request) {
       },
     });
 
-    if (trial.credits > 0) {
+    if (trial.credits > 0 && !(workspaceType === "BUSINESS" && productIntent === "voice")) {
       const cents = Math.round(trial.credits * 100);
       try {
         await grantCredits(workspace.id, cents, `Trial credit grant ($${trial.credits})`, "trial");

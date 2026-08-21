@@ -16,6 +16,7 @@ export type ProcessMissedCallInput = {
   humanCallId?: string | null;
   contactId?: string | null;
   providerCallId?: string | null;
+  demoMode?: boolean;
   call: ClassifyInboundCallInput;
 };
 
@@ -84,6 +85,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
       status: "DETECTED",
       traceId,
       idempotencyKey,
+      metadata: input.demoMode ? { demoMode: true } : undefined,
     },
   });
 
@@ -97,12 +99,21 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     detail: { classification, caller, business: input.businessE164 },
   });
 
+  if (input.demoMode) {
+    const { recordDemoCallDetected } = await import("@/lib/mctb/onboarding/demo");
+    await recordDemoCallDetected({
+      workspaceId: input.workspaceId,
+      missedCallEventId: event.id,
+    }).catch(() => undefined);
+  }
+
   const eligibility = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: caller,
     businessE164: input.businessE164,
     phoneNumberId: input.phoneNumberId,
     idempotencyKey,
+    demoMode: input.demoMode,
     call: input.call,
   });
 

@@ -4,6 +4,7 @@ import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
 import { resolveMctbSmsSender } from "./sms-sender";
+import { getDemoMessageBody } from "@/lib/mctb/onboarding/demo";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   let out = template;
@@ -29,8 +30,14 @@ export async function executeMissedCallTextSend(input: {
     return { ok: true, skipped: true, reason: "already_sent" };
   }
 
+  const eventMeta =
+    event.metadata && typeof event.metadata === "object"
+      ? (event.metadata as Record<string, unknown>)
+      : {};
+  const demoMode = eventMeta.demoMode === true;
+
   const config = await loadMissedCallTextConfig(input.workspaceId);
-  if (!config.enabled) {
+  if (!config.enabled && !demoMode) {
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: { status: "SUPPRESSED", suppressionReason: "FEATURE_DISABLED" },
@@ -44,6 +51,7 @@ export async function executeMissedCallTextSend(input: {
     businessE164: event.businessE164,
     phoneNumberId: event.phoneNumberId,
     idempotencyKey: event.idempotencyKey,
+    demoMode,
     call: {
       direction: "inbound",
       disposition: event.disposition,
@@ -75,11 +83,13 @@ export async function executeMissedCallTextSend(input: {
         where: { workspaceId: input.workspaceId, phone: event.callerE164 },
       });
 
-  const body = renderTemplate(config.messageTemplate, {
-    firstName: contact?.firstName || "there",
-    name: [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "there",
-    phone: event.callerE164,
-  });
+  const body = demoMode
+    ? getDemoMessageBody()
+    : renderTemplate(config.messageTemplate, {
+        firstName: contact?.firstName || "there",
+        name: [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "there",
+        phone: event.callerE164,
+      });
 
   await prisma.missedCallEvent.update({
     where: { id: event.id },
@@ -90,7 +100,14 @@ export async function executeMissedCallTextSend(input: {
     workspaceId: input.workspaceId,
     config,
   });
-  if (!sender?.e164) {
+  let resolvedSender = sender;
+  if (!resolvedSender?.e164 && demoMode) {
+    const { resolvePlatformDemoSmsSender } = await import(
+      "@/lib/agents/missed-call-text-back/demo-bypass"
+    );
+    resolvedSender = await resolvePlatformDemoSmsSender();
+  }
+  if (!resolvedSender?.e164) {
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: { status: "FAILED", suppressionReason: "NOT_SMS_CAPABLE" },
@@ -103,7 +120,7 @@ export async function executeMissedCallTextSend(input: {
     traceId: input.traceId,
     missedCallEventId: event.id,
     kind: "sms.send.started",
-    detail: { to: event.callerE164, from: sender.e164, senderSource: sender.source },
+    detail: { to: event.callerE164, from: resolvedSender.e164, senderSource: resolvedSender.source },
   });
 
   try {
@@ -111,9 +128,10 @@ export async function executeMissedCallTextSend(input: {
       workspaceId: input.workspaceId,
       to: event.callerE164,
       body,
-      from: sender.e164,
+      from: resolvedSender.e164,
       customerName: contact?.firstName || undefined,
       idempotencyKey: `mctb:${event.idempotencyKey}`,
+      demoBypass: demoMode,
     });
 
     const messageId =
@@ -136,8 +154,13 @@ export async function executeMissedCallTextSend(input: {
       traceId: input.traceId,
       missedCallEventId: event.id,
       kind: "sms.send.accepted",
-      detail: { messageId, providerStatus: "queued" },
+      detail: { messageId, providerStatus: "queued", demoMode },
     });
+
+    if (demoMode) {
+      const { recordDemoTextSent } = await import("@/lib/mctb/onboarding/demo");
+      await recordDemoTextSent(input.workspaceId).catch(() => undefined);
+    }
 
     return { ok: true, messageId, status: "queued" };
   } catch (err) {

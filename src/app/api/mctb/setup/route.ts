@@ -55,14 +55,15 @@ export async function GET() {
 
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
-    select: { settingsJson: true },
+    select: { customFieldsConfig: true },
   });
+  const customCfg =
+    ws?.customFieldsConfig && typeof ws.customFieldsConfig === "object"
+      ? (ws.customFieldsConfig as Record<string, unknown>)
+      : {};
   const mctbSettings =
-    ws?.settingsJson &&
-    typeof ws.settingsJson === "object" &&
-    (ws.settingsJson as Record<string, unknown>).mctb &&
-    typeof (ws.settingsJson as Record<string, unknown>).mctb === "object"
-      ? ((ws.settingsJson as Record<string, unknown>).mctb as Record<string, unknown>)
+    customCfg.mctb && typeof customCfg.mctb === "object"
+      ? (customCfg.mctb as Record<string, unknown>)
       : {};
 
   const [runtime, solution, phoneNumbers, compliance, reg] = await Promise.all([
@@ -203,21 +204,21 @@ export async function POST(req: Request) {
   if (body.consentMode || body.replyNotifications !== undefined) {
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      select: { settingsJson: true },
+      select: { customFieldsConfig: true },
     });
-    const settings =
-      ws?.settingsJson && typeof ws.settingsJson === "object"
-        ? (ws.settingsJson as Record<string, unknown>)
+    const customCfg =
+      ws?.customFieldsConfig && typeof ws.customFieldsConfig === "object"
+        ? (ws.customFieldsConfig as Record<string, unknown>)
         : {};
     const mctb =
-      settings.mctb && typeof settings.mctb === "object"
-        ? (settings.mctb as Record<string, unknown>)
+      customCfg.mctb && typeof customCfg.mctb === "object"
+        ? (customCfg.mctb as Record<string, unknown>)
         : {};
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
-        settingsJson: {
-          ...settings,
+        customFieldsConfig: {
+          ...customCfg,
           mctb: {
             ...mctb,
             ...(body.consentMode ? { consentMode: body.consentMode } : {}),
@@ -225,7 +226,7 @@ export async function POST(req: Request) {
               ? { replyNotifications: body.replyNotifications }
               : {}),
           },
-        } as object,
+        },
       },
     });
   }

@@ -33,7 +33,7 @@ function SignupForm() {
   const router = useRouter();
   const params = useSearchParams();
   const productNext = voiceProductNext(params.get("product"));
-  const nextPath = params.get("next") || productNext || (numbersPlatformOnly ? "/personal" : "/hire");
+  const nextPath = params.get("next") || productNext || (numbersPlatformOnly ? "/personal" : "/onboarding/mctb");
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

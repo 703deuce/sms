@@ -22,12 +22,16 @@ export type QuickSendSmsInput = {
   idempotencyKey?: string;
   mediaUrls?: string[];
   senderPoolId?: string;
+  /** Skip messaging registration + credit gates for platform demo SMS. */
+  demoBypass?: boolean;
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
-  const entitlement = await checkCreditBalance(input.workspaceId);
-  if (!entitlement.ok) throw new Error(entitlement.error);
-  await assertWithinWorkspaceLimits(input.workspaceId);
+  if (!input.demoBypass) {
+    const entitlement = await checkCreditBalance(input.workspaceId);
+    if (!entitlement.ok) throw new Error(entitlement.error);
+    await assertWithinWorkspaceLimits(input.workspaceId);
+  }
 
   const to = normalizeE164(input.to);
   const prisma = getPrisma();
@@ -105,10 +109,28 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   }
 
   const reg = await getRegistrationByWorkspace(input.workspaceId);
-  if (!isMessagingReady(reg)) {
+  let sendWorkspaceId = input.workspaceId;
+  let activeReg = reg;
+
+  if (input.demoBypass) {
+    const demoWorkspaceId = process.env.PLATFORM_MCTB_DEMO_WORKSPACE_ID?.trim();
+    if (demoWorkspaceId) {
+      const demoReg = await getRegistrationByWorkspace(demoWorkspaceId);
+      if (demoReg) {
+        sendWorkspaceId = demoWorkspaceId;
+        activeReg = demoReg;
+      }
+    }
+  }
+
+  if (!input.demoBypass && !isMessagingReady(reg)) {
     throw new Error(
       "SMS is blocked until messaging registration is ready (Brand APPROVED, A2P VERIFIED, number attached).",
     );
+  }
+
+  if (input.demoBypass && !isMessagingReady(activeReg) && !input.from) {
+    throw new Error("Platform demo messaging is not configured.");
   }
 
   const trackingToken = randomTrackingToken();
@@ -144,7 +166,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         workspaceId: input.workspaceId,
         campaignId: input.campaignId,
         to,
-        from: poolFrom || reg!.phoneE164 || input.from || "messaging_service",
+        from: poolFrom || activeReg?.phoneE164 || input.from || "messaging_service",
         body: finalBody,
         status: "sending",
         providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
@@ -187,7 +209,13 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   let providerSid: string | null = null;
 
   try {
-    const result = await sendViaRegistration(input.workspaceId, to, finalBody, input.mediaUrls, poolFrom);
+    const result = await sendViaRegistration(
+      sendWorkspaceId,
+      to,
+      finalBody,
+      input.mediaUrls,
+      poolFrom || input.from,
+    );
     providerAccepted = true;
     providerSid = result.sid;
 
@@ -222,7 +250,9 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     }
 
     try {
-      await deductCreditsForSend(input.workspaceId, 1, "Quick SMS send");
+      if (!input.demoBypass) {
+        await deductCreditsForSend(input.workspaceId, 1, "Quick SMS send");
+      }
     } catch (creditErr) {
       console.warn("[sendQuickSms] credit deduction failed", pending.id, creditErr);
     }

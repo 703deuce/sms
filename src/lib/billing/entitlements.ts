@@ -39,6 +39,9 @@ export async function checkCreditBalance(workspaceId: string): Promise<Entitleme
   if (plan === "suspended") {
     return { ok: false, error: "Workspace billing is suspended" };
   }
+  if (plan === "onboarding") {
+    return { ok: true };
+  }
   if (plan === "trial_pending_card" && !workspace.stripeCustomerId && process.env.STRIPE_SECRET_KEY?.trim()) {
     return {
       ok: false,
