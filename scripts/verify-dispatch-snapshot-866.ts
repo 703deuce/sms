@@ -90,6 +90,5 @@ async function main() {
 
 main().catch((err) => {
   console.error("\nFAIL —", err instanceof Error ? err.message : err);
-  console.error("\nNext: redeploy web + Python worker, then republish agent #2 via publishVoiceAgent.");
   process.exit(1);
 });
