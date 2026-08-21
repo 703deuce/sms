@@ -10,6 +10,7 @@ import {
   Settings,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import { buildReceptionistNavChildren } from "@/lib/solutions-nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
@@ -36,7 +37,12 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       sectionLabel: "Main",
     },
     { label: "Calls", href: "/voice/calls", icon: PhoneCall, emphasize: true },
-    { label: "Receptionist", href: receptionistHref, icon: AudioLines },
+    {
+      label: "Receptionist",
+      href: receptionistHref,
+      icon: AudioLines,
+      children: buildReceptionistNavChildren(agentId),
+    },
     { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
     {
       label: "Numbers",

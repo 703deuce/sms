@@ -146,10 +146,7 @@ function bestExpandedKey(
       score = Math.max(score, base);
     }
 
-    if (
-      item.href === "/voice/receptionist" &&
-      isReceptionistSectionPath(pathname)
-    ) {
+    if (item.label === "Receptionist" && isReceptionistSectionPath(pathname)) {
       score = Math.max(score, 60_000);
     }
 
@@ -387,7 +384,7 @@ export function Sidebar({
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
           const receptionistOwned =
-            item.label === "AI Receptionist" && isReceptionistSectionPath(pathname);
+            item.label === "Receptionist" && isReceptionistSectionPath(pathname);
           const callsOwned =
             item.label === "Calls" &&
             (pathname === "/voice/calls" || pathname.startsWith("/voice/calls/"));

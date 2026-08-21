@@ -60,7 +60,7 @@ export function buildSmartRoutingNavChildren(flowId?: string | null) {
   ];
 }
 
-/** Legacy receptionist submenu — hidden from primary launch sidebar. */
+/** Receptionist submenu under the primary launch sidebar. */
 export function buildReceptionistNavChildren(agentId?: string | null) {
   const landing = "/voice/receptionist";
   const agentsList = "/voice/agents";
