@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
@@ -36,23 +37,27 @@ class CallObservability:
 
     async def mark_bootstrap_complete(self) -> None:
         self._bootstrap_ms = int((time.perf_counter() - self._job_started_at) * 1000)
-        await self._record(
-            "bootstrap_complete",
-            metrics={
-                "bootstrapMs": self._bootstrap_ms,
-                "agentTemplate": self._template_id,
-            },
+        asyncio.create_task(
+            self._record(
+                "bootstrap_complete",
+                metrics={
+                    "bootstrapMs": self._bootstrap_ms,
+                    "agentTemplate": self._template_id,
+                },
+            ),
         )
 
     async def mark_worker_ready(self) -> None:
         self._worker_ready_ms = int((time.perf_counter() - self._job_started_at) * 1000)
-        await self._record(
-            "worker_ready",
-            metrics={
-                "bootstrapMs": self._bootstrap_ms,
-                "workerReadyMs": self._worker_ready_ms,
-                "agentTemplate": self._template_id,
-            },
+        asyncio.create_task(
+            self._record(
+                "worker_ready",
+                metrics={
+                    "bootstrapMs": self._bootstrap_ms,
+                    "workerReadyMs": self._worker_ready_ms,
+                    "agentTemplate": self._template_id,
+                },
+            ),
         )
 
     async def mark_first_agent_response(self, *, source: str) -> None:
@@ -65,15 +70,17 @@ class CallObservability:
             user_to_agent_ms = int(
                 (self._first_agent_response_at - self._first_user_speech_at) * 1000,
             )
-        await self._record(
-            "first_agent_response",
-            metrics={
-                "firstAgentResponseMs": response_ms,
-                "userToAgentResponseMs": user_to_agent_ms,
-                "responseSource": source,
-                "agentTemplate": self._template_id,
-            },
-            latency_ms=response_ms,
+        asyncio.create_task(
+            self._record(
+                "first_agent_response",
+                metrics={
+                    "firstAgentResponseMs": response_ms,
+                    "userToAgentResponseMs": user_to_agent_ms,
+                    "responseSource": source,
+                    "agentTemplate": self._template_id,
+                },
+                latency_ms=response_ms,
+            ),
         )
 
     async def record_tool_call(

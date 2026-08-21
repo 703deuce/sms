@@ -17,6 +17,10 @@ import {
   getLiveKitAgentTemplateFromAdvanced,
   normalizeAgentTemplateId,
 } from "@/lib/voice/templates/agent-template-config";
+import {
+  isLabLiveKitTemplate,
+  slimReceptionistCompiledForBootstrap,
+} from "@/lib/voice/python-runtime-bridge/bootstrap-payload";
 import type { PythonRuntimeBootstrapInput, PythonRuntimeBootstrapResult, PythonRuntimeError } from "./types";
 
 function parseJobMetadata(raw: PythonRuntimeBootstrapInput["jobMetadata"]): Record<string, unknown> | null {
@@ -125,11 +129,16 @@ export async function bootstrapInboundForPython(
     undefined;
 
   const { loadVoiceAgentConfigForCall } = await import("@/lib/voice/real-estate/publish");
-  const loaded = await loadVoiceAgentConfigForCall({
-    workspaceId: routing.workspaceId,
-    agentId: routing.agentId,
-    agentVersionId: pinnedVersionId,
-  });
+  const [loaded, sipOutboundTrunkId] = await Promise.all([
+    loadVoiceAgentConfigForCall({
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      agentVersionId: pinnedVersionId,
+    }),
+    resolvePlatformOutboundTrunkId({
+      callerIdE164: normalizedTo || routing.e164 || null,
+    }),
+  ]);
 
   const agentConfig = loaded.config;
   const advanced = agentConfig.advanced as Record<string, unknown> | undefined;
@@ -156,6 +165,11 @@ export async function bootstrapInboundForPython(
 
   const realtimeAdvanced = advanced?.realtime as Record<string, unknown> | undefined;
   const calendarAdvanced = advanced?.calendar as Record<string, unknown> | undefined;
+  const useSlimBootstrap = isLabLiveKitTemplate(agentTemplate);
+  const bootstrapCompiled =
+    receptionistCompiled && useSlimBootstrap
+      ? slimReceptionistCompiledForBootstrap(receptionistCompiled)
+      : receptionistCompiled;
 
   return {
     ok: true,
@@ -179,8 +193,8 @@ export async function bootstrapInboundForPython(
     agentTemplate,
     agentTemplateVersion: "1",
     runtime: "livekit_python",
-    receptionistCompiled: receptionistCompiled || undefined,
-    compiledPrompt: receptionistCompiled?.compiledPrompt,
+    receptionistCompiled: bootstrapCompiled || undefined,
+    compiledPrompt: useSlimBootstrap ? undefined : receptionistCompiled?.compiledPrompt,
     greeting: receptionistCompiled?.greeting,
     realtimeModel:
       (typeof realtimeAdvanced?.model === "string" && realtimeAdvanced.model) ||
@@ -194,9 +208,7 @@ export async function bootstrapInboundForPython(
       typeof realtimeAdvanced?.speed === "number" ? realtimeAdvanced.speed : undefined,
     eventTypeUri:
       typeof calendarAdvanced?.eventTypeUri === "string" ? calendarAdvanced.eventTypeUri : null,
-    sipOutboundTrunkId: await resolvePlatformOutboundTrunkId({
-      callerIdE164: normalizedTo || routing.e164 || null,
-    }),
+    sipOutboundTrunkId,
     sipCallerIdE164: normalizedTo || routing.e164 || null,
   };
 }

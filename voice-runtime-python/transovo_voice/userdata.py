@@ -63,6 +63,8 @@ class ReceptionistCompiled:
     field_manifest: list[ManifestField]
     capabilities: list[str] = field(default_factory=list)
     transfer_policy: TransferPolicy | None = None
+    agent_job_instructions: str = ""
+    business_description: str = ""
 
 
 @dataclass

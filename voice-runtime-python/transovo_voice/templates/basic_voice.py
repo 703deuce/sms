@@ -9,7 +9,7 @@ from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.templates.session_factory import build_realtime_session
 from transovo_voice.templates.template_context import (
     build_template_instructions,
-    resolve_greeting_instructions,
+    deliver_template_greeting,
 )
 from transovo_voice.userdata import SessionUserData
 
@@ -46,14 +46,12 @@ class BasicVoiceAgent(Agent):
     async def on_enter(self) -> None:
         if self._observability is not None:
             await self._observability.mark_worker_ready()
-        await self.session.generate_reply(
-            instructions=resolve_greeting_instructions(
-                self._ud,
-                fallback="Greet the caller briefly and ask how you can help.",
-            ),
+        await deliver_template_greeting(
+            self.session,
+            self._ud,
+            fallback="Greet the caller briefly and ask how you can help.",
+            observability=self._observability,
         )
-        if self._observability is not None:
-            await self._observability.mark_first_agent_response(source="greeting")
 
     @function_tool
     async def lookup_weather(

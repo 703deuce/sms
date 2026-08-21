@@ -18,7 +18,7 @@ def resolve_realtime_voice(configured: str | None) -> str:
 
 
 def resolve_semantic_vad() -> SemanticVad:
-    eagerness_raw = (os.getenv("VOICE_REALTIME_VAD_EAGERNESS", "medium")).strip().lower()
+    eagerness_raw = (os.getenv("VOICE_REALTIME_VAD_EAGERNESS", "high")).strip().lower()
     if eagerness_raw not in {"low", "medium", "high", "auto"}:
         eagerness_raw = "medium"
     interrupt = os.getenv("VOICE_REALTIME_INTERRUPT_RESPONSE", "1").strip().lower()

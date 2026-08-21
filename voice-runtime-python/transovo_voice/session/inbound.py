@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -70,6 +71,8 @@ def _userdata_from_bootstrap(data: dict[str, Any]) -> SessionUserData:
         field_manifest=_parse_manifest(manifest_raw if isinstance(manifest_raw, list) else []),
         capabilities=capabilities,
         transfer_policy=transfer_policy,
+        agent_job_instructions=str(compiled_raw.get("agentJobInstructions") or ""),
+        business_description=str(compiled_raw.get("businessDescription") or ""),
     )
     return SessionUserData(
         workspace_id=str(data["workspaceId"]),
@@ -104,6 +107,16 @@ def _prefill_caller_phone(ud: SessionUserData) -> None:
         manifest = {"id": field.id, "label": field.label, "type": field.type}
         if is_phone_field(manifest) and not ud.collected_fields.get(field.id, "").strip():
             ud.collected_fields[field.id] = ud.caller_e164
+
+
+def _fire_backend_call(backend: TransovoBackend, action: str, payload: dict[str, Any]) -> None:
+    async def _send() -> None:
+        try:
+            await backend.call(action, payload)
+        except Exception as err:
+            logger.warning("background backend action=%s failed: %s", action, err)
+
+    asyncio.create_task(_send())
 
 
 async def run_inbound_session(ctx: JobContext) -> None:
@@ -175,7 +188,8 @@ async def run_inbound_session(ctx: JobContext) -> None:
         },
     )
 
-    await backend.call(
+    _fire_backend_call(
+        backend,
         "emit_event",
         {
             "workspaceId": ud.workspace_id,
@@ -192,7 +206,8 @@ async def run_inbound_session(ctx: JobContext) -> None:
 
     _prefill_caller_phone(ud)
 
-    persisted = await backend.call(
+    _fire_backend_call(
+        backend,
         "persist_intake_fields",
         {
             "workspaceId": ud.workspace_id,
@@ -202,7 +217,5 @@ async def run_inbound_session(ctx: JobContext) -> None:
             "purpose": "booking",
         },
     )
-    if persisted.get("ok") and persisted.get("fields"):
-        ud.collected_fields = dict(persisted["fields"])
 
     await run_template(ctx, ud, backend, template_id=template_id, observability=observability)

@@ -14,7 +14,7 @@ from transovo_voice.session.telephony_audio import build_telephony_room_options
 from transovo_voice.templates.session_factory import build_realtime_session
 from transovo_voice.templates.template_context import (
     build_template_instructions,
-    resolve_greeting_instructions,
+    deliver_template_greeting,
 )
 from transovo_voice.userdata import SessionUserData
 
@@ -120,14 +120,12 @@ class FrontDeskBookingAgent(Agent):
     async def on_enter(self) -> None:
         if self._observability is not None:
             await self._observability.mark_worker_ready()
-        await self.session.generate_reply(
-            instructions=resolve_greeting_instructions(
-                self._ud,
-                fallback="Welcome the caller and invite them to book an appointment.",
-            ),
+        await deliver_template_greeting(
+            self.session,
+            self._ud,
+            fallback="Welcome the caller and invite them to book an appointment.",
+            observability=self._observability,
         )
-        if self._observability is not None:
-            await self._observability.mark_first_agent_response(source="greeting")
 
     @function_tool
     async def get_current_time(self) -> str:
