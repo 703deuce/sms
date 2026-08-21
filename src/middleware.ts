@@ -3,7 +3,8 @@ import {
   parseProductAccessCookie,
   PRODUCT_ACCESS_COOKIE,
 } from "@/lib/products/entitlements";
-import { productAccessDeniedRedirect } from "@/lib/products/routing";
+import { productAccessDeniedRedirect, SMS_PREVIEW_ACCESS } from "@/lib/products/routing";
+import { isSmsProductPath } from "@/lib/products/paths";
 import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
@@ -219,9 +220,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     if (wsType === "PERSONAL" && isBusinessOnlyPath(pathname)) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/personal";
-      return NextResponse.redirect(url);
+      if (SMS_PREVIEW_ACCESS && isSmsProductPath(pathname)) {
+        // Allow SMS preview while workspace cookie catches up after /api/products/open.
+      } else {
+        const url = request.nextUrl.clone();
+        url.pathname = "/personal";
+        return NextResponse.redirect(url);
+      }
     }
     if (
       !isNumbersPlatformOnlyLaunch() &&

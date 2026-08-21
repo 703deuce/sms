@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Hash, MessageSquare, ArrowRight } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getUserProductAccess } from "@/lib/products/entitlements";
-import { productHomePath } from "@/lib/products/types";
 import { redirect } from "next/navigation";
 
 export default async function ProductLauncherPage() {
@@ -27,15 +26,19 @@ export default async function ProductLauncherPage() {
           icon={<MessageSquare className="h-6 w-6" />}
           title="Transovo SMS"
           description="Business texting, campaigns, automations, and customer conversations."
-          href={hasSms ? productHomePath("sms") : "/sms-marketing"}
-          actionLabel={hasSms ? "Open SMS" : "Explore SMS"}
+          href="/api/products/open?product=sms"
+          actionLabel="Open SMS"
           entitled={hasSms}
         />
         <ProductCard
           icon={<Hash className="h-6 w-6" />}
           title="Transovo Numbers"
           description="Find, manage, forward, vault, and transfer your phone numbers."
-          href={hasNumbers ? productHomePath("numbers") : "/personal/numbers/premium"}
+          href={
+            hasNumbers
+              ? "/api/products/open?product=numbers"
+              : "/personal/numbers/premium"
+          }
           actionLabel={hasNumbers ? "Open Numbers" : "Find a Number"}
           entitled={hasNumbers}
         />

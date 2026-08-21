@@ -6,6 +6,7 @@ import {
   prismaProductKeyToApp,
   productOfferPath,
 } from "@/lib/products/paths";
+import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
 export const PRODUCT_ACCESS_COOKIE = "transovo_product_access";
@@ -193,6 +194,38 @@ export async function resolveWorkspaceForProduct(
   return {
     workspaceId: match.workspaceId,
     workspaceType: match.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+  };
+}
+
+/** Ensure the user has a workspace for the requested product (creates one if missing). */
+export async function ensureProductWorkspace(
+  userId: string,
+  product: ProductKey,
+): Promise<{ workspaceId: string; workspaceType: WorkspaceType }> {
+  const prisma = getPrisma();
+  const preferredType: WorkspaceType = product === "numbers" ? "PERSONAL" : "BUSINESS";
+  const existing = await prisma.membership.findFirst({
+    where: { userId, workspace: { type: preferredType } },
+    include: { workspace: { select: { id: true, type: true } } },
+  });
+
+  if (existing) {
+    await ensureWorkspaceEntitlements(existing.workspaceId);
+    return {
+      workspaceId: existing.workspaceId,
+      workspaceType: existing.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+    };
+  }
+
+  const workspace = await createWorkspaceForUser(
+    userId,
+    product === "numbers" ? "Personal" : "Business",
+    preferredType,
+  );
+  await ensureWorkspaceEntitlements(workspace.id);
+  return {
+    workspaceId: workspace.id,
+    workspaceType: preferredType,
   };
 }
 

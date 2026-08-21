@@ -7,6 +7,9 @@ import { activeProductKeys } from "@/lib/products/entitlements";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
 
+/** Temporary testing flag — authenticated users can browse SMS without entitlement. */
+export const SMS_PREVIEW_ACCESS = true;
+
 function isSafeNextPath(next: string | null | undefined): next is string {
   if (!next?.trim()) return false;
   if (!next.startsWith("/") || next.startsWith("//")) return false;
@@ -51,6 +54,9 @@ export function productAccessDeniedRedirect(
   pathname: string,
   access: Pick<UserProductAccess, "hasSms" | "hasNumbers">,
 ): string | null {
+  if (SMS_PREVIEW_ACCESS && isSmsProductPath(pathname) && !access.hasSms) {
+    return null;
+  }
   if (isSmsProductPath(pathname) && !access.hasSms) {
     return productOfferPath("sms");
   }

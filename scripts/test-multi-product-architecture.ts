@@ -17,7 +17,7 @@ import {
   isSmsProductPath,
   resolveProductFromPath,
 } from "@/lib/products/paths";
-import { resolvePostLoginPath } from "@/lib/products/routing";
+import { resolvePostLoginPath, productAccessDeniedRedirect } from "@/lib/products/routing";
 import type { UserProductAccess } from "@/lib/products/types";
 
 function access(partial: Partial<UserProductAccess> & Pick<UserProductAccess, "hasSms" | "hasNumbers">): UserProductAccess {
@@ -95,5 +95,16 @@ assert.ok(!smsLabels.includes("AI Agents"), "AI Agents hidden from SMS nav for n
 assert.equal(smsNav.length, 10, "SMS sidebar ships 10 items");
 assert.equal(SMS_SIDEBAR_HREFS.length, 10);
 assert.ok(SMS_CREATE_ACTIONS.length >= 5, "Create menu has primary actions");
+
+assert.equal(
+  productAccessDeniedRedirect("/dashboard", { hasSms: false, hasNumbers: true }),
+  null,
+  "SMS preview allows dashboard without entitlement",
+);
+assert.equal(
+  productAccessDeniedRedirect("/personal/vault", { hasSms: true, hasNumbers: false }),
+  "/personal/numbers/premium",
+  "Numbers paths still gate without entitlement",
+);
 
 console.log("test-multi-product-architecture: all checks passed");
