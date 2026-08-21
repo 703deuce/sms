@@ -9,6 +9,7 @@ import { requiresLiveKitVoiceRuntime } from "@/lib/voice/architecture/livekit-vo
 import { TRANSOVO_LIVEKIT_AGENT_NAME } from "@/lib/telephony/provisioning/config";
 import { requireLiveKitEnv } from "@/lib/voice/runtime-provider/config";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
+import { normalizeAgentTemplateId } from "@/lib/voice/templates/agent-template-config";
 import type { TestSessionResult } from "./test-session";
 
 const BROWSER_ROOM_PREFIX =
@@ -60,7 +61,7 @@ export async function createLiveKitBrowserTestSession(input: {
     dispatchSource: "job_metadata" as const,
     livekitProfile: "frontdesk_realtime",
     browserTest: true,
-    agentTemplate: input.agentTemplate || "livekit_basic_voice",
+    agentTemplate: normalizeAgentTemplateId(input.agentTemplate),
     runtime: "livekit_python",
   };
 

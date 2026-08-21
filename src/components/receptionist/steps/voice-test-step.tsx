@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentTemplateSelect } from "@/components/receptionist/agent-template-select";
 import { LiveKitBrowserCall } from "@/components/receptionist/livekit-browser-call";
 import { PhoneNumberSelect } from "@/components/receptionist/phone-number-select";
 import {
@@ -182,6 +183,17 @@ export function VoiceTestStep({
               </p>
             </WizardAccordionSection>
           ) : null}
+
+          <WizardAccordionSection number={onPhoneChange ? 4 : 3} title="LiveKit agent template">
+            <AgentTemplateSelect
+              value={state.livekitAgentTemplate}
+              onChange={(livekitAgentTemplate) => patch({ livekitAgentTemplate })}
+            />
+            <p className="mt-2 text-xs text-[#6b7280]">
+              Pick hotel, booking, intake, or another verified template. This is the agent runtime
+              used for browser tests and when you activate this receptionist to a phone number.
+            </p>
+          </WizardAccordionSection>
         </div>
 
         {/* Column 2 — phone mockup (center) */}
@@ -220,7 +232,11 @@ export function VoiceTestStep({
           </div>
           {state.agentId ? (
             <div className="mt-4 w-full max-w-[300px] voice-card p-4">
-              <LiveKitBrowserCall agentId={state.agentId} voiceLabel={state.voiceLabel} />
+              <LiveKitBrowserCall
+                agentId={state.agentId}
+                voiceLabel={state.voiceLabel}
+                agentTemplate={state.livekitAgentTemplate}
+              />
             </div>
           ) : null}
           <p className="mt-3 max-w-[300px] text-center text-[11px] text-[#6b7280]">

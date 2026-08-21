@@ -25,6 +25,7 @@ import {
 } from "./dispatch-metadata";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { livekitProfileFromConfig } from "@/lib/voice/frontdesk/agent-config";
+import { getLiveKitAgentTemplateFromAdvanced } from "@/lib/voice/templates/agent-template-config";
 import {
   ensureTelnyxLiveKitFqdnConnection,
   routeTelnyxNumberToConnection,
@@ -118,6 +119,9 @@ async function buildDispatchMetadataForAgent(input: {
     agentId: input.agentId,
     publishedVersionId: agent?.publishedVersionId,
     livekitProfile: livekitProfileFromConfig(config.advanced as Record<string, unknown>),
+    agentTemplate: getLiveKitAgentTemplateFromAdvanced(
+      config.advanced as Record<string, unknown>,
+    ),
     toE164: input.toE164,
     dispatchSource: "phone_provision",
   });

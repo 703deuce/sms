@@ -12,6 +12,10 @@ import {
 } from "@/lib/voice/receptionist/compile";
 import { collectFieldIdsFromRows } from "@/lib/voice/receptionist/field-manifest";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import {
+  LIVEKIT_AGENT_TEMPLATE_KEY,
+  normalizeAgentTemplateId,
+} from "@/lib/voice/templates/agent-template-config";
 import { useCallback, useEffect, useState } from "react";
 
 export function useReceptionistAgentState(agentId: string) {
@@ -166,6 +170,7 @@ export function useReceptionistAgentState(agentId: string) {
           vadThreshold: next.vadThreshold,
           vadSilenceMs: next.vadSilenceMs,
           vadPrefixMs: next.vadPrefixMs,
+          livekitAgentTemplate: normalizeAgentTemplateId(next.livekitAgentTemplate),
         },
         realtimeVad: {
           threshold: next.vadThreshold,
@@ -209,6 +214,7 @@ export function useReceptionistAgentState(agentId: string) {
         advanced: {
           ...(merged.advanced as object),
           ...advancedBlock,
+          [LIVEKIT_AGENT_TEMPLATE_KEY]: normalizeAgentTemplateId(next.livekitAgentTemplate),
         },
       };
       const patchRes = await fetch(`/api/voice/agents/${agentId}`, {

@@ -11,6 +11,8 @@ export const roomMetadataSchema = z.object({
   publishedVersionId: z.string().min(1).optional(),
   /** frontdesk | frontdesk_realtime | outbound_* — explicit dispatch hint. */
   livekitProfile: z.string().optional(),
+  /** LiveKit Python template id (livekit_basic_voice, livekit_hotel_receptionist, …). */
+  agentTemplate: z.string().optional(),
   dispatchSource: z
     .enum(["phone_provision", "sip_metadata", "job_metadata", "did_lookup"])
     .optional(),
@@ -45,6 +47,7 @@ export function parseDispatchAttributes(attrs: Record<string, string>): RoomMeta
     callId: attrs.callId,
     publishedVersionId: attrs.publishedVersionId,
     livekitProfile: attrs.livekitProfile,
+    agentTemplate: attrs.agentTemplate,
     dispatchSource: attrs.dispatchSource as RoomMetadata["dispatchSource"],
   });
 }

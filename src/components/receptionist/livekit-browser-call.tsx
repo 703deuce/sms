@@ -20,9 +20,11 @@ type LiveKitTestSession = {
 export function LiveKitBrowserCall({
   agentId,
   voiceLabel,
+  agentTemplate,
 }: {
   agentId: string;
   voiceLabel?: string;
+  agentTemplate?: string;
 }) {
   const [phase, setPhase] = useState<"idle" | "connecting" | "connected" | "ended" | "failed">(
     "idle",
@@ -53,7 +55,10 @@ export function LiveKitBrowserCall({
       const sessionRes = await fetch(`/api/voice/agents/${agentId}/test-session`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sync: false }),
+        body: JSON.stringify({
+          sync: false,
+          agentTemplate: agentTemplate || undefined,
+        }),
       });
       const sessionJson = await sessionRes.json();
       if (!sessionRes.ok) {

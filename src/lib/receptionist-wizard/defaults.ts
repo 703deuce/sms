@@ -1,5 +1,6 @@
 import type { ReceptionistWizardState } from "./types";
 import { CAPABILITY_OPTIONS } from "./types";
+import { DEFAULT_ACTIVE_TEMPLATE } from "@/lib/voice/templates/catalog";
 import {
   DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
   getReceptionistElevenLabsVoice,
@@ -54,6 +55,7 @@ export function createDefaultWizardState(): ReceptionistWizardState {
     vadThreshold: 0.65,
     vadSilenceMs: 500,
     vadPrefixMs: 300,
+    livekitAgentTemplate: DEFAULT_ACTIVE_TEMPLATE,
   };
 }
 

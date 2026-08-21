@@ -21,6 +21,7 @@ export type TelephonyProvisionRecord = {
     agentId?: string;
     publishedVersionId?: string;
     livekitProfile?: string;
+    agentTemplate?: string;
     updatedAt?: string;
   };
   lastProvisionedAt?: string;

@@ -8,6 +8,10 @@ import type {
   CollectFieldId,
   ReceptionistWizardState,
 } from "./types";
+import {
+  getLiveKitAgentTemplateFromAdvanced,
+  normalizeAgentTemplateId,
+} from "@/lib/voice/templates/agent-template-config";
 
 const CAPABILITY_MAP: Record<string, CapabilityId> = {
   answer_questions: "answer_questions",
@@ -145,6 +149,11 @@ export function wizardStateFromDraftConfig(
             Number.isFinite(advancedVad.prefixPaddingMs)
           ? advancedVad.prefixPaddingMs
           : base.vadPrefixMs,
+    livekitAgentTemplate: normalizeAgentTemplateId(
+      typeof wiz?.livekitAgentTemplate === "string"
+        ? wiz.livekitAgentTemplate
+        : getLiveKitAgentTemplateFromAdvanced(cfg.advanced as Record<string, unknown> | undefined),
+    ),
   };
 }
 

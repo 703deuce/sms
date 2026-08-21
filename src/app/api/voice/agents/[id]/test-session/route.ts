@@ -22,6 +22,7 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as {
       sync?: boolean;
       testVariables?: Record<string, string>;
+      agentTemplate?: string;
     };
 
     const result = await createVoiceTestSession({
@@ -30,6 +31,7 @@ export async function POST(
       agentId,
       sync: body.sync !== false,
       testVariables: body.testVariables,
+      agentTemplate: body.agentTemplate,
     });
 
     if (!result.ok) {

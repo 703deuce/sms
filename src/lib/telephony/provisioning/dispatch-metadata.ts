@@ -1,11 +1,13 @@
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { livekitProfileFromConfig } from "@/lib/voice/frontdesk/agent-config";
+import { getLiveKitAgentTemplateFromAdvanced } from "@/lib/voice/templates/agent-template-config";
 import type { RoomMetadata } from "./metadata";
 
 export type ExplicitDispatchMetadata = RoomMetadata & {
   livekitProfile?: string;
   publishedVersionId?: string;
+  agentTemplate?: string;
   dispatchSource?: "phone_provision" | "sip_metadata" | "job_metadata" | "did_lookup";
 };
 
@@ -14,6 +16,7 @@ export function buildExplicitDispatchMetadata(input: {
   agentId: string;
   publishedVersionId?: string | null;
   livekitProfile?: string | null;
+  agentTemplate?: string | null;
   fromE164?: string | null;
   toE164?: string | null;
   dispatchSource: ExplicitDispatchMetadata["dispatchSource"];
@@ -23,6 +26,7 @@ export function buildExplicitDispatchMetadata(input: {
     agentId: input.agentId,
     publishedVersionId: input.publishedVersionId || undefined,
     livekitProfile: input.livekitProfile || undefined,
+    agentTemplate: input.agentTemplate || undefined,
     fromE164: input.fromE164 || undefined,
     toE164: input.toE164 || undefined,
     dispatchSource: input.dispatchSource,
@@ -65,6 +69,7 @@ export async function loadExplicitDispatchForDid(
           ? String(row.publishedVersionId)
           : undefined,
         livekitProfile: row.livekitProfile ? String(row.livekitProfile) : undefined,
+        agentTemplate: row.agentTemplate ? String(row.agentTemplate) : undefined,
         toE164: phone.e164,
         dispatchSource: "phone_provision",
       };
@@ -87,6 +92,9 @@ export async function loadExplicitDispatchForDid(
     agentId: assignment.id,
     publishedVersionId: assignment.publishedVersionId,
     livekitProfile: livekitProfileFromConfig(config.advanced as Record<string, unknown>),
+    agentTemplate: getLiveKitAgentTemplateFromAdvanced(
+      config.advanced as Record<string, unknown>,
+    ),
     toE164: phone.e164,
     dispatchSource: "did_lookup",
   });
@@ -109,6 +117,9 @@ export function mergeExplicitDispatchMetadata(
     if ("livekitProfile" in source && source.livekitProfile) {
       merged.livekitProfile = source.livekitProfile;
     }
+    if ("agentTemplate" in source && source.agentTemplate) {
+      merged.agentTemplate = source.agentTemplate;
+    }
     if ("dispatchSource" in source && source.dispatchSource) {
       merged.dispatchSource = source.dispatchSource;
     }
@@ -126,6 +137,7 @@ export function explicitDispatchPatchForPhoneSettings(
       agentId: metadata.agentId,
       publishedVersionId: metadata.publishedVersionId,
       livekitProfile: metadata.livekitProfile,
+      agentTemplate: metadata.agentTemplate,
       updatedAt: new Date().toISOString(),
     },
   };

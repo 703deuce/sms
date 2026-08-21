@@ -64,6 +64,8 @@ export async function createVoiceTestSession(input: {
   /** When true, sync full assistant + enable web calls before returning. */
   sync?: boolean;
   testVariables?: Record<string, string>;
+  /** Override LiveKit Python template for browser test. */
+  agentTemplate?: string;
 }): Promise<TestSessionResult> {
   const rateKey = `${input.workspaceId}:${input.userId}`;
   if (!rateOk(rateKey)) {
@@ -97,10 +99,17 @@ export async function createVoiceTestSession(input: {
   );
   if (requiresLiveKitVoiceRuntime({ ...draftConfig, agentType: agent.agentType })) {
     const { createLiveKitBrowserTestSession } = await import("./livekit-browser-test-session");
+    const { getLiveKitAgentTemplateFromAdvanced, normalizeAgentTemplateId } = await import(
+      "@/lib/voice/templates/agent-template-config"
+    );
+    const configuredTemplate = getLiveKitAgentTemplateFromAdvanced(
+      draftConfig.advanced as Record<string, unknown>,
+    );
     return createLiveKitBrowserTestSession({
       workspaceId: input.workspaceId,
       userId: input.userId,
       agentId: input.agentId,
+      agentTemplate: normalizeAgentTemplateId(input.agentTemplate || configuredTemplate),
     });
   }
 

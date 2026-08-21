@@ -55,6 +55,8 @@ export type ReceptionistWizardState = {
   vadSilenceMs: number;
   /** Audio padding (ms) before detected speech start. */
   vadPrefixMs: number;
+  /** LiveKit Python template id — controls inbound + browser test runtime. */
+  livekitAgentTemplate: string;
   agentId?: string;
 };
 

@@ -13,6 +13,10 @@ import {
 } from "@/lib/telephony/provisioning/metadata";
 import { resolvePlatformOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { loadExplicitDispatchForDid, mergeExplicitDispatchMetadata } from "@/lib/telephony/provisioning";
+import {
+  getLiveKitAgentTemplateFromAdvanced,
+  normalizeAgentTemplateId,
+} from "@/lib/voice/templates/agent-template-config";
 import type { PythonRuntimeBootstrapInput, PythonRuntimeBootstrapResult, PythonRuntimeError } from "./types";
 
 function parseJobMetadata(raw: PythonRuntimeBootstrapInput["jobMetadata"]): Record<string, unknown> | null {
@@ -141,9 +145,14 @@ export async function bootstrapInboundForPython(
     typeof jobMetaRaw?.agentTemplate === "string" ? jobMetaRaw.agentTemplate.trim() : "";
   const roomTemplate =
     typeof roomMeta?.agentTemplate === "string" ? roomMeta.agentTemplate.trim() : "";
+  const dispatchTemplate =
+    typeof explicit?.agentTemplate === "string" ? explicit.agentTemplate.trim() : "";
+  const configTemplate = getLiveKitAgentTemplateFromAdvanced(advanced);
   const envTemplate = process.env.VOICE_ACTIVE_TEMPLATE?.trim() || "";
   const defaultTemplate = "livekit_basic_voice";
-  const agentTemplate = jobTemplate || roomTemplate || envTemplate || defaultTemplate;
+  const agentTemplate = normalizeAgentTemplateId(
+    jobTemplate || roomTemplate || dispatchTemplate || envTemplate || configTemplate || defaultTemplate,
+  );
 
   const realtimeAdvanced = advanced?.realtime as Record<string, unknown> | undefined;
   const calendarAdvanced = advanced?.calendar as Record<string, unknown> | undefined;
