@@ -138,7 +138,11 @@ export function evaluatePass3StrictEvidence(evidence: Pass3Evidence): Pass3Stric
   );
 
   const missedCallSent = evidence.missedCallEvents.some(
-    (e) => e.status === "SENT" && isFrom571(e.businessE164),
+    (e) =>
+      isFrom571(e.businessE164) &&
+      (e.status === "SENT" ||
+        e.status === "CUSTOMER_REPLIED" ||
+        Boolean(e.smsSentAt)),
   );
 
   const existingAttestation = evidence.consentEvents.some(
@@ -455,7 +459,7 @@ export async function collectPass3Evidence(input: {
       body: m.body,
       providerMessageId: m.providerMessageId,
       createdAt: m.createdAt,
-      workspaceId: m.conversation.workspaceId,
+      workspaceId: m.conversation?.workspaceId ?? input.workspaceId,
     })),
     suppressions: suppressions.map((s) => ({ ...s, phone: maskPhone(s.phone) })),
     duplicateProviderIds,
