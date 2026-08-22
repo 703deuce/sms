@@ -63,12 +63,12 @@ def _safe_attrs(attrs: dict[str, str]) -> dict[str, str]:
     return out
 
 
+from transovo_voice.session.sip_forwarded_from import extract_forwarded_from_sip_attributes
+
+
 def _extract_forwarded(attrs: dict[str, str]) -> str | None:
-    for key, value in attrs.items():
-        lowered = key.lower()
-        if "diversion" in lowered or "forward" in lowered or "history-info" in lowered:
-            return str(value)[:300]
-    return None
+    forwarded, _ = extract_forwarded_from_sip_attributes(attrs)
+    return forwarded
 
 
 def derive_correlation_id(attrs: dict[str, str], *, room_name: str, job_id: str) -> str:

@@ -8,6 +8,8 @@ type VoiceRuntimeAction =
   | "bootstrap_inbound"
   | "resolve_dispatch_snapshot"
   | "capture_mctb_sip_inbound"
+  | "resolve_mctb_sip_session"
+  | "record_mctb_sip_press_1_consent"
   | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
   | "persist_intake_fields"
@@ -112,6 +114,22 @@ export async function POST(request: Request) {
           "@/lib/mctb/event-only/sip-capture"
         );
         result = await captureMctbSipInboundForPython(payload as never);
+        break;
+      }
+
+      case "resolve_mctb_sip_session": {
+        const { resolveMctbSipSessionForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-sip-session"
+        );
+        result = await resolveMctbSipSessionForPython(payload as never);
+        break;
+      }
+
+      case "record_mctb_sip_press_1_consent": {
+        const { recordMctbSipPress1ConsentForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-sip-session"
+        );
+        result = await recordMctbSipPress1ConsentForPython(payload as never);
         break;
       }
 
