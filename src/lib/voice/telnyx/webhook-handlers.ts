@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import type { Prisma } from "@/lib/domain";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
+import { parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 
 type TelnyxPayload = {
@@ -319,7 +320,7 @@ export async function processVoiceWebhookEvent(input: {
         fromE164: from,
         toE164: to,
         callControlId,
-        forwardedFrom: String(eventPayload.forwarded_from ?? ""),
+        forwardedFrom: parseTelnyxForwardedFrom(eventPayload),
       }).catch((err) => {
         console.error("[voice/webhook] tryStartSmartRoutingInbound", err);
         return { started: false as const };

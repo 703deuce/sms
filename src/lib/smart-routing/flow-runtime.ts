@@ -73,7 +73,7 @@ export async function executeNode(input: {
   try {
     switch (node.type) {
       case "ENTRY": {
-        await answerCall(controlId, input.sessionId);
+        await answerCall(controlId, input.sessionId).catch(() => undefined);
         nextId = nextNodeId(node, "always") ?? Object.values(node.edges)[0];
         break;
       }

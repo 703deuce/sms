@@ -26,6 +26,7 @@ import {
 } from "./record-by-phone-service";
 import type { SessionState } from "./types";
 import { emitSmartRoutingEvent } from "./events";
+import { answerCall } from "./telnyx-provider";
 
 export async function tryStartSmartRoutingInbound(input: {
   workspaceId: string;
@@ -37,6 +38,11 @@ export async function tryStartSmartRoutingInbound(input: {
 }) {
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
   if (!flow?.publishedVersionId) return { started: false as const };
+
+  // Carrier-forwarded PSTN legs (AT&T *61* → local DID) drop in ~1–2s unless we answer first.
+  if (input.callControlId) {
+    await answerCall(input.callControlId).catch(() => undefined);
+  }
 
   const prisma = getPrisma();
   const existing = await prisma.smartRoutingCallSession.findFirst({
