@@ -510,7 +510,7 @@ export function MctbSetupView() {
             )}
             <div className="flex flex-wrap gap-2">
               <Button
-                variant="default"
+                variant="primary"
                 disabled={!selectedNumber || saving}
                 onClick={() => {
                   void fetch("/api/mctb/setup-test", { method: "POST" })

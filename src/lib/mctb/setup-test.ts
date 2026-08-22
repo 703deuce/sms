@@ -154,7 +154,7 @@ export async function getMctbSetupTestStatus(workspaceId: string): Promise<MctbS
     orderBy: { createdAt: "asc" },
   });
 
-  const kinds = new Set(traces.map((t) => t.kind));
+  const kinds = new Set(traces.map((t: { kind: string }) => t.kind));
   const consentEvents = await prisma.smartRoutingSmsConsentEvent.findMany({
     where: {
       workspaceId,

@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   parseProductAccessCookie,
   PRODUCT_ACCESS_COOKIE,
-} from "@/lib/products/entitlements";
-import { productAccessDeniedRedirect } from "@/lib/products/routing";
+} from "@/lib/products/access-cookie";
+import { productAccessDeniedRedirect } from "@/lib/products/access-guards";
 import { isVoiceProductPath } from "@/lib/products/voice-routes";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 import {

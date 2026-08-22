@@ -3,8 +3,8 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import {
   loadMissedCallTextConfig,
-  type MissedCallTextConfigRecord,
 } from "@/lib/agents/missed-call-text-back/config";
+import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-back/types";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { loadMctbConsentPrompt } from "@/lib/mctb/consent-prompt/store";

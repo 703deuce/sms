@@ -14,7 +14,7 @@ export type ForwardingVerificationResult = {
   callerE164: string | null;
   businessLineE164: string | null;
   forwardedFromE164: string | null;
-  forwardTargetE164: string;
+  forwardTargetE164: string | null;
   path: ForwardingCallPath | null;
   /** True when From is not the business line (ANI likely preserved on forward). */
   aniLikelyPreserved: boolean | null;
@@ -70,6 +70,8 @@ export async function getForwardingVerificationStatus(
     aniLikelyPreserved: null,
     detectedAt: state.forwardingConnectedAt || null,
   };
+
+  if (!forwardTargetE164) return empty;
 
   if (!testStartedAt) return empty;
 

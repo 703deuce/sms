@@ -11,6 +11,12 @@ export type MctbTimelineStep = {
   detail?: Record<string, unknown>;
 };
 
+type MissedCallTextTraceRow = {
+  kind: string;
+  createdAt: Date;
+  detail: unknown;
+};
+
 const TRACE_LABELS: Record<string, string> = {
   "call.missed": "Call received",
   "mctb.eligibility.passed": "Eligible for recovery",
@@ -71,7 +77,7 @@ export async function buildMctbEventTimeline(missedCallEventId: string): Promise
       { suppressionReason: event.suppressionReason },
     );
   } else {
-    const consentTrace = traces.find((t) => t.kind.includes("consent"));
+    const consentTrace = traces.find((t: MissedCallTextTraceRow) => t.kind.includes("consent"));
     push(
       "call_answered",
       "Call answered by MCTB",

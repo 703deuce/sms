@@ -3,6 +3,11 @@ import { DbError } from "@/lib/supabase/prisma-compat";
 import type { ProductAccessStatus, ProductKey, UserProductAccess } from "@/lib/products/types";
 import { isActiveEntitlement } from "@/lib/products/types";
 import {
+  PRODUCT_ACCESS_COOKIE,
+  parseProductAccessCookie,
+  serializeProductAccessCookie,
+} from "@/lib/products/access-cookie";
+import {
   appProductKeyToPrisma,
   prismaProductKeyToApp,
   productOfferPath,
@@ -11,7 +16,11 @@ import { ensureMctbWorkspaceSeeded } from "@/lib/mctb/provisioning/seed-workspac
 import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
-export const PRODUCT_ACCESS_COOKIE = "transovo_product_access";
+export {
+  PRODUCT_ACCESS_COOKIE,
+  parseProductAccessCookie,
+  serializeProductAccessCookie,
+};
 
 function isProductEntitlementSchemaUnavailable(err: unknown): boolean {
   if (!(err instanceof DbError)) return false;
@@ -57,19 +66,6 @@ function prismaStatusToApp(status: string): ProductAccessStatus {
   const s = status.toLowerCase();
   if (s === "active" || s === "inactive" || s === "trial") return s;
   return "inactive";
-}
-
-/** Serialize active product keys for middleware cookie. */
-export function serializeProductAccessCookie(products: ProductKey[]): string {
-  return products.join(",");
-}
-
-export function parseProductAccessCookie(raw: string | undefined): ProductKey[] {
-  if (!raw?.trim()) return [];
-  return raw
-    .split(",")
-    .map((p) => p.trim().toLowerCase())
-    .filter((p): p is ProductKey => p === "sms" || p === "numbers" || p === "voice");
 }
 
 /** Infer default entitlements from workspace type when none exist yet. */
