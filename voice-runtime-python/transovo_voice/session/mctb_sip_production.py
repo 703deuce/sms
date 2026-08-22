@@ -6,7 +6,10 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from transovo_voice.session.sip_status import SIP_CALL_STATUS_ACTIVE
-from transovo_voice.session.sip_consent_audio import play_consent_audio_url
+from transovo_voice.session.sip_consent_audio import (
+    play_confirmation_audio_url,
+    play_consent_audio_url,
+)
 from transovo_voice.session.sip_dtmf import wait_for_sip_dtmf_digit
 from transovo_voice.session.sip_forwarded_from import extract_forwarded_from_sip_attributes
 from transovo_voice.session.sip_frozen_answer import run_frozen_sip_answer_sequence
@@ -147,6 +150,7 @@ async def run_mctb_sip_production_session(
             forwardedFromE164=session.get("forwardedFromE164"),
         )
 
+        press_1_completed = False
         if consent_mode == "existing_consent":
             capture = await _capture_existing_consent_event(
                 backend,
@@ -217,37 +221,98 @@ async def run_mctb_sip_production_session(
                 pressed = False
 
             if pressed:
-                consent_result = await _record_press_1_consent(
-                    backend,
-                    trace=trace,
-                    session=session,
-                    digit=str(session.get("consentDigit") or "1"),
+                consent_digit = str(session.get("consentDigit") or "1")
+                trace.log(
+                    "mctb_dtmf_validated",
+                    digit=consent_digit,
+                    participantIdentity=participant.identity,
+                    sipCallStatus=read_sip_call_status(participant),
                 )
+
+                trace.log("consent_persist_start", providerCallId=trace.correlation_id)
+                persist_task = asyncio.create_task(
+                    _record_press_1_consent(
+                        backend,
+                        trace=trace,
+                        session=session,
+                        digit=consent_digit,
+                    ),
+                    name="mctb_consent_persist",
+                )
+
+                confirmation_url = str(session.get("confirmationPlayUrl") or "").strip()
+                confirmation_task: asyncio.Task[Any] | None = None
+                if confirmation_url:
+                    confirmation_task = asyncio.create_task(
+                        play_confirmation_audio_url(
+                            ctx.room,
+                            answer_session,
+                            trace=trace,
+                            sip_participant=participant,
+                            sip_call_status=read_sip_call_status(participant),
+                            play_url=confirmation_url,
+                        ),
+                        name="mctb_confirmation_audio",
+                    )
+
+                confirmation_result = None
+                if confirmation_task is not None:
+                    confirmation_result = await confirmation_task
+
+                consent_result = await persist_task
+                trace.log(
+                    "consent_persist_complete",
+                    consentRecorded=consent_result.get("consentRecorded"),
+                    duplicateConsent=consent_result.get("duplicateConsent"),
+                    durationNote="backend_round_trip",
+                )
+
+                sms_payload = consent_result.get("sms")
+                if isinstance(sms_payload, dict) and sms_payload.get("scheduled"):
+                    trace.log(
+                        "sms_schedule_confirmed",
+                        eligible=sms_payload.get("eligible"),
+                        scheduled=sms_payload.get("scheduled"),
+                        ok=sms_payload.get("ok"),
+                    )
+
                 trace.log(
                     "mctb_press_1_consent_recorded",
                     consentRecorded=consent_result.get("consentRecorded"),
                     duplicateConsent=consent_result.get("duplicateConsent"),
-                    smsTriggered=consent_result.get("sms"),
+                    smsTriggered=sms_payload,
+                    confirmationPlayed=bool(
+                        confirmation_result is not None and confirmation_result.ok,
+                    ),
                 )
+
+                if confirmation_result is not None and not confirmation_result.ok:
+                    trace.log(
+                        "confirmation_audio_publish_failed",
+                        error=confirmation_result.error,
+                        playUrl=confirmation_url,
+                    )
+                press_1_completed = True
             else:
                 trace.log(
                     "mctb_press_1_not_received",
                     consentDigit=session.get("consentDigit") or "1",
                 )
 
-        trace.log(
-            "mctb_hold_started",
-            holdSeconds=POST_FLOW_HOLD_SECONDS,
-            note="post_flow_hold_before_disconnect",
-            sipCallStatus=read_sip_call_status(participant),
-            consentMode=consent_mode,
-        )
-        await asyncio.sleep(POST_FLOW_HOLD_SECONDS)
-        trace.log(
-            "mctb_hold_complete",
-            holdSeconds=POST_FLOW_HOLD_SECONDS,
-            sipCallStatus=read_sip_call_status(participant),
-        )
+        if not press_1_completed:
+            trace.log(
+                "mctb_hold_started",
+                holdSeconds=POST_FLOW_HOLD_SECONDS,
+                note="post_flow_hold_before_disconnect",
+                sipCallStatus=read_sip_call_status(participant),
+                consentMode=consent_mode,
+            )
+            await asyncio.sleep(POST_FLOW_HOLD_SECONDS)
+            trace.log(
+                "mctb_hold_complete",
+                holdSeconds=POST_FLOW_HOLD_SECONDS,
+                sipCallStatus=read_sip_call_status(participant),
+            )
 
         trace.log_sip_call_final_state(
             disconnect_reason="production_complete",

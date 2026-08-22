@@ -131,6 +131,33 @@ def _pcm_to_frames(pcm: bytes, *, sample_rate: int, channels: int) -> list[rtc.A
     return frames
 
 
+async def play_confirmation_audio_url(
+    room: rtc.Room,
+    answer_session: "AgentSession",
+    *,
+    trace: "MctbSipE2eTrace",
+    sip_participant: rtc.RemoteParticipant,
+    sip_call_status: str | None,
+    play_url: str,
+) -> ConsentAudioResult:
+    """Play post-Press-1 confirmation MP3 through RoomIO."""
+    return await _play_audio_url(
+        room,
+        answer_session,
+        trace=trace,
+        sip_participant=sip_participant,
+        sip_call_status=sip_call_status,
+        play_url=play_url,
+        playback_method="confirmation_mp3_roomio",
+        source_created_event="confirmation_audio_start",
+        track_published_event="confirmation_audio_track_published",
+        first_frame_event="confirmation_audio_first_frame",
+        frames_sent_event="confirmation_audio_frames_sent",
+        playback_complete_event="confirmation_audio_complete",
+        publish_failed_event="confirmation_audio_publish_failed",
+    )
+
+
 async def play_consent_audio_url(
     room: rtc.Room,
     answer_session: "AgentSession",
@@ -141,13 +168,46 @@ async def play_consent_audio_url(
     play_url: str,
 ) -> ConsentAudioResult:
     """Play hosted consent MP3 through the existing RoomIO audio output."""
+    return await _play_audio_url(
+        room,
+        answer_session,
+        trace=trace,
+        sip_participant=sip_participant,
+        sip_call_status=sip_call_status,
+        play_url=play_url,
+        playback_method="consent_mp3_roomio",
+        source_created_event="diagnostic_audio_source_created",
+        track_published_event="diagnostic_audio_track_published",
+        first_frame_event="diagnostic_audio_first_frame_sent",
+        frames_sent_event="diagnostic_audio_frames_sent",
+        playback_complete_event="diagnostic_audio_playback_complete",
+        publish_failed_event="diagnostic_audio_publish_failed",
+    )
+
+
+async def _play_audio_url(
+    room: rtc.Room,
+    answer_session: "AgentSession",
+    *,
+    trace: "MctbSipE2eTrace",
+    sip_participant: rtc.RemoteParticipant,
+    sip_call_status: str | None,
+    play_url: str,
+    playback_method: str,
+    source_created_event: str,
+    track_published_event: str,
+    first_frame_event: str,
+    frames_sent_event: str,
+    playback_complete_event: str,
+    publish_failed_event: str,
+) -> ConsentAudioResult:
     started = time.perf_counter()
     result = ConsentAudioResult(ok=False)
     audio_output = answer_session.output.audio
     if audio_output is None:
         result.error = "roomio_audio_output_missing"
         trace.log(
-            "diagnostic_audio_publish_failed",
+            publish_failed_event,
             error=result.error,
             playUrl=play_url,
             **_common_log_fields(
@@ -170,8 +230,8 @@ async def play_consent_audio_url(
         result.track_sid = track.sid if track is not None else None
 
     trace.log(
-        "diagnostic_audio_source_created",
-        playbackMethod="consent_mp3_roomio",
+        source_created_event,
+        playbackMethod=playback_method,
         playUrl=play_url,
         **_common_log_fields(
             trace=trace,
@@ -186,7 +246,7 @@ async def play_consent_audio_url(
     if publication is None or result.track_sid is None:
         result.error = "roomio_audio_track_not_published"
         trace.log(
-            "diagnostic_audio_publish_failed",
+            publish_failed_event,
             error=result.error,
             playUrl=play_url,
             **_common_log_fields(
@@ -200,7 +260,7 @@ async def play_consent_audio_url(
         return result
 
     trace.log(
-        "diagnostic_audio_track_published",
+        track_published_event,
         publicationSid=result.publication_sid,
         publicationName=publication.name,
         note="existing_roomio_track_from_answer_path",
@@ -228,7 +288,7 @@ async def play_consent_audio_url(
             if result.frames_written == 1:
                 result.first_frame_sent_ms = int((time.perf_counter() - started) * 1000)
                 trace.log(
-                    "diagnostic_audio_first_frame_sent",
+                    first_frame_event,
                     frameIndex=0,
                     playUrl=play_url,
                     **_common_log_fields(
@@ -248,7 +308,7 @@ async def play_consent_audio_url(
         result.ok = result.frames_written > 0
 
         trace.log(
-            "diagnostic_audio_frames_sent",
+            frames_sent_event,
             playUrl=play_url,
             **_common_log_fields(
                 trace=trace,
@@ -263,7 +323,7 @@ async def play_consent_audio_url(
         )
         if result.ok:
             trace.log(
-                "diagnostic_audio_playback_complete",
+                playback_complete_event,
                 playUrl=play_url,
                 **_common_log_fields(
                     trace=trace,
@@ -280,7 +340,7 @@ async def play_consent_audio_url(
     except Exception as err:
         result.error = str(err)
         trace.log(
-            "diagnostic_audio_publish_failed",
+            publish_failed_event,
             error=result.error,
             playUrl=play_url,
             framesWritten=result.frames_written,

@@ -6,9 +6,11 @@ import {
 } from "@/lib/mctb/consent-mode";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { loadMctbConsentPrompt } from "@/lib/mctb/consent-prompt/store";
+import { DEFAULT_MCTB_CONSENT_VOICE_ID } from "@/lib/mctb/consent-prompt/defaults";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { getImmediate571ConsentGather } from "@/lib/smart-routing/platform-consent-fast-path";
+import { generatePromptAudio, publicPlaybackUrl } from "@/lib/smart-routing/media-service";
 import { resolveSmsConsentPlayback } from "@/lib/smart-routing/prompt-playback";
 import {
   normalizeForwardedFromE164,
@@ -17,6 +19,35 @@ import {
 
 const FALLBACK_WORKSPACE_ID =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
+
+const MCTB_PRESS_1_CONFIRMATION_TEXT =
+  "Perfect. Check your phone. We have just sent you a message.";
+
+let cachedConfirmationPlayback: { playUrl: string; expiresAt: number } | null = null;
+
+async function resolveConfirmationPlayUrl(workspaceId: string): Promise<string | undefined> {
+  const envAsset = process.env.MCTB_PLATFORM_CONFIRMATION_AUDIO_ASSET_ID?.trim();
+  if (envAsset) {
+    const url = publicPlaybackUrl(envAsset);
+    if (url.startsWith("http")) return url;
+  }
+  if (cachedConfirmationPlayback && cachedConfirmationPlayback.expiresAt > Date.now()) {
+    return cachedConfirmationPlayback.playUrl;
+  }
+  const ownerId = process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || workspaceId;
+  const asset = await generatePromptAudio({
+    workspaceId: ownerId,
+    name: "MCTB Press-1 Confirmation",
+    text: MCTB_PRESS_1_CONFIRMATION_TEXT,
+    voiceId: DEFAULT_MCTB_CONSENT_VOICE_ID,
+  });
+  const playUrl = publicPlaybackUrl(asset.id);
+  if (playUrl.startsWith("http")) {
+    cachedConfirmationPlayback = { playUrl, expiresAt: Date.now() + 60 * 60 * 1000 };
+    return playUrl;
+  }
+  return undefined;
+}
 
 export type ResolveMctbSipSessionInput = {
   callerE164: string;
@@ -33,6 +64,8 @@ export type ResolveMctbSipSessionResult = {
   consentMode: MctbConsentMode;
   consentDigit: string;
   playUrl?: string;
+  confirmationPlayUrl?: string;
+  confirmationText?: string;
   audioAssetId?: string;
   failClosed?: boolean;
   forwardedFromE164?: string | null;
@@ -120,6 +153,7 @@ export async function resolveMctbSipSessionForPython(
   const businessE164 = forwardedFromE164 || transovoNumberE164;
 
   let playUrl: string | undefined;
+  let confirmationPlayUrl: string | undefined;
   let audioAssetId: string | undefined;
   let failClosed = false;
 
@@ -147,6 +181,7 @@ export async function resolveMctbSipSessionForPython(
         audioAssetId = publishedAssetId || undefined;
       }
     }
+    confirmationPlayUrl = await resolveConfirmationPlayUrl(target.workspaceId);
   }
 
   return {
@@ -156,6 +191,8 @@ export async function resolveMctbSipSessionForPython(
     consentMode,
     consentDigit: "1",
     playUrl,
+    confirmationPlayUrl,
+    confirmationText: MCTB_PRESS_1_CONFIRMATION_TEXT,
     audioAssetId,
     failClosed,
     forwardedFromE164,

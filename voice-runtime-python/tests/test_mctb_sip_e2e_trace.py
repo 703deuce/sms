@@ -109,6 +109,22 @@ async def test_watchdog_emits_failure_stage():
 
 
 @pytest.mark.asyncio
+async def test_room_connect_watchdog_cancelled_after_connected(capsys):
+    trace = MctbSipE2eTrace.create(
+        correlation_id="watch-cancel@telnyx",
+        job_id="job-1",
+        room_name="room-1",
+    )
+    trace.start_watchdog("room_connect", 0.05)
+    trace.log_worker_room_connected(10)
+
+    await asyncio.sleep(0.1)
+    output = capsys.readouterr().out
+    assert "mctb_sip_watchdog_timeout" not in output
+    assert trace.failure_reason is None
+
+
+@pytest.mark.asyncio
 async def test_mctb_diagnostic_skipped_on_duplicate():
     from transovo_voice.session.mctb_sip_diagnostic import run_mctb_sip_diagnostic_session
 

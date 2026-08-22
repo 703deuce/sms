@@ -108,7 +108,7 @@ class MctbSipE2eTrace:
     failure_stage: str | None = None
     failure_reason: str | None = None
     finalized: bool = False
-    _watchdog_tasks: list[asyncio.Task[Any]] = field(default_factory=list, repr=False)
+    _watchdog_tasks: dict[str, asyncio.Task[Any]] = field(default_factory=dict, repr=False)
     _backend_report: Any | None = field(default=None, repr=False)
 
     @classmethod
@@ -307,6 +307,7 @@ class MctbSipE2eTrace:
             raise ValueError(
                 f"sip_participant_active requires observed sip.callStatus=active, got {sip_call_status!r}",
             )
+        self.cancel_watchdog("participant_active")
         self.log(
             "sip_participant_active",
             participantId=self.participant_id,
@@ -332,6 +333,7 @@ class MctbSipE2eTrace:
         self.log("worker_room_connect_start", jobId=self.job_id)
 
     def log_worker_room_connected(self, elapsed_ms: int) -> None:
+        self.cancel_watchdog("room_connect")
         self.mark_stage("roomConnected")
         self.log(
             "worker_room_connected",
@@ -377,6 +379,7 @@ class MctbSipE2eTrace:
         )
 
     def log_diagnostic_audio_complete(self) -> None:
+        self.cancel_watchdog("diagnostic_audio")
         self.mark_stage("audioCompleted")
         self.log(
             "diagnostic_audio_complete",
@@ -424,6 +427,12 @@ class MctbSipE2eTrace:
         )
 
     def log_watchdog_failure(self, watchdog_key: str) -> None:
+        if watchdog_key == "room_connect" and "roomConnected" in self.stage_ms:
+            return
+        if watchdog_key == "participant_active" and self.stage_ms.get("roomConnected", -1) >= 0:
+            return
+        if watchdog_key == "diagnostic_audio" and "audioCompleted" in self.stage_ms:
+            return
         reason = WATCHDOG_FAILURES.get(watchdog_key, watchdog_key.upper())
         self.fail(stage=self.last_successful_stage or "telnyxInbound", reason=reason)
         self.log(
@@ -435,10 +444,15 @@ class MctbSipE2eTrace:
         )
 
     def _cancel_watchdogs(self) -> None:
-        for task in self._watchdog_tasks:
+        for task in self._watchdog_tasks.values():
             if not task.done():
                 task.cancel()
         self._watchdog_tasks.clear()
+
+    def cancel_watchdog(self, key: str) -> None:
+        task = self._watchdog_tasks.pop(key, None)
+        if task is not None and not task.done():
+            task.cancel()
 
     def start_watchdog(self, key: str, timeout_s: float) -> None:
         async def _watch() -> None:
@@ -450,7 +464,7 @@ class MctbSipE2eTrace:
             except asyncio.CancelledError:
                 pass
 
-        self._watchdog_tasks.append(asyncio.create_task(_watch()))
+        self._watchdog_tasks[key] = asyncio.create_task(_watch())
 
     def start_standard_watchdogs(self) -> None:
         self.start_watchdog("room_connect", 15.0)
