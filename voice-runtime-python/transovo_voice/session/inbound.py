@@ -157,17 +157,24 @@ async def run_inbound_session(ctx: JobContext) -> None:
 
     from transovo_voice.session.mctb_sip_diagnostic import (
         is_mctb_571_sip_target,
-        run_mctb_sip_diagnostic_session,
     )
 
     if is_mctb_571_sip_target(to_e164):
-        await run_mctb_sip_diagnostic_session(
-            ctx,
-            participant_identity=participant.identity,
-            from_e164=from_e164,
-            to_e164=to_e164,
-            attrs=attrs,
-        )
+        from transovo_voice.integrations.backend_client import TransovoBackend
+        from transovo_voice.session.mctb_sip_diagnostic import run_mctb_sip_diagnostic_session
+
+        mctb_backend = TransovoBackend()
+        try:
+            await run_mctb_sip_diagnostic_session(
+                ctx,
+                mctb_backend,
+                participant_identity=participant.identity,
+                from_e164=from_e164,
+                to_e164=to_e164,
+                attrs=attrs,
+            )
+        finally:
+            await mctb_backend.close()
         return
 
     connect_task = asyncio.create_task(ctx.connect())

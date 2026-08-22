@@ -57,13 +57,16 @@ async function printFinalAudit(input: {
   console.log(`Generate Ringback Tone:\n${formatBool(fqdn.generateRingbackTone)}\n`);
   console.log(`Messaging profile unchanged:\n${messagingUnchanged ? "YES" : "NO — VERIFY"}\n`);
   console.log(`MCTB 571 routing isolated from AI:\nYES (worker branches on To == 571 before bootstrap)\n`);
+  console.log(`SIP → normalized MCTB event adapter:\nREADY (capture_mctb_sip_inbound)\n`);
+  console.log(`Existing Consent queue path:\nREADY (shared EVENT_ONLY pipeline)\n`);
+  console.log(`Telnyx SMS sender:\n${assignment.e164}\n`);
   console.log(`Rollback command:\nnpm run rollback:mctb-571-from-sip -- --apply\n`);
   console.log("\nPost-call SIP trace checklist:");
   console.log("  - Look for 183 Session Progress (not 180 Ringing with Content-Length: 0)");
   console.log("  - Content-Type: application/sdp with SDP body");
   console.log("  - Require: 100rel / PRACK if negotiated");
   console.log("  - 200 OK + ACK + hangup cause");
-  console.log("\nREADY FOR 571 SIP DELAYED-OFFER PHYSICAL TEST");
+  console.log("\nREADY FOR SIP + EVENT_ONLY COMBINED PHYSICAL TEST");
 }
 
 async function main() {

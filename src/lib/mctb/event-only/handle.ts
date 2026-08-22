@@ -7,7 +7,7 @@ import {
   evaluateMctbRecoveryEligibility,
 } from "@/lib/mctb/event-only/eligibility";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
-import type { MctbInboundCallEvent } from "@/lib/mctb/event-only/types";
+import type { MctbCaptureMode, MctbInboundCallEvent } from "@/lib/mctb/event-only/types";
 
 const FALLBACK_WORKSPACE_ID =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
@@ -158,6 +158,14 @@ export async function handleMctbInboundEvent(
     eligible: result.eligible !== false,
     scheduled: result.scheduled === true,
   });
+  logMctbEventOnly("mctb_sms_job_queued", {
+    callEventId: result.missedCallEventId,
+    workspaceId: target.workspaceId,
+    caller: event.callerE164,
+    provider: event.provider,
+    eligible: result.eligible !== false,
+    scheduled: result.scheduled === true,
+  });
 
   return {
     ok: true,
@@ -168,6 +176,10 @@ export async function handleMctbInboundEvent(
     deduped: result.deduped,
     reason: result.reason || undefined,
   };
+}
+
+function resolveCaptureMode(event: MctbInboundCallEvent): MctbCaptureMode {
+  return event.provider === "TELNYX_SIP" ? "SIP_INGRESS" : "EVENT_ONLY";
 }
 
 function buildEventMetadata(
@@ -186,7 +198,7 @@ function buildEventMetadata(
   }
 
   return {
-    captureMode: "EVENT_ONLY",
+    captureMode: resolveCaptureMode(event),
     provider: event.provider,
     providerCallId: event.providerCallId,
     providerSessionId: event.providerSessionId || null,

@@ -1,6 +1,9 @@
 export const MCTB_EVENT_ONLY_LOG_SOURCE = "mctb-event-only";
 
-export type MctbInboundProvider = "TELNYX" | "TWILIO";
+export type MctbInboundProvider = "TELNYX" | "TELNYX_SIP" | "TWILIO";
+
+/** captureMode values for MCTB metadata (EVENT_ONLY = Call Control webhook; SIP_INGRESS = LiveKit/FQDN). */
+export type MctbCaptureMode = "EVENT_ONLY" | "SIP_INGRESS";
 
 /** Normalized provider-agnostic inbound call event for MCTB. */
 export type MctbInboundCallEvent = {

@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 type VoiceRuntimeAction =
   | "bootstrap_inbound"
   | "resolve_dispatch_snapshot"
+  | "capture_mctb_sip_inbound"
   | "persist_inbound_call"
   | "persist_intake_fields"
   | "persist_message"
@@ -102,6 +103,14 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/resolve-dispatch-snapshot"
         );
         result = await resolveDispatchSnapshotForPython(payload as never);
+        break;
+      }
+
+      case "capture_mctb_sip_inbound": {
+        const { captureMctbSipInboundForPython } = await import(
+          "@/lib/mctb/event-only/sip-capture"
+        );
+        result = await captureMctbSipInboundForPython(payload as never);
         break;
       }
 

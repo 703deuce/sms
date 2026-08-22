@@ -15,7 +15,8 @@ export type MctbRecoveryEligibilityResult = {
 };
 
 function buildEventOnlyIdempotencyKey(workspaceId: string, event: MctbInboundCallEvent): string {
-  return `missed-call-text:${workspaceId}:telnyx:${event.providerCallId}`;
+  const providerKey = event.provider === "TELNYX_SIP" ? "telnyx-sip" : "telnyx";
+  return `missed-call-text:${workspaceId}:${providerKey}:${event.providerCallId}`;
 }
 
 export async function resolveMctbConsentMode(workspaceId: string): Promise<string> {
@@ -52,6 +53,11 @@ export async function evaluateMctbRecoveryEligibility(input: {
     consentMode: "EXISTING_CONSENT",
     existingConsentValid: attestation.existingConsentValid,
     workspaceId: input.workspaceId,
+  });
+  logMctbEventOnly("mctb_existing_consent_resolved", {
+    workspaceId: input.workspaceId,
+    existingConsentValid: attestation.existingConsentValid,
+    attestationReason: attestation.reason || null,
   });
 
   if (!attestation.valid) {

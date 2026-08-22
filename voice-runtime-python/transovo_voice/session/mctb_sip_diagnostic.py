@@ -1,17 +1,19 @@
-"""MCTB 571 SIP delayed-offer diagnostic — no AI, no SMS, no Gather."""
+"""MCTB 571 SIP ingress — capture missed-call event + optional diagnostic audio."""
 
 from __future__ import annotations
 
 import json
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
-
-from livekit.agents import JobContext
 
 from transovo_voice.session.startup_audio import play_immediate_answer
 from transovo_voice.telemetry import log_event
+
+if TYPE_CHECKING:
+    from livekit.agents import JobContext
+    from transovo_voice.integrations.backend_client import TransovoBackend
 
 MCTB_571_E164 = "+15714073615"
 MCTB_SIP_DIAGNOSTIC_SAY = (
@@ -60,6 +62,13 @@ def _extract_forwarded(attrs: dict[str, str]) -> str | None:
     return None
 
 
+def _provider_call_id(attrs: dict[str, str], room: str, call_id: str) -> str:
+    sip_call_id = attrs.get("sip.callId") or attrs.get("sip.call-id")
+    if sip_call_id:
+        return f"sip:{sip_call_id}"
+    return f"livekit:{room}:{call_id}"
+
+
 def _log_mctb_sip_diagnostic(
     event: str,
     *,
@@ -91,15 +100,73 @@ def _log_mctb_sip_diagnostic(
     print(json.dumps(payload, default=str))
 
 
+async def _capture_mctb_sip_event(
+    backend: "TransovoBackend",
+    *,
+    call_id: str,
+    from_e164: str | None,
+    to_e164: str | None,
+    room: str,
+    participant_identity: str,
+    attrs: dict[str, str],
+) -> None:
+    if not from_e164 or not to_e164:
+        log_event(
+            "mctb_sip_capture_skipped",
+            call_id=call_id,
+            extra={"reason": "missing_numbers", "source": LOG_SOURCE},
+        )
+        return
+
+    provider_call_id = _provider_call_id(attrs, room, call_id)
+    diversion = _extract_forwarded(attrs)
+    try:
+        result = await backend.call(
+            "capture_mctb_sip_inbound",
+            {
+                "providerCallId": provider_call_id,
+                "callerE164": from_e164,
+                "transovoNumberE164": to_e164,
+                "diversionHeader": diversion,
+                "livekitRoomName": room,
+                "participantIdentity": participant_identity,
+                "sipAttributes": _safe_sip_attrs(attrs),
+                "receivedAt": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        log_event(
+            "mctb_sip_capture_complete",
+            call_id=call_id,
+            extra={
+                "source": LOG_SOURCE,
+                "providerCallId": provider_call_id,
+                "ok": result.get("ok"),
+                "eligible": result.get("eligible"),
+                "missedCallEventId": result.get("missedCallEventId"),
+            },
+        )
+    except Exception as err:
+        log_event(
+            "mctb_sip_capture_failed",
+            call_id=call_id,
+            extra={"source": LOG_SOURCE, "error": str(err)},
+        )
+
+
 async def run_mctb_sip_diagnostic_session(
-    ctx: JobContext,
+    ctx: "JobContext",
+    backend: "TransovoBackend",
     *,
     participant_identity: str,
     from_e164: str | None,
     to_e164: str | None,
     attrs: dict[str, str],
 ) -> None:
-    """Answer via LiveKit media, speak diagnostic phrase, hang up — no AI template."""
+    """
+    SIP ingress for 571:
+    1) Normalize + queue MCTB Existing Consent SMS (independent of media)
+    2) Optional diagnostic phrase for delayed-offer physical test
+    """
     call_id = str(uuid4())
     _log_mctb_sip_diagnostic(
         "inbound_sip_captured",
@@ -110,6 +177,7 @@ async def run_mctb_sip_diagnostic_session(
         participant_identity=participant_identity,
         attrs=attrs,
     )
+
     log_event(
         "mctb_sip_diagnostic_started",
         call_id=call_id,
@@ -119,6 +187,17 @@ async def run_mctb_sip_diagnostic_session(
             "runtime": "livekit_python",
             "source": LOG_SOURCE,
         },
+    )
+
+    # Queue MCTB SMS first — must not depend on media/connect success.
+    await _capture_mctb_sip_event(
+        backend,
+        call_id=call_id,
+        from_e164=from_e164,
+        to_e164=to_e164,
+        room=ctx.room.name,
+        participant_identity=participant_identity,
+        attrs=attrs,
     )
 
     await ctx.connect()

@@ -38,7 +38,9 @@ export async function executeMissedCallTextSend(input: {
       ? (event.metadata as Record<string, unknown>)
       : {};
   const demoMode = eventMeta.demoMode === true;
-  const isEventOnly = eventMeta.captureMode === "EVENT_ONLY";
+  const isEventOnlyCapture =
+    eventMeta.captureMode === "EVENT_ONLY" || eventMeta.captureMode === "SIP_INGRESS";
+  const isEventOnly = isEventOnlyCapture;
 
   const config = await loadMissedCallTextConfig(input.workspaceId);
   if (!config.enabled && !demoMode) {
@@ -225,6 +227,20 @@ export async function executeMissedCallTextSend(input: {
       kind: "sms.send.accepted",
       detail: { messageId, providerStatus: "queued", demoMode },
     });
+
+    console.log(
+      JSON.stringify({
+        source: "mctb-event-only",
+        event: "mctb_sms_sent",
+        timestamp: new Date().toISOString(),
+        workspaceId: input.workspaceId,
+        missedCallEventId: event.id,
+        callerE164: event.callerE164,
+        fromE164: resolvedSender.e164,
+        messageId,
+        captureMode: eventMeta.captureMode || null,
+      }),
+    );
 
     if (demoMode) {
       const { recordDemoTextSent } = await import("@/lib/mctb/onboarding/demo");
