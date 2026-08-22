@@ -255,12 +255,27 @@ export async function publishPlatformDemoMctbConsent(actorUserId?: string) {
   const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
   if (!ownerId) throw new Error("Platform demo owner workspace not found");
 
-  const { phoneNumberId } = await preparePlatformDemoNumberForSmartRouting();
+  const { phoneNumberId, providerNumberId } = await preparePlatformDemoNumberForSmartRouting();
 
   await initMctbConsentPromptForWorkspace(ownerId);
-  const config = await loadMctbConsentPrompt(ownerId);
+  let config = await loadMctbConsentPrompt(ownerId);
   if (!config.audioAssetId) {
     await generateMctbConsentAudio(ownerId);
+    config = await loadMctbConsentPrompt(ownerId);
+  }
+
+  const { verify571MctbConsentTexmlRoute } = await import(
+    "@/lib/mctb/consent-prompt/telnyx-texml-route"
+  );
+  const texml = await verify571MctbConsentTexmlRoute(providerNumberId);
+  if (texml.ok) {
+    const now = new Date().toISOString();
+    return saveMctbConsentPrompt(ownerId, {
+      publishedAt: now,
+      publishedScriptHash: config.scriptHash,
+      publishedAudioAssetId: config.audioAssetId,
+      flowId: config.flowId,
+    });
   }
 
   return publishMctbConsentPrompt(ownerId, actorUserId, {

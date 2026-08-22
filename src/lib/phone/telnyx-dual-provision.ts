@@ -815,11 +815,25 @@ export async function diagnoseWorkspaceNumber(input: {
     });
   }
 
-  const voiceOk = Boolean(
-    telnyx?.connectionId &&
+  const voiceOk = await (async () => {
+    if (
+      telnyx?.connectionId &&
       expectedVoice &&
-      telnyx.connectionId === expectedVoice,
-  );
+      telnyx.connectionId === expectedVoice
+    ) {
+      return true;
+    }
+    if (telnyx?.connectionId && row.providerNumberId) {
+      const { isPlatform571E164, verify571MctbConsentTexmlRoute } = await import(
+        "@/lib/mctb/consent-prompt/telnyx-texml-route"
+      );
+      if (isPlatform571E164(row.e164)) {
+        const texml = await verify571MctbConsentTexmlRoute(row.providerNumberId);
+        return texml.ok;
+      }
+    }
+    return false;
+  })();
   const messagingOk = Boolean(
     messagingProfileId &&
       expectedMessaging &&
@@ -833,11 +847,20 @@ export async function diagnoseWorkspaceNumber(input: {
       message: "Number has no Voice Connection / Call Control Application",
     });
   } else if (telnyx && expectedVoice && telnyx.connectionId !== expectedVoice) {
-    issues.push({
-      code: "voice_wrong_connection",
-      severity: "warn",
-      message: `Voice connection is ${telnyx.connectionId}, expected ${expectedVoice}`,
-    });
+    const { isPlatform571E164, verify571MctbConsentTexmlRoute } = await import(
+      "@/lib/mctb/consent-prompt/telnyx-texml-route"
+    );
+    const onMctbTexml =
+      isPlatform571E164(row.e164) &&
+      row.providerNumberId &&
+      (await verify571MctbConsentTexmlRoute(row.providerNumberId)).ok;
+    if (!onMctbTexml) {
+      issues.push({
+        code: "voice_wrong_connection",
+        severity: "warn",
+        message: `Voice connection is ${telnyx.connectionId}, expected ${expectedVoice}`,
+      });
+    }
   }
 
   if (!messagingProfileId) {

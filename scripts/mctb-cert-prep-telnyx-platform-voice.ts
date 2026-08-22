@@ -241,7 +241,7 @@ async function syncConsentRuntime(mode: ReturnType<typeof normalizeMctbConsentMo
 async function verifyFinalState(
   ownerWorkspaceId: string,
   phoneNumberId: string,
-  pn: { settingsJson: unknown },
+  pn: { settingsJson: unknown; providerNumberId?: string | null },
 ) {
   const prisma = getPrisma();
   const settings =
@@ -251,6 +251,10 @@ async function verifyFinalState(
   const routingOwner = settings.routingOwner;
   const smartRouting = await hasActiveSmartRoutingOnNumber(ownerWorkspaceId, phoneNumberId);
   const activeFlow = await resolveActiveFlowForNumber(ownerWorkspaceId, phoneNumberId);
+  const texml =
+    pn.providerNumberId != null
+      ? await verify571MctbConsentTexmlRoute(pn.providerNumberId)
+      : { ok: false, detail: "no providerNumberId" };
   const voiceAgent = await prisma.voiceAgent.findFirst({
     where: { workspaceId: ownerWorkspaceId, phoneNumberId, status: "ACTIVE" },
     select: { id: true },
@@ -265,10 +269,12 @@ async function verifyFinalState(
   );
   record(
     "smart_routing_active",
-    smartRouting ? "PASS" : apply ? "FAIL" : "WARN",
-    smartRouting
-      ? `Active flow: ${activeFlow?.name || "(unknown)"}`
-      : "No published smart routing flow on 571",
+    texml.ok ? "PASS" : smartRouting ? "PASS" : apply ? "FAIL" : "WARN",
+    texml.ok
+      ? `Press-1 via TeXML edge (${texml.detail})`
+      : smartRouting
+        ? `Active flow: ${activeFlow?.name || "(unknown)"}`
+        : "No TeXML route or published smart routing flow on 571",
   );
   record(
     "voice_agent_clear",
@@ -347,7 +353,7 @@ async function main() {
   console.log("\n── Verification ──\n");
   const refreshed = await prisma.phoneNumber.findUnique({
     where: { id: pn.id },
-    select: { settingsJson: true },
+    select: { settingsJson: true, providerNumberId: true },
   });
   await verifyFinalState(ownerWorkspaceId, pn.id, refreshed || pn);
 
