@@ -30,6 +30,7 @@ type OnboardingPayload = {
   steps: MctbOnboardingStep[];
   stepLabels: Record<MctbOnboardingStep, string>;
   demo: {
+    demoNumberE164: string;
     demoNumberDisplay: string | null;
     label?: string;
     description?: string;
