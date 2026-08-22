@@ -1,7 +1,6 @@
 {
-  "updatedAt": "2026-08-22T00:26:00.000Z",
-  "verifiedBy": "mctb-certification-pass1-webhook.ts",
-  "notes": "Pass 1 PARTIAL (B-01 approval + B-02 webhook deploy). Pass 2 exposed AT&T Wireless voicemail race.",
+  "updatedAt": "2026-08-22T00:32:00.000Z",
+  "notes": "Pass 2: AT&T forward+ANI PASS after timer fix. Pass 1 still PARTIAL.",
   "pass1Status": "PARTIAL",
   "pass1Remaining": [
     "B-02: production /api/twilio/toll-free-verification must not 404",
@@ -17,7 +16,17 @@
     "twilioTfvStatus": "PENDING_REVIEW"
   },
   "pass2": {
-    "status": "IN_PROGRESS",
+    "status": "PARTIAL",
+    "forwardingAni": {
+      "result": "PASS",
+      "testedAt": "2026-08-22T00:31:24.000Z",
+      "twilioCallSid": "CAc451ed0da9abc5d9705f4ffd77c4abb7",
+      "path": "FORWARDED_TO_TFN",
+      "fromMasked": "+1(703)***-6017",
+      "forwardedFromMasked": "+1(571)***-6175",
+      "aniPreserved": true,
+      "note": "Business 571 forwarded to TFN; Twilio From=original caller 703, not business line"
+    },
     "directDialAni": {
       "result": "PASS",
       "testedAt": "2026-08-22T00:11:24.000Z",
@@ -39,6 +48,20 @@
         "testedAt": "2026-08-22T00:18:00.000Z",
         "matrixImpact": "D-01 blocked for AT&T Wireless until no-answer timer < voicemail is proven",
         "productAction": "Carrier capability flags + onboarding timer strategy; do not require VM disable"
+      },
+      {
+        "id": "att-wireless-forward-timer-2026-08-22",
+        "carrier": "att",
+        "platform": "iphone_wireless",
+        "forwardingType": "when_unanswered_with_timer_adjustment",
+        "voicemailActive": true,
+        "result": "PASS",
+        "twilioCallReceived": true,
+        "twilioCallSid": "CAc451ed0da9abc5d9705f4ffd77c4abb7",
+        "path": "FORWARDED_TO_TFN",
+        "aniPreserved": true,
+        "testedAt": "2026-08-22T00:31:24.000Z",
+        "note": "Forward reached TFN before voicemail; From=703 original caller, ForwardedFrom=571 business"
       }
     ]
   },
@@ -63,7 +86,7 @@
     },
     "D-01": {
       "status": "MANUAL_HUMAN_TEST_REQUIRED",
-      "note": "AT&T Wireless+iPhone+VM: conditional forward failed live test; other carriers pending"
+      "note": "AT&T Wireless forward+ANI PASS (2026-08-22); remaining carriers + dispositions pending"
     }
   }
 }
