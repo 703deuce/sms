@@ -20,6 +20,35 @@ export function isCreditTrackingEnabled(): boolean {
   return isStripeConfigured();
 }
 
+/**
+ * Whether prepaid credit balance should gate or meter outbound usage for a workspace.
+ * Pre-billing workspaces (no Stripe customer/subscription) stay unlimited until billing
+ * is attached — used for physical MCTB certification before Stripe is live.
+ */
+export async function isWorkspaceCreditEnforced(workspaceId: string): Promise<boolean> {
+  if (!workspaceId || !isCreditTrackingEnabled()) return false;
+
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: {
+      billingPlan: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+    },
+  });
+  if (!workspace) return false;
+
+  const plan = String(workspace.billingPlan || "").toLowerCase();
+  if (plan === "onboarding") return false;
+
+  if (!workspace.stripeCustomerId && !workspace.stripeSubscriptionId) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function getCreditLedger(workspaceId: string, limit = 50) {
   const prisma = getPrisma();
   return prisma.creditLedgerEntry.findMany({
@@ -210,7 +239,7 @@ export async function deductCreditsForSend(
   segments = 1,
   description?: string,
 ): Promise<number> {
-  if (!isCreditTrackingEnabled()) return 0;
+  if (!(await isWorkspaceCreditEnforced(workspaceId))) return 0;
   const count = Math.max(1, Math.round(segments));
   const cost = smsCostCents() * count;
   if (cost <= 0) return 0;

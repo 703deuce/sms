@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { isWorkspaceCreditEnforced } from "@/lib/settings/billing";
 
 export type EntitlementResult = { ok: true } | { ok: false; error: string };
 
@@ -13,7 +14,7 @@ function outboundPaused(): boolean {
  * Entitlement gate for outbound sends. Blocks when:
  * - outbound messaging is paused for the environment,
  * - the workspace billing plan is suspended,
- * - the workspace credit balance has gone negative.
+ * - the workspace credit balance has gone negative (only when credit enforcement is active).
  */
 export async function checkCreditBalance(workspaceId: string): Promise<EntitlementResult> {
   if (!workspaceId) return { ok: false, error: "workspaceId required" };
@@ -49,7 +50,8 @@ export async function checkCreditBalance(workspaceId: string): Promise<Entitleme
     };
   }
 
-  if (Number(workspace.creditBalanceCents ?? 0) < 0) {
+  const creditEnforced = await isWorkspaceCreditEnforced(workspaceId);
+  if (creditEnforced && Number(workspace.creditBalanceCents ?? 0) < 0) {
     return { ok: false, error: "Insufficient credit balance — add credits to continue sending" };
   }
 

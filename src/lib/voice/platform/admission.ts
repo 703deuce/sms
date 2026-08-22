@@ -4,6 +4,7 @@
  */
 
 import { getPrisma } from "@/lib/db";
+import { isWorkspaceCreditEnforced } from "@/lib/settings/billing";
 
 export type AiAdmissionResult =
   | { ok: true; agent: Awaited<ReturnType<typeof loadAgent>> }
@@ -185,7 +186,8 @@ export async function assertAiCallAdmission(input: {
       code: "trial_card_required",
     };
   }
-  if (Number(workspace?.creditBalanceCents ?? 0) < 0) {
+  const creditEnforced = await isWorkspaceCreditEnforced(input.workspaceId);
+  if (creditEnforced && Number(workspace?.creditBalanceCents ?? 0) < 0) {
     await noteFailure({
       workspaceId: input.workspaceId,
       agentId: agent.id,
