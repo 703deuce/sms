@@ -48,6 +48,7 @@ export async function evaluateMissedCallTextEligibility(input: {
   call: ClassifyInboundCallInput;
   idempotencyKey: string;
   demoMode?: boolean;
+  eventOnly?: boolean;
 }): Promise<EligibilityResult> {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   const classification = classifyInboundCallOutcome(input.call);
@@ -88,8 +89,9 @@ export async function evaluateMissedCallTextEligibility(input: {
     }
 
     if (
-      classification === "unknown" ||
-      !classificationTriggersMctb(classification, config)
+      !input.eventOnly &&
+      (classification === "unknown" ||
+        !classificationTriggersMctb(classification, config))
     ) {
       return { eligible: false, reason: "NOT_MISSED", classification };
     }

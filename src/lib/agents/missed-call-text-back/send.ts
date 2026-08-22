@@ -38,6 +38,7 @@ export async function executeMissedCallTextSend(input: {
       ? (event.metadata as Record<string, unknown>)
       : {};
   const demoMode = eventMeta.demoMode === true;
+  const isEventOnly = eventMeta.captureMode === "EVENT_ONLY";
 
   const config = await loadMissedCallTextConfig(input.workspaceId);
   if (!config.enabled && !demoMode) {
@@ -48,6 +49,24 @@ export async function executeMissedCallTextSend(input: {
     return { ok: false, reason: "FEATURE_DISABLED" };
   }
 
+  if (isEventOnly) {
+    const { validateExistingConsentAttestation } = await import(
+      "@/lib/mctb/event-only/attestation"
+    );
+    const attestation = await validateExistingConsentAttestation(input.workspaceId);
+    if (!attestation.valid) {
+      await prisma.missedCallEvent.update({
+        where: { id: event.id },
+        data: {
+          status: "SUPPRESSED",
+          suppressionReason: attestation.reason || "MISSING_ATTESTATION",
+          eligible: false,
+        },
+      });
+      return { ok: false, reason: attestation.reason || "MISSING_ATTESTATION" };
+    }
+  }
+
   const eligibility = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: event.callerE164,
@@ -55,6 +74,7 @@ export async function executeMissedCallTextSend(input: {
     phoneNumberId: event.phoneNumberId,
     idempotencyKey: event.idempotencyKey,
     demoMode,
+    eventOnly: isEventOnly,
     call: {
       direction: "inbound",
       disposition: event.disposition,
@@ -178,7 +198,7 @@ export async function executeMissedCallTextSend(input: {
       body,
       from: resolvedSender.e164,
       customerName: contact?.firstName || undefined,
-      idempotencyKey: `mctb:${event.idempotencyKey}`,
+    idempotencyKey: `mctb-recovery:${event.id}`,
       demoBypass: demoMode,
       senderRoute: { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 },
     });

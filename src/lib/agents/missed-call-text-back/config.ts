@@ -1,5 +1,9 @@
 import { getPrisma } from "@/lib/db";
 import {
+  clampMctbRecoveryDelaySeconds,
+  MCTB_RECOVERY_DELAY_DEFAULT_SECONDS,
+} from "@/lib/mctb/event-only/types";
+import {
   DEFAULT_MCTB_CONFIG,
   DEFAULT_MCTB_MESSAGE,
   type MissedCallTextConfigRecord,
@@ -49,6 +53,7 @@ export async function loadMissedCallTextConfig(
       data: {
         workspaceId,
         ...DEFAULT_MCTB_CONFIG,
+        delaySeconds: MCTB_RECOVERY_DELAY_DEFAULT_SECONDS,
       },
     });
   }
@@ -83,7 +88,7 @@ export async function updateMissedCallTextConfig(input: {
     mark("enabled", input.patch.enabled, before.enabled);
   }
   if (input.patch.delay_seconds !== undefined) {
-    const v = Math.max(0, Math.floor(Number(input.patch.delay_seconds)));
+    const v = clampMctbRecoveryDelaySeconds(Number(input.patch.delay_seconds));
     data.delaySeconds = v;
     mark("delaySeconds", v, before.delaySeconds);
   }

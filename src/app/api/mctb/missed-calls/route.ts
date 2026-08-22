@@ -37,16 +37,31 @@ export async function GET(req: Request) {
   return NextResponse.json({
     data: {
       summary: { missedToday, sentToday, repliedToday },
-      events: events.map((e: (typeof events)[number]) => ({
-        id: e.id,
-        callerE164: e.callerE164,
-        businessE164: e.businessE164,
-        status: e.status,
-        suppressionReason: e.suppressionReason,
-        detectedAt: e.detectedAt,
-        smsSentAt: e.smsSentAt,
-        classification: e.disposition,
-      })),
+      events: events.map((e: (typeof events)[number]) => {
+        const meta =
+          e.metadata && typeof e.metadata === "object"
+            ? (e.metadata as Record<string, unknown>)
+            : {};
+        return {
+          id: e.id,
+          callerE164: e.callerE164,
+          businessE164: e.businessE164,
+          transovoNumberE164:
+            typeof meta.transovoNumberE164 === "string" ? meta.transovoNumberE164 : null,
+          status: e.status,
+          suppressionReason: e.suppressionReason,
+          detectedAt: e.detectedAt,
+          scheduledSmsAt: e.scheduledSmsAt,
+          smsSentAt: e.smsSentAt,
+          classification: e.disposition,
+          consentMode: typeof meta.consentMode === "string" ? meta.consentMode : null,
+          eligibilityStatus:
+            typeof meta.eligibilityStatus === "string" ? meta.eligibilityStatus : null,
+          captureMode: typeof meta.captureMode === "string" ? meta.captureMode : null,
+          voiceCaptureStatus:
+            typeof meta.voiceCaptureStatus === "string" ? meta.voiceCaptureStatus : null,
+        };
+      }),
     },
   });
 }

@@ -17,10 +17,16 @@ export type ProcessMissedCallInput = {
   contactId?: string | null;
   providerCallId?: string | null;
   demoMode?: boolean;
+  eventOnly?: boolean;
+  eventMetadata?: Record<string, unknown>;
+  forceEligibilityStatus?: string;
   call: ClassifyInboundCallInput;
 };
 
 function buildIdempotencyKey(input: ProcessMissedCallInput): string {
+  if (input.eventOnly && input.providerCallId) {
+    return `missed-call-text:${input.workspaceId}:telnyx:${input.providerCallId}`;
+  }
   const provider =
     input.providerCallId ||
     input.voiceCallId ||
@@ -85,7 +91,10 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
       status: "DETECTED",
       traceId,
       idempotencyKey,
-      metadata: input.demoMode ? { demoMode: true } : undefined,
+      metadata: {
+        ...(input.demoMode ? { demoMode: true } : {}),
+        ...(input.eventMetadata || {}),
+      },
     },
   });
 
@@ -114,16 +123,18 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     phoneNumberId: input.phoneNumberId,
     idempotencyKey,
     demoMode: input.demoMode,
+    eventOnly: input.eventOnly,
     call: input.call,
   });
 
   if (!eligibility.eligible) {
+    const suppressionReason = input.forceEligibilityStatus || eligibility.reason;
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: {
         status: "SUPPRESSED",
         eligible: false,
-        suppressionReason: eligibility.reason,
+        suppressionReason,
       },
     });
     await appendMctbTrace({
@@ -156,6 +167,24 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
   const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
   const { isExistingConsentMode } = await import("@/lib/mctb/consent-mode");
   const consentMode = await loadMctbConsentMode(input.workspaceId);
+  if (input.eventOnly && !isExistingConsentMode(consentMode)) {
+    await prisma.missedCallEvent.update({
+      where: { id: event.id },
+      data: {
+        status: "SUPPRESSED",
+        eligible: false,
+        suppressionReason: "NOT_EXISTING_CONSENT",
+      },
+    });
+    return {
+      ok: true,
+      missedCallEventId: event.id,
+      traceId,
+      eligible: false,
+      reason: "NOT_EXISTING_CONSENT",
+    };
+  }
+
   if (isExistingConsentMode(consentMode)) {
     const { recordExistingConsentAttestation } = await import("@/lib/mctb/consent-attestation");
     await recordExistingConsentAttestation({

@@ -39,7 +39,14 @@ export type MctbSuppressionReason =
   | "TRIGGER_DISABLED"
   | "ENTITLEMENT_SUSPENDED"
   | "TRIAL_SMS_LIMIT"
-  | "MESSAGING_NOT_APPROVED";
+  | "MESSAGING_NOT_APPROVED"
+  | "NOT_EXISTING_CONSENT"
+  | "MISSING_ATTESTATION"
+  | "MCTB_DISABLED"
+  | "DUPLICATE"
+  | "INVALID_CALLER"
+  | "WORKSPACE_INACTIVE"
+  | "NOT_FORWARD_EVENT";
 
 export type MissedCallTextConfigRecord = {
   id: string;
@@ -101,7 +108,7 @@ export const DEFAULT_MCTB_CONFIG: Omit<
 > = {
   agentId: null,
   enabled: true,
-  delaySeconds: 0,
+  delaySeconds: 20,
   messageTemplate: DEFAULT_MCTB_MESSAGE,
   sendAfterNoAnswer: true,
   sendAfterBusy: true,

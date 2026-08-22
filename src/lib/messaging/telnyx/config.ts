@@ -56,6 +56,8 @@ export function getTelnyxWebhookUrls() {
     mctbConsentTexml: `${base}/api/telnyx/voice/mctb-consent`,
     /** MCTB platform 571 Call Control diagnostic (separate app — do not mix with TeXML) */
     mctbCallControlDiagnostic: `${base}/api/telnyx/voice/mctb-call-control`,
+    /** MCTB 571 Telnyx EVENT_ONLY — Existing Consent capture without voice media */
+    mctbEventOnly: `${base}/api/telnyx/voice/mctb-event-only`,
     /** MCTB 571 Telnyx first-hop capture → Twilio voice bridge */
     mctbVoiceBridge: `${base}/api/telnyx/voice/mctb-voice-bridge`,
     /** MCTB Twilio voice ingress (second hop) */
