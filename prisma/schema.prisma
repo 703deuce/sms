@@ -302,6 +302,7 @@ model Workspace {
   missedCallTextConfig MissedCallTextConfig?
   missedCallEvents MissedCallEvent[]
   missedCallTextTraces MissedCallTextTrace[]
+  mctbVoiceBridgeCallEvents MctbVoiceBridgeCallEvent[]
   agentConfigurationChanges AgentConfigurationChange[]
   smartRoutingFlows SmartRoutingFlow[]
   smartRoutingDestinations SmartRoutingDestination[]
@@ -3578,6 +3579,46 @@ model MissedCallEvent {
   @@index([voiceCallId])
   @@index([humanCallId])
   @@map("missed_call_events")
+}
+
+/// Authoritative Telnyx first-hop record for MCTB split voice/SMS bridge (571 → Twilio ingress).
+model MctbVoiceBridgeCallEvent {
+  id                         String    @id @default(cuid())
+  workspaceId                String
+  callerE164                 String
+  transovoNumberE164         String
+  businessNumberE164         String?
+  telnyxCallControlId        String    @unique
+  telnyxCallSessionId        String?
+  telnyxCallLegId            String?
+  telnyxProviderCallId       String?
+  telnyxConnectionId         String?
+  diversionHeader            String?
+  firstHopReceivedAt         DateTime  @default(now())
+  voiceBridgeStatus          String    @default("FIRST_HOP_CAPTURED")
+  twilioCallSid              String?   @unique
+  correlationStatus          String    @default("PENDING")
+  bridgeCorrelationTokenHash String?
+  bridgeCorrelationExpiresAt DateTime?
+  consentMode                String?
+  consentStatus              String?
+  consentAt                  DateTime?
+  smsEligibilityStatus       String?
+  smsScheduledAt             DateTime?
+  smsSentAt                  DateTime?
+  smsProvider                String?
+  smsFromE164                String?
+  smsToE164                  String?
+  status                     String    @default("ACTIVE")
+  metadata                   Json?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  workspace                  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, firstHopReceivedAt])
+  @@index([callerE164, transovoNumberE164, firstHopReceivedAt])
+  @@index([correlationStatus, firstHopReceivedAt])
+  @@map("mctb_voice_bridge_call_events")
 }
 
 /// Machine-readable trace for John MCTB runs.

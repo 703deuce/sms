@@ -204,6 +204,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   missedCallTextConfig: "missed_call_text_configs",
   missedCallEvent: "missed_call_events",
   missedCallTextTrace: "missed_call_text_traces",
+  mctbVoiceBridgeCallEvent: "mctb_voice_bridge_call_events",
   agentConfigurationChange: "agent_configuration_changes",
   smartRoutingFlow: "smart_routing_flows",
   smartRoutingFlowVersion: "smart_routing_flow_versions",
