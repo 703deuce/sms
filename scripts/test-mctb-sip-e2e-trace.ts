@@ -10,8 +10,8 @@ import {
   logMctbSipE2eTrace,
 } from "@/lib/mctb/sip-diagnostic/e2e-trace";
 
-const SYNTHETIC_CALLER = "+15550001001";
-const SYNTHETIC_OTHER_DID = "+15550001002";
+const SYNTHETIC_CALLER = "+18880001001";
+const SYNTHETIC_OTHER_DID = "+18880001002";
 
 function captureConsole(fn: () => void): string[] {
   const lines: string[] = [];

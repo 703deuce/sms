@@ -22,8 +22,8 @@ from transovo_voice.session.mctb_sip_e2e_trace import (
     _active_traces,
 )
 
-SYNTHETIC_CALLER = "+15550001001"
-SYNTHETIC_OTHER_DID = "+15550001002"
+SYNTHETIC_CALLER = "+18880001001"
+SYNTHETIC_OTHER_DID = "+18880001002"
 
 
 @pytest.fixture(autouse=True)
