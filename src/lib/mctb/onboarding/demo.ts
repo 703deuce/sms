@@ -171,15 +171,29 @@ export async function recordDemoCallDetected(input: {
   const state = await loadMctbOnboardingState(input.workspaceId);
   const session = state.demoSession;
   if (!session) return;
+  if (
+    session.status === "call_detected" ||
+    session.status === "text_sent" ||
+    session.status === "reply_received" ||
+    session.status === "completed"
+  ) {
+    return;
+  }
 
-  await saveMctbOnboardingState(input.workspaceId, {
-    demoSession: {
-      ...session,
-      status: "call_detected",
-      callDetectedAt: new Date().toISOString(),
-      missedCallEventId: input.missedCallEventId ?? session.missedCallEventId ?? null,
-    },
-  });
+  try {
+    await saveMctbOnboardingState(input.workspaceId, {
+      demoSession: {
+        ...session,
+        status: "call_detected",
+        callDetectedAt: new Date().toISOString(),
+        missedCallEventId: input.missedCallEventId ?? session.missedCallEventId ?? null,
+      },
+    });
+  } catch (err) {
+    console.error("[mctb-demo] recordDemoCallDetected save failed", err);
+    return;
+  }
+
   await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_CALL_DETECTED", {
     ...(input.missedCallEventId ? { missedCallEventId: input.missedCallEventId } : {}),
   }).catch((err) => {
