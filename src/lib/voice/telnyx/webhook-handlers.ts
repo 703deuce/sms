@@ -65,11 +65,19 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
     },
   });
 
-  // Fast ACK — heavy work in background job
-  await enqueueJob({
-    jobType: "voice_webhook_process",
-    queueName: "voice-calls",
-    payload: {
+  const jobPayload = {
+    providerEventId,
+    eventType,
+    workspaceId,
+    callId,
+    humanCallId,
+    isHuman,
+    eventPayload,
+  } as Prisma.InputJsonValue;
+
+  // Forwarded PSTN legs often drop in 1–2s unless we answer immediately — do not queue.
+  if (eventType === "call.initiated") {
+    const result = await processVoiceWebhookEvent({
       providerEventId,
       eventType,
       workspaceId,
@@ -77,7 +85,15 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
       humanCallId,
       isHuman,
       eventPayload,
-    } as Prisma.InputJsonValue,
+    });
+    return { ok: true, eventType, providerEventId, processed: "sync", ...result };
+  }
+
+  // Fast ACK — other voice events processed in background job
+  await enqueueJob({
+    jobType: "voice_webhook_process",
+    queueName: "voice-calls",
+    payload: jobPayload,
     idempotencyKey: `voice-webhook:${providerEventId}`,
   });
 
