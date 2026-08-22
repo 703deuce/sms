@@ -80,7 +80,6 @@ export async function bootstrapAdminMctbTestAccount(input: {
 
   await saveMissedCallTextBack(input.workspaceId, {
     phoneNumberId: link.phoneNumberId,
-    smsPhoneNumberId: link.phoneNumberId,
     initialDelayMinutes: 0,
     initialDelaySeconds: 0,
     firstMessage: "Sorry we missed your call! Reply here and we'll get back to you shortly.",

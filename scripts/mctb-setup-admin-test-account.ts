@@ -101,7 +101,6 @@ async function main() {
 
   await saveMissedCallTextBack(workspaceId, {
     phoneNumberId: link.phoneNumberId,
-    smsPhoneNumberId: link.phoneNumberId,
     initialDelayMinutes: 0,
     initialDelaySeconds: 0,
     firstMessage: "Sorry we missed your call! Reply here and we'll get back to you shortly.",
