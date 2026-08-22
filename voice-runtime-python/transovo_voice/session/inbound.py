@@ -126,6 +126,8 @@ def _fire_backend_call(backend: TransovoBackend, action: str, payload: dict[str,
 
 
 async def run_inbound_session(ctx: JobContext) -> None:
+    import traceback
+
     from transovo_voice.session.mctb_sip_diagnostic import is_mctb_571_sip_target
     from transovo_voice.session.mctb_sip_e2e_trace import (
         MctbSipE2eTrace,
@@ -133,6 +135,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
         extract_job_id,
         make_backend_reporter,
     )
+    from transovo_voice.session.room_utils import resolve_room_sid
 
     agent_name = os.getenv("LIVEKIT_AGENT_NAME", "transovo-voice-runtime")
 
@@ -144,8 +147,19 @@ async def run_inbound_session(ctx: JobContext) -> None:
     startup_timeline.mark("job_received")
 
     job_id = extract_job_id(ctx)
-    room_sid = await resolve_room_sid(ctx.room)
     trace: MctbSipE2eTrace | None = None
+    room_connected = False
+
+    log_event(
+        "worker_job_entry_entered",
+        room=ctx.room.name,
+        extra={
+            "source": "mctb-sip-e2e",
+            "jobId": job_id,
+            "roomName": ctx.room.name,
+            "phase": "run_inbound_session",
+        },
+    )
 
     async def shutdown_backend() -> None:
         if trace is not None and not trace.finalized:
@@ -165,6 +179,53 @@ async def run_inbound_session(ctx: JobContext) -> None:
         )
 
     ctx.add_shutdown_callback(shutdown_backend)
+
+    # LiveKit requires room connection within ~10s of job entry — connect before any
+    # blocking work (room.sid, participant wait, backend trace mirroring).
+    connect_started = time.perf_counter()
+    log_event(
+        "ctx_connect_invoked",
+        room=ctx.room.name,
+        extra={"source": "mctb-sip-e2e", "jobId": job_id, "roomName": ctx.room.name},
+    )
+    try:
+        await ctx.connect()
+        room_connected = True
+        connect_ms = int((time.perf_counter() - connect_started) * 1000)
+        log_event(
+            "ctx_connect_completed",
+            room=ctx.room.name,
+            extra={
+                "source": "mctb-sip-e2e",
+                "jobId": job_id,
+                "roomName": ctx.room.name,
+                "elapsedMs": connect_ms,
+            },
+        )
+    except Exception as err:
+        connect_ms = int((time.perf_counter() - connect_started) * 1000)
+        log_event(
+            "ctx_connect_failed",
+            room=ctx.room.name,
+            extra={
+                "source": "mctb-sip-e2e",
+                "jobId": job_id,
+                "roomName": ctx.room.name,
+                "elapsedMs": connect_ms,
+                "error": str(err),
+                "traceback": traceback.format_exc(),
+            },
+        )
+        await backend.close()
+        return
+
+    room_sid = await resolve_room_sid(ctx.room)
+
+    log_event(
+        "participant_wait_started",
+        room=ctx.room.name,
+        extra={"source": "mctb-sip-e2e", "jobId": job_id, "roomName": ctx.room.name},
+    )
 
     participant_watchdog = asyncio.create_task(asyncio.sleep(15.0))
 
@@ -186,6 +247,17 @@ async def run_inbound_session(ctx: JobContext) -> None:
     finally:
         if not participant_watchdog.done():
             participant_watchdog.cancel()
+
+    log_event(
+        "participant_found",
+        room=ctx.room.name,
+        extra={
+            "source": "mctb-sip-e2e",
+            "jobId": job_id,
+            "participantIdentity": participant.identity,
+            "participantId": participant.sid,
+        },
+    )
 
     startup_timeline.mark("participant_joined")
 
@@ -212,6 +284,10 @@ async def run_inbound_session(ctx: JobContext) -> None:
     if is_mctb_571_sip_target(to_e164):
         from transovo_voice.session.mctb_sip_diagnostic import run_mctb_sip_diagnostic_session
 
+        trace.log("mctb_branch_selected", toE164=to_e164, fromE164=from_e164)
+        trace.log_worker_room_connect_start()
+        trace.log_worker_room_connected(0)
+
         try:
             await run_mctb_sip_diagnostic_session(
                 ctx,
@@ -219,19 +295,18 @@ async def run_inbound_session(ctx: JobContext) -> None:
                 trace=trace,
                 participant=participant,
                 agent_name=agent_name,
+                room_already_connected=room_connected,
             )
         finally:
             await backend.close()
         return
 
-    connect_task = asyncio.create_task(ctx.connect())
     try:
         from livekit.plugins.openai.realtime import RealtimeModel  # noqa: F401
     except ImportError:
         pass
 
     async def _connect_and_optional_masking_audio() -> None:
-        await connect_task
         startup_timeline.mark("room_connected")
         if not startup_masking_audio_enabled():
             return
@@ -325,7 +400,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
             dispatch_resolve_ms,
         )
 
-    await connect_task
+    # Room already connected at session start.
     if not bootstrap.get("ok"):
         masking_task.cancel()
         logger.error("inbound bootstrap failed: %s", bootstrap.get("error"))

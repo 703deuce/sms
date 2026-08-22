@@ -11,7 +11,6 @@ from livekit.agents import AgentServer, JobContext, cli
 from transovo_voice.boot_probe import probe_backend_health
 from transovo_voice.constants import VOICE_RUNTIME_API_VERSION
 from transovo_voice.session.inbound import run_inbound_session
-from transovo_voice.session.room_utils import resolve_room_sid
 from transovo_voice.telemetry import log_boot_versions, log_event
 
 load_dotenv()
@@ -47,7 +46,15 @@ server = AgentServer()
 async def entrypoint(ctx: JobContext) -> None:
     _ensure_worker_registered()
     job_id = getattr(getattr(ctx, "job", None), "id", None) or ctx.room.name
-    room_sid = await resolve_room_sid(ctx.room)
+    log_event(
+        "worker_job_entry_entered",
+        room=ctx.room.name,
+        extra={
+            "source": "mctb-sip-e2e",
+            "jobId": str(job_id),
+            "roomName": ctx.room.name,
+        },
+    )
     log_event(
         "worker_job_received",
         room=ctx.room.name,
@@ -56,7 +63,6 @@ async def entrypoint(ctx: JobContext) -> None:
             "event": "worker_job_received",
             "jobId": str(job_id),
             "roomName": ctx.room.name,
-            "roomSid": room_sid,
         },
     )
     ctx.log_context_fields = {

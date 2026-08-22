@@ -1,20 +1,18 @@
-"""MCTB 571 SIP ingress — end-to-end diagnostic trace only (no SMS, no AI)."""
+"""MCTB 571 SIP ingress — room-answer hold test (no audio)."""
 
 from __future__ import annotations
 
 import asyncio
 import re
-import time
+import traceback
 from typing import TYPE_CHECKING
 
 from transovo_voice.session.mctb_sip_e2e_trace import (
     MCTB_571_E164,
     MctbSipE2eTrace,
     is_correlation_already_handled,
-    make_backend_reporter,
     mark_correlation_handled,
 )
-from transovo_voice.session.sip_raw_audio import play_sip_raw_tone
 from transovo_voice.telemetry import log_event
 
 if TYPE_CHECKING:
@@ -23,6 +21,7 @@ if TYPE_CHECKING:
     from transovo_voice.integrations.backend_client import TransovoBackend
 
 LOG_SOURCE = "mctb-sip-diagnostic"
+HOLD_SECONDS = 3.0
 
 
 def _normalize_e164(value: str | None) -> str | None:
@@ -50,10 +49,12 @@ async def run_mctb_sip_diagnostic_session(
     trace: MctbSipE2eTrace,
     participant: "rtc.RemoteParticipant",
     agent_name: str,
+    room_already_connected: bool = True,
 ) -> None:
     """
-    SIP ingress for 571 — raw PCM tone diagnostic only:
-    connect → publish 1 kHz tone for 2s → hang up.
+    SIP ingress for 571 — restore physical answer only:
+    room already connected → confirm participant active → hold → disconnect.
+    No audio publication in this step.
     """
     if is_correlation_already_handled(trace.correlation_id):
         trace.log_mctb_diagnostic_skipped("duplicate_correlation_id")
@@ -61,6 +62,7 @@ async def run_mctb_sip_diagnostic_session(
         return
 
     mark_correlation_handled(trace.correlation_id)
+    trace.log("mctb_branch_selected", toE164=trace.to_e164, agentName=agent_name)
     trace.log_dispatch_evaluated(agent_name=agent_name)
     trace.log_participant_joined()
     trace.log_worker_job_received()
@@ -79,50 +81,56 @@ async def run_mctb_sip_diagnostic_session(
 
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
-    connect_started = time.perf_counter()
-    trace.log_worker_room_connect_start()
-    try:
-        await ctx.connect()
-        connect_ms = int((time.perf_counter() - connect_started) * 1000)
-        trace.log_worker_room_connected(connect_ms)
-        trace.log_participant_active()
-    except Exception as err:
-        connect_ms = int((time.perf_counter() - connect_started) * 1000)
-        trace.log_worker_room_connect_failed(elapsed_ms=connect_ms, error=str(err))
-        trace.log_sip_call_final_state(disconnect_reason="room_connect_failed")
-        await trace.finalize()
-        return
+    if not room_already_connected:
+        import time
+
+        connect_started = time.perf_counter()
+        trace.log_worker_room_connect_start()
+        trace.log("ctx_connect_invoked", roomName=ctx.room.name, jobId=trace.job_id)
+        try:
+            await ctx.connect()
+            connect_ms = int((time.perf_counter() - connect_started) * 1000)
+            trace.log("ctx_connect_completed", elapsedMs=connect_ms)
+            trace.log_worker_room_connected(connect_ms)
+        except Exception as err:
+            connect_ms = int((time.perf_counter() - connect_started) * 1000)
+            trace.log(
+                "ctx_connect_failed",
+                elapsedMs=connect_ms,
+                error=str(err),
+                traceback=traceback.format_exc(),
+            )
+            trace.log_worker_room_connect_failed(elapsed_ms=connect_ms, error=str(err))
+            trace.log_sip_call_final_state(disconnect_reason="room_connect_failed")
+            await trace.finalize()
+            return
+    else:
+        trace.log(
+            "ctx_connect_skipped_already_connected",
+            roomName=ctx.room.name,
+            jobId=trace.job_id,
+        )
+        trace.log_worker_room_connected(0)
+
+    sip_status = (participant.attributes or {}).get("sip.callStatus")
+    trace.log_participant_active()
+    trace.log(
+        "sip_participant_status_observed",
+        sipCallStatus=sip_status,
+        participantId=participant.sid,
+        expectedActive=True,
+    )
 
     participant_count = len(ctx.room.remote_participants) + 1
     trace.log_room_ready(created_new=False, participant_count=participant_count)
 
-    trace.log_diagnostic_audio_start()
-    audio_result = await play_sip_raw_tone(
-        ctx.room,
-        trace=trace,
-        sip_participant=participant,
+    trace.log(
+        "mctb_hold_started",
+        holdSeconds=HOLD_SECONDS,
+        note="no_audio_room_answer_only_test",
     )
-
-    if not audio_result.ok or audio_result.frames_written == 0:
-        trace.log_diagnostic_audio_failed(
-            audio_result.error or "no_frames_written",
-        )
-    else:
-        trace.log(
-            "diagnostic_audio_complete",
-            framesWritten=audio_result.frames_written,
-            firstFrameWrittenMs=audio_result.first_frame_written_ms,
-            playbackDurationMs=audio_result.playback_duration_ms,
-            trackSid=audio_result.track_sid,
-            publicationSid=audio_result.publication_sid,
-            sampleRate=audio_result.sample_rate,
-            numChannels=audio_result.num_channels,
-            frequencyHz=audio_result.frequency_hz,
-            callerAudioProof="frames_pushed_to_audio_source",
-            note="completion_requires_frames_written_not_playback_ack",
-        )
-
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(HOLD_SECONDS)
+    trace.log("mctb_hold_complete", holdSeconds=HOLD_SECONDS)
 
     trace.log_sip_call_final_state(
         disconnect_reason="diagnostic_complete",
@@ -136,10 +144,8 @@ async def run_mctb_sip_diagnostic_session(
             "toE164": trace.to_e164,
             "fromE164": trace.from_e164,
             "source": LOG_SOURCE,
-            "framesWritten": audio_result.frames_written,
-            "playbackDurationMs": audio_result.playback_duration_ms,
-            "trackSid": audio_result.track_sid,
-            "rawPcm": True,
+            "holdSeconds": HOLD_SECONDS,
+            "audioEnabled": False,
         },
     )
     await trace.finalize()

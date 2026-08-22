@@ -22,6 +22,12 @@ async def test_resolve_room_sid_awaits_async_property():
     assert sid == "RM_test123"
 
 
-async def test_resolve_room_sid_handles_sync_value():
-    sid = await resolve_room_sid(_SyncSidRoom())
-    assert sid == "RM_sync456"
+async def test_resolve_room_sid_times_out_when_unavailable():
+    class _HangingSid:
+        @property
+        async def sid(self) -> str:
+            await asyncio.sleep(5)
+            return "RM_never"
+
+    sid = await resolve_room_sid(_HangingSid(), timeout_s=0.05)
+    assert sid is None
