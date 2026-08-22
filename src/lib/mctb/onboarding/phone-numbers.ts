@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { isPhoneMctbSipIngress } from "@/lib/mctb/sip-ingress/sync";
+import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import { MCTB_PLATFORM_DEMO_E164 } from "./constants";
 import { getPlatformDemoNumberE164 } from "./demo";
 
@@ -28,6 +29,10 @@ export function getMctbDefaultBusinessLineE164(): string | null {
 export async function getProductionMctbForwardTargetE164(
   workspaceId: string,
 ): Promise<string | null> {
+  if (await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId)) {
+    return getMctbDemoIngressE164();
+  }
+
   const prisma = getPrisma();
   const phones = await prisma.phoneNumber.findMany({
     where: {

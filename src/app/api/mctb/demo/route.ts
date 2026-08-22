@@ -76,6 +76,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as {
       consentMode?: MctbConsentMode;
       existingConsentAttested?: boolean;
+      context?: "try_it" | "onboarding";
     };
 
     if (body.consentMode) {
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
     const result = await startDemoSession({
       workspaceId: auth.workspaceId,
       callerE164: user.phone,
+      context: body.context === "onboarding" ? "onboarding" : "try_it",
     });
 
     return NextResponse.json({

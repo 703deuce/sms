@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
 import { getUserProductAccess } from "@/lib/products/entitlements";
+import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
 import { getMaintenanceState } from "@/lib/platform-flags";
@@ -40,6 +41,10 @@ export default async function AppLayout({
     (workspaceRow as { displayName?: string | null; name?: string } | null)?.displayName ||
     workspaceRow?.name ||
     "Workspace";
+  const billingPlan = String(
+    (workspaceRow as { billingPlan?: string | null } | null)?.billingPlan || "",
+  );
+  const showTryIt = shouldShowTryItNav(billingPlan);
 
   return (
     <>
@@ -61,6 +66,7 @@ export default async function AppLayout({
       hasVoice={productAccess.hasVoice}
       hasSms={productAccess.hasSms}
       hasNumbers={productAccess.hasNumbers}
+      showTryIt={showTryIt}
     >
       {children}
     </AppShell>

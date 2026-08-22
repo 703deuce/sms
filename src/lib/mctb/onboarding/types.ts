@@ -43,11 +43,16 @@ export type MctbDemoSessionStatus =
   | "expired";
 
 export type MctbDemoSession = {
+  /** Stable id for workspace-isolated demo session resolution. */
+  demoSessionId?: string;
   status: MctbDemoSessionStatus;
   callerE164: string;
   /** Platform-owned pre-approved demo number — NOT the customer's trial TFN. */
   demoNumberE164: string;
   startedAt: string;
+  expiresAt?: string | null;
+  /** try_it = standalone /voice/try-it page; onboarding = wizard demo step */
+  context?: "try_it" | "onboarding";
   callDetectedAt?: string | null;
   textSentAt?: string | null;
   replyReceivedAt?: string | null;

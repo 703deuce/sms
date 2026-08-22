@@ -8,24 +8,37 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
+  showTryIt?: boolean;
 };
 
 /**
  * Missed Call Text Back — primary product sidebar.
  */
-export function buildVoiceNav(_options: VoiceNavOptions = {}): NavItem[] {
-  return [
+export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
+  const main: NavItem[] = [
     {
-      label: "Dashboard",
+      label: "Overview",
       href: "/dashboard",
       icon: LayoutDashboard,
       sectionLabel: "Main",
     },
+  ];
+
+  if (options.showTryIt) {
+    main.push({
+      label: "Try It",
+      href: "/voice/try-it",
+      icon: Sparkles,
+    });
+  }
+
+  main.push(
     {
       label: "Conversations",
       href: "/voice/conversations",
@@ -41,6 +54,10 @@ export function buildVoiceNav(_options: VoiceNavOptions = {}): NavItem[] {
       href: "/voice/setup",
       icon: SlidersHorizontal,
     },
+  );
+
+  return [
+    ...main,
     {
       label: "Numbers",
       href: "/voice/numbers",
@@ -65,6 +82,7 @@ export function buildVoiceNav(_options: VoiceNavOptions = {}): NavItem[] {
 
 export function getVoicePageTitle(pathname: string): string {
   if (pathname === "/dashboard" || pathname === "/outcomes") return "";
+  if (pathname.startsWith("/voice/try-it")) return "Try It";
   if (pathname.startsWith("/voice/conversations")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/setup")) return "Setup";
@@ -77,11 +95,15 @@ export function getVoicePageTitle(pathname: string): string {
   return "";
 }
 
-export function buildVoiceMobileNav() {
-  return [
-    { label: "Home", href: "/dashboard" },
+export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
+  const items = [{ label: "Home", href: "/dashboard" }];
+  if (options.showTryIt) {
+    items.push({ label: "Try It", href: "/voice/try-it" });
+  }
+  items.push(
     { label: "Chats", href: "/voice/conversations" },
     { label: "Missed", href: "/voice/missed-calls" },
     { label: "Setup", href: "/voice/setup" },
-  ];
+  );
+  return items;
 }

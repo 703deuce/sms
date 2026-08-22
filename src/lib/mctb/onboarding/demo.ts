@@ -8,6 +8,7 @@ import {
 } from "./types";
 import { loadMctbOnboardingState, parseMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { MCTB_PLATFORM_DEMO_E164 } from "./constants";
+import { createId } from "@/lib/supabase/id";
 
 const DEMO_SESSION_TTL_MS = 30 * 60 * 1000;
 
@@ -131,21 +132,31 @@ export async function resolveOnboardingWorkspaceForPlatformInbound(input: {
 export async function startDemoSession(input: {
   workspaceId: string;
   callerE164: string;
+  context?: "try_it" | "onboarding";
 }): Promise<{ demoNumberE164: string; session: MctbDemoSession }> {
   const demoNumberE164 = getPlatformDemoNumberE164();
+  const startedAt = new Date().toISOString();
+  const context = input.context || "onboarding";
 
   const caller = normalizeE164(input.callerE164);
   const session: MctbDemoSession = {
+    demoSessionId: createId(),
     status: "waiting_call",
     callerE164: caller,
     demoNumberE164,
-    startedAt: new Date().toISOString(),
+    startedAt,
+    expiresAt: new Date(Date.now() + DEMO_SESSION_TTL_MS).toISOString(),
+    context,
   };
 
-  await saveMctbOnboardingState(input.workspaceId, {
+  const statePatch: Parameters<typeof saveMctbOnboardingState>[1] = {
     demoSession: session,
-    currentStep: "demo",
-  });
+  };
+  if (context === "onboarding") {
+    statePatch.currentStep = "demo";
+  }
+
+  await saveMctbOnboardingState(input.workspaceId, statePatch);
 
   const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
   const { syncPlatformDemoConsentRuntime } = await import(
@@ -226,13 +237,15 @@ export async function recordDemoTextSent(workspaceId: string): Promise<void> {
     status: "text_sent",
     textSentAt: new Date().toISOString(),
   };
-  const nextState = {
+  const nextState: Parameters<typeof saveMctbOnboardingState>[1] = {
     demoSession: nextSession,
     completedSteps: (state.completedSteps.includes("demo")
       ? state.completedSteps
       : [...state.completedSteps, "demo"]) as MctbOnboardingState["completedSteps"],
-    currentStep: state.currentStep === "demo" ? ("trial_number" as const) : state.currentStep,
   };
+  if (session.context !== "try_it" && state.currentStep === "demo") {
+    nextState.currentStep = "trial_number";
+  }
   await saveMctbOnboardingState(workspaceId, nextState);
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_TEXT_SENT");
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_COMPLETED").catch(() => undefined);
@@ -255,7 +268,9 @@ export async function recordDemoReplyReceived(workspaceId: string): Promise<void
     completedSteps: state.completedSteps.includes("demo")
       ? state.completedSteps
       : [...state.completedSteps, "demo"],
-    currentStep: state.currentStep === "demo" ? ("trial_number" as const) : state.currentStep,
+    ...(session.context !== "try_it" && state.currentStep === "demo"
+      ? { currentStep: "trial_number" as const }
+      : {}),
   });
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_REPLY_RECEIVED");
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_COMPLETED");
@@ -298,5 +313,7 @@ export async function getDemoStatus(workspaceId: string) {
     },
     completed: Boolean(session?.replyReceivedAt || session?.textSentAt),
     expired: session ? isDemoSessionExpired(session) : false,
+    demoSessionId: session?.demoSessionId || null,
+    expiresAt: session?.expiresAt || null,
   };
 }

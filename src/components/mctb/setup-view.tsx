@@ -526,7 +526,7 @@ export function MctbSetupView() {
                     });
                 }}
               >
-                Test my setup
+                Test My Setup
               </Button>
               <Link href="/voice/missed-calls">
                 <Button variant="outline">View missed call log</Button>

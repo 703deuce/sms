@@ -37,6 +37,7 @@ export function AppShell({
   hasVoice = false,
   hasSms = false,
   hasNumbers = false,
+  showTryIt = false,
 }: {
   children: React.ReactNode;
   userName: string;
@@ -55,6 +56,7 @@ export function AppShell({
   hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
+  showTryIt?: boolean;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,6 +103,7 @@ export function AppShell({
           hasVoice={hasVoice}
           hasSms={hasSms}
           hasNumbers={hasNumbers}
+          showTryIt={showTryIt}
         />
       </Suspense>
       <div className={sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-[260px]"}>
@@ -141,6 +144,7 @@ export function AppShell({
       <MobileNav
         realtorMode={realtorMode}
         currentProduct={currentProduct}
+        showTryIt={showTryIt}
         onMore={() => setMenuOpen(true)}
       />
     </div>

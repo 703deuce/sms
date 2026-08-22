@@ -21,13 +21,15 @@ export function MobileNav({
   onMore,
   realtorMode = false,
   currentProduct = null,
+  showTryIt = false,
 }: {
   onMore: () => void;
   realtorMode?: boolean;
   currentProduct?: CurrentProduct;
+  showTryIt?: boolean;
 }) {
   const pathname = usePathname();
-  const voiceItems = buildVoiceMobileNav().map((item, i) => ({
+  const voiceItems = buildVoiceMobileNav({ showTryIt }).map((item, i) => ({
     ...item,
     icon: voiceMobileIcons[i] ?? LayoutDashboard,
   }));

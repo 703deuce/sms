@@ -258,6 +258,7 @@ export function Sidebar({
   hasVoice = false,
   hasSms = false,
   hasNumbers = false,
+  showTryIt = false,
 }: {
   userName: string;
   workspaceName?: string;
@@ -275,6 +276,7 @@ export function Sidebar({
   hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
+  showTryIt?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -290,11 +292,18 @@ export function Sidebar({
       return buildSmsNav({ inboxBadge });
     }
     if (currentProduct === "voice" || hasVoice) {
-      return buildVoiceNav({ primaryVoiceAgentId: primaryVoiceAgentId ?? null });
+      return buildVoiceNav({
+        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
+        showTryIt,
+      });
     }
-    return buildVoiceNav({ primaryVoiceAgentId: primaryVoiceAgentId ?? null });
+    return buildVoiceNav({
+      primaryVoiceAgentId: primaryVoiceAgentId ?? null,
+      showTryIt,
+    });
   }, [
     primaryVoiceAgentId,
+    showTryIt,
     pathname,
     realtorMode,
     currentProduct,
@@ -370,15 +379,6 @@ export function Sidebar({
             + Add Line
           </Link>
         ) : null}
-        {(currentProduct === "voice" || currentProduct === null) && !collapsed ? (
-          <Link
-            href="/onboarding/mctb"
-            onClick={onClose}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
-          >
-            Finish Setup
-          </Link>
-        ) : null}
         {(currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) && !collapsed ? (
           <SmsCreateMenu variant="sidebar" />
         ) : null}
@@ -388,6 +388,8 @@ export function Sidebar({
         {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
+          const tryItOwned =
+            item.label === "Try It" && pathname.startsWith("/voice/try-it");
           const setupOwned =
             item.label === "Setup" && pathname.startsWith("/voice/setup");
           const missedCallsOwned =
@@ -411,6 +413,7 @@ export function Sidebar({
             item.label === "Settings" &&
             (pathname === "/settings" || pathname.startsWith("/settings/"));
           const ownedOutcome =
+            tryItOwned ||
             setupOwned ||
             missedCallsOwned ||
             complianceOwned ||

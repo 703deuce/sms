@@ -15,6 +15,10 @@ import {
 } from "@/lib/compliance-helpers";
 import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
+import {
+  getPlatformDemoPhoneRecord,
+  isWorkspaceAuthorizedForPlatformDemoNumber,
+} from "@/lib/mctb/platform-demo-access";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -89,9 +93,27 @@ export async function GET() {
   ]);
 
   const requiredActions = deriveRequiredActions(compliance.registration, reg);
+  const platformDemoAuthorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
+  const platformDemoPhone = platformDemoAuthorized ? await getPlatformDemoPhoneRecord() : null;
+  const mergedPhoneNumbers =
+    platformDemoPhone &&
+    !phoneNumbers.some((n: { id: string }) => n.id === platformDemoPhone.phoneNumberId)
+      ? [
+          ...phoneNumbers,
+          {
+            id: platformDemoPhone.phoneNumberId,
+            e164: platformDemoPhone.e164,
+            friendlyName: "Transovo platform demo (571)",
+            type: "local",
+            a2pStatus: "APPROVED",
+            status: "Active",
+            settingsJson: platformDemoPhone.settingsJson,
+          },
+        ]
+      : phoneNumbers;
   const messagingReady =
     requiredActions.length === 0 &&
-    phoneNumbers.some((n: { settingsJson?: unknown; a2pStatus?: string | null; type?: string | null }) =>
+    mergedPhoneNumbers.some((n: { settingsJson?: unknown; a2pStatus?: string | null; type?: string | null }) =>
       isPhoneMessagingApproved(n),
     );
 
@@ -111,7 +133,7 @@ export async function GET() {
             config: solution.config,
           }
         : null,
-      phoneNumbers,
+      phoneNumbers: mergedPhoneNumbers,
       compliance: {
         messagingReady,
         requiredActions,

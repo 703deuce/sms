@@ -57,6 +57,9 @@ export function isMctbAppPath(pathname: string): boolean {
   if (pathname === "/onboarding/mctb" || pathname.startsWith("/onboarding/mctb/")) {
     return true;
   }
+  if (pathname === "/voice/try-it" || pathname.startsWith("/voice/try-it/")) {
+    return true;
+  }
   if (pathname === "/voice/setup" || pathname.startsWith("/voice/setup/")) {
     return true;
   }

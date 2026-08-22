@@ -92,7 +92,8 @@ assert.equal(isNumbersMarketplacePath("/numbers/premium"), true);
 assert.equal(productHomePath("voice"), "/dashboard");
 
 // Sidebar separation — no cross-product links in primary nav
-const voiceNav = buildVoiceNav();
+const voiceNav = buildVoiceNav({ showTryIt: false });
+const voiceNavTrial = buildVoiceNav({ showTryIt: true });
 const numbersNav = buildNumbersNav();
 const smsNav = buildSmsNav();
 const voiceLabels = voiceNav.map((i) => i.label);
@@ -109,7 +110,10 @@ assert.ok(!voiceLabels.includes("Receptionist"), "Receptionist removed from voic
 assert.ok(!voiceLabels.includes("Knowledge"), "Knowledge removed from voice nav");
 assert.ok(!voiceLabels.includes("Automations"), "Automations hidden from voice nav");
 assert.ok(!voiceLabels.includes("Smart Routing"), "Smart Routing hidden from voice nav");
-assert.equal(voiceNav.length, 9, "Voice sidebar ships 9 items");
+assert.ok(voiceLabels.includes("Overview"), "Voice nav includes Overview");
+assert.ok(voiceNavTrial.map((i) => i.label).includes("Try It"), "Trial voice nav includes Try It");
+assert.equal(voiceNav.length, 9, "Voice sidebar ships 9 items without Try It");
+assert.equal(voiceNavTrial.length, 10, "Voice sidebar ships 10 items with Try It");
 assert.equal(smsNav.length, 9, "SMS sidebar preserved without dashboard");
 assert.ok(SMS_CREATE_ACTIONS.length >= 5, "Create menu has primary actions");
 
