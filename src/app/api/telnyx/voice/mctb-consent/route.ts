@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  mctb571ConsentPlaybackUrl,
   mctb571ConsentTexmlVoiceUrl,
 } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
@@ -65,9 +64,47 @@ async function resolveInboundTarget(input: {
   });
 }
 
+function scheduleDemoCallDetect(input: {
+  from: string;
+  to: string;
+  callSid: string;
+  forwardedFrom: string;
+}) {
+  void (async () => {
+    try {
+      const target = await resolveInboundTarget({
+        from: input.from,
+        to: input.to,
+        forwardedFrom: input.forwardedFrom,
+      });
+      if (!target.demoMode) return;
+      const { recordDemoCallDetected } = await import("@/lib/mctb/onboarding/demo");
+      await recordDemoCallDetected({ workspaceId: target.workspaceId });
+    } catch (err) {
+      console.error("[mctb-consent-texml] demo call detect failed", err);
+    }
+  })();
+}
+
+function inboundConsentTexml(forwardedFrom: string) {
+  const actionUrl = new URL(mctb571ConsentTexmlVoiceUrl());
+  actionUrl.searchParams.set("event", "gather");
+  if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
+  const action = actionUrl.toString();
+  // Say first — Telnyx edge TTS, no HTTPS fetch. Critical for ~5s carrier forwards.
+  const say =
+    "Sorry we missed your call. " +
+    "To receive a text message from us, press 1 now.";
+  return texml(
+    `<Gather action="${escapeXml(action)}" method="POST" numDigits="1" timeout="15">` +
+      `<Say voice="female">${escapeXml(say)}</Say>` +
+      `</Gather><Hangup/>`,
+  );
+}
+
 /**
  * TeXML voice_url for platform 571 MCTB Press-1.
- * Telnyx fetches this when the call arrives — answers and plays without Call Control round trip.
+ * MUST return XML immediately — never await DB before the response (carrier forwards die in ~5s).
  */
 export async function POST(request: Request) {
   const url = new URL(request.url);
@@ -78,6 +115,7 @@ export async function POST(request: Request) {
   const to = pick(fields, "To", "to", "Called") || "+15714073615";
   const digits = pick(fields, "Digits", "digits");
   const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
+  const callStatus = pick(fields, "CallStatus", "CallStatus", "call_status");
   const forwardedFrom =
     normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
     normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
@@ -146,34 +184,16 @@ export async function POST(request: Request) {
       from,
       to,
       callSid,
+      callStatus: callStatus || null,
       forwardedFrom: forwardedFrom || null,
-      fieldKeys: Object.keys(fields),
     }),
   );
 
   if (from) {
-    try {
-      const target = await resolveInboundTarget({ from, to, forwardedFrom });
-      if (target.demoMode) {
-        const { recordDemoCallDetected } = await import("@/lib/mctb/onboarding/demo");
-        await recordDemoCallDetected({ workspaceId: target.workspaceId });
-      }
-    } catch (err) {
-      console.error("[mctb-consent-texml] demo call detect failed", err);
-    }
+    scheduleDemoCallDetect({ from, to, callSid, forwardedFrom });
   }
 
-  const playbackUrl = mctb571ConsentPlaybackUrl();
-  const actionUrl = new URL(mctb571ConsentTexmlVoiceUrl());
-  actionUrl.searchParams.set("event", "gather");
-  if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
-  const action = actionUrl.toString();
-  return texml(
-    `<Gather action="${escapeXml(action)}" method="POST" numDigits="1" timeout="12" finishOnKey="#">` +
-      `<Play>${escapeXml(playbackUrl)}</Play>` +
-      `<Say voice="female">Press 1 to receive a text message.</Say>` +
-      `</Gather><Hangup/>`,
-  );
+  return inboundConsentTexml(forwardedFrom);
 }
 
 export async function GET() {

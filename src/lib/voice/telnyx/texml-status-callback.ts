@@ -173,6 +173,18 @@ export async function handleTexmlStatusCallback(request: Request) {
   const toEarly = normalizeE164(
     pick(eventPayload.to, eventPayload.To, eventPayload.destination_number),
   );
+  const connectionId = pick(eventPayload.ConnectionId, eventPayload.connection_id);
+  const { isPlatform571E164, isMctb571ConsentTexmlConnection } = await import(
+    "@/lib/mctb/consent-prompt/telnyx-texml-route"
+  );
+  if (toEarly && isPlatform571E164(toEarly) && isMctb571ConsentTexmlConnection(connectionId)) {
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId },
+      data: { status: "processed", processedAt: new Date() },
+    });
+    return NextResponse.json({ ok: true, skipped: "mctb_texml_consent" });
+  }
+
   if (
     toEarly &&
     (eventType === "call.initiated" || eventType === "call.ringing")
