@@ -1,8 +1,8 @@
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
-  isMctb571SipDiagnosticTarget,
   MCTB_SIP_E2E_AGENT_NAME,
 } from "@/lib/mctb/sip-diagnostic/constants";
+import { isMctbSipIngressTarget } from "@/lib/mctb/sip-ingress/resolver";
 import {
   logLivekitDispatchEvaluated,
   logLivekitJobNotDispatched,
@@ -172,7 +172,7 @@ export async function resolveDispatchSnapshotForPython(
     }
   }
 
-  if (isMctb571SipDiagnosticTarget(normalizedTo || toE164)) {
+  if (await isMctbSipIngressTarget(normalizedTo || toE164)) {
     logLivekitDispatchEvaluated({
       toE164: normalizedTo || toE164,
       fromE164,
@@ -253,7 +253,7 @@ export async function resolveDispatchSnapshotForPython(
     }
   }
 
-  if (isMctb571SipDiagnosticTarget(normalizedTo || toE164)) {
+  if (await isMctbSipIngressTarget(normalizedTo || toE164)) {
     logLivekitDispatchEvaluated({
       toE164: normalizedTo || toE164,
       fromE164,

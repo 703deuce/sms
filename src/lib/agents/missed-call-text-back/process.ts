@@ -200,10 +200,13 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     });
   }
 
+  const delaySeconds = input.demoMode ? 0 : undefined;
   await scheduleMissedCallText({
     workspaceId: input.workspaceId,
     missedCallEventId: event.id,
     traceId,
+    delaySeconds,
+    demoMode: input.demoMode,
   });
 
   return {

@@ -8,9 +8,12 @@ export async function scheduleMissedCallText(input: {
   missedCallEventId: string;
   traceId: string;
   delaySeconds?: number;
+  demoMode?: boolean;
 }) {
   const config = await loadMissedCallTextConfig(input.workspaceId);
-  const delayMs = Math.max(0, (input.delaySeconds ?? config.delaySeconds) * 1000);
+  const configuredDelay =
+    input.demoMode === true ? 0 : (input.delaySeconds ?? config.delaySeconds);
+  const delayMs = Math.max(0, configuredDelay * 1000);
   const runAt = new Date(Date.now() + delayMs);
 
   const prisma = getPrisma();

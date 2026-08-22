@@ -128,7 +128,7 @@ def _fire_backend_call(backend: TransovoBackend, action: str, payload: dict[str,
 async def run_inbound_session(ctx: JobContext) -> None:
     import traceback
 
-    from transovo_voice.session.mctb_sip_diagnostic import is_mctb_571_sip_target
+    from transovo_voice.session.mctb_sip_diagnostic import is_mctb_sip_route_target
     from transovo_voice.session.mctb_sip_e2e_trace import (
         MctbSipE2eTrace,
         derive_correlation_id,
@@ -281,7 +281,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
     trace.log_telnyx_to_livekit_invite_attempted()
     trace.log_livekit_sip_session_received(participant)
 
-    if is_mctb_571_sip_target(to_e164):
+    if await is_mctb_sip_route_target(backend, to_e164):
         from transovo_voice.session.mctb_sip_diagnostic import run_mctb_sip_diagnostic_session
 
         trace.log("mctb_branch_selected", toE164=to_e164, fromE164=from_e164)

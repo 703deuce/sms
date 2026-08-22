@@ -107,6 +107,7 @@ export async function POST(req: Request) {
       industry?: string;
       messageTemplate?: string;
       consentMode?: MctbConsentMode;
+      existingConsentAttested?: boolean;
       forwardingCarrier?: MctbForwardingCarrier;
       businessNumberE164?: string;
       forwardingRingSeconds?: number;
@@ -175,6 +176,15 @@ export async function POST(req: Request) {
     }
 
     if (body.consentMode) {
+      if (
+        body.consentMode === "existing_consent" &&
+        body.existingConsentAttested !== true
+      ) {
+        return NextResponse.json(
+          { error: "Existing consent attestation is required" },
+          { status: 400 },
+        );
+      }
       await saveMissedCallTextBack(auth.workspaceId, { activate: false });
       const ws = await prisma.workspace.findUnique({
         where: { id: auth.workspaceId },
@@ -213,6 +223,15 @@ export async function POST(req: Request) {
       await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
         console.error("[mctb/onboarding] syncPlatformDemoConsentRuntime", err);
       });
+      if (body.consentMode === "existing_consent") {
+        const { recordWorkspaceExistingConsentAttestation } = await import(
+          "@/lib/mctb/event-only/attestation"
+        );
+        await recordWorkspaceExistingConsentAttestation({
+          workspaceId: auth.workspaceId,
+          attestedByUserId: auth.session.userId,
+        }).catch(() => undefined);
+      }
     }
 
     if (body.action === "start_forwarding_test") {

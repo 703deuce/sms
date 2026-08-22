@@ -99,6 +99,12 @@ export function MctbSetupView() {
   const [timezone, setTimezone] = useState("America/New_York");
   const [cooldownMinutes, setCooldownMinutes] = useState(60);
   const [replyNotifications, setReplyNotifications] = useState(true);
+  const [existingConsentAttested, setExistingConsentAttested] = useState(false);
+  const [setupTest, setSetupTest] = useState<{
+    started: boolean;
+    verified: boolean;
+    checks: Record<string, boolean>;
+  } | null>(null);
   const [enabled, setEnabled] = useState(true);
 
   const load = useCallback(async () => {
@@ -140,6 +146,24 @@ export function MctbSetupView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!setupTest?.started || setupTest.verified) return;
+    const timer = setInterval(() => {
+      void fetch("/api/mctb/setup-test", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((json) => {
+          if (!json?.status) return;
+          setSetupTest({
+            started: json.status.started,
+            verified: json.status.verified,
+            checks: json.status.checks,
+          });
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [setupTest?.started, setupTest?.verified]);
+
   const selectedNumber = useMemo(
     () => data?.phoneNumbers.find((n) => n.id === phoneNumberId) || null,
     [data?.phoneNumbers, phoneNumberId],
@@ -167,6 +191,8 @@ export function MctbSetupView() {
           messageTemplate,
           delaySeconds,
           consentMode,
+          existingConsentAttested:
+            consentMode === MCTB_CONSENT_MODE_EXISTING ? existingConsentAttested : undefined,
           cooldownMinutes,
           replyNotifications,
           businessHoursOnly,
@@ -340,13 +366,26 @@ export function MctbSetupView() {
             {consentMode === MCTB_CONSENT_MODE_VERIFIED ? (
               <MctbConsentPromptEditor />
             ) : (
-              <div className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-4 text-[12px] text-[#4b5563]">
-                <p className="font-semibold text-[#111827]">Already Have Consent selected</p>
-                <p className="mt-1">
-                  Missed calls proceed directly to your recovery text after eligibility checks — no
-                  voice prompt or DTMF. Your saved Verified Call Consent audio stays in your
-                  workspace and returns when you switch back.
-                </p>
+              <div className="space-y-3">
+                <div className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-4 text-[12px] text-[#4b5563]">
+                  <p className="font-semibold text-[#111827]">Existing consent selected</p>
+                  <p className="mt-1">
+                    Missed calls proceed directly to your recovery text after eligibility checks —
+                    no voice prompt or DTMF.
+                  </p>
+                </div>
+                <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px]">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={existingConsentAttested}
+                    onChange={(e) => setExistingConsentAttested(e.target.checked)}
+                  />
+                  <span>
+                    I certify that I have the required permission to send SMS messages to callers
+                    covered by this setup.
+                  </span>
+                </label>
               </div>
             )}
 
@@ -470,6 +509,25 @@ export function MctbSetupView() {
               <p className="text-[13px] text-rose-600">Select a number above before testing.</p>
             )}
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="default"
+                disabled={!selectedNumber || saving}
+                onClick={() => {
+                  void fetch("/api/mctb/setup-test", { method: "POST" })
+                    .then((res) => res.json())
+                    .then((json) => {
+                      if (json?.status) {
+                        setSetupTest({
+                          started: json.status.started,
+                          verified: json.status.verified,
+                          checks: json.status.checks,
+                        });
+                      }
+                    });
+                }}
+              >
+                Test my setup
+              </Button>
               <Link href="/voice/missed-calls">
                 <Button variant="outline">View missed call log</Button>
               </Link>
@@ -477,6 +535,18 @@ export function MctbSetupView() {
                 <Button variant="outline">View conversations</Button>
               </Link>
             </div>
+            {setupTest?.started ? (
+              <div className="space-y-2 rounded-lg border p-3 text-[12px]">
+                <p className="font-semibold text-[#111827]">
+                  {setupTest.verified ? "Setup verified" : "Waiting for your test call…"}
+                </p>
+                {Object.entries(setupTest.checks).map(([key, done]) => (
+                  <p key={key} className={done ? "text-emerald-700" : "text-muted-foreground"}>
+                    {done ? "✓" : "○"} {key.replace(/([A-Z])/g, " $1")}
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </Card>
 
           {error ? <p className="text-[13px] font-medium text-rose-600">{error}</p> : null}

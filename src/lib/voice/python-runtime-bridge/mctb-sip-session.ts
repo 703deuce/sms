@@ -4,7 +4,7 @@ import {
   MCTB_CONSENT_MODE_EXISTING,
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
-import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
+import { loadMctbWorkspaceConfig } from "@/lib/mctb/config";
 import { loadMctbConsentPrompt } from "@/lib/mctb/consent-prompt/store";
 import { DEFAULT_MCTB_CONSENT_VOICE_ID } from "@/lib/mctb/consent-prompt/defaults";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
@@ -149,7 +149,11 @@ export async function resolveMctbSipSessionForPython(
     forwardedFrom: forwardedFromE164,
   });
 
-  const consentMode = await loadMctbConsentMode(target.workspaceId);
+  const mctbConfig = await loadMctbWorkspaceConfig(target.workspaceId, {
+    callerE164,
+    transovoNumberE164,
+  });
+  const consentMode = mctbConfig.consentMode;
   const businessE164 = forwardedFromE164 || transovoNumberE164;
 
   let playUrl: string | undefined;
@@ -187,7 +191,7 @@ export async function resolveMctbSipSessionForPython(
   return {
     ok: true,
     workspaceId: target.workspaceId,
-    demoMode: target.demoMode,
+    demoMode: mctbConfig.demoMode,
     consentMode,
     consentDigit: "1",
     playUrl,

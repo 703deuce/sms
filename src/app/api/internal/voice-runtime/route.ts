@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type VoiceRuntimeAction =
+  | "check_mctb_sip_ingress"
   | "bootstrap_inbound"
   | "resolve_dispatch_snapshot"
   | "capture_mctb_sip_inbound"
@@ -93,6 +94,13 @@ export async function POST(request: Request) {
     let result: unknown;
 
     switch (action) {
+      case "check_mctb_sip_ingress": {
+        const { isMctbSipIngressTarget } = await import("@/lib/mctb/sip-ingress/resolver");
+        const toE164 = String(payload.toE164 || "").trim();
+        result = { route: await isMctbSipIngressTarget(toE164), toE164 };
+        break;
+      }
+
       case "bootstrap_inbound": {
         const { bootstrapInboundForPython } = await import(
           "@/lib/voice/python-runtime-bridge/bootstrap-inbound"

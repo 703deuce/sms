@@ -32,9 +32,28 @@ def _normalize_e164(value: str | None) -> str | None:
     return value
 
 
-def is_mctb_571_sip_target(to_e164: str | None) -> bool:
+def is_mctb_sip_ingress_target(to_e164: str | None) -> bool:
+    """Fast sync check for platform demo DID — async resolver uses backend in inbound."""
     normalized = _normalize_e164(to_e164)
     return normalized == MCTB_571_E164
+
+
+async def is_mctb_sip_route_target(
+    backend: "TransovoBackend",
+    to_e164: str | None,
+) -> bool:
+    if is_mctb_sip_ingress_target(to_e164):
+        return True
+    try:
+        result = await backend.call("check_mctb_sip_ingress", {"toE164": to_e164})
+        return bool(result.get("route"))
+    except Exception:
+        return is_mctb_sip_ingress_target(to_e164)
+
+
+def is_mctb_571_sip_target(to_e164: str | None) -> bool:
+    """Backward-compatible alias."""
+    return is_mctb_sip_ingress_target(to_e164)
 
 
 async def run_mctb_sip_diagnostic_session(

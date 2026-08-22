@@ -112,6 +112,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
+  const [existingConsentAttested, setExistingConsentAttested] = useState(false);
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
   const [forwardingTestActive, setForwardingTestActive] = useState(false);
@@ -392,20 +393,20 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
       {step === "consent" ? (
         <Card className="space-y-4 p-6">
-          <h2 className="text-lg font-semibold">Consent method</h2>
+          <h2 className="text-lg font-semibold">How should missed-call texting be authorized?</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {(
               [
                 {
                   id: "press_1" as const,
-                  title: "Verified Call Consent",
+                  title: "Ask callers to press 1",
                   badge: "Recommended",
-                  desc: "Caller hears a disclosure and presses 1 to receive the follow-up text.",
+                  desc: "We play a short disclosure and only text callers who press 1.",
                 },
                 {
                   id: "existing_consent" as const,
-                  title: "I Already Have Consent",
-                  desc: "You have documented consent (web form, prior relationship, etc.) and attest to it.",
+                  title: "I already have permission to text these callers",
+                  desc: "No Press 1. You certify that you already have the required consent.",
                 },
               ] as const
             ).map((opt) => (
@@ -432,6 +433,20 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               </button>
             ))}
           </div>
+          {consentMode === "existing_consent" ? (
+            <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={existingConsentAttested}
+                onChange={(e) => setExistingConsentAttested(e.target.checked)}
+              />
+              <span>
+                I certify that I have the required permission to send SMS messages to callers
+                covered by this setup.
+              </span>
+            </label>
+          ) : null}
           {consentMode === "press_1" ? (
             <p className="text-sm text-muted-foreground">
               After onboarding, customize your spoken Press-1 script and generate audio in{" "}
@@ -441,7 +456,19 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               . Live calls play your saved recording before collecting Press 1.
             </p>
           ) : null}
-          <Button disabled={saving} onClick={() => void post({ consentMode })}>
+          <Button
+            disabled={
+              saving ||
+              (consentMode === "existing_consent" && !existingConsentAttested)
+            }
+            onClick={() =>
+              void post({
+                consentMode,
+                existingConsentAttested:
+                  consentMode === "existing_consent" ? true : undefined,
+              })
+            }
+          >
             Continue
           </Button>
         </Card>

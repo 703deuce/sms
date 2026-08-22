@@ -13,17 +13,17 @@ export const MCTB_CONSENT_MODE_LABELS: Record<
   MctbConsentMode,
   { title: string; subtitle: string; productCode: string }
 > = {
-  existing_consent: {
-    productCode: "EXISTING_CONSENT",
-    title: "Already Have Consent",
-    subtitle:
-      "You confirm callers already have valid consent through your existing relationship, forms, agreements, etc.",
-  },
   press_1: {
     productCode: "VERIFIED_CALL_CONSENT",
-    title: "Verified Call Consent",
+    title: "Ask callers to press 1",
     subtitle:
-      "Transovo plays your published consent message and only sends the text after the caller presses 1.",
+      "We play a short disclosure and only text callers who press 1.",
+  },
+  existing_consent: {
+    productCode: "EXISTING_CONSENT",
+    title: "I already have permission to text these callers",
+    subtitle:
+      "No Press 1. You certify that you already have the required consent.",
   },
 };
 

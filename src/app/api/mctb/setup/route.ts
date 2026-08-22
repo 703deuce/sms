@@ -40,6 +40,7 @@ export type MctbSetupPayload = {
   cooldownMinutes?: number;
   replyNotifications?: boolean;
   activate?: boolean;
+  existingConsentAttested?: boolean;
 };
 
 const DEFAULT_CAMPAIGN_DESCRIPTION =
@@ -242,6 +243,15 @@ export async function POST(req: Request) {
     });
 
     if (body.consentMode) {
+      if (
+        body.consentMode === "existing_consent" &&
+        body.existingConsentAttested !== true
+      ) {
+        return NextResponse.json(
+          { error: "Existing consent attestation is required" },
+          { status: 400 },
+        );
+      }
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
       await syncMctbConsentRouting(workspaceId, session.userId).catch(() => undefined);
 

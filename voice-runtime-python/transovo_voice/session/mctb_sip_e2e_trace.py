@@ -261,7 +261,7 @@ class MctbSipE2eTrace:
             explicitAgentId=None,
             mctb_sip_route_selected=True,
             reasonIfNotMatched=None,
-            note="571_bypasses_ai_dispatch_worker_branch",
+            note="mctb_sip_route_bypasses_ai_dispatch",
         )
         self.mark_stage("jobDispatched")
         self.log(

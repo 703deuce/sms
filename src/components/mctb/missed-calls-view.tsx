@@ -126,8 +126,12 @@ export function MctbMissedCallsView() {
             </THead>
             <TBody>
               {events.map((row) => (
-                <TR key={row.id}>
-                  <TD className="font-medium">{fmtPhone(row.callerE164)}</TD>
+                <TR key={row.id} className="cursor-pointer hover:bg-muted/40">
+                  <TD className="font-medium">
+                    <Link href={`/voice/missed-calls/${row.id}`} className="hover:underline">
+                      {fmtPhone(row.callerE164)}
+                    </Link>
+                  </TD>
                   <TD>{fmtPhone(row.businessE164)}</TD>
                   <TD className="text-muted-foreground">{fmtTime(row.detectedAt)}</TD>
                   <TD className="text-muted-foreground">
