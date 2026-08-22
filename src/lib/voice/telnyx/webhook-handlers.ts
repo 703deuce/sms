@@ -33,6 +33,18 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
   const providerEventId = body.data?.id || `${eventType}:${Date.now()}`;
   const eventPayload = (body.data?.payload || {}) as Record<string, unknown>;
 
+  // Carrier-forwarded legs to platform 571 expire in ~5s. Answer before idempotency DB writes.
+  if (eventType === "call.initiated") {
+    const callControlId = String(eventPayload.call_control_id || "");
+    const to = String(eventPayload.to || "");
+    if (callControlId && to === "+15714073615") {
+      const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
+      await answerCall(callControlId).catch((err) => {
+        console.error("[telnyx/voice] early answer (571) failed", { callControlId, err });
+      });
+    }
+  }
+
   const prisma = getPrisma();
 
   // Idempotency

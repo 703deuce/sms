@@ -26,7 +26,7 @@ import {
 } from "./record-by-phone-service";
 import type { SessionState } from "./types";
 import { emitSmartRoutingEvent } from "./events";
-import { answerCall } from "./telnyx-provider";
+import { answerCall, gatherUsingAudio } from "./telnyx-provider";
 
 export async function tryStartSmartRoutingInbound(input: {
   workspaceId: string;
@@ -36,12 +36,25 @@ export async function tryStartSmartRoutingInbound(input: {
   callControlId: string;
   forwardedFrom?: string;
 }) {
+  const callControlId = input.callControlId;
+
+  // Answer before any DB — AT&T forward legs to 571 die in ~5s total.
+  if (callControlId) {
+    await answerCall(callControlId).catch((err) => {
+      console.error("[smart-routing] pre-answer failed", {
+        callControlId,
+        forwardedFrom: input.forwardedFrom,
+        err,
+      });
+    });
+  }
+
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
   if (!flow?.publishedVersionId) return { started: false as const };
 
   const prisma = getPrisma();
   const existing = await prisma.smartRoutingCallSession.findFirst({
-    where: { callControlId: input.callControlId },
+    where: { callControlId },
     select: { id: true },
   });
   if (existing) {
@@ -49,26 +62,81 @@ export async function tryStartSmartRoutingInbound(input: {
   }
 
   const { loadPublishedCompiledFlow } = await import("./session-store");
-
-  // Carrier-forwarded PSTN legs (AT&T *61* → local DID) drop in ~5s unless we answer
-  // and start media immediately — load the published flow in parallel with answer.
-  const [answerResult, published] = await Promise.all([
-    input.callControlId
-      ? answerCall(input.callControlId).catch((err) => {
-          console.error("[smart-routing] pre-answer failed", {
-            callControlId: input.callControlId,
-            forwardedFrom: input.forwardedFrom,
-            err,
-          });
-          return null;
-        })
-      : Promise.resolve(null),
-    loadPublishedCompiledFlow(flow.id),
-  ]);
-
+  const published = await loadPublishedCompiledFlow(flow.id);
   if (!published?.compiled) return { started: false as const };
 
+  const { resolvePlatformConsentFastPath } = await import("./platform-consent-fast-path");
   const { startFlowForInboundCall } = await import("./flow-runtime");
+  const compiled = published.compiled as import("./types").CompiledFlow;
+  const fastPath =
+    input.forwardedFrom?.trim() &&
+    (await resolvePlatformConsentFastPath({
+      workspaceId: input.workspaceId,
+      flowId: flow.id,
+      flowVersionId: flow.publishedVersionId,
+      calledNumber: input.toE164,
+      compiled,
+    }));
+
+  if (fastPath && callControlId) {
+    const { startCallSession } = await import("./session-store");
+    const session = await startCallSession({
+      workspaceId: input.workspaceId,
+      flowId: flow.id,
+      flowVersionId: flow.publishedVersionId,
+      callerNumber: input.fromE164,
+      calledNumber: input.toE164,
+      callControlId,
+      forwardedFrom: input.forwardedFrom,
+      deferFlowStartedEvent: true,
+    });
+
+    const clientState = {
+      kind: "smart_routing" as const,
+      sessionId: session.id,
+      workspaceId: input.workspaceId,
+      flowId: flow.id,
+      nodeId: fastPath.consentNodeId,
+      awaiting: "sms_consent",
+    };
+
+    await gatherUsingAudio({
+      callControlId,
+      audioUrl: fastPath.playUrl,
+      validDigits: fastPath.consentDigit,
+      clientState,
+      sessionId: session.id,
+    });
+
+    const { updateSessionState } = await import("./session-store");
+    await updateSessionState(session.id, {
+      answeredAt: new Date(),
+      currentNodeId: fastPath.consentNodeId,
+      stateJson: { awaitingEvent: "sms_consent" },
+    });
+
+    const { ensureSmartRoutingHumanCall } = await import("./human-call-bridge");
+    void ensureSmartRoutingHumanCall({
+      workspaceId: input.workspaceId,
+      sessionId: session.id,
+      fromE164: input.fromE164,
+      toE164: input.toE164,
+      callSid: callControlId,
+      provider: "telnyx",
+    }).catch((err) => console.error("[smart-routing] ensureSmartRoutingHumanCall", err));
+
+    const { emitSmartRoutingEvent } = await import("./events");
+    void emitSmartRoutingEvent({
+      workspaceId: input.workspaceId,
+      type: "FLOW_STARTED",
+      sessionId: session.id,
+      flowId: flow.id,
+      payload: { caller: input.fromE164, forwarded: true },
+    }).catch(() => undefined);
+
+    return { started: true as const, sessionId: session.id, fastPath: true as const };
+  }
+
   const session = await startFlowForInboundCall({
     workspaceId: input.workspaceId,
     flowId: flow.id,
@@ -78,7 +146,7 @@ export async function tryStartSmartRoutingInbound(input: {
     callControlId: input.callControlId,
     forwardedFrom: input.forwardedFrom,
     preloadedPublished: published,
-    preAnswered: Boolean(answerResult),
+    preAnswered: true,
   });
   return { started: true as const, sessionId: session.id };
 }
