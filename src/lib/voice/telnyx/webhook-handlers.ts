@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import type { Prisma } from "@/lib/domain";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
+import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 
@@ -33,11 +34,24 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
   const providerEventId = body.data?.id || `${eventType}:${Date.now()}`;
   const eventPayload = (body.data?.payload || {}) as Record<string, unknown>;
 
-  // Carrier-forwarded legs to platform 571 expire in ~5s. Answer before idempotency DB writes.
+  // Carrier-forwarded legs to platform 571 expire in ~5s. Answer + gather before ANY DB.
   if (eventType === "call.initiated") {
     const callControlId = String(eventPayload.call_control_id || "");
     const to = String(eventPayload.to || "");
-    if (callControlId && to === "+15714073615") {
+    const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
+    if (callControlId && to === MCTB_PLATFORM_DEMO_E164 && forwardedFrom) {
+      const { startImmediate571ForwardGather } = await import(
+        "@/lib/smart-routing/platform-consent-fast-path"
+      );
+      await startImmediate571ForwardGather({
+        callControlId,
+        workspaceId:
+          process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() ||
+          "cmt2zyg4l43373s0f146b442h",
+        flowId:
+          process.env.MCTB_PLATFORM_CONSENT_FLOW_ID?.trim() || "cmt3o902u2l4652654a4y1v3y",
+      });
+    } else if (callControlId && to === MCTB_PLATFORM_DEMO_E164) {
       const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
       await answerCall(callControlId).catch((err) => {
         console.error("[telnyx/voice] early answer (571) failed", { callControlId, err });

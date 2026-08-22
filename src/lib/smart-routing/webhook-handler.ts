@@ -79,6 +79,9 @@ export async function tryStartSmartRoutingInbound(input: {
     }));
 
   if (fastPath && callControlId) {
+    const { wasEarly571ForwardGatherStarted } = await import("./platform-consent-fast-path");
+    const alreadyGathering = wasEarly571ForwardGatherStarted(callControlId);
+
     const { startCallSession } = await import("./session-store");
     const session = await startCallSession({
       workspaceId: input.workspaceId,
@@ -91,22 +94,24 @@ export async function tryStartSmartRoutingInbound(input: {
       deferFlowStartedEvent: true,
     });
 
-    const clientState = {
-      kind: "smart_routing" as const,
-      sessionId: session.id,
-      workspaceId: input.workspaceId,
-      flowId: flow.id,
-      nodeId: fastPath.consentNodeId,
-      awaiting: "sms_consent",
-    };
+    if (!alreadyGathering) {
+      const clientState = {
+        kind: "smart_routing" as const,
+        sessionId: session.id,
+        workspaceId: input.workspaceId,
+        flowId: flow.id,
+        nodeId: fastPath.consentNodeId,
+        awaiting: "sms_consent",
+      };
 
-    await gatherUsingAudio({
-      callControlId,
-      audioUrl: fastPath.playUrl,
-      validDigits: fastPath.consentDigit,
-      clientState,
-      sessionId: session.id,
-    });
+      await gatherUsingAudio({
+        callControlId,
+        audioUrl: fastPath.playUrl,
+        validDigits: fastPath.consentDigit,
+        clientState,
+        sessionId: session.id,
+      });
+    }
 
     const { updateSessionState } = await import("./session-store");
     await updateSessionState(session.id, {
@@ -312,8 +317,20 @@ export async function processSmartRoutingWebhookEvent(input: {
   );
   if (!clientState?.sessionId) return { handled: false as const };
 
-  const session = await loadCallSession(clientState.sessionId);
+  let session = await loadCallSession(clientState.sessionId);
+  if (!session && clientState.sessionId.startsWith("pending:")) {
+    const callControlId = String(input.eventPayload.call_control_id ?? "");
+    if (callControlId) {
+      const prisma = getPrisma();
+      session = await prisma.smartRoutingCallSession.findFirst({
+        where: { callControlId },
+        include: { flow: true },
+      });
+    }
+  }
   if (!session) return { handled: false as const };
+
+  const sessionId = session.id;
 
   if (
     input.eventType === "call.gather.ended" ||
@@ -329,11 +346,11 @@ export async function processSmartRoutingWebhookEvent(input: {
           : session.callControlId;
         if (parentId && agentControlId) {
           await completeWhisperAccept({
-            sessionId: clientState.sessionId,
+            sessionId,
             parentCallControlId: parentId!,
             agentControlId,
           });
-          await finalizeSession(clientState.sessionId, "connected");
+          await finalizeSession(sessionId, "connected");
         }
         return { handled: true as const, outcome: "connected" };
       }
@@ -342,7 +359,7 @@ export async function processSmartRoutingWebhookEvent(input: {
       String(input.eventPayload.digits ?? input.eventPayload.digit ?? "").trim();
     const status = String(input.eventPayload.status ?? "");
     const result = await handleGatherResult({
-      sessionId: clientState.sessionId,
+      sessionId,
       digit: digits.charAt(0) || undefined,
       status,
     });
@@ -351,7 +368,7 @@ export async function processSmartRoutingWebhookEvent(input: {
 
   if (input.eventType === "call.answered" && clientState.awaiting === "transfer") {
     const result = await handleTransferResult({
-      sessionId: clientState.sessionId,
+      sessionId,
       answered: true,
     });
     return { handled: true as const, ...result };
@@ -362,7 +379,7 @@ export async function processSmartRoutingWebhookEvent(input: {
     clientState.awaiting === "transfer"
   ) {
     const result = await handleTransferResult({
-      sessionId: clientState.sessionId,
+      sessionId,
       answered: false,
     });
     return { handled: true as const, ...result };
@@ -374,20 +391,20 @@ export async function processSmartRoutingWebhookEvent(input: {
         input.eventPayload.recording_url ??
         "",
     );
-  if (url) {
+    if (url) {
       const prisma = getPrisma();
       await prisma.smartRoutingCallSession.update({
-        where: { id: clientState.sessionId },
+        where: { id: sessionId },
         data: { recordingUrl: url },
       });
       await emitSmartRoutingEvent({
         workspaceId: session.workspaceId,
         type: "VOICEMAIL_RECEIVED",
-        sessionId: clientState.sessionId,
+        sessionId,
         payload: { url },
       });
       const { finalizeSession } = await import("./flow-runtime");
-      await finalizeSession(clientState.sessionId, "voicemail");
+      await finalizeSession(sessionId, "voicemail");
     }
     return { handled: true as const, kind: "recording" };
   }
@@ -395,7 +412,7 @@ export async function processSmartRoutingWebhookEvent(input: {
   if (input.eventType === "call.hangup") {
     const prisma = getPrisma();
     await prisma.smartRoutingCallSession.updateMany({
-      where: { id: clientState.sessionId, completedAt: null },
+      where: { id: sessionId, completedAt: null },
       data: { completedAt: new Date(), finalOutcome: "caller_hung_up" },
     });
     return { handled: true as const, kind: "hangup" };
