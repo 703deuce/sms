@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-08-22T00:09:16.782Z",
+  "updatedAt": "2026-08-22T00:26:00.000Z",
   "verifiedBy": "mctb-certification-pass1-webhook.ts",
-  "notes": "LIVE_VERIFIED only when external proof exists. Pass 1 is PARTIAL until B-01 approval + B-02 webhook proof.",
+  "notes": "Pass 1 PARTIAL (B-01 approval + B-02 webhook deploy). Pass 2 exposed AT&T Wireless voicemail race.",
   "pass1Status": "PARTIAL",
   "pass1Remaining": [
-    "B-02 production webhook proof",
-    "B-01 TFV approval via poll/webhook without DB edit"
+    "B-02: production /api/twilio/toll-free-verification must not 404",
+    "B-01: TFV PENDING_REVIEW → APPROVED without DB edit"
   ],
   "pass1": {
     "runId": "mctb-cert-pass1-mt3majrh",
@@ -15,6 +15,32 @@
     "tfvSid": "HHb367fcc7f4a011a3447b939ade4787b2",
     "transovoTfvStatus": "PENDING",
     "twilioTfvStatus": "PENDING_REVIEW"
+  },
+  "pass2": {
+    "status": "IN_PROGRESS",
+    "directDialAni": {
+      "result": "PASS",
+      "testedAt": "2026-08-22T00:11:24.000Z",
+      "twilioCallSid": "CA1a0ad1c138ab4fd5d637693b808ed0df",
+      "note": "Direct dial to TFN; From matched caller 571-***-6175"
+    },
+    "carrierTests": [
+      {
+        "id": "att-wireless-iphone-voicemail-2026-08-22",
+        "carrier": "att",
+        "platform": "iphone_wireless",
+        "forwardingType": "when_unanswered",
+        "voicemailActive": true,
+        "forwardingUiConfirmed": true,
+        "result": "FAIL",
+        "twilioCallReceived": false,
+        "failureMode": "voicemail_answered_before_forward",
+        "userObservation": "Reached voicemail then hung up; call never hit Transovo TFN",
+        "testedAt": "2026-08-22T00:18:00.000Z",
+        "matrixImpact": "D-01 blocked for AT&T Wireless until no-answer timer < voicemail is proven",
+        "productAction": "Carrier capability flags + onboarding timer strategy; do not require VM disable"
+      }
+    ]
   },
   "items": {
     "A-02": {
@@ -33,41 +59,11 @@
     },
     "B-02": {
       "status": "MANUAL_HUMAN_TEST_REQUIRED",
-      "lastRunAt": "2026-08-22T00:09:16.782Z",
-      "note": "Deploy /api/twilio/toll-free-verification and re-run pass1-webhook script",
-      "checks": [
-        {
-          "name": "Webhook URL configured",
-          "status": "PASS",
-          "detail": "<app-host>/api/twilio/toll-free-verification"
-        },
-        {
-          "name": "Endpoint deployed (not HTTP 404)",
-          "status": "FAIL",
-          "detail": "POST empty body → HTTP 404",
-          "matrixIds": [
-            "B-02"
-          ]
-        }
-      ]
+      "note": "TFV webhook HTTP 404 at production app URL — deploy and re-run pass1-webhook"
+    },
+    "D-01": {
+      "status": "MANUAL_HUMAN_TEST_REQUIRED",
+      "note": "AT&T Wireless+iPhone+VM: conditional forward failed live test; other carriers pending"
     }
-  },
-  "pass1Webhook": {
-    "executedAt": "2026-08-22T00:09:16.782Z",
-    "checks": [
-      {
-        "name": "Webhook URL configured",
-        "status": "PASS",
-        "detail": "<app-host>/api/twilio/toll-free-verification"
-      },
-      {
-        "name": "Endpoint deployed (not HTTP 404)",
-        "status": "FAIL",
-        "detail": "POST empty body → HTTP 404",
-        "matrixIds": [
-          "B-02"
-        ]
-      }
-    ]
   }
 }

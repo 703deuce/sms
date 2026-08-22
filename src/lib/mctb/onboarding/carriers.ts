@@ -1,53 +1,62 @@
 import type { MctbForwardingCarrier } from "./types";
+import {
+  type CarrierForwardingCapabilities,
+  getCarrierCapabilities,
+} from "./carrier-capabilities";
 
 export type CarrierForwardingGuide = {
   id: MctbForwardingCarrier;
   label: string;
   steps: string[];
   supportUrl?: string;
+  capabilities: CarrierForwardingCapabilities;
 };
 
 export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
   {
     id: "verizon",
     label: "Verizon",
+    capabilities: getCarrierCapabilities("verizon"),
     steps: [
-      "Open the My Verizon app or dial *72 from your business phone.",
-      "Enter your Transovo forwarding number (YOUR_TRANSOVO_NUMBER) when prompted.",
-      "Choose conditional forwarding (forward when busy / no answer).",
-      "Save and test by calling your business line without answering.",
+      "Set conditional forwarding (busy / no answer) to YOUR_TRANSOVO_NUMBER.",
+      "If you use voicemail, set no-answer forward to ring fewer times than voicemail (recommended: ~15 seconds before forward).",
+      "Dial *71 + YOUR_TRANSOVO_NUMBER + SEND to enable no-answer forwarding, or use My Verizon → Manage device → Call forwarding.",
+      "Save and test by calling your business line from another phone without answering.",
     ],
     supportUrl: "https://www.verizon.com/support/call-forwarding-faqs/",
   },
   {
     id: "att",
     label: "AT&T",
+    capabilities: getCarrierCapabilities("att"),
     steps: [
-      "Sign in to your AT&T account or use your phone's call settings.",
-      "Find Call Forwarding or Conditional Call Forwarding.",
-      "Set forward on no answer / busy to your Transovo number.",
-      "Save changes and run a test call.",
+      "Set Call Forwarding → When Unanswered to YOUR_TRANSOVO_NUMBER.",
+      "Critical: forwarding must fire BEFORE voicemail answers. On AT&T Wireless this may require carrier support — iPhone “When Unanswered” alone may not be enough if voicemail is on.",
+      "Ask AT&T to set the no-answer forward timer shorter than your voicemail pickup (target ~15 seconds).",
+      "Do not disable voicemail — adjust the forward timer instead.",
+      "After setup, use Test forwarding below and confirm the call reaches Transovo.",
     ],
     supportUrl: "https://www.att.com/support/article/wireless/KM1008851/",
   },
   {
     id: "tmobile",
     label: "T-Mobile",
+    capabilities: getCarrierCapabilities("tmobile"),
     steps: [
-      "Open T-Mobile app or dial **21*YOUR_TRANSOVO_NUMBER# for unconditional forwarding.",
-      "For conditional forwarding, use your device call settings or contact T-Mobile.",
-      "Set busy / no answer to your Transovo number.",
-      "Test by calling your business line.",
+      "Set busy / no answer forwarding to YOUR_TRANSOVO_NUMBER (T-Mobile app or device settings).",
+      "If voicemail is on, ensure no-answer forward rings fewer times than voicemail (recommended ~15 seconds).",
+      "Test by calling your business line from another phone.",
     ],
     supportUrl: "https://www.t-mobile.com/support/plans-features/call-forwarding",
   },
   {
     id: "google_voice",
     label: "Google Voice",
+    capabilities: getCarrierCapabilities("google_voice"),
     steps: [
-      "Open voice.google.com and go to Settings.",
-      "Under Calls, enable call forwarding to your Transovo number.",
-      "Set to forward when you don't answer.",
+      "Open voice.google.com → Settings → Calls.",
+      "Enable call forwarding to YOUR_TRANSOVO_NUMBER when you don't answer.",
+      "Set ring duration before forward (~15 seconds recommended).",
       "Test with a call to your Google Voice number.",
     ],
     supportUrl: "https://support.google.com/voice/answer/115106",
@@ -55,10 +64,11 @@ export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
   {
     id: "ringcentral",
     label: "RingCentral",
+    capabilities: getCarrierCapabilities("ringcentral"),
     steps: [
-      "Sign in to the RingCentral admin portal.",
-      "Go to Phone System → Call Handling & Forwarding.",
-      "Add your Transovo number as a forward destination for unanswered calls.",
+      "Admin portal → Phone System → Call Handling & Forwarding.",
+      "Forward unanswered calls to YOUR_TRANSOVO_NUMBER after ~15 seconds.",
+      "Ensure voicemail does not answer before the forward rule.",
       "Save and test.",
     ],
     supportUrl: "https://support.ringcentral.com/article-v2/Setting-up-call-forwarding.html",
@@ -66,31 +76,31 @@ export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
   {
     id: "spectrum",
     label: "Spectrum",
+    capabilities: getCarrierCapabilities("spectrum"),
     steps: [
-      "Sign in to your Spectrum account or use your phone dial codes.",
-      "Enable conditional call forwarding (no answer / busy).",
-      "Enter your Transovo number as the forward destination.",
+      "Contact Spectrum or use account tools for conditional call forwarding (no answer / busy).",
+      "Forward to YOUR_TRANSOVO_NUMBER with a shorter ring timer than voicemail (~15 seconds).",
       "Test by calling your business line.",
     ],
   },
   {
     id: "comcast",
     label: "Comcast / Xfinity",
+    capabilities: getCarrierCapabilities("comcast"),
     steps: [
-      "Sign in to Xfinity Voice or use your phone's call forwarding settings.",
-      "Set up forward on no answer to your Transovo number.",
-      "Save settings.",
+      "Xfinity Voice or device settings → forward on no answer to YOUR_TRANSOVO_NUMBER.",
+      "Set forward to trigger before voicemail (~15 seconds recommended).",
       "Test with a call to your business line.",
     ],
   },
   {
     id: "other",
     label: "Other",
+    capabilities: getCarrierCapabilities("other"),
     steps: [
-      "Contact your phone provider and ask for conditional call forwarding.",
-      "Request: forward to your Transovo number when busy or not answered.",
-      "Some carriers call this 'no answer/busy transfer' or 'conditional forwarding'.",
-      "Once configured, use Test my connection below.",
+      "Ask your provider for conditional call forwarding (no answer / busy) to YOUR_TRANSOVO_NUMBER.",
+      "Request a no-answer timer shorter than voicemail pickup (~15 seconds).",
+      "Use Test forwarding below to confirm the call reaches Transovo.",
     ],
   },
 ];
@@ -98,3 +108,5 @@ export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
 export function getCarrierGuide(carrier: MctbForwardingCarrier): CarrierForwardingGuide {
   return MCTB_CARRIER_GUIDES.find((g) => g.id === carrier) || MCTB_CARRIER_GUIDES.at(-1)!;
 }
+
+export { getCarrierCapabilities, DEFAULT_FORWARD_RING_SECONDS } from "./carrier-capabilities";

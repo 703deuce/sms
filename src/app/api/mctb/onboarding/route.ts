@@ -27,6 +27,10 @@ import {
 } from "@/lib/mctb/tfv/service";
 import { MCTB_CARRIER_GUIDES } from "@/lib/mctb/onboarding/carriers";
 import {
+  getForwardingVerificationStatus,
+  startForwardingVerificationTest,
+} from "@/lib/mctb/onboarding/forwarding-verification";
+import {
   MCTB_PLATFORM_DEMO_DISPLAY,
   MCTB_PLATFORM_DEMO_LABEL,
 } from "@/lib/mctb/onboarding/constants";
@@ -45,7 +49,8 @@ export async function GET() {
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
-    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv] = await Promise.all([
+    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification] =
+      await Promise.all([
       loadMctbOnboardingState(auth.workspaceId),
       getDemoStatus(auth.workspaceId),
       getTrialNumberStatus(auth.workspaceId),
@@ -53,6 +58,7 @@ export async function GET() {
       getTrialInfo(auth.workspaceId),
       getTrialActivationRequirements(auth.workspaceId),
       getTfvStatusForWorkspace(auth.workspaceId),
+      getForwardingVerificationStatus(auth.workspaceId).catch(() => null),
     ]);
 
     return NextResponse.json({
@@ -80,6 +86,7 @@ export async function GET() {
         rejectedAt: state.tfvRejectedAt,
       },
       carriers: MCTB_CARRIER_GUIDES,
+      forwardingVerification,
       platformDemoDisplay: MCTB_PLATFORM_DEMO_DISPLAY,
     });
   } catch (err) {
@@ -102,6 +109,8 @@ export async function POST(req: Request) {
       consentMode?: MctbConsentMode;
       forwardingCarrier?: MctbForwardingCarrier;
       businessNumberE164?: string;
+      forwardingRingSeconds?: number;
+      /** @deprecated Use start_forwarding_test + Twilio verification */
       forwardingConnected?: boolean;
     };
 
@@ -198,26 +207,50 @@ export async function POST(req: Request) {
       });
     }
 
-    if (body.forwardingCarrier || body.businessNumberE164) {
-      const isStarting = Boolean(body.businessNumberE164 && !state.forwardingConnectedAt);
+    if (body.action === "start_forwarding_test") {
+      await startForwardingVerificationTest(auth.workspaceId);
+      state = await loadMctbOnboardingState(auth.workspaceId);
+    }
+
+    if (body.forwardingCarrier || body.businessNumberE164 || body.forwardingRingSeconds != null) {
+      const isStarting = Boolean(body.businessNumberE164 && !state.forwardingTestStartedAt);
       state = await saveMctbOnboardingState(auth.workspaceId, {
         forwardingCarrier: body.forwardingCarrier || state.forwardingCarrier,
         businessNumberE164: body.businessNumberE164 || state.businessNumberE164,
-        ...(body.forwardingConnected
-          ? { forwardingConnectedAt: new Date().toISOString() }
+        ...(body.forwardingRingSeconds != null
+          ? { forwardingRingSeconds: Math.min(30, Math.max(10, body.forwardingRingSeconds)) }
           : {}),
       });
       if (isStarting) {
         await recordFunnelEvent(auth.workspaceId, "MCTB_FORWARDING_STARTED");
       }
-      if (body.forwardingConnected) {
+      await saveMctbOnboardingState(auth.workspaceId, state);
+    }
+
+    const forwardingCheck = await getForwardingVerificationStatus(auth.workspaceId).catch(
+      () => null,
+    );
+    if (forwardingCheck?.verified) {
+      state = await loadMctbOnboardingState(auth.workspaceId);
+      if (state.forwardingConnectedAt && !state.completedSteps.includes("connect")) {
         state = markStepComplete(state, "connect");
-        await recordFunnelEvent(auth.workspaceId, "MCTB_FORWARDING_VERIFIED");
         await saveMctbOnboardingState(auth.workspaceId, { currentStep: "live_test" });
         const { startLiveTestSession } = await import("@/lib/mctb/onboarding/live-test");
         await startLiveTestSession(auth.workspaceId);
+        state = await loadMctbOnboardingState(auth.workspaceId);
       }
-      await saveMctbOnboardingState(auth.workspaceId, state);
+    }
+
+    // Legacy clients — ignore self-attested forwarding without Twilio proof.
+    if (body.forwardingConnected && !forwardingCheck?.verified) {
+      return NextResponse.json(
+        {
+          error:
+            "Forwarding must be verified with a real test call that reaches your Transovo number. Use Test forwarding.",
+          forwardingVerification: forwardingCheck,
+        },
+        { status: 400 },
+      );
     }
 
     if (body.step === "tfv") {
@@ -229,9 +262,14 @@ export async function POST(req: Request) {
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
+    const forwardingVerification = await getForwardingVerificationStatus(
+      auth.workspaceId,
+    ).catch(() => null);
+
     return NextResponse.json({
       ok: true,
       state: state.version ? state : defaultMctbOnboardingState(),
+      forwardingVerification,
     });
   } catch (err) {
     return jsonError(err, 500);

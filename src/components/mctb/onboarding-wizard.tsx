@@ -69,6 +69,13 @@ type OnboardingPayload = {
     failureReason?: string | null;
   };
   carriers: CarrierForwardingGuide[];
+  forwardingVerification: {
+    testStarted: boolean;
+    callDetected: boolean;
+    verified: boolean;
+    path: string | null;
+    aniLikelyPreserved: boolean | null;
+  } | null;
 };
 
 const DEFAULT_MESSAGE =
@@ -103,6 +110,8 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
+  const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
+  const [forwardingTestActive, setForwardingTestActive] = useState(false);
   const [businessNumber, setBusinessNumber] = useState("");
 
   const step = data?.state.currentStep || "business";
@@ -122,6 +131,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       if (json.state.consentMode) setConsentMode(json.state.consentMode);
       if (json.state.forwardingCarrier) setCarrier(json.state.forwardingCarrier);
       if (json.state.businessNumberE164) setBusinessNumber(json.state.businessNumberE164);
+      if (json.state.forwardingRingSeconds) setForwardRingSeconds(json.state.forwardingRingSeconds);
+      if (json.state.forwardingTestStartedAt && !json.state.forwardingConnectedAt) {
+        setForwardingTestActive(true);
+      }
+      if (json.forwardingVerification?.verified) setForwardingTestActive(false);
     }
     setLoading(false);
   }, []);
@@ -151,6 +165,20 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     }, 2500);
     return () => clearInterval(timer);
   }, [step, load]);
+
+  useEffect(() => {
+    if (step !== "connect" && step !== "live_test") return;
+    if (!forwardingTestActive && !data?.state.forwardingTestStartedAt) return;
+    if (data?.forwardingVerification?.verified) return;
+    const timer = setInterval(() => void load(), 4000);
+    return () => clearInterval(timer);
+  }, [
+    step,
+    forwardingTestActive,
+    data?.state.forwardingTestStartedAt,
+    data?.forwardingVerification?.verified,
+    load,
+  ]);
 
   useEffect(() => {
     if (step !== "live_test") return;
@@ -598,27 +626,109 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           </div>
 
           {selectedCarrier ? (
-            <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-              {selectedCarrier.steps.map((s) => (
-                <li key={s}>
-                  {s.replace("YOUR_TRANSOVO_NUMBER", trialDisplay || "your Transovo number")}
-                </li>
-              ))}
-            </ol>
+            <>
+              {selectedCarrier.capabilities.alternateSetupRequired ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  <p className="font-medium">Carrier timing note</p>
+                  <p className="mt-1">{selectedCarrier.capabilities.alternateSetupNote}</p>
+                </div>
+              ) : null}
+              {selectedCarrier.capabilities.voicemailRaceRisk === "high" ? (
+                <p className="text-sm text-muted-foreground">
+                  Forwarding must ring for about{" "}
+                  <span className="font-medium">{forwardRingSeconds} seconds</span> before sending
+                  the call to Transovo — shorter than your voicemail pickup. We do not ask you to
+                  turn voicemail off.
+                </p>
+              ) : null}
+              <div className="space-y-2">
+                <Label>
+                  Ring before Transovo catches the call (seconds)
+                </Label>
+                <Input
+                  type="number"
+                  min={10}
+                  max={30}
+                  value={forwardRingSeconds}
+                  onChange={(e) => setForwardRingSeconds(Number(e.target.value) || 15)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Recommended: {selectedCarrier.capabilities.recommendedForwardRingSeconds}s
+                  {selectedCarrier.capabilities.defaultVoicemailPickupSeconds
+                    ? ` — keep below typical voicemail (~${selectedCarrier.capabilities.defaultVoicemailPickupSeconds}s)`
+                    : ""}
+                </p>
+              </div>
+              <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+                {selectedCarrier.steps.map((s) => (
+                  <li key={s}>
+                    {s.replace("YOUR_TRANSOVO_NUMBER", trialDisplay || "your Transovo number")}
+                  </li>
+                ))}
+              </ol>
+            </>
           ) : null}
 
-          <Button
-            disabled={saving || !businessNumber.trim()}
-            onClick={() =>
-              void post({
-                forwardingCarrier: carrier,
-                businessNumberE164: businessNumber,
-                forwardingConnected: true,
-              })
-            }
-          >
-            I&apos;ve set up forwarding
-          </Button>
+          {data?.forwardingVerification?.testStarted ? (
+            <div className="rounded-lg border p-4 text-sm space-y-2">
+              <StepCheck
+                done={data.forwardingVerification.callDetected}
+                label="Call reached your Transovo number"
+              />
+              <StepCheck
+                done={data.forwardingVerification.verified}
+                label="Forwarded from your business line (not a direct dial)"
+              />
+              {data.forwardingVerification.verified ? (
+                <p className="text-emerald-800 font-medium">Forwarding verified. Continue to live test.</p>
+              ) : data.forwardingVerification.callDetected ? (
+                <p className="text-amber-800">
+                  Call detected but not from forwarding — dial your business line and let it forward,
+                  don&apos;t call the Transovo number directly.
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  Waiting for your test call… call your business line from another phone and don&apos;t
+                  answer.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={saving || !businessNumber.trim()}
+              onClick={() =>
+                void post({
+                  forwardingCarrier: carrier,
+                  businessNumberE164: businessNumber,
+                  forwardingRingSeconds: forwardRingSeconds,
+                })
+              }
+            >
+              Save setup
+            </Button>
+            <Button
+              disabled={saving || !businessNumber.trim()}
+              onClick={async () => {
+                await post({
+                  forwardingCarrier: carrier,
+                  businessNumberE164: businessNumber,
+                  forwardingRingSeconds: forwardRingSeconds,
+                });
+                setForwardingTestActive(true);
+                await fetch("/api/mctb/onboarding", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "start_forwarding_test" }),
+                });
+                await load();
+              }}
+            >
+              Test forwarding
+            </Button>
+          </div>
         </Card>
       ) : null}
 

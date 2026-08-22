@@ -98,7 +98,13 @@ export type MctbOnboardingState = {
   forwardingCarrier?: MctbForwardingCarrier | null;
   /** Customer's advertised business line (forwards to trial TFN). */
   businessNumberE164?: string | null;
+  /** Target seconds before no-answer forward (must beat voicemail when VM is on). */
+  forwardingRingSeconds?: number | null;
+  forwardingTestStartedAt?: string | null;
   forwardingConnectedAt?: string | null;
+  forwardingVerifiedCallSid?: string | null;
+  forwardingVerifiedCallerE164?: string | null;
+  forwardingVerifiedFromE164?: string | null;
   liveTestSession?: MctbLiveTestSession | null;
   liveTestPassedAt?: string | null;
   trialActivatedAt?: string | null;
