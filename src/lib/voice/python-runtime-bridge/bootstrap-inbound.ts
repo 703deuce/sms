@@ -2,7 +2,11 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   isMctb571SipDiagnosticTarget,
   MCTB_SIP_DIAGNOSTIC_LOG_SOURCE,
+  MCTB_SIP_E2E_AGENT_NAME,
 } from "@/lib/mctb/sip-diagnostic/constants";
+import {
+  logLivekitDispatchEvaluated,
+} from "@/lib/mctb/sip-diagnostic/e2e-trace";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import { resolveInboundFrontDeskRouting } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
@@ -209,11 +213,20 @@ export async function bootstrapInboundForPython(
   }
 
   if (isMctb571SipDiagnosticTarget(normalizedTo || toE164)) {
+    logLivekitDispatchEvaluated({
+      toE164: normalizedTo || toE164,
+      fromE164,
+      matched: true,
+      dispatchTarget: MCTB_SIP_E2E_AGENT_NAME,
+      agentName: MCTB_SIP_E2E_AGENT_NAME,
+      reasonIfNotMatched: null,
+    });
     logBootstrapProfile(input.predeterminedCallId, steps, Date.now() - started, {
       source: MCTB_SIP_DIAGNOSTIC_LOG_SOURCE,
       event: "bootstrap_skipped_mctb_sip_diagnostic",
       toE164: normalizedTo || toE164,
       fromE164,
+      mctb_sip_route_selected: true,
     });
     return {
       ok: false,

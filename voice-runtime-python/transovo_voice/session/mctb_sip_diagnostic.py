@@ -1,28 +1,29 @@
-"""MCTB 571 SIP ingress — capture missed-call event + optional diagnostic audio."""
+"""MCTB 571 SIP ingress — end-to-end diagnostic trace only (no SMS, no AI)."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import re
-from datetime import datetime, timezone
+import time
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
+from transovo_voice.session.mctb_sip_e2e_trace import (
+    DIAGNOSTIC_PHRASE,
+    MCTB_571_E164,
+    MctbSipE2eTrace,
+    is_correlation_already_handled,
+    make_backend_reporter,
+    mark_correlation_handled,
+)
 from transovo_voice.session.startup_audio import play_immediate_answer
 from transovo_voice.telemetry import log_event
 
 if TYPE_CHECKING:
     from livekit.agents import JobContext
+    from livekit import rtc
     from transovo_voice.integrations.backend_client import TransovoBackend
 
-MCTB_571_E164 = "+15714073615"
-MCTB_SIP_DIAGNOSTIC_SAY = (
-    "Transovo SIP test. Your forwarded call reached us successfully."
-)
 LOG_SOURCE = "mctb-sip-diagnostic"
-
-_SECRET_KEY = re.compile(r"password|secret|auth|token|credential", re.I)
 
 
 def _normalize_e164(value: str | None) -> str | None:
@@ -43,208 +44,86 @@ def is_mctb_571_sip_target(to_e164: str | None) -> bool:
     return normalized == MCTB_571_E164
 
 
-def _safe_sip_attrs(attrs: dict[str, str]) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for key, value in attrs.items():
-        if _SECRET_KEY.search(key):
-            continue
-        text = str(value)
-        if len(text) > 300:
-            text = f"{text[:300]}…"
-        out[key] = text
-    return out
-
-
-def _extract_forwarded(attrs: dict[str, str]) -> str | None:
-    for key, value in attrs.items():
-        lowered = key.lower()
-        if "diversion" in lowered or "forward" in lowered or "history-info" in lowered:
-            return str(value)[:300]
-    return None
-
-
-def _provider_call_id(attrs: dict[str, str], room: str, call_id: str) -> str:
-    sip_call_id = attrs.get("sip.callId") or attrs.get("sip.call-id")
-    if sip_call_id:
-        return f"sip:{sip_call_id}"
-    return f"livekit:{room}:{call_id}"
-
-
-def _log_mctb_sip_diagnostic(
-    event: str,
-    *,
-    call_id: str,
-    from_e164: str | None,
-    to_e164: str | None,
-    room: str,
-    participant_identity: str,
-    attrs: dict[str, str],
-    extra: dict[str, Any] | None = None,
-) -> None:
-    payload = {
-        "source": LOG_SOURCE,
-        "event": event,
-        "callId": call_id,
-        "callerAni": from_e164,
-        "calledDid": to_e164,
-        "forwardedFrom": _extract_forwarded(attrs),
-        "callIdHeader": attrs.get("sip.callId") or attrs.get("sip.call-id"),
-        "sipHeaders": _safe_sip_attrs(attrs),
-        "inviteHasSdp": attrs.get("sip.hasSdp") or attrs.get("sip.inviteHasSdp"),
-        "contentLength": attrs.get("sip.contentLength"),
-        "receivedAt": datetime.now(timezone.utc).isoformat(),
-        "room": room,
-        "participantIdentity": participant_identity,
-    }
-    if extra:
-        payload.update(extra)
-    print(json.dumps(payload, default=str))
-
-
-async def _capture_mctb_sip_event(
-    backend: "TransovoBackend",
-    *,
-    call_id: str,
-    from_e164: str | None,
-    to_e164: str | None,
-    room: str,
-    participant_identity: str,
-    attrs: dict[str, str],
-) -> None:
-    if not from_e164 or not to_e164:
-        log_event(
-            "mctb_sip_capture_skipped",
-            call_id=call_id,
-            extra={"reason": "missing_numbers", "source": LOG_SOURCE},
-        )
-        return
-
-    provider_call_id = _provider_call_id(attrs, room, call_id)
-    diversion = _extract_forwarded(attrs)
-    try:
-        result = await backend.call(
-            "capture_mctb_sip_inbound",
-            {
-                "providerCallId": provider_call_id,
-                "callerE164": from_e164,
-                "transovoNumberE164": to_e164,
-                "diversionHeader": diversion,
-                "livekitRoomName": room,
-                "participantIdentity": participant_identity,
-                "sipAttributes": _safe_sip_attrs(attrs),
-                "receivedAt": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-        log_event(
-            "mctb_sip_capture_complete",
-            call_id=call_id,
-            extra={
-                "source": LOG_SOURCE,
-                "providerCallId": provider_call_id,
-                "ok": result.get("ok"),
-                "eligible": result.get("eligible"),
-                "missedCallEventId": result.get("missedCallEventId"),
-            },
-        )
-    except Exception as err:
-        log_event(
-            "mctb_sip_capture_failed",
-            call_id=call_id,
-            extra={"source": LOG_SOURCE, "error": str(err)},
-        )
-
-
 async def run_mctb_sip_diagnostic_session(
     ctx: "JobContext",
     backend: "TransovoBackend",
     *,
-    participant_identity: str,
-    from_e164: str | None,
-    to_e164: str | None,
-    attrs: dict[str, str],
+    trace: MctbSipE2eTrace,
+    participant: "rtc.RemoteParticipant",
+    agent_name: str,
 ) -> None:
     """
-    SIP ingress for 571:
-    1) Answer immediately via ctx.connect() to stop upstream ringback
-    2) Queue MCTB Existing Consent SMS in background (independent of media)
-    3) Optional diagnostic phrase for delayed-offer physical test
+    SIP ingress for 571 — minimal media diagnostic only:
+    connect → play one test phrase → hang up.
     """
-    call_id = str(uuid4())
-    _log_mctb_sip_diagnostic(
-        "inbound_sip_captured",
-        call_id=call_id,
-        from_e164=from_e164,
-        to_e164=to_e164,
-        room=ctx.room.name,
-        participant_identity=participant_identity,
-        attrs=attrs,
-    )
+    if is_correlation_already_handled(trace.correlation_id):
+        trace.log_mctb_diagnostic_skipped("duplicate_correlation_id")
+        await trace.finalize()
+        return
 
-    log_event(
-        "mctb_sip_diagnostic_started",
-        call_id=call_id,
-        extra={
-            "toE164": to_e164,
-            "fromE164": from_e164,
-            "runtime": "livekit_python",
-            "source": LOG_SOURCE,
-        },
-    )
+    mark_correlation_handled(trace.correlation_id)
+    trace.log_dispatch_evaluated(agent_name=agent_name)
+    trace.log_participant_joined()
+    trace.log_worker_job_received()
+    trace.log_mctb_diagnostic_started()
+    trace.start_standard_watchdogs()
 
-    # Answer first — Telnyx ringback (183) continues until LiveKit accepts the SIP leg.
-    await ctx.connect()
-    _log_mctb_sip_diagnostic(
-        "room_connected",
-        call_id=call_id,
-        from_e164=from_e164,
-        to_e164=to_e164,
-        room=ctx.room.name,
-        participant_identity=participant_identity,
-        attrs=attrs,
-    )
+    def _on_participant_disconnected(p: "rtc.RemoteParticipant") -> None:
+        if p.sid == participant.sid:
+            trace.log(
+                "sip_participant_disconnected",
+                participantId=p.sid,
+                participantIdentity=p.identity,
+                roomName=ctx.room.name,
+                disconnectReason="participant_left",
+            )
 
-    capture_task = asyncio.create_task(
-        _capture_mctb_sip_event(
-            backend,
-            call_id=call_id,
-            from_e164=from_e164,
-            to_e164=to_e164,
-            room=ctx.room.name,
-            participant_identity=participant_identity,
-            attrs=attrs,
-        ),
-    )
+    ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
+    connect_started = time.perf_counter()
+    trace.log_worker_room_connect_start()
+    try:
+        await ctx.connect()
+        connect_ms = int((time.perf_counter() - connect_started) * 1000)
+        trace.log_worker_room_connected(connect_ms)
+        trace.log_participant_active()
+    except Exception as err:
+        connect_ms = int((time.perf_counter() - connect_started) * 1000)
+        trace.log_worker_room_connect_failed(elapsed_ms=connect_ms, error=str(err))
+        trace.log_sip_call_final_state(disconnect_reason="room_connect_failed")
+        await trace.finalize()
+        return
+
+    participant_count = len(ctx.room.remote_participants) + 1
+    trace.log_room_ready(created_new=False, participant_count=participant_count)
+
+    trace.log_diagnostic_audio_start()
     played_ms = await play_immediate_answer(
         ctx.room,
-        phrase=MCTB_SIP_DIAGNOSTIC_SAY,
-        call_id=call_id,
+        phrase=DIAGNOSTIC_PHRASE,
+        call_id=trace.correlation_id,
         temporary=False,
     )
-    _log_mctb_sip_diagnostic(
-        "diagnostic_phrase_played",
-        call_id=call_id,
-        from_e164=from_e164,
-        to_e164=to_e164,
-        room=ctx.room.name,
-        participant_identity=participant_identity,
-        attrs=attrs,
-        extra={"playedMs": played_ms, "phrase": MCTB_SIP_DIAGNOSTIC_SAY},
-    )
+    if played_ms is None:
+        trace.log_diagnostic_audio_failed("playback_failed")
+    else:
+        trace.log_diagnostic_audio_complete()
 
-    _log_mctb_sip_diagnostic(
-        "diagnostic_hangup",
-        call_id=call_id,
-        from_e164=from_e164,
-        to_e164=to_e164,
-        room=ctx.room.name,
-        participant_identity=participant_identity,
-        attrs=attrs,
+    await asyncio.sleep(0.5)
+
+    trace.log_sip_call_final_state(
+        disconnect_reason="diagnostic_complete",
+        sip_status="hangup",
     )
     log_event(
         "mctb_sip_diagnostic_complete",
-        call_id=call_id,
-        extra={"toE164": to_e164, "fromE164": from_e164, "source": LOG_SOURCE},
+        call_id=trace.correlation_id,
+        room=ctx.room.name,
+        extra={
+            "toE164": trace.to_e164,
+            "fromE164": trace.from_e164,
+            "source": LOG_SOURCE,
+            "playedMs": played_ms,
+        },
     )
-
-    await asyncio.gather(capture_task, return_exceptions=True)
+    await trace.finalize()

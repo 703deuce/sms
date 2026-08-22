@@ -38,6 +38,7 @@
     "rollback:mctb-571-twilio-voice-bridge": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-rollback-571-twilio-voice-bridge.ts",
     "test:mctb-event-only": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-event-only.ts",
     "test:mctb-sip-event-only": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-sip-event-only.ts",
+    "test:mctb-sip-e2e-trace": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-sip-e2e-trace.ts",
     "test:mctb-voice-bridge": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-voice-bridge.ts",
     "test:mctb-demo-call-detect": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-demo-call-detect.ts",
     "replay:mctb-consent-texml": "tsx scripts/replay-mctb-consent-texml-call.ts",

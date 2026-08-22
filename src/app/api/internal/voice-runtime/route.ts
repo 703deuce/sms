@@ -8,6 +8,7 @@ type VoiceRuntimeAction =
   | "bootstrap_inbound"
   | "resolve_dispatch_snapshot"
   | "capture_mctb_sip_inbound"
+  | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
   | "persist_intake_fields"
   | "persist_message"
@@ -111,6 +112,14 @@ export async function POST(request: Request) {
           "@/lib/mctb/event-only/sip-capture"
         );
         result = await captureMctbSipInboundForPython(payload as never);
+        break;
+      }
+
+      case "mctb_sip_e2e_trace": {
+        const { logMctbSipE2eMirror } = await import("@/lib/mctb/sip-diagnostic/e2e-trace");
+        const tracePayload = (payload.payload || payload) as Record<string, unknown>;
+        logMctbSipE2eMirror(tracePayload);
+        result = { ok: true, mirrored: true };
         break;
       }
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 from uuid import uuid4
@@ -125,6 +126,16 @@ def _fire_backend_call(backend: TransovoBackend, action: str, payload: dict[str,
 
 
 async def run_inbound_session(ctx: JobContext) -> None:
+    from transovo_voice.session.mctb_sip_diagnostic import is_mctb_571_sip_target
+    from transovo_voice.session.mctb_sip_e2e_trace import (
+        MctbSipE2eTrace,
+        derive_correlation_id,
+        extract_job_id,
+        make_backend_reporter,
+    )
+
+    agent_name = os.getenv("LIVEKIT_AGENT_NAME", "transovo-voice-runtime")
+
     backend = TransovoBackend()
     ud: SessionUserData | None = None
     observability: CallObservability | None = None
@@ -132,7 +143,14 @@ async def run_inbound_session(ctx: JobContext) -> None:
     startup_timeline = StartupTimeline(job_started_at)
     startup_timeline.mark("job_received")
 
+    job_id = extract_job_id(ctx)
+    room_sid = getattr(ctx.room, "sid", None)
+    trace: MctbSipE2eTrace | None = None
+
     async def shutdown_backend() -> None:
+        if trace is not None and not trace.finalized:
+            trace.log_sip_call_final_state(disconnect_reason="worker_shutdown")
+            await trace.finalize()
         if observability is not None:
             await observability.finalize()
         if ud is not None:
@@ -148,33 +166,62 @@ async def run_inbound_session(ctx: JobContext) -> None:
 
     ctx.add_shutdown_callback(shutdown_backend)
 
-    participant = await ctx.wait_for_participant()
+    participant_watchdog = asyncio.create_task(asyncio.sleep(15.0))
+
+    try:
+        participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=15.0)
+    except asyncio.TimeoutError:
+        participant_watchdog.cancel()
+        log_event(
+            "mctb_sip_watchdog_timeout",
+            room=ctx.room.name,
+            extra={
+                "source": "mctb-sip-e2e",
+                "failureReason": "SIP_PARTICIPANT_NOT_CREATED",
+                "jobId": job_id,
+            },
+        )
+        await backend.close()
+        return
+    finally:
+        if not participant_watchdog.done():
+            participant_watchdog.cancel()
+
     startup_timeline.mark("participant_joined")
 
     attrs = dict(participant.attributes or {})
     call_id = str(uuid4())
     from_e164, to_e164 = extract_call_numbers(attrs, ctx.room.metadata, participant.identity)
 
-    from transovo_voice.session.mctb_sip_diagnostic import (
-        is_mctb_571_sip_target,
+    reporter = await make_backend_reporter(backend)
+    correlation_id = derive_correlation_id(attrs, room_name=ctx.room.name, job_id=job_id)
+    trace = MctbSipE2eTrace.create(
+        correlation_id=correlation_id,
+        job_id=job_id,
+        room_name=ctx.room.name,
+        room_sid=str(room_sid) if room_sid else None,
+        attrs=attrs,
+        from_e164=from_e164,
+        to_e164=to_e164,
+        backend_report=reporter,
     )
+    trace.log_telnyx_sip_inbound_seen()
+    trace.log_telnyx_to_livekit_invite_attempted()
+    trace.log_livekit_sip_session_received(participant)
 
     if is_mctb_571_sip_target(to_e164):
-        from transovo_voice.integrations.backend_client import TransovoBackend
         from transovo_voice.session.mctb_sip_diagnostic import run_mctb_sip_diagnostic_session
 
-        mctb_backend = TransovoBackend()
         try:
             await run_mctb_sip_diagnostic_session(
                 ctx,
-                mctb_backend,
-                participant_identity=participant.identity,
-                from_e164=from_e164,
-                to_e164=to_e164,
-                attrs=attrs,
+                backend,
+                trace=trace,
+                participant=participant,
+                agent_name=agent_name,
             )
         finally:
-            await mctb_backend.close()
+            await backend.close()
         return
 
     connect_task = asyncio.create_task(ctx.connect())

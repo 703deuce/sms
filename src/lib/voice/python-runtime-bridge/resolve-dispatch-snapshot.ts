@@ -1,5 +1,13 @@
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
+  isMctb571SipDiagnosticTarget,
+  MCTB_SIP_E2E_AGENT_NAME,
+} from "@/lib/mctb/sip-diagnostic/constants";
+import {
+  logLivekitDispatchEvaluated,
+  logLivekitJobNotDispatched,
+} from "@/lib/mctb/sip-diagnostic/e2e-trace";
+import {
   loadExplicitDispatchForDid,
   mergeExplicitDispatchMetadata,
   parseDispatchAttributes,
@@ -164,6 +172,17 @@ export async function resolveDispatchSnapshotForPython(
     }
   }
 
+  if (isMctb571SipDiagnosticTarget(normalizedTo || toE164)) {
+    logLivekitDispatchEvaluated({
+      toE164: normalizedTo || toE164,
+      fromE164,
+      matched: true,
+      dispatchTarget: MCTB_SIP_E2E_AGENT_NAME,
+      agentName: MCTB_SIP_E2E_AGENT_NAME,
+      reasonIfNotMatched: null,
+    });
+  }
+
   const embeddedSnapshot = snapshotFromMetadataSources(jobMetaRaw, roomMeta, attrs);
   if (embeddedSnapshot) {
     const explicit = mergeExplicitDispatchMetadata(
@@ -232,6 +251,22 @@ export async function resolveDispatchSnapshotForPython(
         bootstrapProfileMs: Date.now() - started,
       });
     }
+  }
+
+  if (isMctb571SipDiagnosticTarget(normalizedTo || toE164)) {
+    logLivekitDispatchEvaluated({
+      toE164: normalizedTo || toE164,
+      fromE164,
+      matched: false,
+      explicitWorkspaceId: explicit?.workspaceId || null,
+      explicitAgentId: explicit?.agentId || null,
+      reasonIfNotMatched: "DISPATCH_SNAPSHOT_NOT_FOUND",
+    });
+    logLivekitJobNotDispatched({
+      reason: "DISPATCH_NOT_MATCHED",
+      participantIdentity: input.participantIdentity,
+      toE164: normalizedTo || toE164,
+    });
   }
 
   console.log(
