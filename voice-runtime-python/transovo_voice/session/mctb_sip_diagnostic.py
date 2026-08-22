@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime, timezone
@@ -164,8 +165,9 @@ async def run_mctb_sip_diagnostic_session(
 ) -> None:
     """
     SIP ingress for 571:
-    1) Normalize + queue MCTB Existing Consent SMS (independent of media)
-    2) Optional diagnostic phrase for delayed-offer physical test
+    1) Answer immediately via ctx.connect() to stop upstream ringback
+    2) Queue MCTB Existing Consent SMS in background (independent of media)
+    3) Optional diagnostic phrase for delayed-offer physical test
     """
     call_id = str(uuid4())
     _log_mctb_sip_diagnostic(
@@ -189,17 +191,7 @@ async def run_mctb_sip_diagnostic_session(
         },
     )
 
-    # Queue MCTB SMS first — must not depend on media/connect success.
-    await _capture_mctb_sip_event(
-        backend,
-        call_id=call_id,
-        from_e164=from_e164,
-        to_e164=to_e164,
-        room=ctx.room.name,
-        participant_identity=participant_identity,
-        attrs=attrs,
-    )
-
+    # Answer first — Telnyx ringback (183) continues until LiveKit accepts the SIP leg.
     await ctx.connect()
     _log_mctb_sip_diagnostic(
         "room_connected",
@@ -209,6 +201,18 @@ async def run_mctb_sip_diagnostic_session(
         room=ctx.room.name,
         participant_identity=participant_identity,
         attrs=attrs,
+    )
+
+    capture_task = asyncio.create_task(
+        _capture_mctb_sip_event(
+            backend,
+            call_id=call_id,
+            from_e164=from_e164,
+            to_e164=to_e164,
+            room=ctx.room.name,
+            participant_identity=participant_identity,
+            attrs=attrs,
+        ),
     )
 
     played_ms = await play_immediate_answer(
@@ -242,3 +246,5 @@ async def run_mctb_sip_diagnostic_session(
         call_id=call_id,
         extra={"toE164": to_e164, "fromE164": from_e164, "source": LOG_SOURCE},
     )
+
+    await asyncio.gather(capture_task, return_exceptions=True)
