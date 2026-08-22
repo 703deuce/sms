@@ -42,4 +42,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.mctb-571-voice-backup.json
 public/connection-greeting/sources/*.wav
