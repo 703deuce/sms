@@ -37,6 +37,7 @@ const demoSession = (): MctbDemoSession => ({
 async function main() {
   await test("test:mctb-paid-user-hides-try-it-nav", () => {
   assert.equal(shouldShowTryItNav("growth"), false);
+  assert.equal(shouldShowTryItNav("growth", { isPlatformAdmin: true }), true);
   assert.equal(shouldShowTryItNav("trial"), true);
   assert.equal(shouldShowTryItNav("onboarding"), true);
   const nav = buildVoiceNav({ showTryIt: false });

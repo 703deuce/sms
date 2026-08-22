@@ -8,7 +8,11 @@ const PAID_MCTB_PLANS = new Set([
 ]);
 
 /** Show standalone Try It nav for trial/onboarding workspaces — hide for paid production. */
-export function shouldShowTryItNav(billingPlan: string | null | undefined): boolean {
+export function shouldShowTryItNav(
+  billingPlan: string | null | undefined,
+  options?: { isPlatformAdmin?: boolean; adminTestAccount?: boolean },
+): boolean {
+  if (options?.isPlatformAdmin || options?.adminTestAccount) return true;
   const plan = String(billingPlan || "").toLowerCase();
   if (!plan || plan === "onboarding") return true;
   if (plan === "trial" || plan === "trial_pending_card") return true;

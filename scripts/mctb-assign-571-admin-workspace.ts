@@ -5,7 +5,7 @@
  * Usage:
  *   npx tsx scripts/mctb-assign-571-admin-workspace.ts
  *   npx tsx scripts/mctb-assign-571-admin-workspace.ts --apply
- *   npx tsx scripts/mctb-assign-571-admin-workspace.ts --email <google-account> --apply
+ *   MCTB_ADMIN_ASSIGN_EMAIL=you@example.com npx tsx scripts/mctb-assign-571-admin-workspace.ts --apply
  */
 import { getPrisma } from "@/lib/db";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
@@ -43,7 +43,6 @@ async function main() {
   const membership = await prisma.membership.findFirst({
     where: { userId: user.id, workspace: { type: "BUSINESS" } },
     include: { workspace: { select: { id: true, name: true, billingPlan: true } } },
-    orderBy: { createdAt: "asc" },
   });
   if (!membership) {
     console.error(`❌ No BUSINESS workspace membership for ${email}`);

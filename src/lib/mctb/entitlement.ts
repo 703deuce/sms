@@ -102,6 +102,7 @@ export async function getMctbEntitlement(workspaceId: string): Promise<MctbEntit
     canSendAutomaticRecovery = false;
     reason = serviceStatus.toLowerCase();
   } else if (
+    !limits.adminUnlimitedMctb &&
     trialSmsSegmentLimit != null &&
     trialSmsSegmentsUsed >= trialSmsSegmentLimit
   ) {

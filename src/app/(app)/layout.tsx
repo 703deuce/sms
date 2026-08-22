@@ -44,7 +44,18 @@ export default async function AppLayout({
   const billingPlan = String(
     (workspaceRow as { billingPlan?: string | null } | null)?.billingPlan || "",
   );
-  const showTryIt = shouldShowTryItNav(billingPlan);
+  const customCfg =
+    workspaceRow?.customFieldsConfig && typeof workspaceRow.customFieldsConfig === "object"
+      ? (workspaceRow.customFieldsConfig as Record<string, unknown>)
+      : {};
+  const mctbCfg =
+    customCfg.mctb && typeof customCfg.mctb === "object"
+      ? (customCfg.mctb as Record<string, unknown>)
+      : {};
+  const showTryIt = shouldShowTryItNav(billingPlan, {
+    isPlatformAdmin: session.isAdmin,
+    adminTestAccount: mctbCfg.adminTestAccount === true || mctbCfg.unlimitedMctbTesting === true,
+  });
 
   return (
     <>
