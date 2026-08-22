@@ -13,11 +13,40 @@ import {
   assign571ToConnection,
   fetchTelnyxPhoneNumberByE164,
 } from "@/lib/mctb/consent-prompt/telnyx-call-control-route";
+import { decryptSecret } from "@/lib/messaging/crypto";
+import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
-import { getParentTwilioClient } from "@/lib/messaging/twilio-client";
+import { getParentTwilioClient, getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
 
 const BACKUP_PATH = join(process.cwd(), ".mctb-571-voice-bridge-backup.json");
 const apply = process.argv.includes("--apply");
+const DEFAULT_INGRESS_WORKSPACE_ID =
+  process.env.MCTB_TWILIO_VOICE_INGRESS_WORKSPACE_ID?.trim() ||
+  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() ||
+  "cmt3m55zl0p2f5o1l16604i73";
+
+async function resolveTwilioClientForRollback(backup: {
+  twilioIngressAccountSid?: string | null;
+}): Promise<ReturnType<typeof getParentTwilioClient> | null> {
+  const { accountSid, authToken } = getTwilioParentCredentials();
+  if (!accountSid || !authToken) return null;
+
+  if (backup.twilioIngressAccountSid && backup.twilioIngressAccountSid !== accountSid) {
+    const reg = await getRegistrationByWorkspace(DEFAULT_INGRESS_WORKSPACE_ID);
+    if (
+      reg?.subaccountSid === backup.twilioIngressAccountSid &&
+      reg.subaccountAuthTokenEnc &&
+      !reg.subaccountSid.startsWith("PENDING:")
+    ) {
+      return getSubaccountTwilioClient(
+        reg.subaccountSid,
+        decryptSecret(reg.subaccountAuthTokenEnc),
+      );
+    }
+  }
+
+  return getParentTwilioClient();
+}
 
 async function main() {
   console.log("\n══ MCTB 571 Twilio voice bridge rollback ══\n");
@@ -30,6 +59,7 @@ async function main() {
   const backup = JSON.parse(readFileSync(BACKUP_PATH, "utf8")) as {
     previousConnectionId?: string;
     twilioIngressSid?: string | null;
+    twilioIngressAccountSid?: string | null;
     previousTwilioVoiceUrl?: string | null;
   };
 
@@ -59,9 +89,8 @@ async function main() {
   }
 
   if (backup.twilioIngressSid) {
-    const { accountSid, authToken } = getTwilioParentCredentials();
-    if (accountSid && authToken) {
-      const client = getParentTwilioClient();
+    const client = await resolveTwilioClientForRollback(backup);
+    if (client) {
       await client.incomingPhoneNumbers(backup.twilioIngressSid).update({
         voiceUrl: backup.previousTwilioVoiceUrl || "",
         voiceMethod: "POST",

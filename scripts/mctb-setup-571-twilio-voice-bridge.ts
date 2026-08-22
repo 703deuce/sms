@@ -24,9 +24,16 @@ import {
   verify571VoiceBridgeRoute,
 } from "@/lib/mctb/consent-prompt/telnyx-voice-bridge-route";
 import { getTelnyxWebhookUrls, getAppBaseUrl } from "@/lib/messaging/telnyx/config";
+import { decryptSecret } from "@/lib/messaging/crypto";
+import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
-import { getParentTwilioClient } from "@/lib/messaging/twilio-client";
+import { getParentTwilioClient, getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+
+const DEFAULT_INGRESS_WORKSPACE_ID =
+  process.env.MCTB_TWILIO_VOICE_INGRESS_WORKSPACE_ID?.trim() ||
+  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() ||
+  "cmt3m55zl0p2f5o1l16604i73";
 
 const BACKUP_PATH = join(process.cwd(), ".mctb-571-voice-bridge-backup.json");
 const apply = process.argv.includes("--apply");
@@ -39,32 +46,69 @@ type Backup = {
   previousConnectionKind: string;
   twilioIngressE164: string;
   twilioIngressSid: string | null;
+  twilioIngressAccountSid: string | null;
   previousTwilioVoiceUrl: string | null;
   savedAt: string;
 };
 
+async function resolveTwilioIngressClient(): Promise<{
+  client: ReturnType<typeof getParentTwilioClient>;
+  accountLabel: string;
+}> {
+  const explicitSid = process.env.MCTB_TWILIO_VOICE_INGRESS_SID?.trim();
+  if (explicitSid) {
+    return { client: getParentTwilioClient(), accountLabel: "parent (explicit sid)" };
+  }
+
+  const parent = getParentTwilioClient();
+  const target = normalizeE164(MCTB_TWILIO_VOICE_INGRESS_E164);
+  const parentMatch = await parent.incomingPhoneNumbers.list({ phoneNumber: target, limit: 1 });
+  if (parentMatch[0]?.sid) {
+    return { client: parent, accountLabel: "parent" };
+  }
+
+  const reg = await getRegistrationByWorkspace(DEFAULT_INGRESS_WORKSPACE_ID);
+  if (reg?.subaccountSid && reg.subaccountAuthTokenEnc && !reg.subaccountSid.startsWith("PENDING:")) {
+    const authToken = decryptSecret(reg.subaccountAuthTokenEnc);
+    const subClient = getSubaccountTwilioClient(reg.subaccountSid, authToken);
+    const subMatch = await subClient.incomingPhoneNumbers.list({ phoneNumber: target, limit: 1 });
+    if (subMatch[0]?.sid) {
+      return { client: subClient, accountLabel: `subaccount ${reg.subaccountSid}` };
+    }
+  }
+
+  throw new Error(
+    `Twilio ingress number ${target} not found in parent or workspace ${DEFAULT_INGRESS_WORKSPACE_ID} subaccount`,
+  );
+}
+
 async function findTwilioIngressNumber(): Promise<{
   sid: string;
   voiceUrl: string | null;
+  accountLabel: string;
 }> {
   const target = normalizeE164(MCTB_TWILIO_VOICE_INGRESS_E164);
-  const { accountSid, authToken } = getTwilioParentCredentials();
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio parent credentials missing — cannot configure 855 ingress webhook");
+  const explicitSid = process.env.MCTB_TWILIO_VOICE_INGRESS_SID?.trim();
+  if (explicitSid) {
+    const { client, accountLabel } = await resolveTwilioIngressClient();
+    const row = await client.incomingPhoneNumbers(explicitSid).fetch();
+    return { sid: row.sid, voiceUrl: row.voiceUrl || null, accountLabel };
   }
-  const client = getParentTwilioClient();
+
+  const { client, accountLabel } = await resolveTwilioIngressClient();
   const numbers = await client.incomingPhoneNumbers.list({ phoneNumber: target, limit: 1 });
   const row = numbers[0];
   if (!row?.sid) {
-    throw new Error(`Twilio ingress number ${target} not found in parent account`);
+    throw new Error(`Twilio ingress number ${target} not found (${accountLabel})`);
   }
-  return { sid: row.sid, voiceUrl: row.voiceUrl || null };
+  return { sid: row.sid, voiceUrl: row.voiceUrl || null, accountLabel };
 }
 
-async function configureTwilioIngressWebhook(sid: string): Promise<string> {
+async function configureTwilioIngressWebhook(
+  sid: string,
+  client: ReturnType<typeof getParentTwilioClient>,
+): Promise<string> {
   const voiceUrl = `${getAppBaseUrl().replace(/\/$/, "")}/api/twilio/voice/mctb-ingress`;
-  const { accountSid, authToken } = getTwilioParentCredentials();
-  const client = getParentTwilioClient();
   await client.incomingPhoneNumbers(sid).update({
     voiceUrl,
     voiceMethod: "POST",
@@ -103,6 +147,7 @@ async function main() {
   const twilio = await findTwilioIngressNumber();
   console.log("\nTwilio ingress number:");
   console.log(`  E164:      ${MCTB_TWILIO_VOICE_INGRESS_E164}`);
+  console.log(`  Account:   ${twilio.accountLabel}`);
   console.log(`  SID:       ${twilio.sid}`);
   console.log(`  Voice URL: ${twilio.voiceUrl || "(none)"}`);
 
@@ -122,6 +167,10 @@ async function main() {
     previousConnectionKind: currentKind,
     twilioIngressE164: MCTB_TWILIO_VOICE_INGRESS_E164,
     twilioIngressSid: twilio.sid,
+    twilioIngressAccountSid:
+      twilio.accountLabel.startsWith("subaccount ")
+        ? twilio.accountLabel.replace("subaccount ", "")
+        : getTwilioParentCredentials().accountSid || null,
     previousTwilioVoiceUrl: twilio.voiceUrl,
     savedAt: new Date().toISOString(),
   };
@@ -139,7 +188,8 @@ async function main() {
   console.log(`\n✓ Saved backup → ${BACKUP_PATH}`);
 
   const assigned = await assign571ToConnection(bridgeAppId);
-  const newTwilioVoiceUrl = await configureTwilioIngressWebhook(twilio.sid);
+  const { client } = await resolveTwilioIngressClient();
+  const newTwilioVoiceUrl = await configureTwilioIngressWebhook(twilio.sid, client);
   const verify = await verify571VoiceBridgeRoute();
 
   console.log("\nCutover result:");
