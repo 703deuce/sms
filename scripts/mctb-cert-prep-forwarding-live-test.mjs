@@ -85,7 +85,7 @@ console.log(
         "4. After forwarding verifies in UI, run live test: call again the same way.",
         tfv.approved
           ? "5. Missed-call recovery SMS should send from your TFN after Press-1."
-          : `5. TFV is ${tfv.status} — voice/forwarding/Press-1 can be tested; TFN SMS waits for TFV approval.`,
+          : `5. TFV is ${tfv.status} — after Press-1, recovery SMS sends from platform 571 (not TFN) until TFV approves.`,
         `6. Inspect: npx tsx scripts/mctb-certification-pass2.ts --inspect --workspace-id ${WORKSPACE_ID} --expected-caller <caller-e164>`,
       ],
     },

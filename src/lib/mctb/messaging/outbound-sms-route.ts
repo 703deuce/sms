@@ -6,9 +6,8 @@
  *
  * Never authorize a Telnyx sender with Twilio TFV status, or vice versa.
  *
- * Platform demo (+15714073615): outbound only when trafficMode is PLATFORM_DEMO
- * (onboarding demo session). Pending customer TFN stays messaging-disabled —
- * no silent fallback through the platform number.
+ * Platform demo (+15714073615): outbound for explicit PLATFORM_DEMO sessions and for
+ * onboarding TFN voice (855) while TFV is pending — voice on TFN, SMS from 571.
  */
 import { getPrisma } from "@/lib/db";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
@@ -152,6 +151,8 @@ export async function resolveMctbOutboundSmsRoute(input: {
   demoMode?: boolean;
   /** Explicit certification run on platform 571 (same adapter path, not customer TFN). */
   certificationMode?: boolean;
+  /** Inbound business line that missed the call (TFN during onboarding → 571 SMS if TFV pending). */
+  businessE164?: string;
 }): Promise<MctbOutboundSmsRoute | null> {
   if (input.demoMode) {
     return resolvePlatformTelnyxSmsRoute({
@@ -164,6 +165,17 @@ export async function resolveMctbOutboundSmsRoute(input: {
       customerWorkspaceId: input.workspaceId,
       trafficMode: "CERTIFICATION",
     });
+  }
+
+  if (input.businessE164) {
+    const { resolveOnboardingTfnSmsViaPlatform571 } = await import(
+      "@/lib/mctb/onboarding/onboarding-sms-routing"
+    );
+    const onboardingRoute = await resolveOnboardingTfnSmsViaPlatform571({
+      workspaceId: input.workspaceId,
+      businessE164: input.businessE164,
+    });
+    if (onboardingRoute) return onboardingRoute;
   }
 
   const sender = await resolveMctbSmsSender({
