@@ -86,7 +86,7 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
       isHuman,
       eventPayload,
     });
-    return { ok: true, eventType, providerEventId, processed: "sync", ...result };
+    return { ...result, eventType, providerEventId, processed: "sync" as const };
   }
 
   // Fast ACK — other voice events processed in background job
