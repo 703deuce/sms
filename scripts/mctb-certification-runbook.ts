@@ -104,7 +104,7 @@ export const CERTIFICATION_PASSES: Record<
     ],
     checklist: [
       "Platform demo (Telnyx 571 A2P): start demo → call platform line → full Telnyx loop → reply → STOP/START.",
-      "Pending customer Twilio TFN must NOT send SMS through 571 — messaging disabled until TFV approved.",
+      "Pending customer Twilio TFN: voice on TFN; recovery SMS from platform 571 until TFV approves.",
       "Pass 3 cert = real TELNYX_LOCAL_A2P adapter on +15714073615 (PLATFORM_DEMO traffic only).",
       "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion + promptScriptHash.",
       "Press-1 edge cases (before marking CP complete):",
