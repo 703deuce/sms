@@ -124,10 +124,10 @@ export type MctbOnboardingState = {
 
 export const MCTB_ONBOARDING_STEP_ORDER: MctbOnboardingStep[] = [
   "business",
-  "trial_number",
-  "configure",
   "consent",
   "demo",
+  "trial_number",
+  "configure",
   "tfv",
   "pending",
   "connect",

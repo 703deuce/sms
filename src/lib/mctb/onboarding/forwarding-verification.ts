@@ -202,6 +202,9 @@ export async function getForwardingVerificationStatus(
 
 export async function startForwardingVerificationTest(workspaceId: string): Promise<void> {
   const state = await loadMctbOnboardingState(workspaceId);
+  if (!state.completedSteps.includes("demo")) {
+    throw new Error("Complete the direct-call demo before testing forwarding.");
+  }
   if (!state.businessNumberE164?.trim()) {
     throw new Error("Enter your business phone number before testing forwarding.");
   }

@@ -13,8 +13,9 @@ import {
   type ExistingConsentAttestationRecord,
   validateExistingConsentAttestation,
 } from "@/lib/mctb/event-only/attestation";
-import { isDemoModeForWorkspace, isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
+import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { resolveRuntimeDemoMode } from "@/lib/mctb/ingress";
 
 export type MctbSetupStatus =
   | "draft"
@@ -121,20 +122,13 @@ export async function loadMctbWorkspaceConfig(
   }
 
   const transovoNumber = input?.transovoNumberE164 || providerPhoneNumber || "";
-  let demoMode = Boolean(input?.forceDemoMode);
-  if (!demoMode && input?.callerE164 && transovoNumber) {
-    demoMode =
-      isDemoModeForWorkspace(
-        workspaceId,
-        transovoNumber,
-        input.callerE164,
-        onboarding.demoSession,
-      ) ||
-      Boolean(onboarding.liveTestSession?.startedAt && !onboarding.liveTestPassedAt) ||
-      Boolean(onboarding.forwardingTestStartedAt && !onboarding.liveTestPassedAt);
-  } else if (!demoMode && transovoNumber && isPlatformDemoNumber(transovoNumber)) {
-    demoMode = Boolean(onboarding.demoSession?.startedAt);
-  }
+  const demoMode = resolveRuntimeDemoMode({
+    workspaceId,
+    transovoNumberE164: transovoNumber,
+    callerE164: input?.callerE164 || "",
+    forceDemoMode: input?.forceDemoMode,
+    demoSession: onboarding.demoSession,
+  });
 
   const greetingAssetId =
     prompt.publishedAudioAssetId || prompt.audioAssetId || null;

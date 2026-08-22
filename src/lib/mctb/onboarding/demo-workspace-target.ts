@@ -3,6 +3,7 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveOnboardingWorkspaceForDemoCall } from "@/lib/agents/missed-call-text-back/demo-bypass";
 import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { resolveMctbSipIngressByDid } from "@/lib/mctb/sip-ingress/resolver";
+import { resolveRuntimeDemoMode } from "@/lib/mctb/ingress";
 
 /** Resolve workspace + demoMode from called Transovo DID (sip.trunkPhoneNumber). */
 export async function resolveMctbTargetWorkspaceForInboundCall(input: {
@@ -21,17 +22,14 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
   const ingress = await resolveMctbSipIngressByDid(transovoE164);
   if (ingress.workspaceId) {
     const { loadMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
-    const { isDemoModeForWorkspace } = await import("@/lib/mctb/onboarding/demo");
     const state = await loadMctbOnboardingState(ingress.workspaceId);
-    const demoMode =
-      isDemoModeForWorkspace(
-        ingress.workspaceId,
-        transovoE164,
-        input.callerE164,
-        state.demoSession,
-      ) ||
-      Boolean(state.liveTestSession?.startedAt && !state.liveTestPassedAt) ||
-      Boolean(state.forwardingTestStartedAt && !state.liveTestPassedAt);
+    const demoMode = resolveRuntimeDemoMode({
+      workspaceId: ingress.workspaceId,
+      transovoNumberE164: transovoE164,
+      callerE164: input.callerE164,
+      forwardedFromE164: input.forwardedFrom,
+      demoSession: state.demoSession,
+    });
 
     return {
       workspaceId: ingress.workspaceId,
@@ -71,17 +69,14 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
   let demoMode = false;
   if (demoWorkspaceId) {
     const { loadMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
-    const { isDemoModeForWorkspace } = await import("@/lib/mctb/onboarding/demo");
     const state = await loadMctbOnboardingState(demoWorkspaceId);
-    demoMode =
-      isDemoModeForWorkspace(
-        demoWorkspaceId,
-        input.businessE164,
-        input.callerE164,
-        state.demoSession,
-      ) ||
-      Boolean(state.liveTestSession?.startedAt && !state.liveTestPassedAt) ||
-      Boolean(state.forwardingTestStartedAt && !state.liveTestPassedAt);
+    demoMode = resolveRuntimeDemoMode({
+      workspaceId: demoWorkspaceId,
+      transovoNumberE164: transovoE164,
+      callerE164: input.callerE164,
+      forwardedFromE164: input.forwardedFrom,
+      demoSession: state.demoSession,
+    });
   }
 
   return {

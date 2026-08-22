@@ -73,7 +73,9 @@ export async function GET() {
         ...demo,
         label: MCTB_PLATFORM_DEMO_LABEL,
         description:
-          "Transovo's Telnyx A2P-approved demo line (571) — try the full call-and-text loop before your toll-free number is verified. Not your production number.",
+          "Call Transovo's demo line directly from your verified mobile — no forwarding or carrier setup. Experience Press 1 or Existing Consent exactly as configured above.",
+        consentMode: state.consentMode || "press_1",
+        requiresForwarding: false,
       },
       trialNumber,
       liveTest,
@@ -170,15 +172,6 @@ export async function POST(req: Request) {
       state = markStepComplete(state, "business");
       await saveMctbOnboardingState(auth.workspaceId, state);
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
-
-      const provision = await provisionTrialMctbNumber(auth.workspaceId);
-      if (!provision.ok) {
-        return NextResponse.json(
-          { error: provision.error || "Could not assign trial number", state },
-          { status: 400 },
-        );
-      }
-      state = await loadMctbOnboardingState(auth.workspaceId);
     }
 
     if (body.messageTemplate) {
@@ -256,11 +249,27 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "start_forwarding_test") {
+      const { isProductionActivationPhase } = await import("@/lib/mctb/ingress");
+      if (!state.completedSteps.includes("demo")) {
+        return NextResponse.json(
+          { error: "Complete the direct-call demo before configuring forwarding." },
+          { status: 400 },
+        );
+      }
+      if (!isProductionActivationPhase(state) && state.currentStep !== "connect") {
+        return NextResponse.json(
+          { error: "Forwarding setup is only available during production activation." },
+          { status: 400 },
+        );
+      }
       await startForwardingVerificationTest(auth.workspaceId);
       state = await loadMctbOnboardingState(auth.workspaceId);
     }
 
-    if (body.forwardingCarrier || body.businessNumberE164 || body.forwardingRingSeconds != null) {
+    if (
+      (body.forwardingCarrier || body.businessNumberE164 || body.forwardingRingSeconds != null) &&
+      state.completedSteps.includes("demo")
+    ) {
       const isStarting = Boolean(body.businessNumberE164 && !state.forwardingTestStartedAt);
       state = await saveMctbOnboardingState(auth.workspaceId, {
         forwardingCarrier: body.forwardingCarrier || state.forwardingCarrier,
@@ -305,6 +314,21 @@ export async function POST(req: Request) {
       await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_STARTED");
       state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: "tfv" });
     } else if (body.step) {
+      if (body.step === "trial_number" && !state.completedSteps.includes("demo")) {
+        return NextResponse.json(
+          { error: "Complete the direct-call demo before assigning your production number." },
+          { status: 400 },
+        );
+      }
+      if (body.step === "trial_number") {
+        const provision = await provisionTrialMctbNumber(auth.workspaceId);
+        if (!provision.ok) {
+          return NextResponse.json(
+            { error: provision.error || "Could not assign production number", state },
+            { status: 400 },
+          );
+        }
+      }
       state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: body.step });
     }
 

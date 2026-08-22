@@ -231,7 +231,7 @@ export async function recordDemoTextSent(workspaceId: string): Promise<void> {
     completedSteps: (state.completedSteps.includes("demo")
       ? state.completedSteps
       : [...state.completedSteps, "demo"]) as MctbOnboardingState["completedSteps"],
-    currentStep: state.currentStep === "demo" ? ("tfv" as const) : state.currentStep,
+    currentStep: state.currentStep === "demo" ? ("trial_number" as const) : state.currentStep,
   };
   await saveMctbOnboardingState(workspaceId, nextState);
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_TEXT_SENT");
@@ -255,7 +255,7 @@ export async function recordDemoReplyReceived(workspaceId: string): Promise<void
     completedSteps: state.completedSteps.includes("demo")
       ? state.completedSteps
       : [...state.completedSteps, "demo"],
-    currentStep: state.currentStep === "demo" ? "tfv" : state.currentStep,
+    currentStep: state.currentStep === "demo" ? ("trial_number" as const) : state.currentStep,
   });
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_REPLY_RECEIVED");
   await recordFunnelEvent(workspaceId, "MCTB_DEMO_COMPLETED");

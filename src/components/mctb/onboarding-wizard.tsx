@@ -34,6 +34,8 @@ type OnboardingPayload = {
     demoNumberDisplay: string | null;
     label?: string;
     description?: string;
+    consentMode?: string;
+    requiresForwarding?: boolean;
     checks: {
       callDetected: boolean;
       missedCall: boolean;
@@ -170,6 +172,24 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     }, 2500);
     return () => clearInterval(timer);
   }, [step, load]);
+
+  useEffect(() => {
+    if (step !== "trial_number") return;
+    if (data?.trialNumber.provisioned || saving) return;
+    void (async () => {
+      setSaving(true);
+      try {
+        await fetch("/api/mctb/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "provision_trial_number" }),
+        });
+        await load();
+      } finally {
+        setSaving(false);
+      }
+    })();
+  }, [step, data?.trialNumber.provisioned, saving, load]);
 
   useEffect(() => {
     if (step !== "connect" && step !== "live_test") return;
@@ -340,9 +360,10 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
       {step === "trial_number" ? (
         <Card className="space-y-4 p-6">
-          <h2 className="text-lg font-semibold">Your Transovo number</h2>
+          <h2 className="text-lg font-semibold">Your production MCTB number</h2>
           <p className="text-sm text-muted-foreground">
-            Every trial gets its own Twilio toll-free number for missed-call text back.
+            Now that you&apos;ve tried the demo, we assign your own Telnyx number for real
+            missed-call recovery. You&apos;ll forward your business line to this number next.
           </p>
           {saving || !data?.trialNumber.provisioned ? (
             <div className="flex items-center gap-3 rounded-lg border p-4 text-sm text-muted-foreground">
@@ -489,12 +510,21 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <div className="flex items-start gap-3">
             <Sparkles className="mt-0.5 h-5 w-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold">See how Missed Call Text Back works</h2>
+              <h2 className="text-lg font-semibold">Try it now — call the demo line directly</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {data?.demo.description ||
-                  "Call Transovo's pre-approved demo line — not your assigned trial number."}
+                  "No forwarding or carrier setup. Call from your verified mobile and experience the product in under two minutes."}
               </p>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm">
+            <p className="font-medium">Demo consent mode</p>
+            <p className="mt-1 text-muted-foreground">
+              {data?.demo.consentMode === "existing_consent"
+                ? "Existing Consent — no Press 1 prompt; recovery text sends immediately after the missed call."
+                : "Press 1 — you'll hear the consent greeting and press 1 to receive the recovery text."}
+            </p>
           </div>
 
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
@@ -505,7 +535,8 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               {data?.demo.demoNumberDisplay}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              Call from your verified mobile. Let it ring — nobody will answer.
+              Call this number directly from your verified mobile. Do not set up forwarding — let it
+              ring without answering.
             </p>
           </div>
 
@@ -533,8 +564,8 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               <p className="text-sm font-medium text-emerald-800">
                 That&apos;s what your customers will experience.
               </p>
-              <Button onClick={() => void post({ step: "tfv" })}>
-                Activate texting on your number
+              <Button onClick={() => void post({ step: "trial_number" })}>
+                Continue — get your production number
               </Button>
             </div>
           )}
@@ -624,9 +655,9 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             <div>
               <h2 className="text-lg font-semibold">Connect your existing business number</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                You keep advertising your business line. When it isn&apos;t answered, forward missed
-                calls to Transovo&apos;s platform line ({forwardDisplay}) — the same number you used
-                in the demo.
+                Keep advertising your business line. When it isn&apos;t answered, set conditional
+                forwarding to your assigned Transovo MCTB number ({forwardDisplay}). This is
+                required for production — the demo used a direct call with no forwarding.
               </p>
             </div>
           </div>
