@@ -291,7 +291,7 @@ export function printPass3Evidence(evidence: Pass3Evidence) {
       console.log(
         `  ${c.startedAt.toISOString()} ${c.status} ${c.fromE164} → ${c.toE164} telnyx=${c.telnyxCallControlId || "—"}`,
       );
-      for (const ev of c.events.filter((e) => /dtmf|gather|digit|consent/i.test(e.eventType))) {
+      for (const ev of (c.events || []).filter((e) => /dtmf|gather|digit|consent/i.test(e.eventType))) {
         console.log(`    event ${ev.eventType} ${ev.providerEventId || ""}`);
       }
     }
