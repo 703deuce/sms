@@ -1,23 +1,27 @@
 import { NextResponse } from "next/server";
-import {
-  mctb571ConsentTexmlVoiceUrl,
-} from "@/lib/mctb/consent-prompt/telnyx-texml-route";
 import { runMctbConsentTexmlDemoCallDetect } from "@/lib/mctb/consent-prompt/texml-inbound-call-event";
+import {
+  buildMctbConsentControlledHangupTexml,
+  buildMctbConsentGatherSuccessTexml,
+  buildMctbConsentInboundTexml,
+  logMctbConsentTexmlResponseReady,
+  wrapMctbConsentTexmlBody,
+} from "@/lib/mctb/consent-prompt/texml-response";
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
+const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
 
-function texml(body: string) {
-  return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, {
+function texml(body: string, branch: Parameters<typeof logMctbConsentTexmlResponseReady>[0]["branch"]) {
+  const xml = wrapMctbConsentTexmlBody(body);
+  logMctbConsentTexmlResponseReady({
+    branch,
     status: 200,
-    headers: { "Content-Type": "text/xml; charset=utf-8" },
+    contentType: TEXML_CONTENT_TYPE,
+    xml,
+  });
+  return new NextResponse(xml, {
+    status: 200,
+    headers: { "Content-Type": TEXML_CONTENT_TYPE },
   });
 }
 
@@ -83,116 +87,138 @@ function scheduleDemoCallDetect(input: {
   });
 }
 
-function inboundConsentTexml(forwardedFrom: string) {
-  const actionUrl = new URL(mctb571ConsentTexmlVoiceUrl());
-  actionUrl.searchParams.set("event", "gather");
-  if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
-  const action = actionUrl.toString();
-  // Say first — Telnyx edge TTS, no HTTPS fetch. Critical for ~5s carrier forwards.
-  const say =
-    "Sorry we missed your call. " +
-    "To receive a text message from us, press 1 now.";
-  return texml(
-    `<Gather action="${escapeXml(action)}" method="POST" numDigits="1" timeout="15">` +
-      `<Say voice="female">${escapeXml(say)}</Say>` +
-      `</Gather><Hangup/>`,
-  );
-}
-
 /**
  * TeXML voice_url for platform 571 MCTB Press-1.
  * MUST return XML immediately — never await DB before the response (carrier forwards die in ~5s).
  */
 export async function POST(request: Request) {
-  const url = new URL(request.url);
-  const event = url.searchParams.get("event") || "inbound";
-  const fields = await parseFields(request);
+  try {
+    const url = new URL(request.url);
+    const event = url.searchParams.get("event") || "inbound";
+    const fields = await parseFields(request);
 
-  const from = pick(fields, "From", "from", "Caller");
-  const to = pick(fields, "To", "to", "Called") || "+15714073615";
-  const digits = pick(fields, "Digits", "digits");
-  const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
-  const callStatus = pick(fields, "CallStatus", "CallStatus", "call_status");
-  const forwardedFrom =
-    normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
-    normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
-    parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
-    "";
+    const from = pick(fields, "From", "from", "Caller");
+    const to = pick(fields, "To", "to", "Called") || "+15714073615";
+    const digits = pick(fields, "Digits", "digits");
+    const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
+    const callStatus = pick(fields, "CallStatus", "CallStatus", "call_status");
+    const forwardedFrom =
+      normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
+      normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
+      parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
+      "";
 
-  if (event === "gather" && digits === "1" && from) {
+    if (event === "gather" && digits === "1" && from) {
+      console.log(
+        JSON.stringify({
+          source: "mctb-consent-texml",
+          event: "gather_press_1",
+          from,
+          to,
+          callSid,
+          forwardedFrom: forwardedFrom || null,
+        }),
+      );
+
+      try {
+        const target = await resolveInboundTarget({ from, to, forwardedFrom });
+        const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
+          "@/lib/smart-routing/consent-service"
+        );
+
+        await recordSmsConsent({
+          workspaceId: target.workspaceId,
+          callerNumber: from,
+          businessNumber: to,
+          affirmativeInput: "1",
+          consentScope: "CUSTOMER_CARE_SMS",
+          forwardedFrom: forwardedFrom || null,
+          metadata: { path: "texml_mctb_consent", callSid, forwardedFrom },
+        });
+
+        if (target.demoMode || forwardedFrom) {
+          const sms = await triggerMissedCallTextFromConsent({
+            workspaceId: target.workspaceId,
+            callerNumber: from,
+            businessNumber: to,
+            callSessionId: callSid || `texml:${Date.now()}`,
+            forwardedFrom: forwardedFrom || null,
+          });
+          console.log(
+            JSON.stringify({
+              source: "mctb-consent-texml",
+              event: "sms_triggered",
+              workspaceId: target.workspaceId,
+              demoMode: target.demoMode,
+              result: sms,
+            }),
+          );
+        }
+      } catch (err) {
+        console.error("[mctb-consent-texml] gather handler failed", err);
+      }
+
+      return texml(buildMctbConsentGatherSuccessTexml(), "gather_press_1");
+    }
+
     console.log(
       JSON.stringify({
         source: "mctb-consent-texml",
-        event: "gather_press_1",
+        event: "inbound_prompt",
         from,
         to,
         callSid,
+        callStatus: callStatus || null,
         forwardedFrom: forwardedFrom || null,
       }),
     );
 
-    try {
-      const target = await resolveInboundTarget({ from, to, forwardedFrom });
-      const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
-        "@/lib/smart-routing/consent-service"
-      );
-
-      await recordSmsConsent({
-        workspaceId: target.workspaceId,
-        callerNumber: from,
-        businessNumber: to,
-        affirmativeInput: "1",
-        consentScope: "CUSTOMER_CARE_SMS",
-        forwardedFrom: forwardedFrom || null,
-        metadata: { path: "texml_mctb_consent", callSid, forwardedFrom },
-      });
-
-      if (target.demoMode || forwardedFrom) {
-        const sms = await triggerMissedCallTextFromConsent({
-          workspaceId: target.workspaceId,
-          callerNumber: from,
-          businessNumber: to,
-          callSessionId: callSid || `texml:${Date.now()}`,
-          forwardedFrom: forwardedFrom || null,
-        });
-        console.log(
-          JSON.stringify({
-            source: "mctb-consent-texml",
-            event: "sms_triggered",
-            workspaceId: target.workspaceId,
-            demoMode: target.demoMode,
-            result: sms,
-          }),
-        );
-      }
-    } catch (err) {
-      console.error("[mctb-consent-texml] gather handler failed", err);
+    if (from) {
+      scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
     }
 
-    return texml(
-      `<Say voice="female">Perfect. Check your phone. We have just sent you a message.</Say><Hangup/>`,
+    const built = buildMctbConsentInboundTexml(forwardedFrom, {
+      promptMode: resolveMctbConsentTexmlPromptMode(url.searchParams.get("prompt")),
+    });
+    const xml = wrapMctbConsentTexmlBody(built.body);
+    logMctbConsentTexmlResponseReady({
+      branch: "inbound",
+      status: 200,
+      contentType: TEXML_CONTENT_TYPE,
+      xml,
+      meta: built,
+    });
+    return new NextResponse(xml, {
+      status: 200,
+      headers: { "Content-Type": TEXML_CONTENT_TYPE },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      JSON.stringify({
+        source: "mctb-consent-texml",
+        event: "handler_error",
+        error: message,
+      }),
     );
+    const body = buildMctbConsentControlledHangupTexml(
+      "We are unable to complete your call. Goodbye.",
+    );
+    const xml = wrapMctbConsentTexmlBody(body);
+    logMctbConsentTexmlResponseReady({
+      branch: "error",
+      status: 200,
+      contentType: TEXML_CONTENT_TYPE,
+      xml,
+      meta: { error: message },
+    });
+    return new NextResponse(xml, {
+      status: 200,
+      headers: { "Content-Type": TEXML_CONTENT_TYPE },
+    });
   }
-
-  console.log(
-    JSON.stringify({
-      source: "mctb-consent-texml",
-      event: "inbound_prompt",
-      from,
-      to,
-      callSid,
-      callStatus: callStatus || null,
-      forwardedFrom: forwardedFrom || null,
-    }),
-  );
-
-  if (from) {
-    scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
-  }
-
-  return inboundConsentTexml(forwardedFrom);
 }
 
 export async function GET() {
-  return texml(`<Say voice="female">MCTB consent line ready.</Say><Hangup/>`);
+  return texml(`<Say voice="female">MCTB consent line ready.</Say><Hangup/>`, "health");
 }
