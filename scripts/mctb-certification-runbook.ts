@@ -7,6 +7,7 @@
  * Run:
  *   npx tsx scripts/mctb-certification-runbook.ts           # full runbook
  *   npx tsx scripts/mctb-certification-runbook.ts --pass 1  # Twilio/TFV only
+ *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1.ts  # live Pass 1 executor
  *   npx tsx scripts/mctb-certification-runbook.ts --sheet   # carrier ANI test sheet
  */
 import {
@@ -55,7 +56,7 @@ export const CERTIFICATION_PASSES: Record<
       "  • use-case description, sample SMS",
       "  • consent description (Press-1 wording OR Existing Consent)",
       "  • opt-in evidence URLs, privacy/terms",
-      "  • message volume, external reference ID (mctb-tfv:{workspaceId}:{phoneNumberId})",
+      "  • message volume, external reference ID (mctb-tfv_{workspaceId}_{phoneNumberId})",
       "Resolve provider notification mechanism:",
       "  • Is Twilio Event Streams configured for TFV status changes?",
       "  • Or legacy status callbacks? Document which applies to your account structure.",

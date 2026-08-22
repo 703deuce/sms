@@ -91,6 +91,18 @@ export function mapA2pCompanyType(businessType: string): string {
   return "private";
 }
 
+/** Twilio toll-free verification business_type enum. */
+export function mapTfvBusinessType(
+  businessType: string,
+): "PRIVATE_PROFIT" | "PUBLIC_PROFIT" | "SOLE_PROPRIETOR" | "NON_PROFIT" | "GOVERNMENT" {
+  const mapped = mapBusinessType(businessType).toLowerCase();
+  if (mapped.includes("sole")) return "SOLE_PROPRIETOR";
+  if (mapped.includes("non-profit") || mapped.includes("nonprofit")) return "NON_PROFIT";
+  if (mapped.includes("government")) return "GOVERNMENT";
+  if (mapped.includes("public")) return "PUBLIC_PROFIT";
+  return "PRIVATE_PROFIT";
+}
+
 export function normalizeE164(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (phone.trim().startsWith("+") && digits.length >= 10) return `+${digits}`;

@@ -70,10 +70,21 @@ export async function activateJohnOnPhoneNumber(input: {
     source: "john_activation",
   });
 
-  await enableVoiceOnWorkspaceNumber({
-    workspaceId: input.workspaceId,
-    phoneNumberId: input.phoneNumberId,
+  const phoneRow = await getPrisma().phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+    select: { provider: true, twilioSid: true },
   });
+  if (phoneRow?.provider === "twilio" && phoneRow.twilioSid) {
+    const { twilioNumberProvider } = await import(
+      "@/lib/numbers/providers/twilio-number-provider"
+    );
+    await twilioNumberProvider.configureVoiceWebhook(phoneRow.twilioSid, input.workspaceId);
+  } else {
+    await enableVoiceOnWorkspaceNumber({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
+    });
+  }
 
   return { ok: true, config: configResult.config };
 }

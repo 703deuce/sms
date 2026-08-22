@@ -4,6 +4,8 @@ import type { TollFreeVerificationStatus } from "@/lib/messaging/compliance/mess
 import { loadWorkspaceTfvForPhone } from "@/lib/mctb/tfv/store";
 import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { messagingOnboarding } from "@/lib/messaging/service";
+import { twilioAdapter } from "@/lib/messaging/twilio-adapter";
+import { assertLiveTwilioConfigured } from "@/lib/messaging/twilio-config";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "./constants";
 import {
   loadMctbOnboardingState,
@@ -154,7 +156,9 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
     for (let attempt = 0; attempt < 3; attempt++) {
       const areaCode = pickTrialAreaCode();
       try {
-        const results = await messagingOnboarding.searchNumbers(workspaceId, areaCode);
+        // MCTB trial TFN is always purchased on Twilio — search Twilio inventory only.
+        assertLiveTwilioConfigured();
+        const results = await twilioAdapter.searchNumbers(areaCode);
         const candidate = results.find((n) => n.phoneNumber)?.phoneNumber;
         if (!candidate) continue;
         await messagingOnboarding.purchaseNumber(workspaceId, candidate, "twilio");

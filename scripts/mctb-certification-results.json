@@ -1,6 +1,34 @@
 {
-  "updatedAt": null,
-  "verifiedBy": null,
-  "notes": "Set status to LIVE_VERIFIED only after real provider/carrier/Stripe proof. Run: npx tsx scripts/mctb-certification-runbook.ts",
-  "items": {}
+  "updatedAt": "2026-08-22T00:05:49.296Z",
+  "verifiedBy": "mctb-certification-pass1.ts",
+  "notes": "LIVE_VERIFIED only when external proof exists. TFV approval rows stay pending until Twilio approves.",
+  "pass1": {
+    "runId": "mctb-cert-pass1-mt3majrh",
+    "workspaceId": "cmt3m55zl0p2f5o1l16604i73",
+    "tfnE164": "+18553103375",
+    "twilioPhoneSid": "PN8379125aeb942f80992e3e2373441299",
+    "tfvSid": "HHb367fcc7f4a011a3447b939ade4787b2",
+    "transovoTfvStatus": "PENDING",
+    "twilioTfvStatus": "PENDING_REVIEW"
+  },
+  "items": {
+    "A-02": {
+      "status": "LIVE_VERIFIED",
+      "verifiedAt": "2026-08-22T00:05:49.296Z",
+      "note": "Real Twilio subaccount PN ownership confirmed"
+    },
+    "A-06": {
+      "status": "LIVE_VERIFIED",
+      "verifiedAt": "2026-08-22T00:05:49.296Z",
+      "note": "Real TFV submitted; field compare PASS"
+    },
+    "B-01": {
+      "status": "MANUAL_HUMAN_TEST_REQUIRED",
+      "note": "TFV PENDING_REVIEW — await Twilio approval without DB edits"
+    },
+    "B-02": {
+      "status": "MANUAL_HUMAN_TEST_REQUIRED",
+      "note": "TFV webhook returned 404 at app URL — confirm production deploy + Event Streams optional"
+    }
+  }
 }

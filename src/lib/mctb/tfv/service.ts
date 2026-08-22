@@ -22,9 +22,13 @@ import {
 import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { applyTfvStatusUpdate } from "./state-update";
 import { loadTfvForPhoneNumber, loadWorkspaceTfvForPhone } from "./store";
+import {
+  buildMctbTfvExternalReferenceId,
+  parseMctbTfvExternalReferenceId,
+} from "./external-reference";
 
 function externalReferenceId(workspaceId: string, phoneNumberId: string): string {
-  return `mctb-tfv:${workspaceId}:${phoneNumberId}`;
+  return buildMctbTfvExternalReferenceId(workspaceId, phoneNumberId);
 }
 
 export async function resolveWorkspaceTollFreePhoneForTfv(workspaceId: string) {
@@ -280,10 +284,20 @@ export async function handleTwilioTfvWebhook(input: {
   let workspaceId: string | null = null;
   let phoneNumberId: string | null = null;
 
-  if (input.externalReferenceId?.startsWith("mctb-tfv:")) {
-    const parts = input.externalReferenceId.split(":");
-    workspaceId = parts[1] || null;
-    phoneNumberId = parts[2] || null;
+  if (input.externalReferenceId) {
+    const parsed = parseMctbTfvExternalReferenceId(input.externalReferenceId);
+    if (parsed) {
+      phoneNumberId = parsed.phoneNumberId;
+      if (parsed.workspaceId) workspaceId = parsed.workspaceId;
+    }
+  }
+
+  if (phoneNumberId && !workspaceId) {
+    const phoneLookup = await prisma.phoneNumber.findFirst({
+      where: { id: phoneNumberId },
+      select: { workspaceId: true },
+    });
+    workspaceId = phoneLookup?.workspaceId || null;
   }
 
   if (!workspaceId || !phoneNumberId) {

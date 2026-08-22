@@ -16,6 +16,11 @@ import {
   evaluateTrialActivationGates,
 } from "../src/lib/mctb/onboarding/trial-gates";
 import { normalizeWorkspaceTollFreeFields } from "../src/lib/mctb/workspace-toll-free";
+import {
+  buildMctbTfvExternalReferenceId,
+  isMctbTfvExternalReferenceId,
+  parseMctbTfvExternalReferenceId,
+} from "../src/lib/mctb/tfv/external-reference";
 
 assert.equal(mapTwilioTfvStatus("TWILIO_APPROVED"), "APPROVED");
 assert.equal(mapTwilioTfvStatus("PENDING_REVIEW"), "PENDING");
@@ -94,9 +99,13 @@ assert.equal(canActivateTrialFromGates(baseGate), true);
 
 assert.equal(canActivateTrialFromGates({ ...baseGate, trialAlreadyStarted: true }), true);
 
-const extRefA = "mctb-tfv:ws_a:pn_1";
-const extRefB = "mctb-tfv:ws_b:pn_2";
+const extRefA = buildMctbTfvExternalReferenceId("ws_a", "cmt3abc1234567890phon01");
+const extRefB = buildMctbTfvExternalReferenceId("ws_b", "cmt3abc1234567890phon02");
 assert.notEqual(extRefA, extRefB);
+assert.equal(parseMctbTfvExternalReferenceId(extRefA)?.phoneNumberId, "cmt3abc1234567890phon01");
+assert.equal(isMctbTfvExternalReferenceId("ws_a", "cmt3abc1234567890phon01", extRefA), true);
+assert.equal(extRefA, "cmt3abc1234567890phon01");
+assert.equal(parseMctbTfvExternalReferenceId("mctb-tfv:ws_a:pn_1")?.phoneNumberId, "pn_1");
 
 assert.equal(
   evaluateTrialActivationGates({

@@ -48,19 +48,13 @@ export type TfvStatusUpdateResult = {
   previousStatus?: TollFreeVerificationStatus;
 };
 
-function assertWorkspaceScopedExternalRef(
-  workspaceId: string,
-  phoneNumberId: string,
-  externalReferenceId: string,
-): boolean {
-  return externalReferenceId === `mctb-tfv:${workspaceId}:${phoneNumberId}`;
-}
+import { isMctbTfvExternalReferenceId } from "./external-reference";
 
 /** Single canonical TFV state transition used by submit, polling, and webhooks. */
 export async function applyTfvStatusUpdate(
   input: TfvStatusUpdateInput,
 ): Promise<TfvStatusUpdateResult> {
-  if (!assertWorkspaceScopedExternalRef(input.workspaceId, input.phoneNumberId, input.externalReferenceId)) {
+  if (!isMctbTfvExternalReferenceId(input.workspaceId, input.phoneNumberId, input.externalReferenceId)) {
     throw new Error("TFV external reference does not match workspace phone scope.");
   }
 

@@ -4,6 +4,7 @@ import { isLiveMessagingAdapter, getAppBaseUrl } from "@/lib/messaging/twilio-co
 import { decryptSecret } from "@/lib/messaging/crypto";
 import { getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
 import { mapTwilioTfvFromProviderRecord, mapTwilioTfvStatus } from "@/lib/messaging/compliance/messaging-compliance";
+import { mapTfvBusinessType } from "@/lib/messaging/twilio-mappings";
 
 export type TwilioTfvSubmitInput = {
   reg: MessagingRegistration;
@@ -28,6 +29,9 @@ export type TwilioTfvSubmitInput = {
   businessContactPhone?: string;
   additionalInformation?: string;
   customerProfileSid?: string;
+  businessType?: string;
+  businessRegistrationNumber?: string;
+  businessRegistrationCountry?: string;
 };
 
 export type TwilioTfvSubmitResult = {
@@ -58,6 +62,7 @@ export async function submitTwilioTollFreeVerification(
   }
 
   const client = requireSubaccountClient(input.reg);
+  const tfvBusinessType = mapTfvBusinessType(input.businessType || input.reg.businessType || "llc");
   const verification = await client.messaging.v1.tollfreeVerifications.create({
     businessName: input.businessName,
     businessWebsite: input.businessWebsite,
@@ -83,6 +88,20 @@ export async function submitTwilioTollFreeVerification(
     businessContactPhone: input.businessContactPhone,
     additionalInformation: input.additionalInformation,
     customerProfileSid: input.customerProfileSid || undefined,
+    businessType: tfvBusinessType,
+    businessRegistrationNumber:
+      input.businessRegistrationNumber || input.reg.businessRegistrationId || undefined,
+    businessRegistrationAuthority:
+      tfvBusinessType === "SOLE_PROPRIETOR"
+        ? undefined
+        : ((input.businessRegistrationCountry ||
+            input.reg.country ||
+            input.businessCountry ||
+            "US") === "US"
+            ? "EIN"
+            : "OTHER"),
+    businessRegistrationCountry:
+      input.businessRegistrationCountry || input.reg.country || input.businessCountry || "US",
   });
 
   return {
