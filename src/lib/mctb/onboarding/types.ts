@@ -25,8 +25,8 @@ export type MctbTfvStatus =
 export type MctbTrialNumberInfo = {
   e164: string;
   phoneNumberId: string;
-  provider: "twilio";
-  numberType: "toll_free";
+  provider: "twilio" | "telnyx";
+  numberType: "toll_free" | "local";
   voiceStatus: "ready" | "pending";
   messagingVerificationStatus: MctbTfvStatus;
   verificationId?: string | null;

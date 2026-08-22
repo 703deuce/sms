@@ -54,6 +54,9 @@ export function isVoiceShellRoute(pathname: string): boolean {
 }
 
 export function isVoiceProductPath(pathname: string): boolean {
+  if (pathname === "/onboarding/mctb" || pathname.startsWith("/onboarding/mctb/")) {
+    return true;
+  }
   if (pathname.startsWith("/personal")) return false;
   if (pathname.startsWith("/numbers/premium") || pathname.startsWith("/numbers/pools")) {
     return false;

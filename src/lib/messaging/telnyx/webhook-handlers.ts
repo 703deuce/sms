@@ -247,6 +247,15 @@ export async function handleTelnyxMessageStatus(payload: unknown) {
     }
   }
 
+  const { appendMctbDeliveryTraceFromProviderStatus } = await import(
+    "@/lib/mctb/messaging/delivery-trace"
+  );
+  await appendMctbDeliveryTraceFromProviderStatus({
+    providerMessageId: sid,
+    status,
+    errorDetail: parsed.errorDetail,
+  }).catch(() => undefined);
+
   return { ok: true as const, status, eventType: eventType || null };
 }
 

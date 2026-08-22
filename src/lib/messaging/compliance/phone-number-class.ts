@@ -77,6 +77,7 @@ export function telnyxLocalA2pSettings(input?: {
   return {
     mctbNumberClass: "TELNYX_LOCAL_A2P" as const,
     mctbRole: input?.role || "customer_production",
+    mctbSipIngress: true,
     messagingCompliance: {
       type: "A2P_10DLC",
       status: input?.a2pApproved ? "APPROVED" : "NOT_STARTED",

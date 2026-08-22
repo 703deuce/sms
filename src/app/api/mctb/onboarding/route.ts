@@ -19,8 +19,11 @@ import {
 } from "@/lib/mctb/onboarding/trial";
 import {
   getTrialNumberStatus,
+  provisionTrialMctbNumber,
   provisionTrialTollFreeNumber,
 } from "@/lib/mctb/onboarding/trial-number";
+import { provisionMctbCustomerTelnyxLocalNumber } from "@/lib/mctb/provisioning/provision-customer-local";
+import { getOnboardingForwardTargetE164ForWorkspace } from "@/lib/mctb/onboarding/forward-target";
 import {
   getTfvStatusForWorkspace,
   syncTrialTollFreeVerification,
@@ -49,7 +52,7 @@ export async function GET() {
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
-    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification] =
+    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164] =
       await Promise.all([
       loadMctbOnboardingState(auth.workspaceId),
       getDemoStatus(auth.workspaceId),
@@ -59,6 +62,7 @@ export async function GET() {
       getTrialActivationRequirements(auth.workspaceId),
       getTfvStatusForWorkspace(auth.workspaceId),
       getForwardingVerificationStatus(auth.workspaceId).catch(() => null),
+      getOnboardingForwardTargetE164ForWorkspace(auth.workspaceId),
     ]);
 
     return NextResponse.json({
@@ -88,6 +92,7 @@ export async function GET() {
       carriers: MCTB_CARRIER_GUIDES,
       forwardingVerification,
       platformDemoDisplay: MCTB_PLATFORM_DEMO_DISPLAY,
+      forwardTargetE164,
     });
   } catch (err) {
     return jsonError(err, 500);
@@ -119,12 +124,28 @@ export async function POST(req: Request) {
     let state = await loadMctbOnboardingState(auth.workspaceId);
 
     if (body.action === "provision_trial_number") {
-      const result = await provisionTrialTollFreeNumber(auth.workspaceId);
+      const result = await provisionTrialMctbNumber(auth.workspaceId);
       if (!result.ok) {
         return NextResponse.json({ error: result.error || "Provisioning failed" }, { status: 400 });
       }
       state = await loadMctbOnboardingState(auth.workspaceId);
       return NextResponse.json({ ok: true, state, trialNumber: result.trialNumber });
+    }
+
+    if (body.action === "provision_telnyx_local") {
+      const result = await provisionMctbCustomerTelnyxLocalNumber(auth.workspaceId, {
+        messageTemplate: body.messageTemplate || state.messageTemplate || undefined,
+      });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error || "Provisioning failed" }, { status: 400 });
+      }
+      state = await loadMctbOnboardingState(auth.workspaceId);
+      return NextResponse.json({
+        ok: true,
+        state,
+        trialNumber: result.trialNumber,
+        provisionActions: result.provisionActions,
+      });
     }
 
     if (body.action === "activate_trial") {
@@ -150,7 +171,7 @@ export async function POST(req: Request) {
       await saveMctbOnboardingState(auth.workspaceId, state);
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
 
-      const provision = await provisionTrialTollFreeNumber(auth.workspaceId);
+      const provision = await provisionTrialMctbNumber(auth.workspaceId);
       if (!provision.ok) {
         return NextResponse.json(
           { error: provision.error || "Could not assign trial number", state },

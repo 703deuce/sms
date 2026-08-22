@@ -197,6 +197,10 @@ export async function POST(request: Request) {
     await updateProductIntent(user.id, productIntent);
 
     if (workspaceType === "BUSINESS" && productIntent === "voice") {
+      const { ensureMctbWorkspaceSeeded } = await import(
+        "@/lib/mctb/provisioning/seed-workspace"
+      );
+      await ensureMctbWorkspaceSeeded(workspace.id);
       const { recordFunnelEvent } = await import("@/lib/mctb/onboarding/state");
       await recordFunnelEvent(workspace.id, "MCTB_SIGNUP_COMPLETED", {
         product: "mctb",

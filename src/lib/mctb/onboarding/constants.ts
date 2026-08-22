@@ -26,6 +26,10 @@ export function getMctbTestCallerE164(): string {
   return process.env.MCTB_TEST_CALLER_E164?.trim() || "";
 }
 
+/** Default area code when auto-provisioning customer Telnyx local MCTB numbers. */
+export const MCTB_DEFAULT_LOCAL_AREA_CODE =
+  process.env.MCTB_DEFAULT_LOCAL_AREA_CODE?.trim() || "571";
+
 /** Toll-free area codes used when auto-provisioning customer trial numbers (Twilio + TFV). */
 export const MCTB_TRIAL_TOLL_FREE_AREA_CODES = [
   "888",

@@ -9,11 +9,13 @@ import {
 import { resolvePublicAppUrl } from "@/lib/integrations/framework/app-url";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import {
+  ensureProductWorkspace,
   getUserProductAccess,
+  grantProductEntitlement,
   resolveWorkspaceForProduct,
 } from "@/lib/products/entitlements";
 import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
-import { applyProductAccessCookie } from "@/lib/products/session";
+import { applyProductAccessCookie, updateLastActiveProduct, updateProductIntent } from "@/lib/products/session";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -55,12 +57,38 @@ export async function GET(request: Request) {
     const account = await findOrCreateUserFromGoogle(profile);
     const access = await getUserProductAccess(account.userId);
     const pathProduct = preferredProductFromPath(nextPath);
-    const workspaceForProduct = pathProduct
-      ? await resolveWorkspaceForProduct(account.userId, pathProduct)
-      : null;
-    const workspaceId = workspaceForProduct?.workspaceId ?? account.workspaceId;
-    const workspaceType = workspaceForProduct?.workspaceType ?? account.workspaceType;
-    const redirectPath = resolvePostLoginPath(access, { nextPath });
+
+    let workspaceId = account.workspaceId;
+    let workspaceType = account.workspaceType;
+
+    if (pathProduct === "voice") {
+      const voiceWs = await ensureProductWorkspace(account.userId, "voice");
+      workspaceId = voiceWs.workspaceId;
+      workspaceType = voiceWs.workspaceType;
+      const { ensureMctbWorkspaceSeeded } = await import(
+        "@/lib/mctb/provisioning/seed-workspace"
+      );
+      await ensureMctbWorkspaceSeeded(workspaceId);
+      await grantProductEntitlement(workspaceId, "voice", "active");
+      await updateLastActiveProduct(account.userId, "voice");
+      await updateProductIntent(account.userId, "voice");
+    } else if (pathProduct) {
+      const ws = await ensureProductWorkspace(account.userId, pathProduct);
+      workspaceId = ws.workspaceId;
+      workspaceType = ws.workspaceType;
+    } else {
+      const workspaceForProduct = await resolveWorkspaceForProduct(
+        account.userId,
+        access.lastActiveProduct || access.productIntent || "voice",
+      );
+      if (workspaceForProduct) {
+        workspaceId = workspaceForProduct.workspaceId;
+        workspaceType = workspaceForProduct.workspaceType;
+      }
+    }
+
+    const refreshedAccess = pathProduct === "voice" ? await getUserProductAccess(account.userId) : access;
+    const redirectPath = resolvePostLoginPath(refreshedAccess, { nextPath });
 
     const session = {
       userId: account.userId,
@@ -77,7 +105,7 @@ export async function GET(request: Request) {
       secure: process.env.NODE_ENV === "production",
     });
     applyWorkspaceCookies(res, workspaceId, workspaceType === "PERSONAL" ? "PERSONAL" : "BUSINESS");
-    applyProductAccessCookie(res, access);
+    applyProductAccessCookie(res, refreshedAccess);
     return res;
   } catch (err) {
     loginUrl.searchParams.set("next", nextPath);

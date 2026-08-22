@@ -40,6 +40,8 @@ export async function GET(request: Request) {
   const workspace = await ensureProductWorkspace(session.userId, product);
 
   if (product === "voice") {
+    const { ensureMctbWorkspaceSeeded } = await import("@/lib/mctb/provisioning/seed-workspace");
+    await ensureMctbWorkspaceSeeded(workspace.workspaceId);
     await grantProductEntitlement(workspace.workspaceId, "voice", "active");
   } else if (product === "numbers") {
     await grantProductEntitlement(workspace.workspaceId, "numbers", "active");

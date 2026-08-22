@@ -72,6 +72,7 @@ type OnboardingPayload = {
     failureReason?: string | null;
   };
   carriers: CarrierForwardingGuide[];
+  forwardTargetE164?: string | null;
   forwardingVerification: {
     testStarted: boolean;
     callDetected: boolean;
@@ -245,9 +246,18 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const selectedCarrier = data?.carriers.find((c) => c.id === carrier);
   const trialDisplay = data?.trialNumber.display;
   const trialE164 = data?.tfv.trialE164 ?? null;
+  const forwardE164 =
+    data?.forwardTargetE164 ||
+    data?.liveTest.forwardTargetE164 ||
+    data?.demo.demoNumberE164 ||
+    "+15714073615";
   const forwardDisplay =
-    data?.demo.demoNumberDisplay || data?.demo.label || "1-571-407-3615";
-  const forwardE164 = data?.demo.demoNumberE164 || "+15714073615";
+    trialDisplay ||
+    (forwardE164
+      ? forwardE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
+      : data?.demo.demoNumberDisplay || data?.demo.label || "your Transovo number");
+  const forwardTargetLabel =
+    forwardE164 === data?.demo.demoNumberE164 ? "platform demo line" : "your MCTB number";
   const tfvApproved = data?.tfv.approved || false;
   const tfvActionRequired = data?.trialNumber.messagingVerificationStatus === "action_required";
   const tfvFailureReason = data?.tfv.failureReason;
@@ -712,7 +722,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             <div className="rounded-lg border p-4 text-sm space-y-2">
               <StepCheck
                 done={data.forwardingVerification.callDetected}
-                label="Call reached Transovo (571)"
+                label={`Call reached Transovo (${forwardTargetLabel})`}
               />
               <StepCheck
                 done={data.forwardingVerification.verified}
@@ -777,13 +787,13 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <p className="text-sm text-muted-foreground">
             Call your business number ({businessNumber || "your line"}) from another phone.
             Don&apos;t answer. We&apos;ll detect the miss on {forwardDisplay} and send your recovery
-            text from the same number automatically.
+            text from that number automatically.
           </p>
 
           <div className="space-y-2 rounded-lg border p-4">
             <StepCheck
               done={data?.liveTest.checks.callDetected || false}
-              label="Call arrived on Transovo (571)"
+              label={`Call arrived on Transovo (${forwardTargetLabel})`}
             />
             <StepCheck
               done={data?.liveTest.checks.missedCall || false}

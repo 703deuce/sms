@@ -162,11 +162,16 @@ export async function resolveMctbSipSessionForPython(
   let failClosed = false;
 
   if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
-    const immediate = getImmediate571ConsentGather();
-    if (immediate) {
-      playUrl = immediate.playUrl;
-      audioAssetId = immediate.audioAssetId;
-    } else {
+    const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
+    const usePlatformFastPath = isPlatformDemoNumber(transovoNumberE164);
+    if (usePlatformFastPath) {
+      const immediate = getImmediate571ConsentGather();
+      if (immediate) {
+        playUrl = immediate.playUrl;
+        audioAssetId = immediate.audioAssetId;
+      }
+    }
+    if (!playUrl) {
       const prompt = await loadMctbConsentPrompt(target.workspaceId);
       const publishedAssetId = String(
         prompt.publishedAudioAssetId || prompt.audioAssetId || "",

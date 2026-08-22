@@ -24,9 +24,15 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 }
 
 function voiceProductNext(product: string | null): string | null {
-  if (product === "voice") return "/api/products/open?product=voice";
+  if (product === "voice" || product === "mctb") return "/api/products/open?product=voice";
   if (product === "numbers") return "/api/products/open?product=numbers";
   return null;
+}
+
+function resolveProductIntent(product: string | null): "voice" | "numbers" | undefined {
+  if (product === "voice" || product === "mctb") return "voice";
+  if (product === "numbers") return "numbers";
+  return undefined;
 }
 
 function SignupForm() {
@@ -63,6 +69,8 @@ function SignupForm() {
         businessName: workspaceType === "BUSINESS" ? form.get("businessName") : undefined,
         workspaceType,
         phone,
+        productIntent: resolveProductIntent(params.get("product")),
+        next: nextPath,
       }),
     });
     setLoading(false);

@@ -247,6 +247,23 @@ export async function executeMissedCallTextSend(input: {
       await recordDemoTextSent(input.workspaceId).catch(() => undefined);
     }
 
+    if (messageId) {
+      const msgRow = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { providerId: true, body: true },
+      });
+      const { ensureMctbRecoveryConversation } = await import(
+        "@/lib/mctb/messaging/recovery-conversation"
+      );
+      await ensureMctbRecoveryConversation({
+        workspaceId: input.workspaceId,
+        toE164: event.callerE164,
+        fromE164: resolvedSender.e164,
+        body: msgRow?.body || body,
+        providerMessageId: msgRow?.providerId,
+      }).catch(() => undefined);
+    }
+
     return { ok: true, messageId, status: "queued" };
   } catch (err) {
     if (trialReservation?.reserved) {

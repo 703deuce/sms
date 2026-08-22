@@ -213,6 +213,26 @@ export async function POST(req: Request) {
     activate: body.activate ?? true,
   });
 
+  let sipProvision: { ok: boolean; actions?: string[]; error?: string } | null = null;
+  const phoneId = body.phoneNumberId ?? runtimeResult.config.phoneNumberId;
+  if (phoneId) {
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { id: phoneId, workspaceId },
+      select: { id: true, provider: true },
+    });
+    if (pn && String(pn.provider || "").toLowerCase() === "telnyx") {
+      const { provisionMctbTelnyxSipIngress } = await import(
+        "@/lib/mctb/provisioning/telnyx-sip-ingress"
+      );
+      sipProvision = await provisionMctbTelnyxSipIngress({
+        workspaceId,
+        phoneNumberId: pn.id,
+        messageTemplate: body.messageTemplate,
+        delaySeconds: body.delaySeconds,
+      });
+    }
+  }
+
   if (body.consentMode || body.replyNotifications !== undefined) {
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -279,6 +299,7 @@ export async function POST(req: Request) {
     data: {
       runtime: runtimeResult.config,
       solution: saved,
+      sipProvision,
     },
   });
 }

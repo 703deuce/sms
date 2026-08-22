@@ -8,6 +8,7 @@ import { messagingOnboarding } from "@/lib/messaging/service";
 import { twilioAdapter } from "@/lib/messaging/twilio-adapter";
 import { assertLiveTwilioConfigured } from "@/lib/messaging/twilio-config";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "./constants";
+import { provisionMctbCustomerTelnyxLocalNumber } from "@/lib/mctb/provisioning/provision-customer-local";
 import {
   loadMctbOnboardingState,
   markStepComplete,
@@ -135,6 +136,36 @@ export function tfvStatusLabel(status: MctbTfvStatus): string {
     default:
       return "Not started";
   }
+}
+
+/** Provision the workspace MCTB trial number — Telnyx local SIP by default. */
+export async function provisionTrialMctbNumber(workspaceId: string): Promise<{
+  ok: boolean;
+  trialNumber?: MctbTrialNumberInfo;
+  error?: string;
+  provisionActions?: string[];
+}> {
+  const useTwilioTfn = process.env.MCTB_TRIAL_USE_TWILIO_TFN?.trim() === "1";
+  if (!useTwilioTfn) {
+    const telnyx = await provisionMctbCustomerTelnyxLocalNumber(workspaceId);
+    if (telnyx.ok && telnyx.trialNumber) {
+      await recordFunnelEvent(workspaceId, "MCTB_TRIAL_NUMBER_PROVISIONED", {
+        e164: telnyx.trialNumber.e164,
+        phoneNumberId: telnyx.trialNumber.phoneNumberId,
+        provider: "telnyx",
+        routing: "mctb_sip",
+      });
+      const { initMctbConsentPromptForWorkspace } = await import(
+        "@/lib/mctb/consent-prompt/service"
+      );
+      await initMctbConsentPromptForWorkspace(workspaceId).catch(() => undefined);
+      return telnyx;
+    }
+    if (telnyx.error && !telnyx.error.includes("no_telnyx_numbers")) {
+      return telnyx;
+    }
+  }
+  return provisionTrialTollFreeNumber(workspaceId);
 }
 
 /** Provision a Twilio toll-free number for this workspace's MCTB trial. */

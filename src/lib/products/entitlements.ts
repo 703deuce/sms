@@ -7,6 +7,7 @@ import {
   prismaProductKeyToApp,
   productOfferPath,
 } from "@/lib/products/paths";
+import { ensureMctbWorkspaceSeeded } from "@/lib/mctb/provisioning/seed-workspace";
 import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
@@ -285,6 +286,9 @@ export async function ensureProductWorkspace(
         bestCount = count;
       }
     }
+    if (product === "voice") {
+      await ensureMctbWorkspaceSeeded(best.workspaceId);
+    }
     await ensureWorkspaceEntitlements(best.workspaceId);
     return {
       workspaceId: best.workspaceId,
@@ -308,6 +312,9 @@ export async function ensureProductWorkspace(
         });
       }
       await ensureWorkspaceEntitlements(ownedWithNumbers.id);
+      if (product === "voice") {
+        await ensureMctbWorkspaceSeeded(ownedWithNumbers.id);
+      }
       return {
         workspaceId: ownedWithNumbers.id,
         workspaceType: ownedWithNumbers.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
@@ -320,6 +327,9 @@ export async function ensureProductWorkspace(
     product === "numbers" ? "Personal" : "Business",
     preferredType,
   );
+  if (product === "voice") {
+    await ensureMctbWorkspaceSeeded(workspace.id);
+  }
   await ensureWorkspaceEntitlements(workspace.id);
   return {
     workspaceId: workspace.id,
