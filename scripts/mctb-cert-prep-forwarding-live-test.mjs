@@ -1,6 +1,10 @@
 /**
- * Prep cert workspace for Twilio forwarding + live test on platform 571.
+ * Prep cert workspace for forwarding + live test on platform 571.
  *
+ * Run Telnyx voice prep first (Pass 1 parity for 571):
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-cert-prep-telnyx-platform-voice.ts --apply
+ *
+ * Then:
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-cert-prep-forwarding-live-test.mjs
  */
 import {

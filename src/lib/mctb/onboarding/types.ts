@@ -53,6 +53,15 @@ export type MctbDemoSession = {
   replyReceivedAt?: string | null;
   completedAt?: string | null;
   missedCallEventId?: string | null;
+  /** Last platform inbound call that triggered demo detection (AT&T forward shape). */
+  lastInboundCall?: {
+    from: string;
+    to: string;
+    forwardedFrom?: string | null;
+    callSid?: string | null;
+    callStatus?: string | null;
+    detectedAt: string;
+  } | null;
 };
 
 export type MctbLiveTestSession = {

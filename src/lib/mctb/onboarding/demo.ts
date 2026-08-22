@@ -113,7 +113,7 @@ export async function resolveOnboardingWorkspaceForPlatformInbound(input: {
 
   const prisma = getPrisma();
   const workspaces = await prisma.workspace.findMany({
-    where: { customFieldsConfig: { not: { equals: null } } },
+    where: { NOT: { customFieldsConfig: null } },
     select: { id: true, customFieldsConfig: true },
     take: 2000,
   });
@@ -167,6 +167,11 @@ export async function startDemoSession(input: {
 export async function recordDemoCallDetected(input: {
   workspaceId: string;
   missedCallEventId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  forwardedFrom?: string | null;
+  callSid?: string | null;
+  callStatus?: string | null;
 }): Promise<void> {
   const state = await loadMctbOnboardingState(input.workspaceId);
   const session = state.demoSession;
@@ -180,22 +185,32 @@ export async function recordDemoCallDetected(input: {
     return;
   }
 
-  try {
-    await saveMctbOnboardingState(input.workspaceId, {
-      demoSession: {
-        ...session,
-        status: "call_detected",
-        callDetectedAt: new Date().toISOString(),
-        missedCallEventId: input.missedCallEventId ?? session.missedCallEventId ?? null,
-      },
-    });
-  } catch (err) {
-    console.error("[mctb-demo] recordDemoCallDetected save failed", err);
-    return;
-  }
+  const detectedAt = new Date().toISOString();
+  const lastInboundCall =
+    input.from && input.to
+      ? {
+          from: input.from,
+          to: input.to,
+          forwardedFrom: input.forwardedFrom ?? null,
+          callSid: input.callSid ?? null,
+          callStatus: input.callStatus ?? null,
+          detectedAt,
+        }
+      : session.lastInboundCall ?? null;
+
+  await saveMctbOnboardingState(input.workspaceId, {
+    demoSession: {
+      ...session,
+      status: "call_detected",
+      callDetectedAt: detectedAt,
+      missedCallEventId: input.missedCallEventId ?? session.missedCallEventId ?? null,
+      lastInboundCall,
+    },
+  });
 
   await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_CALL_DETECTED", {
     ...(input.missedCallEventId ? { missedCallEventId: input.missedCallEventId } : {}),
+    ...(lastInboundCall ? { lastInboundCall } : {}),
   }).catch((err) => {
     console.warn("[mctb-demo] recordFunnelEvent MCTB_DEMO_CALL_DETECTED failed", err);
   });

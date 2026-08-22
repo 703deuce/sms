@@ -626,6 +626,19 @@ function serializeValue(v: unknown): unknown {
   return v;
 }
 
+/** Prisma `{ not: ... }` on a column — must not stringify filter ops as JSON (22P02 on jsonb). */
+function applyColumnNotFilter(query: any, key: string, notValue: unknown): any {
+  if (notValue === null) return query.not(key, "is", null);
+  if (isObject(notValue) && "equals" in notValue) {
+    if (notValue.equals === null) return query.not(key, "is", null);
+    return query.neq(key, serializeValue(notValue.equals));
+  }
+  if (isObject(notValue) && "in" in notValue && Array.isArray((notValue as Row).in)) {
+    return query.not(key, "in", `(${(notValue as Row).in.map(String).join(",")})`);
+  }
+  return query.neq(key, serializeValue(notValue));
+}
+
 function formatOrAtom(key: string, value: unknown): string | null {
   if (value === null) return `${key}.is.null`;
   if (typeof value === "string") return `${key}.eq.${value}`;
@@ -644,6 +657,10 @@ function formatOrAtom(key: string, value: unknown): string | null {
   if ("lt" in value) return `${key}.lt.${value.lt instanceof Date ? value.lt.toISOString() : value.lt}`;
   if ("not" in value) {
     if (value.not === null) return `${key}.not.is.null`;
+    if (isObject(value.not) && "equals" in value.not) {
+      if (value.not.equals === null) return `${key}.not.is.null`;
+      return `${key}.neq.${value.not.equals}`;
+    }
     return `${key}.neq.${value.not}`;
   }
   if ("contains" in value && typeof value.contains === "string") {
@@ -792,12 +809,7 @@ function applyWhereSync(query: any, where: Args | undefined): any {
         q = q.ilike(key, `%${v.endsWith}`);
       }
       if ("not" in v) {
-        if (v.not === null) q = q.not(key, "is", null);
-        else if (isObject(v.not) && "in" in v.not && Array.isArray((v.not as Row).in)) {
-          q = q.not(key, "in", `(${(v.not as Row).in.map(String).join(",")})`);
-        } else {
-          q = q.neq(key, serializeValue(v.not));
-        }
+        q = applyColumnNotFilter(q, key, v.not);
       }
       continue;
     }

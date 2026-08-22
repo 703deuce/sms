@@ -9,6 +9,7 @@
  *   npx tsx scripts/mctb-certification-runbook.ts --pass 1  # Twilio/TFV only
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1.ts  # live Pass 1 executor
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1-webhook.ts  # after deploy
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-cert-prep-telnyx-platform-voice.ts --apply  # Telnyx 571 voice prep (Pass 1 parity)
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass2.ts  # forwarding/ANI checklist
  *   npx tsx scripts/mctb-certification-pass3.ts  # Telnyx A2P + Press-1/SMS lifecycle
  *   npx tsx scripts/mctb-certification-telnyx-a2p.ts  # Telnyx A2P registration audit
@@ -24,6 +25,7 @@ export type CertificationPass = 1 | 2 | 3 | 4;
 
 export const CERTIFICATION_EXECUTION_ORDER = [
   "1. Twilio TFN + real TFV submission and approval (Pass 1)",
+  "1b. Telnyx 571 voice prep — mctb-cert-prep-telnyx-platform-voice.ts --apply (Pass 1 parity for platform line)",
   "2. Real conditional forwarding + ANI preservation (Pass 2)",
   "3. Real Press-1 flow using published consent audio (Pass 3 / CP-11–17)",
   "4. Real Existing Consent flow (Pass 3 / F-03 / CP-18)",
@@ -75,6 +77,8 @@ export const CERTIFICATION_PASSES: Record<
     goal: "Prove demo flow and real forwarding preserve original caller ANI.",
     matrixIds: ["C-06", "D-01", "D-02", "T-04"],
     checklist: [
+      "BEFORE forward tests: run mctb-cert-prep-telnyx-platform-voice.ts --apply (Call Control, smart routing, consent on 571 — Twilio Pass 1 parity).",
+      "Direct-dial smoke on 571 after prep — Press-1 or existing-consent per active mode.",
       "Demo flow: start demo session → call platform Telnyx demo line (571-407-3615) → don't answer → SMS from same number → reply → browser updates.",
       "Confirm random callers without active demo session are NOT texted.",
       "Real setup: caller → business number → no answer → conditional forward → platform 571.",

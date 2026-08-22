@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   mctb571ConsentTexmlVoiceUrl,
 } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
+import { runMctbConsentTexmlDemoCallDetect } from "@/lib/mctb/consent-prompt/texml-inbound-call-event";
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
 
 function escapeXml(value: string): string {
@@ -68,22 +69,18 @@ function scheduleDemoCallDetect(input: {
   from: string;
   to: string;
   callSid: string;
+  callStatus: string;
   forwardedFrom: string;
 }) {
-  void (async () => {
-    try {
-      const target = await resolveInboundTarget({
-        from: input.from,
-        to: input.to,
-        forwardedFrom: input.forwardedFrom,
-      });
-      if (!target.demoMode) return;
-      const { recordDemoCallDetected } = await import("@/lib/mctb/onboarding/demo");
-      await recordDemoCallDetected({ workspaceId: target.workspaceId });
-    } catch (err) {
-      console.error("[mctb-consent-texml] demo call detect failed", err);
-    }
-  })();
+  void runMctbConsentTexmlDemoCallDetect({
+    from: input.from,
+    to: input.to,
+    forwardedFrom: input.forwardedFrom || null,
+    callSid: input.callSid || null,
+    callStatus: input.callStatus || null,
+  }).catch((err) => {
+    console.error("[mctb-consent-texml] demo call detect failed", err);
+  });
 }
 
 function inboundConsentTexml(forwardedFrom: string) {
@@ -190,7 +187,7 @@ export async function POST(request: Request) {
   );
 
   if (from) {
-    scheduleDemoCallDetect({ from, to, callSid, forwardedFrom });
+    scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
   }
 
   return inboundConsentTexml(forwardedFrom);

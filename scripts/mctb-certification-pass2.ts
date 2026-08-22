@@ -4,6 +4,9 @@
  * Run the human steps below, then use --inspect to pull Transovo smart-routing
  * records for the most recent inbound call to +15714073615.
  *
+ * Before forward tests, run Telnyx 571 voice prep (Pass 1 parity):
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-cert-prep-telnyx-platform-voice.ts --apply
+ *
  * Usage:
  *   npx tsx scripts/mctb-certification-pass2.ts
  *
