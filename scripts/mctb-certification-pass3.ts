@@ -2,25 +2,22 @@
  * MCTB Pass 3 — Telnyx A2P + Press-1 / SMS lifecycle certification helper.
  *
  * Pass 3 runs on the platform Telnyx line only (full TELNYX_LOCAL_A2P path):
- *   call +15714073615 → Press-1 (if enabled) → SMS from 571 → reply → STOP/START
- *
- * Customer Twilio TFN remains messaging-disabled until TFV approves — no cross-number fallback.
- * AT&T → Twilio TFN forwarding is Pass 2 (voice/ANI only).
+ *   call +15714073615 → Press-1 (when smart routing published) → SMS from 571 → reply → STOP/START
  *
  * Usage:
+ *   npx tsx scripts/mctb-platform-demo-db-setup.ts              # verify 571 DB record
+ *   npx tsx scripts/mctb-platform-demo-db-setup.ts --apply    # tag platform_demo role
  *   npx tsx scripts/mctb-certification-pass3.ts
  *   npx tsx scripts/mctb-certification-pass3.ts --inspect --workspace-id <id>
- *   npx tsx scripts/mctb-certification-pass3.ts --audit-platform-number
+ *   npx tsx scripts/mctb-certification-pass3.ts --inspect --write-results --workspace-id <id>
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getPrisma } from "@/lib/db";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { isMessagingReady, registrationProviderName } from "@/lib/messaging/status";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
-import { getLiveTestStatus } from "@/lib/mctb/onboarding/live-test";
 import {
   MCTB_PLATFORM_DEMO_DISPLAY,
   MCTB_PLATFORM_DEMO_E164,
@@ -35,28 +32,38 @@ import {
   resolvePlatformDemoSmsSender,
 } from "@/lib/mctb/onboarding/platform-demo";
 import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
+import { getPrisma } from "@/lib/db";
+import {
+  collectPass3Evidence,
+  printPass3Evidence,
+} from "./mctb-certification-pass3-evidence";
 
 const RESULTS_PATH = join(process.cwd(), "scripts/mctb-certification-results.json");
 const args = process.argv.slice(2);
 const workspaceId =
   args.includes("--workspace-id") ? args[args.indexOf("--workspace-id") + 1] : "cmt3m55zl0p2f5o1l16604i73";
 const inspect = args.includes("--inspect");
+const writeResults = args.includes("--write-results");
 const auditPlatform = args.includes("--audit-platform-number");
+const sinceHours = args.includes("--since-hours")
+  ? Number(args[args.indexOf("--since-hours") + 1])
+  : 24;
 
 const HUMAN_STEPS = [
-  "── Pass 3: full Telnyx path on platform 571 (PLATFORM_DEMO / CERTIFICATION traffic only) ──",
+  "── Pass 3: full Telnyx path on platform 571 (PLATFORM_DEMO traffic only) ──",
+  `0. Run: npx tsx scripts/mctb-platform-demo-db-setup.ts --apply (one-time if needed)`,
   `1. Start onboarding demo → call ${MCTB_PLATFORM_DEMO_DISPLAY} from verified mobile.`,
-  "2. (Optional) Publish Press-1 on platform line → hear consent → press 1.",
-  "3. Let ring (missed) → SMS from same 571 number via Telnyx API.",
+  "2. Hear published consent audio on 571 → Press 1 (if smart routing active on platform line).",
+  "3. Let ring / complete consent → SMS from same 571 via Telnyx API.",
   "4. Handset receives SMS → reply to 571 → Telnyx inbound → conversation + owner notification.",
-  "5. STOP → next send blocked; START → restored; verify delivery callbacks + dedupe.",
-  "6. Confirm trial segment counter does NOT increment for demo traffic.",
+  "5. Text STOP → place another demo miss → SMS blocked. Text START → restored.",
+  "6. Replay one Telnyx delivery webhook → confirm no duplicate send.",
+  "7. Run --inspect --write-results to capture provider IDs + checklist.",
   "",
-  "── Separate (already proven Pass 2): Twilio TFN voice / forwarding / ANI ──",
-  "7. AT&T business line → timed forward → workspace Twilio TFN (voice only while TFV pending).",
-  "8. Customer TFN SMS stays disabled until TFV APPROVED — sender must match their 855.",
-  "",
-  "9. Run --inspect after live proof; mark matrix rows LIVE_VERIFIED with webhook evidence.",
+  "── Not in Pass 3 (separate tracks) ──",
+  "• Customer Twilio 855 SMS — only after TFV APPROVED (same-number sender).",
+  "• AT&T → Twilio TFN forwarding — Pass 2 voice/ANI (already proven).",
+  "• New-customer Telnyx A2P provisioning lifecycle — mctb-certification-telnyx-a2p.ts",
 ] as const;
 
 function loadResults(): Record<string, unknown> {
@@ -67,12 +74,41 @@ function loadResults(): Record<string, unknown> {
   }
 }
 
-function saveResults(patch: Record<string, unknown>) {
+function savePass3Evidence(evidence: Awaited<ReturnType<typeof collectPass3Evidence>>) {
   const current = loadResults();
+  const items = (current.items as Record<string, unknown>) || {};
+  const allPass = Object.values(evidence.checklist).every(Boolean);
   writeFileSync(
     RESULTS_PATH,
-    JSON.stringify({ ...current, ...patch, updatedAt: new Date().toISOString() }, null, 2),
+    JSON.stringify(
+      {
+        ...current,
+        updatedAt: new Date().toISOString(),
+        pass3: {
+          status: allPass ? "LIVE_VERIFIED_PENDING_REVIEW" : "PARTIAL",
+          lastEvidenceAt: evidence.collectedAt,
+          workspaceId: evidence.workspaceId,
+          platformE164: evidence.platformE164,
+          checklist: evidence.checklist,
+          evidence,
+        },
+        items: {
+          ...items,
+          ...(allPass
+            ? {
+                "E-01": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "Pass 3 Telnyx 571" },
+                "M-03": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "STOP on platform demo" },
+                "M-04": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "START restore" },
+                "C-06": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "Demo E2E on 571" },
+              }
+            : {}),
+        },
+      },
+      null,
+      2,
+    ),
   );
+  console.log(`\nWrote evidence → ${RESULTS_PATH}`);
 }
 
 async function auditPlatformTelnyxNumber() {
@@ -94,8 +130,7 @@ async function auditPlatformTelnyxNumber() {
 
   if (!pn) {
     console.log(`❌ No PhoneNumber row for ${MCTB_PLATFORM_DEMO_E164}`);
-    console.log("   Tag existing Telnyx number in DB with:");
-    console.log(`   settingsJson: ${JSON.stringify(telnyxLocalA2pSettings({ role: "platform_demo", a2pApproved: true }))}`);
+    console.log("   Run: npx tsx scripts/mctb-platform-demo-db-setup.ts --apply");
     return false;
   }
 
@@ -106,15 +141,16 @@ async function auditPlatformTelnyxNumber() {
   const reg = ownerId ? await getRegistrationByWorkspace(ownerId) : null;
   const auth = await isPhoneAuthorizedForOutboundSms(pn.id);
 
-  console.log(`E.164:           ${pn.e164}`);
-  console.log(`Provider:        ${pn.provider}`);
-  console.log(`Number class:    ${numberClass}`);
-  console.log(`Platform role:   ${isPlatform ? "platform_demo" : "NOT TAGGED — set mctbRole"}`);
-  console.log(`Owner workspace: ${ownerId || "missing"}`);
-  console.log(`SMS sender:      ${sender?.e164 || "missing"}`);
-  console.log(`Telnyx reg:      ${reg ? registrationProviderName(reg) : "none"}`);
-  console.log(`Messaging ready: ${reg ? isMessagingReady(reg) : false}`);
-  console.log(`Outbound auth:   ${auth.allowed} (${auth.regime})`);
+  console.log(`E.164:             ${pn.e164}`);
+  console.log(`PhoneNumber id:    ${pn.id}`);
+  console.log(`Provider:          ${pn.provider}`);
+  console.log(`ProviderNumberId:  ${pn.providerNumberId || "—"}`);
+  console.log(`Number class:      ${numberClass}`);
+  console.log(`Platform role:     ${isPlatform ? "platform_demo" : "NOT TAGGED"}`);
+  console.log(`Owner workspace:   ${ownerId || "missing"}`);
+  console.log(`Telnyx reg:        ${reg ? registrationProviderName(reg) : "none"}`);
+  console.log(`Messaging ready:   ${reg ? isMessagingReady(reg) : false}`);
+  console.log(`Outbound auth:     ${auth.allowed} (${auth.regime})`);
 
   const ok =
     numberClass === "TELNYX_LOCAL_A2P" &&
@@ -125,125 +161,51 @@ async function auditPlatformTelnyxNumber() {
     auth.allowed;
 
   console.log(ok ? "\n✅ Platform Telnyx path ready for Pass 3" : "\n❌ Fix platform number setup before cert");
+  if (!isPlatform) {
+    console.log(`   Tag: ${JSON.stringify(telnyxLocalA2pSettings({ role: "platform_demo", a2pApproved: true }))}`);
+  }
   return ok;
-}
-
-async function inspectWorkspace(workspaceId: string) {
-  const prisma = getPrisma();
-  const state = await loadMctbOnboardingState(workspaceId);
-  const tfn = getWorkspaceTollFreeNumber(state);
-  const tfv = await getTfvStatusForWorkspace(workspaceId);
-  const liveTest = await getLiveTestStatus(workspaceId);
-
-  console.log("\n── Pass 3 inspect ──\n");
-  console.log(`Workspace:     ${workspaceId}`);
-  console.log(`Voice TFN:       ${tfn?.e164 || "none"} (${classifyProductionNumber({ e164: tfn?.e164 || "", provider: "twilio", type: "TollFree" })})`);
-  console.log(`TFV status:      ${tfv?.status || "n/a"} (SMS from TFN blocked until APPROVED)`);
-  console.log(`Consent mode:    ${state.consentMode || "press_1"}`);
-  console.log(`Live test:       ${liveTest.passed ? "PASS" : "pending"}`);
-  console.log(`  call:          ${liveTest.checks.callDetected}`);
-  console.log(`  consent:       ${liveTest.checks.consentCompleted}`);
-  console.log(`  text sent:     ${liveTest.checks.textSent}`);
-  console.log(`  reply:         ${liveTest.checks.replyReceived}`);
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const events = await prisma.missedCallEvent.findMany({
-    where: { workspaceId, detectedAt: { gte: since } },
-    orderBy: { detectedAt: "desc" },
-    take: 5,
-    select: {
-      id: true,
-      callerE164: true,
-      businessE164: true,
-      status: true,
-      smsSentAt: true,
-      smsMessageId: true,
-      detectedAt: true,
-    },
-  });
-  console.log("\nRecent missed-call events:");
-  for (const e of events) {
-    console.log(
-      `  ${e.detectedAt.toISOString()} ${e.status} from=${e.callerE164} biz=${e.businessE164} sms=${e.smsMessageId || "—"}`,
-    );
-  }
-
-  const messages = await prisma.message.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-    select: { id: true, from: true, to: true, status: true, providerId: true, createdAt: true },
-  });
-  console.log("\nRecent outbound messages (customer workspace):");
-  for (const m of messages) {
-    console.log(
-      `  ${m.createdAt.toISOString()} ${m.status} ${m.from} → ${m.to} providerId=${m.providerId || "—"}`,
-    );
-  }
-
-  const consent = await prisma.smartRoutingSmsConsentEvent.findMany({
-    where: { workspaceId, consentedAt: { gte: since } },
-    orderBy: { consentedAt: "desc" },
-    take: 3,
-    select: {
-      id: true,
-      callerNumber: true,
-      consentedAt: true,
-      promptAssetId: true,
-      promptVersion: true,
-    },
-  });
-  console.log("\nPress-1 consent events:");
-  for (const c of consent) {
-    console.log(
-      `  ${c.consentedAt?.toISOString()} caller=${c.callerNumber} asset=${c.promptAssetId || "—"} v=${c.promptVersion || "—"}`,
-    );
-  }
-
-  const platformSender = await resolvePlatformDemoSmsSender();
-  if (platformSender) {
-    const telnyxMsgs = await prisma.message.findMany({
-      where: { from: platformSender.e164, to: { not: "" }, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-      take: 3,
-      select: { workspaceId: true, to: true, status: true, providerId: true },
-    });
-    console.log(`\nRecent sends from platform Telnyx ${platformSender.e164}:`);
-    for (const m of telnyxMsgs) {
-      console.log(`  ws=${m.workspaceId} → ${m.to} ${m.status} id=${m.providerId || "—"}`);
-    }
-  }
 }
 
 async function main() {
   if (auditPlatform) {
-    await auditPlatformTelnyxNumber();
-    return;
+    const ok = await auditPlatformTelnyxNumber();
+    process.exit(ok ? 0 : 1);
   }
 
-  console.log("\n══ MCTB Pass 3 — Telnyx A2P + Press-1 / SMS Certification ══\n");
-  console.log("Architecture:");
-  console.log("  TWILIO_TOLL_FREE  → TFV → Twilio voice/SMS");
-  console.log("  TELNYX_LOCAL_A2P  → 10DLC → Telnyx voice/SMS");
-  console.log(`  PLATFORM_DEMO:    ${MCTB_PLATFORM_DEMO_DISPLAY} (Telnyx 571 — isolated demo/cert only)\n`);
+  console.log("\n══ MCTB Pass 3 — Telnyx 571 Production-Path Certification ══\n");
+  console.log("Modes:");
+  console.log("  CUSTOMER_PRODUCTION → own number, own compliance regime");
+  console.log(`  PLATFORM_DEMO       → ${MCTB_PLATFORM_DEMO_DISPLAY} (isolated)\n`);
 
-  await auditPlatformTelnyxNumber();
+  const ready = await auditPlatformTelnyxNumber();
+  if (!ready) {
+    console.log("\nStop: fix 571 DB + Telnyx registration before live test.");
+    process.exit(1);
+  }
 
   const state = await loadMctbOnboardingState(workspaceId);
   const tfn = getWorkspaceTollFreeNumber(state);
-  console.log(`\nCert workspace TFN (voice only until TFV): ${tfn?.e164 || "not provisioned"}`);
-  console.log(`Pass 3 SMS path:    ${MCTB_PLATFORM_DEMO_E164} (PLATFORM_DEMO — not customer fallback)\n`);
+  const tfv = await getTfvStatusForWorkspace(workspaceId);
+  console.log(`\nInspect workspace:  ${workspaceId}`);
+  console.log(`Customer TFN:       ${tfn?.e164 || "none"} (voice only; TFV=${tfv?.status || "n/a"})`);
+  console.log(`Pass 3 SMS path:    ${MCTB_PLATFORM_DEMO_E164} only\n`);
 
   console.log("Human checklist:");
   for (const step of HUMAN_STEPS) console.log(`  ${step}`);
 
   if (inspect) {
-    await inspectWorkspace(workspaceId);
-    console.log("\nAfter live proof, update scripts/mctb-certification-results.json pass3 items.");
+    const evidence = await collectPass3Evidence({ workspaceId, sinceHours });
+    printPass3Evidence(evidence);
+    if (writeResults) savePass3Evidence(evidence);
+    else {
+      console.log("\nAdd --write-results to persist evidence in mctb-certification-results.json");
+    }
   } else {
-    console.log("\nNext: run human steps, then:");
-    console.log(`  npx tsx scripts/mctb-certification-pass3.ts --inspect --workspace-id ${workspaceId}`);
-    console.log("  npx tsx scripts/mctb-certification-telnyx-a2p.ts --workspace-id <telnyx-owner-ws>");
+    console.log("\nAfter live test:");
+    console.log(
+      `  npx tsx scripts/mctb-certification-pass3.ts --inspect --write-results --workspace-id ${workspaceId}`,
+    );
   }
 }
 
