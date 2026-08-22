@@ -1,4 +1,4 @@
-"""MCTB 571 SIP ingress — room-answer hold test (no audio)."""
+"""MCTB 571 SIP ingress — true SIP answer hold test (no AI/audio)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,13 @@ from transovo_voice.session.mctb_sip_e2e_trace import (
     is_correlation_already_handled,
     mark_correlation_handled,
 )
+from transovo_voice.session.sip_answer_session import start_minimal_sip_answer_session
+from transovo_voice.session.sip_status import (
+    SIP_CALL_STATUS_ACTIVE,
+    SipCallStatusTracer,
+    read_sip_call_status,
+    wait_for_sip_call_status_active,
+)
 from transovo_voice.telemetry import log_event
 
 if TYPE_CHECKING:
@@ -22,6 +29,7 @@ if TYPE_CHECKING:
 
 LOG_SOURCE = "mctb-sip-diagnostic"
 HOLD_SECONDS = 3.0
+SIP_ANSWER_TIMEOUT_SECONDS = 15.0
 
 
 def _normalize_e164(value: str | None) -> str | None:
@@ -52,10 +60,10 @@ async def run_mctb_sip_diagnostic_session(
     room_already_connected: bool = True,
 ) -> None:
     """
-    SIP ingress for 571 — restore physical answer only:
-    room already connected → confirm participant active → hold → disconnect.
-    No audio publication in this step.
-    """
+    SIP ingress for 571:
+    connect → locate SIP participant (ringing) → minimum RoomIO answer →
+    wait for real sip.callStatus=active → hold → disconnect.
+  """
     if is_correlation_already_handled(trace.correlation_id):
         trace.log_mctb_diagnostic_skipped("duplicate_correlation_id")
         await trace.finalize()
@@ -69,6 +77,8 @@ async def run_mctb_sip_diagnostic_session(
     trace.log_mctb_diagnostic_started()
     trace.start_standard_watchdogs()
 
+    status_tracer = SipCallStatusTracer(ctx.room, participant, trace=trace)
+
     def _on_participant_disconnected(p: "rtc.RemoteParticipant") -> None:
         if p.sid == participant.sid:
             trace.log(
@@ -81,71 +91,112 @@ async def run_mctb_sip_diagnostic_session(
 
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
-    if not room_already_connected:
-        import time
+    answer_session = None
+    answer_task: asyncio.Task[None] | None = None
 
-        connect_started = time.perf_counter()
-        trace.log_worker_room_connect_start()
-        trace.log("ctx_connect_invoked", roomName=ctx.room.name, jobId=trace.job_id)
-        try:
-            await ctx.connect()
-            connect_ms = int((time.perf_counter() - connect_started) * 1000)
-            trace.log("ctx_connect_completed", elapsedMs=connect_ms)
-            trace.log_worker_room_connected(connect_ms)
-        except Exception as err:
-            connect_ms = int((time.perf_counter() - connect_started) * 1000)
+    try:
+        if not room_already_connected:
+            import time
+
+            connect_started = time.perf_counter()
+            trace.log_worker_room_connect_start()
+            trace.log("ctx_connect_invoked", roomName=ctx.room.name, jobId=trace.job_id)
+            try:
+                await ctx.connect()
+                connect_ms = int((time.perf_counter() - connect_started) * 1000)
+                trace.log("ctx_connect_completed", elapsedMs=connect_ms)
+                trace.log_worker_room_connected(connect_ms)
+            except Exception as err:
+                connect_ms = int((time.perf_counter() - connect_started) * 1000)
+                trace.log(
+                    "ctx_connect_failed",
+                    elapsedMs=connect_ms,
+                    error=str(err),
+                    traceback=traceback.format_exc(),
+                )
+                trace.log_worker_room_connect_failed(elapsed_ms=connect_ms, error=str(err))
+                trace.log_sip_call_final_state(disconnect_reason="room_connect_failed")
+                return
+        else:
             trace.log(
-                "ctx_connect_failed",
-                elapsedMs=connect_ms,
-                error=str(err),
-                traceback=traceback.format_exc(),
+                "ctx_connect_skipped_already_connected",
+                roomName=ctx.room.name,
+                jobId=trace.job_id,
             )
-            trace.log_worker_room_connect_failed(elapsed_ms=connect_ms, error=str(err))
-            trace.log_sip_call_final_state(disconnect_reason="room_connect_failed")
-            await trace.finalize()
-            return
-    else:
-        trace.log(
-            "ctx_connect_skipped_already_connected",
-            roomName=ctx.room.name,
-            jobId=trace.job_id,
+            trace.log_worker_room_connected(0)
+
+        status_tracer.start()
+        status_tracer.log_initial()
+
+        answer_session, answer_task = await start_minimal_sip_answer_session(
+            ctx,
+            trace=trace,
+            delete_room_on_close=True,
         )
-        trace.log_worker_room_connected(0)
 
-    sip_status = (participant.attributes or {}).get("sip.callStatus")
-    trace.log_participant_active()
-    trace.log(
-        "sip_participant_status_observed",
-        sipCallStatus=sip_status,
-        participantId=participant.sid,
-        expectedActive=True,
-    )
+        active = await wait_for_sip_call_status_active(
+            ctx.room,
+            participant,
+            trace=trace,
+            timeout_s=SIP_ANSWER_TIMEOUT_SECONDS,
+            status_tracer=status_tracer,
+        )
+        if not active:
+            trace.log_sip_call_final_state(
+                disconnect_reason="sip_answer_timeout",
+                sip_status=read_sip_call_status(participant),
+            )
+            return
 
-    participant_count = len(ctx.room.remote_participants) + 1
-    trace.log_room_ready(created_new=False, participant_count=participant_count)
+        observed_status = read_sip_call_status(participant)
+        trace.log_participant_active(sip_call_status=observed_status)
 
-    trace.log(
-        "mctb_hold_started",
-        holdSeconds=HOLD_SECONDS,
-        note="no_audio_room_answer_only_test",
-    )
-    await asyncio.sleep(HOLD_SECONDS)
-    trace.log("mctb_hold_complete", holdSeconds=HOLD_SECONDS)
+        participant_count = len(ctx.room.remote_participants) + 1
+        trace.log_room_ready(created_new=False, participant_count=participant_count)
 
-    trace.log_sip_call_final_state(
-        disconnect_reason="diagnostic_complete",
-        sip_status="hangup",
-    )
-    log_event(
-        "mctb_sip_diagnostic_complete",
-        call_id=trace.correlation_id,
-        room=ctx.room.name,
-        extra={
-            "toE164": trace.to_e164,
-            "fromE164": trace.from_e164,
-            "source": LOG_SOURCE,
-            "holdSeconds": HOLD_SECONDS,
-            "audioEnabled": False,
-        },
-    )
-    await trace.finalize()
+        trace.log(
+            "mctb_hold_started",
+            holdSeconds=HOLD_SECONDS,
+            note="true_sip_answer_hold_test",
+            sipCallStatus=observed_status,
+        )
+        await asyncio.sleep(HOLD_SECONDS)
+        trace.log(
+            "mctb_hold_complete",
+            holdSeconds=HOLD_SECONDS,
+            sipCallStatus=read_sip_call_status(participant),
+        )
+
+        trace.log_sip_call_final_state(
+            disconnect_reason="diagnostic_complete",
+            sip_status=read_sip_call_status(participant) or SIP_CALL_STATUS_ACTIVE,
+        )
+        log_event(
+            "mctb_sip_diagnostic_complete",
+            call_id=trace.correlation_id,
+            room=ctx.room.name,
+            extra={
+                "toE164": trace.to_e164,
+                "fromE164": trace.from_e164,
+                "source": LOG_SOURCE,
+                "holdSeconds": HOLD_SECONDS,
+                "audioEnabled": False,
+                "sipCallStatus": read_sip_call_status(participant),
+            },
+        )
+    finally:
+        status_tracer.stop()
+        if answer_session is not None:
+            try:
+                await answer_session.aclose()
+            except Exception:
+                pass
+        if answer_task is not None and not answer_task.done():
+            answer_task.cancel()
+            try:
+                await answer_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+        await trace.finalize()

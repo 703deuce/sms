@@ -301,14 +301,19 @@ class MctbSipE2eTrace:
             sipCallStatus=self.sip_attrs.get("sip.callStatus"),
         )
 
-    def log_participant_active(self) -> None:
+    def log_participant_active(self, *, sip_call_status: str | None) -> None:
+        """Emit only when the observed LiveKit SIP attribute is truly active."""
+        if sip_call_status != "active":
+            raise ValueError(
+                f"sip_participant_active requires observed sip.callStatus=active, got {sip_call_status!r}",
+            )
         self.log(
             "sip_participant_active",
             participantId=self.participant_id,
             participantIdentity=self.participant_identity,
             roomName=self.room_name,
             roomSid=self.room_sid,
-            sipCallStatus="active",
+            sipCallStatus=sip_call_status,
         )
 
     def log_worker_job_received(self) -> None:
