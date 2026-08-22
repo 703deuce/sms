@@ -15,6 +15,11 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Drop undefined values so json/jsonb columns accept nested onboarding state. */
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 const LEGACY_STEP_MAP: Record<string, MctbOnboardingStep> = {
   compliance: "tfv",
 };
@@ -104,10 +109,10 @@ export async function saveMctbOnboardingState(
     completedSteps: patch.completedSteps ?? current.completedSteps,
     funnelEvents: { ...current.funnelEvents, ...(patch.funnelEvents || {}) },
   };
-  const customFieldsConfig = {
+  const customFieldsConfig = jsonSafe({
     ...asRecord(ws?.customFieldsConfig),
     mctbOnboarding: next,
-  };
+  });
   await prisma.workspace.update({
     where: { id: workspaceId },
     data: { customFieldsConfig },

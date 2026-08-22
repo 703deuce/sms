@@ -617,7 +617,10 @@ function serializeValue(v: unknown): unknown {
     // Leave nested Prisma ops alone; plain objects (JSON fields) serialize dates inside
     if (isFilterOpObject(v) || "increment" in v || "connect" in v || "create" in v) return v;
     const out: Row = {};
-    for (const [k, val] of Object.entries(v)) out[k] = serializeValue(val);
+    for (const [k, val] of Object.entries(v)) {
+      if (val === undefined) continue;
+      out[k] = serializeValue(val);
+    }
     return out;
   }
   return v;

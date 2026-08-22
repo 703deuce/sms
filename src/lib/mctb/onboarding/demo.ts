@@ -177,11 +177,13 @@ export async function recordDemoCallDetected(input: {
       ...session,
       status: "call_detected",
       callDetectedAt: new Date().toISOString(),
-      missedCallEventId: input.missedCallEventId || session.missedCallEventId,
+      missedCallEventId: input.missedCallEventId ?? session.missedCallEventId ?? null,
     },
   });
   await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_CALL_DETECTED", {
-    missedCallEventId: input.missedCallEventId,
+    ...(input.missedCallEventId ? { missedCallEventId: input.missedCallEventId } : {}),
+  }).catch((err) => {
+    console.warn("[mctb-demo] recordFunnelEvent MCTB_DEMO_CALL_DETECTED failed", err);
   });
 }
 

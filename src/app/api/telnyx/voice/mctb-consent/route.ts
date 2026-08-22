@@ -3,7 +3,7 @@ import {
   mctb571ConsentPlaybackUrl,
   mctb571ConsentTexmlVoiceUrl,
 } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
-import { parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
+import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
 
 function escapeXml(value: string): string {
   return value
@@ -79,8 +79,8 @@ export async function POST(request: Request) {
   const digits = pick(fields, "Digits", "digits");
   const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
   const forwardedFrom =
-    url.searchParams.get("forwardedFrom")?.trim() ||
-    pick(fields, "ForwardedFrom", "forwarded_from") ||
+    normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
+    normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
     parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
     "";
 
