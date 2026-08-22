@@ -10,7 +10,12 @@ function appBaseUrl(): string {
 
 function consentTexmlVoiceUrl(): string {
   const base = appBaseUrl();
-  return base ? `${base}/api/telnyx/voice/mctb-consent` : "/api/telnyx/voice/mctb-consent";
+  if (!base) {
+    throw new Error(
+      "MCTB TeXML requires APP_URL or NEXT_PUBLIC_APP_URL for Gather action URLs",
+    );
+  }
+  return `${base}/api/telnyx/voice/mctb-consent`;
 }
 
 function consentPlaybackUrl(): string {
@@ -112,6 +117,38 @@ export function buildMctbConsentControlledHangupTexml(message: string): string {
 
 export function wrapMctbConsentTexmlBody(body: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
+}
+
+export function logMctbConsentTexmlResponseFailed(input: {
+  from: string;
+  to: string;
+  callSid: string;
+  forwardedFrom: string;
+  callStatus: string;
+  error: unknown;
+  phase: string;
+}) {
+  const err = input.error;
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  console.error(
+    JSON.stringify({
+      source: "mctb-consent-texml",
+      event: "response_failed",
+      phase: input.phase,
+      error: message,
+      stack: stack ?? null,
+      from: input.from,
+      to: input.to,
+      forwardedFrom: input.forwardedFrom || null,
+      callSid: input.callSid || null,
+      callStatus: input.callStatus || null,
+    }),
+  );
+  // Plain-text duplicate for log grep / alerting.
+  console.error(
+    `[mctb-consent-texml] response_failed phase=${input.phase} error=${message} from=${input.from} to=${input.to} forwardedFrom=${input.forwardedFrom} callSid=${input.callSid}`,
+  );
 }
 
 export function logMctbConsentTexmlResponseReady(input: {

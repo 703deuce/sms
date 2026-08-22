@@ -4,6 +4,7 @@ import {
   buildMctbConsentControlledHangupTexml,
   buildMctbConsentGatherSuccessTexml,
   buildMctbConsentInboundTexml,
+  logMctbConsentTexmlResponseFailed,
   logMctbConsentTexmlResponseReady,
   resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
@@ -174,26 +175,89 @@ export async function POST(request: Request) {
       }),
     );
 
-    if (from) {
-      scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
-    }
+    try {
+      console.log(
+        JSON.stringify({
+          source: "mctb-consent-texml",
+          event: "inbound_build_start",
+          from,
+          to,
+          callSid,
+          forwardedFrom: forwardedFrom || null,
+        }),
+      );
 
-    const built = buildMctbConsentInboundTexml(forwardedFrom, {
-      promptMode: resolveMctbConsentTexmlPromptMode(url.searchParams.get("prompt")),
-    });
-    const xml = wrapMctbConsentTexmlBody(built.body);
-    logMctbConsentTexmlResponseReady({
-      branch: "inbound",
-      status: 200,
-      contentType: TEXML_CONTENT_TYPE,
-      xml,
-      meta: built,
-    });
-    return new NextResponse(xml, {
-      status: 200,
-      headers: { "Content-Type": TEXML_CONTENT_TYPE },
-    });
+      if (from) {
+        scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
+      }
+
+      const promptMode = resolveMctbConsentTexmlPromptMode(url.searchParams.get("prompt"));
+      const built = buildMctbConsentInboundTexml(forwardedFrom, { promptMode });
+      console.log(
+        JSON.stringify({
+          source: "mctb-consent-texml",
+          event: "inbound_built",
+          from,
+          callSid,
+          promptMode: built.promptMode,
+          gatherActionUrl: built.gatherActionUrl,
+          usesPlay: built.usesPlay,
+          usesGather: built.usesGather,
+          usesSay: built.usesSay,
+          audioUrl: built.audioUrl,
+        }),
+      );
+
+      const xml = wrapMctbConsentTexmlBody(built.body);
+      logMctbConsentTexmlResponseReady({
+        branch: "inbound",
+        status: 200,
+        contentType: TEXML_CONTENT_TYPE,
+        xml,
+        meta: built,
+      });
+      return new NextResponse(xml, {
+        status: 200,
+        headers: { "Content-Type": TEXML_CONTENT_TYPE },
+      });
+    } catch (inboundErr) {
+      logMctbConsentTexmlResponseFailed({
+        from,
+        to,
+        callSid,
+        forwardedFrom,
+        callStatus,
+        error: inboundErr,
+        phase: "inbound_response",
+      });
+      const body = buildMctbConsentControlledHangupTexml(
+        "We are unable to complete your call. Goodbye.",
+      );
+      const xml = wrapMctbConsentTexmlBody(body);
+      logMctbConsentTexmlResponseReady({
+        branch: "error",
+        status: 200,
+        contentType: TEXML_CONTENT_TYPE,
+        xml,
+        meta: {
+          error: inboundErr instanceof Error ? inboundErr.message : String(inboundErr),
+        },
+      });
+      return new NextResponse(xml, {
+        status: 200,
+        headers: { "Content-Type": TEXML_CONTENT_TYPE },
+      });
+    }
   } catch (err) {
+    logMctbConsentTexmlResponseFailed({
+      from: "",
+      to: "",
+      callSid: "",
+      forwardedFrom: "",
+      callStatus: "",
+      error: err,
+      phase: "post_handler",
+    });
     const message = err instanceof Error ? err.message : String(err);
     console.error(
       JSON.stringify({
