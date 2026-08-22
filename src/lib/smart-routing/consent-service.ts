@@ -76,6 +76,12 @@ export async function triggerMissedCallTextFromConsent(input: {
     return { triggered: false, reason: "test_mode" };
   }
 
+  const target = await resolveMctbTargetWorkspaceForInboundCall({
+    callerE164: input.callerNumber,
+    businessE164: input.businessNumber,
+    fallbackWorkspaceId: input.workspaceId,
+  });
+
   await emitSmartRoutingEvent({
     workspaceId: target.workspaceId,
     type: "MISSED_CALL_TEXT_REQUESTED",
@@ -88,11 +94,6 @@ export async function triggerMissedCallTextFromConsent(input: {
   );
 
   const prisma = getPrisma();
-  const target = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: input.callerNumber,
-    businessE164: input.businessNumber,
-    fallbackWorkspaceId: input.workspaceId,
-  });
 
   const pn = await prisma.phoneNumber.findFirst({
     where: target.isPlatformDemo

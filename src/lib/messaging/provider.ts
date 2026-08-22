@@ -46,6 +46,7 @@ export type BrandResult = {
 export type CampaignResult = {
   id: string;
   status: string;
+  brandId?: string | null;
 };
 
 export type WebhookVerificationInput = {
