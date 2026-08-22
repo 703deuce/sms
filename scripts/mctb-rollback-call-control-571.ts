@@ -43,12 +43,12 @@ async function main() {
   console.log(`Target connection:  ${targetConnectionId}`);
 
   if (String(pn.connection_id) === targetConnectionId) {
-    console.log("\n571 RESTORED TO ORIGINAL TEXML APPLICATION (already on target)");
+    console.log("\n571 RESTORED TO BACKUP CONNECTION (already on target)");
     return;
   }
 
   if (!apply) {
-    console.log("\nDry run — re-run with --apply to restore TeXML routing.");
+    console.log("\nDry run — re-run with --apply to restore previous routing.");
     return;
   }
 
@@ -58,7 +58,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("\n571 RESTORED TO ORIGINAL TEXML APPLICATION");
+  console.log("\n571 RESTORED TO BACKUP CONNECTION");
   console.log(`Live connection: ${assigned.liveConnectionId}`);
 }
 
