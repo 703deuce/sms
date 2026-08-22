@@ -51,6 +51,8 @@ const workspaceId =
   args.includes("--workspace-id") ? args[args.indexOf("--workspace-id") + 1] : "cmt3m55zl0p2f5o1l16604i73";
 const inspect = args.includes("--inspect");
 const writeResults = args.includes("--write-results");
+const preflight = args.includes("--preflight");
+const suiteMessaging = args.includes("--suite") && args.includes("messaging");
 const auditPlatform = args.includes("--audit-platform-number");
 const sinceHours = args.includes("--since-hours")
   ? Number(args[args.indexOf("--since-hours") + 1])
@@ -88,6 +90,15 @@ const PHASE_B_STEPS = [
   "4. npx tsx scripts/mctb-certification-pass3.ts --phase verified-call-consent --inspect --write-results",
 ] as const;
 
+const MESSAGING_BEHAVIOR_STEPS = [
+  "── Messaging behavior (same 571 number, after consent phase passes) ──",
+  "1. Text STOP → place another miss → outbound must be SUPPRESSED.",
+  "2. Text START → place another miss → outbound restored from 571.",
+  "3. Replay one Telnyx delivery webhook → no duplicate SMS.",
+  "4. Call again inside cooldown window → COOLDOWN_ACTIVE suppression.",
+  "5. npx tsx scripts/mctb-certification-pass3.ts --suite messaging --inspect --write-results",
+] as const;
+
 function loadResults(): Record<string, unknown> {
   try {
     return JSON.parse(readFileSync(RESULTS_PATH, "utf8")) as Record<string, unknown>;
@@ -99,11 +110,13 @@ function loadResults(): Record<string, unknown> {
 function savePass3Evidence(evidence: Awaited<ReturnType<typeof collectPass3Evidence>>) {
   const current = loadResults();
   const items = (current.items as Record<string, unknown>) || {};
-  const allPass = Object.values(evidence.checklist).every(Boolean);
+  const liveVerified = evidence.strict.liveVerified;
   const resultKey =
     evidence.consentPhase === MCTB_CONSENT_MODE_VERIFIED
       ? "pass3_verified_call_consent"
       : "pass3_existing_consent";
+
+  const messagingAllPass = Object.values(evidence.messagingBehavior).every(Boolean);
 
   writeFileSync(
     RESULTS_PATH,
@@ -112,40 +125,52 @@ function savePass3Evidence(evidence: Awaited<ReturnType<typeof collectPass3Evide
         ...current,
         updatedAt: new Date().toISOString(),
         [resultKey]: {
-          status: allPass ? "LIVE_VERIFIED" : "PARTIAL",
+          status: liveVerified ? "LIVE_VERIFIED" : "PARTIAL",
           consentProductCode: evidence.consentProductCode,
           lastEvidenceAt: evidence.collectedAt,
           workspaceId: evidence.workspaceId,
           platformE164: evidence.platformE164,
           checklist: evidence.checklist,
+          strictChecklist: evidence.strict.strictChecklist,
+          blockingReasons: evidence.strict.blockingReasons,
+          providerEvidence: evidence.strict.providerEvidence,
           evidence,
         },
-        ...(allPass && evidence.consentPhase === MCTB_CONSENT_MODE_EXISTING
+        ...(liveVerified && evidence.consentPhase === MCTB_CONSENT_MODE_EXISTING
           ? {
               pass3: {
                 status: "PHASE_A_LIVE_VERIFIED",
-                note: "EXISTING_CONSENT baseline on 571",
+                note: "EXISTING_CONSENT baseline on 571 (strict provider evidence)",
                 lastEvidenceAt: evidence.collectedAt,
+              },
+            }
+          : {}),
+        ...(messagingAllPass
+          ? {
+              pass3_messaging_behavior: {
+                status: "LIVE_VERIFIED",
+                lastEvidenceAt: evidence.collectedAt,
+                checklist: evidence.messagingBehavior,
               },
             }
           : {}),
         items: {
           ...items,
-          ...(allPass
+          ...(liveVerified
             ? {
                 ...(evidence.consentPhase === MCTB_CONSENT_MODE_EXISTING
                   ? {
                       "E-01a": {
                         status: "LIVE_VERIFIED",
                         verifiedAt: evidence.collectedAt,
-                        note: "Pass 3 EXISTING_CONSENT on 571",
+                        note: "Pass 3 EXISTING_CONSENT on 571 (strict)",
                       },
                     }
                   : {
                       "E-01b": {
                         status: "LIVE_VERIFIED",
                         verifiedAt: evidence.collectedAt,
-                        note: "Pass 3 VERIFIED_CALL_CONSENT on 571",
+                        note: "Pass 3 VERIFIED_CALL_CONSENT on 571 (strict)",
                       },
                     }),
               }
@@ -157,6 +182,12 @@ function savePass3Evidence(evidence: Awaited<ReturnType<typeof collectPass3Evide
     ),
   );
   console.log(`\nWrote ${resultKey} evidence → ${RESULTS_PATH}`);
+  if (!liveVerified) {
+    console.log("❌ LIVE_VERIFIED not granted — strict provider evidence incomplete.");
+    console.log("   Blocking:", evidence.strict.blockingReasons.join(", "));
+  } else {
+    console.log("✅ LIVE_VERIFIED — all strict provider evidence present.");
+  }
 }
 
 async function auditPlatformTelnyxNumber() {
@@ -203,6 +234,60 @@ async function auditPlatformTelnyxNumber() {
   );
 }
 
+async function runPreflight(workspaceId: string, certPhase: Pass3ConsentPhase): Promise<boolean> {
+  const prisma = getPrisma();
+  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+  const pn = ownerId
+    ? await prisma.phoneNumber.findFirst({
+        where: { e164: MCTB_PLATFORM_DEMO_E164, workspaceId: ownerId },
+        select: { id: true },
+      })
+    : null;
+
+  const state = await loadMctbOnboardingState(workspaceId);
+  const consentMode = normalizeMctbConsentMode(state.consentMode);
+  const smartRoutingActive = Boolean(
+    ownerId &&
+      pn &&
+      (await prisma.smartRoutingFlow.findFirst({
+        where: {
+          workspaceId: ownerId,
+          assignedPhoneNumberId: pn.id,
+          status: "active",
+          publishedVersionId: { not: null },
+        },
+        select: { id: true },
+      })),
+  );
+
+  console.log("\n── Preflight (before handset test) ──\n");
+  console.log(`Workspace consent:     ${consentMode}`);
+  console.log(`Cert phase:            ${certPhase}`);
+  console.log(`571 smart routing IVR: ${smartRoutingActive ? "ACTIVE" : "paused"}`);
+
+  let ok = true;
+  if (consentMode !== certPhase) {
+    console.log("❌ Workspace consent mode does not match cert phase");
+    ok = false;
+  }
+  if (certPhase === MCTB_CONSENT_MODE_EXISTING && smartRoutingActive) {
+    console.log("❌ Phase A requires Press-1 IVR paused on 571");
+    ok = false;
+  }
+  if (certPhase === MCTB_CONSENT_MODE_VERIFIED && !smartRoutingActive) {
+    console.log("❌ Phase B requires Verified Call Consent IVR active on 571");
+    ok = false;
+  }
+  if (ok) {
+    console.log("\n✅ Preflight OK — place the live call from your handset now.");
+  } else {
+    console.log(
+      `\nFix: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-set-workspace-consent-mode.ts --workspace-id ${workspaceId} --mode ${certPhase}`,
+    );
+  }
+  return ok;
+}
+
 async function main() {
   if (auditPlatform) {
     process.exit((await auditPlatformTelnyxNumber()) ? 0 : 1);
@@ -237,16 +322,33 @@ async function main() {
     );
   }
 
+  if (preflight) {
+    const ok = await runPreflight(workspaceId, phase);
+    process.exit(ok ? 0 : 1);
+  }
+
   console.log("Runbook:");
   for (const step of PHASE_A_STEPS) console.log(`  ${step}`);
   console.log("");
   for (const step of PHASE_B_STEPS) console.log(`  ${step}`);
+  console.log("");
+  for (const step of MESSAGING_BEHAVIOR_STEPS) console.log(`  ${step}`);
 
-  if (inspect) {
+  if (inspect || suiteMessaging) {
     const evidence = await collectPass3Evidence({ workspaceId, sinceHours, consentPhase: phase });
     printPass3Evidence(evidence);
-    if (writeResults) savePass3Evidence(evidence);
+    if (suiteMessaging) {
+      const msgPass = Object.values(evidence.messagingBehavior).every(Boolean);
+      console.log(`\nMessaging behavior suite: ${msgPass ? "✅ PASS" : "❌ INCOMPLETE"}`);
+    }
+    if (writeResults) {
+      savePass3Evidence(evidence);
+      if (!evidence.strict.liveVerified) process.exit(1);
+    }
   } else {
+    console.log(
+      `\nBefore calling:\n  npx tsx scripts/mctb-certification-pass3.ts --preflight --phase ${phase === MCTB_CONSENT_MODE_VERIFIED ? "verified-call-consent" : "existing-consent"} --workspace-id ${workspaceId}`,
+    );
     console.log(
       `\nAfter live test:\n  npx tsx scripts/mctb-certification-pass3.ts --phase ${phase === MCTB_CONSENT_MODE_VERIFIED ? "verified-call-consent" : "existing-consent"} --inspect --write-results --workspace-id ${workspaceId}`,
     );

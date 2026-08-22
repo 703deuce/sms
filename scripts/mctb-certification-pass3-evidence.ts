@@ -36,6 +36,7 @@ export type Pass3Evidence = {
     id: string;
     callerNumber: string;
     businessNumber: string;
+    method: string;
     affirmativeInput: string;
     promptAssetId: string | null;
     promptVersion: string | null;
@@ -71,6 +72,7 @@ export type Pass3Evidence = {
   }>;
   suppressions: Array<{ phone: string; reason: string | null; createdAt: Date }>;
   duplicateProviderIds: Array<{ providerMessageId: string; count: number }>;
+  deliveryWebhooks: Array<{ eventType: string; providerEventId: string; createdAt: Date }>;
   smartRoutingCallSessions: Array<{
     id: string;
     finalOutcome: string | null;
@@ -80,7 +82,156 @@ export type Pass3Evidence = {
     smsTriggered: boolean;
   }>;
   checklist: Record<string, boolean>;
+  /** Hard gates — all must pass before LIVE_VERIFIED (provider IDs + callbacks required). */
+  strict: Pass3StrictEvaluation;
+  messagingBehavior: Record<string, boolean>;
 };
+
+export type Pass3StrictEvaluation = {
+  liveVerified: boolean;
+  blockingReasons: string[];
+  strictChecklist: Record<string, boolean>;
+  providerEvidence: {
+    callControlIds: string[];
+    outboundProviderIds: string[];
+    inboundProviderIds: string[];
+    deliveryWebhookEventTypes: string[];
+  };
+};
+
+const PLATFORM_DIGITS = MCTB_PLATFORM_DEMO_E164.replace(/\D/g, "");
+
+/** Real Telnyx provider id — rejects placeholders and internal idempotency keys. */
+export function isRealTelnyxProviderId(id: string | null | undefined): boolean {
+  if (!id || id.trim().length < 8) return false;
+  const lower = id.trim().toLowerCase();
+  if (lower.startsWith("pending:") || lower.startsWith("idem:")) return false;
+  if (/^test_|^mock_|^sim_/i.test(id)) return false;
+  return true;
+}
+
+function isFrom571(from: string): boolean {
+  return from.replace(/\D/g, "") === PLATFORM_DIGITS;
+}
+
+export function evaluatePass3StrictEvidence(evidence: Pass3Evidence): Pass3StrictEvaluation {
+  const blockingReasons: string[] = [];
+
+  const callControlIds = evidence.voiceCalls
+    .map((c) => c.telnyxCallControlId)
+    .filter((id): id is string => isRealTelnyxProviderId(id));
+
+  const outboundFrom571 = evidence.outboundMessages.filter((m) => isFrom571(m.from));
+  const outboundProviderIds = outboundFrom571
+    .map((m) => m.providerId)
+    .filter((id): id is string => isRealTelnyxProviderId(id));
+
+  const inboundProviderIds = evidence.inboundConversationMessages
+    .map((m) => m.providerMessageId)
+    .filter((id): id is string => isRealTelnyxProviderId(id));
+
+  const deliveryWebhookEventTypes = evidence.deliveryWebhooks.map((w) => w.eventType);
+
+  const hasDeliveredOutbound = outboundFrom571.some((m) => m.status === "delivered");
+  const hasDeliveryWebhook = deliveryWebhookEventTypes.some((t) =>
+    /message\.delivered|delivered/i.test(t),
+  );
+
+  const missedCallSent = evidence.missedCallEvents.some(
+    (e) => e.status === "SENT" && isFrom571(e.businessE164),
+  );
+
+  const existingAttestation = evidence.consentEvents.some(
+    (c) => c.method === EXISTING_CONSENT_METHOD,
+  );
+  const press1Consent = evidence.consentEvents.some((c) => c.affirmativeInput === "1");
+  const consentWithPrompt = evidence.consentEvents.some(
+    (c) => c.promptAssetId && c.promptVersion,
+  );
+  const smartRoutingTriggered = evidence.smartRoutingCallSessions.some((s) => s.smsTriggered);
+
+  const strictChecklist: Record<string, boolean> = {
+    telnyx_call_control_id: callControlIds.length > 0,
+    missed_call_sms_sent: missedCallSent,
+    outbound_from_571: outboundFrom571.length > 0,
+    telnyx_outbound_message_id: outboundProviderIds.length > 0,
+    telnyx_delivery_callback: hasDeliveredOutbound || hasDeliveryWebhook,
+    inbound_reply_provider_id: inboundProviderIds.length > 0,
+    conversation_thread: evidence.inboundConversationMessages.length > 0,
+  };
+
+  if (evidence.consentPhase === MCTB_CONSENT_MODE_EXISTING) {
+    Object.assign(strictChecklist, {
+      existing_consent_attestation: existingAttestation,
+      no_dtmf_press_1: !press1Consent,
+      direct_path_no_press1_ivr: !smartRoutingTriggered,
+    });
+  } else {
+    Object.assign(strictChecklist, {
+      dtmf_press_1_consent: press1Consent,
+      consent_prompt_asset_version: consentWithPrompt,
+      smart_routing_sms_triggered: smartRoutingTriggered,
+    });
+  }
+
+  for (const [key, ok] of Object.entries(strictChecklist)) {
+    if (!ok) blockingReasons.push(`missing:${key}`);
+  }
+
+  return {
+    liveVerified: blockingReasons.length === 0,
+    blockingReasons,
+    strictChecklist,
+    providerEvidence: {
+      callControlIds,
+      outboundProviderIds,
+      inboundProviderIds,
+      deliveryWebhookEventTypes,
+    },
+  };
+}
+
+export function evaluatePass3MessagingBehavior(evidence: Pass3Evidence): Record<string, boolean> {
+  const stopRecorded = evidence.suppressions.some((s) =>
+    String(s.reason || "").toUpperCase().includes("STOP"),
+  );
+
+  const blockedAfterStop = evidence.missedCallEvents.some((e) => {
+    if (e.status !== "SUPPRESSED") return false;
+    const reason = String(e.suppressionReason || "").toUpperCase();
+    return (
+      reason.includes("OPTED_OUT") ||
+      reason.includes("BLOCKED") ||
+      reason.includes("SUPPRESSION")
+    );
+  });
+
+  const stopAt = evidence.suppressions.find((s) =>
+    String(s.reason || "").toUpperCase().includes("STOP"),
+  )?.createdAt;
+
+  const restoredAfterStart = stopAt
+    ? evidence.outboundMessages.some(
+        (m) =>
+          isFrom571(m.from) &&
+          m.status === "delivered" &&
+          m.createdAt > stopAt &&
+          isRealTelnyxProviderId(m.providerId),
+      )
+    : false;
+
+  const cooldownBlocked = evidence.missedCallEvents.some(
+    (e) => String(e.suppressionReason || "").toUpperCase() === "COOLDOWN_ACTIVE",
+  );
+
+  return {
+    stop_suppression_recorded: stopRecorded,
+    send_blocked_after_stop: blockedAfterStop,
+    start_restore_send: restoredAfterStart,
+    webhook_dedupe_clean: evidence.duplicateProviderIds.length === 0,
+    cooldown_suppression: cooldownBlocked,
+  };
+}
 
 function maskPhone(e164: string): string {
   const d = e164.replace(/\D/g, "");
@@ -200,6 +351,22 @@ export async function collectPass3Evidence(input: {
     .filter(([, count]) => count > 1)
     .map(([providerMessageId, count]) => ({ providerMessageId, count }));
 
+  const deliveryWebhooks = await prisma.providerWebhookEvent.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      provider: "telnyx",
+      createdAt: { gte: since },
+      OR: [
+        { eventType: { contains: "message.delivered" } },
+        { eventType: { contains: "message.sent" } },
+        { eventType: { contains: "message.received" } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { eventType: true, providerEventId: true, createdAt: true },
+  });
+
   const smartRoutingCallSessions = await prisma.smartRoutingCallSession.findMany({
     where: {
       workspaceId: { in: [input.workspaceId, ...(platformOwnerId ? [platformOwnerId] : [])] },
@@ -221,22 +388,20 @@ export async function collectPass3Evidence(input: {
     const meta = e.metadata as Record<string, unknown> | null;
     return meta?.demoMode === true;
   });
-  const hasDelivered = outboundMessages.some((m) => m.status === "delivered");
-  const hasSent = outboundMessages.some((m) =>
-    ["sent", "delivered", "queued", "sending"].includes(m.status),
+  const hasRealDelivery = outboundMessages.some(
+    (m) => m.status === "delivered" && isRealTelnyxProviderId(m.providerId),
   );
 
   const sharedMessaging = {
-    telnyx_call_id: voiceCalls.some((c) => Boolean(c.telnyxCallControlId)),
-    outbound_sms_from_571: outboundMessages.some(
-      (m) => m.from.replace(/\D/g, "") === MCTB_PLATFORM_DEMO_E164.replace(/\D/g, ""),
+    telnyx_call_id: voiceCalls.some((c) => isRealTelnyxProviderId(c.telnyxCallControlId)),
+    outbound_sms_from_571: outboundMessages.some((m) => isFrom571(m.from)),
+    telnyx_message_id: outboundMessages.some((m) => isRealTelnyxProviderId(m.providerId)),
+    delivery_status: hasRealDelivery,
+    inbound_reply_webhook: inboundConversationMessages.some((m) =>
+      isRealTelnyxProviderId(m.providerMessageId),
     ),
-    telnyx_message_id: outboundMessages.some(
-      (m) => m.providerId && !m.providerId.startsWith("pending:") && !m.providerId.startsWith("idem:"),
-    ),
-    delivery_status: hasDelivered || hasSent,
-    inbound_reply_webhook: inboundConversationMessages.length > 0,
     conversation_created: inboundConversationMessages.length > 0,
+    missed_call_detected: missedCallEvents.some((e) => e.status === "SENT"),
     stop_suppression: suppressions.some((s) => String(s.reason || "").toUpperCase().includes("STOP")),
     demo_wizard_updated: Boolean(demo.checks.textDelivered && demo.checks.replyReceived),
     demo_events_only_for_segment_check:
@@ -265,7 +430,7 @@ export async function collectPass3Evidence(input: {
   const consentProductCode =
     consentPhase === MCTB_CONSENT_MODE_VERIFIED ? "VERIFIED_CALL_CONSENT" : "EXISTING_CONSENT";
 
-  return {
+  const baseEvidence: Omit<Pass3Evidence, "strict" | "messagingBehavior"> = {
     collectedAt: new Date().toISOString(),
     workspaceId: input.workspaceId,
     platformE164: MCTB_PLATFORM_DEMO_E164,
@@ -294,8 +459,18 @@ export async function collectPass3Evidence(input: {
     })),
     suppressions: suppressions.map((s) => ({ ...s, phone: maskPhone(s.phone) })),
     duplicateProviderIds,
+    deliveryWebhooks,
     smartRoutingCallSessions,
     checklist,
+  };
+
+  const strict = evaluatePass3StrictEvidence(baseEvidence as Pass3Evidence);
+  const messagingBehavior = evaluatePass3MessagingBehavior(baseEvidence as Pass3Evidence);
+
+  return {
+    ...baseEvidence,
+    strict,
+    messagingBehavior,
   };
 }
 
@@ -315,8 +490,31 @@ export function printPass3Evidence(evidence: Pass3Evidence) {
   );
   console.log("(Demo traffic should not increment trial segments.)\n");
 
-  console.log("Checklist:");
+  console.log("Checklist (informational):");
   for (const [key, ok] of Object.entries(evidence.checklist)) {
+    console.log(`  ${ok ? "✅" : "⬜"} ${key}`);
+  }
+
+  console.log(`\nStrict LIVE_VERIFIED gates: ${evidence.strict.liveVerified ? "✅ PASS" : "❌ FAIL"}`);
+  for (const [key, ok] of Object.entries(evidence.strict.strictChecklist)) {
+    console.log(`  ${ok ? "✅" : "⬜"} ${key}`);
+  }
+  if (evidence.strict.blockingReasons.length) {
+    console.log("\nBlocking reasons:");
+    for (const r of evidence.strict.blockingReasons) console.log(`  • ${r}`);
+  }
+
+  const pe = evidence.strict.providerEvidence;
+  console.log("\nProvider evidence captured:");
+  console.log(`  callControlIds:     ${pe.callControlIds.join(", ") || "—"}`);
+  console.log(`  outboundProviderIds: ${pe.outboundProviderIds.join(", ") || "—"}`);
+  console.log(`  inboundProviderIds:  ${pe.inboundProviderIds.join(", ") || "—"}`);
+  console.log(
+    `  deliveryWebhooks:    ${pe.deliveryWebhookEventTypes.join(", ") || "—"}`,
+  );
+
+  console.log("\nMessaging behavior (STOP/START/dedupe/cooldown):");
+  for (const [key, ok] of Object.entries(evidence.messagingBehavior)) {
     console.log(`  ${ok ? "✅" : "⬜"} ${key}`);
   }
 
@@ -336,7 +534,7 @@ export function printPass3Evidence(evidence: Pass3Evidence) {
     console.log("\nConsent records:");
     for (const c of evidence.consentEvents) {
       console.log(
-        `  ${c.consentedAt.toISOString()} caller=${maskPhone(c.callerNumber)} input=${c.affirmativeInput} asset=${c.promptAssetId || "—"} v=${c.promptVersion || "—"}`,
+        `  ${c.consentedAt.toISOString()} method=${c.method} caller=${maskPhone(c.callerNumber)} input=${c.affirmativeInput} asset=${c.promptAssetId || "—"} v=${c.promptVersion || "—"}`,
       );
     }
   }
