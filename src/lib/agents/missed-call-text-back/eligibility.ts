@@ -52,54 +52,6 @@ export async function evaluateMissedCallTextEligibility(input: {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   const classification = classifyInboundCallOutcome(input.call);
 
-  if (input.demoMode) {
-    let caller = "";
-    try {
-      caller = normalizeE164(input.callerE164);
-    } catch {
-      return { eligible: false, reason: "INVALID_PHONE", classification };
-    }
-    if (!caller || caller.length < 8) {
-      return { eligible: false, reason: "INVALID_PHONE", classification };
-    }
-    return { eligible: true, reason: null, classification };
-  }
-
-  if (!config.enabled) {
-    return { eligible: false, reason: "FEATURE_DISABLED", classification };
-  }
-
-  const entitlement = await getMctbEntitlement(input.workspaceId);
-  if (!entitlement.canSendAutomaticRecovery) {
-    return {
-      eligible: false,
-      reason:
-        entitlement.reason === "trial_sms_limit_reached"
-          ? "TRIAL_SMS_LIMIT"
-          : "ENTITLEMENT_SUSPENDED",
-      classification,
-    };
-  }
-
-  if (classification === "outbound" || classification === "answered") {
-    return {
-      eligible: false,
-      reason: classification === "outbound" ? "OUTBOUND_CALL" : "CALL_ANSWERED",
-      classification,
-    };
-  }
-
-  if (
-    classification === "unknown" ||
-    !classificationTriggersMctb(classification, config)
-  ) {
-    return { eligible: false, reason: "NOT_MISSED", classification };
-  }
-
-  if (config.phoneNumberId && input.phoneNumberId && config.phoneNumberId !== input.phoneNumberId) {
-    return { eligible: false, reason: "TRIGGER_DISABLED", classification };
-  }
-
   let caller = "";
   try {
     caller = normalizeE164(input.callerE164);
@@ -110,14 +62,51 @@ export async function evaluateMissedCallTextEligibility(input: {
     return { eligible: false, reason: "INVALID_PHONE", classification };
   }
 
-  if (config.suppressKnownSpam) {
-    const spam = evaluateCallerIdForMctb(caller);
-    if (spam.blocked) {
+  if (!input.demoMode) {
+    if (!config.enabled) {
+      return { eligible: false, reason: "FEATURE_DISABLED", classification };
+    }
+
+    const entitlement = await getMctbEntitlement(input.workspaceId);
+    if (!entitlement.canSendAutomaticRecovery) {
       return {
         eligible: false,
-        reason: spam.reason === "SPAM" ? "SPAM" : spam.reason || "UNKNOWN_CALLER",
+        reason:
+          entitlement.reason === "trial_sms_limit_reached"
+            ? "TRIAL_SMS_LIMIT"
+            : "ENTITLEMENT_SUSPENDED",
         classification,
       };
+    }
+
+    if (classification === "outbound" || classification === "answered") {
+      return {
+        eligible: false,
+        reason: classification === "outbound" ? "OUTBOUND_CALL" : "CALL_ANSWERED",
+        classification,
+      };
+    }
+
+    if (
+      classification === "unknown" ||
+      !classificationTriggersMctb(classification, config)
+    ) {
+      return { eligible: false, reason: "NOT_MISSED", classification };
+    }
+
+    if (config.phoneNumberId && input.phoneNumberId && config.phoneNumberId !== input.phoneNumberId) {
+      return { eligible: false, reason: "TRIGGER_DISABLED", classification };
+    }
+
+    if (config.suppressKnownSpam) {
+      const spam = evaluateCallerIdForMctb(caller);
+      if (spam.blocked) {
+        return {
+          eligible: false,
+          reason: spam.reason === "SPAM" ? "SPAM" : spam.reason || "UNKNOWN_CALLER",
+          classification,
+        };
+      }
     }
   }
 
@@ -163,15 +152,17 @@ export async function evaluateMissedCallTextEligibility(input: {
     return { eligible: false, reason: "COOLDOWN_ACTIVE", classification };
   }
 
-  const now = new Date();
-  if (config.quietHoursEnabled && config.quietHoursStart && config.quietHoursEnd) {
-    if (!inWindow(now, config.timezone, config.quietHoursStart, config.quietHoursEnd)) {
-      return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
+  if (!input.demoMode) {
+    const now = new Date();
+    if (config.quietHoursEnabled && config.quietHoursStart && config.quietHoursEnd) {
+      if (!inWindow(now, config.timezone, config.quietHoursStart, config.quietHoursEnd)) {
+        return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
+      }
     }
-  }
-  if (config.businessHoursOnly && config.allowedStartTime && config.allowedEndTime) {
-    if (!inWindow(now, config.timezone, config.allowedStartTime, config.allowedEndTime)) {
-      return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
+    if (config.businessHoursOnly && config.allowedStartTime && config.allowedEndTime) {
+      if (!inWindow(now, config.timezone, config.allowedStartTime, config.allowedEndTime)) {
+        return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
+      }
     }
   }
 
