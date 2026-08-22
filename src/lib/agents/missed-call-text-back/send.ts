@@ -3,7 +3,6 @@ import { sendQuickSms } from "@/lib/sms/send-quick";
 import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
-import { resolveMctbSmsSender } from "./sms-sender";
 import { getDemoMessageBody } from "@/lib/mctb/onboarding/demo";
 import {
   reserveTrialSmsSegments,
@@ -117,10 +116,6 @@ export async function executeMissedCallTextSend(input: {
     trialReservation = { reserved: true, segments: 1 };
   }
 
-  const sender = await resolveMctbSmsSender({
-    workspaceId: input.workspaceId,
-    config,
-  });
   const { resolveMctbOutboundSmsRoute } = await import("@/lib/mctb/messaging/outbound-sms-route");
   const route = await resolveMctbOutboundSmsRoute({
     workspaceId: input.workspaceId,
@@ -128,14 +123,7 @@ export async function executeMissedCallTextSend(input: {
     demoMode,
   });
 
-  const resolvedSender = route
-    ? {
-        e164: route.fromE164,
-        phoneNumberId: route.phoneNumberId,
-        source: route.source,
-      }
-    : sender;
-  if (!resolvedSender?.e164) {
+  if (!route?.fromE164) {
     if (trialReservation?.reserved) {
       await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
         () => undefined,
@@ -143,10 +131,30 @@ export async function executeMissedCallTextSend(input: {
     }
     await prisma.missedCallEvent.update({
       where: { id: event.id },
-      data: { status: "FAILED", suppressionReason: "NOT_SMS_CAPABLE" },
+      data: {
+        status: "SUPPRESSED",
+        suppressionReason: demoMode ? "NOT_SMS_CAPABLE" : "MESSAGING_NOT_APPROVED",
+        eligible: false,
+      },
     });
-    return { ok: false, reason: "NOT_SMS_CAPABLE" };
+    await appendMctbTrace({
+      workspaceId: input.workspaceId,
+      traceId: input.traceId,
+      missedCallEventId: event.id,
+      kind: "sms.send.blocked",
+      detail: {
+        reason: demoMode ? "NOT_SMS_CAPABLE" : "MESSAGING_NOT_APPROVED",
+        demoMode,
+      },
+    });
+    return { ok: false, reason: demoMode ? "NOT_SMS_CAPABLE" : "MESSAGING_NOT_APPROVED" };
   }
+
+  const resolvedSender = {
+    e164: route.fromE164,
+    phoneNumberId: route.phoneNumberId,
+    source: route.source,
+  };
 
   await appendMctbTrace({
     workspaceId: input.workspaceId,
@@ -157,9 +165,9 @@ export async function executeMissedCallTextSend(input: {
       to: event.callerE164,
       from: resolvedSender.e164,
       senderSource: resolvedSender.source,
-      complianceRegime: route?.complianceRegime,
-      usesPlatformSender: route?.usesPlatformSender,
-      sendWorkspaceId: route?.sendWorkspaceId,
+      complianceRegime: route.complianceRegime,
+      trafficMode: route.trafficMode,
+      sendWorkspaceId: route.sendWorkspaceId,
     },
   });
 
@@ -172,9 +180,7 @@ export async function executeMissedCallTextSend(input: {
       customerName: contact?.firstName || undefined,
       idempotencyKey: `mctb:${event.idempotencyKey}`,
       demoBypass: demoMode,
-      senderRoute: route
-        ? { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 }
-        : undefined,
+      senderRoute: { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 },
     });
 
     const messageId =

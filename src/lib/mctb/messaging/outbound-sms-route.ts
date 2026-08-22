@@ -5,8 +5,10 @@
  * Telnyx local → A2P_10DLC via messagingRegistration on the owning workspace.
  *
  * Never authorize a Telnyx sender with Twilio TFV status, or vice versa.
- * When a customer workspace TFN is not TFV-approved yet, fall back to the
- * platform Telnyx A2P demo line for outbound SMS (live test / cert).
+ *
+ * Platform demo (+15714073615): outbound only when trafficMode is PLATFORM_DEMO
+ * (onboarding demo session). Pending customer TFN stays messaging-disabled —
+ * no silent fallback through the platform number.
  */
 import { getPrisma } from "@/lib/db";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
@@ -30,10 +32,12 @@ import {
   resolvePlatformDemoOwnerWorkspaceId,
   resolvePlatformDemoSmsSender,
 } from "@/lib/mctb/onboarding/platform-demo";
-import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { loadWorkspaceTfvForPhone } from "@/lib/mctb/tfv/store";
 
 export type MessagingComplianceRegime = "TOLL_FREE_VERIFICATION" | "A2P_10DLC";
+
+/** Isolated platform traffic on Transovo-owned +15714073615 — not customer production. */
+export type MctbPlatformTrafficMode = "PLATFORM_DEMO" | "CERTIFICATION";
 
 export type MctbOutboundSmsRoute = {
   customerWorkspaceId: string;
@@ -43,7 +47,7 @@ export type MctbOutboundSmsRoute = {
   phoneNumberId: string;
   source: MctbSmsSender["source"] | "platform_telnyx_a2p";
   complianceRegime: MessagingComplianceRegime;
-  usesPlatformSender: boolean;
+  trafficMode: MctbPlatformTrafficMode | "CUSTOMER_PRODUCTION";
 };
 
 export async function isPhoneAuthorizedForOutboundSms(phoneNumberId: string): Promise<{
@@ -111,10 +115,14 @@ export async function isPhoneAuthorizedForOutboundSms(phoneNumberId: string): Pr
   };
 }
 
-/** Platform Telnyx A2P sender — shared demo line and cert/live-test SMS fallback. */
-export async function resolvePlatformTelnyxSmsRoute(
-  customerWorkspaceId: string,
-): Promise<MctbOutboundSmsRoute | null> {
+/**
+ * Platform Telnyx A2P route — only for explicit PLATFORM_DEMO or CERTIFICATION traffic.
+ * Uses the platform owner's Telnyx registration (real TELNYX_LOCAL_A2P adapter path).
+ */
+export async function resolvePlatformTelnyxSmsRoute(input: {
+  customerWorkspaceId: string;
+  trafficMode: MctbPlatformTrafficMode;
+}): Promise<MctbOutboundSmsRoute | null> {
   const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
   const sender = await resolvePlatformDemoSmsSender();
   if (!ownerId || !sender) return null;
@@ -127,23 +135,35 @@ export async function resolvePlatformTelnyxSmsRoute(
   if (!auth.allowed) return null;
 
   return {
-    customerWorkspaceId,
+    customerWorkspaceId: input.customerWorkspaceId,
     sendWorkspaceId: ownerId,
     fromE164: sender.e164,
     phoneNumberId: sender.phoneNumberId,
     source: "platform_telnyx_a2p",
     complianceRegime: "A2P_10DLC",
-    usesPlatformSender: true,
+    trafficMode: input.trafficMode,
   };
 }
 
 export async function resolveMctbOutboundSmsRoute(input: {
   workspaceId: string;
   config: Pick<MissedCallTextConfigRecord, "phoneNumberId" | "smsPhoneNumberId">;
+  /** Onboarding demo — routes via platform 571, isolated from customer production. */
   demoMode?: boolean;
+  /** Explicit certification run on platform 571 (same adapter path, not customer TFN). */
+  certificationMode?: boolean;
 }): Promise<MctbOutboundSmsRoute | null> {
   if (input.demoMode) {
-    return resolvePlatformTelnyxSmsRoute(input.workspaceId);
+    return resolvePlatformTelnyxSmsRoute({
+      customerWorkspaceId: input.workspaceId,
+      trafficMode: "PLATFORM_DEMO",
+    });
+  }
+  if (input.certificationMode) {
+    return resolvePlatformTelnyxSmsRoute({
+      customerWorkspaceId: input.workspaceId,
+      trafficMode: "CERTIFICATION",
+    });
   }
 
   const sender = await resolveMctbSmsSender({
@@ -151,24 +171,24 @@ export async function resolveMctbOutboundSmsRoute(input: {
     config: input.config,
   });
 
-  if (sender?.phoneNumberId) {
-    const auth = await isPhoneAuthorizedForOutboundSms(sender.phoneNumberId);
-    if (auth.allowed) {
-      const pn = await getPrisma().phoneNumber.findFirst({
-        where: { id: sender.phoneNumberId },
-        select: { workspaceId: true, e164: true },
-      });
-      return {
-        customerWorkspaceId: input.workspaceId,
-        sendWorkspaceId: pn?.workspaceId || input.workspaceId,
-        fromE164: sender.e164,
-        phoneNumberId: sender.phoneNumberId,
-        source: sender.source,
-        complianceRegime: auth.regime || "A2P_10DLC",
-        usesPlatformSender: isPlatformDemoNumber(sender.e164),
-      };
-    }
-  }
+  if (!sender?.phoneNumberId) return null;
 
-  return resolvePlatformTelnyxSmsRoute(input.workspaceId);
+  const auth = await isPhoneAuthorizedForOutboundSms(sender.phoneNumberId);
+  if (!auth.allowed) return null;
+
+  const pn = await getPrisma().phoneNumber.findFirst({
+    where: { id: sender.phoneNumberId },
+    select: { workspaceId: true, e164: true },
+  });
+  if (!pn) return null;
+
+  return {
+    customerWorkspaceId: input.workspaceId,
+    sendWorkspaceId: pn.workspaceId,
+    fromE164: sender.e164,
+    phoneNumberId: sender.phoneNumberId,
+    source: sender.source,
+    complianceRegime: auth.regime || "A2P_10DLC",
+    trafficMode: "CUSTOMER_PRODUCTION",
+  };
 }

@@ -103,9 +103,9 @@ export const CERTIFICATION_PASSES: Record<
       "CP-17",
     ],
     checklist: [
-      "Platform demo (Telnyx 571 A2P): start demo → call platform line → missed → SMS from same number → reply → STOP/START.",
-      "Do NOT wait on Twilio TFV for Pass 3 — outbound SMS uses Telnyx A2P path while TFV pending.",
-      "Live workspace cert: 703 → business line → forward → Twilio TFN → Press-1 → SMS from Telnyx local → reply.",
+      "Platform demo (Telnyx 571 A2P): start demo → call platform line → full Telnyx loop → reply → STOP/START.",
+      "Pending customer Twilio TFN must NOT send SMS through 571 — messaging disabled until TFV approved.",
+      "Pass 3 cert = real TELNYX_LOCAL_A2P adapter on +15714073615 (PLATFORM_DEMO traffic only).",
       "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion + promptScriptHash.",
       "Press-1 edge cases (before marking CP complete):",
       "  • Edit script after publish → Setup shows stale/unpublished; live calls still use last publish until re-published",

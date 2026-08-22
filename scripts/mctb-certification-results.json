@@ -1,19 +1,21 @@
 {
   "updatedAt": "2026-08-22T00:32:00.000Z",
-  "notes": "Pass 2: AT&T forward+ANI PASS. Pass 3: Telnyx A2P path ready — run pass3 + telnyx-a2p audit before live cert. Pass 1 still PARTIAL.",
+  "notes": "Pass 3: Telnyx 571 PLATFORM_DEMO only — no TFV→571 fallback. Pending TFN = messaging disabled.",
   "pass3": {
     "status": "READY",
     "platformDemoE164": "+15714073615",
-    "architecture": "TWILIO_TOLL_FREE voice/TFV + TELNYX_LOCAL_A2P SMS via provider-aware routing",
+    "trafficModes": ["PLATFORM_DEMO", "CERTIFICATION"],
+    "architecture": "TELNYX_LOCAL_A2P on 571 for demo/cert; TWILIO_TOLL_FREE voice+SMS only after TFV",
+    "explicitlyRemoved": "Silent SMS fallback from customer TFN to platform 571 when TFV pending",
     "scripts": [
       "npx tsx scripts/mctb-certification-pass3.ts --audit-platform-number",
       "npx tsx scripts/mctb-certification-telnyx-a2p.ts",
       "npx tsx scripts/mctb-certification-pass3.ts --inspect --workspace-id cmt3m55zl0p2f5o1l16604i73"
     ],
     "pendingLiveProof": [
-      "Platform demo: call 571 → SMS → reply → STOP/START",
-      "Live cert: forward → Twilio TFN → Press-1 → Telnyx SMS → reply",
-      "Delivery status webhooks + dedupe + segment counting"
+      "Platform 571: call → Press-1 (optional) → SMS → reply → STOP/START on Telnyx",
+      "Delivery status webhooks + dedupe on platform line",
+      "Customer TFN: voice/forwarding only until TFV — then Twilio SMS from same TFN"
     ]
   },
   "pass1Status": "PARTIAL",

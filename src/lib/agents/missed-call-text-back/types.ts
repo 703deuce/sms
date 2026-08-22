@@ -38,7 +38,8 @@ export type MctbSuppressionReason =
   | "PROVIDER_ERROR"
   | "TRIGGER_DISABLED"
   | "ENTITLEMENT_SUSPENDED"
-  | "TRIAL_SMS_LIMIT";
+  | "TRIAL_SMS_LIMIT"
+  | "MESSAGING_NOT_APPROVED";
 
 export type MissedCallTextConfigRecord = {
   id: string;

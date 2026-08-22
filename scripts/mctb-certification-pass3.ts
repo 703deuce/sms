@@ -1,12 +1,11 @@
 /**
  * MCTB Pass 3 — Telnyx A2P + Press-1 / SMS lifecycle certification helper.
  *
- * Dual-provider cert path (no TFV wait):
- *   703 caller → business line → forward → Twilio workspace TFN → Press-1 →
- *   SMS from approved Telnyx local (platform demo line) → reply → STOP/START
+ * Pass 3 runs on the platform Telnyx line only (full TELNYX_LOCAL_A2P path):
+ *   call +15714073615 → Press-1 (if enabled) → SMS from 571 → reply → STOP/START
  *
- * Platform demo path (full Telnyx loop on one number):
- *   call +15714073615 → missed → SMS from same number → reply
+ * Customer Twilio TFN remains messaging-disabled until TFV approves — no cross-number fallback.
+ * AT&T → Twilio TFN forwarding is Pass 2 (voice/ANI only).
  *
  * Usage:
  *   npx tsx scripts/mctb-certification-pass3.ts
@@ -45,20 +44,19 @@ const inspect = args.includes("--inspect");
 const auditPlatform = args.includes("--audit-platform-number");
 
 const HUMAN_STEPS = [
-  "── Platform demo (Telnyx 571 — immediate, no TFV wait) ──",
+  "── Pass 3: full Telnyx path on platform 571 (PLATFORM_DEMO / CERTIFICATION traffic only) ──",
   `1. Start onboarding demo → call ${MCTB_PLATFORM_DEMO_DISPLAY} from verified mobile.`,
-  "2. Let ring (missed) → receive SMS from same 571 number via Telnyx API.",
-  "3. Reply → confirm inbox + demo checkmarks update.",
-  "4. Text STOP → confirm suppressed; START → restored.",
+  "2. (Optional) Publish Press-1 on platform line → hear consent → press 1.",
+  "3. Let ring (missed) → SMS from same 571 number via Telnyx API.",
+  "4. Handset receives SMS → reply to 571 → Telnyx inbound → conversation + owner notification.",
+  "5. STOP → next send blocked; START → restored; verify delivery callbacks + dedupe.",
+  "6. Confirm trial segment counter does NOT increment for demo traffic.",
   "",
-  "── Live cert workspace (Twilio TFN voice + Telnyx SMS sender) ──",
-  "5. Publish Press-1 consent audio for workspace Twilio TFN.",
-  "6. Forward business line → workspace TFN (AT&T *61* dial code if needed).",
-  "7. Call business line from 703 handset → hear Press-1 → press 1.",
-  "8. SMS must send from approved Telnyx local (571) while TFV pending.",
-  "9. 703 receives SMS → reply → Telnyx inbound webhook → customer conversation.",
-  "10. STOP blocks next missed-call SMS; START restores; verify segment counting.",
-  "11. Run --inspect to pull provider message IDs + consent audit rows.",
+  "── Separate (already proven Pass 2): Twilio TFN voice / forwarding / ANI ──",
+  "7. AT&T business line → timed forward → workspace Twilio TFN (voice only while TFV pending).",
+  "8. Customer TFN SMS stays disabled until TFV APPROVED — sender must match their 855.",
+  "",
+  "9. Run --inspect after live proof; mark matrix rows LIVE_VERIFIED with webhook evidence.",
 ] as const;
 
 function loadResults(): Record<string, unknown> {
@@ -227,14 +225,14 @@ async function main() {
   console.log("Architecture:");
   console.log("  TWILIO_TOLL_FREE  → TFV → Twilio voice/SMS");
   console.log("  TELNYX_LOCAL_A2P  → 10DLC → Telnyx voice/SMS");
-  console.log(`  Platform demo:    ${MCTB_PLATFORM_DEMO_DISPLAY} (pre-approved Telnyx local)\n`);
+  console.log(`  PLATFORM_DEMO:    ${MCTB_PLATFORM_DEMO_DISPLAY} (Telnyx 571 — isolated demo/cert only)\n`);
 
   await auditPlatformTelnyxNumber();
 
   const state = await loadMctbOnboardingState(workspaceId);
   const tfn = getWorkspaceTollFreeNumber(state);
-  console.log(`\nCert workspace TFN (voice/Press-1): ${tfn?.e164 || "not provisioned"}`);
-  console.log(`Platform SMS sender (when TFV pending): ${MCTB_PLATFORM_DEMO_E164}\n`);
+  console.log(`\nCert workspace TFN (voice only until TFV): ${tfn?.e164 || "not provisioned"}`);
+  console.log(`Pass 3 SMS path:    ${MCTB_PLATFORM_DEMO_E164} (PLATFORM_DEMO — not customer fallback)\n`);
 
   console.log("Human checklist:");
   for (const step of HUMAN_STEPS) console.log(`  ${step}`);

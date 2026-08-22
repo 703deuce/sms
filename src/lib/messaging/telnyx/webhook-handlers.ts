@@ -69,7 +69,9 @@ export async function handleTelnyxInbound(payload: unknown) {
 
   try {
     const { recordDemoReplyReceived } = await import("@/lib/mctb/onboarding/demo");
-    const { resolveMctbInboundWorkspace } = await import("@/lib/mctb/messaging/inbound-routing");
+    const { resolvePlatformDemoInboundWorkspace } = await import(
+      "@/lib/mctb/messaging/inbound-routing"
+    );
     const { getPrisma } = await import("@/lib/db");
 
     const prisma = getPrisma();
@@ -78,30 +80,16 @@ export async function handleTelnyxInbound(payload: unknown) {
       select: { workspaceId: true, e164: true, settingsJson: true },
     });
 
-    const routed = await resolveMctbInboundWorkspace({
+    const routed = await resolvePlatformDemoInboundWorkspace({
       fromE164: parsed.from,
-      toE164: parsed.to,
       phoneRecord: phone,
     });
 
     if (routed?.reason === "demo_session") {
       await recordDemoReplyReceived(routed.workspaceId);
-    } else if (routed?.reason === "recent_outbound" && routed.workspaceId) {
-      const { saveMctbOnboardingState, loadMctbOnboardingState } = await import(
-        "@/lib/mctb/onboarding/state"
-      );
-      const state = await loadMctbOnboardingState(routed.workspaceId);
-      if (state.liveTestSession?.startedAt && !state.liveTestPassedAt) {
-        await saveMctbOnboardingState(routed.workspaceId, {
-          liveTestSession: {
-            ...state.liveTestSession,
-            replyReceivedAt: new Date().toISOString(),
-          },
-        });
-      }
     }
   } catch (demoErr) {
-    console.warn("[telnyx/inbound] MCTB inbound routing failed", demoErr);
+    console.warn("[telnyx/inbound] platform demo routing failed", demoErr);
   }
 
   const root = payload as { data?: { payload?: { messaging_profile_id?: string } } };
@@ -111,19 +99,20 @@ export async function handleTelnyxInbound(payload: unknown) {
     return { ok: true as const, unmatched: true as const };
   }
 
-  const { resolveMctbInboundWorkspace } = await import("@/lib/mctb/messaging/inbound-routing");
+  const { resolvePlatformDemoInboundWorkspace } = await import(
+    "@/lib/mctb/messaging/inbound-routing"
+  );
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
   const phoneRecord = await prisma.phoneNumber.findFirst({
     where: { e164: parsed.to, status: "Active" },
     select: { workspaceId: true, e164: true, settingsJson: true },
   });
-  const routed = await resolveMctbInboundWorkspace({
+  const platformRoute = await resolvePlatformDemoInboundWorkspace({
     fromE164: parsed.from,
-    toE164: parsed.to,
     phoneRecord,
   });
-  const targetWorkspaceId = routed?.workspaceId || ctx.workspaceId;
+  const targetWorkspaceId = platformRoute?.workspaceId || ctx.workspaceId;
   const targetRegistration =
     targetWorkspaceId === ctx.workspaceId
       ? ctx.registration

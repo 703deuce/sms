@@ -1,77 +1,23 @@
 /**
- * Route inbound SMS on shared/platform numbers to the correct customer workspace.
- * Uses recent outbound message correlation — not hard-coded overrides.
+ * Inbound SMS routing for the platform demo line (+15714073615).
+ *
+ * Production customer numbers use normal per-workspace inbound resolution.
+ * Platform demo: match active onboarding demo session only — no cross-workspace
+ * recent-outbound pairing for production customers.
  */
-import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { isPlatformDemoPhoneRecord } from "@/lib/messaging/compliance/phone-number-class";
 import { resolveDemoWorkspaceForCaller } from "@/lib/mctb/onboarding/demo";
 
-const RECENT_OUTBOUND_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
-
-function normalizePair(from: string, to: string): { from: string; to: string } {
-  try {
-    return { from: normalizeE164(from), to: normalizeE164(to) };
-  } catch {
-    return { from, to };
-  }
-}
-
-/** Find customer workspace for an inbound reply based on recent outbound from the same DID pair. */
-export async function resolveInboundWorkspaceByRecentOutbound(input: {
-  fromE164: string;
-  toE164: string;
-  platformOwnerWorkspaceId?: string | null;
-}): Promise<string | null> {
-  const { from, to } = normalizePair(input.fromE164, input.toE164);
-  const since = new Date(Date.now() - RECENT_OUTBOUND_WINDOW_MS);
-  const prisma = getPrisma();
-
-  const recent = await prisma.message.findFirst({
-    where: {
-      to: from,
-      from: to,
-      createdAt: { gte: since },
-      status: { in: ["sending", "sent", "delivered", "queued"] },
-      ...(input.platformOwnerWorkspaceId
-        ? { workspaceId: { not: input.platformOwnerWorkspaceId } }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    select: { workspaceId: true },
-  });
-  if (recent?.workspaceId) return recent.workspaceId;
-
-  const mctbEvent = await prisma.missedCallEvent.findFirst({
-    where: {
-      callerE164: from,
-      businessE164: { not: to },
-      smsSentAt: { gte: since },
-      status: "SENT",
-      ...(input.platformOwnerWorkspaceId
-        ? { workspaceId: { not: input.platformOwnerWorkspaceId } }
-        : {}),
-    },
-    orderBy: { smsSentAt: "desc" },
-    select: { workspaceId: true },
-  });
-  return mctbEvent?.workspaceId || null;
-}
+export type PlatformInboundRouteReason = "demo_session" | "phone_owner";
 
 /**
- * Resolve workspace for inbound SMS to a platform/shared Telnyx line.
- * Demo sessions take priority; otherwise correlate via recent outbound.
+ * Resolve workspace for inbound SMS to the platform demo Telnyx line.
+ * Returns null when no active demo session — do not attribute to random workspaces.
  */
-export async function resolveMctbInboundWorkspace(input: {
+export async function resolvePlatformDemoInboundWorkspace(input: {
   fromE164: string;
-  toE164: string;
   phoneRecord?: { workspaceId: string; e164: string; settingsJson?: unknown } | null;
-}): Promise<{ workspaceId: string; reason: "demo_session" | "recent_outbound" | "phone_owner" } | null> {
-  const demo = await resolveDemoWorkspaceForCaller(input.fromE164);
-  if (demo) {
-    return { workspaceId: demo.workspaceId, reason: "demo_session" };
-  }
-
+}): Promise<{ workspaceId: string; reason: PlatformInboundRouteReason } | null> {
   const isPlatform =
     input.phoneRecord &&
     isPlatformDemoPhoneRecord({
@@ -79,20 +25,14 @@ export async function resolveMctbInboundWorkspace(input: {
       settingsJson: input.phoneRecord.settingsJson,
     });
 
-  if (isPlatform || input.phoneRecord) {
-    const correlated = await resolveInboundWorkspaceByRecentOutbound({
-      fromE164: input.fromE164,
-      toE164: input.toE164,
-      platformOwnerWorkspaceId: input.phoneRecord?.workspaceId,
-    });
-    if (correlated) {
-      return { workspaceId: correlated, reason: "recent_outbound" };
-    }
+  if (!isPlatform) return null;
+
+  const demo = await resolveDemoWorkspaceForCaller(input.fromE164);
+  if (demo) {
+    return { workspaceId: demo.workspaceId, reason: "demo_session" };
   }
 
-  if (input.phoneRecord?.workspaceId) {
-    return { workspaceId: input.phoneRecord.workspaceId, reason: "phone_owner" };
-  }
-
-  return null;
+  return input.phoneRecord?.workspaceId
+    ? { workspaceId: input.phoneRecord.workspaceId, reason: "phone_owner" }
+    : null;
 }

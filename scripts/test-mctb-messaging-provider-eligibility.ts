@@ -53,4 +53,7 @@ assert.equal(
 assert.equal(MCTB_PLATFORM_DEMO_E164, "+15714073615");
 assert.equal(MCTB_PLATFORM_DEMO_DISPLAY, "1-571-407-3615");
 
+// Customer TFN without TFV must not auto-route through platform 571 — enforced in
+// resolveMctbOutboundSmsRoute (returns null unless demoMode/certificationMode).
+
 console.log("test-mctb-messaging-provider-eligibility: ok");

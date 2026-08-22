@@ -188,7 +188,7 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
     area: "Demo",
     requirement: "Full demo call → SMS → reply → browser update E2E",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
-    evidence: "Requires real phone call to platform demo line",
+    evidence: "Platform demo: Telnyx 571 A2P (+15714073615) — pass3.ts",
   },
 
   // ── Phase D — Forwarding / caller ID ─────────────────────────────────────
