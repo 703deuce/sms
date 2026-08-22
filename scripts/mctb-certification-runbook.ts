@@ -76,6 +76,7 @@ export const CERTIFICATION_PASSES: Record<
       "Demo flow: start demo session → call platform demo number → don't answer → SMS → reply → browser updates.",
       "Confirm random callers without active demo session are NOT texted.",
       "Real setup: caller → business number → no answer → conditional forward → workspace TFN.",
+      "CRITICAL: forward timer must fire BEFORE voicemail (not generic 'when unanswered' if VM wins the race).",
       "CRITICAL: record ANI Transovo received vs original caller number.",
       "Fill carrier test sheet (see --sheet output).",
       "Test dispositions: no-answer, busy, reject, after-hours, early hangup, blocked CID, landline.",

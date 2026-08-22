@@ -199,7 +199,8 @@ export const MCTB_LAUNCH_READINESS_MATRIX: MatrixItem[] = [
     area: "Forwarding",
     requirement: "Original caller ANI survives conditional forward (all major carriers)",
     status: "MANUAL_HUMAN_TEST_REQUIRED",
-    evidence: "Verizon/AT&T/T-Mobile/Google Voice/RingCentral/cable",
+    evidence:
+      "Pass 2: AT&T Wireless+iPhone+VM PASS via *61* dial code 2026-08-22; other carriers pending",
   },
   {
     id: "D-02",

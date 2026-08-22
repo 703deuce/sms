@@ -1,6 +1,7 @@
 import type { MctbForwardingCarrier } from "./types";
 import {
   type CarrierForwardingCapabilities,
+  formatAttNoAnswerForwardDialCode,
   getCarrierCapabilities,
 } from "./carrier-capabilities";
 
@@ -30,11 +31,10 @@ export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
     label: "AT&T",
     capabilities: getCarrierCapabilities("att"),
     steps: [
-      "Set Call Forwarding → When Unanswered to YOUR_TRANSOVO_NUMBER.",
-      "Critical: forwarding must fire BEFORE voicemail answers. On AT&T Wireless this may require carrier support — iPhone “When Unanswered” alone may not be enough if voicemail is on.",
-      "Ask AT&T to set the no-answer forward timer shorter than your voicemail pickup (target ~15 seconds).",
-      "Do not disable voicemail — adjust the forward timer instead.",
-      "After setup, use Test forwarding below and confirm the call reaches Transovo.",
+      "From your AT&T business iPhone, dial YOUR_ATT_NO_ANSWER_CODE then tap Call. (Live-verified: no-answer forward with timer — e.g. *61*18553103375*11*10# forwards after 10 seconds.)",
+      "This sets no-answer forwarding to YOUR_TRANSOVO_NUMBER with a delay shorter than voicemail. Do not disable voicemail.",
+      "Optional: disable iPhone Settings → Call Forwarding → When Unanswered if it conflicts — the dial code is the source of truth.",
+      "Call your business line from another phone, don't answer, and use Test forwarding below.",
     ],
     supportUrl: "https://www.att.com/support/article/wireless/KM1008851/",
   },
@@ -109,4 +109,23 @@ export function getCarrierGuide(carrier: MctbForwardingCarrier): CarrierForwardi
   return MCTB_CARRIER_GUIDES.find((g) => g.id === carrier) || MCTB_CARRIER_GUIDES.at(-1)!;
 }
 
-export { getCarrierCapabilities, DEFAULT_FORWARD_RING_SECONDS } from "./carrier-capabilities";
+/** Replace dial-code placeholders for onboarding display. */
+export function formatCarrierStep(
+  step: string,
+  input: { transovoE164: string; forwardRingSeconds?: number },
+): string {
+  const digits = input.transovoE164.replace(/\D/g, "");
+  const national = digits.length === 10 ? `1${digits}` : digits;
+  const seconds = String(input.forwardRingSeconds ?? 10);
+  const attCode = formatAttNoAnswerForwardDialCode({
+    forwardToE164: input.transovoE164,
+    delaySeconds: input.forwardRingSeconds ?? 10,
+  });
+  return step
+    .replace(/YOUR_TRANSOVO_NUMBER_DIGITS/g, national)
+    .replace(/YOUR_FORWARD_RING_SECONDS/g, seconds)
+    .replace(/YOUR_ATT_NO_ANSWER_CODE/g, attCode)
+    .replace(/YOUR_TRANSOVO_NUMBER/g, input.transovoE164);
+}
+
+export { getCarrierCapabilities, DEFAULT_FORWARD_RING_SECONDS, formatAttNoAnswerForwardDialCode } from "./carrier-capabilities";

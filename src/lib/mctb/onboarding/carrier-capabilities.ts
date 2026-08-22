@@ -24,6 +24,13 @@ export type CarrierForwardingCapabilities = {
   requiresManualCarrierAction: boolean;
   /** Documented but not live-verified on current wireless (do not ship as instructions). */
   unverifiedFeatureCodes?: string[];
+  /**
+   * Live-cert verified dial/setup pattern. Use placeholders:
+   * YOUR_TRANSOVO_NUMBER_DIGITS (E.164 without +), YOUR_FORWARD_RING_SECONDS
+   */
+  verifiedNoAnswerForwardDialCode?: string;
+  liveVerifiedAt?: string;
+  liveVerifiedNote?: string;
   voicemailRaceRisk: "high" | "medium" | "low";
   /** When true, generic device UI setup may be insufficient — show alternate path. */
   alternateSetupRequired: boolean;
@@ -31,6 +38,17 @@ export type CarrierForwardingCapabilities = {
 };
 
 export const DEFAULT_FORWARD_RING_SECONDS = 15;
+
+/** GSM no-answer forward: *61*{number}*11*{seconds}# — live-verified AT&T Wireless 2026-08-22. */
+export function formatAttNoAnswerForwardDialCode(input: {
+  forwardToE164: string;
+  delaySeconds?: number;
+}): string {
+  const digits = input.forwardToE164.replace(/\D/g, "");
+  const national = digits.length === 10 ? `1${digits}` : digits.startsWith("1") ? digits : digits;
+  const delay = Math.min(30, Math.max(5, input.delaySeconds ?? DEFAULT_FORWARD_RING_SECONDS));
+  return `*61*${national}*11*${delay}#`;
+}
 
 export const MCTB_CARRIER_CAPABILITIES: Record<
   MctbForwardingCarrier,
@@ -51,18 +69,21 @@ export const MCTB_CARRIER_CAPABILITIES: Record<
   att: {
     supportsNoAnswerForwarding: true,
     supportsBusyForwarding: true,
-    // *610 no-answer timer exists in legacy AT&T docs — NOT proven on current AT&T Wireless/iPhone.
-    supportsNoAnswerTimer: false,
-    configurableNoAnswerRingSeconds: false,
-    recommendedForwardRingSeconds: 15,
+    supportsNoAnswerTimer: true,
+    configurableNoAnswerRingSeconds: true,
+    recommendedForwardRingSeconds: 10,
     defaultVoicemailPickupSeconds: 22,
-    setupMethod: "device_settings",
-    requiresManualCarrierAction: true,
+    setupMethod: "carrier_codes",
+    requiresManualCarrierAction: false,
     unverifiedFeatureCodes: ["*610"],
-    voicemailRaceRisk: "high",
-    alternateSetupRequired: true,
+    verifiedNoAnswerForwardDialCode: "*61*YOUR_TRANSOVO_NUMBER_DIGITS*11*YOUR_FORWARD_RING_SECONDS#",
+    liveVerifiedAt: "2026-08-22",
+    liveVerifiedNote:
+      "Pass 2 cert: iPhone AT&T Wireless, voicemail on. Dial code reached TFN before VM; ANI preserved (703→571→855).",
+    voicemailRaceRisk: "medium",
+    alternateSetupRequired: false,
     alternateSetupNote:
-      "Live cert 2026-08-22: AT&T Wireless + iPhone with voicemail on — “When Unanswered” forwarding activated but voicemail answered before the call reached Transovo. Requires a no-answer timer shorter than voicemail (carrier support or proven feature code) — do not instruct customers to disable voicemail.",
+      "iPhone Settings → When Unanswered alone failed live cert when voicemail was on. Use the *61* dial code with ring seconds below voicemail pickup.",
   },
   tmobile: {
     supportsNoAnswerForwarding: true,

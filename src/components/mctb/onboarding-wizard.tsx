@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
+import { formatCarrierStep, type CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
 import type {
   MctbConsentMode,
   MctbForwardingCarrier,
@@ -240,6 +240,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
   const selectedCarrier = data?.carriers.find((c) => c.id === carrier);
   const trialDisplay = data?.trialNumber.display;
+  const trialE164 = data?.tfv.trialE164 ?? data?.liveTest.trialNumberE164 ?? null;
   const tfvApproved = data?.tfv.approved || false;
   const tfvActionRequired = data?.trialNumber.messagingVerificationStatus === "action_required";
   const tfvFailureReason = data?.tfv.failureReason;
@@ -660,11 +661,15 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                 </p>
               </div>
               <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-                {selectedCarrier.steps.map((s) => (
-                  <li key={s}>
-                    {s.replace("YOUR_TRANSOVO_NUMBER", trialDisplay || "your Transovo number")}
-                  </li>
-                ))}
+                {selectedCarrier.steps.map((s) => {
+                  const text = trialE164
+                    ? formatCarrierStep(s, {
+                        transovoE164: trialE164,
+                        forwardRingSeconds,
+                      })
+                    : s.replace("YOUR_TRANSOVO_NUMBER", trialDisplay || "your Transovo number");
+                  return <li key={s}>{text}</li>;
+                })}
               </ol>
             </>
           ) : null}
