@@ -50,6 +50,9 @@ type OnboardingPayload = {
     voiceStatus: string | null;
     messagingVerificationStatus: MctbTfvStatus;
     tfvStatusLabel: string;
+    messagingApproved?: boolean;
+    numberClass?: string | null;
+    complianceType?: string | null;
   };
   liveTest: {
     started: boolean;
@@ -72,6 +75,9 @@ type OnboardingPayload = {
     approved: boolean;
     trialE164: string | null;
     failureReason?: string | null;
+    messagingApproved?: boolean;
+    numberClass?: string | null;
+    complianceType?: string | null;
   };
   carriers: CarrierForwardingGuide[];
   demoIngressE164?: string | null;
@@ -292,7 +298,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     (demoNumberE164
       ? demoNumberE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
       : "demo line");
-  const tfvApproved = data?.tfv.approved || false;
+  const tfvApproved =
+    data?.tfv.approved || data?.trialNumber.messagingApproved === true || false;
+  const usesA2pPath =
+    data?.tfv.numberClass === "TELNYX_LOCAL_A2P" ||
+    data?.trialNumber.numberClass === "TELNYX_LOCAL_A2P";
   const tfvActionRequired = data?.trialNumber.messagingVerificationStatus === "action_required";
   const tfvFailureReason = data?.tfv.failureReason;
 
@@ -631,17 +641,26 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
             <div>
               <h2 className="text-lg font-semibold">
-                {tfvApproved ? "Your number is ready" : "Activate texting on your number"}
+                {tfvApproved
+                  ? usesA2pPath
+                    ? "A2P messaging is ready"
+                    : "Your number is ready"
+                  : usesA2pPath
+                    ? "Activate A2P texting on your number"
+                    : "Activate texting on your number"}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Twilio Toll-Free Verification for {trialDisplay || "your assigned number"}. This
-                does not use your demo line and does not start your 14-day trial yet.
+                {usesA2pPath
+                  ? `Telnyx 10DLC / A2P for ${trialDisplay || "your assigned number"}. Pre-approved numbers skip this wait.`
+                  : `Twilio Toll-Free Verification for ${trialDisplay || "your assigned number"}. This does not use your demo line and does not start your 14-day trial yet.`}
               </p>
             </div>
           </div>
 
           <div className="rounded-lg border p-4 text-sm">
-            <p className="text-muted-foreground">Toll-free verification status</p>
+            <p className="text-muted-foreground">
+              {usesA2pPath ? "A2P / messaging status" : "Toll-free verification status"}
+            </p>
             <p className="mt-1 text-lg font-semibold">
               {data?.trialNumber.tfvStatusLabel || data?.tfv.status || "Not started"}
             </p>

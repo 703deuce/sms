@@ -19,6 +19,13 @@ type PhoneOption = {
   friendlyName: string | null;
   type?: string | null;
   a2pStatus?: string | null;
+  messagingStatus?: {
+    approved: boolean;
+    complianceType: string;
+    status: string;
+    label: string;
+    numberClass: string;
+  };
 };
 
 type SetupData = {
@@ -47,6 +54,12 @@ type SetupData = {
     requiredActions: string[];
     brandStatus: string;
     campaignStatus: string;
+  };
+  adminTest?: {
+    isPlatformAdmin: boolean;
+    isAdminTestWorkspace: boolean;
+    platformDemoLinked: boolean;
+    canBootstrap: boolean;
   };
   prefills: {
     campaignDescription: string;
@@ -106,6 +119,7 @@ export function MctbSetupView() {
     checks: Record<string, boolean>;
   } | null>(null);
   const [enabled, setEnabled] = useState(true);
+  const [bootstrapping, setBootstrapping] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -238,12 +252,69 @@ export function MctbSetupView() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-950">
           <p className="font-semibold">Messaging setup incomplete</p>
           <p className="mt-1">
-            Complete verification before missed-call text back can go live.{" "}
+            {data?.adminTest?.isAdminTestWorkspace
+              ? "Select an A2P-approved number below, or use Admin test setup to link the platform 571 line."
+              : "Complete verification before missed-call text back can go live."}{" "}
             <Link href="/compliance" className="font-semibold text-amber-900 underline">
               Open Messaging Compliance →
             </Link>
           </p>
         </div>
+      ) : (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-950">
+          <p className="font-semibold">Messaging ready</p>
+          <p className="mt-1">
+            At least one assigned number has approved SMS messaging (A2P or toll-free verification).
+            You can save, activate, and run production tests.
+          </p>
+        </div>
+      )}
+
+      {data?.adminTest?.canBootstrap ? (
+        <Card className="space-y-3 border-violet-200 bg-violet-50/40 p-5">
+          <h2 className="text-[15px] font-semibold text-[#111827]">Admin test setup</h2>
+          <p className="text-[13px] text-muted-foreground">
+            One-click setup for platform admin testing: links the 571 demo line to this workspace
+            (without moving DID ownership), wires MCTB runtime, and enables unlimited test sends.
+            Use this to run Try It, Test My Setup, and paid-customer flows in the browser.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#4b5563]">
+            <span>
+              Platform 571 linked:{" "}
+              <strong>{data.adminTest.platformDemoLinked ? "Yes" : "No"}</strong>
+            </span>
+            <span>·</span>
+            <span>
+              Admin test mode:{" "}
+              <strong>{data.adminTest.isAdminTestWorkspace ? "Active" : "Not set"}</strong>
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              disabled={bootstrapping || saving}
+              onClick={() => {
+                setBootstrapping(true);
+                setError(null);
+                void fetch("/api/mctb/admin-test/bootstrap", { method: "POST" })
+                  .then(async (res) => {
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error || "Bootstrap failed");
+                    await load();
+                  })
+                  .catch((err) => {
+                    setError(err instanceof Error ? err.message : "Bootstrap failed");
+                  })
+                  .finally(() => setBootstrapping(false));
+              }}
+            >
+              {bootstrapping ? "Setting up…" : "Set up admin test account"}
+            </Button>
+            <Link href="/voice/try-it">
+              <Button variant="outline">Open Try It</Button>
+            </Link>
+          </div>
+        </Card>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
@@ -275,9 +346,41 @@ export function MctbSetupView() {
                 <option key={n.id} value={n.id}>
                   {n.friendlyName ? `${n.friendlyName} · ` : ""}
                   {fmtPhone(n.e164)}
+                  {n.messagingStatus
+                    ? ` — ${n.messagingStatus.label}`
+                    : n.a2pStatus
+                      ? ` — ${n.a2pStatus}`
+                      : ""}
                 </option>
               ))}
             </select>
+            {selectedNumber?.messagingStatus ? (
+              <div
+                className={cn(
+                  "rounded-lg px-3 py-2 text-[12px]",
+                  selectedNumber.messagingStatus.approved
+                    ? "bg-emerald-50 text-emerald-900"
+                    : "bg-amber-50 text-amber-950",
+                )}
+              >
+                <p className="font-semibold">
+                  {selectedNumber.messagingStatus.approved
+                    ? "SMS messaging approved"
+                    : "SMS messaging not approved yet"}
+                </p>
+                <p className="mt-0.5">
+                  {selectedNumber.messagingStatus.complianceType === "A2P_10DLC"
+                    ? "Telnyx 10DLC / A2P"
+                    : selectedNumber.messagingStatus.complianceType === "TOLL_FREE_VERIFICATION"
+                      ? "Toll-free verification"
+                      : "Messaging compliance"}
+                  {" · "}
+                  {selectedNumber.messagingStatus.label}
+                  {" · "}
+                  Voice + SMS + inbound supported when provisioned
+                </p>
+              </div>
+            ) : null}
             <Link href="/voice/numbers" className="text-[13px] font-semibold text-primary hover:underline">
               Manage numbers →
             </Link>

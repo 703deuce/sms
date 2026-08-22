@@ -95,7 +95,10 @@ export async function getMctbEntitlement(workspaceId: string): Promise<MctbEntit
   let canSendAutomaticRecovery = serviceStatus === "ACTIVE";
   let reason: string | null = null;
 
-  if (serviceStatus === "ONBOARDING") {
+  if (serviceStatus === "ONBOARDING" && limits.adminUnlimitedMctb) {
+    canSendAutomaticRecovery = true;
+    reason = null;
+  } else if (serviceStatus === "ONBOARDING") {
     canSendAutomaticRecovery = false;
     reason = "onboarding";
   } else if (serviceStatus !== "ACTIVE") {

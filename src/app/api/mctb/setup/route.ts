@@ -13,12 +13,14 @@ import {
   phoneNumbersSummary,
   tollFreeSummary,
 } from "@/lib/compliance-helpers";
-import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
+import { getPhoneMessagingStatus } from "@/lib/messaging/compliance/phone-messaging-status";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import {
   getPlatformDemoPhoneRecord,
   isWorkspaceAuthorizedForPlatformDemoNumber,
 } from "@/lib/mctb/platform-demo-access";
+import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
+import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -95,6 +97,7 @@ export async function GET() {
   const requiredActions = deriveRequiredActions(compliance.registration, reg);
   const platformDemoAuthorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
   const platformDemoPhone = platformDemoAuthorized ? await getPlatformDemoPhoneRecord() : null;
+  const adminFlags = await loadAdminMctbTestFlags(workspaceId);
   const mergedPhoneNumbers =
     platformDemoPhone &&
     !phoneNumbers.some((n: { id: string }) => n.id === platformDemoPhone.phoneNumberId)
@@ -111,11 +114,25 @@ export async function GET() {
           },
         ]
       : phoneNumbers;
-  const messagingReady =
-    requiredActions.length === 0 &&
-    mergedPhoneNumbers.some((n: { settingsJson?: unknown; a2pStatus?: string | null; type?: string | null }) =>
-      isPhoneMessagingApproved(n),
-    );
+  const phoneNumbersWithStatus = mergedPhoneNumbers.map(
+    (n: {
+      id: string;
+      e164: string;
+      friendlyName: string | null;
+      type?: string | null;
+      a2pStatus?: string | null;
+      status?: string | null;
+      settingsJson?: unknown;
+    }) => ({
+      ...n,
+      messagingStatus: getPhoneMessagingStatus(n),
+    }),
+  );
+  const messagingReady = isMctbSetupMessagingReady({
+    phoneNumbers: mergedPhoneNumbers,
+    requiredActions,
+    adminFlags,
+  });
 
   const setupMeta =
     solution?.config && typeof solution.config === "object"
@@ -133,7 +150,7 @@ export async function GET() {
             config: solution.config,
           }
         : null,
-      phoneNumbers: mergedPhoneNumbers,
+      phoneNumbers: phoneNumbersWithStatus,
       compliance: {
         messagingReady,
         requiredActions,
@@ -141,6 +158,15 @@ export async function GET() {
         tollFreeSummary: tollFreeSummary(reg),
         brandStatus: compliance.registration?.brandStatus || "Not started",
         campaignStatus: compliance.registration?.campaignStatus || "Not started",
+      },
+      adminTest: {
+        isPlatformAdmin: session.isAdmin,
+        isAdminTestWorkspace:
+          adminFlags.adminTestAccount ||
+          adminFlags.unlimitedMctbTesting ||
+          adminFlags.adminUnlimitedMctb,
+        platformDemoLinked: platformDemoAuthorized,
+        canBootstrap: session.isAdmin,
       },
       prefills: {
         campaignDescription: DEFAULT_CAMPAIGN_DESCRIPTION,
@@ -238,10 +264,20 @@ export async function POST(req: Request) {
   let sipProvision: { ok: boolean; actions?: string[]; error?: string } | null = null;
   const phoneId = body.phoneNumberId ?? runtimeResult.config.phoneNumberId;
   if (phoneId) {
-    const pn = await prisma.phoneNumber.findFirst({
+    let pn = await prisma.phoneNumber.findFirst({
       where: { id: phoneId, workspaceId },
       select: { id: true, provider: true },
     });
+    if (!pn) {
+      const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
+      const demo = authorized ? await getPlatformDemoPhoneRecord() : null;
+      if (demo?.phoneNumberId === phoneId) {
+        pn = await prisma.phoneNumber.findFirst({
+          where: { id: phoneId },
+          select: { id: true, provider: true },
+        });
+      }
+    }
     if (pn && String(pn.provider || "").toLowerCase() === "telnyx") {
       const { provisionMctbTelnyxSipIngress } = await import(
         "@/lib/mctb/provisioning/telnyx-sip-ingress"

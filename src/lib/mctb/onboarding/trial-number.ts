@@ -1,6 +1,11 @@
 import { getPrisma } from "@/lib/db";
 import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/phone-switch";
 import type { TollFreeVerificationStatus } from "@/lib/messaging/compliance/messaging-compliance";
+import {
+  isPhoneMessagingApproved,
+  parseMessagingComplianceFromSettings,
+} from "@/lib/messaging/compliance/messaging-compliance";
+import { classifyProductionNumber } from "@/lib/messaging/compliance/phone-number-class";
 import { tollFreeComplianceSettings } from "@/lib/messaging/compliance/phone-number-class";
 import { loadWorkspaceTfvForPhone } from "@/lib/mctb/tfv/store";
 import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
@@ -55,25 +60,68 @@ export async function getTrialNumberStatus(workspaceId: string) {
 
   const workspaceNumber = getWorkspaceTollFreeNumber(state);
 
-  const resolveTfv = async (phoneNumberId: string) => {
+  const resolveMessagingStatus = async (phoneNumberId: string, e164: string) => {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: phoneNumberId },
+      select: { e164: true, settingsJson: true, a2pStatus: true, type: true, provider: true },
+    });
+    if (!phone) {
+      return {
+        uiStatus: "not_started" as MctbTfvStatus,
+        approved: false,
+        numberClass: classifyProductionNumber({ e164 }),
+      };
+    }
+
+    const approved = isPhoneMessagingApproved(phone);
+    const numberClass = classifyProductionNumber(phone);
+    const compliance = parseMessagingComplianceFromSettings(phone.settingsJson);
+
+    if (numberClass === "TELNYX_LOCAL_A2P") {
+      return {
+        uiStatus: approved ? ("approved" as MctbTfvStatus) : ("not_started" as MctbTfvStatus),
+        approved,
+        numberClass,
+        complianceType: compliance?.type || "A2P_10DLC",
+      };
+    }
+
     const record = await loadWorkspaceTfvForPhone(workspaceId, phoneNumberId);
-    return record
+    const tfvStatus = record
       ? mapTfvRecordToUiStatus(record.status)
-      : ("not_started" as MctbTfvStatus);
+      : approved
+        ? ("approved" as MctbTfvStatus)
+        : ("not_started" as MctbTfvStatus);
+    return {
+      uiStatus: tfvStatus,
+      approved: approved || tfvStatus === "approved",
+      numberClass,
+      complianceType: compliance?.type || "TOLL_FREE_VERIFICATION",
+    };
   };
 
   if (workspaceNumber?.e164) {
-    const tfvStatus = await resolveTfv(workspaceNumber.phoneNumberId);
+    const messaging = await resolveMessagingStatus(
+      workspaceNumber.phoneNumberId,
+      workspaceNumber.e164,
+    );
     return {
       provisioned: true,
       trialNumber: {
         ...workspaceNumber,
-        messagingVerificationStatus: tfvStatus,
+        messagingVerificationStatus: messaging.uiStatus,
       },
       display: formatPhoneDisplay(workspaceNumber.e164),
       voiceStatus: "ready" as const,
-      messagingVerificationStatus: tfvStatus,
-      tfvStatusLabel: tfvStatusLabel(tfvStatus),
+      messagingVerificationStatus: messaging.uiStatus,
+      tfvStatusLabel: messaging.approved
+        ? messaging.numberClass === "TELNYX_LOCAL_A2P"
+          ? "A2P approved"
+          : tfvStatusLabel(messaging.uiStatus)
+        : tfvStatusLabel(messaging.uiStatus),
+      messagingApproved: messaging.approved,
+      numberClass: messaging.numberClass,
+      complianceType: messaging.complianceType || null,
     };
   }
 
@@ -88,14 +136,14 @@ export async function getTrialNumberStatus(workspaceId: string) {
   });
 
   if (existingPn) {
-    const tfvStatus = await resolveTfv(existingPn.id);
+    const messaging = await resolveMessagingStatus(existingPn.id, existingPn.e164);
     const info: MctbTrialNumberInfo = {
       e164: existingPn.e164,
       phoneNumberId: existingPn.id,
-      provider: "twilio",
-      numberType: "toll_free",
+      provider: existingPn.provider === "telnyx" ? "telnyx" : "twilio",
+      numberType: existingPn.provider === "telnyx" ? "local" : "toll_free",
       voiceStatus: "ready",
-      messagingVerificationStatus: tfvStatus,
+      messagingVerificationStatus: messaging.uiStatus,
       provisionedAt: new Date().toISOString(),
     };
     await saveMctbOnboardingState(workspaceId, withWorkspaceTollFreeNumber(state, info));
@@ -104,8 +152,15 @@ export async function getTrialNumberStatus(workspaceId: string) {
       trialNumber: info,
       display: formatPhoneDisplay(info.e164),
       voiceStatus: "ready" as const,
-      messagingVerificationStatus: tfvStatus,
-      tfvStatusLabel: tfvStatusLabel(tfvStatus),
+      messagingVerificationStatus: messaging.uiStatus,
+      tfvStatusLabel: messaging.approved
+        ? messaging.numberClass === "TELNYX_LOCAL_A2P"
+          ? "A2P approved"
+          : tfvStatusLabel(messaging.uiStatus)
+        : tfvStatusLabel(messaging.uiStatus),
+      messagingApproved: messaging.approved,
+      numberClass: messaging.numberClass,
+      complianceType: messaging.complianceType || null,
     };
   }
 

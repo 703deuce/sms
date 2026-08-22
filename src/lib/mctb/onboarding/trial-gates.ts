@@ -9,6 +9,10 @@ export type TrialActivationGateInput = {
   forwardingConnected: boolean;
   liveTestPassed: boolean;
   trialAlreadyStarted: boolean;
+  /** When true, Telnyx A2P is already approved on the trial number. */
+  messagingApproved?: boolean;
+  /** TWILIO_TOLL_FREE vs TELNYX_LOCAL_A2P */
+  numberClass?: "TWILIO_TOLL_FREE" | "TELNYX_LOCAL_A2P";
 };
 
 export type TrialActivationGateResult = {
@@ -32,7 +36,14 @@ export function evaluateTrialActivationGates(
     missing.push("tfv_workspace_isolation");
   }
 
-  if (!isTfvApproved(input.tfvStatus)) {
+  const usesA2pPath =
+    input.numberClass === "TELNYX_LOCAL_A2P" || input.messagingApproved === true;
+
+  if (usesA2pPath) {
+    if (!input.messagingApproved) {
+      missing.push("a2p_approved");
+    }
+  } else if (!isTfvApproved(input.tfvStatus)) {
     missing.push("tfv_approved");
   }
 

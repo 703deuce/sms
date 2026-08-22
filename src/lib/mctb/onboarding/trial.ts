@@ -1,6 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import { getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
+import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
+import { classifyProductionNumber } from "@/lib/messaging/compliance/phone-number-class";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
@@ -11,6 +13,24 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+async function loadTrialNumberMessagingGate(workspaceId: string, phoneNumberId: string | null) {
+  if (!phoneNumberId) {
+    return { messagingApproved: false, numberClass: undefined as "TWILIO_TOLL_FREE" | "TELNYX_LOCAL_A2P" | undefined };
+  }
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId },
+    select: { e164: true, settingsJson: true, a2pStatus: true, type: true, provider: true },
+  });
+  if (!phone) {
+    return { messagingApproved: false, numberClass: undefined };
+  }
+  return {
+    messagingApproved: isPhoneMessagingApproved(phone),
+    numberClass: classifyProductionNumber(phone),
+  };
 }
 
 export type TrialActivationRequirements = {
@@ -28,6 +48,10 @@ export async function getTrialActivationRequirements(
   const state = await loadMctbOnboardingState(workspaceId);
   const workspaceNumber = getWorkspaceTollFreeNumber(state);
   const tfv = await getTfvStatusForWorkspace(workspaceId);
+  const messagingGate = await loadTrialNumberMessagingGate(
+    workspaceId,
+    workspaceNumber?.phoneNumberId || null,
+  );
 
   const gate = evaluateTrialActivationGates({
     trialPhoneE164: workspaceNumber?.e164 || null,
@@ -37,14 +61,16 @@ export async function getTrialActivationRequirements(
     forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
     liveTestPassed: Boolean(state.liveTestPassedAt),
     trialAlreadyStarted: false,
+    messagingApproved: messagingGate.messagingApproved,
+    numberClass: messagingGate.numberClass,
   });
 
   return {
-    tfvApproved: tfv.approved,
+    tfvApproved: tfv.approved || messagingGate.messagingApproved,
     forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
     liveTestPassed: Boolean(state.liveTestPassedAt),
     missing: gate.missing,
-    complianceApproved: tfv.approved,
+    complianceApproved: tfv.approved || messagingGate.messagingApproved,
   };
 }
 
@@ -71,6 +97,10 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
   const state = await loadMctbOnboardingState(workspaceId);
   const workspaceNumber = getWorkspaceTollFreeNumber(state);
   const tfv = await getTfvStatusForWorkspace(workspaceId);
+  const messagingGate = await loadTrialNumberMessagingGate(
+    workspaceId,
+    workspaceNumber?.phoneNumberId || null,
+  );
   const gate = evaluateTrialActivationGates({
     trialPhoneE164: workspaceNumber?.e164 || null,
     trialPhoneNumberId: workspaceNumber?.phoneNumberId || null,
@@ -79,6 +109,8 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
     forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
     liveTestPassed: Boolean(state.liveTestPassedAt),
     trialAlreadyStarted: false,
+    messagingApproved: messagingGate.messagingApproved,
+    numberClass: messagingGate.numberClass,
   });
 
   if (!gate.canActivate) {

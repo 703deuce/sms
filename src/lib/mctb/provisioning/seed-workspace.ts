@@ -36,8 +36,13 @@ export async function ensureMctbWorkspaceSeeded(workspaceId: string): Promise<vo
       };
 
   const plan = String(ws.billingPlan || "").toLowerCase();
+  const mctbCfg =
+    cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
+  const preservePaidPlan =
+    mctbCfg.adminTestAccount === true || mctbCfg.unlimitedMctbTesting === true;
   const billingPatch =
-    plan === "growth" || plan === "trial" || plan === "trial_pending_card" || plan === "expired"
+    !preservePaidPlan &&
+    (plan === "trial" || plan === "trial_pending_card" || plan === "expired")
       ? { billingPlan: "onboarding" as const }
       : {};
 

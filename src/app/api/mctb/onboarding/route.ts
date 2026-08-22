@@ -84,13 +84,16 @@ export async function GET() {
       trialRequirements: trialReqs,
       tfv: {
         status: tfv.status,
-        approved: tfv.approved,
+        approved: tfv.approved || trialNumber.messagingApproved === true,
         record: tfv.record,
         trialE164: tfv.trialE164,
         failureReason: tfv.record?.failureReason || null,
         submittedAt: state.tfvSubmittedAt,
         approvedAt: state.tfvApprovedAt,
         rejectedAt: state.tfvRejectedAt,
+        messagingApproved: trialNumber.messagingApproved === true,
+        numberClass: trialNumber.numberClass || null,
+        complianceType: trialNumber.complianceType || null,
       },
       carriers: MCTB_CARRIER_GUIDES,
       forwardingVerification,
@@ -189,6 +192,11 @@ export async function POST(req: Request) {
         messageTemplate: body.messageTemplate,
       });
       state = markStepComplete(state, "configure");
+      const trialStatus = await getTrialNumberStatus(auth.workspaceId);
+      if (trialStatus.messagingApproved && trialStatus.numberClass === "TELNYX_LOCAL_A2P") {
+        state = markStepComplete(state, "tfv");
+        state = markStepComplete(state, "pending");
+      }
       await saveMctbOnboardingState(auth.workspaceId, state);
       await recordFunnelEvent(auth.workspaceId, "MCTB_MESSAGE_CONFIGURED");
     }
