@@ -5,6 +5,7 @@ import {
   buildMctbConsentGatherSuccessTexml,
   buildMctbConsentInboundTexml,
   logMctbConsentTexmlResponseReady,
+  resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
