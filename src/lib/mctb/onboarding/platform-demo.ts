@@ -42,8 +42,8 @@ export function normalizeDemoE164(e164: string): string {
 }
 
 /**
- * Point platform 571 at Call Control + smart routing for Pass 3 certification.
- * Overrides LiveKit/TeXML agent routing that would bypass Press-1 consent.
+ * Point platform 571 at TeXML Press-1 (instant answer at Telnyx edge).
+ * Call Control webhooks are too slow for AT&T conditional forwards (~5s total).
  */
 export async function preparePlatformDemoNumberForSmartRouting(): Promise<{
   ownerWorkspaceId: string;
@@ -62,10 +62,8 @@ export async function preparePlatformDemoNumberForSmartRouting(): Promise<{
     throw new Error(`Platform demo phone ${MCTB_PLATFORM_DEMO_E164} missing Telnyx id`);
   }
 
-  const { assignVoiceConnection } = await import("@/lib/phone/telnyx-dual-provision");
-  const { resolveVoiceConnectionId } = await import("@/lib/phone/telnyx-voice-connection");
-  const connectionId = await resolveVoiceConnectionId();
-  await assignVoiceConnection(pn.providerNumberId, connectionId);
+  const { route571ToMctbConsentTexml } = await import("@/lib/mctb/consent-prompt/telnyx-texml-route");
+  await route571ToMctbConsentTexml(pn.providerNumberId);
 
   await prisma.voiceAgent.updateMany({
     where: { workspaceId: ownerId, phoneNumberId: pn.id, status: "ACTIVE" },

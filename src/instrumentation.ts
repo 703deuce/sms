@@ -41,17 +41,25 @@ export async function register() {
   const { bootstrapOutboundRealtimeTest } = await import(
     "@/lib/voice/outbound/outbound-boot"
   );
-  await bootstrapOutboundRealtimeTest();
+  void bootstrapOutboundRealtimeTest().catch((err) => {
+    console.warn("[instrumentation] outbound boot failed", err);
+  });
   const { bootstrapFrontDeskRealtimeTest } = await import(
     "@/lib/voice/frontdesk/frontdesk-boot"
   );
-  await bootstrapFrontDeskRealtimeTest();
+  void bootstrapFrontDeskRealtimeTest().catch((err) => {
+    console.warn("[instrumentation] frontdesk boot failed", err);
+  });
   const { bootstrapRealEstateFrontDesk } = await import(
     "@/lib/voice/real-estate/bootstrap"
   );
-  await bootstrapRealEstateFrontDesk();
+  void bootstrapRealEstateFrontDesk().catch((err) => {
+    console.warn("[instrumentation] re-frontdesk boot failed", err);
+  });
   const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
-  await bootstrapRealtorVerification();
+  void bootstrapRealtorVerification().catch((err) => {
+    console.warn("[instrumentation] realtor verification boot failed", err);
+  });
   const { scheduleOutboundAutoSmokeCall } = await import(
     "@/lib/voice/outbound/auto-smoke"
   );

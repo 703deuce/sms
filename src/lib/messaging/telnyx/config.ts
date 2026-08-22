@@ -52,6 +52,8 @@ export function getTelnyxWebhookUrls() {
     voice: `${base}/api/telnyx/voice`,
     /** TeXML application status_callback (form or JSON call progress) */
     texmlStatus: `${base}/api/telnyx/voice/texml-status`,
+    /** MCTB platform 571 Press-1 TeXML voice_url (instant answer for carrier forwards) */
+    mctbConsentTexml: `${base}/api/telnyx/voice/mctb-consent`,
   };
 }
 

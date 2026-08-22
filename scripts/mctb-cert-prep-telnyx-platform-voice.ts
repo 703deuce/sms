@@ -27,7 +27,6 @@ import {
   reconcileTelnyxLocalNumberToWorkspace,
   fetchTelnyxLocalNumberProviderSnapshot,
 } from "@/lib/messaging/telnyx/reconcile-local-number";
-import { diagnoseAndRepairInboundNumber } from "@/lib/voice/telnyx/inbound-diagnostics";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { getOnboardingForwardTargetE164 } from "@/lib/mctb/onboarding/forward-target";
 import { formatDemoPhoneDisplay } from "@/lib/mctb/onboarding/demo";
@@ -36,6 +35,7 @@ import {
   resolvePlatformDemoOwnerWorkspaceId,
   syncPlatformDemoConsentRuntime,
 } from "@/lib/mctb/onboarding/platform-demo";
+import { verify571MctbConsentTexmlRoute } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { MCTB_CONSENT_FLOW_NAME } from "@/lib/mctb/consent-prompt/types";
 import { normalizeMctbConsentMode, MCTB_CONSENT_MODE_LABELS } from "@/lib/mctb/consent-mode";
@@ -142,34 +142,6 @@ async function reconcileMessaging(workspaceId: string, phoneE164: string) {
   return ok;
 }
 
-async function repairInbound(workspaceId: string, phoneE164: string) {
-  const diag = await diagnoseAndRepairInboundNumber({
-    workspaceId,
-    e164: phoneE164,
-    repair: apply,
-  });
-
-  if (!apply) {
-    record(
-      "telnyx_inbound_voice",
-      diag.ready ? "PASS" : diag.issues.some((i) => i.severity === "error") ? "FAIL" : "WARN",
-      diag.ready
-        ? "Inbound diagnostics ready (dry-run — re-run with --apply to repair)"
-        : `${diag.issues.length} issue(s): ${diag.issues.map((i) => i.code).join(", ")}`,
-    );
-    return diag.ready;
-  }
-
-  record(
-    "telnyx_inbound_voice",
-    diag.ready ? "PASS" : "FAIL",
-    diag.ready
-      ? `Inbound ready${diag.repairs.length ? ` (${diag.repairs.join("; ")})` : ""}`
-      : `Still not ready: ${diag.issues.map((i) => i.message).join(" | ")}`,
-  );
-  return diag.ready;
-}
-
 async function pauseConflictingFlows(ownerWorkspaceId: string, phoneNumberId: string) {
   const prisma = getPrisma();
   const activeFlows = await prisma.smartRoutingFlow.findMany({
@@ -207,15 +179,44 @@ async function pauseConflictingFlows(ownerWorkspaceId: string, phoneNumberId: st
   );
 }
 
-async function wireSmartRouting(ownerWorkspaceId: string, phoneNumberId: string) {
-  if (!apply) {
-    record("smart_routing_wiring", "PENDING", "Would assign Call Control + clear voice agent + set routingOwner");
+async function verifyTexmlRouting(providerNumberId: string | null) {
+  if (!providerNumberId) {
+    record("texml_571_route", "FAIL", "No providerNumberId on platform 571");
     return false;
   }
 
+  if (!apply) {
+    const live = await verify571MctbConsentTexmlRoute(providerNumberId);
+    record(
+      "texml_571_route",
+      live.ok ? "PASS" : "PENDING",
+      live.ok ? live.detail : `Would route to TeXML — ${live.detail}`,
+    );
+    return live.ok;
+  }
+
   await preparePlatformDemoNumberForSmartRouting();
+  const live = await verify571MctbConsentTexmlRoute(providerNumberId);
+  record("texml_571_route", live.ok ? "PASS" : "FAIL", live.detail);
+  return live.ok;
+}
+
+async function wireSmartRouting(ownerWorkspaceId: string, phoneNumberId: string) {
+  if (!apply) {
+    record(
+      "smart_routing_wiring",
+      "PENDING",
+      "Would set routingOwner=smart_routing and clear voice agent on 571",
+    );
+    return false;
+  }
+
   await transitionNumberService(ownerWorkspaceId, phoneNumberId, "set_smart_routing_owner");
-  record("smart_routing_wiring", "PASS", "Call Control assigned, voice agent cleared, routingOwner=smart_routing");
+  record(
+    "smart_routing_wiring",
+    "PASS",
+    "routingOwner=smart_routing, voice agent cleared (Press-1 via TeXML edge)",
+  );
   return true;
 }
 
@@ -333,8 +334,13 @@ async function main() {
 
   pn = await applyPlatformDbTags(pn);
   await reconcileMessaging(ownerWorkspaceId, e164);
-  await repairInbound(ownerWorkspaceId, e164);
+  record(
+    "telnyx_inbound_voice",
+    "SKIP",
+    "Platform 571 uses TeXML edge answer (not Call Control) — see texml_571_route",
+  );
   await pauseConflictingFlows(ownerWorkspaceId, pn.id);
+  await verifyTexmlRouting(pn.providerNumberId);
   await wireSmartRouting(ownerWorkspaceId, pn.id);
   await syncConsentRuntime(consentMode);
 
