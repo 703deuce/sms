@@ -7,6 +7,7 @@
  * on ring-outs.
  */
 import type { VoiceCall } from "@prisma/client";
+import { getPrisma } from "@/lib/db";
 import { classifyInboundCallOutcome, classificationTriggersMctb } from "@/lib/agents/missed-call-text-back/classify";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 
@@ -71,21 +72,46 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
   const targetWorkspaceId = demoWorkspaceId || call.workspaceId;
   const isDemo = Boolean(demoWorkspaceId);
 
-  if (!isDemo) {
-    const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
-    const consentMode = await loadMctbConsentMode(targetWorkspaceId);
-    const smartRouting = await activeSmartRoutingOnNumber(call.workspaceId, call.phoneNumberId);
+  const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
+  const consentMode = await loadMctbConsentMode(targetWorkspaceId);
 
-    if (consentMode === "press_1") {
-      if (smartRouting) {
-        return { triggered: false, reason: "smart_routing_active" };
+  // Platform 571 smart routing lives on the owner workspace, not the onboarding workspace.
+  let routingWorkspaceId = call.workspaceId;
+  let routingPhoneNumberId = call.phoneNumberId;
+  if (isDemo) {
+    const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
+    if (isPlatformDemoNumber(call.toE164)) {
+      const { resolvePlatformDemoOwnerWorkspaceId } = await import(
+        "@/lib/mctb/onboarding/platform-demo"
+      );
+      const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+      if (ownerId) {
+        routingWorkspaceId = ownerId;
+        const platformPn = await getPrisma().phoneNumber.findFirst({
+          where: { workspaceId: ownerId, e164: call.toE164 },
+          select: { id: true },
+        });
+        routingPhoneNumberId = platformPn?.id || call.phoneNumberId;
       }
-      return { triggered: false, reason: "consent_prompt_not_published" };
     }
+  }
 
+  const smartRouting = await activeSmartRoutingOnNumber(
+    routingWorkspaceId,
+    routingPhoneNumberId,
+  );
+
+  // Pass 3 / press_1: never skip Verified Call Consent — smart routing must own the call.
+  if (consentMode === "press_1") {
     if (smartRouting) {
       return { triggered: false, reason: "smart_routing_active" };
     }
+    return { triggered: false, reason: "consent_prompt_not_published" };
+  }
+
+  // existing_consent marketing demo may bypass Press-1; production still defers to smart routing.
+  if (!isDemo && smartRouting) {
+    return { triggered: false, reason: "smart_routing_active" };
   }
 
   const config = await loadMissedCallTextConfig(targetWorkspaceId);

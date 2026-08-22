@@ -518,7 +518,7 @@ export async function assignNumberToCampaignAndReady(input: {
     .updateMany({
       where: { workspaceId: input.workspaceId, e164: phoneE164 },
       data: {
-        a2pStatus: ready ? "Approved" : "Pending",
+        a2pStatus: ready ? "APPROVED" : "PENDING",
         messagingService: resolvedProfileId,
         providerNumberId,
         status: "Active",

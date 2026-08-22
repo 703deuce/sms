@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
+import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import { emitSmartRoutingEvent } from "./events";
 
 export async function recordSmsConsent(input: {
@@ -17,9 +18,16 @@ export async function recordSmsConsent(input: {
   metadata?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
+  const target = await resolveMctbTargetWorkspaceForInboundCall({
+    callerE164: input.callerNumber,
+    businessE164: input.businessNumber,
+    fallbackWorkspaceId: input.workspaceId,
+  });
+  const workspaceId = target.workspaceId;
+
   const existing = await prisma.smartRoutingSmsConsentEvent.findFirst({
     where: {
-      workspaceId: input.workspaceId,
+      workspaceId,
       callSessionId: input.callSessionId ?? undefined,
       callerNumber: input.callerNumber,
     },
@@ -32,7 +40,7 @@ export async function recordSmsConsent(input: {
   const consent = await prisma.smartRoutingSmsConsentEvent.create({
     data: {
       id: createId(),
-      workspaceId: input.workspaceId,
+      workspaceId,
       callerNumber: input.callerNumber,
       businessNumber: input.businessNumber,
       callSessionId: input.callSessionId ?? null,
@@ -47,7 +55,7 @@ export async function recordSmsConsent(input: {
   });
 
   await emitSmartRoutingEvent({
-    workspaceId: input.workspaceId,
+    workspaceId,
     type: "SMS_CONSENT_CAPTURED",
     sessionId: input.callSessionId,
     contactId: input.contactId,
@@ -69,7 +77,7 @@ export async function triggerMissedCallTextFromConsent(input: {
   }
 
   await emitSmartRoutingEvent({
-    workspaceId: input.workspaceId,
+    workspaceId: target.workspaceId,
     type: "MISSED_CALL_TEXT_REQUESTED",
     sessionId: input.callSessionId,
     payload: { caller: input.callerNumber, business: input.businessNumber },
@@ -80,16 +88,25 @@ export async function triggerMissedCallTextFromConsent(input: {
   );
 
   const prisma = getPrisma();
+  const target = await resolveMctbTargetWorkspaceForInboundCall({
+    callerE164: input.callerNumber,
+    businessE164: input.businessNumber,
+    fallbackWorkspaceId: input.workspaceId,
+  });
+
   const pn = await prisma.phoneNumber.findFirst({
-    where: { workspaceId: input.workspaceId, e164: input.businessNumber },
+    where: target.isPlatformDemo
+      ? { e164: input.businessNumber }
+      : { workspaceId: target.workspaceId, e164: input.businessNumber },
   });
 
   const result = await processMissedInboundCall({
-    workspaceId: input.workspaceId,
+    workspaceId: target.workspaceId,
     callerE164: input.callerNumber,
     businessE164: input.businessNumber,
     phoneNumberId: pn?.id,
     providerCallId: input.callSessionId,
+    demoMode: target.demoMode,
     call: {
       direction: "INBOUND",
       status: "NO_ANSWER",

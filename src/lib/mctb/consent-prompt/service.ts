@@ -11,6 +11,8 @@ import {
   updateFlowDraft,
 } from "@/lib/smart-routing/flow-service";
 import { templateForType } from "@/lib/smart-routing/templates";
+import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
+import { resolvePlatformDemoOwnerWorkspaceId, preparePlatformDemoNumberForSmartRouting } from "@/lib/mctb/onboarding/platform-demo";
 import type { DraftConfig } from "@/lib/smart-routing/types";
 import {
   canPublishConsentPrompt,
@@ -132,12 +134,17 @@ export async function generateMctbConsentAudio(
   });
 }
 
-export async function publishMctbConsentPrompt(workspaceId: string, actorUserId?: string) {
+export async function publishMctbConsentPrompt(
+  workspaceId: string,
+  actorUserId?: string,
+  options?: { assignedPhoneNumberId?: string },
+) {
   const config = await loadMctbConsentPrompt(workspaceId);
   const gate = canPublishConsentPrompt(config);
   if (!gate.ok) throw new Error(gate.reason || "Cannot publish consent prompt");
 
-  const phoneNumberId = await resolveWorkspaceTfnPhoneNumberId(workspaceId);
+  const phoneNumberId =
+    options?.assignedPhoneNumberId || (await resolveWorkspaceTfnPhoneNumberId(workspaceId));
   if (!phoneNumberId) {
     throw new Error("Assign a workspace toll-free number before publishing consent audio");
   }
@@ -235,4 +242,25 @@ export async function getMctbConsentPromptStatus(workspaceId: string) {
       ? `/api/public/smart-routing-audio/${config.audioAssetId}`
       : null,
   };
+}
+
+/**
+ * Publish Verified Call Consent smart routing on the platform Telnyx 571 line.
+ * Required for Pass 3 certification — real DTMF Press-1 on the platform DID.
+ */
+export async function publishPlatformDemoMctbConsent(actorUserId?: string) {
+  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+  if (!ownerId) throw new Error("Platform demo owner workspace not found");
+
+  const { phoneNumberId } = await preparePlatformDemoNumberForSmartRouting();
+
+  await initMctbConsentPromptForWorkspace(ownerId);
+  const config = await loadMctbConsentPrompt(ownerId);
+  if (!config.audioAssetId) {
+    await generateMctbConsentAudio(ownerId);
+  }
+
+  return publishMctbConsentPrompt(ownerId, actorUserId, {
+    assignedPhoneNumberId: phoneNumberId,
+  });
 }
