@@ -5,17 +5,16 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from transovo_voice.session.mctb_sip_e2e_trace import (
-    DIAGNOSTIC_PHRASE,
     MCTB_571_E164,
     MctbSipE2eTrace,
     is_correlation_already_handled,
     make_backend_reporter,
     mark_correlation_handled,
 )
-from transovo_voice.session.startup_audio import play_immediate_answer
+from transovo_voice.session.sip_raw_audio import play_sip_raw_tone
 from transovo_voice.telemetry import log_event
 
 if TYPE_CHECKING:
@@ -53,8 +52,8 @@ async def run_mctb_sip_diagnostic_session(
     agent_name: str,
 ) -> None:
     """
-    SIP ingress for 571 — minimal media diagnostic only:
-    connect → play one test phrase → hang up.
+    SIP ingress for 571 — raw PCM tone diagnostic only:
+    connect → publish 1 kHz tone for 2s → hang up.
     """
     if is_correlation_already_handled(trace.correlation_id):
         trace.log_mctb_diagnostic_skipped("duplicate_correlation_id")
@@ -98,18 +97,32 @@ async def run_mctb_sip_diagnostic_session(
     trace.log_room_ready(created_new=False, participant_count=participant_count)
 
     trace.log_diagnostic_audio_start()
-    played_ms = await play_immediate_answer(
+    audio_result = await play_sip_raw_tone(
         ctx.room,
-        phrase=DIAGNOSTIC_PHRASE,
-        call_id=trace.correlation_id,
-        temporary=False,
+        trace=trace,
+        sip_participant=participant,
     )
-    if played_ms is None:
-        trace.log_diagnostic_audio_failed("playback_failed")
-    else:
-        trace.log_diagnostic_audio_complete()
 
-    await asyncio.sleep(0.5)
+    if not audio_result.ok or audio_result.frames_written == 0:
+        trace.log_diagnostic_audio_failed(
+            audio_result.error or "no_frames_written",
+        )
+    else:
+        trace.log(
+            "diagnostic_audio_complete",
+            framesWritten=audio_result.frames_written,
+            firstFrameWrittenMs=audio_result.first_frame_written_ms,
+            playbackDurationMs=audio_result.playback_duration_ms,
+            trackSid=audio_result.track_sid,
+            publicationSid=audio_result.publication_sid,
+            sampleRate=audio_result.sample_rate,
+            numChannels=audio_result.num_channels,
+            frequencyHz=audio_result.frequency_hz,
+            callerAudioProof="frames_pushed_to_audio_source",
+            note="completion_requires_frames_written_not_playback_ack",
+        )
+
+    await asyncio.sleep(0.3)
 
     trace.log_sip_call_final_state(
         disconnect_reason="diagnostic_complete",
@@ -123,7 +136,10 @@ async def run_mctb_sip_diagnostic_session(
             "toE164": trace.to_e164,
             "fromE164": trace.from_e164,
             "source": LOG_SOURCE,
-            "playedMs": played_ms,
+            "framesWritten": audio_result.frames_written,
+            "playbackDurationMs": audio_result.playback_duration_ms,
+            "trackSid": audio_result.track_sid,
+            "rawPcm": True,
         },
     )
     await trace.finalize()

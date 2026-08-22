@@ -144,7 +144,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
     startup_timeline.mark("job_received")
 
     job_id = extract_job_id(ctx)
-    room_sid = getattr(ctx.room, "sid", None)
+    room_sid = await resolve_room_sid(ctx.room)
     trace: MctbSipE2eTrace | None = None
 
     async def shutdown_backend() -> None:
@@ -199,7 +199,7 @@ async def run_inbound_session(ctx: JobContext) -> None:
         correlation_id=correlation_id,
         job_id=job_id,
         room_name=ctx.room.name,
-        room_sid=str(room_sid) if room_sid else None,
+        room_sid=room_sid,
         attrs=attrs,
         from_e164=from_e164,
         to_e164=to_e164,
