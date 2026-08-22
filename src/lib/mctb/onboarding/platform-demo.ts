@@ -2,6 +2,12 @@ import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { getPlatformDemoNumberE164 } from "@/lib/mctb/onboarding/demo";
+import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
+import {
+  isExistingConsentMode,
+  isVerifiedCallConsentMode,
+} from "@/lib/mctb/consent-mode";
+import { MCTB_CONSENT_FLOW_NAME } from "@/lib/mctb/consent-prompt/types";
 
 /** Workspace that owns the shared platform demo Telnyx line (voice + A2P SMS routing). */
 export async function resolvePlatformDemoOwnerWorkspaceId(): Promise<string | null> {
@@ -71,4 +77,56 @@ export async function preparePlatformDemoNumberForSmartRouting(): Promise<{
     phoneNumberId: pn.id,
     providerNumberId: pn.providerNumberId,
   };
+}
+
+async function findPlatformDemoConsentFlow(ownerWorkspaceId: string, phoneNumberId: string) {
+  const prisma = getPrisma();
+  return prisma.smartRoutingFlow.findFirst({
+    where: {
+      workspaceId: ownerWorkspaceId,
+      assignedPhoneNumberId: phoneNumberId,
+      name: MCTB_CONSENT_FLOW_NAME,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/**
+ * Align platform 571 inbound runtime with the active consent mode.
+ * - existing_consent: pause Verified Call Consent IVR so missed calls go direct to SMS
+ * - press_1: publish/activate Verified Call Consent on 571
+ */
+export async function syncPlatformDemoConsentRuntime(mode: MctbConsentMode): Promise<{
+  mode: MctbConsentMode;
+  action: "paused_verified_consent" | "activated_verified_consent" | "no_flow";
+}> {
+  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+  if (!ownerId) throw new Error("Platform demo owner workspace not found");
+
+  const prisma = getPrisma();
+  const pn = await prisma.phoneNumber.findFirst({
+    where: { e164: MCTB_PLATFORM_DEMO_E164, workspaceId: ownerId },
+    select: { id: true },
+  });
+  if (!pn) throw new Error("Platform demo phone not found");
+
+  if (isExistingConsentMode(mode)) {
+    const flow = await findPlatformDemoConsentFlow(ownerId, pn.id);
+    if (flow?.status === "active") {
+      const { pauseFlow } = await import("@/lib/smart-routing/flow-service");
+      await pauseFlow(ownerId, flow.id);
+    }
+    return { mode, action: "paused_verified_consent" };
+  }
+
+  if (isVerifiedCallConsentMode(mode)) {
+    const { publishPlatformDemoMctbConsent } = await import(
+      "@/lib/mctb/consent-prompt/service"
+    );
+    await publishPlatformDemoMctbConsent();
+    return { mode, action: "activated_verified_consent" };
+  }
+
+  const flow = await findPlatformDemoConsentFlow(ownerId, pn.id);
+  return { mode, action: flow ? "paused_verified_consent" : "no_flow" };
 }

@@ -10,7 +10,7 @@ export type MctbOnboardingStep =
   | "live_test"
   | "complete";
 
-export type MctbConsentMode = "press_1" | "existing_consent";
+export type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 
 export type MctbTfvStatus =
   | "not_started"

@@ -1,23 +1,29 @@
 /**
- * MCTB Pass 3 — Telnyx A2P + Press-1 / SMS lifecycle certification helper.
+ * MCTB Pass 3 — Telnyx A2P certification on platform 571 (two consent-mode phases).
  *
- * Pass 3 runs on the platform Telnyx line only (full TELNYX_LOCAL_A2P path):
- *   call +15714073615 → Press-1 (when smart routing published) → SMS from 571 → reply → STOP/START
+ * Phase A — EXISTING_CONSENT (baseline SMS loop, no Press-1):
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-set-workspace-consent-mode.ts --mode existing_consent
+ *   Start demo → call 571 → immediate SMS → reply → STOP/START
+ *   npx tsx scripts/mctb-certification-pass3.ts --phase existing-consent --inspect --write-results
  *
- * Usage:
- *   npx tsx scripts/mctb-platform-demo-db-setup.ts              # verify 571 DB record
- *   npx tsx scripts/mctb-platform-demo-db-setup.ts --apply    # tag platform_demo role
- *   npx tsx scripts/mctb-certification-pass3.ts
- *   npx tsx scripts/mctb-certification-pass3.ts --inspect --workspace-id <id>
- *   npx tsx scripts/mctb-certification-pass3.ts --inspect --write-results --workspace-id <id>
+ * Phase B — VERIFIED_CALL_CONSENT (Press-1 on top of proven SMS path):
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-set-workspace-consent-mode.ts --mode press_1
+ *   Start demo → call 571 → audio → Press 1 → SMS → reply
+ *   npx tsx scripts/mctb-certification-pass3.ts --phase verified-call-consent --inspect --write-results
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { isMessagingReady, registrationProviderName } from "@/lib/messaging/status";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
+import {
+  MCTB_CONSENT_MODE_EXISTING,
+  MCTB_CONSENT_MODE_LABELS,
+  MCTB_CONSENT_MODE_VERIFIED,
+} from "@/lib/mctb/consent-mode";
 import {
   MCTB_PLATFORM_DEMO_DISPLAY,
   MCTB_PLATFORM_DEMO_E164,
@@ -36,6 +42,7 @@ import { getPrisma } from "@/lib/db";
 import {
   collectPass3Evidence,
   printPass3Evidence,
+  type Pass3ConsentPhase,
 } from "./mctb-certification-pass3-evidence";
 
 const RESULTS_PATH = join(process.cwd(), "scripts/mctb-certification-results.json");
@@ -49,22 +56,36 @@ const sinceHours = args.includes("--since-hours")
   ? Number(args[args.indexOf("--since-hours") + 1])
   : 24;
 
-const HUMAN_STEPS = [
-  "── Pass 3: full Telnyx path on platform 571 (PLATFORM_DEMO traffic only) ──",
-  `0. Run: npx tsx scripts/mctb-reconcile-telnyx-platform-number.ts --apply`,
-  `1. Run: npx tsx scripts/mctb-publish-platform-consent.ts (real Press-1 on 571)`,
-  `2. Start onboarding demo → call ${MCTB_PLATFORM_DEMO_DISPLAY} from verified mobile.`,
-  "3. Hear published consent audio on 571 → Press 1 (certification never skips consent).",
-  "4. Let ring / complete consent → SMS from same 571 via Telnyx API.",
-  "5. Handset receives SMS → reply to 571 → Telnyx inbound → conversation + owner notification.",
-  "6. Text STOP → place another demo miss → SMS blocked. Text START → restored.",
-  "7. Replay one Telnyx delivery webhook → confirm no duplicate send.",
-  "8. Run --inspect --write-results to capture provider IDs + checklist.",
-  "",
-  "── Not in Pass 3 (separate tracks) ──",
-  "• Customer Twilio 855 SMS — only after TFV APPROVED (same-number sender).",
-  "• AT&T → Twilio TFN forwarding — Pass 2 voice/ANI (already proven).",
-  "• New-customer Telnyx A2P provisioning lifecycle — mctb-certification-telnyx-a2p.ts",
+function resolvePhase(): Pass3ConsentPhase {
+  if (args.includes("--phase")) {
+    const raw = args[args.indexOf("--phase") + 1] || "";
+    if (raw === "verified-call-consent" || raw === "press_1" || raw === "verified") {
+      return MCTB_CONSENT_MODE_VERIFIED;
+    }
+    return MCTB_CONSENT_MODE_EXISTING;
+  }
+  return MCTB_CONSENT_MODE_EXISTING;
+}
+
+const phase = resolvePhase();
+const phaseLabel = MCTB_CONSENT_MODE_LABELS[phase];
+
+const PHASE_A_STEPS = [
+  "── Phase A: EXISTING_CONSENT baseline (prove Telnyx SMS first) ──",
+  `0. npx tsx scripts/mctb-reconcile-telnyx-platform-number.ts --apply`,
+  `1. NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-set-workspace-consent-mode.ts --mode existing_consent`,
+  `2. Start onboarding demo → call ${MCTB_PLATFORM_DEMO_DISPLAY} — no Press-1 audio.`,
+  "3. Missed call → immediate SMS from 571 via Telnyx.",
+  "4. Handset delivery → reply → Conversation → STOP → blocked → START → restored.",
+  "5. npx tsx scripts/mctb-certification-pass3.ts --phase existing-consent --inspect --write-results",
+] as const;
+
+const PHASE_B_STEPS = [
+  "── Phase B: VERIFIED_CALL_CONSENT (Press-1 on proven SMS path) ──",
+  `1. NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-set-workspace-consent-mode.ts --mode press_1`,
+  `2. Start demo → call ${MCTB_PLATFORM_DEMO_DISPLAY} — hear published audio → Press 1.`,
+  "3. Consent audit record → SMS from 571 → reply → STOP/START.",
+  "4. npx tsx scripts/mctb-certification-pass3.ts --phase verified-call-consent --inspect --write-results",
 ] as const;
 
 function loadResults(): Record<string, unknown> {
@@ -79,28 +100,54 @@ function savePass3Evidence(evidence: Awaited<ReturnType<typeof collectPass3Evide
   const current = loadResults();
   const items = (current.items as Record<string, unknown>) || {};
   const allPass = Object.values(evidence.checklist).every(Boolean);
+  const resultKey =
+    evidence.consentPhase === MCTB_CONSENT_MODE_VERIFIED
+      ? "pass3_verified_call_consent"
+      : "pass3_existing_consent";
+
   writeFileSync(
     RESULTS_PATH,
     JSON.stringify(
       {
         ...current,
         updatedAt: new Date().toISOString(),
-        pass3: {
-          status: allPass ? "LIVE_VERIFIED_PENDING_REVIEW" : "PARTIAL",
+        [resultKey]: {
+          status: allPass ? "LIVE_VERIFIED" : "PARTIAL",
+          consentProductCode: evidence.consentProductCode,
           lastEvidenceAt: evidence.collectedAt,
           workspaceId: evidence.workspaceId,
           platformE164: evidence.platformE164,
           checklist: evidence.checklist,
           evidence,
         },
+        ...(allPass && evidence.consentPhase === MCTB_CONSENT_MODE_EXISTING
+          ? {
+              pass3: {
+                status: "PHASE_A_LIVE_VERIFIED",
+                note: "EXISTING_CONSENT baseline on 571",
+                lastEvidenceAt: evidence.collectedAt,
+              },
+            }
+          : {}),
         items: {
           ...items,
           ...(allPass
             ? {
-                "E-01": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "Pass 3 Telnyx 571" },
-                "M-03": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "STOP on platform demo" },
-                "M-04": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "START restore" },
-                "C-06": { status: "LIVE_VERIFIED", verifiedAt: evidence.collectedAt, note: "Demo E2E on 571" },
+                ...(evidence.consentPhase === MCTB_CONSENT_MODE_EXISTING
+                  ? {
+                      "E-01a": {
+                        status: "LIVE_VERIFIED",
+                        verifiedAt: evidence.collectedAt,
+                        note: "Pass 3 EXISTING_CONSENT on 571",
+                      },
+                    }
+                  : {
+                      "E-01b": {
+                        status: "LIVE_VERIFIED",
+                        verifiedAt: evidence.collectedAt,
+                        note: "Pass 3 VERIFIED_CALL_CONSENT on 571",
+                      },
+                    }),
               }
             : {}),
         },
@@ -109,7 +156,7 @@ function savePass3Evidence(evidence: Awaited<ReturnType<typeof collectPass3Evide
       2,
     ),
   );
-  console.log(`\nWrote evidence → ${RESULTS_PATH}`);
+  console.log(`\nWrote ${resultKey} evidence → ${RESULTS_PATH}`);
 }
 
 async function auditPlatformTelnyxNumber() {
@@ -131,7 +178,6 @@ async function auditPlatformTelnyxNumber() {
 
   if (!pn) {
     console.log(`❌ No PhoneNumber row for ${MCTB_PLATFORM_DEMO_E164}`);
-    console.log("   Run: npx tsx scripts/mctb-platform-demo-db-setup.ts --apply");
     return false;
   }
 
@@ -143,69 +189,66 @@ async function auditPlatformTelnyxNumber() {
   const auth = await isPhoneAuthorizedForOutboundSms(pn.id);
 
   console.log(`E.164:             ${pn.e164}`);
-  console.log(`PhoneNumber id:    ${pn.id}`);
-  console.log(`Provider:          ${pn.provider}`);
-  console.log(`ProviderNumberId:  ${pn.providerNumberId || "—"}`);
-  console.log(`Number class:      ${numberClass}`);
-  console.log(`Platform role:     ${isPlatform ? "platform_demo" : "NOT TAGGED"}`);
-  console.log(`Owner workspace:   ${ownerId || "missing"}`);
-  console.log(`Telnyx reg:        ${reg ? registrationProviderName(reg) : "none"}`);
   console.log(`Messaging ready:   ${reg ? isMessagingReady(reg) : false}`);
   console.log(`Outbound auth:     ${auth.allowed} (${auth.regime})`);
 
-  const ok =
+  return (
     numberClass === "TELNYX_LOCAL_A2P" &&
     String(pn.provider).toLowerCase() === "telnyx" &&
     Boolean(ownerId) &&
     Boolean(sender) &&
     Boolean(reg && isMessagingReady(reg)) &&
-    auth.allowed;
-
-  console.log(ok ? "\n✅ Platform Telnyx path ready for Pass 3" : "\n❌ Fix platform number setup before cert");
-  if (!isPlatform) {
-    console.log(`   Tag: ${JSON.stringify(telnyxLocalA2pSettings({ role: "platform_demo", a2pApproved: true }))}`);
-  }
-  return ok;
+    auth.allowed &&
+    isPlatform
+  );
 }
 
 async function main() {
   if (auditPlatform) {
-    const ok = await auditPlatformTelnyxNumber();
-    process.exit(ok ? 0 : 1);
+    process.exit((await auditPlatformTelnyxNumber()) ? 0 : 1);
   }
 
-  console.log("\n══ MCTB Pass 3 — Telnyx 571 Production-Path Certification ══\n");
-  console.log("Modes:");
-  console.log("  CUSTOMER_PRODUCTION → own number, own compliance regime");
-  console.log(`  PLATFORM_DEMO       → ${MCTB_PLATFORM_DEMO_DISPLAY} (isolated)\n`);
+  console.log("\n══ MCTB Pass 3 — Telnyx 571 (dual consent-mode certification) ══\n");
+  console.log(`Active phase: ${phaseLabel.productCode} (${phaseLabel.title})\n`);
 
-  const ready = await auditPlatformTelnyxNumber();
-  if (!ready) {
-    console.log("\nStop: fix 571 DB + Telnyx registration before live test.");
+  if (!(await auditPlatformTelnyxNumber())) {
+    console.log("\n❌ Fix 571 DB + Telnyx registration before live test.");
     process.exit(1);
   }
+  console.log("\n✅ Platform Telnyx path ready");
 
   const state = await loadMctbOnboardingState(workspaceId);
+  const consentMode = normalizeMctbConsentMode(state.consentMode);
   const tfn = getWorkspaceTollFreeNumber(state);
   const tfv = await getTfvStatusForWorkspace(workspaceId);
-  console.log(`\nInspect workspace:  ${workspaceId}`);
-  console.log(`Customer TFN:       ${tfn?.e164 || "none"} (voice only; TFV=${tfv?.status || "n/a"})`);
-  console.log(`Pass 3 SMS path:    ${MCTB_PLATFORM_DEMO_E164} only\n`);
 
-  console.log("Human checklist:");
-  for (const step of HUMAN_STEPS) console.log(`  ${step}`);
+  console.log(`\nWorkspace:       ${workspaceId}`);
+  console.log(`Workspace mode:  ${consentMode}`);
+  console.log(`Cert phase:      ${phase}`);
+  console.log(`Customer TFN:    ${tfn?.e164 || "none"} (TFV=${tfv?.status || "n/a"})`);
+  console.log(`SMS path:        ${MCTB_PLATFORM_DEMO_E164} only\n`);
+
+  if (consentMode !== phase) {
+    console.log(
+      `⚠️  Workspace consent mode (${consentMode}) does not match --phase (${phase}).`,
+    );
+    console.log(
+      `   Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-set-workspace-consent-mode.ts --workspace-id ${workspaceId} --mode ${phase}\n`,
+    );
+  }
+
+  console.log("Runbook:");
+  for (const step of PHASE_A_STEPS) console.log(`  ${step}`);
+  console.log("");
+  for (const step of PHASE_B_STEPS) console.log(`  ${step}`);
 
   if (inspect) {
-    const evidence = await collectPass3Evidence({ workspaceId, sinceHours });
+    const evidence = await collectPass3Evidence({ workspaceId, sinceHours, consentPhase: phase });
     printPass3Evidence(evidence);
     if (writeResults) savePass3Evidence(evidence);
-    else {
-      console.log("\nAdd --write-results to persist evidence in mctb-certification-results.json");
-    }
   } else {
-    console.log("\nAfter live test:");
     console.log(
-      `  npx tsx scripts/mctb-certification-pass3.ts --inspect --write-results --workspace-id ${workspaceId}`,
+      `\nAfter live test:\n  npx tsx scripts/mctb-certification-pass3.ts --phase ${phase === MCTB_CONSENT_MODE_VERIFIED ? "verified-call-consent" : "existing-consent"} --inspect --write-results --workspace-id ${workspaceId}`,
     );
   }
 }

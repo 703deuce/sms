@@ -101,7 +101,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     routingPhoneNumberId,
   );
 
-  // Pass 3 / press_1: never skip Verified Call Consent — smart routing must own the call.
+  // Verified Call Consent: smart routing must own inbound before MCTB direct-send.
   if (consentMode === "press_1") {
     if (smartRouting) {
       return { triggered: false, reason: "smart_routing_active" };
@@ -109,7 +109,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     return { triggered: false, reason: "consent_prompt_not_published" };
   }
 
-  // existing_consent marketing demo may bypass Press-1; production still defers to smart routing.
+  // Existing Consent: proceed directly (no Press-1). Production still defers if unrelated SR active.
   if (!isDemo && smartRouting) {
     return { triggered: false, reason: "smart_routing_active" };
   }

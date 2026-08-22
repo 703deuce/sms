@@ -23,7 +23,10 @@ import {
 } from "./store";
 import { MCTB_CONSENT_FLOW_NAME } from "./types";
 
-export type MctbConsentMode = "press_1" | "existing_consent";
+import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
+import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
+
+export type { MctbConsentMode };
 
 export async function loadMctbConsentMode(workspaceId: string): Promise<MctbConsentMode> {
   const prisma = getPrisma();
@@ -37,8 +40,8 @@ export async function loadMctbConsentMode(workspaceId: string): Promise<MctbCons
       : {};
   const mctb =
     cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
-  const mode = String(mctb.consentMode || "press_1");
-  return mode === "existing_consent" ? "existing_consent" : "press_1";
+  const mode = normalizeMctbConsentMode(mctb.consentMode);
+  return mode;
 }
 
 async function resolveWorkspaceTfnPhoneNumberId(workspaceId: string): Promise<string | null> {

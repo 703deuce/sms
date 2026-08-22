@@ -153,6 +153,24 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     kind: "mctb.eligibility.passed",
   });
 
+  const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
+  const { isExistingConsentMode } = await import("@/lib/mctb/consent-mode");
+  const consentMode = await loadMctbConsentMode(input.workspaceId);
+  if (isExistingConsentMode(consentMode)) {
+    const { recordExistingConsentAttestation } = await import("@/lib/mctb/consent-attestation");
+    await recordExistingConsentAttestation({
+      workspaceId: input.workspaceId,
+      callerNumber: caller,
+      businessNumber: input.businessE164,
+      voiceCallId: input.voiceCallId,
+      contactId,
+      metadata: {
+        demoMode: Boolean(input.demoMode),
+        missedCallEventId: event.id,
+      },
+    });
+  }
+
   await scheduleMissedCallText({
     workspaceId: input.workspaceId,
     missedCallEventId: event.id,

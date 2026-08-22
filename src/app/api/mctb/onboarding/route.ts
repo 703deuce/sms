@@ -205,6 +205,14 @@ export async function POST(req: Request) {
       await recordFunnelEvent(auth.workspaceId, "MCTB_CONSENT_SELECTED", {
         consentMode: body.consentMode,
       });
+      const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
+      await syncMctbConsentRouting(auth.workspaceId, auth.session.userId).catch(() => undefined);
+      const { syncPlatformDemoConsentRuntime } = await import(
+        "@/lib/mctb/onboarding/platform-demo"
+      );
+      await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
+        console.error("[mctb/onboarding] syncPlatformDemoConsentRuntime", err);
+      });
     }
 
     if (body.action === "start_forwarding_test") {

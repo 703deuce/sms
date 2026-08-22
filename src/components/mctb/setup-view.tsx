@@ -3,6 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  MCTB_CONSENT_MODE_EXISTING,
+  MCTB_CONSENT_MODE_LABELS,
+  MCTB_CONSENT_MODE_VERIFIED,
+  type MctbConsentMode,
+} from "@/lib/mctb/consent-mode";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
@@ -34,7 +40,7 @@ type SetupData = {
     cooldownMinutes: number;
     conversationEnabled: boolean;
   };
-  consentMode: "press_1" | "existing_consent";
+  consentMode: MctbConsentMode;
   phoneNumbers: PhoneOption[];
   compliance: {
     messagingReady: boolean;
@@ -78,7 +84,7 @@ export function MctbSetupView() {
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [messageTemplate, setMessageTemplate] = useState("");
   const [delaySeconds, setDelaySeconds] = useState(0);
-  const [consentMode, setConsentMode] = useState<"press_1" | "existing_consent">("press_1");
+  const [consentMode, setConsentMode] = useState<MctbConsentMode>(MCTB_CONSENT_MODE_VERIFIED);
   const [triggers, setTriggers] = useState({
     noAnswer: true,
     busy: true,
@@ -303,39 +309,43 @@ export function MctbSetupView() {
           </Card>
 
           <Card id="consent" className="scroll-mt-24 space-y-4 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Consent method</h2>
+            <h2 className="text-[15px] font-semibold text-[#111827]">
+              How do you have permission to text callers?
+            </h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              {(
-                [
-                  ["press_1", "Verified Consent", "Caller presses 1 during the disclosure"],
-                  ["existing_consent", "Existing Consent", "You certify prior permission exists"],
-                ] as const
-              ).map(([mode, title, desc]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setConsentMode(mode)}
-                  className={cn(
-                    "rounded-xl border p-4 text-left transition",
-                    consentMode === mode
-                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                      : "border-[#e5e7eb] hover:border-[#d1d5db]",
-                  )}
-                >
-                  <p className="text-[14px] font-semibold text-[#111827]">{title}</p>
-                  <p className="mt-1 text-[12px] text-muted-foreground">{desc}</p>
-                </button>
-              ))}
+              {([MCTB_CONSENT_MODE_EXISTING, MCTB_CONSENT_MODE_VERIFIED] as const).map((mode) => {
+                const meta = MCTB_CONSENT_MODE_LABELS[mode];
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setConsentMode(mode)}
+                    className={cn(
+                      "rounded-xl border p-4 text-left transition",
+                      consentMode === mode
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                        : "border-[#e5e7eb] hover:border-[#d1d5db]",
+                    )}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {meta.productCode.replace(/_/g, " ")}
+                    </p>
+                    <p className="mt-1 text-[14px] font-semibold text-[#111827]">{meta.title}</p>
+                    <p className="mt-1 text-[12px] text-muted-foreground">{meta.subtitle}</p>
+                  </button>
+                );
+              })}
             </div>
 
-            {consentMode === "press_1" ? (
+            {consentMode === MCTB_CONSENT_MODE_VERIFIED ? (
               <MctbConsentPromptEditor />
             ) : (
               <div className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-4 text-[12px] text-[#4b5563]">
-                <p className="font-semibold text-[#111827]">Existing Consent selected</p>
+                <p className="font-semibold text-[#111827]">Already Have Consent selected</p>
                 <p className="mt-1">
-                  No Press-1 voice prompt is played on missed calls. You certify that callers already
-                  have permission to receive your recovery texts.
+                  Missed calls proceed directly to your recovery text after eligibility checks — no
+                  voice prompt or DTMF. Your saved Verified Call Consent audio stays in your
+                  workspace and returns when you switch back.
                 </p>
               </div>
             )}
@@ -345,7 +355,7 @@ export function MctbSetupView() {
               <p className="mt-1">{data?.prefills.campaignDescription}</p>
               <p className="mt-3 font-semibold text-[#111827]">Opt-in description</p>
               <p className="mt-1">
-                {consentMode === "press_1"
+                {consentMode === MCTB_CONSENT_MODE_VERIFIED
                   ? data?.prefills.press1Consent
                   : "Describe how callers previously opted in to receive texts from your business."}
               </p>
@@ -432,9 +442,26 @@ export function MctbSetupView() {
           <Card id="test" className="scroll-mt-24 space-y-3 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Test</h2>
             <p className="text-[13px] text-muted-foreground">
-              Call your business number, let it ring without answering, complete consent if
-              required, and confirm the SMS and conversation thread appear.
+              Each consent mode has its own runtime path. Save your selection above, then run the
+              test that matches your current mode.
             </p>
+            {consentMode === MCTB_CONSENT_MODE_EXISTING ? (
+              <div className="rounded-lg bg-[#f0fdf4] p-3 text-[12px] text-[#166534]">
+                <p className="font-semibold">Test — Already Have Consent</p>
+                <p className="mt-1">
+                  Call your number and let it ring without answering. You should receive the recovery
+                  SMS immediately with no Press-1 audio. Confirm delivery, reply, and STOP/START.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-[#eff6ff] p-3 text-[12px] text-[#1e40af]">
+                <p className="font-semibold">Test — Verified Call Consent</p>
+                <p className="mt-1">
+                  Publish your consent audio, then call and listen for your recording. Press 1,
+                  then confirm the recovery SMS, reply, and STOP/START.
+                </p>
+              </div>
+            )}
             {selectedNumber ? (
               <p className="text-[14px] font-semibold text-[#111827]">
                 Test number: {fmtPhone(selectedNumber.e164)}

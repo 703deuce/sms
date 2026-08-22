@@ -6,11 +6,21 @@ import { getDemoStatus } from "@/lib/mctb/onboarding/demo";
 import { getMctbEntitlement } from "@/lib/mctb/entitlement";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { resolvePlatformDemoOwnerWorkspaceId } from "@/lib/mctb/onboarding/platform-demo";
+import {
+  EXISTING_CONSENT_METHOD,
+  type MctbConsentMode,
+  MCTB_CONSENT_MODE_EXISTING,
+  MCTB_CONSENT_MODE_VERIFIED,
+} from "@/lib/mctb/consent-mode";
+
+export type Pass3ConsentPhase = MctbConsentMode;
 
 export type Pass3Evidence = {
   collectedAt: string;
   workspaceId: string;
   platformE164: string;
+  consentPhase: Pass3ConsentPhase;
+  consentProductCode: string;
   demo: Awaited<ReturnType<typeof getDemoStatus>>;
   trialSegments: { used: number; limit: number | null };
   voiceCalls: Array<{
@@ -81,7 +91,10 @@ function maskPhone(e164: string): string {
 export async function collectPass3Evidence(input: {
   workspaceId: string;
   sinceHours?: number;
+  /** Which consent-mode certification phase this evidence belongs to. */
+  consentPhase?: Pass3ConsentPhase;
 }): Promise<Pass3Evidence> {
+  const consentPhase = input.consentPhase ?? MCTB_CONSENT_MODE_EXISTING;
   const prisma = getPrisma();
   const since = new Date(Date.now() - (input.sinceHours ?? 24) * 60 * 60 * 1000);
   const platformOwnerId = await resolvePlatformDemoOwnerWorkspaceId();
@@ -213,10 +226,8 @@ export async function collectPass3Evidence(input: {
     ["sent", "delivered", "queued", "sending"].includes(m.status),
   );
 
-  const checklist = {
+  const sharedMessaging = {
     telnyx_call_id: voiceCalls.some((c) => Boolean(c.telnyxCallControlId)),
-    dtmf_press_1_consent: consentEvents.some((c) => c.affirmativeInput === "1"),
-    consent_record_with_prompt: consentEvents.some((c) => c.promptAssetId && c.promptVersion),
     outbound_sms_from_571: outboundMessages.some(
       (m) => m.from.replace(/\D/g, "") === MCTB_PLATFORM_DEMO_E164.replace(/\D/g, ""),
     ),
@@ -233,10 +244,33 @@ export async function collectPass3Evidence(input: {
     webhook_dedupe_clean: duplicateProviderIds.length === 0,
   };
 
+  const existingConsentChecklist = {
+    ...sharedMessaging,
+    existing_consent_attestation: consentEvents.some((c) => c.method === EXISTING_CONSENT_METHOD),
+    no_press_1_required: !consentEvents.some((c) => c.affirmativeInput === "1"),
+  };
+
+  const verifiedCallChecklist = {
+    ...sharedMessaging,
+    dtmf_press_1_consent: consentEvents.some((c) => c.affirmativeInput === "1"),
+    consent_record_with_prompt: consentEvents.some((c) => c.promptAssetId && c.promptVersion),
+    smart_routing_session: smartRoutingCallSessions.some((s) => s.smsTriggered),
+  };
+
+  const checklist =
+    consentPhase === MCTB_CONSENT_MODE_VERIFIED
+      ? verifiedCallChecklist
+      : existingConsentChecklist;
+
+  const consentProductCode =
+    consentPhase === MCTB_CONSENT_MODE_VERIFIED ? "VERIFIED_CALL_CONSENT" : "EXISTING_CONSENT";
+
   return {
     collectedAt: new Date().toISOString(),
     workspaceId: input.workspaceId,
     platformE164: MCTB_PLATFORM_DEMO_E164,
+    consentPhase,
+    consentProductCode,
     demo,
     trialSegments: {
       used: entitlement.trialSmsSegmentsUsed,
@@ -269,7 +303,8 @@ export function printPass3Evidence(evidence: Pass3Evidence) {
   console.log("\n── Pass 3 evidence ──\n");
   console.log(`Collected: ${evidence.collectedAt}`);
   console.log(`Workspace: ${evidence.workspaceId}`);
-  console.log(`Platform:  ${evidence.platformE164}\n`);
+  console.log(`Platform:  ${evidence.platformE164}`);
+  console.log(`Consent:   ${evidence.consentProductCode} (${evidence.consentPhase})\n`);
 
   console.log("Demo wizard:");
   console.log(`  call: ${evidence.demo.checks.callDetected}`);

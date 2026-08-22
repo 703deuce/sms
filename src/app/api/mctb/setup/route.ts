@@ -244,6 +244,13 @@ export async function POST(req: Request) {
     if (body.consentMode) {
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
       await syncMctbConsentRouting(workspaceId, session.userId).catch(() => undefined);
+
+      const { syncPlatformDemoConsentRuntime } = await import(
+        "@/lib/mctb/onboarding/platform-demo"
+      );
+      await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
+        console.error("[mctb/setup] syncPlatformDemoConsentRuntime", err);
+      });
     }
   }
 

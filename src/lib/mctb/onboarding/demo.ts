@@ -103,6 +103,16 @@ export async function startDemoSession(input: {
     demoSession: session,
     currentStep: "demo",
   });
+
+  const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
+  const { syncPlatformDemoConsentRuntime } = await import(
+    "@/lib/mctb/onboarding/platform-demo"
+  );
+  const consentMode = await loadMctbConsentMode(input.workspaceId);
+  await syncPlatformDemoConsentRuntime(consentMode).catch((err) => {
+    console.error("[demo] syncPlatformDemoConsentRuntime", err);
+  });
+
   await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_STARTED", {
     demoNumberE164,
     callerE164: caller,
