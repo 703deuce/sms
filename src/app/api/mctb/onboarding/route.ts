@@ -69,7 +69,7 @@ export async function GET() {
         ...demo,
         label: MCTB_PLATFORM_DEMO_LABEL,
         description:
-          "Transovo's pre-approved demo line — separate from your assigned trial toll-free number.",
+          "Transovo's Telnyx A2P-approved demo line (571) — try the full call-and-text loop before your toll-free number is verified. Not your production number.",
       },
       trialNumber,
       liveTest,

@@ -51,10 +51,10 @@ assert.ok(afterBusiness.completedSteps.includes("business"));
 assert.equal(afterBusiness.currentStep, "trial_number");
 
 assert.match(getDemoMessageBody(), /Transovo Demo/i);
-assert.equal(getPlatformDemoNumberE164(), "+18663464256");
-assert.equal(MCTB_PLATFORM_DEMO_DISPLAY, "1-866-346-4256");
-assert.equal(MCTB_PLATFORM_DEMO_LABEL, "Approved Transovo Demo Number");
-assert.equal(formatDemoPhoneDisplay("+18663464256"), "1-866-346-4256");
+assert.equal(getPlatformDemoNumberE164(), "+15714073615");
+assert.equal(MCTB_PLATFORM_DEMO_DISPLAY, "1-571-407-3615");
+assert.equal(MCTB_PLATFORM_DEMO_LABEL, "Transovo Demo Line (A2P-approved)");
+assert.equal(formatDemoPhoneDisplay("+15714073615"), "1-571-407-3615");
 assert.equal(isPlatformDemoNumber(MCTB_PLATFORM_DEMO_E164), true);
 assert.equal(isPlatformDemoNumber("+19999999999"), false);
 

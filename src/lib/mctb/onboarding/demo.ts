@@ -50,7 +50,7 @@ function isDemoSessionExpired(session: MctbDemoSession | null | undefined): bool
   return Date.now() - started > DEMO_SESSION_TTL_MS;
 }
 
-/** Resolve onboarding workspace for an inbound call to the platform demo TFN. */
+/** Resolve onboarding workspace for an inbound call to the platform demo line. */
 export async function resolveDemoWorkspaceForCaller(
   callerE164: string,
 ): Promise<{ workspaceId: string; session: MctbDemoSession } | null> {

@@ -1,17 +1,22 @@
 /**
- * Platform-owned pre-approved messaging number for onboarding demos.
+ * Platform-owned pre-approved Telnyx local A2P number for onboarding demos.
  * Same for every user — NOT their assigned trial toll-free number.
  * Per-user workspaces are matched by verified caller phone during the demo.
+ *
+ * Compliance: 10DLC/A2P on Telnyx (not Twilio TFV).
  */
-export const MCTB_PLATFORM_DEMO_E164 = "+18663464256";
+export const MCTB_PLATFORM_DEMO_E164 = "+15714073615";
 
 /** Human-readable display for onboarding UI. */
-export const MCTB_PLATFORM_DEMO_DISPLAY = "1-866-346-4256";
+export const MCTB_PLATFORM_DEMO_DISPLAY = "1-571-407-3615";
 
-/** Label shown in onboarding — not "demo TFN", it's the approved Transovo demo line. */
-export const MCTB_PLATFORM_DEMO_LABEL = "Approved Transovo Demo Number";
+/** Label shown in onboarding — Telnyx A2P-approved platform line. */
+export const MCTB_PLATFORM_DEMO_LABEL = "Transovo Demo Line (A2P-approved)";
 
-/** Toll-free area codes used when auto-provisioning trial numbers. */
+/** Messaging provider for the platform demo number — distinct from customer Twilio TFV path. */
+export const MCTB_PLATFORM_DEMO_PROVIDER = "telnyx" as const;
+
+/** Toll-free area codes used when auto-provisioning customer trial numbers (Twilio + TFV). */
 export const MCTB_TRIAL_TOLL_FREE_AREA_CODES = [
   "888",
   "877",

@@ -121,13 +121,20 @@ export async function executeMissedCallTextSend(input: {
     workspaceId: input.workspaceId,
     config,
   });
-  let resolvedSender = sender;
-  if (!resolvedSender?.e164 && demoMode) {
-    const { resolvePlatformDemoSmsSender } = await import(
-      "@/lib/agents/missed-call-text-back/demo-bypass"
-    );
-    resolvedSender = await resolvePlatformDemoSmsSender();
-  }
+  const { resolveMctbOutboundSmsRoute } = await import("@/lib/mctb/messaging/outbound-sms-route");
+  const route = await resolveMctbOutboundSmsRoute({
+    workspaceId: input.workspaceId,
+    config,
+    demoMode,
+  });
+
+  const resolvedSender = route
+    ? {
+        e164: route.fromE164,
+        phoneNumberId: route.phoneNumberId,
+        source: route.source,
+      }
+    : sender;
   if (!resolvedSender?.e164) {
     if (trialReservation?.reserved) {
       await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
@@ -146,7 +153,14 @@ export async function executeMissedCallTextSend(input: {
     traceId: input.traceId,
     missedCallEventId: event.id,
     kind: "sms.send.started",
-    detail: { to: event.callerE164, from: resolvedSender.e164, senderSource: resolvedSender.source },
+    detail: {
+      to: event.callerE164,
+      from: resolvedSender.e164,
+      senderSource: resolvedSender.source,
+      complianceRegime: route?.complianceRegime,
+      usesPlatformSender: route?.usesPlatformSender,
+      sendWorkspaceId: route?.sendWorkspaceId,
+    },
   });
 
   try {
@@ -158,6 +172,9 @@ export async function executeMissedCallTextSend(input: {
       customerName: contact?.firstName || undefined,
       idempotencyKey: `mctb:${event.idempotencyKey}`,
       demoBypass: demoMode,
+      senderRoute: route
+        ? { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 }
+        : undefined,
     });
 
     const messageId =

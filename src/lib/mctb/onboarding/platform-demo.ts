@@ -2,7 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { getPlatformDemoNumberE164 } from "@/lib/mctb/onboarding/demo";
 
-/** Workspace that owns the shared platform demo toll-free (for SMS routing). */
+/** Workspace that owns the shared platform demo Telnyx line (voice + A2P SMS routing). */
 export async function resolvePlatformDemoOwnerWorkspaceId(): Promise<string | null> {
   const demoE164 = getPlatformDemoNumberE164();
   const prisma = getPrisma();

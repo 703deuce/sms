@@ -24,6 +24,11 @@ export type QuickSendSmsInput = {
   senderPoolId?: string;
   /** Skip messaging registration + credit gates for platform demo SMS. */
   demoBypass?: boolean;
+  /**
+   * Route outbound through another workspace's provider registration (e.g. platform Telnyx A2P).
+   * Message rows still belong to workspaceId. Does not skip credits/trial unless demoBypass.
+   */
+  senderRoute?: { sendWorkspaceId: string; fromE164: string };
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
@@ -112,7 +117,13 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   let sendWorkspaceId = input.workspaceId;
   let activeReg = reg;
 
-  if (input.demoBypass) {
+  if (input.senderRoute) {
+    const routeReg = await getRegistrationByWorkspace(input.senderRoute.sendWorkspaceId);
+    if (routeReg) {
+      sendWorkspaceId = input.senderRoute.sendWorkspaceId;
+      activeReg = routeReg;
+    }
+  } else if (input.demoBypass) {
     const { resolvePlatformDemoOwnerWorkspaceId } = await import(
       "@/lib/mctb/onboarding/platform-demo"
     );
@@ -126,13 +137,17 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     }
   }
 
-  if (!input.demoBypass && !isMessagingReady(reg)) {
+  if (!input.demoBypass && !input.senderRoute && !isMessagingReady(reg)) {
     throw new Error(
       "SMS is blocked until messaging registration is ready (Brand APPROVED, A2P VERIFIED, number attached).",
     );
   }
 
-  if (input.demoBypass && !isMessagingReady(activeReg) && !input.from) {
+  if (input.senderRoute && !isMessagingReady(activeReg)) {
+    throw new Error("Outbound SMS sender is not messaging-ready for its provider regime.");
+  }
+
+  if (input.demoBypass && !input.senderRoute && !isMessagingReady(activeReg) && !input.from) {
     throw new Error("Platform demo messaging is not configured.");
   }
 

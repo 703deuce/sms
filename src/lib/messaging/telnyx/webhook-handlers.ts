@@ -68,16 +68,40 @@ export async function handleTelnyxInbound(payload: unknown) {
   }
 
   try {
-    const { isPlatformDemoNumber, resolveDemoWorkspaceForCaller, recordDemoReplyReceived } =
-      await import("@/lib/mctb/onboarding/demo");
-    if (isPlatformDemoNumber(parsed.to)) {
-      const match = await resolveDemoWorkspaceForCaller(parsed.from);
-      if (match) {
-        await recordDemoReplyReceived(match.workspaceId);
+    const { recordDemoReplyReceived } = await import("@/lib/mctb/onboarding/demo");
+    const { resolveMctbInboundWorkspace } = await import("@/lib/mctb/messaging/inbound-routing");
+    const { getPrisma } = await import("@/lib/db");
+
+    const prisma = getPrisma();
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { e164: parsed.to, status: "Active" },
+      select: { workspaceId: true, e164: true, settingsJson: true },
+    });
+
+    const routed = await resolveMctbInboundWorkspace({
+      fromE164: parsed.from,
+      toE164: parsed.to,
+      phoneRecord: phone,
+    });
+
+    if (routed?.reason === "demo_session") {
+      await recordDemoReplyReceived(routed.workspaceId);
+    } else if (routed?.reason === "recent_outbound" && routed.workspaceId) {
+      const { saveMctbOnboardingState, loadMctbOnboardingState } = await import(
+        "@/lib/mctb/onboarding/state"
+      );
+      const state = await loadMctbOnboardingState(routed.workspaceId);
+      if (state.liveTestSession?.startedAt && !state.liveTestPassedAt) {
+        await saveMctbOnboardingState(routed.workspaceId, {
+          liveTestSession: {
+            ...state.liveTestSession,
+            replyReceivedAt: new Date().toISOString(),
+          },
+        });
       }
     }
   } catch (demoErr) {
-    console.warn("[telnyx/inbound] demo reply tracking failed", demoErr);
+    console.warn("[telnyx/inbound] MCTB inbound routing failed", demoErr);
   }
 
   const root = payload as { data?: { payload?: { messaging_profile_id?: string } } };
@@ -87,29 +111,49 @@ export async function handleTelnyxInbound(payload: unknown) {
     return { ok: true as const, unmatched: true as const };
   }
 
+  const { resolveMctbInboundWorkspace } = await import("@/lib/mctb/messaging/inbound-routing");
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  const phoneRecord = await prisma.phoneNumber.findFirst({
+    where: { e164: parsed.to, status: "Active" },
+    select: { workspaceId: true, e164: true, settingsJson: true },
+  });
+  const routed = await resolveMctbInboundWorkspace({
+    fromE164: parsed.from,
+    toE164: parsed.to,
+    phoneRecord,
+  });
+  const targetWorkspaceId = routed?.workspaceId || ctx.workspaceId;
+  const targetRegistration =
+    targetWorkspaceId === ctx.workspaceId
+      ? ctx.registration
+      : await prisma.messagingRegistration.findUnique({
+          where: { workspaceId: targetWorkspaceId },
+        });
+
   const result = await processInboundMessage({
-    workspaceId: ctx.workspaceId,
+    workspaceId: targetWorkspaceId,
     from: parsed.from,
     to: parsed.to,
     body: parsed.body,
     providerMessageId: parsed.providerMessageId,
     mediaUrls: parsed.mediaUrls || null,
-    registration: ctx.registration,
+    registration: targetRegistration,
   });
 
   let replySent = false;
-  if (result.replyText && ctx.registration) {
-    const profileId =
-      ctx.registration.messagingProfileId ||
-      (looksLikeTwilioMessagingServiceSid(ctx.registration.messagingServiceSid)
+  if (result.replyText && targetRegistration) {
+    const replyProfileId =
+      targetRegistration.messagingProfileId ||
+      (looksLikeTwilioMessagingServiceSid(targetRegistration.messagingServiceSid)
         ? null
-        : ctx.registration.messagingServiceSid);
+        : targetRegistration.messagingServiceSid);
     try {
-      await telnyxProvider.sendMessage(ctx.registration as any, {
+      await telnyxProvider.sendMessage(targetRegistration as any, {
         to: parsed.from,
         from: ctx.phoneE164 || parsed.to,
         body: result.replyText,
-        messagingProfileId: profileId,
+        messagingProfileId: replyProfileId,
         mediaUrls: result.mediaUrls?.filter(Boolean),
       });
       replySent = true;
@@ -124,7 +168,7 @@ export async function handleTelnyxInbound(payload: unknown) {
         "@/lib/agents/missed-call-text-back/customer-sms"
       );
       const john = await handleJohnCustomerSmsReply({
-        workspaceId: ctx.workspaceId,
+        workspaceId: targetWorkspaceId,
         fromE164: parsed.from,
         toE164: parsed.to,
         body: parsed.body,

@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/phone-switch";
 import type { TollFreeVerificationStatus } from "@/lib/messaging/compliance/messaging-compliance";
+import { tollFreeComplianceSettings } from "@/lib/messaging/compliance/phone-number-class";
 import { loadWorkspaceTfvForPhone } from "@/lib/mctb/tfv/store";
 import { getWorkspaceTollFreeNumber, withWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { messagingOnboarding } from "@/lib/messaging/service";
@@ -185,16 +186,14 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
     await prisma.phoneNumber.update({
       where: { id: phoneRow.id },
       data: {
-        settingsJson: {
-          messagingCompliance: { type: "TOLL_FREE_VERIFICATION", status: "NOT_STARTED" },
-        },
+        settingsJson: tollFreeComplianceSettings(),
       },
     });
 
     await activateJohnOnPhoneNumber({
       workspaceId,
       phoneNumberId: phoneRow.id,
-      smsPhoneNumberId: phoneRow.id,
+      smsPhoneNumberId: undefined,
       delaySeconds: 0,
       messageTemplate: undefined,
     });

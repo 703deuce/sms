@@ -10,6 +10,8 @@
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1.ts  # live Pass 1 executor
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1-webhook.ts  # after deploy
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass2.ts  # forwarding/ANI checklist
+ *   npx tsx scripts/mctb-certification-pass3.ts  # Telnyx A2P + Press-1/SMS lifecycle
+ *   npx tsx scripts/mctb-certification-telnyx-a2p.ts  # Telnyx A2P registration audit
  *   npx tsx scripts/mctb-certification-runbook.ts --sheet   # carrier ANI test sheet
  */
 import {
@@ -73,7 +75,7 @@ export const CERTIFICATION_PASSES: Record<
     goal: "Prove demo flow and real forwarding preserve original caller ANI.",
     matrixIds: ["C-06", "D-01", "D-02", "T-04"],
     checklist: [
-      "Demo flow: start demo session → call platform demo number → don't answer → SMS → reply → browser updates.",
+      "Demo flow: start demo session → call platform Telnyx demo line (571-407-3615) → don't answer → SMS from same number → reply → browser updates.",
       "Confirm random callers without active demo session are NOT texted.",
       "Real setup: caller → business number → no answer → conditional forward → workspace TFN.",
       "CRITICAL: forward timer must fire BEFORE voicemail (not generic 'when unanswered' if VM wins the race).",
@@ -101,7 +103,9 @@ export const CERTIFICATION_PASSES: Record<
       "CP-17",
     ],
     checklist: [
-      "Press-1 path: publish consent audio in Setup → missed → consent prompt plays → Press 1 → SMS.",
+      "Platform demo (Telnyx 571 A2P): start demo → call platform line → missed → SMS from same number → reply → STOP/START.",
+      "Do NOT wait on Twilio TFV for Pass 3 — outbound SMS uses Telnyx A2P path while TFV pending.",
+      "Live workspace cert: 703 → business line → forward → Twilio TFN → Press-1 → SMS from Telnyx local → reply.",
       "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion + promptScriptHash.",
       "Press-1 edge cases (before marking CP complete):",
       "  • Edit script after publish → Setup shows stale/unpublished; live calls still use last publish until re-published",
