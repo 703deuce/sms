@@ -1,43 +1,40 @@
-"""Raw PCM audio publication for MCTB 571 SIP diagnostic — no TTS, no AudioMixer."""
+"""Raw PCM diagnostic tone for MCTB 571 SIP — no TTS, no OpenAI."""
 
 from __future__ import annotations
 
+import array
 import asyncio
 import math
-import struct
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from livekit import rtc
 
 if TYPE_CHECKING:
+    from livekit.agents import AgentSession
+
     from transovo_voice.session.mctb_sip_e2e_trace import MctbSipE2eTrace
 
-LOG_SOURCE = "mctb-sip-raw-audio"
-
-SAMPLE_RATE = 48_000
+DEFAULT_SAMPLE_RATE = 24_000
 NUM_CHANNELS = 1
-SAMPLES_PER_FRAME = 480  # 10 ms @ 48 kHz
 TONE_FREQUENCY_HZ = 1_000
 TONE_DURATION_S = 2.0
 TONE_AMPLITUDE = 0.8
 
 
 @dataclass
-class SipRawAudioResult:
+class SipDiagnosticAudioResult:
     ok: bool
     frames_written: int = 0
-    first_frame_written_ms: int | None = None
+    first_frame_sent_ms: int | None = None
     playback_duration_ms: int = 0
     track_sid: str | None = None
     publication_sid: str | None = None
-    sample_rate: int = SAMPLE_RATE
-    num_channels: int = NUM_CHANNELS
+    sample_rate: int = DEFAULT_SAMPLE_RATE
+    channels: int = NUM_CHANNELS
     frequency_hz: int = TONE_FREQUENCY_HZ
     error: str | None = None
-    sip_participant_track_count: int = 0
-    local_publication_count: int = 0
 
 
 @dataclass
@@ -47,197 +44,234 @@ class _ToneGenerator:
     phase: float = 0.0
 
     def fill_frame(self, audio_data: memoryview, samples_per_channel: int) -> None:
-        packed = struct.pack(
-            f"<{samples_per_channel}h",
-            *(
-                int(
-                    32767
-                    * TONE_AMPLITUDE
-                    * math.sin(
-                        2 * math.pi * self.frequency_hz * (self.phase + i) / self.sample_rate,
-                    ),
-                )
-                for i in range(samples_per_channel)
-            ),
-        )
-        audio_data[:] = packed
+        samples = [
+            int(
+                32767
+                * TONE_AMPLITUDE
+                * math.sin(
+                    2 * math.pi * self.frequency_hz * (self.phase + i) / self.sample_rate,
+                ),
+            )
+            for i in range(samples_per_channel)
+        ]
+        audio_data[:] = array.array("h", samples)
         self.phase += samples_per_channel
 
 
-def _describe_publications(participant: Any, *, label: str) -> list[dict[str, Any]]:
-    pubs: list[dict[str, Any]] = []
-    track_publications = getattr(participant, "track_publications", {}) or {}
-    for pub_sid, pub in track_publications.items():
-        subscribed = getattr(pub, "subscribed", None)
-        pubs.append(
-            {
-                "label": label,
-                "publicationSid": pub_sid,
-                "trackSid": getattr(getattr(pub, "track", None), "sid", None),
-                "trackName": getattr(pub, "name", None),
-                "kind": str(getattr(pub, "kind", "")),
-                "source": str(getattr(pub, "source", "")),
-                "muted": getattr(pub, "muted", None),
-                "subscribed": subscribed,
-            },
-        )
-    return pubs
+def _samples_per_frame(sample_rate: int) -> int:
+    return max(1, sample_rate // 100)
 
 
-async def play_sip_raw_tone(
-    room: rtc.Room,
+def _common_log_fields(
     *,
     trace: "MctbSipE2eTrace",
     sip_participant: rtc.RemoteParticipant,
+    sip_call_status: str | None,
+    track_sid: str | None = None,
+    sample_rate: int | None = None,
+    channels: int | None = None,
+    frame_count: int | None = None,
+    duration_ms: int | None = None,
+) -> dict[str, Any]:
+    fields: dict[str, Any] = {
+        "participantId": sip_participant.sid,
+        "participantIdentity": sip_participant.identity,
+        "roomSid": trace.room_sid,
+        "roomName": trace.room_name,
+        "sipCallStatus": sip_call_status,
+    }
+    if track_sid is not None:
+        fields["trackSid"] = track_sid
+    if sample_rate is not None:
+        fields["sampleRate"] = sample_rate
+    if channels is not None:
+        fields["channels"] = channels
+    if frame_count is not None:
+        fields["frameCount"] = frame_count
+    if duration_ms is not None:
+        fields["durationMs"] = duration_ms
+    return fields
+
+
+def _find_local_audio_publication(room: rtc.Room) -> rtc.LocalTrackPublication | None:
+    local = room.local_participant
+    if local is None:
+        return None
+    for publication in local.track_publications.values():
+        if publication.kind == rtc.TrackKind.KIND_AUDIO:
+            return publication
+    return None
+
+
+async def play_diagnostic_tone(
+    room: rtc.Room,
+    answer_session: "AgentSession",
+    *,
+    trace: "MctbSipE2eTrace",
+    sip_participant: rtc.RemoteParticipant,
+    sip_call_status: str | None,
     duration_s: float = TONE_DURATION_S,
     frequency_hz: int = TONE_FREQUENCY_HZ,
-) -> SipRawAudioResult:
+) -> SipDiagnosticAudioResult:
     """
-    Publish a mono PCM 1 kHz tone directly via AudioSource.capture_frame.
-    Does not use BackgroundAudioPlayer, TTS, or AudioMixer.
+    Push a deterministic PCM tone through the existing RoomIO audio output.
+
+    The answer path has already published the RoomIO audio track; this only
+  captures frames into that track after sip.callStatus is active.
     """
     started = time.perf_counter()
-    result = SipRawAudioResult(ok=False, frequency_hz=frequency_hz)
-    source: rtc.AudioSource | None = None
-    publication: rtc.LocalTrackPublication | None = None
-    frame_count_target = max(1, int(duration_s * SAMPLE_RATE / SAMPLES_PER_FRAME))
+    result = SipDiagnosticAudioResult(ok=False, frequency_hz=frequency_hz)
+    audio_output = answer_session.output.audio
+    if audio_output is None:
+        result.error = "roomio_audio_output_missing"
+        trace.log(
+            "diagnostic_audio_publish_failed",
+            error=result.error,
+            **_common_log_fields(
+                trace=trace,
+                sip_participant=sip_participant,
+                sip_call_status=sip_call_status,
+            ),
+        )
+        return result
+
+    sample_rate = audio_output.sample_rate or DEFAULT_SAMPLE_RATE
+    result.sample_rate = sample_rate
+    result.channels = NUM_CHANNELS
+    samples_per_frame = _samples_per_frame(sample_rate)
+    frame_count_target = max(1, int(duration_s * sample_rate / samples_per_frame))
+
+    publication = _find_local_audio_publication(room)
+    if publication is not None:
+        result.publication_sid = publication.sid
+        track = publication.track
+        result.track_sid = track.sid if track is not None else None
 
     trace.log(
-        "audio_source_create_start",
-        sampleRate=SAMPLE_RATE,
-        numChannels=NUM_CHANNELS,
-        samplesPerFrame=SAMPLES_PER_FRAME,
+        "diagnostic_audio_source_created",
+        playbackMethod="roomio_capture_frame",
         frequencyHz=frequency_hz,
-        durationS=duration_s,
         targetFrames=frame_count_target,
-        playbackMethod="raw_pcm_audio_source",
+        samplesPerFrame=samples_per_frame,
+        **_common_log_fields(
+            trace=trace,
+            sip_participant=sip_participant,
+            sip_call_status=sip_call_status,
+            track_sid=result.track_sid,
+            sample_rate=sample_rate,
+            channels=NUM_CHANNELS,
+        ),
     )
 
+    if publication is None or result.track_sid is None:
+        result.error = "roomio_audio_track_not_published"
+        trace.log(
+            "diagnostic_audio_publish_failed",
+            error=result.error,
+            **_common_log_fields(
+                trace=trace,
+                sip_participant=sip_participant,
+                sip_call_status=sip_call_status,
+                sample_rate=sample_rate,
+                channels=NUM_CHANNELS,
+            ),
+        )
+        return result
+
+    trace.log(
+        "diagnostic_audio_track_published",
+        publicationSid=result.publication_sid,
+        publicationName=publication.name,
+        publicationMuted=publication.muted,
+        note="existing_roomio_track_from_answer_path",
+        **_common_log_fields(
+            trace=trace,
+            sip_participant=sip_participant,
+            sip_call_status=sip_call_status,
+            track_sid=result.track_sid,
+            sample_rate=sample_rate,
+            channels=NUM_CHANNELS,
+        ),
+    )
+
+    frame = rtc.AudioFrame.create(sample_rate, NUM_CHANNELS, samples_per_frame)
+    audio_data = memoryview(frame.data)
+    tone = _ToneGenerator(sample_rate, frequency_hz)
+
     try:
-        source = rtc.AudioSource(SAMPLE_RATE, NUM_CHANNELS, queue_size_ms=200)
-        trace.log(
-            "audio_source_created",
-            sampleRate=source.sample_rate,
-            numChannels=source.num_channels,
-            queueSizeMs=200,
-        )
-
-        track = rtc.LocalAudioTrack.create_audio_track("mctb-sip-diagnostic-tone", source)
-        result.track_sid = track.sid
-        trace.log(
-            "audio_track_created",
-            trackSid=track.sid,
-            trackName=track.name,
-            kind=str(track.kind),
-        )
-
-        options = rtc.TrackPublishOptions()
-        options.source = rtc.TrackSource.SOURCE_MICROPHONE
-
-        local = room.local_participant
-        if local is None:
-            raise RuntimeError("local_participant_missing_after_connect")
-
-        publication = await local.publish_track(track, options)
-        result.publication_sid = publication.sid
-        result.local_publication_count = len(local.track_publications)
-
-        trace.log(
-            "audio_track_published",
-            trackSid=track.sid,
-            publicationSid=publication.sid,
-            publicationName=publication.name,
-            publicationMuted=publication.muted,
-            publicationKind=str(publication.kind),
-            publicationSource=str(publication.source),
-            localPublicationCount=result.local_publication_count,
-        )
-
-        sip_pubs = _describe_publications(sip_participant, label="sip_participant")
-        result.sip_participant_track_count = len(sip_pubs)
-        trace.log(
-            "sip_participant_publication_state",
-            participantId=sip_participant.sid,
-            participantIdentity=sip_participant.identity,
-            publications=sip_pubs,
-        )
-
-        local_pubs = _describe_publications(local, label="local_participant")
-        trace.log(
-            "local_participant_publication_state",
-            publications=local_pubs,
-        )
-
-        frame = rtc.AudioFrame.create(SAMPLE_RATE, NUM_CHANNELS, SAMPLES_PER_FRAME)
-        audio_data = memoryview(frame.data)
-        tone = _ToneGenerator(SAMPLE_RATE, frequency_hz)
-
-        trace.log(
-            "raw_audio_playback_start",
-            sampleRate=SAMPLE_RATE,
-            numChannels=NUM_CHANNELS,
-            samplesPerFrame=SAMPLES_PER_FRAME,
-            targetFrames=frame_count_target,
-        )
-
-        for frame_index in range(frame_count_target):
-            tone.fill_frame(audio_data, SAMPLES_PER_FRAME)
-            await source.capture_frame(frame)
+        for _frame_index in range(frame_count_target):
+            tone.fill_frame(audio_data, samples_per_frame)
+            await audio_output.capture_frame(frame)
             result.frames_written += 1
             if result.frames_written == 1:
-                result.first_frame_written_ms = int((time.perf_counter() - started) * 1000)
+                result.first_frame_sent_ms = int((time.perf_counter() - started) * 1000)
                 trace.log(
-                    "first_audio_frame_written",
+                    "diagnostic_audio_first_frame_sent",
                     frameIndex=0,
-                    samplesPerChannel=SAMPLES_PER_FRAME,
-                    sampleRate=SAMPLE_RATE,
-                    numChannels=NUM_CHANNELS,
-                    elapsedMs=result.first_frame_written_ms,
+                    samplesPerFrame=samples_per_frame,
+                    **_common_log_fields(
+                        trace=trace,
+                        sip_participant=sip_participant,
+                        sip_call_status=sip_call_status,
+                        track_sid=result.track_sid,
+                        sample_rate=sample_rate,
+                        channels=NUM_CHANNELS,
+                        duration_ms=result.first_frame_sent_ms,
+                    ),
                 )
 
-        await source.wait_for_playout()
+        audio_output.flush()
+        await asyncio.wait_for(audio_output.wait_for_playout(), timeout=duration_s + 5.0)
         result.playback_duration_ms = int((time.perf_counter() - started) * 1000)
+        result.ok = result.frames_written > 0
 
         trace.log(
-            "raw_audio_frames_complete",
+            "diagnostic_audio_frames_sent",
             framesWritten=result.frames_written,
-            frameCount=result.frames_written,
-            playbackDurationMs=result.playback_duration_ms,
             frequencyHz=frequency_hz,
-            sampleRate=SAMPLE_RATE,
-            numChannels=NUM_CHANNELS,
+            **_common_log_fields(
+                trace=trace,
+                sip_participant=sip_participant,
+                sip_call_status=sip_call_status,
+                track_sid=result.track_sid,
+                sample_rate=sample_rate,
+                channels=NUM_CHANNELS,
+                frame_count=result.frames_written,
+                duration_ms=result.playback_duration_ms,
+            ),
         )
 
-        result.ok = result.frames_written > 0
+        if result.ok:
+            trace.log(
+                "diagnostic_audio_playback_complete",
+                frequencyHz=frequency_hz,
+                **_common_log_fields(
+                    trace=trace,
+                    sip_participant=sip_participant,
+                    sip_call_status=sip_call_status,
+                    track_sid=result.track_sid,
+                    sample_rate=sample_rate,
+                    channels=NUM_CHANNELS,
+                    frame_count=result.frames_written,
+                    duration_ms=result.playback_duration_ms,
+                ),
+            )
+        return result
 
     except Exception as err:
         result.error = str(err)
         trace.log(
-            "audio_publication_failed",
+            "diagnostic_audio_publish_failed",
             error=result.error,
             framesWritten=result.frames_written,
-            trackSid=result.track_sid,
-            publicationSid=result.publication_sid,
+            **_common_log_fields(
+                trace=trace,
+                sip_participant=sip_participant,
+                sip_call_status=sip_call_status,
+                track_sid=result.track_sid,
+                sample_rate=sample_rate,
+                channels=NUM_CHANNELS,
+                frame_count=result.frames_written,
+            ),
         )
         return result
-
-    finally:
-        try:
-            if publication is not None and room.local_participant is not None:
-                await room.local_participant.unpublish_track(publication.sid)
-                trace.log(
-                    "audio_track_unpublished",
-                    publicationSid=publication.sid,
-                    trackSid=result.track_sid,
-                )
-        except Exception as err:
-            trace.log("audio_track_unpublish_failed", error=str(err))
-
-        try:
-            if source is not None:
-                await source.aclose()
-                trace.log("audio_source_disposed", trackSid=result.track_sid)
-        except Exception as err:
-            trace.log("audio_source_dispose_failed", error=str(err))
-
-    return result

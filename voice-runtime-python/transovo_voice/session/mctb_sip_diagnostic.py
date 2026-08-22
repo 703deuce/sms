@@ -1,4 +1,4 @@
-"""MCTB 571 SIP ingress — true SIP answer hold test (no AI/audio)."""
+"""MCTB 571 SIP ingress — answer + raw PCM audio diagnostic (no AI/TTS)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from transovo_voice.session.mctb_sip_e2e_trace import (
     mark_correlation_handled,
 )
 from transovo_voice.session.sip_answer_session import start_minimal_sip_answer_session
+from transovo_voice.session.sip_raw_audio import TONE_DURATION_S, play_diagnostic_tone
 from transovo_voice.session.sip_status import (
     SIP_CALL_STATUS_ACTIVE,
     SipCallStatusTracer,
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
     from transovo_voice.integrations.backend_client import TransovoBackend
 
 LOG_SOURCE = "mctb-sip-diagnostic"
-HOLD_SECONDS = 3.0
+POST_TONE_HOLD_SECONDS = 1.0
 SIP_ANSWER_TIMEOUT_SECONDS = 15.0
 
 
@@ -62,7 +63,7 @@ async def run_mctb_sip_diagnostic_session(
     """
     SIP ingress for 571:
     connect → locate SIP participant (ringing) → minimum RoomIO answer →
-    wait for real sip.callStatus=active → hold → disconnect.
+    wait for real sip.callStatus=active → play PCM tone → brief hold → disconnect.
   """
     if is_correlation_already_handled(trace.correlation_id):
         trace.log_mctb_diagnostic_skipped("duplicate_correlation_id")
@@ -154,16 +155,36 @@ async def run_mctb_sip_diagnostic_session(
         participant_count = len(ctx.room.remote_participants) + 1
         trace.log_room_ready(created_new=False, participant_count=participant_count)
 
+        trace.log_diagnostic_audio_start()
+        audio_result = await play_diagnostic_tone(
+            ctx.room,
+            answer_session,
+            trace=trace,
+            sip_participant=participant,
+            sip_call_status=observed_status,
+            duration_s=TONE_DURATION_S,
+        )
+        if audio_result.ok and audio_result.frames_written > 0:
+            trace.log_diagnostic_audio_complete()
+        else:
+            trace.log_diagnostic_audio_failed(audio_result.error or "no_frames_published")
+            trace.log_sip_call_final_state(
+                disconnect_reason="diagnostic_audio_failed",
+                sip_status=read_sip_call_status(participant),
+            )
+            return
+
         trace.log(
             "mctb_hold_started",
-            holdSeconds=HOLD_SECONDS,
-            note="true_sip_answer_hold_test",
-            sipCallStatus=observed_status,
+            holdSeconds=POST_TONE_HOLD_SECONDS,
+            note="post_tone_hold_before_disconnect",
+            sipCallStatus=read_sip_call_status(participant),
+            toneDurationSeconds=TONE_DURATION_S,
         )
-        await asyncio.sleep(HOLD_SECONDS)
+        await asyncio.sleep(POST_TONE_HOLD_SECONDS)
         trace.log(
             "mctb_hold_complete",
-            holdSeconds=HOLD_SECONDS,
+            holdSeconds=POST_TONE_HOLD_SECONDS,
             sipCallStatus=read_sip_call_status(participant),
         )
 
@@ -179,8 +200,10 @@ async def run_mctb_sip_diagnostic_session(
                 "toE164": trace.to_e164,
                 "fromE164": trace.from_e164,
                 "source": LOG_SOURCE,
-                "holdSeconds": HOLD_SECONDS,
-                "audioEnabled": False,
+                "toneDurationSeconds": TONE_DURATION_S,
+                "postToneHoldSeconds": POST_TONE_HOLD_SECONDS,
+                "audioEnabled": True,
+                "audioFramesWritten": audio_result.frames_written,
                 "sipCallStatus": read_sip_call_status(participant),
             },
         )
