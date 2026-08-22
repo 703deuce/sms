@@ -1,11 +1,9 @@
 /**
  * Platform-owned pre-approved Telnyx local A2P number for onboarding demos.
- * Same for every user — NOT their assigned trial toll-free number.
- * Per-user workspaces are matched by verified caller phone during the demo.
- *
- * Compliance: 10DLC/A2P on Telnyx (not Twilio TFV).
+ * Override via MCTB_PLATFORM_DEMO_E164 — direct-call demo ingress only.
  */
-export const MCTB_PLATFORM_DEMO_E164 = "+15714073615";
+export const MCTB_PLATFORM_DEMO_E164 =
+  process.env.MCTB_PLATFORM_DEMO_E164?.trim() || "+15714073615";
 
 /** Human-readable display for onboarding UI. */
 export const MCTB_PLATFORM_DEMO_DISPLAY = "1-571-407-3615";

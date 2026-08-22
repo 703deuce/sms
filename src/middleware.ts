@@ -191,15 +191,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged-in users skip auth pages; honor product onboarding and checkout `next`.
+  // Logged-in users skip auth pages; honor `next` (unified login — no product=voice shortcut).
   if (session && authPages.has(pathname)) {
-    const product = request.nextUrl.searchParams.get("product")?.trim().toLowerCase();
-    if (product === "voice" || product === "numbers" || product === "sms") {
-      return siteRedirect(request, `/api/products/open?product=${product}`);
-    }
     const next = request.nextUrl.searchParams.get("next");
     if (next && next.startsWith("/") && !next.startsWith("//")) {
       return siteRedirect(request, next);
+    }
+    const product = request.nextUrl.searchParams.get("product")?.trim().toLowerCase();
+    if (product === "numbers" || product === "sms") {
+      return siteRedirect(request, `/api/products/open?product=${product}`);
+    }
+    if (product === "mctb") {
+      return siteRedirect(request, "/onboarding/mctb");
     }
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,

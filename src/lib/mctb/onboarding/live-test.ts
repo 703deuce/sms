@@ -1,10 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { isPlatformDemoNumber } from "./demo";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
-import {
-  getOnboardingForwardTargetE164,
-  getOnboardingForwardTargetE164ForWorkspace,
-} from "./forward-target";
+import { getProductionMctbForwardTargetE164 } from "./phone-numbers";
 
 export type LiveTestChecks = {
   callDetected: boolean;
@@ -37,7 +34,7 @@ export async function startLiveTestSession(workspaceId: string): Promise<void> {
     },
     currentStep: "live_test",
   });
-  const forwardTargetE164 = await getOnboardingForwardTargetE164ForWorkspace(workspaceId);
+  const forwardTargetE164 = await getProductionMctbForwardTargetE164(workspaceId);
   await recordFunnelEvent(workspaceId, "MCTB_LIVE_TEST_STARTED", {
     businessNumberE164: state.businessNumberE164,
     forwardTargetE164,
@@ -47,7 +44,7 @@ export async function startLiveTestSession(workspaceId: string): Promise<void> {
 /** Auto-detect live test progress on the platform 571 forward target. */
 export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestStatus> {
   const state = await loadMctbOnboardingState(workspaceId);
-  const forwardTargetE164 = await getOnboardingForwardTargetE164ForWorkspace(workspaceId);
+  const forwardTargetE164 = await getProductionMctbForwardTargetE164(workspaceId);
   const session = state.liveTestSession;
   const started = Boolean(session?.startedAt);
 

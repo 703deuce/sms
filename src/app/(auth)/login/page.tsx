@@ -19,8 +19,8 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 }
 
 function voiceProductNext(product: string | null): string | null {
-  if (product === "voice") return "/api/products/open?product=voice";
   if (product === "numbers") return "/api/products/open?product=numbers";
+  if (product === "mctb") return "/onboarding/mctb";
   return null;
 }
 
@@ -82,9 +82,7 @@ function LoginForm() {
         <p className="mt-1 text-sm text-muted-foreground">
           {reservationId
             ? "Sign in to finish checkout for your reserved number."
-            : productNext
-              ? "Sign in to open your AI Receptionist workspace."
-              : "Sign in to manage your numbers, forwarding, and voicemail."}
+            : "Sign in to manage your numbers, missed-call text back, and voicemail."}
         </p>
       </div>
 

@@ -57,11 +57,15 @@ export async function GET(request: Request) {
     const account = await findOrCreateUserFromGoogle(profile);
     const access = await getUserProductAccess(account.userId);
     const pathProduct = preferredProductFromPath(nextPath);
+    const isMctbPath =
+      nextPath.includes("/onboarding/mctb") ||
+      nextPath.startsWith("/voice/setup") ||
+      nextPath.startsWith("/voice/missed-calls");
 
     let workspaceId = account.workspaceId;
     let workspaceType = account.workspaceType;
 
-    if (pathProduct === "voice") {
+    if (isMctbPath || (pathProduct === "voice" && account.created)) {
       const voiceWs = await ensureProductWorkspace(account.userId, "voice");
       workspaceId = voiceWs.workspaceId;
       workspaceType = voiceWs.workspaceType;
@@ -69,9 +73,11 @@ export async function GET(request: Request) {
         "@/lib/mctb/provisioning/seed-workspace"
       );
       await ensureMctbWorkspaceSeeded(workspaceId);
-      await grantProductEntitlement(workspaceId, "voice", "active");
-      await updateLastActiveProduct(account.userId, "voice");
-      await updateProductIntent(account.userId, "voice");
+      if (account.created || isMctbPath) {
+        await grantProductEntitlement(workspaceId, "voice", "active");
+        await updateLastActiveProduct(account.userId, "voice");
+        await updateProductIntent(account.userId, "voice");
+      }
     } else if (pathProduct) {
       const ws = await ensureProductWorkspace(account.userId, pathProduct);
       workspaceId = ws.workspaceId;
@@ -87,7 +93,10 @@ export async function GET(request: Request) {
       }
     }
 
-    const refreshedAccess = pathProduct === "voice" ? await getUserProductAccess(account.userId) : access;
+    const refreshedAccess =
+      isMctbPath || (pathProduct === "voice" && account.created)
+        ? await getUserProductAccess(account.userId)
+        : access;
     const redirectPath = resolvePostLoginPath(refreshedAccess, { nextPath });
 
     const session = {

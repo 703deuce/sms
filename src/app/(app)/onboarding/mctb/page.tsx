@@ -6,7 +6,7 @@ import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboar
 
 export default async function MctbOnboardingPage() {
   const session = await getSession();
-  if (!session) redirect("/signup?product=mctb");
+  if (!session) redirect(`/login?next=${encodeURIComponent("/onboarding/mctb")}`);
 
   const workspaceId = await getActiveWorkspaceId();
   const prisma = getPrisma();

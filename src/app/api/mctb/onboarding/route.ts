@@ -24,6 +24,7 @@ import {
 } from "@/lib/mctb/onboarding/trial-number";
 import { provisionMctbCustomerTelnyxLocalNumber } from "@/lib/mctb/provisioning/provision-customer-local";
 import { getOnboardingForwardTargetE164ForWorkspace } from "@/lib/mctb/onboarding/forward-target";
+import { getMctbDefaultBusinessLineE164, getMctbDemoIngressE164 } from "@/lib/mctb/onboarding/phone-numbers";
 import {
   getTfvStatusForWorkspace,
   syncTrialTollFreeVerification,
@@ -94,7 +95,10 @@ export async function GET() {
       carriers: MCTB_CARRIER_GUIDES,
       forwardingVerification,
       platformDemoDisplay: MCTB_PLATFORM_DEMO_DISPLAY,
+      demoIngressE164: getMctbDemoIngressE164(),
       forwardTargetE164,
+      productionForwardE164: forwardTargetE164,
+      defaultBusinessLineE164: getMctbDefaultBusinessLineE164(),
     });
   } catch (err) {
     return jsonError(err, 500);

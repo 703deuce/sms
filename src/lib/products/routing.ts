@@ -3,7 +3,7 @@ import {
   isSmsProductPath,
   productOfferPath,
 } from "@/lib/products/paths";
-import { isVoiceProductPath } from "@/lib/products/voice-routes";
+import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
 import { activeProductKeys } from "@/lib/products/entitlements";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
@@ -67,6 +67,9 @@ export function productAccessDeniedRedirect(
   access: ProductAccessFlags,
   options?: { authenticated?: boolean },
 ): string | null {
+  if (isMctbAppPath(pathname)) {
+    return null;
+  }
   if (isVoiceProductPath(pathname) && !access.hasVoice) {
     return options?.authenticated
       ? "/api/products/open?product=voice"

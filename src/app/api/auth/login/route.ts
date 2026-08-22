@@ -12,6 +12,7 @@ import {
 import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
+import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
 export async function POST(request: Request) {
@@ -75,8 +76,9 @@ export async function POST(request: Request) {
     }
 
     const access = await getUserProductAccess(user.id);
-    const preferredProduct =
-      preferredProductFromPath(body.next || "") ??
+    const pathProduct = preferredProductFromPath(body.next || "");
+    const preferredProduct: ProductKey =
+      pathProduct ??
       (access.hasNumbers && !access.hasVoice
         ? "numbers"
         : access.hasVoice

@@ -74,7 +74,10 @@ type OnboardingPayload = {
     failureReason?: string | null;
   };
   carriers: CarrierForwardingGuide[];
+  demoIngressE164?: string | null;
+  productionForwardE164?: string | null;
   forwardTargetE164?: string | null;
+  defaultBusinessLineE164?: string | null;
   forwardingVerification: {
     testStarted: boolean;
     callDetected: boolean;
@@ -138,6 +141,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       if (json.state.consentMode) setConsentMode(json.state.consentMode);
       if (json.state.forwardingCarrier) setCarrier(json.state.forwardingCarrier);
       if (json.state.businessNumberE164) setBusinessNumber(json.state.businessNumberE164);
+      else if (json.defaultBusinessLineE164) setBusinessNumber(json.defaultBusinessLineE164);
       if (json.state.forwardingRingSeconds) setForwardRingSeconds(json.state.forwardingRingSeconds);
       if (json.state.forwardingTestStartedAt && !json.state.forwardingConnectedAt) {
         setForwardingTestActive(true);
@@ -252,7 +256,15 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/mctb/demo", { method: "POST" });
+      const res = await fetch("/api/mctb/demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consentMode,
+          existingConsentAttested:
+            consentMode === "existing_consent" ? existingConsentAttested : undefined,
+        }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not start demo");
       await load();
@@ -267,17 +279,19 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const trialDisplay = data?.trialNumber.display;
   const trialE164 = data?.tfv.trialE164 ?? null;
   const forwardE164 =
+    data?.productionForwardE164 ||
     data?.forwardTargetE164 ||
     data?.liveTest.forwardTargetE164 ||
-    data?.demo.demoNumberE164 ||
-    "+15714073615";
-  const forwardDisplay =
-    trialDisplay ||
-    (forwardE164
-      ? forwardE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
-      : data?.demo.demoNumberDisplay || data?.demo.label || "your Transovo number");
-  const forwardTargetLabel =
-    forwardE164 === data?.demo.demoNumberE164 ? "platform demo line" : "your MCTB number";
+    null;
+  const forwardDisplay = forwardE164
+    ? forwardE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
+    : "your assigned MCTB number";
+  const demoNumberE164 = data?.demoIngressE164 || data?.demo.demoNumberE164 || null;
+  const demoNumberDisplay =
+    data?.demo.demoNumberDisplay ||
+    (demoNumberE164
+      ? demoNumberE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
+      : "demo line");
   const tfvApproved = data?.tfv.approved || false;
   const tfvActionRequired = data?.trialNumber.messagingVerificationStatus === "action_required";
   const tfvFailureReason = data?.tfv.failureReason;
@@ -521,10 +535,43 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm">
             <p className="font-medium">Demo consent mode</p>
             <p className="mt-1 text-muted-foreground">
-              {data?.demo.consentMode === "existing_consent"
-                ? "Existing Consent — no Press 1 prompt; recovery text sends immediately after the missed call."
-                : "Press 1 — you'll hear the consent greeting and press 1 to receive the recovery text."}
+              {consentMode === "existing_consent"
+                ? "Existing Consent — no Press 1; recovery text sends after the missed call."
+                : "Press 1 — hear the greeting and press 1 to receive the recovery text. No press, no text."}
             </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  { id: "press_1" as const, title: "Press 1" },
+                  { id: "existing_consent" as const, title: "Existing Consent" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setConsentMode(opt.id)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-left text-sm transition",
+                    consentMode === opt.id
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border hover:border-primary/40",
+                  )}
+                >
+                  {opt.title}
+                </button>
+              ))}
+            </div>
+            {consentMode === "existing_consent" ? (
+              <label className="mt-3 flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={existingConsentAttested}
+                  onChange={(e) => setExistingConsentAttested(e.target.checked)}
+                />
+                <span>I certify I have permission to text these callers.</span>
+              </label>
+            ) : null}
           </div>
 
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
@@ -532,7 +579,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               {data?.demo.label || "Approved Transovo Demo Number"}
             </p>
             <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary">
-              {data?.demo.demoNumberDisplay}
+              {demoNumberDisplay}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Call this number directly from your verified mobile. Do not set up forwarding — let it
@@ -549,7 +596,13 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
           {!data?.demo.completed ? (
             <div className="flex flex-wrap gap-3">
-              <Button disabled={saving} onClick={() => void startDemo()}>
+              <Button
+                disabled={
+                  saving ||
+                  (consentMode === "existing_consent" && !existingConsentAttested)
+                }
+                onClick={() => void startDemo()}
+              >
                 <Phone className="mr-2 h-4 w-4" />
                 I&apos;m ready — start demo
               </Button>
@@ -701,7 +754,18 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             </div>
           </div>
 
-          {selectedCarrier ? (
+          {!forwardE164 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              Assign your production MCTB number in the previous step or in{" "}
+              <Link href="/voice/setup" className="font-medium underline">
+                Setup
+              </Link>{" "}
+              before configuring forwarding. Set env <code className="text-xs">MCTB_PRODUCTION_FORWARD_E164</code>{" "}
+              for cert testing if you have not provisioned a DID yet.
+            </p>
+          ) : null}
+
+          {selectedCarrier && forwardE164 ? (
             <>
               {selectedCarrier.capabilities.alternateSetupRequired ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
@@ -753,7 +817,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             <div className="rounded-lg border p-4 text-sm space-y-2">
               <StepCheck
                 done={data.forwardingVerification.callDetected}
-                label={`Call reached Transovo (${forwardTargetLabel})`}
+                label={`Call reached your MCTB number (${forwardDisplay})`}
               />
               <StepCheck
                 done={data.forwardingVerification.verified}
@@ -824,7 +888,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <div className="space-y-2 rounded-lg border p-4">
             <StepCheck
               done={data?.liveTest.checks.callDetected || false}
-              label={`Call arrived on Transovo (${forwardTargetLabel})`}
+              label={`Call arrived on your MCTB number (${forwardDisplay})`}
             />
             <StepCheck
               done={data?.liveTest.checks.missedCall || false}

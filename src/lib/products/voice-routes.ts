@@ -53,8 +53,21 @@ export function isVoiceShellRoute(pathname: string): boolean {
   );
 }
 
-export function isVoiceProductPath(pathname: string): boolean {
+export function isMctbAppPath(pathname: string): boolean {
   if (pathname === "/onboarding/mctb" || pathname.startsWith("/onboarding/mctb/")) {
+    return true;
+  }
+  if (pathname === "/voice/setup" || pathname.startsWith("/voice/setup/")) {
+    return true;
+  }
+  if (pathname === "/voice/missed-calls" || pathname.startsWith("/voice/missed-calls/")) {
+    return true;
+  }
+  return false;
+}
+
+export function isVoiceProductPath(pathname: string): boolean {
+  if (isMctbAppPath(pathname)) {
     return true;
   }
   if (pathname.startsWith("/personal")) return false;
