@@ -8,6 +8,8 @@
  *   npx tsx scripts/mctb-certification-runbook.ts           # full runbook
  *   npx tsx scripts/mctb-certification-runbook.ts --pass 1  # Twilio/TFV only
  *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1.ts  # live Pass 1 executor
+ *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass1-webhook.ts  # after deploy
+ *   MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass2.ts  # forwarding/ANI checklist
  *   npx tsx scripts/mctb-certification-runbook.ts --sheet   # carrier ANI test sheet
  */
 import {

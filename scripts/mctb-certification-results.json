@@ -1,7 +1,12 @@
 {
-  "updatedAt": "2026-08-22T00:05:49.296Z",
-  "verifiedBy": "mctb-certification-pass1.ts",
-  "notes": "LIVE_VERIFIED only when external proof exists. TFV approval rows stay pending until Twilio approves.",
+  "updatedAt": "2026-08-22T00:09:16.782Z",
+  "verifiedBy": "mctb-certification-pass1-webhook.ts",
+  "notes": "LIVE_VERIFIED only when external proof exists. Pass 1 is PARTIAL until B-01 approval + B-02 webhook proof.",
+  "pass1Status": "PARTIAL",
+  "pass1Remaining": [
+    "B-02 production webhook proof",
+    "B-01 TFV approval via poll/webhook without DB edit"
+  ],
   "pass1": {
     "runId": "mctb-cert-pass1-mt3majrh",
     "workspaceId": "cmt3m55zl0p2f5o1l16604i73",
@@ -28,7 +33,41 @@
     },
     "B-02": {
       "status": "MANUAL_HUMAN_TEST_REQUIRED",
-      "note": "TFV webhook returned 404 at app URL — confirm production deploy + Event Streams optional"
+      "lastRunAt": "2026-08-22T00:09:16.782Z",
+      "note": "Deploy /api/twilio/toll-free-verification and re-run pass1-webhook script",
+      "checks": [
+        {
+          "name": "Webhook URL configured",
+          "status": "PASS",
+          "detail": "<app-host>/api/twilio/toll-free-verification"
+        },
+        {
+          "name": "Endpoint deployed (not HTTP 404)",
+          "status": "FAIL",
+          "detail": "POST empty body → HTTP 404",
+          "matrixIds": [
+            "B-02"
+          ]
+        }
+      ]
     }
+  },
+  "pass1Webhook": {
+    "executedAt": "2026-08-22T00:09:16.782Z",
+    "checks": [
+      {
+        "name": "Webhook URL configured",
+        "status": "PASS",
+        "detail": "<app-host>/api/twilio/toll-free-verification"
+      },
+      {
+        "name": "Endpoint deployed (not HTTP 404)",
+        "status": "FAIL",
+        "detail": "POST empty body → HTTP 404",
+        "matrixIds": [
+          "B-02"
+        ]
+      }
+    ]
   }
 }
