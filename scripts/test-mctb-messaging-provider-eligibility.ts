@@ -53,7 +53,6 @@ assert.equal(
 assert.equal(MCTB_PLATFORM_DEMO_E164, "+15714073615");
 assert.equal(MCTB_PLATFORM_DEMO_DISPLAY, "1-571-407-3615");
 
-// Customer TFN without TFV routes outbound SMS via platform 571 during onboarding
-// (resolveOnboardingTfnSmsViaPlatform571 in outbound-sms-route).
+// Customer TFN without TFV is not used for onboarding forwarding — customers forward to platform 571.
 
 console.log("test-mctb-messaging-provider-eligibility: ok");

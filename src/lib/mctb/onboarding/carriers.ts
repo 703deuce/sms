@@ -31,7 +31,7 @@ export const MCTB_CARRIER_GUIDES: CarrierForwardingGuide[] = [
     label: "AT&T",
     capabilities: getCarrierCapabilities("att"),
     steps: [
-      "From your AT&T business iPhone, dial YOUR_ATT_NO_ANSWER_CODE then tap Call. (Live-verified: no-answer forward with timer — e.g. *61*18553103375*11*10# forwards after 10 seconds.)",
+      "From your AT&T business iPhone, dial YOUR_ATT_NO_ANSWER_CODE then tap Call. (Live-verified: no-answer forward with timer — e.g. *61*15714073615*11*10# forwards after 10 seconds.)",
       "This sets no-answer forwarding to YOUR_TRANSOVO_NUMBER with a delay shorter than voicemail. Do not disable voicemail.",
       "Optional: disable iPhone Settings → Call Forwarding → When Unanswered if it conflicts — the dial code is the source of truth.",
       "Call your business line from another phone, don't answer, and use Test forwarding below.",

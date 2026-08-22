@@ -1,31 +1,23 @@
 /**
- * MCTB Pass 2 — conditional forwarding + ANI preservation helper.
+ * MCTB Pass 2 — conditional forwarding + ANI preservation on platform 571.
  *
- * Run the human steps below, then use --inspect to pull Twilio + Transovo records
- * for the most recent inbound call to the workspace TFN.
+ * Run the human steps below, then use --inspect to pull Transovo smart-routing
+ * records for the most recent inbound call to +15714073615.
  *
  * Usage:
  *   npx tsx scripts/mctb-certification-pass2.ts
- *     # prints checklist + cert workspace TFN
  *
  *   npx tsx scripts/mctb-certification-pass2.ts --inspect \
  *     --workspace-id cmt3m55zl0p2f5o1l16604i73 \
  *     --expected-caller +17035551234
- *
- * Env: MESSAGING_PROVIDER=twilio (for Twilio call log API)
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getPrisma } from "@/lib/db";
-import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { decryptSecret } from "@/lib/messaging/crypto";
-import { getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
-import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
-import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
+import { getOnboardingForwardTargetE164 } from "@/lib/mctb/onboarding/forward-target";
+import { resolvePlatformDemoOwnerWorkspaceId } from "@/lib/mctb/onboarding/platform-demo";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-
-process.env.MESSAGING_PROVIDER = process.env.MESSAGING_PROVIDER || "twilio";
 
 const RESULTS_PATH = join(process.cwd(), "scripts/mctb-certification-results.json");
 const args = process.argv.slice(2);
@@ -37,13 +29,12 @@ const expectedCallerArg = args.includes("--expected-caller")
   : undefined;
 
 const HUMAN_STEPS = [
-  "Configure conditional no-answer forwarding on YOUR business/test line → workspace TFN below.",
+  "Configure conditional no-answer forwarding on YOUR business/test line → platform 571 below.",
   "Call the business line from a completely different phone (not the business handset).",
-  "Let it ring unanswered so the carrier forwards to the Transovo TFN.",
-  "Confirm the call reaches the TFN (you may hear consent prompt or ring/hangup).",
+  "Let it ring unanswered so the carrier forwards to Transovo 571.",
+  "Confirm the call reaches 571 (you may hear Press-1 consent).",
   "Run this script with --inspect --expected-caller <your-caller-E164> to verify ANI.",
   "Disable forwarding and confirm the business line returns to normal.",
-  "Repeat on additional carriers only after one clean pass.",
 ] as const;
 
 function digits(e164: string): string {
@@ -55,34 +46,30 @@ function callerMatch(expected: string, actual: string): boolean {
   const a = digits(actual);
   if (!e || !a) return false;
   if (e === a) return true;
-  // US 10 vs 11 digit
   if (e.length === 10 && a === `1${e}`) return true;
   if (a.length === 10 && e === `1${a}`) return true;
   return false;
 }
 
-async function loadWorkspaceTfn(workspaceId: string) {
-  const state = await loadMctbOnboardingState(workspaceId);
-  const fromState = getWorkspaceTollFreeNumber(state);
-  if (fromState?.e164) return fromState;
-
+async function inspectRecentCall(
+  certWorkspaceId: string,
+  forwardE164: string,
+  ownerWorkspaceId: string,
+  expectedCaller?: string,
+) {
   const prisma = getPrisma();
-  const row = await prisma.phoneNumber.findFirst({
-    where: { workspaceId, type: { in: ["TollFree", "Toll-free"] }, status: { not: "Released" } },
-    orderBy: { purchasedAt: "desc" },
-    select: { id: true, e164: true, twilioSid: true },
-  });
-  return row ? { e164: row.e164, phoneNumberId: row.id, twilioSid: row.twilioSid } : null;
-}
-
-async function inspectRecentCall(workspaceId: string, tfnE164: string, expectedCaller?: string) {
-  const prisma = getPrisma();
+  const state = await loadMctbOnboardingState(certWorkspaceId);
+  const businessLine = state.businessNumberE164;
   const since = new Date(Date.now() - 60 * 60 * 1000);
 
   const sessions = await prisma.smartRoutingCallSession.findMany({
-    where: { workspaceId, calledNumber: tfnE164, startedAt: { gte: since } },
+    where: {
+      workspaceId: ownerWorkspaceId,
+      calledNumber: forwardE164,
+      startedAt: { gte: since },
+    },
     orderBy: { startedAt: "desc" },
-    take: 5,
+    take: 10,
     select: {
       id: true,
       callerNumber: true,
@@ -94,53 +81,27 @@ async function inspectRecentCall(workspaceId: string, tfnE164: string, expectedC
     },
   });
 
-  console.log("\n── Transovo SmartRouting sessions (last 60m) ──");
-  if (!sessions.length) {
-    console.log("  (none — call may not have hit smart routing yet, or voice webhook not wired)");
+  const relevant = businessLine
+    ? sessions.filter((s) =>
+        s.forwardedFromNumber
+          ? callerMatch(businessLine, s.forwardedFromNumber)
+          : true,
+      )
+    : sessions;
+
+  console.log("\n── Transovo SmartRouting sessions on 571 (last 60m) ──");
+  if (!relevant.length) {
+    console.log("  (none — call may not have hit smart routing yet)");
   }
-  for (const s of sessions) {
+  for (const s of relevant.slice(0, 5)) {
     console.log(
       `  ${s.startedAt.toISOString()} From=${s.callerNumber} To=${s.calledNumber}` +
         (s.forwardedFromNumber ? ` ForwardedFrom=${s.forwardedFromNumber}` : "") +
-        ` CallSid=${s.callControlId || "—"} outcome=${s.finalOutcome || "—"}`,
+        ` CallControlId=${s.callControlId || "—"} outcome=${s.finalOutcome || "—"}`,
     );
   }
 
-  const reg = await getRegistrationByWorkspace(workspaceId);
-  let twilioFrom: string | null = null;
-  let twilioForwardedFrom: string | null = null;
-  let twilioSid: string | null = null;
-
-  if (reg?.subaccountSid && reg.subaccountAuthTokenEnc) {
-    try {
-      const client = getSubaccountTwilioClient(
-        reg.subaccountSid,
-        decryptSecret(reg.subaccountAuthTokenEnc),
-      );
-      const calls = await client.calls.list({ to: tfnE164, limit: 10 });
-      const recent = calls.find((c) => {
-        const start = c.startTime ? new Date(c.startTime) : null;
-        return start && start >= since;
-      });
-      if (recent) {
-        twilioFrom = recent.from || null;
-        twilioForwardedFrom = (recent as { forwardedFrom?: string }).forwardedFrom || null;
-        twilioSid = recent.sid;
-        console.log("\n── Twilio call log (subaccount) ──");
-        console.log(`  CallSid=${recent.sid}`);
-        console.log(`  From=${recent.from} To=${recent.to} Status=${recent.status}`);
-        if (twilioForwardedFrom) console.log(`  ForwardedFrom=${twilioForwardedFrom}`);
-      } else {
-        console.log("\n── Twilio call log ──");
-        console.log("  (no inbound to TFN in last 60m on subaccount)");
-      }
-    } catch (err) {
-      console.log("\n── Twilio call log ──");
-      console.log(`  Error: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  const aniObserved = sessions[0]?.callerNumber || twilioFrom;
+  const aniObserved = relevant[0]?.callerNumber || null;
   let aniPass: boolean | null = null;
   if (expectedCaller && aniObserved) {
     aniPass = callerMatch(expectedCaller, aniObserved);
@@ -161,39 +122,41 @@ async function inspectRecentCall(workspaceId: string, tfnE164: string, expectedC
   return {
     aniObserved,
     aniPass,
-    twilioSid,
-    sessionId: sessions[0]?.id || null,
+    callControlId: relevant[0]?.callControlId || null,
+    sessionId: relevant[0]?.id || null,
+    forwardedFrom: relevant[0]?.forwardedFromNumber || null,
   };
 }
 
 async function main() {
-  console.log("\n══ MCTB Pass 2 — Forwarding + ANI ══\n");
+  console.log("\n══ MCTB Pass 2 — Forwarding + ANI (platform 571) ══\n");
 
-  const tfn = await loadWorkspaceTfn(workspaceId);
-  if (!tfn?.e164) {
-    console.error(`No workspace TFN for ${workspaceId}. Run Pass 1 first.`);
+  const forwardE164 = getOnboardingForwardTargetE164();
+  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+  if (!ownerId) {
+    console.error("Platform 571 owner workspace not configured.");
     process.exit(1);
   }
 
-  const tfv = await getTfvStatusForWorkspace(workspaceId);
-  const display = tfn.e164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
+  const state = await loadMctbOnboardingState(workspaceId);
+  const display = forwardE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
 
-  console.log("Cert workspace:", workspaceId);
-  console.log("Workspace TFN:  ", tfn.e164, `(${display})`);
-  console.log("TFV status:     ", tfv.status, "(SMS not required for ANI test)");
+  console.log("Cert workspace:   ", workspaceId);
+  console.log("Forward target:   ", forwardE164, `(${display})`);
+  console.log("Business line:    ", state.businessNumberE164 || "(set in onboarding connect step)");
   console.log("\nHuman steps:");
   for (let i = 0; i < HUMAN_STEPS.length; i++) {
     console.log(`  ${i + 1}. ${HUMAN_STEPS[i]}`);
   }
 
   console.log("\nExample:");
-  console.log(`  Your caller (+1703…) → business line (+1540…) → no answer → ${tfn.e164}`);
+  console.log(`  Your caller (+1703…) → business line → no answer → ${forwardE164}`);
   console.log("  Transovo must record From = your caller (+1703…), NOT the business line.");
 
   if (!inspect) {
     console.log("\nAfter your test call:");
     console.log(
-      `  MESSAGING_PROVIDER=twilio npx tsx scripts/mctb-certification-pass2.ts --inspect --workspace-id ${workspaceId} --expected-caller +1XXXXXXXXXX`,
+      `  npx tsx scripts/mctb-certification-pass2.ts --inspect --workspace-id ${workspaceId} --expected-caller +1XXXXXXXXXX`,
     );
     return;
   }
@@ -208,7 +171,7 @@ async function main() {
     }
   }
 
-  const result = await inspectRecentCall(workspaceId, tfn.e164, expectedCaller);
+  const result = await inspectRecentCall(workspaceId, forwardE164, ownerId, expectedCaller);
 
   if (result.aniPass === true) {
     let existing: Record<string, unknown> = {};
@@ -221,7 +184,7 @@ async function main() {
     items["D-02"] = {
       status: "LIVE_VERIFIED",
       verifiedAt: new Date().toISOString(),
-      note: `ANI preserved: expected ${expectedCaller} observed ${result.aniObserved}`,
+      note: `ANI preserved on 571: expected ${expectedCaller} observed ${result.aniObserved}`,
     };
     writeFileSync(
       RESULTS_PATH,
@@ -231,10 +194,12 @@ async function main() {
           updatedAt: new Date().toISOString(),
           pass2: {
             workspaceId,
-            tfnE164: tfn.e164,
+            forwardTargetE164: forwardE164,
+            businessLineE164: state.businessNumberE164,
             expectedCaller,
             observedCaller: result.aniObserved,
-            twilioCallSid: result.twilioSid,
+            forwardedFrom: result.forwardedFrom,
+            callControlId: result.callControlId,
             sessionId: result.sessionId,
             verifiedAt: new Date().toISOString(),
           },

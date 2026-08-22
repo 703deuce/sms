@@ -1,20 +1,20 @@
-import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { decryptSecret } from "@/lib/messaging/crypto";
-import { getSubaccountTwilioClient } from "@/lib/messaging/twilio-client";
+import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
-import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
+import { getOnboardingForwardTargetE164 } from "./forward-target";
+import { resolvePlatformDemoOwnerWorkspaceId } from "./platform-demo";
 
-export type ForwardingCallPath = "direct_to_tfn" | "forwarded_to_tfn" | "unknown";
+export type ForwardingCallPath = "direct_to_transovo" | "forwarded_to_transovo" | "unknown";
 
 export type ForwardingVerificationResult = {
   testStarted: boolean;
   callDetected: boolean;
   verified: boolean;
-  twilioCallSid: string | null;
+  callControlId: string | null;
   callerE164: string | null;
   businessLineE164: string | null;
   forwardedFromE164: string | null;
+  forwardTargetE164: string;
   path: ForwardingCallPath | null;
   /** True when From is not the business line (ANI likely preserved on forward). */
   aniLikelyPreserved: boolean | null;
@@ -37,23 +37,23 @@ function sameNumber(a: string | null | undefined, b: string | null | undefined):
 
 function classifyPath(
   forwardedFrom: string | null | undefined,
-  tfnE164: string,
+  transovoE164: string,
 ): ForwardingCallPath {
   const fwd = forwardedFrom?.trim();
-  if (!fwd) return "direct_to_tfn";
-  if (sameNumber(fwd, tfnE164)) return "direct_to_tfn";
-  return "forwarded_to_tfn";
+  if (!fwd) return "direct_to_transovo";
+  if (sameNumber(fwd, transovoE164)) return "direct_to_transovo";
+  return "forwarded_to_transovo";
 }
 
 /**
- * Poll Twilio for inbound calls to the workspace TFN since forwarding test started.
- * Sets forwardingConnectedAt only when a forwarded call reaches Transovo (not direct dial).
+ * Poll platform 571 smart-routing sessions since forwarding test started.
+ * Sets forwardingConnectedAt when a forwarded call reaches Transovo (not direct dial).
  */
 export async function getForwardingVerificationStatus(
   workspaceId: string,
 ): Promise<ForwardingVerificationResult> {
   const state = await loadMctbOnboardingState(workspaceId);
-  const tfn = getWorkspaceTollFreeNumber(state);
+  const forwardTargetE164 = getOnboardingForwardTargetE164();
   const businessE164 = state.businessNumberE164?.trim() || null;
   const testStartedAt = state.forwardingTestStartedAt;
 
@@ -61,62 +61,64 @@ export async function getForwardingVerificationStatus(
     testStarted: Boolean(testStartedAt),
     callDetected: false,
     verified: Boolean(state.forwardingConnectedAt),
-    twilioCallSid: null,
+    callControlId: null,
     callerE164: null,
     businessLineE164: businessE164,
     forwardedFromE164: null,
+    forwardTargetE164,
     path: null,
     aniLikelyPreserved: null,
     detectedAt: state.forwardingConnectedAt || null,
   };
 
-  if (!tfn?.e164 || !testStartedAt) return empty;
+  if (!testStartedAt) return empty;
 
-  const reg = await getRegistrationByWorkspace(workspaceId);
-  if (!reg?.subaccountSid || !reg.subaccountAuthTokenEnc) return empty;
+  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+  if (!ownerId) return empty;
 
   const since = new Date(testStartedAt);
-  const client = getSubaccountTwilioClient(
-    reg.subaccountSid,
-    decryptSecret(reg.subaccountAuthTokenEnc),
-  );
-  const calls = await client.calls.list({ to: tfn.e164, limit: 10 });
-
-  const match = calls.find((c) => {
-    const start = c.startTime ? new Date(c.startTime) : null;
-    return start && start >= since;
+  const prisma = getPrisma();
+  const sessions = await prisma.smartRoutingCallSession.findMany({
+    where: {
+      workspaceId: ownerId,
+      calledNumber: forwardTargetE164,
+      startedAt: { gte: since },
+    },
+    orderBy: { startedAt: "desc" },
+    take: 10,
   });
 
+  const match = sessions[0];
   if (!match) return empty;
 
-  const forwardedFrom = (match as { forwardedFrom?: string }).forwardedFrom || null;
-  const path = classifyPath(forwardedFrom, tfn.e164);
-  const callerE164 = match.from || null;
+  const forwardedFrom = match.forwardedFromNumber || null;
+  const path = classifyPath(forwardedFrom, forwardTargetE164);
+  const callerE164 = match.callerNumber || null;
   const aniLikelyPreserved =
-    path === "forwarded_to_tfn" && callerE164 && businessE164
+    path === "forwarded_to_transovo" && callerE164 && businessE164
       ? !sameNumber(callerE164, businessE164)
-      : path === "forwarded_to_tfn"
+      : path === "forwarded_to_transovo"
         ? callerE164 != null
         : null;
 
-  const detectedAt = match.startTime
-    ? new Date(match.startTime).toISOString()
-    : new Date().toISOString();
-
-  const verified = path === "forwarded_to_tfn";
+  const detectedAt = match.startedAt.toISOString();
+  const verified =
+    path === "forwarded_to_transovo" &&
+    Boolean(businessE164 && forwardedFrom && sameNumber(forwardedFrom, businessE164));
 
   if (verified && !state.forwardingConnectedAt) {
     await saveMctbOnboardingState(workspaceId, {
       forwardingConnectedAt: detectedAt,
-      forwardingVerifiedCallSid: match.sid,
+      forwardingVerifiedCallSid: match.callControlId,
       forwardingVerifiedCallerE164: callerE164,
       forwardingVerifiedFromE164: forwardedFrom,
     });
     await recordFunnelEvent(workspaceId, "MCTB_FORWARDING_VERIFIED", {
-      twilioCallSid: match.sid,
+      callControlId: match.callControlId,
       path,
       callerE164,
       forwardedFrom,
+      forwardTargetE164,
     });
   }
 
@@ -124,10 +126,11 @@ export async function getForwardingVerificationStatus(
     testStarted: true,
     callDetected: true,
     verified: verified || Boolean(state.forwardingConnectedAt),
-    twilioCallSid: match.sid,
+    callControlId: match.callControlId,
     callerE164,
     businessLineE164: businessE164,
     forwardedFromE164: forwardedFrom,
+    forwardTargetE164,
     path,
     aniLikelyPreserved,
     detectedAt,
@@ -136,9 +139,6 @@ export async function getForwardingVerificationStatus(
 
 export async function startForwardingVerificationTest(workspaceId: string): Promise<void> {
   const state = await loadMctbOnboardingState(workspaceId);
-  if (!getWorkspaceTollFreeNumber(state)?.e164) {
-    throw new Error("Assign your Transovo toll-free number before testing forwarding.");
-  }
   if (!state.businessNumberE164?.trim()) {
     throw new Error("Enter your business phone number before testing forwarding.");
   }
@@ -161,5 +161,6 @@ export async function startForwardingVerificationTest(workspaceId: string): Prom
     carrier: state.forwardingCarrier,
     businessNumberE164: state.businessNumberE164,
     forwardRingSeconds: state.forwardingRingSeconds,
+    forwardTargetE164: getOnboardingForwardTargetE164(),
   });
 }

@@ -21,10 +21,10 @@ assert.ok(att.verifiedNoAnswerForwardDialCode?.includes("*61*"));
 
 assert.equal(
   formatAttNoAnswerForwardDialCode({
-    forwardToE164: "+18553103375",
+    forwardToE164: "+15714073615",
     delaySeconds: 10,
   }),
-  "*61*18553103375*11*10#",
+  "*61*15714073615*11*10#",
 );
 
 assert.equal(isForwardRingTimingSafe({ forwardRingSeconds: 15, voicemailPickupSeconds: 22 }), true);
@@ -35,10 +35,10 @@ assert.ok(attGuide.steps.some((s) => s.includes("YOUR_ATT_NO_ANSWER_CODE")));
 assert.ok(attGuide.capabilities.liveVerifiedNote?.includes("Pass 2 cert"));
 
 const formatted = formatCarrierStep(attGuide.steps[0]!, {
-  transovoE164: "+18553103375",
+  transovoE164: "+15714073615",
   forwardRingSeconds: 10,
 });
-assert.ok(formatted.includes("*61*18553103375*11*10#"));
+assert.ok(formatted.includes("*61*15714073615*11*10#"));
 assert.ok(!formatted.includes("YOUR_ATT_NO_ANSWER_CODE"));
 
 assert.equal(DEFAULT_FORWARD_RING_SECONDS, 15);

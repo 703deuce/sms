@@ -35,11 +35,16 @@ export async function resolveDemoBypassContext(input: {
 export async function resolveOnboardingWorkspaceForDemoCall(
   callerE164: string,
   businessE164: string,
+  forwardedFrom?: string | null,
 ): Promise<string | null> {
   if (!isPlatformDemoNumber(businessE164)) return null;
-  const { resolveDemoWorkspaceForCaller } = await import("@/lib/mctb/onboarding/demo");
-  const match = await resolveDemoWorkspaceForCaller(callerE164);
-  return match?.workspaceId || null;
+  const { resolveOnboardingWorkspaceForPlatformInbound } = await import(
+    "@/lib/mctb/onboarding/demo"
+  );
+  return resolveOnboardingWorkspaceForPlatformInbound({
+    callerE164,
+    forwardedFrom,
+  });
 }
 
 export function getDemoNumber(): string {

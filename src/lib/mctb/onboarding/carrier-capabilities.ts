@@ -79,7 +79,7 @@ export const MCTB_CARRIER_CAPABILITIES: Record<
     verifiedNoAnswerForwardDialCode: "*61*YOUR_TRANSOVO_NUMBER_DIGITS*11*YOUR_FORWARD_RING_SECONDS#",
     liveVerifiedAt: "2026-08-22",
     liveVerifiedNote:
-      "Pass 2 cert: iPhone AT&T Wireless, voicemail on. Dial code reached TFN before VM; ANI preserved (703→571→855).",
+      "Pass 2 cert: iPhone AT&T Wireless, voicemail on. Dial code reached 571 before VM; ANI preserved.",
     voicemailRaceRisk: "medium",
     alternateSetupRequired: false,
     alternateSetupNote:

@@ -1,7 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { isPlatformDemoNumber } from "./demo";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
-import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
+import { getOnboardingForwardTargetE164 } from "./forward-target";
 
 export type LiveTestChecks = {
   callDetected: boolean;
@@ -16,6 +16,9 @@ export type LiveTestStatus = {
   started: boolean;
   passed: boolean;
   checks: LiveTestChecks;
+  /** Platform 571 line customers forward to during onboarding. */
+  forwardTargetE164: string | null;
+  /** @deprecated use forwardTargetE164 */
   trialNumberE164: string | null;
   businessNumberE164: string | null;
 };
@@ -31,19 +34,16 @@ export async function startLiveTestSession(workspaceId: string): Promise<void> {
     },
     currentStep: "live_test",
   });
-  const workspaceNumber = getWorkspaceTollFreeNumber(state);
   await recordFunnelEvent(workspaceId, "MCTB_LIVE_TEST_STARTED", {
     businessNumberE164: state.businessNumberE164,
-    trialNumberE164: workspaceNumber?.e164,
+    forwardTargetE164: getOnboardingForwardTargetE164(),
   });
 }
 
-/** Auto-detect live test progress on the customer's assigned trial toll-free number. */
+/** Auto-detect live test progress on the platform 571 forward target. */
 export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestStatus> {
   const state = await loadMctbOnboardingState(workspaceId);
-  const workspaceNumber = getWorkspaceTollFreeNumber(state);
-  const trialE164 = workspaceNumber?.e164 || null;
-  const trialPhoneNumberId = workspaceNumber?.phoneNumberId || null;
+  const forwardTargetE164 = getOnboardingForwardTargetE164();
   const session = state.liveTestSession;
   const started = Boolean(session?.startedAt);
 
@@ -58,11 +58,12 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
       textDelivered: false,
       replyReceived: false,
     },
-    trialNumberE164: trialE164,
+    forwardTargetE164,
+    trialNumberE164: forwardTargetE164,
     businessNumberE164: state.businessNumberE164 || null,
   };
 
-  if (!started || !trialPhoneNumberId || state.liveTestPassedAt) {
+  if (!started || state.liveTestPassedAt) {
     if (state.liveTestPassedAt) {
       return {
         ...empty,
@@ -86,9 +87,8 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
   const event = await prisma.missedCallEvent.findFirst({
     where: {
       workspaceId,
-      phoneNumberId: trialPhoneNumberId,
       detectedAt: { gte: since },
-      businessE164: trialE164 || undefined,
+      businessE164: forwardTargetE164,
     },
     orderBy: { detectedAt: "desc" },
   });
@@ -99,8 +99,11 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     event.metadata && typeof event.metadata === "object"
       ? (event.metadata as Record<string, unknown>)
       : {};
-  const isDemo = metadata.demoMode === true || isPlatformDemoNumber(event.businessE164);
-  if (isDemo) return empty;
+  const isDemoOnly =
+    metadata.demoMode === true &&
+    isPlatformDemoNumber(event.businessE164) &&
+    !state.liveTestSession?.startedAt;
+  if (isDemoOnly) return empty;
 
   const callDetected = true;
   const missedCall = ["missed_no_answer", "missed_busy", "voicemail"].includes(event.reason) ||
@@ -172,7 +175,8 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
       textDelivered,
       replyReceived,
     },
-    trialNumberE164: trialE164,
+    forwardTargetE164,
+    trialNumberE164: forwardTargetE164,
     businessNumberE164: state.businessNumberE164 || null,
   };
 }

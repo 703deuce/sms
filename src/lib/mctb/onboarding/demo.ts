@@ -6,7 +6,7 @@ import {
   type MctbDemoSessionStatus,
   type MctbOnboardingState,
 } from "./types";
-import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
+import { loadMctbOnboardingState, parseMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { MCTB_PLATFORM_DEMO_E164 } from "./constants";
 
 const DEMO_SESSION_TTL_MS = 30 * 60 * 1000;
@@ -80,6 +80,49 @@ export async function resolveDemoWorkspaceForCaller(
     if (!isActiveDemoStatus(session.status)) continue;
     if (isDemoSessionExpired(session)) continue;
     return { workspaceId: membership.workspaceId, session };
+  }
+
+  return null;
+}
+
+function sameE164(a: string, b: string): boolean {
+  try {
+    return normalizeE164(a) === normalizeE164(b);
+  } catch {
+    return false;
+  }
+}
+
+function isOnboardingForwardOrLiveTestActive(state: MctbOnboardingState): boolean {
+  if (state.liveTestPassedAt) return false;
+  if (state.forwardingTestStartedAt) return true;
+  if (state.liveTestSession?.startedAt) return true;
+  return state.currentStep === "connect" || state.currentStep === "live_test";
+}
+
+/** Match onboarding workspace for inbound calls to platform 571 (demo, forwarding, live test). */
+export async function resolveOnboardingWorkspaceForPlatformInbound(input: {
+  callerE164: string;
+  forwardedFrom?: string | null;
+}): Promise<string | null> {
+  const demo = await resolveDemoWorkspaceForCaller(input.callerE164);
+  if (demo) return demo.workspaceId;
+
+  const businessLine = input.forwardedFrom?.trim();
+  if (!businessLine) return null;
+
+  const prisma = getPrisma();
+  const workspaces = await prisma.workspace.findMany({
+    where: { customFieldsConfig: { not: { equals: null } } },
+    select: { id: true, customFieldsConfig: true },
+    take: 2000,
+  });
+
+  for (const ws of workspaces) {
+    const state = parseMctbOnboardingState(ws.customFieldsConfig);
+    if (!state.businessNumberE164 || !sameE164(state.businessNumberE164, businessLine)) continue;
+    if (!isOnboardingForwardOrLiveTestActive(state)) continue;
+    return ws.id;
   }
 
   return null;

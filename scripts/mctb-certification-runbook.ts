@@ -77,7 +77,7 @@ export const CERTIFICATION_PASSES: Record<
     checklist: [
       "Demo flow: start demo session → call platform Telnyx demo line (571-407-3615) → don't answer → SMS from same number → reply → browser updates.",
       "Confirm random callers without active demo session are NOT texted.",
-      "Real setup: caller → business number → no answer → conditional forward → workspace TFN.",
+      "Real setup: caller → business number → no answer → conditional forward → platform 571.",
       "CRITICAL: forward timer must fire BEFORE voicemail (not generic 'when unanswered' if VM wins the race).",
       "CRITICAL: record ANI Transovo received vs original caller number.",
       "Fill carrier test sheet (see --sheet output).",
@@ -104,7 +104,7 @@ export const CERTIFICATION_PASSES: Record<
     ],
     checklist: [
       "Platform demo (Telnyx 571 A2P): start demo → call platform line → full Telnyx loop → reply → STOP/START.",
-      "Pending customer Twilio TFN: voice on TFN; recovery SMS from platform 571 until TFV approves.",
+      "Onboarding forwarding: business line → platform Telnyx 571 (voice + SMS) until customer TFV approves their toll-free.",
       "Pass 3 cert = real TELNYX_LOCAL_A2P adapter on +15714073615 (PLATFORM_DEMO traffic only).",
       "Verify SmartRoutingSmsConsentEvent has promptAssetId + promptVersion + promptScriptHash.",
       "Press-1 edge cases (before marking CP complete):",

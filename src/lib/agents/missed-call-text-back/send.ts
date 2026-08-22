@@ -121,7 +121,6 @@ export async function executeMissedCallTextSend(input: {
     workspaceId: input.workspaceId,
     config,
     demoMode,
-    businessE164: event.businessE164,
   });
 
   if (!route?.fromE164) {

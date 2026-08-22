@@ -18,10 +18,17 @@ export async function recordSmsConsent(input: {
   metadata?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
+  const session = input.callSessionId
+    ? await prisma.smartRoutingCallSession.findUnique({
+        where: { id: input.callSessionId },
+        select: { forwardedFromNumber: true },
+      })
+    : null;
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: input.callerNumber,
     businessE164: input.businessNumber,
     fallbackWorkspaceId: input.workspaceId,
+    forwardedFrom: session?.forwardedFromNumber,
   });
   const workspaceId = target.workspaceId;
 
@@ -76,10 +83,18 @@ export async function triggerMissedCallTextFromConsent(input: {
     return { triggered: false, reason: "test_mode" };
   }
 
+  const prisma = getPrisma();
+
+  const session = await prisma.smartRoutingCallSession.findUnique({
+    where: { id: input.callSessionId },
+    select: { forwardedFromNumber: true },
+  });
+
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: input.callerNumber,
     businessE164: input.businessNumber,
     fallbackWorkspaceId: input.workspaceId,
+    forwardedFrom: session?.forwardedFromNumber,
   });
 
   await emitSmartRoutingEvent({
@@ -92,8 +107,6 @@ export async function triggerMissedCallTextFromConsent(input: {
   const { processMissedInboundCall } = await import(
     "@/lib/agents/missed-call-text-back/process"
   );
-
-  const prisma = getPrisma();
 
   const pn = await prisma.phoneNumber.findFirst({
     where: target.isPlatformDemo
