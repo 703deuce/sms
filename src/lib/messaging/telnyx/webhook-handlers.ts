@@ -130,8 +130,21 @@ export async function handleTelnyxInbound(payload: unknown) {
     registration: targetRegistration,
   });
 
+  const { isPlatformDemoPhoneRecord } = await import(
+    "@/lib/messaging/compliance/phone-number-class"
+  );
+  const platformDemoLine =
+    phoneRecord &&
+    isPlatformDemoPhoneRecord({
+      e164: phoneRecord.e164,
+      settingsJson: phoneRecord.settingsJson,
+    });
+  /** Telnyx 10DLC campaign already sends opt-in/opt-out/help auto-replies on platform 571. */
+  const skipKeywordAutoReply =
+    platformDemoLine && (result.kind === "stop" || result.kind === "start" || result.kind === "help");
+
   let replySent = false;
-  if (result.replyText && targetRegistration) {
+  if (result.replyText && targetRegistration && !skipKeywordAutoReply) {
     const replyProfileId =
       targetRegistration.messagingProfileId ||
       (looksLikeTwilioMessagingServiceSid(targetRegistration.messagingServiceSid)

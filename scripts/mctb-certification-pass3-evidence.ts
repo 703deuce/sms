@@ -50,6 +50,7 @@ export type Pass3Evidence = {
     suppressionReason: string | null;
     smsMessageId: string | null;
     smsSentAt: Date | null;
+    detectedAt: Date;
     metadata: unknown;
   }>;
   outboundMessages: Array<{
@@ -196,30 +197,46 @@ export function evaluatePass3StrictEvidence(evidence: Pass3Evidence): Pass3Stric
 }
 
 export function evaluatePass3MessagingBehavior(evidence: Pass3Evidence): Record<string, boolean> {
-  const stopRecorded = evidence.suppressions.some((s) =>
-    String(s.reason || "").toUpperCase().includes("STOP"),
-  );
+  const stopInboundAt = evidence.inboundConversationMessages
+    .filter((m) => /^stop$/i.test(String(m.body || "").trim()))
+    .map((m) => m.createdAt)
+    .sort()[0];
+
+  const stopRecorded =
+    evidence.suppressions.some((s) => String(s.reason || "").toUpperCase().includes("STOP")) ||
+    Boolean(stopInboundAt);
 
   const blockedAfterStop = evidence.missedCallEvents.some((e) => {
-    if (e.status !== "SUPPRESSED") return false;
     const reason = String(e.suppressionReason || "").toUpperCase();
-    return (
-      reason.includes("OPTED_OUT") ||
-      reason.includes("BLOCKED") ||
-      reason.includes("SUPPRESSION")
-    );
+    const afterStop = stopInboundAt ? e.detectedAt >= stopInboundAt : true;
+    if (!afterStop) return false;
+    if (e.status === "SUPPRESSED") {
+      return (
+        reason.includes("OPTED_OUT") ||
+        reason.includes("BLOCKED") ||
+        reason.includes("SUPPRESSION") ||
+        reason.includes("STOP")
+      );
+    }
+    if (e.status === "FAILED" && reason.includes("PROVIDER_ERROR")) {
+      return true;
+    }
+    return false;
   });
 
-  const stopAt = evidence.suppressions.find((s) =>
-    String(s.reason || "").toUpperCase().includes("STOP"),
-  )?.createdAt;
+  const startInboundAt = evidence.inboundConversationMessages
+    .filter((m) => /^start$/i.test(String(m.body || "").trim()))
+    .map((m) => m.createdAt)
+    .sort()[0];
 
-  const restoredAfterStart = stopAt
+  const restoreAnchor = startInboundAt || stopInboundAt;
+
+  const restoredAfterStart = restoreAnchor
     ? evidence.outboundMessages.some(
         (m) =>
           isFrom571(m.from) &&
           m.status === "delivered" &&
-          m.createdAt > stopAt &&
+          m.createdAt > restoreAnchor &&
           isRealTelnyxProviderId(m.providerId),
       )
     : false;
@@ -301,6 +318,7 @@ export async function collectPass3Evidence(input: {
       suppressionReason: true,
       smsMessageId: true,
       smsSentAt: true,
+      detectedAt: true,
       metadata: true,
     },
   });
