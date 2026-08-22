@@ -47,6 +47,24 @@ function pick(fields: Record<string, string>, ...keys: string[]): string {
   return "";
 }
 
+async function resolveInboundTarget(input: {
+  from: string;
+  to: string;
+  forwardedFrom: string;
+}) {
+  const { resolveMctbTargetWorkspaceForInboundCall } = await import(
+    "@/lib/mctb/onboarding/demo-workspace-target"
+  );
+  const ownerId =
+    process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
+  return resolveMctbTargetWorkspaceForInboundCall({
+    callerE164: input.from,
+    businessE164: input.to,
+    fallbackWorkspaceId: ownerId,
+    forwardedFrom: input.forwardedFrom || null,
+  });
+}
+
 /**
  * TeXML voice_url for platform 571 MCTB Press-1.
  * Telnyx fetches this when the call arrives — answers and plays without Call Control round trip.
@@ -67,21 +85,22 @@ export async function POST(request: Request) {
     "";
 
   if (event === "gather" && digits === "1" && from) {
+    console.log(
+      JSON.stringify({
+        source: "mctb-consent-texml",
+        event: "gather_press_1",
+        from,
+        to,
+        callSid,
+        forwardedFrom: forwardedFrom || null,
+      }),
+    );
+
     try {
-      const { resolveMctbTargetWorkspaceForInboundCall } = await import(
-        "@/lib/mctb/onboarding/demo-workspace-target"
-      );
+      const target = await resolveInboundTarget({ from, to, forwardedFrom });
       const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
         "@/lib/smart-routing/consent-service"
       );
-      const ownerId =
-        process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
-      const target = await resolveMctbTargetWorkspaceForInboundCall({
-        callerE164: from,
-        businessE164: to,
-        fallbackWorkspaceId: ownerId,
-        forwardedFrom: forwardedFrom || null,
-      });
 
       await recordSmsConsent({
         workspaceId: target.workspaceId,
@@ -89,16 +108,27 @@ export async function POST(request: Request) {
         businessNumber: to,
         affirmativeInput: "1",
         consentScope: "CUSTOMER_CARE_SMS",
+        forwardedFrom: forwardedFrom || null,
         metadata: { path: "texml_mctb_consent", callSid, forwardedFrom },
       });
 
       if (target.demoMode || forwardedFrom) {
-        await triggerMissedCallTextFromConsent({
+        const sms = await triggerMissedCallTextFromConsent({
           workspaceId: target.workspaceId,
           callerNumber: from,
           businessNumber: to,
           callSessionId: callSid || `texml:${Date.now()}`,
+          forwardedFrom: forwardedFrom || null,
         });
+        console.log(
+          JSON.stringify({
+            source: "mctb-consent-texml",
+            event: "sms_triggered",
+            workspaceId: target.workspaceId,
+            demoMode: target.demoMode,
+            result: sms,
+          }),
+        );
       }
     } catch (err) {
       console.error("[mctb-consent-texml] gather handler failed", err);
@@ -109,14 +139,39 @@ export async function POST(request: Request) {
     );
   }
 
+  console.log(
+    JSON.stringify({
+      source: "mctb-consent-texml",
+      event: "inbound_prompt",
+      from,
+      to,
+      callSid,
+      forwardedFrom: forwardedFrom || null,
+      fieldKeys: Object.keys(fields),
+    }),
+  );
+
+  if (from) {
+    try {
+      const target = await resolveInboundTarget({ from, to, forwardedFrom });
+      if (target.demoMode) {
+        const { recordDemoCallDetected } = await import("@/lib/mctb/onboarding/demo");
+        await recordDemoCallDetected({ workspaceId: target.workspaceId });
+      }
+    } catch (err) {
+      console.error("[mctb-consent-texml] demo call detect failed", err);
+    }
+  }
+
   const playbackUrl = mctb571ConsentPlaybackUrl();
   const actionUrl = new URL(mctb571ConsentTexmlVoiceUrl());
   actionUrl.searchParams.set("event", "gather");
   if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
   const action = actionUrl.toString();
   return texml(
-    `<Gather action="${escapeXml(action)}" method="POST" numDigits="1" timeout="12">` +
+    `<Gather action="${escapeXml(action)}" method="POST" numDigits="1" timeout="12" finishOnKey="#">` +
       `<Play>${escapeXml(playbackUrl)}</Play>` +
+      `<Say voice="female">Press 1 to receive a text message.</Say>` +
       `</Gather><Hangup/>`,
   );
 }

@@ -15,6 +15,7 @@ export async function recordSmsConsent(input: {
   promptAssetId?: string;
   promptVersion?: string;
   consentScope?: string;
+  forwardedFrom?: string | null;
   metadata?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
@@ -24,11 +25,13 @@ export async function recordSmsConsent(input: {
         select: { forwardedFromNumber: true },
       })
     : null;
+  const metadataForwarded =
+    typeof input.metadata?.forwardedFrom === "string" ? input.metadata.forwardedFrom : null;
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: input.callerNumber,
     businessE164: input.businessNumber,
     fallbackWorkspaceId: input.workspaceId,
-    forwardedFrom: session?.forwardedFromNumber,
+    forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber ?? metadataForwarded,
   });
   const workspaceId = target.workspaceId;
 
@@ -78,6 +81,7 @@ export async function triggerMissedCallTextFromConsent(input: {
   businessNumber: string;
   callSessionId: string;
   isTest?: boolean;
+  forwardedFrom?: string | null;
 }) {
   if (input.isTest) {
     return { triggered: false, reason: "test_mode" };
@@ -94,7 +98,7 @@ export async function triggerMissedCallTextFromConsent(input: {
     callerE164: input.callerNumber,
     businessE164: input.businessNumber,
     fallbackWorkspaceId: input.workspaceId,
-    forwardedFrom: session?.forwardedFromNumber,
+    forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber,
   });
 
   await emitSmartRoutingEvent({

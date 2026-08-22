@@ -109,6 +109,15 @@ export function isPlatform571E164(e164: string): boolean {
   return e164.replace(/\D/g, "").endsWith(MCTB_PLATFORM_DEMO_E164.replace(/\D/g, ""));
 }
 
+export const MCTB_571_CONSENT_TEXML_APP_ID = "3031854672919922436";
+
+export function isMctb571ConsentTexmlConnection(connectionId: string | null | undefined): boolean {
+  if (!connectionId) return false;
+  const preferred = process.env.MCTB_PLATFORM_CONSENT_TEXML_APP_ID?.trim();
+  if (preferred) return connectionId === preferred;
+  return connectionId === MCTB_571_CONSENT_TEXML_APP_ID;
+}
+
 export async function verify571MctbConsentTexmlRoute(providerNumberId: string): Promise<{
   ok: boolean;
   texmlAppId: string | null;

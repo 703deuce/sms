@@ -75,6 +75,25 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
   const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
   const consentMode = await loadMctbConsentMode(targetWorkspaceId);
 
+  const { isPlatform571E164, isMctb571ConsentTexmlConnection } = await import(
+    "@/lib/mctb/consent-prompt/telnyx-texml-route"
+  );
+  const meta =
+    call && typeof (call as { metadata?: unknown }).metadata === "object"
+      ? ((call as { metadata?: Record<string, unknown> }).metadata as Record<string, unknown>)
+      : null;
+  const payload =
+    meta?.payload && typeof meta.payload === "object"
+      ? (meta.payload as Record<string, unknown>)
+      : null;
+  const connectionId = String(payload?.ConnectionId || payload?.connection_id || "");
+  if (
+    isPlatform571E164(call.toE164) &&
+    (isMctb571ConsentTexmlConnection(connectionId) || consentMode === "press_1")
+  ) {
+    return { triggered: false, reason: "mctb_texml_press_1" };
+  }
+
   // Platform 571 smart routing lives on the owner workspace, not the onboarding workspace.
   let routingWorkspaceId = call.workspaceId;
   let routingPhoneNumberId = call.phoneNumberId;
