@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { normalizeSipMctbInboundEvent } from "../src/lib/mctb/event-only/normalize";
 import { MCTB_PLATFORM_DEMO_E164 } from "../src/lib/mctb/onboarding/constants";
 
-const TEST_CALLER = "+12025550101";
-const TEST_BUSINESS = "+12025550102";
+const TEST_CALLER = "+15550001001";
+const TEST_BUSINESS = "+15550001002";
 const PROVIDER_CALL_ID = "sip:test-call-id-571";
 
 function testNormalizeSipIngress() {
