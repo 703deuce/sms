@@ -38,6 +38,8 @@ export async function executeNode(input: {
   sessionId: string;
   nodeId: string;
   eventContext?: { digit?: string; eventType?: string };
+  /** When tryStartSmartRoutingInbound already answered the PSTN leg. */
+  skipEntryAnswer?: boolean;
 }) {
   const session = await loadCallSession(input.sessionId);
   if (!session || session.completedAt) return { done: true };
@@ -73,7 +75,15 @@ export async function executeNode(input: {
   try {
     switch (node.type) {
       case "ENTRY": {
-        await answerCall(controlId, input.sessionId).catch(() => undefined);
+        if (!input.skipEntryAnswer) {
+          await answerCall(controlId, input.sessionId).catch((err) => {
+            console.error("[smart-routing] ENTRY answer failed", {
+              sessionId: input.sessionId,
+              callControlId: controlId,
+              err,
+            });
+          });
+        }
         nextId = nextNodeId(node, "always") ?? Object.values(node.edges)[0];
         break;
       }
@@ -569,21 +579,46 @@ export async function startFlowForInboundCall(input: {
   callControlId: string;
   forwardedFrom?: string;
   isTest?: boolean;
+  preloadedPublished?: Awaited<ReturnType<typeof loadPublishedCompiledFlow>>;
+  preAnswered?: boolean;
 }) {
   const { startCallSession } = await import("./session-store");
-  const session = await startCallSession(input);
+  const published = input.preloadedPublished ?? (await loadPublishedCompiledFlow(input.flowId));
+  if (!published?.compiled) throw new Error("No published flow");
+
+  const session = await startCallSession({ ...input, deferFlowStartedEvent: true });
+  const compiled = asCompiledFlow(published.compiled as Record<string, unknown>);
+
+  if (input.preAnswered) {
+    await updateSessionState(session.id, { answeredAt: new Date() });
+  }
+
+  // Start IVR before slow bookkeeping — forwarded PSTN legs time out in ~5s.
+  await executeNode({
+    sessionId: session.id,
+    nodeId: compiled.entryNodeId,
+    skipEntryAnswer: input.preAnswered,
+  });
+
   const { ensureSmartRoutingHumanCall } = await import("./human-call-bridge");
-  await ensureSmartRoutingHumanCall({
+  void ensureSmartRoutingHumanCall({
     workspaceId: input.workspaceId,
     sessionId: session.id,
     fromE164: input.callerNumber,
     toE164: input.calledNumber,
     callSid: input.callControlId,
     provider: "telnyx",
+  }).catch((err) => {
+    console.error("[smart-routing] ensureSmartRoutingHumanCall", err);
   });
-  const published = await loadPublishedCompiledFlow(input.flowId);
-  if (!published?.compiled) throw new Error("No published flow");
-  const compiled = asCompiledFlow(published.compiled as Record<string, unknown>);
-  await executeNode({ sessionId: session.id, nodeId: compiled.entryNodeId });
+
+  void emitSmartRoutingEvent({
+    workspaceId: input.workspaceId,
+    type: "FLOW_STARTED",
+    sessionId: session.id,
+    flowId: input.flowId,
+    payload: { caller: input.callerNumber, isTest: input.isTest },
+  }).catch(() => undefined);
+
   return session;
 }

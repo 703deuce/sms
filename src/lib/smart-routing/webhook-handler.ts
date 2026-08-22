@@ -39,11 +39,6 @@ export async function tryStartSmartRoutingInbound(input: {
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
   if (!flow?.publishedVersionId) return { started: false as const };
 
-  // Carrier-forwarded PSTN legs (AT&T *61* → local DID) drop in ~1–2s unless we answer first.
-  if (input.callControlId) {
-    await answerCall(input.callControlId).catch(() => undefined);
-  }
-
   const prisma = getPrisma();
   const existing = await prisma.smartRoutingCallSession.findFirst({
     where: { callControlId: input.callControlId },
@@ -52,6 +47,26 @@ export async function tryStartSmartRoutingInbound(input: {
   if (existing) {
     return { started: true as const, sessionId: existing.id, duplicate: true as const };
   }
+
+  const { loadPublishedCompiledFlow } = await import("./session-store");
+
+  // Carrier-forwarded PSTN legs (AT&T *61* → local DID) drop in ~5s unless we answer
+  // and start media immediately — load the published flow in parallel with answer.
+  const [answerResult, published] = await Promise.all([
+    input.callControlId
+      ? answerCall(input.callControlId).catch((err) => {
+          console.error("[smart-routing] pre-answer failed", {
+            callControlId: input.callControlId,
+            forwardedFrom: input.forwardedFrom,
+            err,
+          });
+          return null;
+        })
+      : Promise.resolve(null),
+    loadPublishedCompiledFlow(flow.id),
+  ]);
+
+  if (!published?.compiled) return { started: false as const };
 
   const { startFlowForInboundCall } = await import("./flow-runtime");
   const session = await startFlowForInboundCall({
@@ -62,6 +77,8 @@ export async function tryStartSmartRoutingInbound(input: {
     calledNumber: input.toE164,
     callControlId: input.callControlId,
     forwardedFrom: input.forwardedFrom,
+    preloadedPublished: published,
+    preAnswered: Boolean(answerResult),
   });
   return { started: true as const, sessionId: session.id };
 }

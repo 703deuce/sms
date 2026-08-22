@@ -105,6 +105,8 @@ export async function startCallSession(input: {
   forwardedFrom?: string;
   isTest?: boolean;
   provider?: "telnyx" | "twilio";
+  /** Caller emits FLOW_STARTED after IVR starts (forwarded-leg latency). */
+  deferFlowStartedEvent?: boolean;
 }) {
   const prisma = getPrisma();
   const correlationId = randomUUID();
@@ -125,13 +127,15 @@ export async function startCallSession(input: {
       stateJson: {},
     },
   });
-  await emitSmartRoutingEvent({
-    workspaceId: input.workspaceId,
-    type: "FLOW_STARTED",
-    sessionId: session.id,
-    flowId: input.flowId,
-    payload: { caller: input.callerNumber, isTest: input.isTest },
-  });
+  if (!input.deferFlowStartedEvent) {
+    await emitSmartRoutingEvent({
+      workspaceId: input.workspaceId,
+      type: "FLOW_STARTED",
+      sessionId: session.id,
+      flowId: input.flowId,
+      payload: { caller: input.callerNumber, isTest: input.isTest },
+    });
+  }
   return session;
 }
 
