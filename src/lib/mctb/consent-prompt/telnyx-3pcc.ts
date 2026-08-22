@@ -9,6 +9,18 @@ export const MCTB_571_CALL_CONTROL_DIAG_APP_ID = "3031983555518399856";
 /** Telnyx API field for portal "Enable 3rd Party Call Control" (late-media negotiation). */
 export const TELNYX_THIRD_PARTY_CONTROL_API_FIELD = "third_party_control_enabled" as const;
 
+/** SIP inbound fields (FQDN/credential/IP connections only — not Call Control apps). */
+export const TELNYX_INBOUND_PRACK_API_FIELD = "prack_enabled" as const;
+export const TELNYX_INBOUND_RINGBACK_API_FIELD = "generate_ringback_tone" as const;
+
+export type TelnyxInboundLateMediaSettings = {
+  thirdPartyControlEnabled: boolean | null;
+  prackEnabled: boolean | null;
+  generateRingbackTone: boolean | null;
+  codecs: string[] | null;
+  supportsSipInboundLateMediaFields: boolean;
+};
+
 export type TelnyxConnectionKind =
   | "call_control"
   | "texml"
@@ -35,6 +47,66 @@ export function readThirdPartyControlEnabled(
     inbound?.third_party_control;
   if (typeof inboundValue === "boolean") return inboundValue;
   return null;
+}
+
+function readInboundBoolean(
+  connection: Record<string, unknown> | null,
+  field: string,
+): boolean | null {
+  if (!connection) return null;
+  const top = connection[field];
+  if (typeof top === "boolean") return top;
+  const inbound = asRecord(connection.inbound);
+  const nested = inbound?.[field];
+  if (typeof nested === "boolean") return nested;
+  return null;
+}
+
+/** Read late-media related inbound flags from a Telnyx connection object. */
+export function readInboundLateMediaSettings(
+  connection: Record<string, unknown> | null,
+  kind: TelnyxConnectionKind,
+): TelnyxInboundLateMediaSettings {
+  const inbound = asRecord(connection?.inbound ?? null);
+  const codecs = Array.isArray(inbound?.codecs)
+    ? inbound.codecs.map((c) => String(c))
+    : null;
+  const supportsSipInboundLateMediaFields = kind === "credential" || kind === "fqdn" || kind === "ip";
+  return {
+    thirdPartyControlEnabled: readThirdPartyControlEnabled(connection),
+    prackEnabled: readInboundBoolean(connection, TELNYX_INBOUND_PRACK_API_FIELD),
+    generateRingbackTone: readInboundBoolean(connection, TELNYX_INBOUND_RINGBACK_API_FIELD),
+    codecs,
+    supportsSipInboundLateMediaFields,
+  };
+}
+
+export async function fetchConnectionLateMediaSettings(connectionId: string): Promise<{
+  connectionId: string;
+  kind: TelnyxConnectionKind;
+  connectionName: string | null;
+  settings: TelnyxInboundLateMediaSettings;
+}> {
+  const kind = await classifyTelnyxResourceId(connectionId);
+  let path = `/connections/${encodeURIComponent(connectionId)}`;
+  if (kind === "call_control") path = `/call_control_applications/${encodeURIComponent(connectionId)}`;
+  if (kind === "texml") path = `/texml_applications/${encodeURIComponent(connectionId)}`;
+  if (kind === "credential") path = `/credential_connections/${encodeURIComponent(connectionId)}`;
+  if (kind === "fqdn") path = `/fqdn_connections/${encodeURIComponent(connectionId)}`;
+  if (kind === "ip") path = `/ip_connections/${encodeURIComponent(connectionId)}`;
+
+  const res = await telnyxRequest<{ data?: Record<string, unknown> }>(path);
+  const data = asRecord(res.data) || {};
+  const connectionName = String(
+    data.application_name || data.friendly_name || data.connection_name || "",
+  ) || null;
+
+  return {
+    connectionId,
+    kind,
+    connectionName,
+    settings: readInboundLateMediaSettings(data, kind),
+  };
 }
 
 export async function classifyTelnyxResourceId(

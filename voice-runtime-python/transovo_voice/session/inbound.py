@@ -155,6 +155,21 @@ async def run_inbound_session(ctx: JobContext) -> None:
     call_id = str(uuid4())
     from_e164, to_e164 = extract_call_numbers(attrs, ctx.room.metadata, participant.identity)
 
+    from transovo_voice.session.mctb_sip_diagnostic import (
+        is_mctb_571_sip_target,
+        run_mctb_sip_diagnostic_session,
+    )
+
+    if is_mctb_571_sip_target(to_e164):
+        await run_mctb_sip_diagnostic_session(
+            ctx,
+            participant_identity=participant.identity,
+            from_e164=from_e164,
+            to_e164=to_e164,
+            attrs=attrs,
+        )
+        return
+
     connect_task = asyncio.create_task(ctx.connect())
     try:
         from livekit.plugins.openai.realtime import RealtimeModel  # noqa: F401

@@ -1,4 +1,8 @@
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  isMctb571SipDiagnosticTarget,
+  MCTB_SIP_DIAGNOSTIC_LOG_SOURCE,
+} from "@/lib/mctb/sip-diagnostic/constants";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import { resolveInboundFrontDeskRouting } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
@@ -202,6 +206,20 @@ export async function bootstrapInboundForPython(
     } catch {
       normalizedTo = toE164.trim();
     }
+  }
+
+  if (isMctb571SipDiagnosticTarget(normalizedTo || toE164)) {
+    logBootstrapProfile(input.predeterminedCallId, steps, Date.now() - started, {
+      source: MCTB_SIP_DIAGNOSTIC_LOG_SOURCE,
+      event: "bootstrap_skipped_mctb_sip_diagnostic",
+      toE164: normalizedTo || toE164,
+      fromE164,
+    });
+    return {
+      ok: false,
+      error: "mctb_sip_diagnostic_handled_in_worker",
+      code: "MCTB_SIP_DIAGNOSTIC",
+    };
   }
 
   let t = Date.now();

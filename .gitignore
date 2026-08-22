@@ -45,4 +45,5 @@ next-env.d.ts
 .mctb-571-voice-backup.json
 .mctb-571-voice-bridge-backup.json
 .mctb-571-event-only-backup.json
+.mctb-571-pre-sip-cutover.json
 public/connection-greeting/sources/*.wav
