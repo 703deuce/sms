@@ -187,11 +187,13 @@ export async function POST(request: Request) {
         }),
       );
 
-      if (from) {
+      const promptMode = resolveMctbConsentTexmlPromptMode(url.searchParams.get("prompt"));
+
+      // say-only diagnostic: no Gather/DTMF/DB — isolate Telnyx voice execution on forwarded legs.
+      if (promptMode !== "say-only" && from) {
         scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
       }
 
-      const promptMode = resolveMctbConsentTexmlPromptMode(url.searchParams.get("prompt"));
       const built = buildMctbConsentInboundTexml(forwardedFrom, { promptMode });
       console.log(
         JSON.stringify({

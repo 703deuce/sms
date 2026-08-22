@@ -29,6 +29,6 @@ process.env.MCTB_CONSENT_TEXML_PROMPT = "say-only";
 const sayOnly = buildMctbConsentInboundTexml(sampleForwarder);
 assert.equal(sayOnly.promptMode, "say-only");
 assert.equal(sayOnly.usesGather, false);
-assert.match(wrapMctbConsentTexmlBody(sayOnly.body), /Press 1 to receive a text/);
+assert.match(wrapMctbConsentTexmlBody(sayOnly.body), /Transovo test\. Your forwarded call reached us successfully/);
 
 console.log("test-mctb-consent-texml-response: ok");

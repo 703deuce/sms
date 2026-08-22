@@ -63,6 +63,10 @@ export type MctbConsentInboundTexmlBuild = {
 const DEFAULT_SAY =
   "Sorry we missed your call. To receive a text message from us, press 1 now.";
 
+/** Physical forward diagnostic — no Gather, DTMF, DB, or Play. */
+export const MCTB_CONSENT_TEXML_SAY_ONLY_DIAGNOSTIC =
+  "Transovo test. Your forwarded call reached us successfully.";
+
 /** Build inbound Press-1 TeXML without awaiting DB (safe for carrier forward hot path). */
 export function buildMctbConsentInboundTexml(
   forwardedFrom: string,
@@ -70,15 +74,10 @@ export function buildMctbConsentInboundTexml(
 ): MctbConsentInboundTexmlBuild {
   const promptMode = options?.promptMode ?? resolveMctbConsentTexmlPromptMode();
   const audioUrl = consentPlaybackUrl();
-  const voiceUrl = consentTexmlVoiceUrl();
-  const actionUrl = new URL(voiceUrl);
-  actionUrl.searchParams.set("event", "gather");
-  if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
-  const gatherActionUrl = actionUrl.toString();
 
   if (promptMode === "say-only") {
     return {
-      body: `<Say voice="female">${escapeXml("Press 1 to receive a text.")}</Say><Hangup/>`,
+      body: `<Say voice="female">${escapeXml(MCTB_CONSENT_TEXML_SAY_ONLY_DIAGNOSTIC)}</Say><Hangup/>`,
       promptMode,
       gatherActionUrl: null,
       audioUrl,
@@ -87,6 +86,12 @@ export function buildMctbConsentInboundTexml(
       usesSay: true,
     };
   }
+
+  const voiceUrl = consentTexmlVoiceUrl();
+  const actionUrl = new URL(voiceUrl);
+  actionUrl.searchParams.set("event", "gather");
+  if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
+  const gatherActionUrl = actionUrl.toString();
 
   const promptInner =
     promptMode === "play-gather"
