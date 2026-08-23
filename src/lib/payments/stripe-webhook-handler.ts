@@ -47,6 +47,20 @@ function checkoutTransactionType(session: Stripe.Checkout.Session) {
 
 async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   const tx = checkoutTransactionType(session);
+  const platformProductKey = session.metadata?.platformProductKey;
+  const platformWorkspaceId = session.metadata?.workspaceId;
+  if (platformProductKey && platformWorkspaceId) {
+    const { grantsForPlatformProduct } = await import(
+      "@/lib/products/platform-billing-catalog"
+    );
+    const { grantWorkspaceProductFeature } = await import(
+      "@/lib/products/feature-entitlements"
+    );
+    for (const feature of grantsForPlatformProduct(platformProductKey)) {
+      await grantWorkspaceProductFeature(platformWorkspaceId, feature, "active");
+    }
+    return { subsystem: "platform_product" as const, productKey: platformProductKey };
+  }
   if (tx === "marketplace_number_purchase" || isPremiumNumberCheckoutMetadata(session.metadata as Record<string, string>)) {
     return handlePremiumNumberCheckoutSession(session);
   }

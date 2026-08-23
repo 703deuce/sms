@@ -112,6 +112,14 @@ enum ProductAccessStatus {
   TRIAL
 }
 
+/// Transovo product features (MCTB, Smart Routing, add-ons) — workspace-scoped.
+enum WorkspaceProductFeatureKey {
+  MCTB
+  SMART_ROUTING
+  VISUAL_VOICEMAIL
+  CALLBACK_REQUESTS
+}
+
 model User {
   id                  String       @id @default(cuid())
   email               String       @unique
@@ -310,6 +318,8 @@ model Workspace {
   smartRoutingCallSessions SmartRoutingCallSession[]
   smartRoutingSmsConsentEvents SmartRoutingSmsConsentEvent[]
   productEntitlements ProductEntitlement[]
+  workspaceProductFeatures WorkspaceProductFeature[]
+  callbackRequests CallbackRequest[]
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId])
@@ -330,6 +340,48 @@ model ProductEntitlement {
   @@unique([workspaceId, productKey])
   @@index([workspaceId])
   @@index([productKey, status])
+}
+
+model WorkspaceProductFeature {
+  id            String                    @id @default(cuid())
+  workspaceId   String
+  featureKey    WorkspaceProductFeatureKey
+  status        ProductAccessStatus       @default(ACTIVE)
+  activatedAt   DateTime?
+  deactivatedAt DateTime?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, featureKey])
+  @@index([workspaceId])
+  @@index([featureKey, status])
+  @@map("workspace_product_features")
+}
+
+model CallbackRequest {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  callerE164            String
+  businessE164          String?
+  phoneNumberId         String?
+  smartRoutingSessionId String?
+  sourceRoute           String?
+  reason                String?
+  status                String    @default("new")
+  notes                 String?
+  requestedAt           DateTime  @default(now())
+  contactedAt           DateTime?
+  completedAt           DateTime?
+  dismissedAt           DateTime?
+  metadata              Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, requestedAt])
+  @@index([workspaceId, callerE164])
+  @@map("callback_requests")
 }
 
 model SenderPool {
@@ -2985,6 +3037,8 @@ model VoicemailMessage {
   recordingUrl    String?
   durationSeconds Int?
   transcriptText  String?
+  internalNotes   String?
+  isResolved      Boolean  @default(false)
   isRead          Boolean  @default(false)
   forwardedTo     String?
   humanCallId     String?
@@ -3520,6 +3574,9 @@ model MissedCallTextConfig {
   enabled                 Boolean  @default(true)
   delaySeconds            Int      @default(0)
   messageTemplate         String   @default("Hi, sorry we missed your call. How can we help?")
+  messageTemplateBusinessHours String?
+  messageTemplateAfterHours    String?
+  requireCarrierForward   Boolean  @default(true)
   sendAfterNoAnswer       Boolean  @default(true)
   sendAfterBusy           Boolean  @default(true)
   sendAfterRejected       Boolean  @default(true)

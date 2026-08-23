@@ -9,13 +9,10 @@ import {
   releaseTrialSmsSegmentReservation,
 } from "@/lib/mctb/entitlement";
 
+import { resolveMctbMessageTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
+
 function renderTemplate(template: string, vars: Record<string, string>): string {
-  let out = template;
-  for (const [key, val] of Object.entries(vars)) {
-    out = out.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi"), val);
-    out = out.replace(new RegExp(`\\{\\{\\s*customer\\.${key}\\s*\\}\\}`, "gi"), val);
-  }
-  return out.trim();
+  return renderMctbMessageTemplate(template, vars);
 }
 
 /** Worker entry — recheck eligibility before send (owner may have disabled John). */
@@ -110,10 +107,11 @@ export async function executeMissedCallTextSend(input: {
 
   const body = demoMode
     ? getDemoMessageBody()
-    : renderTemplate(config.messageTemplate, {
+    : renderTemplate(resolveMctbMessageTemplate(config), {
         firstName: contact?.firstName || "there",
         name: [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "there",
         phone: event.callerE164,
+        business_name: "",
       });
 
   await prisma.missedCallEvent.update({

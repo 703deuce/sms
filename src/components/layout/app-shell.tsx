@@ -14,6 +14,7 @@ import { getVoicePageTitle } from "@/lib/products/voice-nav";
 import { getSmsPageTitle } from "@/lib/products/sms-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
+import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { usePathname } from "next/navigation";
@@ -38,6 +39,7 @@ export function AppShell({
   hasSms = false,
   hasNumbers = false,
   showTryIt = false,
+  productFeatures = null,
 }: {
   children: React.ReactNode;
   userName: string;
@@ -57,6 +59,7 @@ export function AppShell({
   hasSms?: boolean;
   hasNumbers?: boolean;
   showTryIt?: boolean;
+  productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -104,6 +107,7 @@ export function AppShell({
           hasSms={hasSms}
           hasNumbers={hasNumbers}
           showTryIt={showTryIt}
+          productFeatures={productFeatures}
         />
       </Suspense>
       <div className={sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-[260px]"}>

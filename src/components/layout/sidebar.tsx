@@ -13,6 +13,7 @@ import { buildSmsNav } from "@/lib/products/sms-nav";
 import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { productLogoHome, productContextLabel } from "@/lib/products/context";
+import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
@@ -260,6 +261,7 @@ export function Sidebar({
   hasSms = false,
   hasNumbers = false,
   showTryIt = false,
+  productFeatures = null,
 }: {
   userName: string;
   workspaceName?: string;
@@ -278,6 +280,7 @@ export function Sidebar({
   hasSms?: boolean;
   hasNumbers?: boolean;
   showTryIt?: boolean;
+  productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -301,16 +304,19 @@ export function Sidebar({
         primaryVoiceAgentId: primaryVoiceAgentId ?? null,
         showTryIt,
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
+        productFeatures,
       });
     }
     return buildVoiceNav({
       primaryVoiceAgentId: primaryVoiceAgentId ?? null,
       showTryIt,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
+      productFeatures,
     });
   }, [
     primaryVoiceAgentId,
     showTryIt,
+    productFeatures,
     pathname,
     realtorMode,
     currentProduct,

@@ -62,6 +62,7 @@ Clean nav ≠ delete working pages. Hide, consolidate, tab, or feature-gate lega
 
 Not "pages render." Done when existing MCTB + both modes + existing SR still work; SR standalone + bundle billing works; combined SR→MCTB fallback works; compliance/cooldown/exclusion visible; add-ons functional; tests + build pass; remaining live telephony smokes documented.
 
+## Caller Amy production verification
 
 Do **not** mark Caller Amy overall PASS until all five gates pass on a real phone call:
 

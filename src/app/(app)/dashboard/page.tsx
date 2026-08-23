@@ -3,6 +3,7 @@ import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-ty
 import { getPrisma } from "@/lib/db";
 import { isOnboardingComplete, loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { redirect } from "next/navigation";
 
 function parseRange(raw: string | undefined): DashboardDateRange {
@@ -30,5 +31,12 @@ export default async function MctbDashboardPage({
   }
   const params = await searchParams;
   const range = parseRange(params.range);
-  return <MctbDashboardView userName={session.name} range={range} />;
+  const productFeatures = await getWorkspaceProductFeatures(workspaceId);
+  return (
+    <MctbDashboardView
+      userName={session.name}
+      range={range}
+      productFeatures={productFeatures}
+    />
+  );
 }

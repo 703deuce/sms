@@ -49,6 +49,8 @@ export async function evaluateMissedCallTextEligibility(input: {
   idempotencyKey: string;
   demoMode?: boolean;
   eventOnly?: boolean;
+  forwardedFromE164?: string | null;
+  transovoNumberE164?: string | null;
 }): Promise<EligibilityResult> {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   const classification = classifyInboundCallOutcome(input.call);
@@ -98,6 +100,15 @@ export async function evaluateMissedCallTextEligibility(input: {
 
     if (config.phoneNumberId && input.phoneNumberId && config.phoneNumberId !== input.phoneNumberId) {
       return { eligible: false, reason: "TRIGGER_DISABLED", classification };
+    }
+
+    if (config.requireCarrierForward) {
+      const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
+      const transovo = input.transovoNumberE164 || input.businessE164;
+      const directDial = !input.forwardedFromE164?.trim();
+      if (directDial && !isPlatformDemoNumber(transovo)) {
+        return { eligible: false, reason: "NOT_FORWARD_EVENT", classification };
+      }
     }
 
     if (config.suppressKnownSpam) {

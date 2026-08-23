@@ -107,6 +107,11 @@ export async function ensureWorkspaceEntitlements(workspaceId: string): Promise<
         },
       });
     }
+
+    const { ensureWorkspaceProductFeatures } = await import(
+      "@/lib/products/feature-entitlements"
+    );
+    await ensureWorkspaceProductFeatures(workspaceId);
   } catch (err) {
     if (isProductEntitlementSchemaUnavailable(err)) return;
     throw err;

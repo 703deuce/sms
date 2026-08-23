@@ -16,6 +16,8 @@ type MissedCallEvent = {
   detectedAt: string;
   smsSentAt: string | null;
   classification: string | null;
+  callsToday?: number;
+  totalCalls?: number;
 };
 
 type Summary = {
@@ -131,6 +133,11 @@ export function MctbMissedCallsView() {
                     <Link href={`/voice/missed-calls/${row.id}`} className="hover:underline">
                       {fmtPhone(row.callerE164)}
                     </Link>
+                    {row.callsToday != null && row.callsToday > 1 ? (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+                        Called {row.callsToday}× today
+                      </span>
+                    ) : null}
                   </TD>
                   <TD>{fmtPhone(row.businessE164)}</TD>
                   <TD className="text-muted-foreground">{fmtTime(row.detectedAt)}</TD>

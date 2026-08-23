@@ -37,8 +37,17 @@ export function configToRecord(row: {
   conversationEnabled: boolean;
   phoneNumberId: string | null;
   smsPhoneNumberId?: string | null;
+  messageTemplateBusinessHours?: string | null;
+  messageTemplateAfterHours?: string | null;
+  requireCarrierForward?: boolean;
 }): MissedCallTextConfigRecord {
-  return { smsPhoneNumberId: null, ...row };
+  return {
+    smsPhoneNumberId: null,
+    messageTemplateBusinessHours: null,
+    messageTemplateAfterHours: null,
+    requireCarrierForward: true,
+    ...row,
+  };
 }
 
 export async function loadMissedCallTextConfig(
@@ -114,6 +123,20 @@ export async function updateMissedCallTextConfig(input: {
   if (input.patch.sms_phone_number_id !== undefined) {
     data.smsPhoneNumberId = input.patch.sms_phone_number_id;
     mark("smsPhoneNumberId", input.patch.sms_phone_number_id, before.smsPhoneNumberId);
+  }
+  if (input.patch.message_template_business_hours !== undefined) {
+    const v = input.patch.message_template_business_hours?.trim() || null;
+    data.messageTemplateBusinessHours = v;
+    mark("messageTemplateBusinessHours", v, before.messageTemplateBusinessHours);
+  }
+  if (input.patch.message_template_after_hours !== undefined) {
+    const v = input.patch.message_template_after_hours?.trim() || null;
+    data.messageTemplateAfterHours = v;
+    mark("messageTemplateAfterHours", v, before.messageTemplateAfterHours);
+  }
+  if (input.patch.require_carrier_forward !== undefined) {
+    data.requireCarrierForward = Boolean(input.patch.require_carrier_forward);
+    mark("requireCarrierForward", data.requireCarrierForward, before.requireCarrierForward);
   }
   const rules = input.patch.trigger_rules;
   if (rules) {

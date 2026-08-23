@@ -1,7 +1,9 @@
 "use client";
 
 import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
+import { ProductCrossSellBanner } from "@/components/products/product-cross-sell-banner";
 import { cn } from "@/lib/utils";
+import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import {
   AlertTriangle,
   ArrowRight,
@@ -17,6 +19,7 @@ import { useEffect, useState } from "react";
 type DashboardProps = {
   userName: string;
   range: DashboardDateRange;
+  productFeatures?: WorkspaceFeatureSnapshot | null;
 };
 
 type SetupSummary = {
@@ -30,9 +33,37 @@ type MissedSummary = {
   repliedToday: number;
 };
 
-export function MctbDashboardView({ userName, range }: DashboardProps) {
+type ActivityItem = {
+  id: string;
+  type: string;
+  label: string;
+  at: string;
+  href?: string;
+};
+
+type MctbAnalytics = {
+  totalMissed: number;
+  textsSent: number;
+  replies: number;
+  replyRate: number;
+  uniqueCallers: number;
+};
+
+export function MctbDashboardView({
+  userName,
+  range,
+  productFeatures = null,
+}: DashboardProps) {
   const [setup, setSetup] = useState<SetupSummary | null>(null);
   const [missed, setMissed] = useState<MissedSummary | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [analytics, setAnalytics] = useState<MctbAnalytics | null>(null);
+  const features: WorkspaceFeatureSnapshot = productFeatures ?? {
+    mctb: "active",
+    smart_routing: "active",
+    visual_voicemail: "inactive",
+    callback_requests: "inactive",
+  };
 
   useEffect(() => {
     fetch("/api/mctb/setup", { cache: "no-store" })
@@ -53,6 +84,14 @@ export function MctbDashboardView({ userName, range }: DashboardProps) {
       .then((r) => r.json())
       .then((j) => setMissed(j.data?.summary || null))
       .catch(() => undefined);
+    fetch("/api/platform/activity?limit=12", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setActivity(j.data || []))
+      .catch(() => undefined);
+    fetch("/api/mctb/analytics?range=30d", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setAnalytics(j.data || null))
+      .catch(() => undefined);
   }, []);
 
   const needsCompliance = setup && !setup.compliance.messagingReady;
@@ -65,9 +104,18 @@ export function MctbDashboardView({ userName, range }: DashboardProps) {
           Good {range === "today" ? "day" : "morning"}, {userName.split(" ")[0] || "there"}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Is missed-call recovery working? Track texts sent, replies, and setup health.
+          Your inbound call platform — missed call recovery, routing, and activity at a glance.
         </p>
       </div>
+
+      <ProductCrossSellBanner
+        feature="smart_routing"
+        features={features}
+        title="Route callers before they become a missed call"
+        description="Add Smart Routing to your existing business number — professional menu and call routing without replacing your phones."
+        cta="Try Smart Routing"
+        href="/settings/billing"
+      />
 
       {needsCompliance ? (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -78,11 +126,6 @@ export function MctbDashboardView({ userName, range }: DashboardProps) {
               <p className="mt-0.5 text-[13px] text-amber-900">
                 Complete verification before missed-call text back can go live.
               </p>
-              {setup.compliance.requiredActions.slice(0, 2).map((a) => (
-                <p key={a} className="mt-1 text-[12px] text-amber-800">
-                  • {a}
-                </p>
-              ))}
             </div>
           </div>
           <Link
@@ -98,14 +141,14 @@ export function MctbDashboardView({ userName, range }: DashboardProps) {
       {needsSetup ? (
         <div className="flex flex-col gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold text-indigo-950">Finish your setup</p>
+            <p className="font-semibold text-indigo-950">Finish setup</p>
             <p className="mt-0.5 text-[13px] text-indigo-900">
-              Choose a business number and configure your text-back message.
+              Connect your business number and recovery messaging.
             </p>
           </div>
           <Link
             href="/voice/setup"
-            className="inline-flex h-9 items-center gap-1 rounded-lg bg-primary px-4 text-[13px] font-semibold text-white"
+            className="inline-flex h-9 items-center gap-1 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white"
           >
             <SlidersHorizontal className="h-4 w-4" />
             Open Setup
@@ -114,118 +157,105 @@ export function MctbDashboardView({ userName, range }: DashboardProps) {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            label: "Missed today",
-            value: missed?.missedToday ?? 0,
-            icon: PhoneMissed,
-            href: "/voice/missed-calls",
-          },
-          {
-            label: "Texts sent today",
-            value: missed?.sentToday ?? 0,
-            icon: Send,
-            href: "/voice/missed-calls",
-          },
-          {
-            label: "Replies today",
-            value: missed?.repliedToday ?? 0,
-            icon: MessageSquare,
-            href: "/voice/conversations",
-          },
-          {
-            label: "Recovery status",
-            value: setup?.runtime.enabled ? "Active" : "Paused",
-            icon: SlidersHorizontal,
-            href: "/voice/setup",
-            text: true,
-          },
-        ].map((card) => {
-          const Icon = card.icon;
-          return (
-            <Link
-              key={card.label}
-              href={card.href}
-              className="voice-card block p-5 transition hover:border-primary/30 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-[12px] font-medium text-muted-foreground">{card.label}</p>
-                <Icon className="h-4 w-4 text-primary" />
-              </div>
-              <p
-                className={cn(
-                  "mt-2 font-bold text-[#111827]",
-                  card.text ? "text-lg" : "text-2xl tabular-nums",
-                )}
-              >
-                {card.value}
-              </p>
-            </Link>
-          );
-        })}
+        <StatCard
+          label="Missed today"
+          value={missed?.missedToday ?? 0}
+          icon={PhoneMissed}
+          href="/voice/missed-calls"
+        />
+        <StatCard
+          label="Texts sent today"
+          value={missed?.sentToday ?? 0}
+          icon={Send}
+          href="/voice/missed-calls"
+        />
+        <StatCard
+          label="Replies today"
+          value={missed?.repliedToday ?? 0}
+          icon={MessageSquare}
+          href="/inbox"
+        />
+        <StatCard
+          label="30-day reply rate"
+          value={analytics ? `${analytics.replyRate}%` : "—"}
+          icon={ArrowRight}
+          href="/voice/analytics"
+        />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="voice-card p-6">
-          <h2 className="text-sm font-semibold text-[#111827]">Quick actions</h2>
-          <ul className="mt-4 space-y-2">
-            {[
-              { label: "Configure missed-call rules", href: "/voice/setup" },
-              { label: "View missed call history", href: "/voice/missed-calls" },
-              { label: "Reply to callers", href: "/voice/conversations" },
-              { label: "Complete messaging compliance", href: "/compliance" },
-            ].map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="flex items-center justify-between rounded-lg px-2 py-2 text-[13px] font-medium text-[#374151] hover:bg-[#f9fafb]"
-                >
-                  {item.label}
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </Link>
-              </li>
-            ))}
-          </ul>
+      {analytics ? (
+        <div className="rounded-xl border border-[#e5e7eb] bg-white p-4">
+          <h2 className="text-[15px] font-semibold text-[#111827]">Recovery (30 days)</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-4 text-[13px]">
+            <div>
+              <span className="text-muted-foreground">Missed calls</span>
+              <p className="font-semibold">{analytics.totalMissed}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Texts sent</span>
+              <p className="font-semibold">{analytics.textsSent}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Replies</span>
+              <p className="font-semibold">{analytics.replies}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Unique callers</span>
+              <p className="font-semibold">{analytics.uniqueCallers}</p>
+            </div>
+          </div>
         </div>
+      ) : null}
 
-        <div className="voice-card p-6">
-          <h2 className="text-sm font-semibold text-[#111827]">Onboarding checklist</h2>
-          <ol className="mt-4 space-y-3 text-[13px]">
-            {[
-              { label: "Create account", done: true },
-              { label: "Connect a business number", done: !needsSetup, href: "/voice/numbers" },
-              { label: "Configure missed-call setup", done: !needsSetup, href: "/voice/setup" },
-              {
-                label: "Complete toll-free verification",
-                done: !needsCompliance,
-                href: "/compliance",
-              },
-              { label: "Run a live test call", done: (missed?.sentToday ?? 0) > 0, href: "/voice/setup#test" },
-              { label: "Activate recovery", done: setup?.runtime.enabled, href: "/voice/setup" },
-            ].map((step) => (
-              <li key={step.label} className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                    step.done ? "bg-emerald-100 text-emerald-700" : "bg-[#f3f4f6] text-[#9ca3af]",
-                  )}
-                >
-                  {step.done ? "✓" : "·"}
-                </span>
-                {step.href && !step.done ? (
-                  <Link href={step.href} className="font-medium text-primary hover:underline">
-                    {step.label}
-                  </Link>
-                ) : (
-                  <span className={step.done ? "text-[#374151]" : "text-muted-foreground"}>
-                    {step.label}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        </div>
+      <div className="rounded-xl border border-[#e5e7eb] bg-white p-4">
+        <h2 className="text-[15px] font-semibold text-[#111827]">Recent activity</h2>
+        <ul className="mt-3 space-y-2">
+          {activity.map((item) => (
+            <li key={item.id} className="flex items-center justify-between text-[13px]">
+              {item.href ? (
+                <Link href={item.href} className="text-[#374151] hover:text-[#6366f1]">
+                  {item.label}
+                </Link>
+              ) : (
+                <span>{item.label}</span>
+              )}
+              <span className="text-muted-foreground text-xs">
+                {new Date(item.at).toLocaleString()}
+              </span>
+            </li>
+          ))}
+          {!activity.length ? (
+            <li className="text-[13px] text-muted-foreground">No recent activity yet.</li>
+          ) : null}
+        </ul>
       </div>
     </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  href,
+}: {
+  label: string;
+  value: number | string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-xl border border-[#e5e7eb] bg-white p-4 transition hover:border-[#6366f1]/40",
+      )}
+    >
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-4 w-4" />
+        <span className="text-[12px] font-medium">{label}</span>
+      </div>
+      <p className="mt-2 text-2xl font-semibold text-[#111827]">{value}</p>
+    </Link>
   );
 }

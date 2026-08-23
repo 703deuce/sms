@@ -124,6 +124,16 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     idempotencyKey,
     demoMode: input.demoMode,
     eventOnly: input.eventOnly,
+    forwardedFromE164:
+      typeof input.eventMetadata?.forwardedFromE164 === "string"
+        ? input.eventMetadata.forwardedFromE164
+        : typeof input.eventMetadata?.forwardedFrom === "string"
+          ? input.eventMetadata.forwardedFrom
+          : null,
+    transovoNumberE164:
+      typeof input.eventMetadata?.transovoNumberE164 === "string"
+        ? input.eventMetadata.transovoNumberE164
+        : input.businessE164,
     call: input.call,
   });
 

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
 import { getUserProductAccess } from "@/lib/products/entitlements";
+import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
@@ -29,13 +30,14 @@ export default async function AppLayout({
 
   const workspaceId = await getActiveWorkspaceId();
   const workspaceType = await getActiveWorkspaceType();
-  const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow, productAccess] =
+  const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow, productAccess, productFeatures] =
     await Promise.all([
     loadShellData(session.userId, workspaceId),
     loadOutcomeInstances(workspaceId),
     loadPrimaryVoiceAgentId(workspaceId),
     loadWorkspace(workspaceId),
     getUserProductAccess(session.userId),
+    getWorkspaceProductFeatures(workspaceId),
   ]);
   const workspaceName =
     (workspaceRow as { displayName?: string | null; name?: string } | null)?.displayName ||
@@ -78,6 +80,7 @@ export default async function AppLayout({
       hasSms={productAccess.hasSms}
       hasNumbers={productAccess.hasNumbers}
       showTryIt={showTryIt}
+      productFeatures={productFeatures}
     >
       {children}
     </AppShell>
