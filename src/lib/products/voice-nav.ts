@@ -59,7 +59,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   if (options.showTryIt && hasMctb) {
     main.push({
-      label: "Try It",
+      label: "Try Missed Call Text Back",
       href: "/voice/try-it",
       icon: Sparkles,
     });
@@ -78,7 +78,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
         icon: PhoneMissed,
       },
       {
-        label: "Setup",
+        label: "Missed Call Setup",
         href: "/voice/setup",
         icon: SlidersHorizontal,
       },
@@ -90,7 +90,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       label: "Smart Routing",
       href: "/smart-routing",
       icon: GitBranch,
-      children: buildSmartRoutingNavChildren(options.smartRoutingFlowId ?? null),
+      children: buildSmartRoutingNavChildren(),
     });
   }
 
@@ -136,14 +136,21 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
 export function getVoicePageTitle(pathname: string): string {
   if (pathname === "/dashboard" || pathname === "/outcomes") return "";
-  if (pathname.startsWith("/voice/try-it")) return "Try It";
+  if (pathname.startsWith("/voice/try-it")) return "Try Missed Call Text Back";
   if (pathname.startsWith("/inbox")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
-  if (pathname.startsWith("/voice/setup")) return "Setup";
+  if (pathname.startsWith("/voice/setup")) return "Missed Call Setup";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
   if (isSmartRoutingSectionPath(pathname)) {
+    if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
+    if (pathname === "/smart-routing/flows") return "Call Flows";
+    if (pathname === "/smart-routing/destinations") return "People & Destinations";
+    if (pathname === "/smart-routing/hours") return "Business Hours";
+    if (pathname === "/smart-routing/callback") return "Business Callback";
+    if (pathname === "/smart-routing/activity") return "Activity";
     if (pathname === "/smart-routing/new") return "Create Flow";
     if (pathname === "/smart-routing/audio") return "Audio Library";
+    if (pathname === "/smart-routing/setup") return "Smart Routing Setup";
     return "";
   }
   if (pathname.startsWith("/personal/voicemail")) return "Visual Voicemail";
@@ -162,13 +169,13 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const hasSr = featureActive(features, "smart_routing", true);
   const items = [{ label: "Home", href: "/dashboard" }];
   if (options.showTryIt && hasMctb) {
-    items.push({ label: "Try It", href: "/voice/try-it" });
+    items.push({ label: "Try MCTB", href: "/voice/try-it" });
   }
   if (hasMctb) {
     items.push(
       { label: "Chats", href: "/inbox" },
       { label: "Missed", href: "/voice/missed-calls" },
-      { label: "Setup", href: "/voice/setup" },
+      { label: "MCTB Setup", href: "/voice/setup" },
     );
   }
   if (hasSr) {

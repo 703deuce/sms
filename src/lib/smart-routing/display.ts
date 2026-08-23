@@ -80,11 +80,23 @@ export function audioSourceLabel(sourceType: string): string {
   return map[sourceType] ?? sourceType.replace(/_/g, " ");
 }
 
+const SMART_ROUTING_STATIC_SEGMENTS = new Set([
+  "new",
+  "audio",
+  "setup",
+  "ai",
+  "flows",
+  "destinations",
+  "hours",
+  "callback",
+  "activity",
+]);
+
 export function smartRoutingFlowIdFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/smart-routing\/([^/]+)/);
   if (!match) return null;
   const id = match[1];
-  if (id === "new" || id === "audio") return null;
+  if (SMART_ROUTING_STATIC_SEGMENTS.has(id)) return null;
   return id;
 }
 

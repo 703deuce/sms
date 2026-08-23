@@ -42,7 +42,7 @@ export function buildPersonalNav(options?: PersonalNavOptions): NavItem[] {
       label: "Smart Routing",
       href: "/smart-routing",
       icon: GitBranch,
-      children: buildSmartRoutingNavChildren(smartRoutingFlowId),
+      children: buildSmartRoutingNavChildren(),
     });
   }
 

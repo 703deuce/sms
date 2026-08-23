@@ -45,7 +45,7 @@ export function buildNumbersNav(options?: NumbersNavOptions): NavItem[] {
       label: "Smart Routing",
       href: "/smart-routing",
       icon: GitBranch,
-      children: buildSmartRoutingNavChildren(options?.smartRoutingFlowId ?? null),
+      children: buildSmartRoutingNavChildren(),
     });
   }
 

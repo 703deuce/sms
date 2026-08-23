@@ -29,12 +29,29 @@ export function SrBackLink({
 export function SrPageShell({
   children,
   className,
+  title,
+  description,
+  actions,
 }: {
   children: ReactNode;
   className?: string;
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
 }) {
   return (
     <div className={cn("mx-auto max-w-[1320px] space-y-6 p-6 lg:p-8", className)}>
+      {title ? (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[28px] font-bold tracking-tight text-[#111827]">{title}</h1>
+            {description ? (
+              <p className="mt-1 max-w-3xl text-[14px] text-[#6b7280]">{description}</p>
+            ) : null}
+          </div>
+          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        </div>
+      ) : null}
       {children}
     </div>
   );

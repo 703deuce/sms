@@ -3,7 +3,6 @@
 import { SmartRoutingOverviewView } from "@/components/smart-routing/overview-view";
 import type { SetupReadiness } from "@/lib/smart-routing/setup-readiness";
 import type { DraftConfig } from "@/lib/smart-routing/types";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 type FlowRow = {
@@ -19,7 +18,6 @@ type FlowRow = {
 };
 
 export default function SmartRoutingOverviewPage() {
-  const router = useRouter();
   const [flows, setFlows] = useState<FlowRow[]>([]);
   const [metrics, setMetrics] = useState<{
     activeFlows: number;
@@ -30,7 +28,6 @@ export default function SmartRoutingOverviewPage() {
   const [templates, setTemplates] = useState<
     Array<{ type: string; title: string; subtitle: string; bestFor: string[] }>
   >([]);
-  const [numberMap, setNumberMap] = useState<Record<string, string>>({});
   const [workspaceStatus, setWorkspaceStatus] = useState<{
     publicBusinessE164: string | null;
     routingNumberE164: string | null;
@@ -52,20 +49,13 @@ export default function SmartRoutingOverviewPage() {
     Promise.all([
       fetch("/api/smart-routing/flows").then((r) => r.json()),
       fetch("/api/smart-routing/templates").then((r) => r.json()),
-      fetch("/api/numbers").then((r) => r.json()),
       fetch("/api/smart-routing/setup").then((r) => r.json()),
       fetch("/api/smart-routing/analytics?days=30").then((r) => r.json()),
     ])
-      .then(([flowsJson, templatesJson, numbersJson, setupJson, analyticsJson]) => {
+      .then(([flowsJson, templatesJson, setupJson, analyticsJson]) => {
         setFlows(flowsJson.data ?? []);
         setMetrics(flowsJson.metrics ?? null);
         setTemplates(templatesJson.data ?? []);
-        const nums = numbersJson.data ?? numbersJson.numbers ?? [];
-        const map: Record<string, string> = {};
-        for (const n of nums) {
-          if (n.id && n.e164) map[n.id] = n.e164;
-        }
-        setNumberMap(map);
 
         const setup = setupJson.data;
         if (setup) {
@@ -95,30 +85,14 @@ export default function SmartRoutingOverviewPage() {
     load();
   }, [load]);
 
-  async function onPause(id: string) {
-    await fetch(`/api/smart-routing/flows/${id}/pause`, { method: "POST" });
-    load();
-  }
-
-  async function onDuplicate(id: string) {
-    const res = await fetch(`/api/smart-routing/flows/${id}/duplicate`, { method: "POST" });
-    const json = await res.json();
-    if (json.data?.id) router.push(`/smart-routing/${json.data.id}`);
-    else load();
-  }
-
   return (
     <SmartRoutingOverviewView
       flows={flows}
       metrics={metrics}
       templates={templates}
-      numberMap={numberMap}
       workspaceStatus={workspaceStatus}
       scheduleOverride={scheduleOverride}
       onWorkspaceRefresh={load}
-      loading={loading}
-      onPause={onPause}
-      onDuplicate={onDuplicate}
     />
   );
 }
