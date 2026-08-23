@@ -183,6 +183,13 @@ export async function startDemoSession(input: {
     console.error("[demo] syncPlatformDemoConsentRuntime", err);
   });
 
+  if (context === "try_it") {
+    const { ensureTryItDemoVoiceReady } = await import("@/lib/mctb/try-it/demo-voice");
+    await ensureTryItDemoVoiceReady(input.workspaceId).catch((err) => {
+      console.error("[demo] ensureTryItDemoVoiceReady", err);
+    });
+  }
+
   await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_STARTED", {
     demoNumberE164,
     callerE164: caller,

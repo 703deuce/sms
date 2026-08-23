@@ -8,23 +8,7 @@ import { Phone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-type TryItStatus = {
-  demoNumberE164: string;
-  demoNumberDisplay: string;
-  consentMode: MctbConsentMode;
-  sessionActive: boolean;
-  waitingForCall: boolean;
-  completed: boolean;
-  expired: boolean;
-  checks: {
-    callReceived: boolean;
-    greetingPlayed: boolean;
-    press1Received: boolean;
-    consentConfirmed: boolean;
-    recoverySmsQueued: boolean;
-    recoverySmsSent: boolean;
-  };
-};
+import type { TryItStatus } from "@/lib/mctb/try-it/types";
 
 function StepCheck({ done, label }: { done: boolean; label: string }) {
   return (
@@ -177,11 +161,11 @@ export function MctbTryItView() {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Step 2 — Call this number directly from your verified mobile (no carrier forwarding).
-            {status?.session?.callerE164 ? (
+            {status?.callerE164 ? (
               <>
                 {" "}
                 Call from{" "}
-                <span className="font-semibold text-foreground">{status.session.callerE164}</span>.
+                <span className="font-semibold text-foreground">{status.callerE164}</span>.
               </>
             ) : null}
           </p>

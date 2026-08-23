@@ -4,28 +4,10 @@ import { getPrisma } from "@/lib/db";
 import { isExistingConsentMode } from "@/lib/mctb/consent-mode";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { getDemoStatus } from "@/lib/mctb/onboarding/demo";
+import type { TryItProgressChecks, TryItStatus } from "@/lib/mctb/try-it/types";
 import type { MctbConsentMode } from "@/lib/mctb/onboarding/types";
 
-export type TryItProgressChecks = {
-  callReceived: boolean;
-  greetingPlayed: boolean;
-  press1Received: boolean;
-  consentConfirmed: boolean;
-  recoverySmsQueued: boolean;
-  recoverySmsSent: boolean;
-};
-
-export type TryItStatus = {
-  demoNumberE164: string;
-  demoNumberDisplay: string;
-  consentMode: MctbConsentMode;
-  sessionActive: boolean;
-  waitingForCall: boolean;
-  completed: boolean;
-  expired: boolean;
-  checks: TryItProgressChecks;
-  session: Awaited<ReturnType<typeof getDemoStatus>>["session"];
-};
+export type { TryItProgressChecks, TryItStatus } from "@/lib/mctb/try-it/types";
 
 type TraceRow = { kind: string };
 
@@ -125,5 +107,6 @@ export async function getTryItStatus(workspaceId: string): Promise<TryItStatus> 
     expired: demo.expired,
     checks,
     session,
+    callerE164: session?.callerE164 || null,
   };
 }

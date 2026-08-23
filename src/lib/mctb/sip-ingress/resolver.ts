@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   isMctbSipIngressTargetSync,
   isPhoneMctbSipIngress,

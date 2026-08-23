@@ -161,24 +161,39 @@ export async function resolveMctbSipSessionForPython(
   let failClosed = false;
 
   if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
-    const prompt = await loadMctbConsentPrompt(target.workspaceId);
-    const publishedAssetId = String(
-      prompt.publishedAudioAssetId || prompt.audioAssetId || "",
-    ).trim();
-    const playback = await resolveSmsConsentPlayback(target.workspaceId, {
-      audioAssetId: publishedAssetId,
-      promptAssetId: publishedAssetId,
-      promptScriptHash: prompt.scriptHash,
-      promptText: prompt.scriptText,
-      text: prompt.scriptText,
-    });
-    if (playback.failClosed) {
-      failClosed = true;
+    if (mctbConfig.demoMode) {
+      const { ensureTryItDemoVoiceReady } = await import("@/lib/mctb/try-it/demo-voice");
+      try {
+        const demoVoice = await ensureTryItDemoVoiceReady(target.workspaceId);
+        playUrl = demoVoice.consentPlayUrl;
+        audioAssetId = demoVoice.consentAudioAssetId;
+        confirmationPlayUrl = demoVoice.confirmationPlayUrl;
+      } catch (err) {
+        console.error("[mctb-sip-session] try_it_demo_voice_failed", err);
+        failClosed = true;
+      }
     } else {
-      playUrl = playback.playUrl;
-      audioAssetId = publishedAssetId || undefined;
+      const prompt = await loadMctbConsentPrompt(target.workspaceId);
+      const publishedAssetId = String(
+        prompt.publishedAudioAssetId || prompt.audioAssetId || "",
+      ).trim();
+      const playback = await resolveSmsConsentPlayback(target.workspaceId, {
+        audioAssetId: publishedAssetId,
+        promptAssetId: publishedAssetId,
+        promptScriptHash: prompt.scriptHash,
+        promptText: prompt.scriptText,
+        text: prompt.scriptText,
+      });
+      if (playback.failClosed) {
+        failClosed = true;
+      } else if (playback.playUrl) {
+        playUrl = playback.playUrl;
+        audioAssetId = publishedAssetId || undefined;
+      } else {
+        failClosed = true;
+      }
+      confirmationPlayUrl = await resolveConfirmationPlayUrl(target.workspaceId);
     }
-    confirmationPlayUrl = await resolveConfirmationPlayUrl(target.workspaceId);
   }
 
   return {

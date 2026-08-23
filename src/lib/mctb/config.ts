@@ -120,7 +120,7 @@ export async function loadMctbWorkspaceConfig(
     const phoneId = await resolveMctbPhoneNumberIdForWorkspace({
       workspaceId,
       phoneNumberId: runtime.phoneNumberId,
-      transovoNumberE164: input?.transovoNumberE164,
+      transovoE164: input?.transovoNumberE164,
     });
     if (phoneId) {
       const pn = await prisma.phoneNumber.findFirst({
