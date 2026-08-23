@@ -56,6 +56,7 @@
     "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts",
     "test:campaign-catalog": "tsx scripts/test-campaign-catalog.ts",
     "test:nav-crosswalk": "tsx scripts/test-nav-crosswalk.ts",
+    "test:transovo-platform": "tsx scripts/test-transovo-platform.ts",
     "test:multi-product": "tsx scripts/test-multi-product-architecture.ts",
     "test:smart-routing-compiler": "tsx scripts/test-smart-routing-compiler.ts",
     "test:smart-routing-preprod": "tsx scripts/smart-routing-preprod-suite.ts",
