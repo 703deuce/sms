@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ProductCrossSellBanner } from "@/components/products/product-cross-sell-banner";
+import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 
 type Session = {
   id: string;
@@ -90,6 +92,7 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<typeof OUTCOME_FILTERS[number]["id"]>("all");
+  const [productFeatures, setProductFeatures] = useState<WorkspaceFeatureSnapshot | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/smart-routing/flows/${flowId}`)
@@ -109,6 +112,12 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
 
   useEffect(() => {
     load();
+    fetch("/api/platform/features")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) setProductFeatures(j.data as WorkspaceFeatureSnapshot);
+      })
+      .catch(() => undefined);
   }, [load]);
 
   useEffect(() => {
@@ -184,6 +193,17 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
   return (
     <SrPageShell className="max-w-[1400px]">
       <SrBackLink />
+
+      {productFeatures ? (
+        <ProductCrossSellBanner
+          feature="mctb"
+          features={productFeatures}
+          title="Recover unanswered routed calls with Missed Call Text Back"
+          description="When a routed call goes unanswered, automatically text the caller back and start a two-way conversation."
+          cta="Try Missed Call Text Back"
+          href="/settings/billing"
+        />
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>

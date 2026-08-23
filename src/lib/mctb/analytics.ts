@@ -47,6 +47,12 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
     where: { workspaceId, detectedAt: { gte: since }, status: "CUSTOMER_REPLIED" },
   });
 
+  const linkClicks = await prisma.linkClickEvent.count({
+    where: { workspaceId, createdAt: { gte: since } },
+  }).catch(() => 0);
+
+  const linksSent = textsSent;
+
   return {
     range,
     since: since.toISOString(),
@@ -58,5 +64,8 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
     replies: replied,
     replyRate: textsSent > 0 ? Math.round((replied / textsSent) * 100) : 0,
     deliveryRate: totalMissed > 0 ? Math.round((textsSent / totalMissed) * 100) : 0,
+    linkClicks,
+    linksSent,
+    linkClickRate: linksSent > 0 ? Math.round((linkClicks / linksSent) * 100) : 0,
   };
 }

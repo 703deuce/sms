@@ -78,7 +78,30 @@ const flowCheck = validateSmartRoutingFlowDestinations({
 assert.equal(flowCheck.valid, false);
 assert.ok(flowCheck.issues.length > 0);
 
-// Messaging gate regression stub — ensure outbound route module still exports resolver
+// Messaging gate regression (c4beb69d): stale messagingEnabled must not block when Telnyx approved
+import { isMessagingSendAuthorized } from "../src/lib/messaging/status";
+const staleTelnyxApproved = {
+  paused: false,
+  messagingEnabled: false,
+  overallStatus: "action_required",
+  phoneAttached: true,
+  phoneE164: "+15715551234",
+  messagingProvider: "telnyx",
+  brandStatus: "approved",
+  campaignStatus: "approved",
+  messagingProfileId: "mp_test",
+  campaignId: "camp_test",
+} as never;
+assert.equal(isMessagingSendAuthorized(staleTelnyxApproved), true);
+const blocked = {
+  paused: false,
+  messagingEnabled: false,
+  overallStatus: "action_required",
+  phoneAttached: false,
+  messagingProvider: "telnyx",
+} as never;
+assert.equal(isMessagingSendAuthorized(blocked), false);
+
 import * as outbound from "../src/lib/mctb/messaging/outbound-sms-route";
 assert.equal(typeof outbound.resolveMctbOutboundSmsRoute, "function");
 
