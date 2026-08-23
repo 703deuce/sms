@@ -12,7 +12,27 @@ export async function evaluateScheduleBranch(
   at = new Date(),
 ): Promise<ScheduleBranch> {
   const meta = scheduleJson ?? {};
+
+  const { loadSmartRoutingWorkspaceSettings } = await import("./workspace-settings");
+  const wsSettings = await loadSmartRoutingWorkspaceSettings(workspaceId);
+  const wsOverride = wsSettings?.scheduleOverrideJson as
+    | { scheduleOverride?: { mode?: string; expiresAt?: string } }
+    | null;
+  if (wsOverride?.scheduleOverride?.mode === "closed_now" && wsOverride.scheduleOverride.expiresAt) {
+    const exp = new Date(wsOverride.scheduleOverride.expiresAt);
+    if (exp > at) return "temporary_closure";
+  }
+
   if (meta.temporaryClosure === true) return "temporary_closure";
+
+  const override = meta.scheduleOverride as
+    | { mode?: string; expiresAt?: string }
+    | undefined;
+  if (override?.mode === "closed_now" && override.expiresAt) {
+    const exp = new Date(override.expiresAt);
+    if (exp > at) return "temporary_closure";
+  }
+
   if (Array.isArray(meta.holidayDates)) {
     const day = at.toISOString().slice(0, 10);
     if ((meta.holidayDates as string[]).includes(day)) return "holiday";

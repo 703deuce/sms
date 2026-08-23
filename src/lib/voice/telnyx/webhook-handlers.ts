@@ -337,6 +337,43 @@ export async function processVoiceWebhookEvent(input: {
     const callControlId = String(eventPayload.call_control_id || "");
     const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
     if (pn && callControlId) {
+      const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
+      const { shouldStartEmployeeAccess } = await import(
+        "@/lib/smart-routing/access-detection"
+      );
+      const employeeCheck = await shouldStartEmployeeAccess({
+        workspaceId: pn.workspaceId,
+        callerE164: from,
+        forwardedFrom,
+      });
+      if (employeeCheck.start && employeeCheck.caller) {
+        const { tryStartEmployeeAccess } = await import(
+          "@/lib/smart-routing/employee-access-runtime"
+        );
+        const ea = await tryStartEmployeeAccess({
+          workspaceId: pn.workspaceId,
+          callerE164: from,
+          calledE164: to,
+          callControlId,
+          authorizedCallerId: employeeCheck.caller.id,
+          authorizedCallerName: employeeCheck.caller.name,
+        }).catch((err) => {
+          console.error("[voice/webhook] tryStartEmployeeAccess", err);
+          return { started: false as const };
+        });
+        if (ea.started) {
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return {
+            ok: true,
+            kind: "smart_routing_employee_access",
+            accessSessionId: ea.accessSessionId,
+          };
+        }
+      }
+
       const { tryStartSmartRoutingInbound } = await import(
         "@/lib/smart-routing/webhook-handler"
       );
@@ -346,7 +383,7 @@ export async function processVoiceWebhookEvent(input: {
         fromE164: from,
         toE164: to,
         callControlId,
-        forwardedFrom: parseTelnyxForwardedFrom(eventPayload),
+        forwardedFrom,
       }).catch((err) => {
         console.error("[voice/webhook] tryStartSmartRoutingInbound", err);
         return { started: false as const };

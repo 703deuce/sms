@@ -149,8 +149,16 @@ export function SmartRoutingOverviewView({
         <div>
           <h1 className="text-[28px] font-bold tracking-tight text-[#111827]">Smart Routing</h1>
           <p className="mt-1 max-w-2xl text-[14px] text-[#6b7280]">
-            Add a professional call menu and routing to the business number you already use.
+            Keep your number. Keep your phones. Add professional call routing without changing
+            carriers or installing another calling app. Return business calls from your verified
+            caller ID.
           </p>
+          <Link
+            href="/smart-routing/setup"
+            className="mt-2 inline-block text-[13px] font-semibold text-[#6366f1] hover:underline"
+          >
+            Open Smart Routing setup →
+          </Link>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/numbers">

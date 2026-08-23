@@ -123,6 +123,19 @@ export async function speakOnCall(
   );
 }
 
+export async function speakOnCallRaw(
+  callControlId: string,
+  text: string,
+  clientStateBase64?: string,
+) {
+  return telnyxAction(callControlId, "speak", {
+    payload: text,
+    voice: "female",
+    language: "en-US",
+    ...(clientStateBase64 ? { client_state: clientStateBase64 } : {}),
+  });
+}
+
 export async function playbackOnCall(
   callControlId: string,
   audioUrl: string,
@@ -146,6 +159,7 @@ export async function gatherUsingSpeak(input: {
   validDigits: string;
   maxDigits?: number;
   timeoutMs?: number;
+  finishOnKey?: string;
   clientState: SmartRoutingClientState;
   sessionId?: string;
 }) {
@@ -160,10 +174,34 @@ export async function gatherUsingSpeak(input: {
       maximum_digits: input.maxDigits ?? 1,
       minimum_digits: 1,
       timeout_millis: input.timeoutMs ?? 10000,
+      ...(input.finishOnKey ? { terminating_digit: input.finishOnKey } : {}),
       client_state: encodeClientState(input.clientState),
     },
     input.sessionId,
   );
+}
+
+/** Gather with arbitrary base64 client_state (employee access, etc.). */
+export async function gatherUsingSpeakRaw(input: {
+  callControlId: string;
+  text: string;
+  validDigits: string;
+  maxDigits?: number;
+  timeoutMs?: number;
+  finishOnKey?: string;
+  clientStateBase64: string;
+}) {
+  return telnyxAction(input.callControlId, "gather_using_speak", {
+    payload: input.text,
+    voice: "female",
+    language: "en-US",
+    valid_digits: input.validDigits,
+    maximum_digits: input.maxDigits ?? 1,
+    minimum_digits: 1,
+    timeout_millis: input.timeoutMs ?? 10000,
+    ...(input.finishOnKey ? { terminating_digit: input.finishOnKey } : {}),
+    client_state: input.clientStateBase64,
+  });
 }
 
 export async function gatherUsingAudio(input: {

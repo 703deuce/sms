@@ -317,6 +317,10 @@ model Workspace {
   smartRoutingAudioAssets SmartRoutingAudioAsset[]
   smartRoutingCallSessions SmartRoutingCallSession[]
   smartRoutingSmsConsentEvents SmartRoutingSmsConsentEvent[]
+  smartRoutingWorkspaceSettings SmartRoutingWorkspaceSettings?
+  smartRoutingAuthorizedCallers SmartRoutingAuthorizedCaller[]
+  smartRoutingOutboundCalls SmartRoutingOutboundCall[]
+  smartRoutingAccessSessions SmartRoutingAccessSession[]
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
   callbackRequests CallbackRequest[]
@@ -3901,4 +3905,105 @@ model SmartRoutingSmsConsentEvent {
   @@index([workspaceId, consentedAt])
   @@index([callerNumber, consentedAt])
   @@map("smart_routing_sms_consent_events")
+}
+
+/// Workspace-level Smart Routing product settings (standalone onboarding).
+model SmartRoutingWorkspaceSettings {
+  id                    String    @id @default(cuid())
+  workspaceId           String    @unique
+  publicBusinessE164    String?
+  routingNumberE164     String?
+  assignedPhoneNumberId String?
+  routingMode             String    @default("front_door")
+  callerIdStatus          String    @default("not_verified")
+  callerIdProvider        String?   @default("telnyx")
+  callerIdProviderRef     String?
+  callerIdMethod          String?
+  callerIdVerifiedAt      DateTime?
+  callerIdFailedReason    String?
+  callerIdRequestedAt     DateTime?
+  outboundEnabled           Boolean   @default(true)
+  scheduleOverrideJson      Json?
+  setupCompletedAt          DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("smart_routing_workspace_settings")
+}
+
+/// Authorized team members who may place business callbacks via private routing DID.
+model SmartRoutingAuthorizedCaller {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  phoneE164         String
+  pinHash           String
+  active            Boolean   @default(true)
+  outboundEnabled   Boolean   @default(true)
+  userId            String?
+  failedPinAttempts Int       @default(0)
+  lockedUntil       DateTime?
+  lastAccessAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outboundCalls     SmartRoutingOutboundCall[]
+
+  @@unique([workspaceId, phoneE164])
+  @@index([workspaceId, active])
+  @@map("smart_routing_authorized_callers")
+}
+
+/// Live employee-access session (PIN + outbound menu on private routing DID).
+model SmartRoutingAccessSession {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  callControlId      String
+  callerNumber       String
+  calledNumber       String
+  authorizedCallerId String?
+  state              String   @default("pin_entry")
+  pinAttempts        Int      @default(0)
+  pendingDestination String?
+  contextType        String?
+  contextRefId       String?
+  customerCallControlId String?
+  stateJson          Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callControlId])
+  @@index([workspaceId, createdAt])
+  @@map("smart_routing_access_sessions")
+}
+
+/// Outbound business callback audit + usage (employee leg + customer leg).
+model SmartRoutingOutboundCall {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  authorizedCallerId    String?
+  employeePhoneE164     String
+  destinationE164       String
+  businessCallerIdE164  String?
+  contextType           String
+  contextRefId          String?
+  provider              String   @default("telnyx")
+  employeeCallControlId String?
+  customerCallControlId String?
+  employeeLegStartedAt  DateTime?
+  customerLegStartedAt  DateTime?
+  bridgedAt             DateTime?
+  endedAt               DateTime?
+  durationSeconds       Int?
+  result                String?
+  metadata              Json?
+  createdAt             DateTime @default(now())
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  authorizedCaller      SmartRoutingAuthorizedCaller? @relation(fields: [authorizedCallerId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([authorizedCallerId])
+  @@map("smart_routing_outbound_calls")
 }

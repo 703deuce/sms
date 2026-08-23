@@ -26,6 +26,9 @@ export async function GET(request: Request) {
       const fid = s.flowId || "unknown";
       byFlow[fid] = (byFlow[fid] || 0) + 1;
     }
+    const outbound = await prisma.smartRoutingOutboundCall.count({
+      where: { workspaceId: auth.workspaceId, createdAt: { gte: since } },
+    }).catch(() => 0);
     return NextResponse.json({
       data: {
         periodDays: days,
@@ -33,6 +36,7 @@ export async function GET(request: Request) {
         answered,
         noAnswer,
         answerRate: total > 0 ? Math.round((answered / total) * 100) : 0,
+        outboundBusinessCallbacks: outbound,
         byFlow,
       },
     });

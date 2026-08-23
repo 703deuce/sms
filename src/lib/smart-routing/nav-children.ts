@@ -3,6 +3,7 @@ export function buildSmartRoutingNavChildren(flowId?: string | null) {
   const fid = flowId ?? null;
   return [
     { label: "Overview", href: "/smart-routing" },
+    { label: "Setup", href: "/smart-routing/setup" },
     { label: "Create Flow", href: "/smart-routing/new" },
     {
       label: "Call Flow Builder",

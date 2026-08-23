@@ -2,6 +2,9 @@ import "server-only";
 
 import { decodeClientState, decodeAnySmartRoutingState } from "./telnyx-provider";
 import {
+  decodeEmployeeAccessState,
+} from "./employee-access-state";
+import {
   handleGatherResult,
   handleTransferResult,
   finalizeSession,
@@ -165,6 +168,52 @@ async function handleLegEvents(input: {
       ? input.eventPayload.client_state
       : undefined;
   const anyState = decodeAnySmartRoutingState(rawState);
+
+  const employeeState = decodeEmployeeAccessState(rawState);
+  if (employeeState) {
+    const callControlId = String(input.eventPayload.call_control_id ?? "");
+    if (
+      input.eventType === "call.gather.ended" ||
+      input.eventType === "call.dtmf.received"
+    ) {
+      const digits = String(
+        input.eventPayload.digits ?? input.eventPayload.digit ?? "",
+      ).trim();
+      const { handleEmployeeAccessGather } = await import("./employee-access-runtime");
+      const result = await handleEmployeeAccessGather({
+        callControlId,
+        digits,
+        accessSessionId: employeeState.accessSessionId,
+        workspaceId: employeeState.workspaceId,
+      });
+      return { handled: true as const, kind: "employee_access_gather", result };
+    }
+    if (input.eventType === "call.answered" && employeeState.outboundCallId) {
+      const prisma = getPrisma();
+      const access = await prisma.smartRoutingAccessSession.findUnique({
+        where: { id: employeeState.accessSessionId },
+      });
+      if (access?.callControlId) {
+        const { handleEmployeeAccessCustomerAnswered } = await import(
+          "./employee-access-runtime"
+        );
+        await handleEmployeeAccessCustomerAnswered({
+          employeeCallControlId: access.callControlId,
+          customerCallControlId: callControlId,
+          accessSessionId: employeeState.accessSessionId,
+          outboundCallId: employeeState.outboundCallId,
+        });
+        return { handled: true as const, kind: "employee_bridge" };
+      }
+    }
+    if (input.eventType === "call.hangup") {
+      const { finalizeOutboundCall } = await import("./outbound-bridge");
+      if (employeeState.outboundCallId) {
+        await finalizeOutboundCall(employeeState.outboundCallId, "completed");
+      }
+      return { handled: true as const, kind: "employee_hangup" };
+    }
+  }
 
   if (anyState?.kind === "smart_routing_record" && input.eventType === "call.answered") {
     const state = anyState as unknown as RecordByPhoneState;

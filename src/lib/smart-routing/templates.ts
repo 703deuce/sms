@@ -95,6 +95,37 @@ export const SMART_ROUTING_TEMPLATES: TemplateDef[] = [
     },
   },
   {
+    type: "call_gate",
+    title: "Call Gate",
+    subtitle: "Press 1 to continue — reduce robocalls before ringing your team",
+    bestFor: ["robocall reduction", "simple screening", "front-door gate"],
+    draftConfig: {
+      greeting: {
+        source: "elevenlabs",
+        text: "Thanks for calling. Press 1 to continue.",
+      },
+      menuOptions: [{ digit: "1", label: "Continue", action: "transfer", phoneNumber: "" }],
+      nodes: [
+        node("entry", "ENTRY"),
+        node("gate", "GATHER_DTMF", {
+          promptText: "Thanks for calling. Press 1 to continue.",
+          validDigits: "1",
+        }),
+        node("route", "TRANSFER_EXTERNAL", { label: "Main line" }),
+        node("vm", "VOICEMAIL"),
+        node("hangup", "HANGUP"),
+      ],
+      edges: [
+        edge("entry", "gate"),
+        edge("gate", "route", "digit", "1"),
+        edge("gate", "gate", "invalid"),
+        edge("gate", "vm", "timeout"),
+        edge("route", "vm", "no_answer"),
+        edge("vm", "hangup"),
+      ],
+    },
+  },
+  {
     type: "after_hours",
     title: "After-Hours Routing",
     subtitle: "For emergency service, press 1. Otherwise, leave us a message.",

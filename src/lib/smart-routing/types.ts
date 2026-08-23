@@ -3,6 +3,7 @@ export const SMART_ROUTING_FLOW_TYPES = [
   "missed_call_recovery",
   "after_hours",
   "department",
+  "call_gate",
   "custom",
 ] as const;
 

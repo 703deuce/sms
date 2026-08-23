@@ -214,6 +214,10 @@ const MODEL_TO_TABLE: Record<string, string> = {
   smartRoutingNodeExecution: "smart_routing_node_executions",
   smartRoutingCommandReceipt: "smart_routing_command_receipts",
   smartRoutingSmsConsentEvent: "smart_routing_sms_consent_events",
+  smartRoutingWorkspaceSettings: "smart_routing_workspace_settings",
+  smartRoutingAuthorizedCaller: "smart_routing_authorized_callers",
+  smartRoutingAccessSession: "smart_routing_access_sessions",
+  smartRoutingOutboundCall: "smart_routing_outbound_calls",
   productEntitlement: "ProductEntitlement",
 };
 
@@ -526,6 +530,23 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     callSession: { table: "smart_routing_call_sessions", fk: "callSessionId" },
   },
   smartRoutingSmsConsentEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  smartRoutingWorkspaceSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  smartRoutingAuthorizedCaller: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    outboundCalls: {
+      table: "smart_routing_outbound_calls",
+      fk: "authorizedCallerId",
+      pk: "id",
+    },
+  },
+  smartRoutingAccessSession: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  smartRoutingOutboundCall: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    authorizedCaller: {
+      table: "smart_routing_authorized_callers",
+      fk: "authorizedCallerId",
+    },
+  },
 };
 
 /** model → `_count` relation name → child table + FK for aggregate counts. */
