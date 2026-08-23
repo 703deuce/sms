@@ -3,7 +3,7 @@ import { checkCreditBalance } from "@/lib/billing/entitlements";
 import { deductCreditsForSend } from "@/lib/settings/billing";
 import { assertWithinWorkspaceLimits } from "@/lib/settings/limits";
 import { randomTrackingToken } from "@/lib/messaging/crypto";
-import { isMessagingReady } from "@/lib/messaging/status";
+import { isMessagingReady, isMessagingSendAuthorized } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -143,11 +143,11 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     );
   }
 
-  if (input.senderRoute && !isMessagingReady(activeReg)) {
+  if (input.senderRoute && !isMessagingSendAuthorized(activeReg)) {
     throw new Error("Outbound SMS sender is not messaging-ready for its provider regime.");
   }
 
-  if (input.demoBypass && !input.senderRoute && !isMessagingReady(activeReg) && !input.from) {
+  if (input.demoBypass && !input.senderRoute && !isMessagingSendAuthorized(activeReg) && !input.from) {
     throw new Error("Platform demo messaging is not configured.");
   }
 

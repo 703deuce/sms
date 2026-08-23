@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { isMessagingReady } from "@/lib/messaging/status";
+import { isMessagingSendAuthorized } from "@/lib/messaging/status";
 import type { MissedCallTextConfigRecord } from "./types";
 
 export type MctbSmsSender = {
@@ -36,7 +36,7 @@ export async function resolveMctbSmsSender(input: {
   if (explicit) return explicit;
 
   const reg = await getRegistrationByWorkspace(input.workspaceId);
-  if (reg?.phoneE164 && isMessagingReady(reg)) {
+  if (reg?.phoneE164 && isMessagingSendAuthorized(reg)) {
     const pn = await prisma.phoneNumber.findFirst({
       where: { workspaceId: input.workspaceId, e164: reg.phoneE164 },
       select: { id: true, e164: true },

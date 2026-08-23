@@ -2,6 +2,10 @@ import type { MessagingRegistration, MessagingStepStatus } from "@/lib/domain";
 import type { RegistrationProgressStep } from "./types";
 import { getMessagingProviderName } from "./provider-config";
 import { looksLikeTwilioMessagingServiceSid } from "./provider-ids";
+import {
+  isApprovedBrandStatus,
+  isApprovedCampaignStatus,
+} from "./telnyx/status-map";
 
 export function registrationProviderName(
   reg: MessagingRegistration | null | undefined,
@@ -41,6 +45,41 @@ export function isMessagingReady(reg: MessagingRegistration | null | undefined):
   if (!reg.messagingServiceSid) return false;
   if (reg.subaccountSid?.startsWith("PENDING:")) return false;
   return true;
+}
+
+/** Telnyx brand/campaign approved + number attached — ignores stale UI flags. */
+export function isTelnyxRegistrationProviderReady(
+  reg: MessagingRegistration | null | undefined,
+): boolean {
+  if (!reg || reg.paused) return false;
+  if (registrationProviderName(reg) !== "telnyx") return false;
+  if (!reg.phoneAttached || !reg.phoneE164) return false;
+  if (reg.phoneSid?.startsWith("PENDING:")) return false;
+
+  const profileId =
+    (reg as MessagingRegistration & { messagingProfileId?: string | null }).messagingProfileId ||
+    (looksLikeTwilioMessagingServiceSid(reg.messagingServiceSid)
+      ? null
+      : reg.messagingServiceSid);
+  const campaignId =
+    (reg as MessagingRegistration & { campaignId?: string | null }).campaignId ||
+    reg.a2pCampaignSid;
+  if (!profileId || !campaignId) return false;
+
+  const brandOk =
+    reg.brandStatus === "approved" ||
+    isApprovedBrandStatus(String(reg.brandStatusRaw || ""));
+  const campaignOk =
+    reg.campaignStatus === "approved" ||
+    isApprovedCampaignStatus(String(reg.campaignStatusRaw || ""));
+  return brandOk && campaignOk;
+}
+
+/** Outbound SMS allowed when registration row is ready OR Telnyx provider state is approved. */
+export function isMessagingSendAuthorized(
+  reg: MessagingRegistration | null | undefined,
+): boolean {
+  return isMessagingReady(reg) || isTelnyxRegistrationProviderReady(reg);
 }
 
 export function buildProgressSteps(reg: MessagingRegistration): RegistrationProgressStep[] {

@@ -10,7 +10,7 @@
  */
 import { getPrisma } from "@/lib/db";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { isMessagingReady, registrationProviderName } from "@/lib/messaging/status";
+import { isMessagingReady, isMessagingSendAuthorized, registrationProviderName } from "@/lib/messaging/status";
 import {
   isPhoneMessagingApproved,
   isTfvApproved,
@@ -100,8 +100,9 @@ export async function isPhoneAuthorizedForOutboundSms(phoneNumberId: string): Pr
     return { allowed: true, regime: "A2P_10DLC", provider: provider || "telnyx" };
   }
   if (isPlatformDemoPhoneRecord({ e164: pn.e164, settingsJson: pn.settingsJson })) {
+    const ownerReg = await getRegistrationByWorkspace(pn.workspaceId);
     return {
-      allowed: isMessagingReady(reg),
+      allowed: isMessagingSendAuthorized(ownerReg),
       regime: "A2P_10DLC",
       provider: provider || "telnyx",
     };
@@ -126,7 +127,7 @@ export async function resolvePlatformTelnyxSmsRoute(input: {
   if (!ownerId || !sender) return null;
 
   const reg = await getRegistrationByWorkspace(ownerId);
-  if (!isMessagingReady(reg)) return null;
+  if (!isMessagingSendAuthorized(reg)) return null;
   if (registrationProviderName(reg) !== "telnyx") return null;
 
   const auth = await isPhoneAuthorizedForOutboundSms(sender.phoneNumberId);
