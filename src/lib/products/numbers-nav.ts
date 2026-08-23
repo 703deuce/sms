@@ -2,6 +2,7 @@ import {
   Activity,
   ArrowRightLeft,
   BarChart3,
+  GitBranch,
   Hash,
   HelpCircle,
   LayoutDashboard,
@@ -11,11 +12,16 @@ import {
   Voicemail,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
-import { isPortInHiddenAtLaunch } from "@/lib/workspace/platform-launch";
+import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
+import { isPortInHiddenAtLaunch, isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
+
+export type NumbersNavOptions = {
+  smartRoutingFlowId?: string | null;
+};
 
 /** Transovo Numbers — standalone product sidebar. */
-export function buildNumbersNav(): NavItem[] {
-  return [
+export function buildNumbersNav(options?: NumbersNavOptions): NavItem[] {
+  const items: NavItem[] = [
     {
       label: "Dashboard",
       href: "/personal",
@@ -32,6 +38,18 @@ export function buildNumbersNav(): NavItem[] {
     },
     { label: "Voicemail", href: "/personal/voicemail", icon: Voicemail },
     { label: "Call Activity", href: "/personal/activity", icon: Activity },
+  ];
+
+  if (isSmartRoutingInNav()) {
+    items.splice(6, 0, {
+      label: "Smart Routing",
+      href: "/smart-routing",
+      icon: GitBranch,
+      children: buildSmartRoutingNavChildren(options?.smartRoutingFlowId ?? null),
+    });
+  }
+
+  items.push(
     {
       label: "Port Out",
       href: isPortInHiddenAtLaunch()
@@ -48,7 +66,9 @@ export function buildNumbersNav(): NavItem[] {
       sectionLabel: "Account",
     },
     { label: "Help", href: "/contact", icon: HelpCircle },
-  ];
+  );
+
+  return items;
 }
 
 export function getNumbersPageTitle(pathname: string): string {

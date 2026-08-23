@@ -4,6 +4,7 @@ import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
 import {
   isSmartRoutingSectionPathExport,
+  smartRoutingFlowIdFromPath,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
@@ -287,7 +288,11 @@ export function Sidebar({
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
     if (isLauncher) return [];
-    if (currentProduct === "numbers") return buildNumbersNav();
+    if (currentProduct === "numbers") {
+      return buildNumbersNav({
+        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
+      });
+    }
     if (currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) {
       return buildSmsNav({ inboxBadge });
     }
@@ -295,11 +300,13 @@ export function Sidebar({
       return buildVoiceNav({
         primaryVoiceAgentId: primaryVoiceAgentId ?? null,
         showTryIt,
+        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
     }
     return buildVoiceNav({
       primaryVoiceAgentId: primaryVoiceAgentId ?? null,
       showTryIt,
+      smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
     });
   }, [
     primaryVoiceAgentId,

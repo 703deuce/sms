@@ -4,6 +4,7 @@ import {
   isSmartRoutingSectionPath,
   smartRoutingFlowIdFromPath,
 } from "@/lib/smart-routing/display";
+import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 
 export type SolutionNavInstance = {
   id: string;
@@ -38,27 +39,8 @@ export function isSmartRoutingSectionPathExport(pathname: string): boolean {
   return isSmartRoutingSectionPath(pathname);
 }
 
-/** Legacy smart-routing nav — hidden from primary launch sidebar. */
-export function buildSmartRoutingNavChildren(flowId?: string | null) {
-  const fid = flowId ?? null;
-  return [
-    { label: "Overview", href: "/smart-routing" },
-    { label: "Create Flow", href: "/smart-routing/new" },
-    {
-      label: "Call Flow Builder",
-      href: fid ? `/smart-routing/${fid}` : "/smart-routing",
-    },
-    { label: "Audio", href: "/smart-routing/audio" },
-    {
-      label: "Test & Activate",
-      href: fid ? `/smart-routing/${fid}/test` : "/smart-routing",
-    },
-    {
-      label: "Activity",
-      href: fid ? `/smart-routing/${fid}/activity` : "/smart-routing",
-    },
-  ];
-}
+/** Re-export for sidebar and layout consumers. */
+export { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 
 /** Receptionist submenu under the primary launch sidebar. */
 export function buildReceptionistNavChildren(agentId?: string | null) {
@@ -88,7 +70,10 @@ export function buildReceptionistNavChildren(agentId?: string | null) {
 
 /** Primary AI Receptionist product nav. */
 export function buildProductNav(options: SolutionsNavOptions = {}): NavItem[] {
-  return buildVoiceNav({ primaryVoiceAgentId: options.primaryVoiceAgentId ?? null });
+  return buildVoiceNav({
+    primaryVoiceAgentId: options.primaryVoiceAgentId ?? null,
+    smartRoutingFlowId: options.primarySmartRoutingFlowId ?? null,
+  });
 }
 
 /** Launch sidebar — simplified product nav. */

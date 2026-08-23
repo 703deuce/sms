@@ -11,7 +11,7 @@ import {
   Voicemail,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
-import { buildSmartRoutingNavChildren } from "@/lib/solutions-nav";
+import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
 import { isPortInHiddenAtLaunch, isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 

@@ -84,13 +84,16 @@ assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
 assert.ok(solutionsHrefs.has("/voice/analytics"), "Analytics required");
 assert.ok(solutionsHrefs.has("/settings/business"), "Settings required");
 assert.ok(!solutionsHrefs.has("/automations"), "Automations hidden from launch nav");
-assert.ok(!solutionsHrefs.has("/smart-routing"), "Smart Routing hidden from launch nav");
+assert.ok(solutionsHrefs.has("/smart-routing"), "Smart Routing in launch nav");
+assert.ok(solutionsHrefs.has("/smart-routing/audio"), "Smart Routing audio in launch nav");
+assert.ok(solutionsHrefs.has("/smart-routing/new"), "Smart Routing create flow in launch nav");
 
 const expectedTopLevel = [
-  "Dashboard",
+  "Overview",
   "Conversations",
   "Missed Calls",
   "Setup",
+  "Smart Routing",
   "Numbers",
   "Messaging Compliance",
   "Analytics",

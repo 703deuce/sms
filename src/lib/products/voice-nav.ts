@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  GitBranch,
   Hash,
   LayoutDashboard,
   MessageSquare,
@@ -11,10 +12,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
+import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
+import { isSmartRoutingInNav } from "@/lib/workspace/platform-launch";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
   showTryIt?: boolean;
+  smartRoutingFlowId?: string | null;
 };
 
 /**
@@ -56,6 +61,15 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     },
   );
 
+  if (isSmartRoutingInNav()) {
+    main.push({
+      label: "Smart Routing",
+      href: "/smart-routing",
+      icon: GitBranch,
+      children: buildSmartRoutingNavChildren(options.smartRoutingFlowId ?? null),
+    });
+  }
+
   return [
     ...main,
     {
@@ -86,6 +100,11 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/conversations")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/setup")) return "Setup";
+  if (isSmartRoutingSectionPath(pathname)) {
+    if (pathname === "/smart-routing/new") return "Create Flow";
+    if (pathname === "/smart-routing/audio") return "Audio Library";
+    return "";
+  }
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/voice/analytics")) return "Analytics";
   if (pathname.startsWith("/compliance")) return "Messaging Compliance";
@@ -105,5 +124,8 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     { label: "Missed", href: "/voice/missed-calls" },
     { label: "Setup", href: "/voice/setup" },
   );
+  if (isSmartRoutingInNav()) {
+    items.push({ label: "Routing", href: "/smart-routing" });
+  }
   return items;
 }
