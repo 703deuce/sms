@@ -26,6 +26,10 @@ export async function GET() {
     const callerId = await getCallerIdVerificationStatus(auth.workspaceId);
     const authorizedCallers = await listAuthorizedCallers(auth.workspaceId);
     const prisma = getPrisma();
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: auth.workspaceId },
+      select: { name: true },
+    });
     const phoneNumbers = await prisma.phoneNumber.findMany({
       where: { workspaceId: auth.workspaceId },
       select: { id: true, e164: true, friendlyName: true },
@@ -136,6 +140,7 @@ export async function GET() {
 
     return NextResponse.json({
       data: {
+        workspaceName: workspace?.name ?? null,
         settings,
         callerId,
         authorizedCallers,

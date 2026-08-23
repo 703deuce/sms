@@ -69,6 +69,8 @@ export function InboxView({
   const [alsoViewing, setAlsoViewing] = useState<Array<{ userId: string; userName: string }>>([]);
   const [translations, setTranslations] = useState<Record<string, { text: string; mode: string }>>({});
   const [translatingId, setTranslatingId] = useState<string | null>(null);
+  const [callbackMarking, setCallbackMarking] = useState(false);
+  const [callbackMarkMsg, setCallbackMarkMsg] = useState<string | null>(null);
   const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const filterDefs = useMemo(() => {
@@ -250,6 +252,32 @@ export function InboxView({
     const json = (await res.json()) as { data?: Conversation };
     if (json.data) {
       setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
+    }
+  }
+
+  async function markNeedsCallback() {
+    if (!selected?.phone) return;
+    setCallbackMarking(true);
+    setCallbackMarkMsg(null);
+    try {
+      const res = await fetch("/api/callback-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callerE164: selected.phone,
+          sourceRoute: "MCTB inbox",
+          reason: "Marked needs callback from conversation",
+          metadata: { conversationId: selected.id },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setCallbackMarkMsg(json.error || "Callback Requests add-on required");
+        return;
+      }
+      setCallbackMarkMsg("Callback request created");
+    } finally {
+      setCallbackMarking(false);
     }
   }
 
@@ -485,11 +513,25 @@ export function InboxView({
                   <option>Snoozed</option>
                   <option>Spam</option>
                 </select>
+                <button
+                  type="button"
+                  className="h-9 rounded-[10px] border border-border px-2 text-[11px] font-semibold hover:bg-muted disabled:opacity-50"
+                  disabled={callbackMarking}
+                  onClick={() => void markNeedsCallback()}
+                >
+                  {callbackMarking ? "Saving…" : "Needs callback"}
+                </button>
                 <button type="button" className="rounded-[10px] border border-border p-2 hover:bg-muted">
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
               </div>
             </div>
+
+            {callbackMarkMsg ? (
+              <div className="border-b border-border bg-muted/40 px-4 py-2 text-[12px] text-muted-foreground">
+                {callbackMarkMsg}
+              </div>
+            ) : null}
 
             {alsoViewing.length > 0 ? (
               <div className="border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-[12px] text-indigo-900">

@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { buildVoiceNav } from "../src/lib/products/voice-nav";
+import { buildSmartRoutingNavChildren } from "../src/lib/smart-routing/nav-children";
 import {
   defaultFeaturesForWorkspaceType,
   activeTransovoFeatures,
@@ -13,8 +14,13 @@ import { renderMctbMessageTemplate, resolveMctbMessageTemplate } from "../src/li
 import { DEFAULT_MCTB_CONFIG } from "../src/lib/agents/missed-call-text-back/types";
 
 const businessDefaults = defaultFeaturesForWorkspaceType("BUSINESS");
-assert.ok(businessDefaults.some((d) => d.feature === "mctb"));
-assert.ok(businessDefaults.some((d) => d.feature === "smart_routing"));
+assert.ok(businessDefaults.some((d) => d.feature === "mctb" && d.status === "inactive"));
+assert.ok(businessDefaults.some((d) => d.feature === "smart_routing" && d.status === "inactive"));
+
+const srNav = buildSmartRoutingNavChildren();
+assert.ok(srNav.some((i) => i.label === "Business Call Back"));
+assert.ok(srNav.some((i) => i.href === "/smart-routing/analytics"));
+assert.ok(!srNav.some((i) => i.label === "Routing Analytics"));
 
 const nav = buildVoiceNav({
   productFeatures: {
@@ -32,6 +38,7 @@ assert.ok(nav.some((i) => i.sectionLabel === "Smart Routing"));
 assert.equal(nav.find((i) => i.label === "Conversations")?.href, "/inbox");
 assert.ok(labels.includes("Visual Voicemail"));
 assert.ok(labels.includes("Callback Requests"));
+assert.ok(labels.includes("Business Call Back"));
 
 const srOnly = buildVoiceNav({
   productFeatures: {
@@ -43,7 +50,7 @@ const srOnly = buildVoiceNav({
 });
 assert.ok(!srOnly.some((i) => i.label === "Missed Calls"));
 assert.ok(srOnly.some((i) => i.href === "/smart-routing" && i.label === "Overview"));
-assert.ok(srOnly.some((i) => i.label === "Routing Analytics"));
+assert.ok(srOnly.some((i) => i.label === "Analytics" && i.href === "/smart-routing/analytics"));
 
 assert.ok(PLATFORM_BILLING_CATALOG.length >= 5);
 
@@ -64,5 +71,8 @@ assert.equal(rendered, "Hi Sam");
 
 import { SMART_ROUTING_NODE_TYPES } from "../src/lib/smart-routing/types";
 assert.ok(SMART_ROUTING_NODE_TYPES.includes("CALLBACK"));
+
+import { showSrBusinessCallBack } from "../src/lib/products/transovo-launch";
+assert.equal(showSrBusinessCallBack(), true);
 
 console.log("test-transovo-platform: ok");

@@ -1,5 +1,6 @@
 "use client";
 
+import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import {
   SrBackLink,
   SrOutlineButton,
@@ -394,6 +395,13 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
                   <dd>{fmtDurationMmSs(durationSec)}</dd>
                 </div>
               </dl>
+              <div className="mt-4 space-y-3">
+                <BusinessCallBackButton
+                  destinationE164={selected.callerNumber}
+                  contextType="missed_call"
+                  contextRefId={selected.id}
+                />
+              </div>
               <Link
                 href={`/voice/calls`}
                 className="mt-4 block text-[12px] font-semibold text-[#6366f1] hover:underline"

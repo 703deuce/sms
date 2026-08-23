@@ -2,7 +2,7 @@ export type EmployeeAccessState = {
   kind: "smart_routing_employee";
   accessSessionId: string;
   workspaceId: string;
-  awaiting?: "pin" | "menu" | "confirm" | "manual_entry";
+  awaiting?: "pin" | "menu" | "confirm" | "manual_entry" | "dashboard_connect";
   outboundCallId?: string;
 };
 

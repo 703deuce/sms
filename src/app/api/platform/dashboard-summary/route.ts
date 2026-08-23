@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { isActiveEntitlement } from "@/lib/products/types";
+import { getRoutingAnalyticsSummary } from "@/lib/smart-routing/ai/analytics";
 
 export async function GET() {
   try {
@@ -23,7 +24,6 @@ export async function GET() {
       sentToday,
       repliedToday,
       missed30d,
-      srSessions30d,
       voicemailsUnread,
       callbacksOpen,
       linkClicks30d,
@@ -40,9 +40,6 @@ export async function GET() {
       }),
       prisma.missedCallEvent.count({
         where: { workspaceId, detectedAt: { gte: since30 } },
-      }),
-      prisma.smartRoutingCallSession.count({
-        where: { workspaceId, startedAt: { gte: since30 } },
       }),
       prisma.voicemailMessage.count({
         where: { workspaceId, isRead: false },
@@ -75,12 +72,22 @@ export async function GET() {
     }
 
     if (isActiveEntitlement(features.smart_routing)) {
+      const srAnalytics = await getRoutingAnalyticsSummary(workspaceId, 30);
+      const topMenu =
+        Object.entries(srAnalytics.byMenuSelection ?? {})
+          .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
       cards.push({
         product: "smart_routing",
         title: "Smart Routing",
         href: "/smart-routing",
         metrics: [
-          { label: "Calls routed (30d)", value: srSessions30d },
+          { label: "Calls routed (30d)", value: srAnalytics.callsRouted },
+          { label: "Answered", value: srAnalytics.answered },
+          { label: "Unanswered", value: srAnalytics.noAnswer },
+          { label: "MCTB fallback (30d)", value: srAnalytics.mctbRecoveryCount ?? 0 },
+          ...(topMenu
+            ? [{ label: "Top menu choice", value: `Press ${topMenu}` }]
+            : []),
         ],
       });
     }
@@ -89,7 +96,7 @@ export async function GET() {
       cards.push({
         product: "visual_voicemail",
         title: "Visual Voicemail",
-        href: "/personal/voicemail",
+        href: "/voice/voicemail",
         metrics: [{ label: "Unread", value: voicemailsUnread }],
       });
     }

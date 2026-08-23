@@ -188,7 +188,25 @@ async function handleLegEvents(input: {
       });
       return { handled: true as const, kind: "employee_access_gather", result };
     }
-    if (input.eventType === "call.answered" && employeeState.outboundCallId) {
+    if (
+      input.eventType === "call.answered" &&
+      employeeState.awaiting === "dashboard_connect" &&
+      employeeState.outboundCallId
+    ) {
+      const { handleDashboardEmployeeAnswered } = await import("./employee-access-runtime");
+      await handleDashboardEmployeeAnswered({
+        callControlId,
+        accessSessionId: employeeState.accessSessionId,
+        workspaceId: employeeState.workspaceId,
+        outboundCallId: employeeState.outboundCallId,
+      });
+      return { handled: true as const, kind: "dashboard_employee_answered" };
+    }
+    if (
+      input.eventType === "call.answered" &&
+      employeeState.outboundCallId &&
+      employeeState.awaiting !== "dashboard_connect"
+    ) {
       const prisma = getPrisma();
       const access = await prisma.smartRoutingAccessSession.findUnique({
         where: { id: employeeState.accessSessionId },

@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { DbError } from "@/lib/supabase/prisma-compat";
 import type { ProductAccessStatus } from "@/lib/products/types";
 import { isActiveEntitlement } from "@/lib/products/types";
+import { transovoEntitlementGrandfatherEnv } from "@/lib/products/transovo-launch";
 
 /** Transovo sellable product features (workspace-scoped). */
 export type TransovoProductFeature =
@@ -54,7 +55,7 @@ function prismaStatusToApp(status: string): ProductAccessStatus {
   return "inactive";
 }
 
-/** Default features for new workspaces — preserves current launch behavior. */
+/** Default features for newly created workspace rows — commercial purchase/trial driven. */
 export function defaultFeaturesForWorkspaceType(
   workspaceType: string,
 ): Array<{ feature: TransovoProductFeature; status: ProductAccessStatus }> {
@@ -65,10 +66,60 @@ export function defaultFeaturesForWorkspaceType(
     ];
   }
   return [
-    { feature: "mctb", status: "active" },
-    { feature: "smart_routing", status: "active" },
-    { feature: "visual_voicemail", status: "trial" },
+    { feature: "mctb", status: "inactive" },
+    { feature: "smart_routing", status: "inactive" },
+    { feature: "visual_voicemail", status: "inactive" },
+    { feature: "callback_requests", status: "inactive" },
   ];
+}
+
+async function resolveGrandfatherFeatureStatus(
+  workspaceId: string,
+  feature: TransovoProductFeature,
+  hasVoice: boolean,
+): Promise<ProductAccessStatus> {
+  if (transovoEntitlementGrandfatherEnv()) return "active";
+
+  const prisma = getPrisma();
+
+  if (feature === "mctb") {
+    if (hasVoice) return "active";
+    const [eventCount, config] = await Promise.all([
+      prisma.missedCallEvent.count({ where: { workspaceId } }),
+      prisma.missedCallTextConfig.findUnique({
+        where: { workspaceId },
+        select: { enabled: true },
+      }),
+    ]);
+    if (eventCount > 0 || config?.enabled) return "active";
+    return "inactive";
+  }
+
+  if (feature === "smart_routing") {
+    const flowCount = await prisma.smartRoutingCallFlow.count({
+      where: { workspaceId },
+    });
+    if (flowCount > 0) return "active";
+    return "inactive";
+  }
+
+  if (feature === "visual_voicemail") {
+    const vmCount = await prisma.voicemailMessage.count({
+      where: { workspaceId },
+    });
+    if (vmCount > 0) return "trial";
+    return "inactive";
+  }
+
+  if (feature === "callback_requests") {
+    const cbCount = await prisma.callbackRequest.count({
+      where: { workspaceId },
+    });
+    if (cbCount > 0) return "active";
+    return "inactive";
+  }
+
+  return "inactive";
 }
 
 function isCompatRepoMissing(err: unknown): boolean {
@@ -104,12 +155,22 @@ export async function ensureWorkspaceProductFeatures(workspaceId: string): Promi
     for (const def of defaults) {
       const prismaKey = PRISMA_FEATURE_MAP[def.feature];
       if (existing.has(prismaKey)) continue;
+
+      let status = def.status;
+      if ((workspace.type ?? "BUSINESS") === "BUSINESS") {
+        status = await resolveGrandfatherFeatureStatus(
+          workspaceId,
+          def.feature,
+          hasVoice,
+        );
+      }
+
       await prisma.workspaceProductFeature.create({
         data: {
           workspaceId,
           featureKey: prismaKey,
-          status: def.status.toUpperCase() as "ACTIVE" | "TRIAL" | "INACTIVE",
-          activatedAt: def.status !== "inactive" ? new Date() : null,
+          status: status.toUpperCase() as "ACTIVE" | "TRIAL" | "INACTIVE",
+          activatedAt: status !== "inactive" ? new Date() : null,
         },
       });
     }
@@ -142,10 +203,7 @@ export async function getWorkspaceProductFeatures(
   const prisma = getPrisma();
   const repo = prisma.workspaceProductFeature as { findMany?: unknown } | undefined;
   if (!repo?.findMany) {
-    const fallback = defaultSnapshot();
-    fallback.mctb = "active";
-    fallback.smart_routing = "active";
-    return fallback;
+    return defaultSnapshot();
   }
   try {
     const rows = await prisma.workspaceProductFeature.findMany({
@@ -168,10 +226,7 @@ export async function getWorkspaceProductFeatures(
     return snap;
   } catch (err) {
     if (isSchemaUnavailable(err) || isCompatRepoMissing(err)) {
-      const fallback = defaultSnapshot();
-      fallback.mctb = "active";
-      fallback.smart_routing = "active";
-      return fallback;
+      return defaultSnapshot();
     }
     throw err;
   }

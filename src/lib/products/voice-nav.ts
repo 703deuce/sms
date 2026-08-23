@@ -24,6 +24,7 @@ import {
   type TransovoProductFeature,
 } from "@/lib/products/feature-entitlements";
 import { isActiveEntitlement } from "@/lib/products/types";
+import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
@@ -41,20 +42,26 @@ function featureActive(
   return isActiveEntitlement(features[key]);
 }
 
-/** Flat Smart Routing links for the voice sidebar (all pages visible under the section). */
+const SR_NAV_ICONS: Record<string, NavItem["icon"]> = {
+  "/smart-routing": LayoutDashboard,
+  "/smart-routing/ai": Sparkles,
+  "/smart-routing/flows": GitBranch,
+  "/smart-routing/destinations": Users,
+  "/smart-routing/hours": Clock,
+  "/smart-routing/callback": PhoneForwarded,
+  "/smart-routing/audio": Music,
+  "/smart-routing/activity": Activity,
+  "/smart-routing/analytics": BarChart3,
+  "/smart-routing/setup": SlidersHorizontal,
+};
+
+/** Flat Smart Routing links for the voice sidebar (launch-simplified by default). */
 function buildSmartRoutingNavItems(firstSectionLabel?: string): NavItem[] {
-  const pages: NavItem[] = [
-    { label: "Overview", href: "/smart-routing", icon: LayoutDashboard },
-    { label: "AI Routing Assistant", href: "/smart-routing/ai", icon: Sparkles },
-    { label: "Call Flows", href: "/smart-routing/flows", icon: GitBranch },
-    { label: "People & Destinations", href: "/smart-routing/destinations", icon: Users },
-    { label: "Business Hours", href: "/smart-routing/hours", icon: Clock },
-    { label: "Business Callback", href: "/smart-routing/callback", icon: PhoneForwarded },
-    { label: "Audio", href: "/smart-routing/audio", icon: Music },
-    { label: "Activity", href: "/smart-routing/activity", icon: Activity },
-    { label: "Setup", href: "/smart-routing/setup", icon: SlidersHorizontal },
-  ];
-  if (firstSectionLabel) {
+  const pages: NavItem[] = buildSmartRoutingNavChildren().map((item) => ({
+    ...item,
+    icon: SR_NAV_ICONS[item.href] ?? LayoutDashboard,
+  }));
+  if (firstSectionLabel && pages[0]) {
     pages[0] = { ...pages[0], sectionLabel: firstSectionLabel };
   }
   return pages;
@@ -66,8 +73,8 @@ function buildSmartRoutingNavItems(firstSectionLabel?: string): NavItem[] {
  */
 export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
-  const hasMctb = featureActive(features, "mctb", true);
-  const hasSr = featureActive(features, "smart_routing", true);
+  const hasMctb = featureActive(features, "mctb", false);
+  const hasSr = featureActive(features, "smart_routing", false);
   const hasVm = featureActive(features, "visual_voicemail", false);
   const hasCallback = featureActive(features, "callback_requests", false);
 
@@ -109,16 +116,11 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   if (hasSr) {
     items.push(...buildSmartRoutingNavItems("Smart Routing"));
-    items.push({
-      label: "Routing Analytics",
-      href: "/smart-routing/analytics",
-      icon: BarChart3,
-    });
   }
 
   items.push({
     label: "Visual Voicemail",
-    href: hasVm ? "/personal/voicemail" : "/settings/billing?upgrade=visual_voicemail",
+    href: hasVm ? "/voice/voicemail" : "/settings/billing?upgrade=visual_voicemail",
     icon: Voicemail,
     sectionLabel: "Add-ons",
     badge: hasVm ? undefined : "Add-on",
@@ -165,20 +167,22 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/setup")) return "Setup";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
-  if (pathname === "/smart-routing/analytics") return "Routing Analytics";
+  if (pathname === "/smart-routing/analytics") return "Analytics";
   if (isSmartRoutingSectionPath(pathname)) {
     if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
     if (pathname === "/smart-routing/flows") return "Call Flows";
     if (pathname === "/smart-routing/destinations") return "People & Destinations";
     if (pathname === "/smart-routing/hours") return "Business Hours";
-    if (pathname === "/smart-routing/callback") return "Business Callback";
+    if (pathname === "/smart-routing/callback") return "Business Call Back";
     if (pathname === "/smart-routing/activity") return "Activity";
     if (pathname === "/smart-routing/new") return "Create Flow";
     if (pathname === "/smart-routing/audio") return "Audio Library";
     if (pathname === "/smart-routing/setup") return "Smart Routing Setup";
     return "";
   }
-  if (pathname.startsWith("/personal/voicemail")) return "Visual Voicemail";
+  if (pathname.startsWith("/voice/voicemail") || pathname.startsWith("/personal/voicemail")) {
+    return "Visual Voicemail";
+  }
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/voice/analytics")) return "Analytics";
   if (pathname.startsWith("/compliance")) return "Messaging Compliance";
@@ -190,8 +194,8 @@ export function getVoicePageTitle(pathname: string): string {
 
 export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const features = options.productFeatures;
-  const hasMctb = featureActive(features, "mctb", true);
-  const hasSr = featureActive(features, "smart_routing", true);
+  const hasMctb = featureActive(features, "mctb", false);
+  const hasSr = featureActive(features, "smart_routing", false);
   const items = [{ label: "Dashboard", href: "/dashboard" }];
   if (options.showTryIt && hasMctb) {
     items.push({ label: "Try It", href: "/voice/try-it" });
@@ -205,8 +209,8 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   }
   if (hasSr) {
     items.push({ label: "Routing", href: "/smart-routing" });
-    items.push({ label: "SR Analytics", href: "/smart-routing/analytics" });
+    items.push({ label: "Analytics", href: "/smart-routing/analytics" });
   }
-  items.push({ label: "Voicemail", href: "/personal/voicemail" });
+  items.push({ label: "Voicemail", href: "/voice/voicemail" });
   return items;
 }

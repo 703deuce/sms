@@ -26,6 +26,7 @@ import type { DraftConfig } from "@/lib/smart-routing/types";
 import {
   DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import { showAiReceptionistNode } from "@/lib/products/transovo-launch";
 import { cn } from "@/lib/utils";
 import {
   Bot,
@@ -218,11 +219,13 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
       promptText: smsPrompt,
       consentDigit: "1",
     });
-    upsertNode("AI_RECEPTIONIST", "ai_route", {
-      agentName: aiAgentName,
-      intentHint: aiIntent,
-      fallbackLabel: aiFallback,
-    });
+    if (showAiReceptionistNode()) {
+      upsertNode("AI_RECEPTIONIST", "ai_route", {
+        agentName: aiAgentName,
+        intentHint: aiIntent,
+        fallbackLabel: aiFallback,
+      });
+    }
 
     const menuNode = draftConfig.nodes?.find((n) => n.type === "MENU");
     if (menuNode && draftConfig.edges && draftConfig.nodes) {
@@ -834,6 +837,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
               </div>
             </SrSectionCard>
 
+            {showAiReceptionistNode() ? (
             <SrSectionCard number={11} title="AI Receptionist Routing">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -852,6 +856,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                 <SrInput value={aiFallback} onChange={(e) => setAiFallback(e.target.value)} />
               </div>
             </SrSectionCard>
+            ) : null}
           </div>
 
           <div className="space-y-4">

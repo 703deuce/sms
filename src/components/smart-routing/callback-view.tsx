@@ -77,8 +77,8 @@ export function SmartRoutingCallbackView() {
 
   return (
     <SrPageShell
-      title="Business Callback"
-      description="Verified company caller ID, a separate Callback Number, and authorized employees with PINs — return customer calls without an app."
+      title="Business Call Back"
+      description="Call customers back from your verified business number — not your personal cell or the hidden routing number. Team members can use the dashboard or call your access number with PIN."
     >
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading Business Callback…</p>

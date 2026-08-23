@@ -68,8 +68,8 @@ export function MctbDashboardView({
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const features: WorkspaceFeatureSnapshot = productFeatures ?? summary?.features ?? {
-    mctb: "active",
-    smart_routing: "active",
+    mctb: "inactive",
+    smart_routing: "inactive",
     visual_voicemail: "inactive",
     callback_requests: "inactive",
   };

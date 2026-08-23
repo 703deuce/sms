@@ -352,6 +352,16 @@ export async function handleEmployeeAccessGather(input: {
   return { handled: false, done: false };
 }
 
+export async function handleDashboardEmployeeAnswered(input: {
+  callControlId: string;
+  accessSessionId: string;
+  workspaceId: string;
+  outboundCallId: string;
+}) {
+  const { handleDashboardEmployeeAnswered: bridge } = await import("./dashboard-outbound-bridge");
+  await bridge(input);
+}
+
 export async function handleEmployeeAccessCustomerAnswered(input: {
   employeeCallControlId: string;
   customerCallControlId: string;
