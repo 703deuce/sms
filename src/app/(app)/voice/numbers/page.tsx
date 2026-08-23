@@ -1,6 +1,10 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { getPrisma } from "@/lib/db";
+import {
+  enrichWorkspacePhoneWithMessagingStatus,
+  loadWorkspaceAccessiblePhoneNumbers,
+} from "@/lib/numbers/workspace-accessible-numbers";
+import { getPlatformDemoPhoneRecord, isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import Link from "next/link";
 
 function fmtPhone(e164: string) {
@@ -13,20 +17,15 @@ function fmtPhone(e164: string) {
 
 export default async function VoiceNumbersPage() {
   const { workspaceId } = await requireWorkspaceContext();
-  const prisma = getPrisma();
-
-  const numbers = await prisma.phoneNumber.findMany({
-    where: { workspaceId },
-    orderBy: { e164: "asc" },
-    select: {
-      id: true,
-      e164: true,
-      status: true,
-      friendlyName: true,
-      type: true,
-      a2pStatus: true,
-    },
-  });
+  const [numbers, platformDemoAuthorized, platformDemoPhone] = await Promise.all([
+    loadWorkspaceAccessiblePhoneNumbers(workspaceId),
+    isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId),
+    getPlatformDemoPhoneRecord(),
+  ]);
+  const numbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(
+    numbers,
+    platformDemoAuthorized ? platformDemoPhone?.phoneNumberId : null,
+  );
 
   return (
     <div>
@@ -63,7 +62,7 @@ export default async function VoiceNumbersPage() {
             </tr>
           </thead>
           <tbody>
-            {numbers.length === 0 ? (
+            {numbersWithStatus.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-muted-foreground">
                   No numbers yet.{" "}
@@ -74,14 +73,23 @@ export default async function VoiceNumbersPage() {
                 </td>
               </tr>
             ) : (
-              numbers.map((n: (typeof numbers)[number]) => (
+              numbersWithStatus.map((n) => (
                 <tr key={n.id} className="border-b border-border/70">
                   <td className="px-3 py-2 font-mono text-xs font-medium">{fmtPhone(n.e164)}</td>
-                  <td className="px-3 py-2">{n.friendlyName || "—"}</td>
+                  <td className="px-3 py-2">
+                    <div className="space-y-1">
+                      <p>{n.friendlyName || "—"}</p>
+                      {n.source === "linked" ? (
+                        <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
+                          {n.sourceLabel || "Assigned to your workspace"}
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="px-3 py-2">{n.type || "Local"}</td>
                   <td className="px-3 py-2">
                     <Link href="/compliance" className="underline-offset-2 hover:underline">
-                      {n.a2pStatus || "Not started"}
+                      {n.messagingStatus?.label || n.a2pStatus || "Not started"}
                     </Link>
                   </td>
                   <td className="px-3 py-2">{n.status}</td>
@@ -97,7 +105,7 @@ export default async function VoiceNumbersPage() {
         <Link href="/voice/setup" className="font-semibold text-primary underline">
           Setup
         </Link>
-        . Complete{" "}
+        . Switching numbers in Setup updates which line handles missed-call recovery. Complete{" "}
         <Link href="/compliance" className="font-semibold text-primary underline">
           Messaging Compliance
         </Link>{" "}

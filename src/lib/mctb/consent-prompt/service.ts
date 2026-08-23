@@ -65,12 +65,24 @@ async function resolveWorkspaceTfnPhoneNumberId(workspaceId: string): Promise<st
 }
 
 /** MCTB number selected in Setup — local 10DLC, toll-free, or admin-linked production DID. */
-async function resolveMctbAssignedPhoneNumberId(workspaceId: string): Promise<string | null> {
+async function resolveMctbAssignedPhoneNumberId(
+  workspaceId: string,
+  overridePhoneNumberId?: string | null,
+): Promise<string | null> {
+  const { resolveMctbPhoneNumberIdForWorkspace } = await import(
+    "@/lib/mctb/platform-production-routing"
+  );
+
+  if (overridePhoneNumberId) {
+    const resolved = await resolveMctbPhoneNumberIdForWorkspace({
+      workspaceId,
+      phoneNumberId: overridePhoneNumberId,
+    });
+    if (resolved) return resolved;
+  }
+
   const runtime = await loadMissedCallTextConfig(workspaceId);
   if (runtime.phoneNumberId) {
-    const { resolveMctbPhoneNumberIdForWorkspace } = await import(
-      "@/lib/mctb/platform-production-routing"
-    );
     const resolved = await resolveMctbPhoneNumberIdForWorkspace({
       workspaceId,
       phoneNumberId: runtime.phoneNumberId,
@@ -165,11 +177,13 @@ export async function publishMctbConsentPrompt(
   if (!gate.ok) throw new Error(gate.reason || "Cannot publish consent prompt");
 
   const prisma = getPrisma();
-  const phoneNumberId =
-    options?.assignedPhoneNumberId || (await resolveMctbAssignedPhoneNumberId(workspaceId));
+  const phoneNumberId = await resolveMctbAssignedPhoneNumberId(
+    workspaceId,
+    options?.assignedPhoneNumberId,
+  );
   if (!phoneNumberId) {
     throw new Error(
-      "Select and save your MCTB number in Setup before publishing consent audio",
+      "Select your MCTB number in Setup before publishing consent audio",
     );
   }
 
@@ -227,7 +241,11 @@ export async function publishMctbConsentPrompt(
 }
 
 /** Keep Smart Routing flow aligned with consent mode (press_1 vs existing_consent). */
-export async function syncMctbConsentRouting(workspaceId: string, actorUserId?: string) {
+export async function syncMctbConsentRouting(
+  workspaceId: string,
+  actorUserId?: string,
+  options?: { assignedPhoneNumberId?: string },
+) {
   const mode = await loadMctbConsentMode(workspaceId);
   const flow = await findMctbConsentFlow(workspaceId);
 
@@ -246,7 +264,9 @@ export async function syncMctbConsentRouting(workspaceId: string, actorUserId?: 
     return { mode, action: "blocked_unpublished" as const };
   }
 
-  await publishMctbConsentPrompt(workspaceId, actorUserId);
+  await publishMctbConsentPrompt(workspaceId, actorUserId, {
+    assignedPhoneNumberId: options?.assignedPhoneNumberId,
+  });
   return { mode, action: "published_consent_flow" as const };
 }
 

@@ -54,7 +54,18 @@ export async function loadTeamMembers(workspaceId: string): Promise<TeamMember[]
   }));
 }
 
-export async function loadPhoneNumbers(workspaceId: string): Promise<PhoneNumber[]> {
+export async function loadPhoneNumbers(
+  workspaceId: string,
+  options?: { includeLinked?: boolean },
+): Promise<PhoneNumber[]> {
+  if (options?.includeLinked) {
+    const { loadWorkspaceAccessiblePhoneNumbers, mapAccessiblePhoneToPhoneNumber } = await import(
+      "@/lib/numbers/workspace-accessible-numbers"
+    );
+    const accessible = await loadWorkspaceAccessiblePhoneNumbers(workspaceId);
+    return accessible.map(mapAccessiblePhoneToPhoneNumber);
+  }
+
   const rows = await getPrisma().phoneNumber.findMany({
     where: { workspaceId },
     orderBy: { e164: "asc" },
@@ -594,7 +605,7 @@ function stepStatusLabel(status?: string | null) {
 
 export async function loadComplianceOverview(workspaceId: string) {
   const reg = await loadRegistration(workspaceId);
-  const numbers = await loadPhoneNumbers(workspaceId);
+  const numbers = await loadPhoneNumbers(workspaceId, { includeLinked: true });
   const brandOk = (reg?.brandStatus || "").toLowerCase() === "approved";
   const campaignOk = (reg?.campaignStatus || "").toLowerCase() === "approved";
   return {
@@ -615,7 +626,7 @@ export async function loadComplianceOverview(workspaceId: string) {
 export async function loadShellData(userId: string, workspaceId: string) {
   const [workspaces, phoneNumbers, metrics, workspace, unreadNotifications] = await Promise.all([
     loadWorkspacesForUser(userId),
-    loadPhoneNumbers(workspaceId),
+    loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadDashboardMetrics(workspaceId),
     loadWorkspace(workspaceId),
     getPrisma()

@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     scriptText?: string;
     voiceId?: string;
     speed?: number;
+    phoneNumberId?: string | null;
   };
 
   try {
@@ -38,8 +39,12 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "publish") {
-      const config = await publishMctbConsentPrompt(workspaceId, session.userId);
-      await syncMctbConsentRouting(workspaceId, session.userId);
+      const config = await publishMctbConsentPrompt(workspaceId, session.userId, {
+        assignedPhoneNumberId: body.phoneNumberId || undefined,
+      });
+      await syncMctbConsentRouting(workspaceId, session.userId, {
+        assignedPhoneNumberId: body.phoneNumberId || undefined,
+      });
       const status = await getMctbConsentPromptStatus(workspaceId);
       return NextResponse.json({ ok: true, data: status });
     }

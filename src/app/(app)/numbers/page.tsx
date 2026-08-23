@@ -48,7 +48,7 @@ function formatA2pDate(status: string) {
 
 export default async function NumbersPage() {
   const { workspaceId } = await requireWorkspaceContext();
-  const phoneNumbers = await loadPhoneNumbers(workspaceId);
+  const phoneNumbers = await loadPhoneNumbers(workspaceId, { includeLinked: true });
 
   const activeCount = phoneNumbers.filter((pn) => pn.status === "Active").length;
   const monthlySpend = phoneNumbers.reduce((sum, pn) => sum + pn.monthlyCost, 0);
@@ -176,6 +176,11 @@ export default async function NumbersPage() {
                   <TD>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[13px] font-medium">{pn.friendlyName}</span>
+                      {pn.workspaceSource === "linked" ? (
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
+                          {pn.workspaceSourceLabel || "Assigned"}
+                        </span>
+                      ) : null}
                       {index === 0 ? (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
                           Default

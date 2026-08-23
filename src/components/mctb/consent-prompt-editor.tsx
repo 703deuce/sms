@@ -24,9 +24,11 @@ type ConsentPromptStatus = {
 
 type Props = {
   disabled?: boolean;
+  /** Selected MCTB number from Setup (may be unsaved until Save & activate). */
+  phoneNumberId?: string | null;
 };
 
-export function MctbConsentPromptEditor({ disabled = false }: Props) {
+export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null }: Props) {
   const [status, setStatus] = useState<ConsentPromptStatus | null>(null);
   const [scriptText, setScriptText] = useState("");
   const [voiceId, setVoiceId] = useState("");
@@ -99,10 +101,13 @@ export function MctbConsentPromptEditor({ disabled = false }: Props) {
     setBusy("publish");
     setError(null);
     try {
+      if (!phoneNumberId) {
+        throw new Error("Select your MCTB number in the dropdown above before publishing.");
+      }
       const res = await fetch("/api/mctb/consent-prompt", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "publish" }),
+        body: JSON.stringify({ action: "publish", phoneNumberId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Publish failed");
@@ -192,7 +197,7 @@ export function MctbConsentPromptEditor({ disabled = false }: Props) {
         <Button
           type="button"
           size="sm"
-          disabled={disabled || busy !== null || !status?.canPublish}
+          disabled={disabled || busy !== null || !status?.canPublish || !phoneNumberId}
           onClick={() => void publish()}
         >
           {busy === "publish" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

@@ -13,7 +13,10 @@ import {
   phoneNumbersSummary,
   tollFreeSummary,
 } from "@/lib/compliance-helpers";
-import { getPhoneMessagingStatus } from "@/lib/messaging/compliance/phone-messaging-status";
+import {
+  enrichWorkspacePhoneWithMessagingStatus,
+  loadWorkspaceAccessiblePhoneNumbers,
+} from "@/lib/numbers/workspace-accessible-numbers";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import {
   getPlatformDemoPhoneRecord,
@@ -23,8 +26,6 @@ import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
-import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
-import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -83,21 +84,9 @@ export async function GET() {
     await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMissedCallTextBack(workspaceId),
-    prisma.phoneNumber.findMany({
-      where: { workspaceId },
-      orderBy: { e164: "asc" },
-      select: {
-        id: true,
-        e164: true,
-        friendlyName: true,
-        type: true,
-        a2pStatus: true,
-        status: true,
-        settingsJson: true,
-      },
-    }),
+    loadWorkspaceAccessiblePhoneNumbers(workspaceId),
     loadComplianceOverview(workspaceId),
-    loadPhoneNumbers(workspaceId),
+    loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadAdminMctbTestFlags(workspaceId),
     loadMctbOnboardingState(workspaceId),
     getProductionMctbForwardTargetE164(workspaceId),
@@ -110,63 +99,12 @@ export async function GET() {
     (typeof mctbSettings.businessLineE164 === "string" ? mctbSettings.businessLineE164 : null) ||
     onboarding.businessNumberE164 ||
     null;
-  const mergedPhoneNumbers =
-    platformDemoPhone &&
-    !phoneNumbers.some((n: { id: string }) => n.id === platformDemoPhone.phoneNumberId)
-      ? [
-          ...phoneNumbers,
-          {
-            id: platformDemoPhone.phoneNumberId,
-            e164: platformDemoPhone.e164,
-            friendlyName: formatMctbPhoneLabel(platformDemoPhone.e164),
-            type: "local",
-            a2pStatus: "APPROVED",
-            status: "Active",
-            settingsJson: {
-              ...platformDemoPhone.settingsJson,
-              ...telnyxLocalA2pSettings({
-                role: "customer_production",
-                a2pApproved: true,
-              }),
-            },
-          },
-        ]
-      : phoneNumbers;
-  const phoneNumbersWithStatus = mergedPhoneNumbers.map(
-    (n: {
-      id: string;
-      e164: string;
-      friendlyName: string | null;
-      type?: string | null;
-      a2pStatus?: string | null;
-      status?: string | null;
-      settingsJson?: unknown;
-    }) => {
-      const isLinkedProductionDid =
-        platformDemoPhone && n.id === platformDemoPhone.phoneNumberId;
-      const row = isLinkedProductionDid
-        ? {
-            ...n,
-            a2pStatus: "APPROVED",
-            settingsJson: {
-              ...(n.settingsJson && typeof n.settingsJson === "object" && !Array.isArray(n.settingsJson)
-                ? (n.settingsJson as Record<string, unknown>)
-                : {}),
-              ...telnyxLocalA2pSettings({
-                role: "customer_production",
-                a2pApproved: true,
-              }),
-            },
-          }
-        : n;
-      return {
-        ...row,
-        messagingStatus: getPhoneMessagingStatus(row),
-      };
-    },
+  const phoneNumbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(
+    phoneNumbers,
+    platformDemoPhone?.phoneNumberId,
   );
   const messagingReady = isMctbSetupMessagingReady({
-    phoneNumbers: mergedPhoneNumbers,
+    phoneNumbers,
     requiredActions,
     adminFlags,
   });

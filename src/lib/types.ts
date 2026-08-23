@@ -61,6 +61,8 @@ export type PhoneNumber = {
   settingsJson?: Record<string, unknown> | null;
   monthlyCost: number;
   status: StatusChip;
+  workspaceSource?: "owned" | "linked";
+  workspaceSourceLabel?: string;
 };
 
 export type Contact = {

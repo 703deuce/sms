@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const data = await loadPhoneNumbers(auth.workspaceId);
+    const data = await loadPhoneNumbers(auth.workspaceId, { includeLinked: true });
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 500);

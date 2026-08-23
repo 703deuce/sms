@@ -19,6 +19,8 @@ type PhoneOption = {
   friendlyName: string | null;
   type?: string | null;
   a2pStatus?: string | null;
+  source?: "owned" | "linked";
+  sourceLabel?: string;
   messagingStatus?: {
     approved: boolean;
     complianceType: string;
@@ -98,6 +100,7 @@ export function MctbSetupView() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [switchingNumber, setSwitchingNumber] = useState(false);
 
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [messageTemplate, setMessageTemplate] = useState("");
@@ -205,6 +208,32 @@ export function MctbSetupView() {
       name,
     );
   }, [messageTemplate, selectedNumber]);
+
+  async function switchMctbNumber(nextId: string | null) {
+    const previousId = phoneNumberId;
+    setPhoneNumberId(nextId);
+    if (!nextId || nextId === previousId) return;
+
+    setSwitchingNumber(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/mctb/setup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phoneNumberId: nextId, activate: false }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not switch number");
+      setSaved(true);
+      await load();
+    } catch (err) {
+      setPhoneNumberId(previousId);
+      setError(err instanceof Error ? err.message : "Could not switch number");
+    } finally {
+      setSwitchingNumber(false);
+    }
+  }
 
   async function save(activate: boolean) {
     setSaving(true);
@@ -372,18 +401,21 @@ export function MctbSetupView() {
           <Card id="number" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Choose the number</h2>
             <p className="text-[13px] text-muted-foreground">
-              Which business number should use missed-call recovery?
+              Which business number should use missed-call recovery? Switching updates which line
+              handles missed-call text back.
             </p>
             <select
               className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
               value={phoneNumberId || ""}
-              onChange={(e) => setPhoneNumberId(e.target.value || null)}
+              disabled={switchingNumber || saving}
+              onChange={(e) => void switchMctbNumber(e.target.value || null)}
             >
               <option value="">Select a number…</option>
               {(data?.phoneNumbers || []).map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.friendlyName ? `${n.friendlyName} · ` : ""}
                   {fmtPhone(n.e164)}
+                  {n.source === "linked" ? " · Assigned" : ""}
                   {n.messagingStatus
                     ? ` — ${n.messagingStatus.label}`
                     : n.a2pStatus
@@ -392,6 +424,15 @@ export function MctbSetupView() {
                 </option>
               ))}
             </select>
+            {switchingNumber ? (
+              <p className="text-[12px] text-muted-foreground">Switching missed-call number…</p>
+            ) : null}
+            {selectedNumber?.source === "linked" ? (
+              <p className="text-[12px] text-violet-800">
+                {selectedNumber.sourceLabel || "Assigned to your workspace"} — also listed under My
+                Numbers.
+              </p>
+            ) : null}
             {selectedNumber?.messagingStatus ? (
               <div
                 className={cn(
@@ -536,7 +577,7 @@ export function MctbSetupView() {
             </div>
 
             {consentMode === MCTB_CONSENT_MODE_VERIFIED ? (
-              <MctbConsentPromptEditor />
+              <MctbConsentPromptEditor phoneNumberId={phoneNumberId} />
             ) : (
               <div className="space-y-3">
                 <div className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-4 text-[12px] text-[#4b5563]">
