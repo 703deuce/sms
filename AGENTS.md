@@ -4,7 +4,64 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-## Caller Amy production verification
+## Transovo production build — preserve first, extend second
+
+**This is an extension/consolidation job, not a rewrite.**
+
+Missed Call Text Back and Smart Routing already work in this repo. **Do not remove, replace, rewrite, disable, or regress working telephony, SMS, compliance, or provider flows.**
+
+Before creating replacements, **audit** existing routes, pages, components, APIs, Prisma models, and tests. Reuse working setup/testing flows. If something exists and is useful, preserve it unless it directly conflicts with the product structure.
+
+### Non-negotiables
+
+- Keep **both MCTB modes**: Press-1 consent (`press_1`) and automatic text-back (`existing_consent`). Never make Press-1 the only option.
+- **Smart Routing** is a standalone purchasable product as well as a bundle with MCTB. Do not require MCTB to use Smart Routing.
+- Customer keeps their **existing business number** — inbound layer only; no port-required launch.
+- Do not turn this into a PBX, softphone, CRM, SMS marketing platform, AI receptionist, or vanity-number marketplace.
+- Do not add Reviews, Realtor, or other out-of-scope products in this workstream.
+- Optional existing integrations may remain; core value must work without external SaaS.
+
+### Product entitlements (target)
+
+Independent flags (fit existing billing architecture): `mctb`, `smart_routing`, `visual_voicemail`, `callback_requests`. One workspace/account can own any combination. Use Stripe for Transovo billing; env/config for price IDs.
+
+**Current gap:** `ProductEntitlement` is coarse (`voice | numbers | sms`). MCTB uses `mctb/entitlement.ts`; Smart Routing is a workspace capability only — not yet a purchasable entitlement.
+
+### Canonical nav (focused sidebar)
+
+- **Overview** (conditional cards by entitlement)
+- **MCTB:** Missed Calls, Conversations, Setup
+- **Smart Routing:** Call Routing (`/smart-routing`), Routing Activity
+- **Add-ons:** Visual Voicemail, Callback Requests (when entitled)
+- **Shared:** Numbers, Analytics, Compliance, Integrations, Settings, Billing
+
+Clean nav ≠ delete working pages. Hide, consolidate, tab, or feature-gate legacy surfaces instead of deleting functioning code.
+
+### Implementation order
+
+1. Audit + inventory (canonical vs legacy vs duplicate)
+2. Product entitlements + Stripe SKUs (standalone MCTB, standalone SR, add-ons, bundle)
+3. UI consolidation (nav, overview dashboard, activity feed) without breaking routes
+4. Missing MCTB gaps (exclusion list, suppression reasons, repeat caller, business-hours SMS, link tracking) on existing runtime
+5. Missing SR gaps (standalone purchase flow, entitlement gates, analytics) on existing `lib/smart-routing`
+6. Add-ons: Visual Voicemail, Callback Requests (audit existing voicemail code first)
+7. Billing trials + contextual cross-sell (not obnoxious)
+8. Test matrices (MCTB, SR, combined, voicemail, callback) + production build
+
+### Key existing surfaces (do not rebuild)
+
+| Area | Routes / entry points |
+|------|------------------------|
+| MCTB nav | `/dashboard`, `/voice/conversations`, `/voice/missed-calls`, `/voice/setup`, `/voice/numbers`, `/compliance`, `/voice/analytics`, `/integrations`, `/settings/business` |
+| MCTB runtime | `src/lib/agents/missed-call-text-back/`, `src/lib/mctb/` |
+| MCTB modes | `src/lib/mctb/consent-mode.ts` — `press_1` vs `existing_consent` |
+| Smart Routing | `/smart-routing/**`, `src/lib/smart-routing/**`, Telnyx via `webhook-handlers.ts` |
+| SR nav | `src/lib/smart-routing/nav-children.ts`, `voice-nav.ts` (enabled) |
+
+### Definition of done
+
+Not "pages render." Done when existing MCTB + both modes + existing SR still work; SR standalone + bundle billing works; combined SR→MCTB fallback works; compliance/cooldown/exclusion visible; add-ons functional; tests + build pass; remaining live telephony smokes documented.
+
 
 Do **not** mark Caller Amy overall PASS until all five gates pass on a real phone call:
 
