@@ -45,7 +45,6 @@ export function buildReviewsNav(): NavItem[] {
     { label: "Review Widget", href: "/tools/google-review-widget", icon: Star },
     { label: "Review Reply", href: "/tools/review-response-generator", icon: MessageSquareText },
     { label: "Review Sites", href: "/reviews/settings", icon: Settings2 },
-    { label: "Phone Number", href: "/numbers", icon: Link2 },
     { label: "Registration", href: "/compliance", icon: Link2 },
     { label: "Alerts", href: "/reviews/alerts", icon: Bell },
     { label: "Reputation Settings", href: "/reviews/settings", icon: Settings2 },

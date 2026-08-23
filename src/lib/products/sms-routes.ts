@@ -75,6 +75,21 @@ export function isSmsShellRoute(pathname: string): boolean {
   );
 }
 
+export function isSmsMessagingChromePath(pathname: string): boolean {
+  if (pathname.startsWith("/numbers")) return false;
+  return (
+    pathname.startsWith("/inbox") ||
+    pathname.startsWith("/send") ||
+    pathname.startsWith("/campaigns") ||
+    pathname.startsWith("/contacts") ||
+    pathname.startsWith("/automations") ||
+    pathname.startsWith("/grow") ||
+    pathname.startsWith("/reports") ||
+    pathname.startsWith("/templates") ||
+    pathname.startsWith("/surveys")
+  );
+}
+
 /** Sidebar-visible SMS nav hrefs (flat — no children in menu). */
 export const SMS_SIDEBAR_HREFS = [
   "/inbox",
@@ -82,7 +97,6 @@ export const SMS_SIDEBAR_HREFS = [
   "/contacts",
   "/automations",
   "/grow",
-  "/numbers",
   "/reports",
   "/settings",
   "/getting-started",

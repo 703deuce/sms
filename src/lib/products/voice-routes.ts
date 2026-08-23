@@ -14,6 +14,16 @@ export const VOICE_APP_ROUTE_PREFIXES = [
   "/getting-started",
   "/contact",
   "/company-brain",
+  "/inbox",
+  "/send",
+  "/campaigns",
+  "/contacts",
+  "/grow",
+  "/templates",
+  "/surveys",
+  "/reports",
+  "/messaging",
+  "/my-numbers",
 ] as const;
 
 /** Legacy/hidden routes that keep voice chrome but are not in primary nav. */
@@ -30,24 +40,14 @@ export const VOICE_DEEP_ROUTE_PREFIXES = [
   "/realtor",
 ] as const;
 
-/** SMS standalone routes — hidden from primary nav but preserved in codebase. */
-export const SMS_HIDDEN_ROUTE_PREFIXES = [
-  "/inbox",
-  "/send",
-  "/campaigns",
-  "/contacts",
-  "/grow",
-  "/templates",
-  "/surveys",
-  "/reports",
-  "/numbers",
-  "/messaging",
-  "/my-numbers",
-] as const;
+/** Legacy SMS texting numbers admin — pages preserved, not in primary nav. */
+export const SMS_NUMBERS_ADMIN_PREFIXES = ["/numbers"] as const;
 
 export function isVoiceShellRoute(pathname: string): boolean {
   if (pathname.startsWith("/personal")) return false;
-  if (SMS_HIDDEN_ROUTE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  if (
+    SMS_NUMBERS_ADMIN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
     return false;
   }
   return VOICE_APP_ROUTE_PREFIXES.some(

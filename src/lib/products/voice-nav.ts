@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  Hash,
   LayoutDashboard,
   MessageSquare,
   PhoneMissed,
@@ -12,10 +11,12 @@ import {
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { buildReviewsNav, getReviewsPageTitle, isReviewsSectionPath } from "@/lib/products/reviews-nav";
+import { buildSmsSectionNav, getSmsPageTitle } from "@/lib/products/sms-nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
   showTryIt?: boolean;
+  inboxBadge?: number;
 };
 
 /**
@@ -59,17 +60,13 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   return [
     ...main,
+    ...buildSmsSectionNav({ inboxBadge: options.inboxBadge }),
     ...buildReviewsNav(),
-    {
-      label: "Numbers",
-      href: "/voice/numbers",
-      icon: Hash,
-      sectionLabel: "Manage",
-    },
     {
       label: "Messaging Compliance",
       href: "/compliance",
       icon: ShieldCheck,
+      sectionLabel: "Manage",
     },
     { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
@@ -95,6 +92,8 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/contact")) return "Help";
   if (isReviewsSectionPath(pathname)) return getReviewsPageTitle(pathname);
+  const smsTitle = getSmsPageTitle(pathname);
+  if (smsTitle) return smsTitle;
   return "";
 }
 

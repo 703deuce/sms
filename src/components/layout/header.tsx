@@ -4,6 +4,7 @@ import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
 import { productContextLabel } from "@/lib/products/context";
+import { isSmsMessagingChromePath } from "@/lib/products/sms-routes";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
 import { WorkspaceModeToggle } from "@/components/workspace/workspace-mode-toggle";
@@ -15,7 +16,7 @@ import {
   Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type SearchResult = {
@@ -72,6 +73,9 @@ export function Header({
   hasNumbers?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const showSmsChrome =
+    currentProduct === "sms" || (hasSms && isSmsMessagingChromePath(pathname));
   const [numberId, setNumberId] = useState(
     activeFromNumberId || phoneNumbers[0]?.id || "",
   );
@@ -245,7 +249,7 @@ export function Header({
           </Link>
         ) : null}
 
-        {currentProduct === "sms" ? (
+        {showSmsChrome ? (
           <SmsCreateMenu variant="header" className="hidden sm:block" />
         ) : null}
 
@@ -258,7 +262,7 @@ export function Header({
           </Link>
         ) : null}
 
-        {currentProduct === "sms" ? (
+        {showSmsChrome ? (
         <div className="mx-auto hidden w-full max-w-[440px] flex-1 md:block" ref={searchRef}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -300,7 +304,7 @@ export function Header({
         ) : null}
 
         <div className="flex items-center gap-2">
-          {!isLauncher && currentProduct === "sms" && phoneNumbers.length > 0 ? (
+          {!isLauncher && showSmsChrome && phoneNumbers.length > 0 ? (
             <select
               className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"
               value={numberId}

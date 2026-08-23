@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  Hash,
   HelpCircle,
   Inbox,
   LayoutDashboard,
@@ -17,10 +16,10 @@ export type SmsNavOptions = {
 };
 
 /**
- * Transovo SMS — customer-facing sidebar (~10 items).
+ * SMS section for the unified product sidebar (paired with Reviews + MCTB).
  * Deep routes (inbox tabs, campaign states, grow tools, etc.) stay off the menu.
  */
-export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
+export function buildSmsSectionNav(options: SmsNavOptions = {}): NavItem[] {
   const inboxBadge = options.inboxBadge ?? 0;
 
   return [
@@ -29,7 +28,7 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
       href: "/inbox",
       icon: Inbox,
       badge: inboxBadge > 0 ? inboxBadge : undefined,
-      sectionLabel: "Main",
+      sectionLabel: "SMS",
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Contacts", href: "/contacts", icon: Users },
@@ -40,13 +39,16 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
       sectionLabel: "Automate & Grow",
     },
     { label: "Grow", href: "/grow/keywords", icon: Sprout },
-    {
-      label: "Numbers",
-      href: "/numbers",
-      icon: Hash,
-      sectionLabel: "Manage",
-    },
     { label: "Reports", href: "/reports", icon: BarChart3 },
+  ];
+}
+
+/**
+ * Standalone SMS sidebar when the SMS product shell is used alone.
+ */
+export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
+  return [
+    ...buildSmsSectionNav(options),
     {
       label: "Settings",
       href: "/settings",

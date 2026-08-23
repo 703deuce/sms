@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AudioLines, Hash, ArrowRight } from "lucide-react";
+import { AudioLines, ArrowRight } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
 import { getUserProductAccess } from "@/lib/products/entitlements";
@@ -12,7 +12,6 @@ export default async function ProductLauncherPage() {
 
   const access = await getUserProductAccess(session.userId);
   const hasVoice = access.hasVoice;
-  const hasNumbers = access.hasNumbers;
 
   return (
     <div className="mx-auto max-w-3xl py-8">
@@ -27,22 +26,10 @@ export default async function ProductLauncherPage() {
         <ProductCard
           icon={<AudioLines className="h-6 w-6" />}
           title={productLabel("voice")}
-          description="Answer calls, help customers, take messages, transfer callers, and book appointments with AI."
+          description="Missed call text back, SMS campaigns, and review management for your business."
           href="/api/products/open?product=voice"
-          actionLabel="Open AI Receptionist"
+          actionLabel="Open Workspace"
           entitled={hasVoice}
-        />
-        <ProductCard
-          icon={<Hash className="h-6 w-6" />}
-          title={`${BRAND_NAME} Numbers`}
-          description="Find and manage memorable phone numbers."
-          href={
-            hasNumbers
-              ? "/api/products/open?product=numbers"
-              : "/personal/numbers/premium"
-          }
-          actionLabel={hasNumbers ? "Open Numbers" : "Find a Number"}
-          entitled={hasNumbers}
         />
       </div>
     </div>
