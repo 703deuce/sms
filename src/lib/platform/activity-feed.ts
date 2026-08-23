@@ -106,10 +106,14 @@ export async function loadPlatformActivityFeed(
   }
 
   for (const s of srSessions) {
+    const outcome = String(s.finalOutcome || "").toLowerCase();
+    const isMctbFallback = outcome.includes("mctb") || outcome.includes("fallback");
     items.push({
-      id: `sr:${s.id}`,
-      type: "smart_routing",
-      label: `Smart Routing call ${s.callerNumber || "unknown"} — ${s.finalOutcome || "in progress"}`,
+      id: isMctbFallback ? `sr-fallback:${s.id}` : `sr:${s.id}`,
+      type: isMctbFallback ? "routing_fallback" : "smart_routing",
+      label: isMctbFallback
+        ? `Smart Routing fallback to MCTB — ${s.callerNumber || "unknown"}`
+        : `Smart Routing call ${s.callerNumber || "unknown"} — ${s.finalOutcome || "in progress"}`,
       at: s.startedAt.toISOString(),
       href: s.flowId ? `/smart-routing/${s.flowId}/activity` : "/smart-routing",
     });
@@ -166,19 +170,6 @@ export async function loadPlatformActivityFeed(
       at: ce.createdAt.toISOString(),
       href: "/smart-routing",
     });
-  }
-
-  for (const s of srSessions) {
-    const outcome = String(s.finalOutcome || "").toLowerCase();
-    if (outcome.includes("mctb") || outcome.includes("fallback")) {
-      items.push({
-        id: `sr-fallback:${s.id}`,
-        type: "routing_fallback",
-        label: `Smart Routing fallback to MCTB — ${s.callerNumber || "unknown"}`,
-        at: s.startedAt.toISOString(),
-        href: s.flowId ? `/smart-routing/${s.flowId}/activity` : "/smart-routing",
-      });
-    }
   }
 
   items.sort((a, b) => (a.at < b.at ? 1 : -1));

@@ -5,6 +5,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { loadAdminCustomerById } from "@/lib/admin-data";
 import { loadMctbSupportSnapshot } from "@/lib/mctb/admin/support-snapshot";
+import { loadPlatformAdminSnapshot } from "@/lib/platform/admin-snapshot";
 import { loadDashboardMetrics } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { ArrowLeft, CreditCard, Shield, UserCog } from "lucide-react";
@@ -25,6 +26,7 @@ export default async function AdminCustomerDetailPage({
 
   const metrics = await loadDashboardMetrics(id);
   const mctbSnapshot = await loadMctbSupportSnapshot(id);
+  const platformSnapshot = await loadPlatformAdminSnapshot(id);
   const usageCost = customer.messages * 0.015;
   const telnyxCost = customer.messages * 0.0085;
 
@@ -145,6 +147,61 @@ export default async function AdminCustomerDetailPage({
           <Link href="/admin/a2p" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
             View A2P queue →
           </Link>
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            <CardTitle>Platform product snapshot</CardTitle>
+          </div>
+          {platformSnapshot ? (
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Entitlements</dt>
+                <dd className="text-right">
+                  {Object.entries(platformSnapshot.productFeatures)
+                    .filter(([, status]) => status === "active" || status === "trial")
+                    .map(([key]) => key.replace(/_/g, " "))
+                    .join(", ") || "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Smart Routing flows</dt>
+                <dd>
+                  {platformSnapshot.smartRouting.activeFlows} active /{" "}
+                  {platformSnapshot.smartRouting.totalFlows} total
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">SR routing number</dt>
+                <dd className="font-mono text-right">
+                  {platformSnapshot.smartRouting.routingNumberE164 || "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Missed calls (30d)</dt>
+                <dd>{formatNumber(platformSnapshot.counts.missedCalls30d)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Link clicks (30d)</dt>
+                <dd>{formatNumber(platformSnapshot.counts.linkClicks30d)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Form submissions (30d)</dt>
+                <dd>{formatNumber(platformSnapshot.counts.formSubmissions30d)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Voicemails (30d)</dt>
+                <dd>{formatNumber(platformSnapshot.counts.voicemails30d)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Open callbacks</dt>
+                <dd>{formatNumber(platformSnapshot.counts.callbacksOpen)}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">No platform snapshot available.</p>
+          )}
         </Card>
 
         <Card>

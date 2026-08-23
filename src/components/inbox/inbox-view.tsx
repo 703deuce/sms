@@ -129,6 +129,21 @@ export function InboxView({
     setTranslations({});
   }, [selected?.id]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    fetch(`/api/inbox/${selectedId}`)
+      .then((res) => res.json())
+      .then((json: { data?: Conversation }) => {
+        if (cancelled || !json.data) return;
+        setItems((prev) => prev.map((c) => (c.id === selectedId ? json.data! : c)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
   const sendPresenceHeartbeat = useCallback(async () => {
     if (!selected?.id || !currentUserId) return;
     try {
@@ -422,6 +437,11 @@ export function InboxView({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-[15px] font-bold whitespace-nowrap">{selected.contactName}</p>
+                  {selected.repeatCaller && selected.repeatCaller.missedToday > 1 ? (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                      Called {selected.repeatCaller.missedToday}× today
+                    </span>
+                  ) : null}
                   <span className="h-2 w-2 shrink-0 rounded-full bg-violet-500" />
                 </div>
                 <p className="text-[12px] text-muted-foreground">{formatPhone(selected.phone)}</p>

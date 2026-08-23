@@ -67,6 +67,7 @@ type VmMessage = {
   calledLabel?: string;
   durationSec: number;
   transcript?: string;
+  transcriptEnglish?: string;
   summary?: string;
   internalNotes?: string;
   readAt: string | null;
@@ -154,6 +155,7 @@ export function PersonalVoicemailUI({
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [forwardEmail, setForwardEmail] = useState("");
   const [secondaryEmail, setSecondaryEmail] = useState("");
+  const [smsNotifyE164, setSmsNotifyE164] = useState("");
   const [inboxFilter, setInboxFilter] = useState<"All" | "Unread" | "Read">("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [inboxPage, setInboxPage] = useState(1);
@@ -200,6 +202,7 @@ export function PersonalVoicemailUI({
     if (primary) {
       setForwardEmail(primary.emailNotify || "");
       setSecondaryEmail(primary.secondaryEmailNotify || "");
+      setSmsNotifyE164(primary.smsNotifyE164 || "");
       setAutoTranscription(primary.transcriptionEnabled ?? true);
       setEmailAlerts(Boolean(primary.emailNotify));
     }
@@ -252,9 +255,8 @@ export function PersonalVoicemailUI({
           : numbers[0]?.friendlyName,
         durationSec: m.durationSec,
         transcript: m.transcript ?? undefined,
-        summary: m.transcript
-          ? m.transcript.replace(/\s+/g, " ").trim().slice(0, 160)
-          : undefined,
+        transcriptEnglish: m.transcriptEnglish ?? undefined,
+        summary: m.summary ?? undefined,
         internalNotes: m.internalNotes ?? undefined,
         readAt: m.readAt ?? null,
         createdAt: m.createdAt,
@@ -368,6 +370,7 @@ export function PersonalVoicemailUI({
             boxId,
             emailNotify: emailAlerts ? forwardEmail.trim() || null : null,
             secondaryEmailNotify: emailAlerts ? secondaryEmail.trim() || null : null,
+            smsNotifyE164: smsNotifyE164.trim() || null,
             transcriptionEnabled: autoTranscription,
           }),
         });
@@ -526,8 +529,20 @@ export function PersonalVoicemailUI({
             onChange={(e) => setSecondaryEmail(e.target.value)}
           />
         </div>
+        <div>
+          <label className="text-[12px] font-medium text-[#6b7280]">
+            SMS alert number (optional)
+          </label>
+          <PersonalMockInput
+            className="mt-1"
+            placeholder="+15551234567"
+            value={smsNotifyE164}
+            onChange={(e) => setSmsNotifyE164(e.target.value)}
+          />
+        </div>
         <p className="text-[11px] text-[#9ca3af]">
-          Email alerts include a recording link and transcript when auto-transcription is on.
+          Email alerts include a recording link and transcript when auto-transcription is on. SMS
+          alerts fire on new voicemail and when a transcript is ready.
         </p>
       </div>
 
@@ -993,6 +1008,15 @@ export function PersonalVoicemailUI({
               </div>
 
               <div>
+                <p className="text-[12px] font-semibold text-[#111827]">Summary</p>
+                {selected.summary ? (
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#374151]">{selected.summary}</p>
+                ) : (
+                  <p className="mt-2 text-[13px] text-[#9ca3af]">No AI summary yet.</p>
+                )}
+              </div>
+
+              <div>
                 <p className="text-[12px] font-semibold text-[#111827]">Transcript</p>
                 {selected.transcript ? (
                   <p className="mt-2 text-[13px] leading-relaxed text-[#374151]">
@@ -1001,6 +1025,16 @@ export function PersonalVoicemailUI({
                 ) : (
                   <p className="mt-2 text-[13px] text-[#9ca3af]">Transcription not available.</p>
                 )}
+                {selected.transcriptEnglish ? (
+                  <div className="mt-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
+                      English
+                    </p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-[#374151]">
+                      {selected.transcriptEnglish}
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

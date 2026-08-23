@@ -141,13 +141,18 @@ async def run_mctb_sip_production_session(
 
         direct_dial_forward = str(session.get("directDialForwardE164") or "").strip()
         if direct_dial_forward:
-            trace.log(
-                "mctb_direct_dial_forward_early",
-                directDialForwardE164=direct_dial_forward,
-                promptText=session.get("directDialPromptText"),
+            from transovo_voice.session.mctb_direct_dial_forward import run_mctb_direct_dial_forward
+
+            forwarded = await run_mctb_direct_dial_forward(
+                backend,
+                ctx=ctx,
+                trace=trace,
+                participant=participant,
+                answer_session=answer_session,
+                session=session,
             )
             trace.log_sip_call_final_state(
-                disconnect_reason="direct_dial_forward_configured",
+                disconnect_reason="direct_dial_forward_complete" if forwarded else "direct_dial_forward_failed",
                 sip_status=read_sip_call_status(participant),
                 directDialForwardE164=direct_dial_forward,
             )

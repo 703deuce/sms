@@ -27,7 +27,20 @@ export async function GET(
     const { id } = await params;
     const row = await loadFull(auth.workspaceId, id);
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ data: mapConversation(row) });
+
+    let repeatCaller: { missedToday: number; total: number } | undefined;
+    const callerPhone = row.contact?.phone?.trim();
+    if (callerPhone) {
+      const { countCallerMissedEventsToday } = await import("@/lib/mctb/repeat-caller");
+      const counts = await countCallerMissedEventsToday(auth.workspaceId, callerPhone);
+      if (counts.missedToday > 1 || counts.total > 1) {
+        repeatCaller = { missedToday: counts.missedToday, total: counts.total };
+      }
+    }
+
+    return NextResponse.json({
+      data: mapConversation({ ...row, repeatCaller }),
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

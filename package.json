@@ -58,6 +58,8 @@
     "test:nav-crosswalk": "tsx scripts/test-nav-crosswalk.ts",
     "test:transovo-platform": "tsx scripts/test-transovo-platform.ts",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
+    "test:transovo-voicemail": "tsx scripts/test-transovo-voicemail.ts",
+    "test:transovo-callback": "tsx scripts/test-transovo-callback.ts",
     "test:e2e": "playwright test",
     "test:multi-product": "tsx scripts/test-multi-product-architecture.ts",
     "test:smart-routing-compiler": "tsx scripts/test-smart-routing-compiler.ts",

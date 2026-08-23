@@ -11,6 +11,7 @@ type VoiceRuntimeAction =
   | "capture_mctb_sip_inbound"
   | "resolve_mctb_sip_session"
   | "resolve_mctb_direct_dial_prompt"
+  | "resolve_mctb_direct_dial_transfer"
   | "record_mctb_sip_press_1_consent"
   | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
@@ -151,6 +152,19 @@ export async function POST(request: Request) {
           directDialForwardE164: resolveMctbDirectDialForwardE164(config),
           promptText: buildDirectDialForwardPromptText(config),
         };
+        break;
+      }
+
+      case "resolve_mctb_direct_dial_transfer": {
+        const { resolveMctbDirectDialTransferForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-direct-dial-transfer"
+        );
+        result = await resolveMctbDirectDialTransferForPython({
+          workspaceId: String(payload.workspaceId || ""),
+          destinationE164: String(payload.destinationE164 || ""),
+          callerNumberE164:
+            typeof payload.callerNumberE164 === "string" ? payload.callerNumberE164 : null,
+        });
         break;
       }
 

@@ -86,13 +86,11 @@ export async function recordToolWebhookIngress(input: {
         callControlId,
         conversationId,
         JSON.stringify(bodyPreview(body)),
-        String(Date.now()),
       ].join("|"),
     )
-    .digest("hex")
-    .slice(0, 24);
+    .digest("hex");
 
-  const ingressId = `voice-tool-ingress:${fingerprint}:${Date.now()}`;
+  const ingressId = `voice-tool-ingress:${fingerprint}`;
 
   const record: ToolWebhookIngressRecord = {
     ingressId,
@@ -121,8 +119,9 @@ export async function recordToolWebhookIngress(input: {
 
   try {
     const prisma = getPrisma();
-    await prisma.providerWebhookEvent.create({
-      data: {
+    await prisma.providerWebhookEvent.upsert({
+      where: { providerEventId: ingressId },
+      create: {
         provider: "telnyx",
         eventType: "voice.tool_webhook.ingress",
         providerEventId: ingressId,
@@ -133,6 +132,13 @@ export async function recordToolWebhookIngress(input: {
           body: bodyPreview(body),
         } as object,
         status: "received",
+      },
+      update: {
+        payload: {
+          ...record,
+          headers: headerSnapshot(request),
+          body: bodyPreview(body),
+        } as object,
       },
     });
   } catch (err) {

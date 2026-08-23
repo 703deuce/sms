@@ -113,6 +113,7 @@ export type Conversation = {
   tags: string[];
   updatedAt: string;
   unread: boolean;
+  repeatCaller?: { missedToday: number; total: number };
   messages: Array<{
     id: string;
     direction: "in" | "out" | "note";

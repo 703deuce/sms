@@ -27,6 +27,39 @@ async function resolvePhoneNumberIdForVoicemail(
   return pn?.id ?? null;
 }
 
+async function sendVoicemailSmsAlert(input: {
+  workspaceId: string;
+  messageId: string;
+  fromE164?: string | null;
+  smsNotifyE164?: string | null;
+}) {
+  const to = input.smsNotifyE164?.trim();
+  if (!to) return;
+  const { sendQuickSms } = await import("@/lib/sms/send-quick");
+  await sendQuickSms({
+    workspaceId: input.workspaceId,
+    to,
+    body: `New voicemail from ${input.fromE164 || "unknown caller"}. Open Transovo to listen.`,
+    idempotencyKey: `vm-notify:${input.messageId}`,
+  }).catch((err) => {
+    console.warn("[voicemail] sms notify failed", err);
+  });
+}
+
+async function notifyVoicemailTranscriptReady(input: {
+  workspaceId: string;
+  messageId: string;
+  fromE164?: string | null;
+}) {
+  const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+  await notifyWorkspace(input.workspaceId, {
+    type: "voicemail_transcript",
+    title: "Voicemail transcript ready",
+    body: `Transcript ready for ${input.fromE164 || "unknown caller"}`,
+    href: "/personal/voicemail",
+  }).catch(() => undefined);
+}
+
 export async function startVoicemailRecordingOnCall(input: {
   telnyxCallControlId: string;
   humanCallId: string;
@@ -331,6 +364,15 @@ export async function leaveVoicemailOnCall(input: {
     href: "/personal/voicemail",
   }).catch(() => undefined);
 
+  if (box.smsNotifyE164?.trim()) {
+    await sendVoicemailSmsAlert({
+      workspaceId: input.workspaceId,
+      messageId: msg.id,
+      fromE164: call?.from,
+      smsNotifyE164: box.smsNotifyE164,
+    });
+  }
+
   return { box, message: msg };
 }
 
@@ -428,7 +470,11 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
 
   try {
     const { transcribeAudioUrl } = await import("./voicemail-transcribe");
-    const transcript = await transcribeAudioUrl(input.recordingUrl);
+    const { summarizeVoicemailTranscript, translateVoicemailToEnglish } = await import(
+      "./voicemail-post-process"
+    );
+    const transcription = await transcribeAudioUrl(input.recordingUrl);
+    const transcript = transcription.text;
     if (!transcript) {
       return prisma.voicemailMessage.update({
         where: { id: msg.id },
@@ -438,26 +484,58 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
         },
       });
     }
+
+    const transcriptEnglish = await translateVoicemailToEnglish(
+      transcript,
+      transcription.language,
+    );
+    const aiSummary = await summarizeVoicemailTranscript(transcript);
+
     const withTranscript = await prisma.voicemailMessage.update({
       where: { id: msg.id },
-      data: { transcriptText: transcript },
+      data: {
+        transcriptText: transcript,
+        transcriptEnglish: transcriptEnglish ?? null,
+        aiSummary: aiSummary ?? null,
+      },
     });
+
+    await notifyVoicemailTranscriptReady({
+      workspaceId: input.workspaceId,
+      messageId: msg.id,
+      fromE164: withTranscript.fromE164,
+    });
+
     if (notifyTargets.length > 0) {
       try {
         const { sendTransactionalEmail } = await import("@/lib/email/brevo");
         const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
+        const englishBlock = transcriptEnglish
+          ? `<p><strong>English:</strong> ${transcriptEnglish}</p>`
+          : "";
+        const summaryBlock = aiSummary ? `<p><strong>Summary:</strong> ${aiSummary}</p>` : "";
         for (const to of notifyTargets) {
           await sendTransactionalEmail({
             to: String(to),
             subject: `Voicemail transcript from ${withTranscript.fromE164 || "unknown"}`,
-            htmlContent: `<p>Transcript: ${transcript}</p>${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open inbox</a></p>` : ""}`,
-            textContent: transcript,
+            htmlContent: `<p>Transcript: ${transcript}</p>${englishBlock}${summaryBlock}${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open inbox</a></p>` : ""}`,
+            textContent: [transcript, transcriptEnglish, aiSummary].filter(Boolean).join("\n\n"),
           });
         }
       } catch {
         // ignore secondary email errors
       }
     }
+
+    if (box?.smsNotifyE164?.trim()) {
+      await sendVoicemailSmsAlert({
+        workspaceId: input.workspaceId,
+        messageId: msg.id,
+        fromE164: withTranscript.fromE164,
+        smsNotifyE164: box.smsNotifyE164,
+      });
+    }
+
     return withTranscript;
   } catch (err) {
     console.warn("[voicemail] transcription failed", err);

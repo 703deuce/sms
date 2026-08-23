@@ -4,6 +4,8 @@ export type PersonalVoicemailMessage = {
   durationSec: number;
   createdAt: string;
   transcript?: string | null;
+  transcriptEnglish?: string | null;
+  summary?: string | null;
   internalNotes?: string | null;
   readAt?: string | null;
   boxId?: string;
@@ -16,6 +18,7 @@ export type PersonalVoicemailBox = {
   greetingUrl?: string | null;
   emailNotify?: string | null;
   secondaryEmailNotify?: string | null;
+  smsNotifyE164?: string | null;
   transcriptionEnabled?: boolean;
 };
 
@@ -25,6 +28,8 @@ export function mapVoicemailMessage(row: {
   durationSeconds?: number | null;
   createdAt: Date | string;
   transcriptText?: string | null;
+  transcriptEnglish?: string | null;
+  aiSummary?: string | null;
   internalNotes?: string | null;
   isRead?: boolean;
   boxId?: string;
@@ -36,6 +41,8 @@ export function mapVoicemailMessage(row: {
     createdAt:
       row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     transcript: row.transcriptText,
+    transcriptEnglish: row.transcriptEnglish,
+    summary: row.aiSummary,
     internalNotes: row.internalNotes,
     readAt: row.isRead ? new Date().toISOString() : null,
     boxId: row.boxId,
@@ -58,6 +65,8 @@ export function parseVoicemailApiPayload(data: unknown): {
       durationSeconds?: number | null;
       createdAt: string;
       transcriptText?: string | null;
+      transcriptEnglish?: string | null;
+      aiSummary?: string | null;
       internalNotes?: string | null;
       isRead?: boolean;
       boxId?: string;

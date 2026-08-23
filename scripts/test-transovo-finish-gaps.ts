@@ -17,6 +17,35 @@ import {
   validateSmartRoutingFlowDestinations,
 } from "../src/lib/smart-routing/loop-validation";
 import { DEFAULT_MCTB_CONFIG } from "../src/lib/agents/missed-call-text-back/types";
+import {
+  buildDirectDialForwardPromptText,
+  resolveMctbDirectDialForwardE164,
+} from "../src/lib/mctb/direct-dial-prompt";
+import { loadPlatformActivityFeed } from "../src/lib/platform/activity-feed";
+
+// Direct dial prompt
+assert.equal(
+  resolveMctbDirectDialForwardE164({
+    ...DEFAULT_MCTB_CONFIG,
+    id: "cfg",
+    workspaceId: "ws",
+    directDialForwardE164: "+15559876543",
+  }),
+  "+15559876543",
+);
+assert.ok(
+  buildDirectDialForwardPromptText(
+    {
+      ...DEFAULT_MCTB_CONFIG,
+      id: "cfg",
+      workspaceId: "ws",
+      directDialForwardE164: "+15559876543",
+    },
+    "Acme Plumbing",
+  )?.includes("Acme"),
+);
+
+assert.equal(typeof loadPlatformActivityFeed, "function");
 
 // Link tracking
 assert.equal(validateMctbLinkDestinationUrl("https://example.com").ok, true);

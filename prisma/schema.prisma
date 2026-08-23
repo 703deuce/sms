@@ -3026,6 +3026,7 @@ model VoicemailBox {
   afterHoursGreetingUrl String?
   emailNotify     String?
   secondaryEmailNotify String?
+  smsNotifyE164   String?
   transcriptionEnabled Boolean @default(true)
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
@@ -3047,6 +3048,7 @@ model VoicemailMessage {
   durationSeconds Int?
   transcriptText  String?
   transcriptEnglish String?
+  aiSummary       String?
   internalNotes   String?
   isResolved      Boolean  @default(false)
   isRead          Boolean  @default(false)

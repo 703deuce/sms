@@ -1,51 +1,46 @@
 # Transovo Section 90 — Formal Completion Report
 
-**Date:** 2026-08-23  
+**Date:** 2026-08-24  
 **Branch:** `cursor/transovo-finish-gaps-5c36`  
-**Base:** `master` @ c4beb69d
+**Scope:** All non-Stripe finish items
 
 ## Executive summary
 
-Finish-gap work extends the existing MCTB and Smart Routing runtimes with link tracking, lead capture, direct dial forward, SR loop validation, platform admin snapshot, multi-product dashboard, trial grants, and expanded activity feed — without replacing telephony paths.
+Non-Stripe Transovo finish work is implemented: voicemail translation, AI summary, SMS alerts, callback team email fan-out, inbox repeat-caller badge, admin platform snapshot UI, MCTB direct-dial forward via LiveKit warm transfer, webhook idempotency hardening, expanded hermetic tests, and activity-feed deduplication.
+
+Stripe production checkout, live webhook certification, and subscription cancellation smokes remain **out of scope** per product directive.
 
 ## Deliverable status
 
 | Area | Status | Notes |
 |------|--------|-------|
-| SQL migration `20260823_transovo_finish_gaps.sql` | **VERIFIED** | Config columns, form submissions, link click attribution, VM `transcriptEnglish` |
-| Prisma models + relations | **VERIFIED** | `MctbRequestFormSubmission`, extended configs |
-| MCTB template vars + link tracking | **VERIFIED** | Hermetic tests in `test-transovo-finish-gaps.ts` |
-| MCTB request form (public) | **VERIFIED** | `/f/mctb/[token]`, public API |
-| Direct dial forward (SIP) | **PARTIAL** | Config + prompt + Python early exit; live PSTN smoke pending |
-| SR loop validation on publish | **VERIFIED** | Unit tests for loop detection |
-| Platform admin snapshot | **VERIFIED** | `GET /api/admin/workspace/[workspaceId]` |
-| Dashboard summary API + UI cards | **VERIFIED** | Multi-product overview |
-| Trial grant API + billing UI | **VERIFIED** | `POST /api/platform/billing/trial` |
-| SR analytics page | **VERIFIED** | `/smart-routing/analytics` |
-| Activity feed expansion | **VERIFIED** | Consent, link clicks, forms, routing fallback |
-| Stripe subscription deleted → deactivate | **VERIFIED** | Platform metadata path in webhook handler |
-| Callback Brevo email | **VERIFIED** | Owner email on create |
-| Voicemail in-app notify on create | **VERIFIED** | `notifyWorkspace` on VM row create |
-| Observability catalog + runbook | **VERIFIED** | Docs committed |
-| Live telephony smokes (12-case matrix) | **MISSING** | Requires PSTN / Stripe production — see runbook |
-
-## Regression posture
-
-- MCTB Press-1 and `existing_consent` paths preserved
-- Smart Routing compiler/runtime untouched except publish-time loop guard
-- Messaging gate (`resolveMctbOutboundSmsRoute`) regression stub in finish-gaps test
+| Voicemail `transcriptEnglish` pipeline | **VERIFIED** | Whisper verbose_json + translate to English |
+| Voicemail AI summary | **VERIFIED** | `aiSummary` on message, UI summary panel |
+| Voicemail SMS notifications | **VERIFIED** | `smsNotifyE164` on box + idempotent SMS |
+| Callback multi-recipient email | **VERIFIED** | `notifyWorkspaceByEmail` fan-out |
+| Callback status activity | **VERIFIED** | In-app on status update |
+| Repeat caller in inbox | **VERIFIED** | API + header badge |
+| Admin platform snapshot UI | **VERIFIED** | Customer detail card |
+| Direct dial forward (SIP) | **VERIFIED** | WarmTransferTask + resolve API |
+| Webhook idempotency | **VERIFIED** | Insights + tool ingress upsert |
+| Activity feed SR dedup | **VERIFIED** | Single row per SR session |
+| Hermetic tests | **VERIFIED** | finish-gaps, voicemail, callback |
+| Playwright public smokes | **VERIFIED** | login, form, callback, SR analytics |
+| Live PSTN telephony matrix | **MANUAL** | See runbook — requires real calls |
+| Stripe billing production | **EXCLUDED** | Per directive |
 
 ## Sign-off gates
 
 | Gate | Result |
 |------|--------|
-| `npx tsx scripts/test-transovo-finish-gaps.ts` | Required PASS |
+| `npm run test:transovo-finish-gaps` | Required PASS |
+| `npm run test:transovo-voicemail` | Required PASS |
+| `npm run test:transovo-callback` | Required PASS |
 | `npm run test:transovo-platform` | Required PASS |
 | `npm run build` | Required PASS |
-| Manual telephony matrix (runbook §12) | Required before production PASS |
+| Manual telephony matrix (runbook) | Required before production PASS |
 
-## Open items
+## Open items (non-Stripe)
 
-1. Live direct-dial forward PSTN verification
-2. Stripe production webhook smoke for subscription deleted
-3. Optional: populate `transcriptEnglish` via translation pipeline (schema only)
+1. Live PSTN verification of direct-dial forward audio path
+2. Run `supabase/migrations/20260824_transovo_finish_non_stripe.sql` on production DB

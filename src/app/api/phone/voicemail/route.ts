@@ -135,6 +135,7 @@ export async function POST(request: Request) {
         ...(body.greetingUrl !== undefined ? { greetingUrl: normalizedGreetingUrl } : {}),
         emailNotify: body.emailNotify,
         secondaryEmailNotify: (body as { secondaryEmailNotify?: string }).secondaryEmailNotify,
+        smsNotifyE164: (body as { smsNotifyE164?: string | null }).smsNotifyE164,
         name: body.name,
       };
       if (typeof (body as { transcriptionEnabled?: boolean }).transcriptionEnabled === "boolean") {

@@ -4,9 +4,16 @@
 
 import { getOpenAiApiKey } from "@/lib/ai/openai";
 
-export async function transcribeAudioUrl(recordingUrl: string): Promise<string | null> {
+export type VoicemailTranscriptionResult = {
+  text: string | null;
+  language?: string | null;
+};
+
+export async function transcribeAudioUrl(
+  recordingUrl: string,
+): Promise<VoicemailTranscriptionResult> {
   const apiKey = getOpenAiApiKey();
-  if (!apiKey || !recordingUrl) return null;
+  if (!apiKey || !recordingUrl) return { text: null };
 
   const audioRes = await fetch(recordingUrl);
   if (!audioRes.ok) {
@@ -18,7 +25,7 @@ export async function transcribeAudioUrl(recordingUrl: string): Promise<string |
   const form = new FormData();
   form.append("file", blob, `voicemail.${ext}`);
   form.append("model", "whisper-1");
-  form.append("response_format", "text");
+  form.append("response_format", "verbose_json");
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -29,6 +36,10 @@ export async function transcribeAudioUrl(recordingUrl: string): Promise<string |
     const errText = await res.text();
     throw new Error(`Whisper API ${res.status}: ${errText.slice(0, 200)}`);
   }
-  const text = (await res.text()).trim();
-  return text || null;
+  const payload = (await res.json()) as { text?: string; language?: string };
+  const text = (payload.text || "").trim();
+  return {
+    text: text || null,
+    language: payload.language?.trim() || null,
+  };
 }

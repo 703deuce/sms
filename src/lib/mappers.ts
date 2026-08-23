@@ -212,6 +212,10 @@ export function mapConversation(c: {
   const first = c.contact?.firstName || "";
   const last = c.contact?.lastName || "";
   const name = `${first} ${last}`.trim() || c.contact?.phone || "Unknown";
+  const repeatCaller =
+    "repeatCaller" in c && c.repeatCaller
+      ? (c.repeatCaller as { missedToday: number; total: number })
+      : undefined;
   return {
     id: c.id,
     contactId: c.contactId,
@@ -223,6 +227,7 @@ export function mapConversation(c: {
     tags: c.tags || [],
     updatedAt: new Date(c.updatedAt).toISOString(),
     unread: c.unread,
+    repeatCaller,
     messages: (c.messages || [])
       .slice()
       .sort(

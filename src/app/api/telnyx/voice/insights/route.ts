@@ -50,19 +50,29 @@ export async function POST(request: Request) {
     const providerEventId = String(
       (payload.data as Record<string, unknown> | undefined)?.id ||
         payload.id ||
-        `insight-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    await getPrisma().providerWebhookEvent.create({
-      data: {
-        workspaceId: workspaceId || undefined,
-        provider: "telnyx",
-        eventType: "ai.insight_webhook",
-        providerEventId,
-        payload: payload as object,
-        status: "processed",
-        processedAt: new Date(),
-      },
-    }).catch(() => undefined);
+        data.id ||
+        data.conversation_id ||
+        "",
+    ).trim();
+    if (providerEventId) {
+      await getPrisma().providerWebhookEvent.upsert({
+        where: { providerEventId },
+        create: {
+          workspaceId: workspaceId || undefined,
+          provider: "telnyx",
+          eventType: "ai.insight_webhook",
+          providerEventId,
+          payload: payload as object,
+          status: "processed",
+          processedAt: new Date(),
+        },
+        update: {
+          payload: payload as object,
+          status: "processed",
+          processedAt: new Date(),
+        },
+      }).catch(() => undefined);
+    }
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

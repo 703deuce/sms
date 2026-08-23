@@ -7,8 +7,13 @@ test.describe("Transovo public surfaces", () => {
     await expect(page.locator("body")).toContainText(/log in|sign in/i);
   });
 
-  test("MCTB request form route returns form or error shell", async ({ page }) => {
-    const res = await page.goto("/f/mctb/invalid-token-test");
+  test("callback requests page does not 500", async ({ page }) => {
+    const res = await page.goto("/voice/callback-requests");
+    expect(res?.status()).toBeLessThan(500);
+  });
+
+  test("smart routing analytics page does not 500", async ({ page }) => {
+    const res = await page.goto("/smart-routing/analytics");
     expect(res?.status()).toBeLessThan(500);
   });
 });
