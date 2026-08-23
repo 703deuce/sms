@@ -1,6 +1,7 @@
 "use client";
 
 import { SmartRoutingOverviewView } from "@/components/smart-routing/overview-view";
+import type { SetupReadiness } from "@/lib/smart-routing/setup-readiness";
 import type { DraftConfig } from "@/lib/smart-routing/types";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -30,6 +31,19 @@ export default function SmartRoutingOverviewPage() {
     Array<{ type: string; title: string; subtitle: string; bestFor: string[] }>
   >([]);
   const [numberMap, setNumberMap] = useState<Record<string, string>>({});
+  const [workspaceStatus, setWorkspaceStatus] = useState<{
+    publicBusinessE164: string | null;
+    routingNumberE164: string | null;
+    callerIdStatus: string;
+    authorizedCallerCount: number;
+    outboundBusinessCallbacks?: number;
+    primaryFlow?: { id: string; name: string; status: string; type: string } | null;
+    readiness: SetupReadiness;
+  } | null>(null);
+  const [scheduleOverride, setScheduleOverride] = useState<{
+    mode?: string;
+    expiresAt?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
@@ -38,8 +52,10 @@ export default function SmartRoutingOverviewPage() {
       fetch("/api/smart-routing/flows").then((r) => r.json()),
       fetch("/api/smart-routing/templates").then((r) => r.json()),
       fetch("/api/numbers").then((r) => r.json()),
+      fetch("/api/smart-routing/setup").then((r) => r.json()),
+      fetch("/api/smart-routing/analytics?days=30").then((r) => r.json()),
     ])
-      .then(([flowsJson, templatesJson, numbersJson]) => {
+      .then(([flowsJson, templatesJson, numbersJson, setupJson, analyticsJson]) => {
         setFlows(flowsJson.data ?? []);
         setMetrics(flowsJson.metrics ?? null);
         setTemplates(templatesJson.data ?? []);
@@ -49,6 +65,26 @@ export default function SmartRoutingOverviewPage() {
           if (n.id && n.e164) map[n.id] = n.e164;
         }
         setNumberMap(map);
+
+        const setup = setupJson.data;
+        if (setup) {
+          const activeFlow = (setup.flows ?? []).find(
+            (f: { status: string }) => f.status === "active",
+          );
+          setScheduleOverride(setup.scheduleOverride ?? null);
+          setWorkspaceStatus({
+            publicBusinessE164: setup.settings?.publicBusinessE164 ?? null,
+            routingNumberE164: setup.settings?.routingNumberE164 ?? null,
+            callerIdStatus: setup.callerId?.status ?? "not_verified",
+            authorizedCallerCount: (setup.authorizedCallers ?? []).filter(
+              (c: { active: boolean; outboundEnabled: boolean }) =>
+                c.active && c.outboundEnabled,
+            ).length,
+            outboundBusinessCallbacks: analyticsJson.data?.outboundBusinessCallbacks,
+            primaryFlow: activeFlow ?? null,
+            readiness: setup.readiness,
+          });
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -75,6 +111,9 @@ export default function SmartRoutingOverviewPage() {
       metrics={metrics}
       templates={templates}
       numberMap={numberMap}
+      workspaceStatus={workspaceStatus}
+      scheduleOverride={scheduleOverride}
+      onWorkspaceRefresh={load}
       loading={loading}
       onPause={onPause}
       onDuplicate={onDuplicate}

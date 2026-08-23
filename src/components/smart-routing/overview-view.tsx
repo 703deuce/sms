@@ -8,6 +8,8 @@ import {
   SrStatusBadge,
   srCard,
 } from "@/components/smart-routing/shared";
+import { OverviewStatusSection } from "@/components/smart-routing/overview-status-section";
+import { CloseNowControl } from "@/components/smart-routing/close-now-control";
 import {
   derivePrimaryDestination,
   FLOW_TYPE_LABELS,
@@ -61,6 +63,17 @@ type Metrics = {
   failures: number;
 };
 
+type WorkspaceStatus = {
+  publicBusinessE164: string | null;
+  routingNumberE164: string | null;
+  callerIdStatus: string;
+  authorizedCallerCount: number;
+  outboundBusinessCallbacks?: number;
+  primaryFlow?: { id: string; name: string; status: string; type: string } | null;
+  readiness: import("@/lib/smart-routing/setup-readiness").SetupReadiness;
+  scheduleOverride?: { mode?: string; expiresAt?: string } | null;
+};
+
 type Template = {
   type: string;
   title: string;
@@ -89,6 +102,9 @@ export function SmartRoutingOverviewView({
   metrics,
   templates,
   numberMap,
+  workspaceStatus,
+  scheduleOverride,
+  onWorkspaceRefresh,
   loading,
   onPause,
   onDuplicate,
@@ -97,6 +113,9 @@ export function SmartRoutingOverviewView({
   metrics: Metrics | null;
   templates: Template[];
   numberMap: Record<string, string>;
+  workspaceStatus?: WorkspaceStatus | null;
+  scheduleOverride?: { mode?: string; expiresAt?: string } | null;
+  onWorkspaceRefresh?: () => void;
   loading: boolean;
   onPause: (id: string) => Promise<void>;
   onDuplicate: (id: string) => Promise<void>;
@@ -175,6 +194,15 @@ export function SmartRoutingOverviewView({
           </Link>
         </div>
       </div>
+
+      {workspaceStatus ? <OverviewStatusSection status={workspaceStatus} /> : null}
+
+      {scheduleOverride !== undefined && onWorkspaceRefresh ? (
+        <CloseNowControl
+          scheduleOverride={scheduleOverride}
+          onUpdated={onWorkspaceRefresh}
+        />
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SrMetricCard

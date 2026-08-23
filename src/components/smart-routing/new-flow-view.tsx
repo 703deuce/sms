@@ -37,6 +37,7 @@ type Template = {
 
 const TEMPLATE_ICONS: Record<string, { icon: typeof Grid3x3; color: string }> = {
   phone_menu: { icon: Grid3x3, color: "text-[#6366f1] bg-[#eef2ff]" },
+  call_gate: { icon: Phone, color: "text-violet-600 bg-violet-50" },
   missed_call_recovery: { icon: MessageSquare, color: "text-emerald-600 bg-emerald-50" },
   after_hours: { icon: Clock, color: "text-amber-600 bg-amber-50" },
   department: { icon: Users, color: "text-sky-600 bg-sky-50" },

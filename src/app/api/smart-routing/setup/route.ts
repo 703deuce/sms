@@ -9,6 +9,8 @@ import {
 import { getCallerIdVerificationStatus } from "@/lib/smart-routing/caller-id-verification";
 import { listAuthorizedCallers } from "@/lib/smart-routing/authorized-callers";
 import { CARRIER_FORWARDING_GUIDES } from "@/lib/smart-routing/forwarding-service";
+import { computeSetupReadiness } from "@/lib/smart-routing/setup-readiness";
+import { evaluateScheduleBranch } from "@/lib/smart-routing/schedule-engine";
 
 export async function GET() {
   try {
@@ -25,10 +27,25 @@ export async function GET() {
     });
     const flows = await prisma.smartRoutingFlow.findMany({
       where: { workspaceId: auth.workspaceId },
-      select: { id: true, name: true, status: true, routingNumberE164: true, businessNumberE164: true },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        type: true,
+        routingNumberE164: true,
+        businessNumberE164: true,
+        scheduleJson: true,
+        draftConfigJson: true,
+      },
       orderBy: { updatedAt: "desc" },
       take: 20,
     });
+    const destinations = await prisma.smartRoutingDestination.findMany({
+      where: { workspaceId: auth.workspaceId },
+      select: { id: true, label: true, phoneNumber: true, active: true, destinationType: true },
+      orderBy: { label: "asc" },
+    });
+
     const forwarding = settings.routingNumberE164
       ? CARRIER_FORWARDING_GUIDES.map((guide) => ({
           carrier: guide.carrier,
@@ -46,6 +63,71 @@ export async function GET() {
           ),
         }))
       : null;
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const forwardedSession = await prisma.smartRoutingCallSession.findFirst({
+      where: {
+        workspaceId: auth.workspaceId,
+        forwardedFromNumber: { not: null },
+        startedAt: { gte: since },
+      },
+      orderBy: { startedAt: "desc" },
+      select: { id: true, startedAt: true, forwardedFromNumber: true, callerNumber: true },
+    });
+
+    const inboundTest = await prisma.smartRoutingCallSession.findFirst({
+      where: {
+        workspaceId: auth.workspaceId,
+        startedAt: { gte: since },
+        isTest: false,
+      },
+      orderBy: { startedAt: "desc" },
+      select: { id: true, startedAt: true, finalOutcome: true },
+    });
+
+    const outboundTest = await prisma.smartRoutingOutboundCall.findFirst({
+      where: {
+        workspaceId: auth.workspaceId,
+        createdAt: { gte: since },
+        result: { in: ["bridged", "completed", "answered"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, destinationE164: true, businessCallerIdE164: true },
+    }).catch(() => null);
+
+    const forwardingOnFlow = flows.some((f: { scheduleJson: unknown }) => {
+      const schedule = (f.scheduleJson as Record<string, unknown>) ?? {};
+      const fwd = (schedule.forwarding as Record<string, unknown>) ?? {};
+      return fwd.status === "verified";
+    });
+
+    const activeFlow = flows.find((f: { status: string }) => f.status === "active");
+    const scheduleBranch = activeFlow
+      ? await evaluateScheduleBranch(
+          auth.workspaceId,
+          "America/New_York",
+          activeFlow.scheduleJson as Record<string, unknown>,
+        )
+      : settings.scheduleOverrideJson
+        ? "temporary_closure"
+        : "open";
+
+    const scheduleOverride = settings.scheduleOverrideJson as
+      | { scheduleOverride?: { mode?: string; expiresAt?: string } }
+      | null;
+
+    const readiness = computeSetupReadiness({
+      settings,
+      callerIdStatus: callerId.status,
+      flows,
+      destinations,
+      authorizedCallers,
+      forwardingDetected: Boolean(forwardedSession) || forwardingOnFlow,
+      inboundTestDetected: Boolean(inboundTest),
+      outboundTestDetected: Boolean(outboundTest),
+      scheduleBranch,
+    });
+
     return NextResponse.json({
       data: {
         settings,
@@ -53,7 +135,31 @@ export async function GET() {
         authorizedCallers,
         phoneNumbers,
         flows,
+        destinations,
         forwarding,
+        readiness,
+        scheduleOverride: scheduleOverride?.scheduleOverride ?? null,
+        forwardingTest: forwardedSession
+          ? {
+              detected: true,
+              at: forwardedSession.startedAt.toISOString(),
+              forwardedFrom: forwardedSession.forwardedFromNumber,
+              callerNumber: forwardedSession.callerNumber,
+            }
+          : { detected: false },
+        recentInbound: inboundTest
+          ? {
+              at: inboundTest.startedAt.toISOString(),
+              outcome: inboundTest.finalOutcome,
+            }
+          : null,
+        recentOutbound: outboundTest
+          ? {
+              at: outboundTest.createdAt.toISOString(),
+              destination: outboundTest.destinationE164,
+              businessCallerId: outboundTest.businessCallerIdE164,
+            }
+          : null,
       },
     });
   } catch (err) {
@@ -74,7 +180,7 @@ export async function POST(request: Request) {
       outboundEnabled: body.outboundEnabled,
       setupCompletedAt: body.markComplete ? new Date() : undefined,
     });
-    if (body.assignedPhoneNumberId && body.routingNumberE164) {
+    if (body.assignedPhoneNumberId) {
       const prisma = getPrisma();
       const pn = await prisma.phoneNumber.findFirst({
         where: { id: body.assignedPhoneNumberId, workspaceId: auth.workspaceId },
@@ -86,7 +192,8 @@ export async function POST(request: Request) {
         });
       }
     }
-    return NextResponse.json({ data: settings });
+    const refreshed = await loadSmartRoutingWorkspaceSettings(auth.workspaceId);
+    return NextResponse.json({ data: refreshed ?? settings });
   } catch (err) {
     return jsonError(err, 400);
   }

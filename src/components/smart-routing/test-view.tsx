@@ -363,6 +363,9 @@ export function SmartRoutingTestView({ flowId }: { flowId: string }) {
                 <Link href="/smart-routing/audio" className="block text-[#6366f1] hover:underline">
                   Prompts & Audio
                 </Link>
+                <Link href="/smart-routing/setup#test-callback" className="block text-[#6366f1] hover:underline">
+                  Test business callback
+                </Link>
                 <Link href="/smart-routing" className="block text-[#6366f1] hover:underline">
                   Smart Routing Overview
                 </Link>

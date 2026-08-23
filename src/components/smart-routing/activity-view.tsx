@@ -51,12 +51,25 @@ type Flow = {
 
 const OUTCOME_FILTERS = [
   { id: "all", label: "All" },
+  { id: "incoming", label: "Incoming" },
+  { id: "outgoing", label: "Outgoing" },
   { id: "connected", label: "Connected" },
   { id: "voicemail", label: "Voicemail" },
   { id: "text", label: "Text Requested" },
   { id: "ai", label: "AI Handoff" },
   { id: "failures", label: "Failures" },
 ] as const;
+
+type OutboundCall = {
+  id: string;
+  employeePhoneE164: string;
+  destinationE164: string;
+  businessCallerIdE164: string | null;
+  durationSeconds: number | null;
+  result: string | null;
+  createdAt: string;
+  authorizedCaller?: { name: string } | null;
+};
 
 function outcomeBadge(outcome: string | null | undefined, sms: boolean) {
   if (sms) return { status: "text_requested", label: "Text Requested" };
@@ -72,6 +85,7 @@ function outcomeBadge(outcome: string | null | undefined, sms: boolean) {
 export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [outboundCalls, setOutboundCalls] = useState<OutboundCall[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [search, setSearch] = useState("");
@@ -88,6 +102,9 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
         setSessions(list);
         setSelectedId((prev) => prev ?? list[0]?.id ?? null);
       });
+    fetch("/api/smart-routing/outbound-calls?limit=30")
+      .then((r) => r.json())
+      .then((j) => setOutboundCalls(j.data ?? []));
   }, [flowId]);
 
   useEffect(() => {
@@ -102,7 +119,9 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
   }, [selectedId]);
 
   const filtered = useMemo(() => {
+    if (filter === "outgoing") return [];
     return sessions.filter((s) => {
+      if (filter === "incoming" && s.isTest) return false;
       if (filter === "connected" && s.finalOutcome !== "connected") return false;
       if (filter === "voicemail" && s.finalOutcome !== "voicemail") return false;
       if (filter === "text" && !s.smsTriggered) return false;
@@ -119,6 +138,21 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
       return true;
     });
   }, [sessions, filter, search]);
+
+  const filteredOutbound = useMemo(() => {
+    if (filter !== "all" && filter !== "outgoing") return [];
+    return outboundCalls.filter((o) => {
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        if (
+          !o.destinationE164.includes(q) &&
+          !o.employeePhoneE164.includes(q)
+        )
+          return false;
+      }
+      return true;
+    });
+  }, [outboundCalls, filter, search]);
 
   const metrics = useMemo(() => {
     const connected = sessions.filter((s) => s.finalOutcome === "connected").length;
@@ -244,7 +278,28 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f3f4f6]">
-                {filtered.length === 0 ? (
+                {filteredOutbound.map((o) => (
+                  <tr key={`out-${o.id}`} className="bg-[#fafafa]">
+                    <td className="px-5 py-3">
+                      <p className="font-semibold text-[#111827]">Business callback</p>
+                      <p className="text-[11px] text-[#6b7280]">
+                        {o.authorizedCaller?.name ?? fmtPhoneDisplay(o.employeePhoneE164)} →{" "}
+                        {fmtPhoneDisplay(o.destinationE164)}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 text-[#6b7280]">
+                      {new Date(o.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-3 text-[#6b7280]">Outbound</td>
+                    <td className="px-3 py-3">
+                      <span className="text-[11px] text-[#6b7280]">
+                        Caller ID: {fmtPhoneDisplay(o.businessCallerIdE164 || "")}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">{fmtDurationMmSs(o.durationSeconds)}</td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && filteredOutbound.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-[#6b7280]">
                       No calls yet for this flow.
