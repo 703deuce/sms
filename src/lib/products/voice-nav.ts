@@ -4,17 +4,20 @@ import {
   Hash,
   LayoutDashboard,
   MessageSquare,
-  PhoneMissed,
   PhoneForwarded,
+  PhoneMissed,
   Puzzle,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Voicemail,
+  Clock,
+  Users,
+  Music,
+  Activity,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
-import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
 import {
   type WorkspaceFeatureSnapshot,
@@ -38,8 +41,28 @@ function featureActive(
   return isActiveEntitlement(features[key]);
 }
 
+/** Flat Smart Routing links for the voice sidebar (all pages visible under the section). */
+function buildSmartRoutingNavItems(firstSectionLabel?: string): NavItem[] {
+  const pages: NavItem[] = [
+    { label: "Overview", href: "/smart-routing", icon: LayoutDashboard },
+    { label: "AI Routing Assistant", href: "/smart-routing/ai", icon: Sparkles },
+    { label: "Call Flows", href: "/smart-routing/flows", icon: GitBranch },
+    { label: "People & Destinations", href: "/smart-routing/destinations", icon: Users },
+    { label: "Business Hours", href: "/smart-routing/hours", icon: Clock },
+    { label: "Business Callback", href: "/smart-routing/callback", icon: PhoneForwarded },
+    { label: "Audio", href: "/smart-routing/audio", icon: Music },
+    { label: "Activity", href: "/smart-routing/activity", icon: Activity },
+    { label: "Setup", href: "/smart-routing/setup", icon: SlidersHorizontal },
+  ];
+  if (firstSectionLabel) {
+    pages[0] = { ...pages[0], sectionLabel: firstSectionLabel };
+  }
+  return pages;
+}
+
 /**
- * Transovo inbound platform sidebar — entitlement-aware sections.
+ * Transovo inbound platform sidebar — product bands:
+ * Dashboard → Missed Call Text Back → Smart Routing → Manage → Account.
  */
 export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
@@ -48,37 +71,36 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const hasVm = featureActive(features, "visual_voicemail", false);
   const hasCallback = featureActive(features, "callback_requests", false);
 
-  const main: NavItem[] = [
+  const items: NavItem[] = [
     {
-      label: "Overview",
+      label: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
-      sectionLabel: "Main",
     },
   ];
 
-  if (options.showTryIt && hasMctb) {
-    main.push({
-      label: "Try Missed Call Text Back",
-      href: "/voice/try-it",
-      icon: Sparkles,
-    });
-  }
-
   if (hasMctb) {
-    main.push(
-      {
-        label: "Conversations",
-        href: "/inbox",
-        icon: MessageSquare,
-      },
+    items.push({
+      label: "Conversations",
+      href: "/inbox",
+      icon: MessageSquare,
+      sectionLabel: "Missed Call Text Back",
+    });
+    if (options.showTryIt) {
+      items.push({
+        label: "Try It",
+        href: "/voice/try-it",
+        icon: Sparkles,
+      });
+    }
+    items.push(
       {
         label: "Missed Calls",
         href: "/voice/missed-calls",
         icon: PhoneMissed,
       },
       {
-        label: "Missed Call Setup",
+        label: "Setup",
         href: "/voice/setup",
         icon: SlidersHorizontal,
       },
@@ -86,32 +108,10 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   }
 
   if (hasSr) {
-    main.push({
-      label: "Smart Routing",
-      href: "/smart-routing",
-      icon: GitBranch,
-      children: buildSmartRoutingNavChildren(),
-    });
+    items.push(...buildSmartRoutingNavItems("Smart Routing"));
   }
 
-  if (hasVm) {
-    main.push({
-      label: "Visual Voicemail",
-      href: "/personal/voicemail",
-      icon: Voicemail,
-    });
-  }
-
-  if (hasCallback) {
-    main.push({
-      label: "Callback Requests",
-      href: "/voice/callback-requests",
-      icon: PhoneForwarded,
-    });
-  }
-
-  return [
-    ...main,
+  const manage: NavItem[] = [
     {
       label: "Numbers",
       href: "/voice/numbers",
@@ -125,21 +125,42 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     },
     { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
-    {
-      label: "Settings",
-      href: "/settings/business",
-      icon: Settings,
-      sectionLabel: "Account",
-    },
   ];
+
+  if (hasVm) {
+    manage.push({
+      label: "Visual Voicemail",
+      href: "/personal/voicemail",
+      icon: Voicemail,
+    });
+  }
+
+  if (hasCallback) {
+    manage.push({
+      label: "Callback Requests",
+      href: "/voice/callback-requests",
+      icon: PhoneForwarded,
+    });
+  }
+
+  items.push(...manage);
+
+  items.push({
+    label: "Settings",
+    href: "/settings/business",
+    icon: Settings,
+    sectionLabel: "Account",
+  });
+
+  return items;
 }
 
 export function getVoicePageTitle(pathname: string): string {
   if (pathname === "/dashboard" || pathname === "/outcomes") return "";
-  if (pathname.startsWith("/voice/try-it")) return "Try Missed Call Text Back";
+  if (pathname.startsWith("/voice/try-it")) return "Try It";
   if (pathname.startsWith("/inbox")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
-  if (pathname.startsWith("/voice/setup")) return "Missed Call Setup";
+  if (pathname.startsWith("/voice/setup")) return "Setup";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
   if (isSmartRoutingSectionPath(pathname)) {
     if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
@@ -167,15 +188,15 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", true);
   const hasSr = featureActive(features, "smart_routing", true);
-  const items = [{ label: "Home", href: "/dashboard" }];
+  const items = [{ label: "Dashboard", href: "/dashboard" }];
   if (options.showTryIt && hasMctb) {
-    items.push({ label: "Try MCTB", href: "/voice/try-it" });
+    items.push({ label: "Try It", href: "/voice/try-it" });
   }
   if (hasMctb) {
     items.push(
       { label: "Chats", href: "/inbox" },
       { label: "Missed", href: "/voice/missed-calls" },
-      { label: "MCTB Setup", href: "/voice/setup" },
+      { label: "Setup", href: "/voice/setup" },
     );
   }
   if (hasSr) {

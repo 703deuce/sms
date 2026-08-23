@@ -39,7 +39,7 @@ const srOnly = buildVoiceNav({
   },
 });
 assert.ok(!srOnly.some((i) => i.label === "Missed Calls"));
-assert.ok(srOnly.some((i) => i.label === "Smart Routing"));
+assert.ok(srOnly.some((i) => i.label === "Overview" && i.href === "/smart-routing"));
 
 assert.ok(PLATFORM_BILLING_CATALOG.length >= 5);
 

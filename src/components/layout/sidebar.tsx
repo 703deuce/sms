@@ -153,6 +153,9 @@ function bestExpandedKey(
     if (item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls")) {
       score = Math.max(score, 60_000);
     }
+    if (item.label === "Try It" && pathname.startsWith("/voice/try-it")) {
+      score = Math.max(score, 60_000);
+    }
     if (item.label === "Compliance" && pathname.startsWith("/compliance")) {
       score = Math.max(score, 60_000);
     }
@@ -402,15 +405,20 @@ export function Sidebar({
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
           const tryItOwned =
-            item.label === "Try It" && pathname.startsWith("/voice/try-it");
+            (item.label === "Try It" || item.label === "Try Missed Call Text Back") &&
+            pathname.startsWith("/voice/try-it");
           const setupOwned =
-            item.label === "Setup" && pathname.startsWith("/voice/setup");
+            (item.label === "Setup" || item.label === "Missed Call Setup") &&
+            pathname.startsWith("/voice/setup");
           const missedCallsOwned =
             item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls");
           const complianceOwned =
             item.label === "Messaging Compliance" && pathname.startsWith("/compliance");
           const smartRoutingOwned =
-            item.label === "Smart Routing" && isSmartRoutingSectionPathExport(pathname);
+            (item.label === "Smart Routing" ||
+              item.href === "/smart-routing" ||
+              item.href.startsWith("/smart-routing/")) &&
+            isSmartRoutingSectionPathExport(pathname);
           const expandKey = itemExpandKey(item);
           const personalOverviewExactOnly =
             currentProduct === "numbers" && item.href === "/personal" && pathname !== "/personal";

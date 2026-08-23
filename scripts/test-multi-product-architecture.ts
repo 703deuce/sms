@@ -110,10 +110,10 @@ assert.ok(!voiceLabels.includes("Receptionist"), "Receptionist removed from voic
 assert.ok(!voiceLabels.includes("Knowledge"), "Knowledge removed from voice nav");
 assert.ok(!voiceLabels.includes("Automations"), "Automations hidden from voice nav");
 assert.ok(voiceLabels.includes("Smart Routing"), "Smart Routing in voice nav");
-assert.ok(voiceLabels.includes("Overview"), "Voice nav includes Overview");
+assert.ok(voiceLabels.includes("Dashboard"), "Voice nav includes Dashboard");
 assert.ok(voiceNavTrial.map((i) => i.label).includes("Try It"), "Trial voice nav includes Try It");
-assert.equal(voiceNav.length, 10, "Voice sidebar ships 10 items without Try It");
-assert.equal(voiceNavTrial.length, 11, "Voice sidebar ships 11 items with Try It");
+assert.equal(voiceNav.length, 18, "Voice sidebar ships 18 items without Try It");
+assert.equal(voiceNavTrial.length, 19, "Voice sidebar ships 19 items with Try It");
 assert.equal(smsNav.length, 9, "SMS sidebar preserved without dashboard");
 assert.ok(SMS_CREATE_ACTIONS.length >= 5, "Create menu has primary actions");
 

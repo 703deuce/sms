@@ -44,7 +44,7 @@ async function main() {
   assert.equal(nav.some((item) => item.label === "Try It"), false);
   const trialNav = buildVoiceNav({ showTryIt: true });
   assert.equal(trialNav.some((item) => item.label === "Try It"), true);
-  assert.equal(trialNav[0]?.label, "Overview");
+  assert.equal(trialNav[0]?.label, "Dashboard");
   });
 
   await test("test:mctb-try-it-no-forwarding-required", () => {
