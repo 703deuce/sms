@@ -84,7 +84,6 @@ def test_log_participant_active_requires_observed_active():
     with pytest.raises(ValueError, match="requires observed"):
         trace.log_participant_active(sip_call_status="ringing")
 
-
 @pytest.mark.asyncio
 async def test_wait_for_sip_call_status_active_times_out(capsys):
     trace = MctbSipE2eTrace.create(

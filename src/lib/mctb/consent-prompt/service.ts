@@ -1,8 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
+import { isPhoneMctbSipIngress } from "@/lib/mctb/sip-ingress/sync";
 import { generatePromptAudio } from "@/lib/smart-routing/media-service";
 import {
   createFlow,
@@ -60,6 +62,22 @@ async function resolveWorkspaceTfnPhoneNumberId(workspaceId: string): Promise<st
     select: { id: true },
   });
   return pn?.id || null;
+}
+
+/** MCTB number selected in Setup — local 10DLC, toll-free, or admin-linked production DID. */
+async function resolveMctbAssignedPhoneNumberId(workspaceId: string): Promise<string | null> {
+  const runtime = await loadMissedCallTextConfig(workspaceId);
+  if (runtime.phoneNumberId) {
+    const { resolveMctbPhoneNumberIdForWorkspace } = await import(
+      "@/lib/mctb/platform-production-routing"
+    );
+    const resolved = await resolveMctbPhoneNumberIdForWorkspace({
+      workspaceId,
+      phoneNumberId: runtime.phoneNumberId,
+    });
+    if (resolved) return resolved;
+  }
+  return resolveWorkspaceTfnPhoneNumberId(workspaceId);
 }
 
 async function findMctbConsentFlow(workspaceId: string) {
@@ -146,10 +164,35 @@ export async function publishMctbConsentPrompt(
   const gate = canPublishConsentPrompt(config);
   if (!gate.ok) throw new Error(gate.reason || "Cannot publish consent prompt");
 
+  const prisma = getPrisma();
   const phoneNumberId =
-    options?.assignedPhoneNumberId || (await resolveWorkspaceTfnPhoneNumberId(workspaceId));
+    options?.assignedPhoneNumberId || (await resolveMctbAssignedPhoneNumberId(workspaceId));
   if (!phoneNumberId) {
-    throw new Error("Assign a workspace toll-free number before publishing consent audio");
+    throw new Error(
+      "Select and save your MCTB number in Setup before publishing consent audio",
+    );
+  }
+
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId },
+    select: { id: true, settingsJson: true },
+  });
+  if (!phone?.id) {
+    throw new Error("Selected MCTB number was not found");
+  }
+
+  const now = new Date().toISOString();
+  const publishedPatch = {
+    publishedAt: now,
+    publishedScriptHash: config.scriptHash,
+    publishedAudioAssetId: config.audioAssetId,
+  };
+
+  if (isPhoneMctbSipIngress(phone.settingsJson)) {
+    return saveMctbConsentPrompt(workspaceId, {
+      ...publishedPatch,
+      flowId: config.flowId,
+    });
   }
 
   const version = config.publishedVersion || 1;
@@ -177,11 +220,8 @@ export async function publishMctbConsentPrompt(
 
   await publishFlow(workspaceId, flow.id, actorUserId);
 
-  const now = new Date().toISOString();
   return saveMctbConsentPrompt(workspaceId, {
-    publishedAt: now,
-    publishedScriptHash: config.scriptHash,
-    publishedAudioAssetId: config.audioAssetId,
+    ...publishedPatch,
     flowId: flow.id,
   });
 }

@@ -23,6 +23,8 @@ import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -116,11 +118,17 @@ export async function GET() {
           {
             id: platformDemoPhone.phoneNumberId,
             e164: platformDemoPhone.e164,
-            friendlyName: "Transovo platform demo line",
+            friendlyName: formatMctbPhoneLabel(platformDemoPhone.e164),
             type: "local",
             a2pStatus: "APPROVED",
             status: "Active",
-            settingsJson: platformDemoPhone.settingsJson,
+            settingsJson: {
+              ...platformDemoPhone.settingsJson,
+              ...telnyxLocalA2pSettings({
+                role: "customer_production",
+                a2pApproved: true,
+              }),
+            },
           },
         ]
       : phoneNumbers;

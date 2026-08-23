@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from transovo_voice.session.sip_forwarded_from import extract_forwarded_from_sip_attributes
 
-SYNTHETIC_FORWARDED = "+18880002001"
+SYNTHETIC_FORWARDED = "+19990001001"
 
 
 def test_extract_forwarded_from_diversion_header():

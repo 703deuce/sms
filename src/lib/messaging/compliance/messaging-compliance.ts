@@ -2,6 +2,7 @@
  * Messaging compliance types — toll-free verification vs 10DLC/A2P.
  * Toll-free trial numbers use TOLL_FREE_VERIFICATION, not A2P_10DLC.
  */
+import { parseMctbPhoneRole } from "./phone-number-class";
 
 export type MessagingComplianceType = "TOLL_FREE_VERIFICATION" | "A2P_10DLC";
 
@@ -131,6 +132,10 @@ export function isPhoneMessagingApproved(input: {
   a2pStatus?: string | null;
   type?: string | null;
 }): boolean {
+  if (parseMctbPhoneRole(input.settingsJson) === "platform_demo") {
+    return true;
+  }
+
   const compliance = parseMessagingComplianceFromSettings(input.settingsJson);
   if (compliance?.type === "TOLL_FREE_VERIFICATION") {
     return isTfvApproved(compliance.status as TollFreeVerificationStatus);

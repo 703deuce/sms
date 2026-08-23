@@ -235,6 +235,9 @@ export function MctbSetupView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
+      if (json.data?.sipProvision && !json.data.sipProvision.ok) {
+        throw new Error(json.data.sipProvision.error || "Voice/SIP provisioning failed");
+      }
       setSaved(true);
       await load();
     } catch (err) {
@@ -450,20 +453,6 @@ export function MctbSetupView() {
                 Select and save an A2P-approved number above to see your forward target.
               </p>
             )}
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-[#374151]">
-                Your business line (the number customers call)
-              </span>
-              <input
-                className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
-                placeholder="+1..."
-                value={businessLineE164}
-                onChange={(e) => setBusinessLineE164(e.target.value)}
-              />
-              <p className="text-[12px] text-muted-foreground">
-                We use this to match forwarded calls to your workspace. Save setup after entering it.
-              </p>
-            </label>
           </Card>
 
           <Card id="triggers" className="scroll-mt-24 space-y-3 p-5">
