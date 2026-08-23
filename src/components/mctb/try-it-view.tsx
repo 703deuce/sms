@@ -116,8 +116,8 @@ export function MctbTryItView() {
           <h1 className="text-2xl font-semibold tracking-tight">Try Missed Call Text Back</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          See exactly what your customers will experience. No forwarding, no carrier setup, no
-          production number required.
+          Same frozen SIP/LiveKit flow as production — you call the shared demo number directly
+          instead of forwarding your business line. No carrier setup required before A2P approval.
         </p>
       </div>
 
@@ -176,7 +176,7 @@ export function MctbTryItView() {
             {demoDisplay}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Step 2 — Call this number directly from your verified mobile. Do not set up forwarding.
+            Step 2 — Call this number directly from your verified mobile (no carrier forwarding).
             {status?.session?.callerE164 ? (
               <>
                 {" "}

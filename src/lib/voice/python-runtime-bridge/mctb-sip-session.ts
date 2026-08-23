@@ -9,7 +9,6 @@ import { loadMctbConsentPrompt } from "@/lib/mctb/consent-prompt/store";
 import { DEFAULT_MCTB_CONSENT_VOICE_ID } from "@/lib/mctb/consent-prompt/defaults";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import { getImmediate571ConsentGather } from "@/lib/smart-routing/platform-consent-fast-path";
 import { generatePromptAudio, publicPlaybackUrl } from "@/lib/smart-routing/media-service";
 import { resolveSmsConsentPlayback } from "@/lib/smart-routing/prompt-playback";
 import {
@@ -162,35 +161,22 @@ export async function resolveMctbSipSessionForPython(
   let failClosed = false;
 
   if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
-    // Try It demo only — production (paid) uses workspace consent audio via frozen SIP.
-    if (mctbConfig.demoMode) {
-      const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
-      if (isPlatformDemoNumber(transovoNumberE164)) {
-        const immediate = getImmediate571ConsentGather();
-        if (immediate) {
-          playUrl = immediate.playUrl;
-          audioAssetId = immediate.audioAssetId;
-        }
-      }
-    }
-    if (!playUrl) {
-      const prompt = await loadMctbConsentPrompt(target.workspaceId);
-      const publishedAssetId = String(
-        prompt.publishedAudioAssetId || prompt.audioAssetId || "",
-      ).trim();
-      const playback = await resolveSmsConsentPlayback(target.workspaceId, {
-        audioAssetId: publishedAssetId,
-        promptAssetId: publishedAssetId,
-        promptScriptHash: prompt.scriptHash,
-        promptText: prompt.scriptText,
-        text: prompt.scriptText,
-      });
-      if (playback.failClosed) {
-        failClosed = true;
-      } else {
-        playUrl = playback.playUrl;
-        audioAssetId = publishedAssetId || undefined;
-      }
+    const prompt = await loadMctbConsentPrompt(target.workspaceId);
+    const publishedAssetId = String(
+      prompt.publishedAudioAssetId || prompt.audioAssetId || "",
+    ).trim();
+    const playback = await resolveSmsConsentPlayback(target.workspaceId, {
+      audioAssetId: publishedAssetId,
+      promptAssetId: publishedAssetId,
+      promptScriptHash: prompt.scriptHash,
+      promptText: prompt.scriptText,
+      text: prompt.scriptText,
+    });
+    if (playback.failClosed) {
+      failClosed = true;
+    } else {
+      playUrl = playback.playUrl;
+      audioAssetId = publishedAssetId || undefined;
     }
     confirmationPlayUrl = await resolveConfirmationPlayUrl(target.workspaceId);
   }

@@ -36,6 +36,8 @@ export async function provisionMctbTelnyxSipIngress(input: {
   phoneNumberId: string;
   messageTemplate?: string;
   delaySeconds?: number;
+  /** platform_demo = shared Try It DID; customer_mctb = paid production DID */
+  mctbRole?: "platform_demo" | "customer_mctb";
 }): Promise<ProvisionMctbTelnyxSipIngressResult> {
   const prisma = getPrisma();
   let phone = await prisma.phoneNumber.findFirst({
@@ -90,11 +92,14 @@ export async function provisionMctbTelnyxSipIngress(input: {
     };
   }
 
-  const mctbSettings = telnyxLocalA2pSettings({ role: "customer_production" });
+  const role = input.mctbRole || "customer_mctb";
+  const mctbSettings = telnyxLocalA2pSettings({
+    role: role === "platform_demo" ? "platform_demo" : "customer_production",
+  });
   const nextSettings = mergeSettings(phone.settingsJson, {
     ...mctbSettings,
     mctbSipIngress: true,
-    mctbRole: "customer_mctb",
+    mctbRole: role,
     routingOwner: "mctb_sip",
   });
 

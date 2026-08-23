@@ -35,8 +35,9 @@ export function isProductionActivationPhase(state: MctbOnboardingState): boolean
 }
 
 /**
- * Demo ingress: direct call to platform demo DID with an active demo session.
- * Forwarded calls are never treated as demo — they belong to production onboarding.
+ * Try It entry: direct call to the shared platform demo DID with an active session.
+ * Production entry: forwarded call to the workspace-assigned MCTB DID.
+ * Both use the same frozen SIP/LiveKit handler — demoMode only classifies entry + trial SMS.
  */
 export function isDemoDirectIngress(input: {
   transovoNumberE164: string;
@@ -68,7 +69,7 @@ export function isProductionForwardedIngress(input: {
   return isProductionActivationPhase(input.onboardingState);
 }
 
-/** Runtime demoMode flag — only true for direct demo ingress, never live test / forwarding. */
+/** Runtime Try It flag — direct demo ingress (no carrier forward). Same SIP engine as production. */
 export function resolveRuntimeDemoMode(input: {
   workspaceId: string;
   transovoNumberE164: string;

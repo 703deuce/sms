@@ -295,12 +295,12 @@ export function MctbSetupView() {
             sends. Use this to run Try It, Test My Setup, and paid-customer flows in the browser.
           </p>
           <p className="text-[13px] text-muted-foreground">
-            Production path (frozen SIP engine): forward your business line to{" "}
+            Production path (frozen SIP/LiveKit): forward your business line to{" "}
             <strong>
               {productionForwardE164 ? fmtPhone(productionForwardE164) : "your assigned MCTB number"}
             </strong>
-            , then call your business line from another phone. Try It is a separate direct-call demo
-            and does not use carrier forwarding.
+            , then call your business line from another phone. Try It uses the same SIP handler —
+            you call the shared demo number directly with no forwarding.
           </p>
           <label className="block space-y-1.5">
             <span className="text-[12px] font-semibold text-[#374151]">

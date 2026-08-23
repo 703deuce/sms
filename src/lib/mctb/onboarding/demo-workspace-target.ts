@@ -58,7 +58,7 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
 
   const isPlatformDemo = isPlatformDemoNumber(transovoE164);
 
-  // Shared Try It demo DID only — paid customers use their assigned number via SIP ingress below.
+  // Shared Try It demo DID — same SIP/LiveKit handler as production; workspace from active session.
   if (isPlatformDemo) {
     const target = await resolvePlatformDemoTarget({
       callerE164: input.callerE164,

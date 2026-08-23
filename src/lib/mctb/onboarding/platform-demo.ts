@@ -3,10 +3,6 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { getPlatformDemoNumberE164 } from "@/lib/mctb/onboarding/demo";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
-import {
-  isExistingConsentMode,
-  isVerifiedCallConsentMode,
-} from "@/lib/mctb/consent-mode";
 import { MCTB_CONSENT_FLOW_NAME } from "@/lib/mctb/consent-prompt/types";
 
 /** Workspace that owns the shared platform demo Telnyx line (voice + A2P SMS routing). */
@@ -41,90 +37,139 @@ export function normalizeDemoE164(e164: string): string {
   return normalizeE164(e164);
 }
 
+async function loadPlatformDemoPhoneRecord(ownerWorkspaceId: string) {
+  const prisma = getPrisma();
+  return prisma.phoneNumber.findFirst({
+    where: { e164: MCTB_PLATFORM_DEMO_E164, workspaceId: ownerWorkspaceId },
+    select: { id: true, providerNumberId: true, e164: true },
+  });
+}
+
+async function pauseLegacyPlatformDemoSmartRouting(
+  ownerWorkspaceId: string,
+  phoneNumberId: string,
+): Promise<void> {
+  const prisma = getPrisma();
+  const flows = await prisma.smartRoutingFlow.findMany({
+    where: {
+      workspaceId: ownerWorkspaceId,
+      assignedPhoneNumberId: phoneNumberId,
+      status: "active",
+    },
+    select: { id: true },
+  });
+  if (!flows.length) return;
+  const { pauseFlow } = await import("@/lib/smart-routing/flow-service");
+  for (const flow of flows) {
+    await pauseFlow(ownerWorkspaceId, flow.id).catch(() => undefined);
+  }
+}
+
 /**
- * Point platform 571 at TeXML Press-1 (instant answer at Telnyx edge).
- * Call Control webhooks are too slow for AT&T conditional forwards (~5s total).
+ * Wire the shared Try It platform demo DID to the frozen MCTB SIP/LiveKit handler.
+ * Same voice engine as production — only the entry point differs (direct dial vs forward).
+ */
+export async function ensurePlatformDemoSipIngress(): Promise<{
+  ok: boolean;
+  ownerWorkspaceId: string;
+  phoneNumberId: string;
+  providerNumberId: string | null;
+  e164: string;
+  actions: string[];
+  error?: string;
+}> {
+  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+  if (!ownerId) throw new Error("Platform demo owner workspace not found");
+
+  const pn = await loadPlatformDemoPhoneRecord(ownerId);
+  if (!pn?.id) {
+    throw new Error(`Platform demo phone ${MCTB_PLATFORM_DEMO_E164} not found`);
+  }
+
+  const { provisionMctbTelnyxSipIngress } = await import(
+    "@/lib/mctb/provisioning/telnyx-sip-ingress"
+  );
+  const provision = await provisionMctbTelnyxSipIngress({
+    workspaceId: ownerId,
+    phoneNumberId: pn.id,
+    mctbRole: "platform_demo",
+    delaySeconds: 0,
+  });
+
+  await getPrisma().voiceAgent.updateMany({
+    where: { workspaceId: ownerId, phoneNumberId: pn.id, status: "ACTIVE" },
+    data: { phoneNumberId: null },
+  });
+  await pauseLegacyPlatformDemoSmartRouting(ownerId, pn.id);
+
+  return {
+    ok: provision.ok,
+    ownerWorkspaceId: ownerId,
+    phoneNumberId: pn.id,
+    providerNumberId: pn.providerNumberId,
+    e164: pn.e164 || MCTB_PLATFORM_DEMO_E164,
+    actions: provision.actions,
+    error: provision.error,
+  };
+}
+
+/**
+ * @deprecated Name kept for cert scripts — routes platform demo to SIP/LiveKit, not TeXML.
  */
 export async function preparePlatformDemoNumberForSmartRouting(): Promise<{
   ownerWorkspaceId: string;
   phoneNumberId: string;
   providerNumberId: string;
 }> {
-  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
-  if (!ownerId) throw new Error("Platform demo owner workspace not found");
-
-  const prisma = getPrisma();
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { e164: MCTB_PLATFORM_DEMO_E164, workspaceId: ownerId },
-    select: { id: true, providerNumberId: true },
-  });
-  if (!pn?.providerNumberId) {
+  const result = await ensurePlatformDemoSipIngress();
+  if (!result.ok) {
+    throw new Error(result.error || "platform_demo_sip_ingress_failed");
+  }
+  if (!result.providerNumberId) {
     throw new Error(`Platform demo phone ${MCTB_PLATFORM_DEMO_E164} missing Telnyx id`);
   }
-
-  const { route571ToMctbConsentTexml } = await import("@/lib/mctb/consent-prompt/telnyx-texml-route");
-  await route571ToMctbConsentTexml(pn.providerNumberId);
-
-  await prisma.voiceAgent.updateMany({
-    where: { workspaceId: ownerId, phoneNumberId: pn.id, status: "ACTIVE" },
-    data: { phoneNumberId: null },
-  });
-
   return {
-    ownerWorkspaceId: ownerId,
-    phoneNumberId: pn.id,
-    providerNumberId: pn.providerNumberId,
+    ownerWorkspaceId: result.ownerWorkspaceId,
+    phoneNumberId: result.phoneNumberId,
+    providerNumberId: result.providerNumberId,
   };
 }
 
-async function findPlatformDemoConsentFlow(ownerWorkspaceId: string, phoneNumberId: string) {
-  const prisma = getPrisma();
-  return prisma.smartRoutingFlow.findFirst({
-    where: {
-      workspaceId: ownerWorkspaceId,
-      assignedPhoneNumberId: phoneNumberId,
-      name: MCTB_CONSENT_FLOW_NAME,
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-}
-
 /**
- * Align platform 571 inbound runtime with the active consent mode.
- * - existing_consent: pause Verified Call Consent IVR so missed calls go direct to SMS
- * - press_1: publish/activate Verified Call Consent on 571
+ * Ensure Try It uses the same frozen SIP/LiveKit MCTB handler as production.
+ * Consent mode (Press 1 vs existing) is resolved per-workspace at SIP session time.
  */
 export async function syncPlatformDemoConsentRuntime(mode: MctbConsentMode): Promise<{
   mode: MctbConsentMode;
-  action: "paused_verified_consent" | "activated_verified_consent" | "no_flow";
+  action:
+    | "sip_ingress_ready"
+    | "sip_ingress_failed"
+    | "paused_verified_consent"
+    | "activated_verified_consent"
+    | "no_flow";
 }> {
-  const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
-  if (!ownerId) throw new Error("Platform demo owner workspace not found");
+  const result = await ensurePlatformDemoSipIngress();
+  if (!result.ok) {
+    return { mode, action: "sip_ingress_failed" };
+  }
 
-  const prisma = getPrisma();
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { e164: MCTB_PLATFORM_DEMO_E164, workspaceId: ownerId },
-    select: { id: true },
+  const legacyFlow = await getPrisma().smartRoutingFlow.findFirst({
+    where: {
+      workspaceId: result.ownerWorkspaceId,
+      assignedPhoneNumberId: result.phoneNumberId,
+      name: MCTB_CONSENT_FLOW_NAME,
+    },
+    select: { id: true, status: true },
   });
-  if (!pn) throw new Error("Platform demo phone not found");
 
-  if (isExistingConsentMode(mode)) {
-    const flow = await findPlatformDemoConsentFlow(ownerId, pn.id);
-    if (flow?.status === "active") {
-      const { pauseFlow } = await import("@/lib/smart-routing/flow-service");
-      await pauseFlow(ownerId, flow.id);
-    }
+  if (legacyFlow?.status === "active") {
+    const { pauseFlow } = await import("@/lib/smart-routing/flow-service");
+    await pauseFlow(result.ownerWorkspaceId, legacyFlow.id).catch(() => undefined);
     return { mode, action: "paused_verified_consent" };
   }
 
-  if (isVerifiedCallConsentMode(mode)) {
-    const { publishPlatformDemoMctbConsent } = await import(
-      "@/lib/mctb/consent-prompt/service"
-    );
-    await publishPlatformDemoMctbConsent();
-    return { mode, action: "activated_verified_consent" };
-  }
-
-  const flow = await findPlatformDemoConsentFlow(ownerId, pn.id);
-  return { mode, action: flow ? "paused_verified_consent" : "no_flow" };
+  return {
+    mode,
+    action: legacyFlow ? "paused_verified_consent" : "sip_ingress_ready",
+  };
 }

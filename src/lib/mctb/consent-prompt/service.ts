@@ -12,7 +12,7 @@ import {
 } from "@/lib/smart-routing/flow-service";
 import { templateForType } from "@/lib/smart-routing/templates";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import { resolvePlatformDemoOwnerWorkspaceId, preparePlatformDemoNumberForSmartRouting } from "@/lib/mctb/onboarding/platform-demo";
+import { resolvePlatformDemoOwnerWorkspaceId } from "@/lib/mctb/onboarding/platform-demo";
 import type { DraftConfig } from "@/lib/smart-routing/types";
 import {
   canPublishConsentPrompt,
@@ -248,14 +248,18 @@ export async function getMctbConsentPromptStatus(workspaceId: string) {
 }
 
 /**
- * Publish Verified Call Consent smart routing on the platform Telnyx 571 line.
- * Required for Pass 3 certification — real DTMF Press-1 on the platform DID.
+ * Publish consent prompt metadata for the platform demo owner workspace.
+ * Voice uses the frozen SIP/LiveKit handler — not TeXML or programmable voice.
  */
 export async function publishPlatformDemoMctbConsent(actorUserId?: string) {
   const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
   if (!ownerId) throw new Error("Platform demo owner workspace not found");
 
-  const { phoneNumberId, providerNumberId } = await preparePlatformDemoNumberForSmartRouting();
+  const { ensurePlatformDemoSipIngress } = await import("@/lib/mctb/onboarding/platform-demo");
+  const sip = await ensurePlatformDemoSipIngress();
+  if (!sip.ok) {
+    throw new Error(sip.error || "platform_demo_sip_ingress_failed");
+  }
 
   await initMctbConsentPromptForWorkspace(ownerId);
   let config = await loadMctbConsentPrompt(ownerId);
@@ -264,21 +268,11 @@ export async function publishPlatformDemoMctbConsent(actorUserId?: string) {
     config = await loadMctbConsentPrompt(ownerId);
   }
 
-  const { verify571MctbConsentTexmlRoute } = await import(
-    "@/lib/mctb/consent-prompt/telnyx-texml-route"
-  );
-  const texml = await verify571MctbConsentTexmlRoute(providerNumberId);
-  if (texml.ok) {
-    const now = new Date().toISOString();
-    return saveMctbConsentPrompt(ownerId, {
-      publishedAt: now,
-      publishedScriptHash: config.scriptHash,
-      publishedAudioAssetId: config.audioAssetId,
-      flowId: config.flowId,
-    });
-  }
-
-  return publishMctbConsentPrompt(ownerId, actorUserId, {
-    assignedPhoneNumberId: phoneNumberId,
+  const now = new Date().toISOString();
+  return saveMctbConsentPrompt(ownerId, {
+    publishedAt: now,
+    publishedScriptHash: config.scriptHash,
+    publishedAudioAssetId: config.audioAssetId,
+    flowId: config.flowId,
   });
 }
