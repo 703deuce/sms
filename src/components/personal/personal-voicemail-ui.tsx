@@ -58,6 +58,7 @@ import {
   pm,
 } from "./mockup/primitives";
 import { PersonalServiceSubscribeBanner } from "./personal-service-subscribe-banner";
+import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 
 type VmMessage = {
   id: string;
@@ -1038,11 +1039,45 @@ export function PersonalVoicemailUI({
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                <ActionBtn icon={PhoneCall} label="Call Back" href={`tel:${selected.callerNumber}`} />
+                {selected.callerNumber && !selected.isDemo ? (
+                  <div className="col-span-2 sm:col-span-3 rounded-lg border border-[#e5e7eb] p-3">
+                    <BusinessCallBackButton
+                      destinationE164={selected.callerNumber}
+                      contextType="voicemail"
+                      contextRefId={selected.id}
+                      size="sm"
+                    />
+                  </div>
+                ) : (
+                  <ActionBtn icon={PhoneCall} label="Call Back" href={`tel:${selected.callerNumber}`} />
+                )}
                 <ActionBtn
                   icon={Check}
                   label="Mark Read"
                   onClick={() => markRead(selected.id)}
+                />
+                <ActionBtn
+                  icon={Check}
+                  label="Mark resolved"
+                  onClick={async () => {
+                    await fetch("/api/phone/voicemail", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "mark_resolved", messageId: selected.id }),
+                    });
+                    await loadVoicemail();
+                  }}
+                />
+                <ActionBtn
+                  icon={Phone}
+                  label="Needs callback"
+                  onClick={async () => {
+                    await fetch("/api/phone/voicemail", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "needs_callback", messageId: selected.id }),
+                    });
+                  }}
                 />
                 <ActionBtn
                   icon={Download}

@@ -96,9 +96,9 @@ export const SMART_ROUTING_TEMPLATES: TemplateDef[] = [
   },
   {
     type: "call_gate",
-    title: "Call Gate",
-    subtitle: "Press 1 to continue — reduce robocalls before ringing your team",
-    bestFor: ["robocall reduction", "simple screening", "front-door gate"],
+    title: "Call Screening",
+    subtitle: "Press 1 to continue — human interaction gate before ringing your team",
+    bestFor: ["robocall reduction", "spam screening", "front-door gate"],
     draftConfig: {
       greeting: {
         source: "elevenlabs",
@@ -186,6 +186,87 @@ export const SMART_ROUTING_TEMPLATES: TemplateDef[] = [
         edge("service", "vm", "no_answer"),
         edge("billing", "vm", "no_answer"),
         edge("appts", "vm", "no_answer"),
+        edge("vm", "hangup"),
+      ],
+    },
+  },
+  {
+    type: "custom",
+    title: "Simple Business",
+    subtitle: "Sales · Service · Billing with no-input rings main team",
+    bestFor: ["small business", "simple departments"],
+    draftConfig: {
+      greeting: { source: "elevenlabs", text: "Thanks for calling. Please listen to the options." },
+      menuOptions: [
+        { digit: "1", label: "Sales", action: "transfer", phoneNumber: "" },
+        { digit: "2", label: "Service", action: "transfer", phoneNumber: "" },
+        { digit: "3", label: "Billing", action: "transfer", phoneNumber: "" },
+      ],
+      metadata: {
+        menuBehaviors: {
+          noInput: { action: "ring_main_team" },
+          invalidInput: { action: "replay_once_ring_team" },
+          operator: { enabled: true },
+        },
+      },
+      nodes: [
+        node("entry", "ENTRY"),
+        node("menu", "MENU", { promptText: "Thanks for calling. Please listen to the options." }),
+        node("team", "RING_GROUP", { label: "Main team", mode: "simultaneous" }),
+        node("opt1", "TRANSFER_EXTERNAL", { label: "Sales" }),
+        node("opt2", "TRANSFER_EXTERNAL", { label: "Service" }),
+        node("opt3", "TRANSFER_EXTERNAL", { label: "Billing" }),
+        node("vm", "VOICEMAIL"),
+        node("hangup", "HANGUP"),
+      ],
+      edges: [
+        edge("entry", "menu"),
+        edge("menu", "opt1", "digit", "1"),
+        edge("menu", "opt2", "digit", "2"),
+        edge("menu", "opt3", "digit", "3"),
+        edge("menu", "team", "timeout"),
+        edge("menu", "team", "invalid"),
+        edge("opt1", "vm", "no_answer"),
+        edge("opt2", "vm", "no_answer"),
+        edge("opt3", "vm", "no_answer"),
+        edge("team", "vm", "no_answer"),
+        edge("vm", "hangup"),
+      ],
+    },
+  },
+  {
+    type: "custom",
+    title: "Simple Reception",
+    subtitle: "Greeting · optional menu · no selection rings main team",
+    bestFor: ["reception", "small office", "owner + team"],
+    draftConfig: {
+      greeting: { source: "elevenlabs", text: "Thanks for calling. You may choose an option or stay on the line." },
+      menuOptions: [
+        { digit: "1", label: "Main team", action: "transfer" },
+        { digit: "0", label: "Operator", action: "transfer" },
+      ],
+      metadata: {
+        menuBehaviors: {
+          noInput: { action: "ring_main_team" },
+          invalidInput: { action: "replay" },
+          operator: { enabled: true },
+        },
+      },
+      nodes: [
+        node("entry", "ENTRY"),
+        node("menu", "MENU", {
+          promptText: "Thanks for calling. Press 1 for the main team or stay on the line.",
+        }),
+        node("team", "RING_GROUP", { label: "Main team", mode: "simultaneous" }),
+        node("vm", "VOICEMAIL"),
+        node("hangup", "HANGUP"),
+      ],
+      edges: [
+        edge("entry", "menu"),
+        edge("menu", "team", "digit", "1"),
+        edge("menu", "team", "digit", "0"),
+        edge("menu", "team", "timeout"),
+        edge("team", "vm", "no_answer"),
         edge("vm", "hangup"),
       ],
     },

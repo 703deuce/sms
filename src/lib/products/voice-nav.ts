@@ -16,6 +16,7 @@ import {
   Users,
   Music,
   Activity,
+  Bell,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
@@ -83,6 +84,11 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       label: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
+    },
+    {
+      label: "Needs Attention",
+      href: "/voice/needs-attention",
+      icon: Bell,
     },
   ];
 
@@ -167,6 +173,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/setup")) return "Setup";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
+  if (pathname.startsWith("/voice/needs-attention")) return "Needs Attention";
   if (pathname === "/smart-routing/analytics") return "Analytics";
   if (isSmartRoutingSectionPath(pathname)) {
     if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
@@ -211,6 +218,7 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     items.push({ label: "Routing", href: "/smart-routing" });
     items.push({ label: "Analytics", href: "/smart-routing/analytics" });
   }
+  items.push({ label: "Attention", href: "/voice/needs-attention" });
   items.push({ label: "Voicemail", href: "/voice/voicemail" });
   return items;
 }

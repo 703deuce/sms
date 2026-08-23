@@ -4,6 +4,7 @@ import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { getPrisma } from "@/lib/db";
+import { isDestinationAvailable } from "./destination-availability";
 import { holdCall, recordCommandReceipt } from "./telnyx-provider";
 import { updateSessionState } from "./session-store";
 import type { SessionState } from "./types";
@@ -35,9 +36,10 @@ async function resolvePhones(workspaceId: string, destinationIds: string[]) {
   const phones: string[] = [];
   for (const id of destinationIds) {
     const dest = await prisma.smartRoutingDestination.findFirst({
-      where: { id, workspaceId, active: true },
+      where: { id, workspaceId },
     });
-    if (dest?.phoneNumber) phones.push(dest.phoneNumber.trim());
+    if (!dest?.phoneNumber || !isDestinationAvailable(dest)) continue;
+    phones.push(dest.phoneNumber.trim());
   }
   return phones.filter(Boolean);
 }

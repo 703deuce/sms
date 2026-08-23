@@ -7,6 +7,7 @@ export const FLOW_TYPE_LABELS: Record<string, string> = {
   missed_call_recovery: "Missed Call Recovery",
   after_hours: "After-Hours Routing",
   department: "Department Routing",
+  call_gate: "Call Screening",
   custom: "Custom Flow",
 };
 

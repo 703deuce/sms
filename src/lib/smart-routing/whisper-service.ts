@@ -108,13 +108,14 @@ export async function handleWhisperAgentAnswered(input: {
   whisperState: WhisperLegState;
   whisperText: string;
   acceptDigit?: string;
+  timeoutMs?: number;
 }) {
   const digit = input.acceptDigit ?? "1";
   await gatherUsingSpeak({
     callControlId: input.agentControlId,
     text: input.whisperText,
     validDigits: digit,
-    timeoutMs: 15000,
+    timeoutMs: input.timeoutMs ?? 8000,
     clientState: {
       kind: "smart_routing",
       sessionId: input.whisperState.sessionId,

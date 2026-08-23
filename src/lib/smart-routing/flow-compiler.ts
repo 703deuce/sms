@@ -5,6 +5,7 @@ import type {
   DraftEdge,
   DraftNode,
 } from "./types";
+import { applyMenuBehaviorsToDraft } from "./menu-behaviors";
 
 function edgeKey(conditionType: string, conditionValue?: string | null): string {
   if (conditionType === "always") return "always";
@@ -38,8 +39,9 @@ function compileNode(node: DraftNode, edgeMap: Map<string, Map<string, string>>)
 }
 
 export function compileDraftConfig(draft: DraftConfig): CompiledFlow {
-  const nodes = draft.nodes ?? [];
-  const edges = draft.edges ?? [];
+  const normalizedDraft = applyMenuBehaviorsToDraft(draft);
+  const nodes = normalizedDraft.nodes ?? [];
+  const edges = normalizedDraft.edges ?? [];
   if (nodes.length === 0) {
     throw new Error("Flow has no nodes");
   }
@@ -51,11 +53,11 @@ export function compileDraftConfig(draft: DraftConfig): CompiledFlow {
   }
 
   // Merge menu options into MENU nodes when builder uses simplified UI
-  if (draft.menuOptions?.length) {
+  if (normalizedDraft.menuOptions?.length) {
     for (const n of nodes) {
       if (n.type !== "MENU") continue;
       const routes: Record<string, string> = { ...compiledNodes[n.id].edges };
-      for (const opt of draft.menuOptions) {
+      for (const opt of normalizedDraft.menuOptions) {
         const target = edges.find(
           (e) => e.fromNodeId === n.id && e.conditionType === "digit" && e.conditionValue === opt.digit,
         );
@@ -65,23 +67,23 @@ export function compileDraftConfig(draft: DraftConfig): CompiledFlow {
         ...compiledNodes[n.id],
         config: {
           ...compiledNodes[n.id].config,
-          menuOptions: draft.menuOptions,
+          menuOptions: normalizedDraft.menuOptions,
           promptText:
-            draft.greeting?.text ??
+            normalizedDraft.greeting?.text ??
             (compiledNodes[n.id].config.promptText as string | undefined),
-          audioAssetId: draft.greeting?.audioAssetId,
+          audioAssetId: normalizedDraft.greeting?.audioAssetId,
         },
         edges: routes,
       };
     }
   }
 
-  if (draft.greeting && entry) {
+  if (normalizedDraft.greeting && entry) {
     compiledNodes[entry.id] = {
       ...compiledNodes[entry.id],
       config: {
         ...compiledNodes[entry.id].config,
-        greeting: draft.greeting,
+        greeting: normalizedDraft.greeting,
       },
     };
   }

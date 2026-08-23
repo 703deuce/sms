@@ -57,7 +57,13 @@ export async function PATCH(request: Request) {
     const id = String(body.id || "");
     const status = String(body.status || "") as CallbackStatus;
     if (!id || !status) return jsonError(new Error("id and status required"), 400);
-    const row = await updateCallbackRequestStatus(auth.workspaceId, id, status);
+    const row = await updateCallbackRequestStatus(auth.workspaceId, id, status, {
+      completedByUserId:
+        status === "completed" ? auth.session.userId : undefined,
+      assignedToUserId: body.assignedToUserId
+        ? String(body.assignedToUserId)
+        : undefined,
+    });
     return NextResponse.json({ data: row });
   } catch (err) {
     return jsonError(err, 400);

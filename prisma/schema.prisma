@@ -377,6 +377,9 @@ model CallbackRequest {
   reason                String?
   status                String    @default("new")
   notes                 String?
+  assignedToUserId      String?
+  completedByUserId     String?
+  voicemailMessageId    String?
   requestedAt           DateTime  @default(now())
   contactedAt           DateTime?
   completedAt           DateTime?
@@ -3052,6 +3055,7 @@ model VoicemailMessage {
   internalNotes   String?
   isResolved      Boolean  @default(false)
   isRead          Boolean  @default(false)
+  assignedToUserId String?
   forwardedTo     String?
   humanCallId     String?
   createdAt       DateTime @default(now())
@@ -3060,6 +3064,7 @@ model VoicemailMessage {
 
   @@index([boxId, isRead])
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, assignedToUserId])
   @@map("voicemail_messages")
 }
 
@@ -3800,21 +3805,26 @@ model SmartRoutingFlowVersion {
 
 /// Reusable routing destinations (phones, agents, subflows).
 model SmartRoutingDestination {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  label           String
-  destinationType String
-  phoneNumber     String?
-  contactId       String?
-  aiAgentId       String?
-  subflowId       String?
-  ringGroupJson   Json?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                       String    @id @default(cuid())
+  workspaceId              String
+  label                    String
+  destinationType          String
+  phoneNumber              String?
+  contactId                String?
+  aiAgentId                String?
+  subflowId                String?
+  ringGroupJson            Json?
+  active                   Boolean   @default(true)
+  availabilityStatus       String    @default("available")
+  unavailableUntil         DateTime?
+  assignedUserId           String?
+  answerConfirmationEnabled Boolean  @default(false)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, active])
+  @@index([workspaceId, assignedUserId])
   @@map("smart_routing_destinations")
 }
 

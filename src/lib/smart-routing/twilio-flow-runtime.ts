@@ -53,12 +53,8 @@ function nextNodeId(node: CompiledNode, condition: string): string | null {
 }
 
 async function resolveDestinationPhone(workspaceId: string, destinationId: string) {
-  if (!destinationId) return null;
-  const prisma = getPrisma();
-  const dest = await prisma.smartRoutingDestination.findFirst({
-    where: { id: destinationId, workspaceId, active: true },
-  });
-  return dest?.phoneNumber?.trim() || null;
+  const { resolveDestinationPhone: resolve } = await import("./destination-resolver");
+  return resolve(workspaceId, destinationId);
 }
 
 type TwimlBuild = { twiml: string; awaiting?: string };
@@ -140,21 +136,33 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           continue;
         }
         case "TRANSFER_EXTERNAL": {
-          const phone =
-            String(node.config.phoneNumber ?? "").trim() ||
-            await resolveDestinationPhone(
-              session.workspaceId,
-              String(node.config.destinationId ?? ""),
-            );
+          const destId = String(node.config.destinationId ?? "");
+          let phone = String(node.config.phoneNumber ?? "").trim();
+          let whisperText = String(node.config.whisperText ?? "").trim();
+          let whisperEnabled = Boolean(node.config.whisperEnabled) || whisperText.length > 0;
+          if (!phone && destId) {
+            const { resolveDestinationForRouting } = await import("./destination-resolver");
+            const resolved = await resolveDestinationForRouting(session.workspaceId, destId);
+            if (!resolved) {
+              nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
+              await completeNodeExecution(execution.id, { nextId, error: "no_phone" });
+              currentId = nextId;
+              continue;
+            }
+            phone = resolved.phone;
+            if (!whisperEnabled && resolved.answerConfirmationEnabled) {
+              whisperEnabled = true;
+              whisperText =
+                whisperText ||
+                `Business call from ${resolved.label}. Press 1 to accept.`;
+            }
+          }
           if (!phone) {
             nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
             await completeNodeExecution(execution.id, { nextId, error: "no_phone" });
             currentId = nextId;
             continue;
           }
-          const whisperText = String(node.config.whisperText ?? "").trim();
-          const whisperEnabled =
-            Boolean(node.config.whisperEnabled) || whisperText.length > 0;
           await emitSmartRoutingEvent({
             workspaceId: session.workspaceId,
             type: "TRANSFER_STARTED",
@@ -196,12 +204,19 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           return { twiml: twiml(parts.join("")), awaiting: "transfer" };
         }
         case "CALL_WHISPER": {
-          const phone =
-            String(node.config.phoneNumber ?? "").trim() ||
-            await resolveDestinationPhone(
-              session.workspaceId,
-              String(node.config.destinationId ?? ""),
-            );
+          const destId = String(node.config.destinationId ?? "");
+          let phone = String(node.config.phoneNumber ?? "").trim();
+          if (!phone && destId) {
+            const { resolveDestinationForRouting } = await import("./destination-resolver");
+            const resolved = await resolveDestinationForRouting(session.workspaceId, destId);
+            if (!resolved) {
+              nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
+              await completeNodeExecution(execution.id, { nextId, error: "no_phone" });
+              currentId = nextId;
+              continue;
+            }
+            phone = resolved.phone;
+          }
           if (!phone) {
             nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
             await completeNodeExecution(execution.id, { nextId, error: "no_phone" });

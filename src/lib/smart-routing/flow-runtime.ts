@@ -150,15 +150,29 @@ export async function executeNode(input: {
         break;
       }
       case "TRANSFER_EXTERNAL": {
-        const phone =
-          String(node.config.phoneNumber ?? "").trim() ||
-          await resolveDestinationPhone(session.workspaceId, String(node.config.destinationId ?? ""));
+        const destId = String(node.config.destinationId ?? "");
+        let phone = String(node.config.phoneNumber ?? "").trim();
+        let whisperText = String(node.config.whisperText ?? "").trim();
+        let whisperEnabled = Boolean(node.config.whisperEnabled) || whisperText.length > 0;
+        if (!phone && destId) {
+          const { resolveDestinationForRouting } = await import("./destination-resolver");
+          const resolved = await resolveDestinationForRouting(session.workspaceId, destId);
+          if (!resolved) {
+            nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
+            break;
+          }
+          phone = resolved.phone;
+          if (!whisperEnabled && resolved.answerConfirmationEnabled) {
+            whisperEnabled = true;
+            whisperText =
+              whisperText ||
+              `Business call from ${resolved.label}. Press 1 to accept.`;
+          }
+        }
         if (!phone) {
           nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
           break;
         }
-        const whisperText = String(node.config.whisperText ?? "").trim();
-        const whisperEnabled = Boolean(node.config.whisperEnabled) || whisperText.length > 0;
         await emitSmartRoutingEvent({
           workspaceId: session.workspaceId,
           type: "TRANSFER_STARTED",
@@ -196,9 +210,17 @@ export async function executeNode(input: {
         return { done: false, awaiting: "transfer" };
       }
       case "CALL_WHISPER": {
-        const phone =
-          String(node.config.phoneNumber ?? "").trim() ||
-          await resolveDestinationPhone(session.workspaceId, String(node.config.destinationId ?? ""));
+        const destId = String(node.config.destinationId ?? "");
+        let phone = String(node.config.phoneNumber ?? "").trim();
+        if (!phone && destId) {
+          const { resolveDestinationForRouting } = await import("./destination-resolver");
+          const resolved = await resolveDestinationForRouting(session.workspaceId, destId);
+          if (!resolved) {
+            nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
+            break;
+          }
+          phone = resolved.phone;
+        }
         if (!phone) {
           nextId = nextNodeId(node, "no_answer") ?? nextNodeId(node, "failed");
           break;
@@ -427,12 +449,49 @@ export async function executeNode(input: {
 }
 
 async function resolveDestinationPhone(workspaceId: string, destinationId: string) {
-  if (!destinationId) return null;
-  const prisma = getPrisma();
-  const dest = await prisma.smartRoutingDestination.findFirst({
-    where: { id: destinationId, workspaceId, active: true },
+  const { resolveDestinationPhone: resolve } = await import("./destination-resolver");
+  return resolve(workspaceId, destinationId);
+}
+
+export async function executeRouteOverride(input: {
+  sessionId: string;
+  destinationId: string;
+  callControlId: string;
+}) {
+  const session = await loadCallSession(input.sessionId);
+  if (!session) return { ok: false };
+  const { resolveDestinationForRouting } = await import("./destination-resolver");
+  const resolved = await resolveDestinationForRouting(session.workspaceId, input.destinationId);
+  if (!resolved) {
+    await finalizeSession(input.sessionId, "no_answer");
+    return { ok: false, reason: "destination_unavailable" };
+  }
+  const whisperEnabled = resolved.answerConfirmationEnabled;
+  if (whisperEnabled) {
+    const { startWhisperTransfer } = await import("./whisper-service");
+    await startWhisperTransfer({
+      sessionId: input.sessionId,
+      workspaceId: session.workspaceId,
+      flowId: session.flowId,
+      nodeId: "route_override",
+      callerControlId: input.callControlId,
+      agentPhone: resolved.phone,
+      fromNumber: session.calledNumber,
+      whisperText: `Business call from ${resolved.label}. Press 1 to accept.`,
+      acceptDigit: "1",
+      timeoutMs: 8000,
+    });
+    return { ok: true, whisper: true };
+  }
+  await transferToPhone(input.callControlId, resolved.phone, input.sessionId, {
+    kind: "smart_routing",
+    sessionId: input.sessionId,
+    workspaceId: session.workspaceId,
+    flowId: session.flowId,
+    nodeId: "route_override",
+    awaiting: "transfer",
   });
-  return dest?.phoneNumber?.trim() || null;
+  return { ok: true, whisper: false };
 }
 
 export async function finalizeSession(sessionId: string, outcome: string) {
@@ -618,6 +677,20 @@ export async function startFlowForInboundCall(input: {
 
   const session = await startCallSession({ ...input, deferFlowStartedEvent: true });
   const compiled = asCompiledFlow(published.compiled as Record<string, unknown>);
+
+  const { loadActiveRouteOverride } = await import("./route-override");
+  const routeOverride = await loadActiveRouteOverride(input.workspaceId);
+  if (routeOverride) {
+    await updateSessionState(session.id, { answeredAt: new Date() });
+    await executeRouteOverride({
+      sessionId: session.id,
+      destinationId: routeOverride.destinationId,
+      callControlId: input.callControlId,
+    });
+    const { ensureSmartRoutingHumanCall } = await import("./human-call-bridge");
+    await ensureSmartRoutingHumanCall(session.id);
+    return session;
+  }
 
   if (input.preAnswered) {
     await updateSessionState(session.id, { answeredAt: new Date() });

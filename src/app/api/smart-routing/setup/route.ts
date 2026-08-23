@@ -150,6 +150,9 @@ export async function GET() {
         forwarding,
         readiness,
         scheduleOverride: scheduleOverride?.scheduleOverride ?? null,
+        routeOverride:
+          (settings.scheduleOverrideJson as { routeOverride?: { destinationId?: string; expiresAt?: string } } | null)
+            ?.routeOverride ?? null,
         forwardingTest: forwardedSession
           ? {
               detected: true,

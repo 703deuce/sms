@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { ensureNumberVoicemailBox, ensureUserVoicemailBox, listVoicemailMessages } from "@/lib/phone/voicemail-service";
 import { normalizeVoicemailGreetingUrl } from "@/lib/phone/voicemail-greeting-playback";
 import { getPrisma } from "@/lib/db";
+import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 
 export async function GET(request: Request) {
   try {
@@ -93,6 +94,52 @@ export async function POST(request: Request) {
         },
       });
       return NextResponse.json({ data: box }, { status: 201 });
+    }
+
+    if (body.action === "mark_resolved" && body.messageId) {
+      await getPrisma().voicemailMessage.updateMany({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+        data: { isResolved: true },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "assign" && body.messageId) {
+      const assignedToUserId = (body as { assignedToUserId?: string }).assignedToUserId
+        ? String((body as { assignedToUserId: string }).assignedToUserId)
+        : auth.session.userId;
+      await getPrisma().voicemailMessage.updateMany({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+        data: { assignedToUserId },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "needs_callback" && body.messageId) {
+      const msg = await getPrisma().voicemailMessage.findFirst({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+      });
+      if (!msg?.fromE164) {
+        return NextResponse.json({ error: "Message not found" }, { status: 404 });
+      }
+      const entitled = await hasWorkspaceProductFeature(auth.workspaceId, "callback_requests");
+      if (!entitled) {
+        return NextResponse.json({ error: "Callback Requests not enabled" }, { status: 403 });
+      }
+      const { createCallbackRequest } = await import("@/lib/callback-requests/service");
+      const row = await createCallbackRequest({
+        workspaceId: auth.workspaceId,
+        callerE164: msg.fromE164,
+        businessE164: msg.toE164,
+        sourceRoute: "visual_voicemail",
+        reason: "needs_callback",
+        metadata: { voicemailMessageId: msg.id },
+      });
+      await getPrisma().callbackRequest.update({
+        where: { id: row.id },
+        data: { voicemailMessageId: msg.id },
+      });
+      return NextResponse.json({ data: row });
     }
 
     if (body.action === "mark_read" && body.messageId) {

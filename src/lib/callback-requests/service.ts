@@ -33,7 +33,7 @@ export async function createCallbackRequest(input: {
     type: "callback_request",
     title: "New callback request",
     body: `Caller ${input.callerE164}${input.sourceRoute ? ` — ${input.sourceRoute}` : ""}`,
-    href: "/voice/callback-requests",
+    href: "/voice/needs-attention",
   }).catch(() => undefined);
 
   const prismaMembers = getPrisma();
@@ -61,12 +61,19 @@ export async function updateCallbackRequestStatus(
   workspaceId: string,
   id: string,
   status: CallbackStatus,
+  options?: { completedByUserId?: string; assignedToUserId?: string },
 ) {
   const prisma = getPrisma();
-  const patch: Record<string, Date | string> = { status };
+  const patch: Record<string, Date | string | null> = { status };
   if (status === "contacted") patch.contactedAt = new Date();
-  if (status === "completed") patch.completedAt = new Date();
+  if (status === "completed") {
+    patch.completedAt = new Date();
+    if (options?.completedByUserId) patch.completedByUserId = options.completedByUserId;
+  }
   if (status === "dismissed") patch.dismissedAt = new Date();
+  if (options?.assignedToUserId !== undefined) {
+    patch.assignedToUserId = options.assignedToUserId;
+  }
   const row = await prisma.callbackRequest.update({
     where: { id, workspaceId },
     data: patch,

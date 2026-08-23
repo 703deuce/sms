@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -29,6 +30,14 @@ type FormSubmission = {
   payloadJson: Record<string, unknown>;
 };
 
+type CallerHistoryEntry = {
+  id: string;
+  kind: string;
+  label: string;
+  at: string;
+  href?: string;
+};
+
 export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +49,8 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
   const [linkClicks, setLinkClicks] = useState<LinkClick[]>([]);
   const [formSubmissions, setFormSubmissions] = useState<FormSubmission[]>([]);
   const [leadCaptureEnabled, setLeadCaptureEnabled] = useState(false);
+  const [history, setHistory] = useState<CallerHistoryEntry[]>([]);
+  const [showCallBack, setShowCallBack] = useState(false);
 
   useEffect(() => {
     void fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" })
@@ -52,6 +63,12 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         setLinkClicks(json.linkClicks || []);
         setFormSubmissions(json.formSubmissions || []);
         setLeadCaptureEnabled(Boolean(json.leadCaptureEnabled));
+        const caller = String(json.event?.callerE164 || "");
+        if (caller) {
+          void fetch(`/api/voice/caller-history?callerE164=${encodeURIComponent(caller)}`)
+            .then((r) => r.json())
+            .then((h) => setHistory(h.data || []));
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
@@ -97,6 +114,39 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
           <p className="text-emerald-700">Lead capture enabled for this workspace</p>
         ) : null}
       </Card>
+
+      {event?.callerE164 ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="text-[15px] font-semibold">Call back</h2>
+          {showCallBack ? (
+            <BusinessCallBackButton
+              destinationE164={String(event.callerE164)}
+              contextType="missed_call"
+              contextRefId={eventId}
+            />
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setShowCallBack(true)}>
+              Call Back as Business
+            </Button>
+          )}
+        </Card>
+      ) : null}
+
+      {history.length ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="text-[15px] font-semibold">Caller history</h2>
+          <ul className="space-y-2 text-sm">
+            {history.slice(0, 12).map((h) => (
+              <li key={h.id} className="flex justify-between gap-3">
+                <span>{h.label}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {new Date(h.at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {linkClicks.length ? (
         <Card className="space-y-3 p-4">

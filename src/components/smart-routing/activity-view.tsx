@@ -9,6 +9,7 @@ import {
   srCard,
 } from "@/components/smart-routing/shared";
 import { fmtDurationMmSs, fmtPhoneDisplay, fmtRelativeTime } from "@/lib/smart-routing/display";
+import { formatRoutingOutcome } from "@/lib/smart-routing/outcome-labels";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -82,7 +83,7 @@ function outcomeBadge(outcome: string | null | undefined, sms: boolean) {
   if (outcome.includes("ai")) return { status: "ai_handoff", label: "AI Handoff" };
   if (outcome.includes("error") || outcome.includes("failed"))
     return { status: "needs_attention", label: "Failed" };
-  return { status: "draft", label: outcome.replace(/_/g, " ") };
+  return { status: "draft", label: formatRoutingOutcome(outcome) };
 }
 
 export function SmartRoutingActivityView({ flowId }: { flowId: string }) {

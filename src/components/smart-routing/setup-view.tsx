@@ -4,6 +4,8 @@ import { AuthorizedCallersPanel } from "@/components/smart-routing/authorized-ca
 import { BusinessCallbackGuide } from "@/components/smart-routing/business-callback-guide";
 import { CallerIdVerificationPanel } from "@/components/smart-routing/caller-id-verification-panel";
 import { CloseNowControl } from "@/components/smart-routing/close-now-control";
+import { PauseCallsControl } from "@/components/smart-routing/pause-calls-control";
+import { RouteOverrideControl } from "@/components/smart-routing/route-override-control";
 import { DestinationsPanel } from "@/components/smart-routing/destinations-panel";
 import { ForwardingSetupPanel } from "@/components/smart-routing/forwarding-setup-panel";
 import { SetupStepper } from "@/components/smart-routing/setup-stepper";
@@ -175,6 +177,15 @@ export function SmartRoutingSetupView() {
       ) : null}
 
       <CloseNowControl scheduleOverride={data?.scheduleOverride ?? null} onUpdated={load} />
+
+      <PauseCallsControl />
+
+      {data?.destinations?.length ? (
+        <RouteOverrideControl
+          destinations={data.destinations.map((d) => ({ id: d.id, label: d.label }))}
+          onUpdated={load}
+        />
+      ) : null}
 
       <Card className="space-y-4 p-5" id="business-number">
         <h2 className="font-medium">1. Your business number</h2>
