@@ -5,6 +5,43 @@ import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { resolveMctbSipIngressByDid } from "@/lib/mctb/sip-ingress/resolver";
 import { resolveRuntimeDemoMode } from "@/lib/mctb/ingress";
 
+async function resolvePhoneOwnerWorkspace(e164: string): Promise<string | null> {
+  const pn = await getPrisma().phoneNumber.findFirst({
+    where: { e164 },
+    select: { workspaceId: true },
+  });
+  return pn?.workspaceId || null;
+}
+
+async function resolvePlatformDemoTarget(input: {
+  callerE164: string;
+  transovoE164: string;
+  fallbackWorkspaceId: string;
+  forwardedFrom?: string | null;
+}): Promise<{ workspaceId: string; demoMode: boolean }> {
+  const { loadMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
+
+  const tenantWorkspaceId =
+    (await resolveOnboardingWorkspaceForDemoCall(
+      input.callerE164,
+      input.transovoE164,
+      input.forwardedFrom,
+    )) ||
+    (await resolvePhoneOwnerWorkspace(input.transovoE164)) ||
+    input.fallbackWorkspaceId;
+
+  const state = await loadMctbOnboardingState(tenantWorkspaceId);
+  const demoMode = resolveRuntimeDemoMode({
+    workspaceId: tenantWorkspaceId,
+    transovoNumberE164: input.transovoE164,
+    callerE164: input.callerE164,
+    forwardedFromE164: input.forwardedFrom,
+    demoSession: state.demoSession,
+  });
+
+  return { workspaceId: tenantWorkspaceId, demoMode };
+}
+
 /** Resolve workspace + demoMode from called Transovo DID (sip.trunkPhoneNumber). */
 export async function resolveMctbTargetWorkspaceForInboundCall(input: {
   callerE164: string;
@@ -17,6 +54,24 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
     transovoE164 = normalizeE164(input.businessE164);
   } catch {
     // keep raw
+  }
+
+  const isPlatformDemo = isPlatformDemoNumber(transovoE164);
+
+  // Platform 571: tenant comes from active Try It / onboarding session (caller phone),
+  // not from DID ownership — otherwise Press-1 SMS and Try It progress never attach.
+  if (isPlatformDemo) {
+    const target = await resolvePlatformDemoTarget({
+      callerE164: input.callerE164,
+      transovoE164,
+      fallbackWorkspaceId: input.fallbackWorkspaceId,
+      forwardedFrom: input.forwardedFrom,
+    });
+    return {
+      workspaceId: target.workspaceId,
+      isPlatformDemo: true,
+      demoMode: target.demoMode,
+    };
   }
 
   const ingress = await resolveMctbSipIngressByDid(transovoE164);
@@ -33,55 +88,23 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
 
     return {
       workspaceId: ingress.workspaceId,
-      isPlatformDemo: isPlatformDemoNumber(transovoE164),
+      isPlatformDemo: false,
       demoMode,
     };
   }
 
-  const pn = await getPrisma().phoneNumber.findFirst({
-    where: { e164: transovoE164 },
-    select: { workspaceId: true },
-  });
-  if (pn?.workspaceId) {
+  const ownerWorkspaceId = await resolvePhoneOwnerWorkspace(transovoE164);
+  if (ownerWorkspaceId) {
     return {
-      workspaceId: pn.workspaceId,
-      isPlatformDemo: isPlatformDemoNumber(transovoE164),
-      demoMode: false,
-    };
-  }
-
-  const isPlatformDemo = isPlatformDemoNumber(transovoE164);
-  if (!isPlatformDemo) {
-    return {
-      workspaceId: input.fallbackWorkspaceId,
+      workspaceId: ownerWorkspaceId,
       isPlatformDemo: false,
       demoMode: false,
     };
   }
 
-  const demoWorkspaceId = await resolveOnboardingWorkspaceForDemoCall(
-    input.callerE164,
-    input.businessE164,
-    input.forwardedFrom,
-  );
-
-  const workspaceId = demoWorkspaceId || input.fallbackWorkspaceId;
-  let demoMode = false;
-  if (demoWorkspaceId) {
-    const { loadMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
-    const state = await loadMctbOnboardingState(demoWorkspaceId);
-    demoMode = resolveRuntimeDemoMode({
-      workspaceId: demoWorkspaceId,
-      transovoNumberE164: transovoE164,
-      callerE164: input.callerE164,
-      forwardedFromE164: input.forwardedFrom,
-      demoSession: state.demoSession,
-    });
-  }
-
   return {
-    workspaceId,
-    isPlatformDemo: true,
-    demoMode,
+    workspaceId: input.fallbackWorkspaceId,
+    isPlatformDemo: false,
+    demoMode: false,
   };
 }

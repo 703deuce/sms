@@ -155,6 +155,18 @@ export async function POST(request: Request) {
               result: sms,
             }),
           );
+        } else {
+          console.log(
+            JSON.stringify({
+              source: "mctb-consent-texml",
+              event: "sms_skipped",
+              workspaceId: target.workspaceId,
+              demoMode: target.demoMode,
+              reason: "start_try_it_before_calling",
+              from,
+              to,
+            }),
+          );
         }
       } catch (err) {
         console.error("[mctb-consent-texml] gather handler failed", err);

@@ -67,20 +67,41 @@ export async function resolveDemoWorkspaceForCaller(
     where: { phone: caller },
     select: { id: true },
   });
-  if (!user) return null;
+  if (user) {
+    const memberships = await prisma.membership.findMany({
+      where: { userId: user.id },
+      select: { workspaceId: true },
+    });
 
-  const memberships = await prisma.membership.findMany({
-    where: { userId: user.id },
-    select: { workspaceId: true },
+    for (const membership of memberships) {
+      const state = await loadMctbOnboardingState(membership.workspaceId);
+      const session = state.demoSession;
+      if (!session || session.callerE164 !== caller) continue;
+      if (!isActiveDemoStatus(session.status)) continue;
+      if (isDemoSessionExpired(session)) continue;
+      return { workspaceId: membership.workspaceId, session };
+    }
+  }
+
+  // Fallback: active Try It / demo session may exist even if user.phone lookup fails.
+  const workspaces = await prisma.workspace.findMany({
+    where: { NOT: { customFieldsConfig: null } },
+    select: { id: true, customFieldsConfig: true },
+    take: 500,
   });
 
-  for (const membership of memberships) {
-    const state = await loadMctbOnboardingState(membership.workspaceId);
+  for (const ws of workspaces) {
+    const state = parseMctbOnboardingState(ws.customFieldsConfig);
     const session = state.demoSession;
-    if (!session || session.callerE164 !== caller) continue;
+    if (!session) continue;
+    try {
+      if (normalizeE164(session.callerE164) !== caller) continue;
+    } catch {
+      continue;
+    }
     if (!isActiveDemoStatus(session.status)) continue;
     if (isDemoSessionExpired(session)) continue;
-    return { workspaceId: membership.workspaceId, session };
+    return { workspaceId: ws.id, session };
   }
 
   return null;

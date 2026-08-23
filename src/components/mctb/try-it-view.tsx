@@ -182,6 +182,13 @@ export function MctbTryItView() {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Step 2 — Call this number directly from your verified mobile. Do not set up forwarding.
+            {status?.session?.callerE164 ? (
+              <>
+                {" "}
+                Call from{" "}
+                <span className="font-semibold text-foreground">{status.session.callerE164}</span>.
+              </>
+            ) : null}
           </p>
         </div>
 
