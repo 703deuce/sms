@@ -34,6 +34,7 @@ export default function SmartRoutingOverviewPage() {
   const [workspaceStatus, setWorkspaceStatus] = useState<{
     publicBusinessE164: string | null;
     routingNumberE164: string | null;
+    callbackNumberE164: string | null;
     callerIdStatus: string;
     authorizedCallerCount: number;
     outboundBusinessCallbacks?: number;
@@ -75,6 +76,7 @@ export default function SmartRoutingOverviewPage() {
           setWorkspaceStatus({
             publicBusinessE164: setup.settings?.publicBusinessE164 ?? null,
             routingNumberE164: setup.settings?.routingNumberE164 ?? null,
+            callbackNumberE164: setup.settings?.callbackNumberE164 ?? null,
             callerIdStatus: setup.callerId?.status ?? "not_verified",
             authorizedCallerCount: (setup.authorizedCallers ?? []).filter(
               (c: { active: boolean; outboundEnabled: boolean }) =>

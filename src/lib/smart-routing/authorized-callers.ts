@@ -135,21 +135,7 @@ export async function verifyAuthorizedCallerPin(input: {
   return { ok: true };
 }
 
-export function isDomesticCallbackDestination(e164: string): boolean {
-  const digits = e164.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) return true;
-  if (digits.length === 10) return true;
-  return false;
-}
-
-export function isBlockedCallbackDestination(
-  destination: string,
-  routingNumberE164?: string | null,
-): boolean {
-  const dest = normalizeE164(destination);
-  if (routingNumberE164 && normalizeE164(routingNumberE164) === dest) return true;
-  if (!isDomesticCallbackDestination(dest)) return true;
-  const digits = dest.replace(/\D/g, "");
-  if (/^1(900|976)/.test(digits)) return true;
-  return false;
-}
+import {
+  isBlockedCallbackDestination,
+  isDomesticCallbackDestination,
+} from "./callback-destination-policy";

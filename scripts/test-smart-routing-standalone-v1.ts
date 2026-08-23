@@ -9,10 +9,7 @@ import {
   decodeEmployeeAccessState,
   encodeEmployeeAccessState,
 } from "../src/lib/smart-routing/employee-access-state";
-
-function isDirectDialToRoutingDid(forwardedFrom?: string | null): boolean {
-  return !forwardedFrom?.trim();
-}
+import { isWorkspaceInternalSmartRoutingNumberSync } from "../src/lib/smart-routing/internal-numbers";
 
 function isDomesticCallbackDestination(e164: string): boolean {
   const digits = e164.replace(/\D/g, "");
@@ -21,10 +18,16 @@ function isDomesticCallbackDestination(e164: string): boolean {
   return false;
 }
 
-assert.equal(isDirectDialToRoutingDid(null), true);
-assert.equal(isDirectDialToRoutingDid("+15551212"), false);
 assert.equal(isDomesticCallbackDestination("+17035551234"), true);
 assert.equal(isDomesticCallbackDestination("+442071234567"), false);
+
+assert.equal(
+  isWorkspaceInternalSmartRoutingNumberSync(
+    { routingNumberE164: "+17035559000", callbackNumberE164: "+17035559001" },
+    "+17035559001",
+  ),
+  true,
+);
 
 const gate = SMART_ROUTING_TEMPLATES.find((t) => t.type === "call_gate");
 assert.ok(gate);

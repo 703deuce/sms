@@ -3,15 +3,21 @@
 **Date:** 2026-08-23  
 **Scope:** Production ingress paths that populate `forwardedFrom` for employee-vs-customer access detection (`access-detection.ts`).
 
-## Decision rule (implemented)
+## Decision rule (implemented — dual-number architecture)
 
 ```
-if forwardedFrom present → ALWAYS customer inbound Smart Routing
-if no forwardedFrom AND ANI matches authorized caller → employee PIN / business callback
-else → normal inbound menu
+called Routing Number → inbound Smart Routing (always)
+called Callback Number → employee Business Callback (authorized + PIN)
 ```
 
-This is correct **only if** `forwardedFrom` is reliably populated on real carrier-forwarded legs to the private routing DID.
+Forwarding metadata (`forwardedFrom`, Diversion) is still parsed for **caller preservation** and analytics, but **does not** choose between inbound routing and employee callback.
+
+Legacy single-DID rule (removed):
+
+```
+if forwardedFrom present → customer
+if no forwardedFrom + authorized ANI → employee callback  ❌ removed
+```
 
 ---
 
@@ -104,11 +110,11 @@ These paths have **richer** forward extraction but are **separate** from Smart R
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Carrier forward does not populate any parsed field | **High** — employee ANI on forwarded leg could enter PIN flow | Live PSTN Test 1: forward public → routing DID, confirm menu + ANI |
-| AT&T Diversion only in SIP attrs, not Call Control payload | **Medium** — parser supports Diversion in `sip_headers` on Call Control | Confirm on real AT&T forward in Test 1 |
-| Test-only synthetic `forwardedFrom` in unit tests | **Low** — tests don't drive production path | This audit; production uses webhook payload only |
+| Carrier forward missing forward metadata | **Medium** — ANI preservation only | Live PSTN Test 1 |
+| Employee ANI on forwarded leg mistaken for callback | **Eliminated** — separate Callback Number | Dual-number architecture |
+| Test-only synthetic `forwardedFrom` in unit tests | **Low** | Production uses webhook payload only |
 
-**No code change recommended** until live PSTN confirms a gap. Parser already matches MCTB's Call Control path.
+**No code change recommended** for ingress discrimination until live PSTN confirms caller preservation. Employee vs customer path no longer depends on `forwardedFrom`.
 
 ---
 

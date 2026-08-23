@@ -11,6 +11,8 @@ const base = computeSetupReadiness({
     publicBusinessE164: "+17035551000",
     routingNumberE164: "+17035559000",
     assignedPhoneNumberId: "pn1",
+    callbackNumberE164: "+17035559001",
+    assignedCallbackPhoneNumberId: "pn2",
     routingMode: "front_door",
     callerIdStatus: "verified",
     callerIdProvider: "telnyx",

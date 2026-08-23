@@ -7,6 +7,8 @@ export type SmartRoutingWorkspaceSettingsRecord = {
   publicBusinessE164: string | null;
   routingNumberE164: string | null;
   assignedPhoneNumberId: string | null;
+  callbackNumberE164: string | null;
+  assignedCallbackPhoneNumberId: string | null;
   routingMode: string;
   callerIdStatus: string;
   callerIdProvider: string | null;
@@ -48,6 +50,8 @@ export async function updateSmartRoutingWorkspaceSettings(
     publicBusinessE164: string | null;
     routingNumberE164: string | null;
     assignedPhoneNumberId: string | null;
+    callbackNumberE164: string | null;
+    assignedCallbackPhoneNumberId: string | null;
     routingMode: string;
     outboundEnabled: boolean;
     scheduleOverrideJson: Record<string, unknown> | null;
@@ -69,6 +73,14 @@ export async function updateSmartRoutingWorkspaceSettings(
   }
   if (patch.assignedPhoneNumberId !== undefined) {
     data.assignedPhoneNumberId = patch.assignedPhoneNumberId;
+  }
+  if (patch.callbackNumberE164 !== undefined) {
+    data.callbackNumberE164 = patch.callbackNumberE164
+      ? normalizeE164(patch.callbackNumberE164)
+      : null;
+  }
+  if (patch.assignedCallbackPhoneNumberId !== undefined) {
+    data.assignedCallbackPhoneNumberId = patch.assignedCallbackPhoneNumberId;
   }
   if (patch.routingMode !== undefined) data.routingMode = patch.routingMode;
   if (patch.outboundEnabled !== undefined) data.outboundEnabled = patch.outboundEnabled;

@@ -6,7 +6,7 @@ import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
 import { bridgeCalls } from "./telnyx-provider";
 import { resolveVerifiedBusinessCallerId } from "./workspace-settings";
-import { isBlockedCallbackDestination } from "./authorized-callers";
+import { isBlockedCallbackDestination } from "./callback-destination-policy";
 
 export type OutboundContextType =
   | "missed_call"
@@ -68,7 +68,12 @@ export async function originateCustomerLeg(input: {
     where: { workspaceId: input.workspaceId },
   });
   const routingNumber = settings?.routingNumberE164 ?? input.fromRoutingE164;
-  if (isBlockedCallbackDestination(input.destinationE164, routingNumber)) {
+  if (
+    isBlockedCallbackDestination(input.destinationE164, {
+      routingNumberE164: settings?.routingNumberE164,
+      callbackNumberE164: settings?.callbackNumberE164,
+    })
+  ) {
     throw new Error("Destination is not allowed");
   }
 

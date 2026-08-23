@@ -338,25 +338,43 @@ export async function processVoiceWebhookEvent(input: {
     const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
     if (pn && callControlId) {
       const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
-      const { shouldStartEmployeeAccess } = await import(
-        "@/lib/smart-routing/access-detection"
+      const { resolveSmartRoutingIngress } = await import(
+        "@/lib/smart-routing/ingress-router"
       );
-      const employeeCheck = await shouldStartEmployeeAccess({
+      const ingress = await resolveSmartRoutingIngress({
         workspaceId: pn.workspaceId,
-        callerE164: from,
-        forwardedFrom,
+        phoneNumberId: pn.id,
+        calledE164: to,
       });
-      if (employeeCheck.start && employeeCheck.caller) {
-        const { tryStartEmployeeAccess } = await import(
+
+      if (ingress.kind === "employee_callback") {
+        const { shouldStartEmployeeAccess } = await import(
+          "@/lib/smart-routing/access-detection"
+        );
+        const { rejectUnauthorizedCallbackCaller, tryStartEmployeeAccess } = await import(
           "@/lib/smart-routing/employee-access-runtime"
         );
+        const employeeCheck = await shouldStartEmployeeAccess({
+          workspaceId: pn.workspaceId,
+          callerE164: from,
+        });
+        if (!employeeCheck.start) {
+          await rejectUnauthorizedCallbackCaller(callControlId).catch((err) => {
+            console.error("[voice/webhook] rejectUnauthorizedCallbackCaller", err);
+          });
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return { ok: true, kind: "smart_routing_callback_rejected" };
+        }
         const ea = await tryStartEmployeeAccess({
           workspaceId: pn.workspaceId,
           callerE164: from,
           calledE164: to,
           callControlId,
-          authorizedCallerId: employeeCheck.caller.id,
-          authorizedCallerName: employeeCheck.caller.name,
+          authorizedCallerId: employeeCheck.caller!.id,
+          authorizedCallerName: employeeCheck.caller!.name,
         }).catch((err) => {
           console.error("[voice/webhook] tryStartEmployeeAccess", err);
           return { started: false as const };
@@ -370,35 +388,39 @@ export async function processVoiceWebhookEvent(input: {
             ok: true,
             kind: "smart_routing_employee_access",
             accessSessionId: ea.accessSessionId,
+            ingress: "callback_number",
           };
         }
       }
 
-      const { tryStartSmartRoutingInbound } = await import(
-        "@/lib/smart-routing/webhook-handler"
-      );
-      const sr = await tryStartSmartRoutingInbound({
-        workspaceId: pn.workspaceId,
-        phoneNumberId: pn.id,
-        fromE164: from,
-        toE164: to,
-        callControlId,
-        forwardedFrom,
-      }).catch((err) => {
-        console.error("[voice/webhook] tryStartSmartRoutingInbound", err);
-        return { started: false as const };
-      });
-      if (sr.started) {
-        await prisma.providerWebhookEvent.update({
-          where: { providerEventId: input.providerEventId },
-          data: { status: "processed", processedAt: new Date() },
+      if (ingress.kind === "inbound_routing" || ingress.kind === "none") {
+        const { tryStartSmartRoutingInbound } = await import(
+          "@/lib/smart-routing/webhook-handler"
+        );
+        const sr = await tryStartSmartRoutingInbound({
+          workspaceId: pn.workspaceId,
+          phoneNumberId: pn.id,
+          fromE164: from,
+          toE164: to,
+          callControlId,
+          forwardedFrom,
+        }).catch((err) => {
+          console.error("[voice/webhook] tryStartSmartRoutingInbound", err);
+          return { started: false as const };
         });
-        return {
-          ok: true,
-          kind: "smart_routing",
-          sessionId: sr.sessionId,
-          duplicate: "duplicate" in sr ? sr.duplicate : undefined,
-        };
+        if (sr.started) {
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return {
+            ok: true,
+            kind: "smart_routing",
+            sessionId: sr.sessionId,
+            duplicate: "duplicate" in sr ? sr.duplicate : undefined,
+            ingress: ingress.kind === "inbound_routing" ? "routing_number" : undefined,
+          };
+        }
       }
 
       if (!call) {

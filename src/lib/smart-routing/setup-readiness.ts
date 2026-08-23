@@ -7,6 +7,7 @@ export type SetupStepKey =
   | "forwarding_detected"
   | "main_route_published"
   | "business_hours"
+  | "callback_number"
   | "destinations"
   | "incoming_tested"
   | "callback_users"
@@ -43,6 +44,7 @@ export function computeSetupReadiness(input: {
   const hasBusinessNumber = Boolean(settings?.publicBusinessE164?.trim());
   const callerVerified = input.callerIdStatus === "verified";
   const hasRoutingNumber = Boolean(settings?.routingNumberE164?.trim());
+  const hasCallbackNumber = Boolean(settings?.callbackNumberE164?.trim());
   const activeFlows = input.flows.filter((f) => f.status === "active");
   const hasPublishedRoute = activeFlows.length > 0;
   const pausedOnly =
@@ -67,7 +69,7 @@ export function computeSetupReadiness(input: {
     },
     {
       key: "caller_id_verified",
-      label: "Caller ID verified",
+      label: "Business caller ID verified",
       complete: callerVerified,
       href: "/smart-routing/setup#verify-caller-id",
     },
@@ -85,7 +87,7 @@ export function computeSetupReadiness(input: {
     },
     {
       key: "main_route_published",
-      label: "Main route published",
+      label: "Greeting and routing published",
       complete: hasPublishedRoute,
       href: "/smart-routing/new",
     },
@@ -95,6 +97,19 @@ export function computeSetupReadiness(input: {
       complete: hasHours,
       optional: true,
       href: activeFlows[0] ? `/smart-routing/${activeFlows[0].id}` : "/smart-routing/new",
+    },
+    {
+      key: "callback_number",
+      label: "Business Callback Number assigned",
+      complete: hasCallbackNumber,
+      href: "/smart-routing/setup#callback-number",
+    },
+    {
+      key: "callback_users",
+      label: "Authorized callback users + PINs",
+      complete: activeCallbackUsers > 0,
+      optional: true,
+      href: "/smart-routing/setup#business-callback",
     },
     {
       key: "destinations",
@@ -107,14 +122,7 @@ export function computeSetupReadiness(input: {
       label: "Incoming call tested",
       complete: input.inboundTestDetected,
       optional: true,
-      href: activeFlows[0] ? `/smart-routing/${activeFlows[0].id}/test` : "/smart-routing/setup#test",
-    },
-    {
-      key: "callback_users",
-      label: "Callback users configured",
-      complete: activeCallbackUsers > 0,
-      optional: true,
-      href: "/smart-routing/setup#business-callback",
+      href: activeFlows[0] ? `/smart-routing/${activeFlows[0].id}/test` : "/smart-routing/setup#test-incoming",
     },
     {
       key: "callback_tested",
@@ -143,7 +151,11 @@ export function computeSetupReadiness(input: {
     steps,
     completedCount: steps.filter((s) => s.complete).length,
     requiredCount: required.length,
-    ready: completedRequired >= required.length - 1 && hasPublishedRoute && hasRoutingNumber,
+    ready:
+      completedRequired >= required.length - 1 &&
+      hasPublishedRoute &&
+      hasRoutingNumber &&
+      hasCallbackNumber,
     routingStatus,
   };
 }

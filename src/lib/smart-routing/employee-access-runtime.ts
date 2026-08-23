@@ -34,6 +34,15 @@ async function speakAndGather(
   });
 }
 
+export async function rejectUnauthorizedCallbackCaller(callControlId: string) {
+  await answerCall(callControlId);
+  await speakOnCallRaw(
+    callControlId,
+    "This number is for authorized team members only. Goodbye.",
+  );
+  await hangupCall(callControlId);
+}
+
 export async function tryStartEmployeeAccess(input: {
   workspaceId: string;
   callerE164: string;

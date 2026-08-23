@@ -20,6 +20,8 @@ type SetupPayload = {
     publicBusinessE164: string | null;
     routingNumberE164: string | null;
     assignedPhoneNumberId: string | null;
+    callbackNumberE164: string | null;
+    assignedCallbackPhoneNumberId: string | null;
     routingMode: string;
     outboundEnabled: boolean;
   };
@@ -70,6 +72,7 @@ export function SmartRoutingSetupView() {
   const [message, setMessage] = useState("");
   const [businessNumber, setBusinessNumber] = useState("");
   const [routingPhoneId, setRoutingPhoneId] = useState("");
+  const [callbackPhoneId, setCallbackPhoneId] = useState("");
   const [callbackTestConfirmed, setCallbackTestConfirmed] = useState(false);
 
   const load = useCallback(async () => {
@@ -81,6 +84,7 @@ export function SmartRoutingSetupView() {
       setData(json.data as SetupPayload);
       setBusinessNumber(json.data.settings.publicBusinessE164 || "");
       setRoutingPhoneId(json.data.settings.assignedPhoneNumberId || "");
+      setCallbackPhoneId(json.data.settings.assignedCallbackPhoneNumberId || "");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Load failed");
     } finally {
@@ -99,7 +103,6 @@ export function SmartRoutingSetupView() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         publicBusinessE164: businessNumber,
-        assignedPhoneNumberId: routingPhoneId || null,
         routingMode: "front_door",
       }),
     });
@@ -112,6 +115,32 @@ export function SmartRoutingSetupView() {
     await load();
   }
 
+  async function saveRoutingNumber() {
+    setMessage("");
+    const res = await fetch("/api/smart-routing/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedPhoneNumberId: routingPhoneId || null }),
+    });
+    const json = await res.json();
+    if (!res.ok) setMessage(json.error || "Save failed");
+    else setMessage("Routing number saved.");
+    await load();
+  }
+
+  async function saveCallbackNumber() {
+    setMessage("");
+    const res = await fetch("/api/smart-routing/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedCallbackPhoneNumberId: callbackPhoneId || null }),
+    });
+    const json = await res.json();
+    if (!res.ok) setMessage(json.error || "Save failed");
+    else setMessage("Business Callback Number saved.");
+    await load();
+  }
+
   if (loading) {
     return <p className="p-6 text-sm text-muted-foreground">Loading Smart Routing setup…</p>;
   }
@@ -119,6 +148,9 @@ export function SmartRoutingSetupView() {
   const routingE164 =
     data?.settings.routingNumberE164 ||
     data?.phoneNumbers.find((p) => p.id === routingPhoneId)?.e164;
+  const callbackE164 =
+    data?.settings.callbackNumberE164 ||
+    data?.phoneNumbers.find((p) => p.id === callbackPhoneId)?.e164;
   const activeFlow = data?.flows.find((f) => f.status === "active");
   const verified = data?.callerId.status === "verified";
   const forwardingDetected =
@@ -160,10 +192,10 @@ export function SmartRoutingSetupView() {
       </Card>
 
       <Card className="space-y-4 p-5" id="routing-number">
-        <h2 className="font-medium">2. Your routing number</h2>
+        <h2 className="font-medium">Your Routing Number</h2>
         <p className="text-sm text-muted-foreground">
-          Your existing business number forwards calls here so Transovo can route them. Authorized
-          team members can also call this number to return business calls.
+          Forward your existing business number to this number. Incoming customer calls are routed
+          through your Smart Routing setup. Do not advertise this as your public business number.
         </p>
         <select
           className="h-10 w-full rounded-lg border px-3 text-sm"
@@ -171,16 +203,49 @@ export function SmartRoutingSetupView() {
           onChange={(e) => setRoutingPhoneId(e.target.value)}
         >
           <option value="">Select routing number…</option>
-          {data?.phoneNumbers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {fmtPhoneDisplay(p.e164)} {p.friendlyName ? `(${p.friendlyName})` : ""}
-            </option>
-          ))}
+          {data?.phoneNumbers
+            .filter((p) => p.id !== callbackPhoneId)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {fmtPhoneDisplay(p.e164)} {p.friendlyName ? `(${p.friendlyName})` : ""}
+              </option>
+            ))}
         </select>
         {routingE164 ? (
           <p className="text-sm font-semibold">{fmtPhoneDisplay(routingE164)}</p>
         ) : null}
-        <Button variant="outline" onClick={() => void saveBasics()}>Save routing number</Button>
+        <Button variant="outline" onClick={() => void saveRoutingNumber()}>
+          Save routing number
+        </Button>
+      </Card>
+
+      <Card className="space-y-4 p-5" id="callback-number">
+        <h2 className="font-medium">Your Business Callback Number</h2>
+        <p className="text-sm text-muted-foreground">
+          Authorized team members call this number to return customer calls from your verified
+          business caller ID.{" "}
+          <strong>Do not forward customer calls here.</strong>
+        </p>
+        <select
+          className="h-10 w-full rounded-lg border px-3 text-sm"
+          value={callbackPhoneId}
+          onChange={(e) => setCallbackPhoneId(e.target.value)}
+        >
+          <option value="">Select Business Callback Number…</option>
+          {data?.phoneNumbers
+            .filter((p) => p.id !== routingPhoneId)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {fmtPhoneDisplay(p.e164)} {p.friendlyName ? `(${p.friendlyName})` : ""}
+              </option>
+            ))}
+        </select>
+        {callbackE164 ? (
+          <p className="text-sm font-semibold">{fmtPhoneDisplay(callbackE164)}</p>
+        ) : null}
+        <Button variant="outline" onClick={() => void saveCallbackNumber()}>
+          Save Business Callback Number
+        </Button>
       </Card>
 
       <Card className="p-5">
@@ -218,6 +283,7 @@ export function SmartRoutingSetupView() {
           <BusinessCallbackGuide
             businessNumber={businessNumber}
             routingNumber={routingE164}
+            callbackNumber={callbackE164 || ""}
             verified={verified}
           />
         ) : null}
@@ -226,10 +292,12 @@ export function SmartRoutingSetupView() {
       <Card className="space-y-4 p-5" id="test">
         <h2 className="font-medium">Test & go live</h2>
         <div className="space-y-3">
-          <div className="rounded-lg border p-4">
-            <h3 className="text-sm font-semibold">Test incoming calls</h3>
+          <div className="rounded-lg border p-4" id="test-incoming">
+            <h3 className="text-sm font-semibold">Incoming Routing Test</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Call your business number from another phone after forwarding is set up.
+              Call your public business number from another phone after forwarding to{" "}
+              {routingE164 ? fmtPhoneDisplay(routingE164) : "your Routing Number"}. Verify the
+              customer menu plays and the original caller is preserved on destination phones.
             </p>
             {data?.recentInbound ? (
               <p className="mt-2 flex items-center gap-1 text-sm text-emerald-700">
@@ -250,9 +318,15 @@ export function SmartRoutingSetupView() {
           </div>
 
           <div className="rounded-lg border p-4" id="test-callback">
-            <h3 className="text-sm font-semibold">Test business callback</h3>
+            <h3 className="text-sm font-semibold">Business Callback Test</h3>
             <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
-              <li>Call {routingE164 ? fmtPhoneDisplay(routingE164) : "your routing number"} from an authorized phone.</li>
+              <li>
+                Call{" "}
+                {callbackE164
+                  ? fmtPhoneDisplay(callbackE164)
+                  : "your Business Callback Number"}{" "}
+                from an authorized phone.
+              </li>
               <li>Enter your PIN.</li>
               <li>Press 4 and enter a test phone number.</li>
               <li>Confirm the destination sees your verified business number.</li>

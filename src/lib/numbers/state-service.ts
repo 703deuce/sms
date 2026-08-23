@@ -18,7 +18,9 @@ export type NumberServiceAction =
   | "set_vault_voicemail"
   | "set_vault_message_only"
   | "set_smart_routing_owner"
-  | "clear_smart_routing_owner";
+  | "clear_smart_routing_owner"
+  | "set_smart_routing_callback_owner"
+  | "clear_smart_routing_callback_owner";
 
 function readSettings(row: { settingsJson: unknown }): Record<string, unknown> {
   return row.settingsJson && typeof row.settingsJson === "object"
@@ -265,6 +267,45 @@ export async function transitionNumberService(
           data: {
             settingsJson: withDisplayState(
               { ...settings, routingOwner: null },
+              { voiceForwardTo: row.voiceForwardTo },
+            ),
+          },
+        }) as Parameters<typeof mapPhoneNumber>[0],
+      );
+
+    case "set_smart_routing_callback_owner":
+      return mapPhoneNumber(
+        await prisma.phoneNumber.update({
+          where: { id: numberId },
+          data: {
+            voiceForwardTo: null,
+            settingsJson: withDisplayState(
+              {
+                ...settings,
+                parked: false,
+                personalParked: false,
+                routingOwner: "smart_routing_callback",
+                personalServiceState: "SMART_ROUTING_CALLBACK",
+              },
+              { voiceForwardTo: null },
+            ),
+          },
+        }) as Parameters<typeof mapPhoneNumber>[0],
+      );
+
+    case "clear_smart_routing_callback_owner":
+      return mapPhoneNumber(
+        await prisma.phoneNumber.update({
+          where: { id: numberId },
+          data: {
+            settingsJson: withDisplayState(
+              {
+                ...settings,
+                routingOwner:
+                  settings.routingOwner === "smart_routing_callback"
+                    ? null
+                    : settings.routingOwner,
+              },
               { voiceForwardTo: row.voiceForwardTo },
             ),
           },

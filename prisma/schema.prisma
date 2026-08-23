@@ -3914,6 +3914,8 @@ model SmartRoutingWorkspaceSettings {
   publicBusinessE164    String?
   routingNumberE164     String?
   assignedPhoneNumberId String?
+  callbackNumberE164              String?
+  assignedCallbackPhoneNumberId   String?
   routingMode             String    @default("front_door")
   callerIdStatus          String    @default("not_verified")
   callerIdProvider        String?   @default("telnyx")

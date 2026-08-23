@@ -66,6 +66,7 @@ type Metrics = {
 type WorkspaceStatus = {
   publicBusinessE164: string | null;
   routingNumberE164: string | null;
+  callbackNumberE164: string | null;
   callerIdStatus: string;
   authorizedCallerCount: number;
   outboundBusinessCallbacks?: number;

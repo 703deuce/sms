@@ -97,7 +97,7 @@ export function AuthorizedCallersPanel({
       <div>
         <h2 className="font-medium">Authorized callback users</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Team members enter a PIN when calling your Routing Number to place a business callback.
+          Team members call the Business Callback Number and enter a PIN — not the Routing Number.
           PINs are never shown after creation.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">{activeCount} active</p>

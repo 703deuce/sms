@@ -11,12 +11,18 @@ import { listAuthorizedCallers } from "@/lib/smart-routing/authorized-callers";
 import { CARRIER_FORWARDING_GUIDES } from "@/lib/smart-routing/forwarding-service";
 import { computeSetupReadiness } from "@/lib/smart-routing/setup-readiness";
 import { evaluateScheduleBranch } from "@/lib/smart-routing/schedule-engine";
+import {
+  assignCallbackPhoneNumber,
+  assignRoutingPhoneNumber,
+  ensureCallbackNumberAssigned,
+} from "@/lib/smart-routing/number-provisioning";
 
 export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const settings = await ensureSmartRoutingWorkspaceSettings(auth.workspaceId);
+    await ensureSmartRoutingWorkspaceSettings(auth.workspaceId);
+    const settings = await ensureCallbackNumberAssigned(auth.workspaceId);
     const callerId = await getCallerIdVerificationStatus(auth.workspaceId);
     const authorizedCallers = await listAuthorizedCallers(auth.workspaceId);
     const prisma = getPrisma();
@@ -172,28 +178,28 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const body = await request.json();
-    const settings = await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
-      publicBusinessE164: body.publicBusinessE164,
-      routingNumberE164: body.routingNumberE164,
-      assignedPhoneNumberId: body.assignedPhoneNumberId,
-      routingMode: body.routingMode,
-      outboundEnabled: body.outboundEnabled,
-      setupCompletedAt: body.markComplete ? new Date() : undefined,
-    });
-    if (body.assignedPhoneNumberId) {
-      const prisma = getPrisma();
-      const pn = await prisma.phoneNumber.findFirst({
-        where: { id: body.assignedPhoneNumberId, workspaceId: auth.workspaceId },
+
+    if (body.publicBusinessE164 !== undefined || body.routingMode !== undefined || body.outboundEnabled !== undefined || body.markComplete) {
+      await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
+        publicBusinessE164: body.publicBusinessE164,
+        routingMode: body.routingMode,
+        outboundEnabled: body.outboundEnabled,
+        setupCompletedAt: body.markComplete ? new Date() : undefined,
       });
-      if (pn) {
-        await prisma.smartRoutingWorkspaceSettings.update({
-          where: { workspaceId: auth.workspaceId },
-          data: { routingNumberE164: pn.e164 },
-        });
-      }
     }
+
+    if (body.assignedPhoneNumberId) {
+      await assignRoutingPhoneNumber(auth.workspaceId, String(body.assignedPhoneNumberId));
+    }
+    if (body.assignedCallbackPhoneNumberId) {
+      await assignCallbackPhoneNumber(
+        auth.workspaceId,
+        String(body.assignedCallbackPhoneNumberId),
+      );
+    }
+
     const refreshed = await loadSmartRoutingWorkspaceSettings(auth.workspaceId);
-    return NextResponse.json({ data: refreshed ?? settings });
+    return NextResponse.json({ data: refreshed });
   } catch (err) {
     return jsonError(err, 400);
   }

@@ -18,6 +18,7 @@ import { useState } from "react";
 type WorkspaceStatus = {
   publicBusinessE164: string | null;
   routingNumberE164: string | null;
+  callbackNumberE164: string | null;
   callerIdStatus: string;
   authorizedCallerCount: number;
   outboundBusinessCallbacks?: number;
@@ -36,7 +37,7 @@ const ROUTING_STATUS_LABELS: Record<SetupReadiness["routingStatus"], string> = {
 export function OverviewStatusSection({ status }: { status: WorkspaceStatus }) {
   const [copied, setCopied] = useState(false);
   const verified = status.callerIdStatus === "verified";
-  const callbackReady = verified && status.authorizedCallerCount > 0;
+  const callbackReady = verified && status.authorizedCallerCount > 0 && status.callbackNumberE164;
 
   function copyRouting() {
     if (!status.routingNumberE164) return;
@@ -85,7 +86,7 @@ export function OverviewStatusSection({ status }: { status: WorkspaceStatus }) {
           {status.routingNumberE164 ? fmtPhoneDisplay(status.routingNumberE164) : "Not assigned"}
         </p>
         <p className="mt-2 text-xs text-[#6b7280]">
-          Forward your existing business number here to activate Smart Routing.
+          Forward your existing business number here. Incoming customer calls only.
         </p>
         {status.routingNumberE164 ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -148,19 +149,38 @@ export function OverviewStatusSection({ status }: { status: WorkspaceStatus }) {
           <Users className="h-4 w-4" />
           <span className="text-xs font-semibold uppercase tracking-wide">Business callback</span>
         </div>
-        <p className="mt-3 text-xl font-bold text-[#111827]">
+        <p className="mt-3 text-sm font-semibold text-[#111827]">
           {callbackReady ? "Ready" : "Setup required"}
         </p>
-        <ul className="mt-2 space-y-1 text-xs text-[#6b7280]">
+        <p className="mt-2 text-xl font-bold text-[#111827]">
+          {status.callbackNumberE164
+            ? fmtPhoneDisplay(status.callbackNumberE164)
+            : "Not assigned"}
+        </p>
+        <p className="mt-2 text-xs text-[#6b7280]">
+          Authorized team calls this number to return customer calls. Do not forward customers here.
+        </p>
+        {status.callbackNumberE164 ? (
+          <Link
+            href="/smart-routing/setup#callback-number"
+            className="mt-3 text-sm font-semibold text-[#6366f1] hover:underline"
+          >
+            Copy / manage →
+          </Link>
+        ) : (
+          <Link
+            href="/smart-routing/setup#callback-number"
+            className="mt-3 text-sm font-semibold text-[#6366f1] hover:underline"
+          >
+            Assign Callback Number →
+          </Link>
+        )}
+        <ul className="mt-3 space-y-1 text-xs text-[#6b7280]">
           <li>
             Caller ID:{" "}
             {verified && status.publicBusinessE164
               ? fmtPhoneDisplay(status.publicBusinessE164)
               : "Not verified"}
-          </li>
-          <li>
-            Team calls:{" "}
-            {status.routingNumberE164 ? fmtPhoneDisplay(status.routingNumberE164) : "—"}
           </li>
           <li>{status.authorizedCallerCount} authorized users</li>
           {status.outboundBusinessCallbacks != null ? (

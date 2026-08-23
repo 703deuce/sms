@@ -4,18 +4,9 @@ import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 /**
- * Employee business-callback access is only considered when the call is a direct
- * dial to the private routing DID — not a carrier-forwarded customer leg.
- *
- * A forwarded call may present an authorized employee ANI in edge cases; we
- * always treat forwarded legs as customer inbound routing.
+ * Business Callback ingress: caller must match an authorized employee record.
+ * Called number (Callback Number) is the workspace discriminator — not forwarding metadata.
  */
-export function isDirectDialToRoutingDid(input: {
-  forwardedFrom?: string | null;
-}): boolean {
-  return !input.forwardedFrom?.trim();
-}
-
 export async function findAuthorizedCallerForWorkspace(input: {
   workspaceId: string;
   callerE164: string;
@@ -38,9 +29,10 @@ export async function findAuthorizedCallerForWorkspace(input: {
 export async function shouldStartEmployeeAccess(input: {
   workspaceId: string;
   callerE164: string;
-  forwardedFrom?: string | null;
-}): Promise<{ start: boolean; caller?: Awaited<ReturnType<typeof findAuthorizedCallerForWorkspace>> }> {
-  if (!isDirectDialToRoutingDid(input)) return { start: false };
+}): Promise<{
+  start: boolean;
+  caller?: Awaited<ReturnType<typeof findAuthorizedCallerForWorkspace>>;
+}> {
   const caller = await findAuthorizedCallerForWorkspace({
     workspaceId: input.workspaceId,
     callerE164: input.callerE164,

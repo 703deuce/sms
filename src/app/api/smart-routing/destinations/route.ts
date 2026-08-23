@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { updateSmartRoutingWorkspaceSettings } from "@/lib/smart-routing/workspace-settings";
+import { isWorkspaceInternalSmartRoutingNumber } from "@/lib/smart-routing/ingress-router";
 
 export async function GET() {
   try {
@@ -24,6 +25,18 @@ export async function POST(request: Request) {
     if ("error" in auth) return auth.error;
     const body = await request.json();
     const prisma = getPrisma();
+    if (body.phoneNumber) {
+      const blocked = await isWorkspaceInternalSmartRoutingNumber(
+        auth.workspaceId,
+        String(body.phoneNumber),
+      );
+      if (blocked) {
+        return jsonError(
+          new Error("Cannot route calls to your Transovo Routing or Business Callback Number"),
+          400,
+        );
+      }
+    }
     const row = await prisma.smartRoutingDestination.create({
       data: {
         workspaceId: auth.workspaceId,

@@ -49,6 +49,10 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
     return { kind: "default" };
   }
 
+  if (routingOwner === "smart_routing_callback") {
+    return { kind: "unavailable" };
+  }
+
   const callSettings = readPersonalCallSettings(row);
 
   let handling: IncomingCallHandling = callSettings.incomingCallHandling;

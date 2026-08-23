@@ -87,6 +87,14 @@ export async function updateFlowDraft(
   });
   if (!existing) throw new Error("Flow not found");
 
+  if (patch.assignedPhoneNumberId) {
+    const { loadSmartRoutingWorkspaceSettings } = await import("./workspace-settings");
+    const ws = await loadSmartRoutingWorkspaceSettings(workspaceId);
+    if (ws?.assignedCallbackPhoneNumberId === patch.assignedPhoneNumberId) {
+      throw new Error("Cannot route customer calls to the Business Callback Number");
+    }
+  }
+
   const data: Record<string, unknown> = { updatedAt: new Date() };
   if (patch.name) data.name = patch.name.trim();
   if (patch.draftConfig) data.draftConfigJson = patch.draftConfig as object;
