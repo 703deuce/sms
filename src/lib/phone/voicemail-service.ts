@@ -323,6 +323,14 @@ export async function leaveVoicemailOnCall(input: {
     data: { status: "voicemail", disposition: `voicemail:${box.id}` },
   });
 
+  const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+  await notifyWorkspace(input.workspaceId, {
+    type: "voicemail",
+    title: "New voicemail",
+    body: `Voicemail from ${call?.from || "unknown"}`,
+    href: "/personal/voicemail",
+  }).catch(() => undefined);
+
   return { box, message: msg };
 }
 

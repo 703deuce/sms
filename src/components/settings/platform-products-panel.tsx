@@ -19,6 +19,7 @@ export function PlatformProductsPanel({
   const [features, setFeatures] = useState<FeatureSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutKey, setCheckoutKey] = useState<string | null>(null);
+  const [trialKey, setTrialKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -30,6 +31,28 @@ export function PlatformProductsPanel({
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, []);
+
+  async function startTrial(productKey: string) {
+    setTrialKey(productKey);
+    setMessage("");
+    try {
+      const res = await fetch("/api/platform/billing/trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productKey }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Trial grant failed");
+      const def = PLATFORM_BILLING_CATALOG.find((p) => p.productKey === productKey);
+      setMessage(`Trial activated for ${def?.displayName || productKey}.`);
+      const refresh = await fetch("/api/platform/features").then((r) => r.json());
+      if (refresh.data) setFeatures(refresh.data as FeatureSnapshot);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Trial grant failed");
+    } finally {
+      setTrialKey(null);
+    }
+  }
 
   async function startCheckout(productKey: string) {
     setCheckoutKey(productKey);
@@ -111,14 +134,23 @@ export function PlatformProductsPanel({
                   <span className="text-xs font-normal text-muted-foreground"> / month</span>
                 </p>
                 {!active ? (
-                  <Button
-                    size="sm"
-                    className="mt-3"
-                    disabled={checkoutKey === product.productKey}
-                    onClick={() => startCheckout(product.productKey)}
-                  >
-                    {checkoutKey === product.productKey ? "Redirecting…" : "Subscribe"}
-                  </Button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={trialKey === product.productKey}
+                      onClick={() => startTrial(product.productKey)}
+                    >
+                      {trialKey === product.productKey ? "Starting trial…" : "Try trial"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={checkoutKey === product.productKey}
+                      onClick={() => startCheckout(product.productKey)}
+                    >
+                      {checkoutKey === product.productKey ? "Redirecting…" : "Subscribe"}
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             );

@@ -182,6 +182,18 @@ export async function publishFlow(workspaceId: string, flowId: string, createdBy
     throw new Error(`Flow validation failed: ${validation.issues[0]?.message}`);
   }
 
+  const { loadSmartRoutingWorkspaceSettings } = await import("./workspace-settings");
+  const { validateSmartRoutingFlowDestinations } = await import("./loop-validation");
+  const wsSettings = await loadSmartRoutingWorkspaceSettings(workspaceId);
+  const loopValidation = validateSmartRoutingFlowDestinations({
+    draft,
+    routingNumberE164: wsSettings?.routingNumberE164,
+    callbackNumberE164: wsSettings?.callbackNumberE164,
+  });
+  if (!loopValidation.valid) {
+    throw new Error(loopValidation.issues[0]?.message || "Routing loop detected");
+  }
+
   if (!flow.assignedPhoneNumberId) {
     throw new Error("Assign a phone number before publishing Smart Routing");
   }

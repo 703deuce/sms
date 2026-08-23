@@ -12,6 +12,23 @@ type TimelineStep = {
   at: string | null;
 };
 
+type RepeatCaller = {
+  total: number;
+  missedToday: number;
+};
+
+type LinkClick = {
+  id: string;
+  destinationUrl: string | null;
+  createdAt: string;
+};
+
+type FormSubmission = {
+  id: string;
+  submittedAt: string;
+  payloadJson: Record<string, unknown>;
+};
+
 export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +36,10 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
   const [timeline, setTimeline] = useState<{ consentMode: string; steps: TimelineStep[] } | null>(
     null,
   );
+  const [repeatCaller, setRepeatCaller] = useState<RepeatCaller | null>(null);
+  const [linkClicks, setLinkClicks] = useState<LinkClick[]>([]);
+  const [formSubmissions, setFormSubmissions] = useState<FormSubmission[]>([]);
+  const [leadCaptureEnabled, setLeadCaptureEnabled] = useState(false);
 
   useEffect(() => {
     void fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" })
@@ -27,6 +48,10 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         if (!res.ok) throw new Error(json.error || "Failed to load event");
         setEvent(json.event);
         setTimeline(json.timeline);
+        setRepeatCaller(json.repeatCaller || null);
+        setLinkClicks(json.linkClicks || []);
+        setFormSubmissions(json.formSubmissions || []);
+        setLeadCaptureEnabled(Boolean(json.leadCaptureEnabled));
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
@@ -60,7 +85,52 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         <p>
           <span className="font-semibold">Consent mode:</span> {timeline?.consentMode || "—"}
         </p>
+        {repeatCaller ? (
+          <p>
+            <span className="font-semibold">Repeat caller:</span>{" "}
+            {repeatCaller.missedToday > 1
+              ? `Called ${repeatCaller.missedToday}× today (${repeatCaller.total} total)`
+              : `${repeatCaller.total} prior missed call(s)`}
+          </p>
+        ) : null}
+        {leadCaptureEnabled ? (
+          <p className="text-emerald-700">Lead capture enabled for this workspace</p>
+        ) : null}
       </Card>
+
+      {linkClicks.length ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="text-[15px] font-semibold">Link clicks</h2>
+          <ul className="space-y-2 text-sm">
+            {linkClicks.map((click) => (
+              <li key={click.id} className="flex justify-between gap-3">
+                <span className="truncate">{click.destinationUrl || "Tracked link"}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {new Date(click.createdAt).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      {formSubmissions.length ? (
+        <Card className="space-y-3 p-4">
+          <h2 className="text-[15px] font-semibold">Form submissions</h2>
+          <ul className="space-y-2 text-sm">
+            {formSubmissions.map((sub) => (
+              <li key={sub.id}>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(sub.submittedAt).toLocaleString()}
+                </p>
+                <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs">
+                  {JSON.stringify(sub.payloadJson, null, 2)}
+                </pre>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card className="space-y-3 p-4">
         <h2 className="text-[15px] font-semibold">Timeline</h2>

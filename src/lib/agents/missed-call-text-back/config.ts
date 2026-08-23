@@ -40,12 +40,24 @@ export function configToRecord(row: {
   messageTemplateBusinessHours?: string | null;
   messageTemplateAfterHours?: string | null;
   requireCarrierForward?: boolean;
+  directDialForwardE164?: string | null;
+  requestFormEnabled?: boolean;
+  requestFormToken?: string | null;
+  defaultLinkUrl?: string | null;
+  leadCaptureEnabled?: boolean;
+  requestFormFieldsJson?: unknown;
 }): MissedCallTextConfigRecord {
   return {
     smsPhoneNumberId: null,
     messageTemplateBusinessHours: null,
     messageTemplateAfterHours: null,
     requireCarrierForward: true,
+    directDialForwardE164: null,
+    requestFormEnabled: false,
+    requestFormToken: null,
+    defaultLinkUrl: null,
+    leadCaptureEnabled: false,
+    requestFormFieldsJson: null,
     ...row,
   };
 }
@@ -137,6 +149,34 @@ export async function updateMissedCallTextConfig(input: {
   if (input.patch.require_carrier_forward !== undefined) {
     data.requireCarrierForward = Boolean(input.patch.require_carrier_forward);
     mark("requireCarrierForward", data.requireCarrierForward, before.requireCarrierForward);
+  }
+  if (input.patch.direct_dial_forward_e164 !== undefined) {
+    const v = input.patch.direct_dial_forward_e164?.trim() || null;
+    data.directDialForwardE164 = v;
+    mark("directDialForwardE164", v, before.directDialForwardE164);
+  }
+  if (input.patch.request_form_enabled !== undefined) {
+    data.requestFormEnabled = Boolean(input.patch.request_form_enabled);
+    mark("requestFormEnabled", data.requestFormEnabled, before.requestFormEnabled);
+  }
+  if (input.patch.default_link_url !== undefined) {
+    const v = input.patch.default_link_url?.trim() || null;
+    data.defaultLinkUrl = v;
+    mark("defaultLinkUrl", v, before.defaultLinkUrl);
+  }
+  if (input.patch.lead_capture_enabled !== undefined) {
+    data.leadCaptureEnabled = Boolean(input.patch.lead_capture_enabled);
+    mark("leadCaptureEnabled", data.leadCaptureEnabled, before.leadCaptureEnabled);
+  }
+  if (input.patch.request_form_fields_json !== undefined) {
+    data.requestFormFieldsJson = input.patch.request_form_fields_json ?? null;
+    mark("requestFormFieldsJson", data.requestFormFieldsJson, before.requestFormFieldsJson);
+  }
+  if (input.patch.request_form_enabled === true && !before.requestFormToken) {
+    const { ensureMctbRequestFormToken } = await import("@/lib/mctb/request-form");
+    const token = await ensureMctbRequestFormToken(input.workspaceId);
+    data.requestFormToken = token;
+    mark("requestFormToken", token, before.requestFormToken);
   }
   const rules = input.patch.trigger_rules;
   if (rules) {

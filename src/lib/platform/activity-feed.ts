@@ -16,7 +16,8 @@ export async function loadPlatformActivityFeed(
   const prisma = getPrisma();
   const items: PlatformActivityItem[] = [];
 
-  const [missed, srSessions, voicemails, callbacks] = await Promise.all([
+  const [missed, srSessions, voicemails, callbacks, linkClicks, formSubs, consentEvents] =
+    await Promise.all([
     prisma.missedCallEvent.findMany({
       where: { workspaceId },
       orderBy: { detectedAt: "desc" },
@@ -54,6 +55,34 @@ export async function loadPlatformActivityFeed(
           requestedAt: true,
           sourceRoute: true,
         },
+      })
+      .catch(() => []),
+    prisma.linkClickEvent.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        phone: true,
+        missedCallEventId: true,
+        destinationUrl: true,
+        createdAt: true,
+      },
+    }),
+    prisma.mctbRequestFormSubmission
+      .findMany({
+        where: { workspaceId },
+        orderBy: { submittedAt: "desc" },
+        take: limit,
+        select: { id: true, formToken: true, submittedAt: true, missedCallEventId: true },
+      })
+      .catch(() => []),
+    prisma.smartRoutingSmsConsentEvent
+      .findMany({
+        where: { workspaceId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        select: { id: true, callerNumber: true, consentStatus: true, createdAt: true },
       })
       .catch(() => []),
   ]);
@@ -106,6 +135,50 @@ export async function loadPlatformActivityFeed(
       href: "/voice/callback-requests",
       meta: { status: c.status },
     });
+  }
+
+  for (const lc of linkClicks) {
+    items.push({
+      id: `link:${lc.id}`,
+      type: "link_click",
+      label: `Link clicked${lc.phone ? ` by ${lc.phone}` : ""}`,
+      at: lc.createdAt.toISOString(),
+      href: lc.missedCallEventId ? `/voice/missed-calls/${lc.missedCallEventId}` : undefined,
+      meta: { destinationUrl: lc.destinationUrl },
+    });
+  }
+
+  for (const fs of formSubs) {
+    items.push({
+      id: `form:${fs.id}`,
+      type: "form_submission",
+      label: "Lead capture form submitted",
+      at: fs.submittedAt.toISOString(),
+      href: fs.missedCallEventId ? `/voice/missed-calls/${fs.missedCallEventId}` : "/voice/setup",
+    });
+  }
+
+  for (const ce of consentEvents) {
+    items.push({
+      id: `consent:${ce.id}`,
+      type: "consent",
+      label: `SMS consent ${ce.consentStatus || "event"}${ce.callerNumber ? ` — ${ce.callerNumber}` : ""}`,
+      at: ce.createdAt.toISOString(),
+      href: "/smart-routing",
+    });
+  }
+
+  for (const s of srSessions) {
+    const outcome = String(s.finalOutcome || "").toLowerCase();
+    if (outcome.includes("mctb") || outcome.includes("fallback")) {
+      items.push({
+        id: `sr-fallback:${s.id}`,
+        type: "routing_fallback",
+        label: `Smart Routing fallback to MCTB — ${s.callerNumber || "unknown"}`,
+        at: s.startedAt.toISOString(),
+        href: s.flowId ? `/smart-routing/${s.flowId}/activity` : "/smart-routing",
+      });
+    }
   }
 
   items.sort((a, b) => (a.at < b.at ? 1 : -1));

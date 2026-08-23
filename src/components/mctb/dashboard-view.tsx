@@ -41,12 +41,21 @@ type ActivityItem = {
   href?: string;
 };
 
-type MctbAnalytics = {
-  totalMissed: number;
-  textsSent: number;
-  replies: number;
-  replyRate: number;
-  uniqueCallers: number;
+type DashboardCard = {
+  product: string;
+  title: string;
+  href: string;
+  metrics: Array<{ label: string; value: number | string }>;
+};
+
+type DashboardSummary = {
+  features: WorkspaceFeatureSnapshot;
+  cards: DashboardCard[];
+  summary: {
+    missed30d: number;
+    linkClicks30d: number;
+    formSubmissions30d: number;
+  };
 };
 
 export function MctbDashboardView({
@@ -57,8 +66,8 @@ export function MctbDashboardView({
   const [setup, setSetup] = useState<SetupSummary | null>(null);
   const [missed, setMissed] = useState<MissedSummary | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [analytics, setAnalytics] = useState<MctbAnalytics | null>(null);
-  const features: WorkspaceFeatureSnapshot = productFeatures ?? {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const features: WorkspaceFeatureSnapshot = productFeatures ?? summary?.features ?? {
     mctb: "active",
     smart_routing: "active",
     visual_voicemail: "inactive",
@@ -88,9 +97,9 @@ export function MctbDashboardView({
       .then((r) => r.json())
       .then((j) => setActivity(j.data || []))
       .catch(() => undefined);
-    fetch("/api/mctb/analytics?range=30d", { cache: "no-store" })
+    fetch("/api/platform/dashboard-summary", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => setAnalytics(j.data || null))
+      .then((j) => setSummary(j.data || null))
       .catch(() => undefined);
   }, []);
 
@@ -176,32 +185,50 @@ export function MctbDashboardView({
           href="/inbox"
         />
         <StatCard
-          label="30-day reply rate"
-          value={analytics ? `${analytics.replyRate}%` : "—"}
+          label="Link clicks (30d)"
+          value={summary?.summary.linkClicks30d ?? 0}
           icon={ArrowRight}
           href="/voice/analytics"
         />
       </div>
 
-      {analytics ? (
+      {summary?.cards?.length ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {summary.cards.map((card) => (
+            <Link
+              key={card.product}
+              href={card.href}
+              className="rounded-xl border border-[#e5e7eb] bg-white p-4 transition hover:border-[#6366f1]/40"
+            >
+              <h2 className="text-[15px] font-semibold text-[#111827]">{card.title}</h2>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {card.metrics.map((metric) => (
+                  <div key={metric.label} className="text-[13px]">
+                    <span className="text-muted-foreground">{metric.label}</span>
+                    <p className="font-semibold tabular-nums">{metric.value}</p>
+                  </div>
+                ))}
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+
+      {summary ? (
         <div className="rounded-xl border border-[#e5e7eb] bg-white p-4">
-          <h2 className="text-[15px] font-semibold text-[#111827]">Recovery (30 days)</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-4 text-[13px]">
+          <h2 className="text-[15px] font-semibold text-[#111827]">Platform summary (30 days)</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3 text-[13px]">
             <div>
               <span className="text-muted-foreground">Missed calls</span>
-              <p className="font-semibold">{analytics.totalMissed}</p>
+              <p className="font-semibold">{summary.summary.missed30d}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Texts sent</span>
-              <p className="font-semibold">{analytics.textsSent}</p>
+              <span className="text-muted-foreground">Link clicks</span>
+              <p className="font-semibold">{summary.summary.linkClicks30d}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Replies</span>
-              <p className="font-semibold">{analytics.replies}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Unique callers</span>
-              <p className="font-semibold">{analytics.uniqueCallers}</p>
+              <span className="text-muted-foreground">Form submissions</span>
+              <p className="font-semibold">{summary.summary.formSubmissions30d}</p>
             </div>
           </div>
         </div>

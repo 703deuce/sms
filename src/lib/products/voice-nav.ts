@@ -109,7 +109,26 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   if (hasSr) {
     items.push(...buildSmartRoutingNavItems("Smart Routing"));
+    items.push({
+      label: "Routing Analytics",
+      href: "/smart-routing/analytics",
+      icon: BarChart3,
+    });
   }
+
+  items.push({
+    label: "Visual Voicemail",
+    href: hasVm ? "/personal/voicemail" : "/settings/billing?upgrade=visual_voicemail",
+    icon: Voicemail,
+    sectionLabel: "Add-ons",
+    badge: hasVm ? undefined : "Add-on",
+  });
+  items.push({
+    label: "Callback Requests",
+    href: hasCallback ? "/voice/callback-requests" : "/settings/billing?upgrade=callback_requests",
+    icon: PhoneForwarded,
+    badge: hasCallback ? undefined : "Add-on",
+  });
 
   const manage: NavItem[] = [
     {
@@ -126,22 +145,6 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
   ];
-
-  if (hasVm) {
-    manage.push({
-      label: "Visual Voicemail",
-      href: "/personal/voicemail",
-      icon: Voicemail,
-    });
-  }
-
-  if (hasCallback) {
-    manage.push({
-      label: "Callback Requests",
-      href: "/voice/callback-requests",
-      icon: PhoneForwarded,
-    });
-  }
 
   items.push(...manage);
 
@@ -162,6 +165,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/setup")) return "Setup";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
+  if (pathname === "/smart-routing/analytics") return "Routing Analytics";
   if (isSmartRoutingSectionPath(pathname)) {
     if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
     if (pathname === "/smart-routing/flows") return "Call Flows";
@@ -201,6 +205,8 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   }
   if (hasSr) {
     items.push({ label: "Routing", href: "/smart-routing" });
+    items.push({ label: "SR Analytics", href: "/smart-routing/analytics" });
   }
+  items.push({ label: "Voicemail", href: "/personal/voicemail" });
   return items;
 }

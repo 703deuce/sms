@@ -139,6 +139,20 @@ async def run_mctb_sip_production_session(
             )
             return
 
+        direct_dial_forward = str(session.get("directDialForwardE164") or "").strip()
+        if direct_dial_forward:
+            trace.log(
+                "mctb_direct_dial_forward_early",
+                directDialForwardE164=direct_dial_forward,
+                promptText=session.get("directDialPromptText"),
+            )
+            trace.log_sip_call_final_state(
+                disconnect_reason="direct_dial_forward_configured",
+                sip_status=read_sip_call_status(participant),
+                directDialForwardE164=direct_dial_forward,
+            )
+            return
+
         consent_mode = str(session.get("consentMode") or "press_1")
         trace.log(
             "mctb_consent_mode_selected",

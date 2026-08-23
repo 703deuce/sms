@@ -50,6 +50,11 @@ type SetupData = {
     timezone: string;
     cooldownMinutes: number;
     conversationEnabled: boolean;
+    directDialForwardE164?: string | null;
+    defaultLinkUrl?: string | null;
+    requestFormEnabled?: boolean;
+    requestFormToken?: string | null;
+    leadCaptureEnabled?: boolean;
   };
   consentMode: MctbConsentMode;
   phoneNumbers: PhoneOption[];
@@ -81,12 +86,13 @@ const SECTIONS = [
   { id: "forwarding", title: "2. Carrier forwarding" },
   { id: "triggers", title: "3. What counts as missed" },
   { id: "message", title: "4. Text-back message" },
-  { id: "consent", title: "5. Consent method" },
-  { id: "hours", title: "6. Business hours" },
-  { id: "cooldown", title: "7. Cooldown" },
-  { id: "replies", title: "8. Reply handling" },
-  { id: "exclusions", title: "9. Do-not-text list" },
-  { id: "test", title: "10. Test" },
+  { id: "links", title: "5. Links & request form" },
+  { id: "consent", title: "6. Consent method" },
+  { id: "hours", title: "7. Business hours" },
+  { id: "cooldown", title: "8. Cooldown" },
+  { id: "replies", title: "9. Reply handling" },
+  { id: "exclusions", title: "10. Do-not-text list" },
+  { id: "test", title: "11. Test" },
 ] as const;
 
 type ExclusionRow = {
@@ -146,6 +152,11 @@ export function MctbSetupView() {
   const [exclusionPhone, setExclusionPhone] = useState("");
   const [exclusionReason, setExclusionReason] = useState("Do not text");
   const [exclusionBusy, setExclusionBusy] = useState(false);
+  const [defaultLinkUrl, setDefaultLinkUrl] = useState("");
+  const [requestFormEnabled, setRequestFormEnabled] = useState(false);
+  const [leadCaptureEnabled, setLeadCaptureEnabled] = useState(false);
+  const [requestFormUrl, setRequestFormUrl] = useState<string | null>(null);
+  const [directDialForwardE164, setDirectDialForwardE164] = useState("");
 
   const loadExclusions = useCallback(async () => {
     try {
@@ -189,6 +200,15 @@ export function MctbSetupView() {
       setCooldownMinutes(r.cooldownMinutes);
       setReplyNotifications(r.conversationEnabled);
       setEnabled(r.enabled);
+      setDefaultLinkUrl(r.defaultLinkUrl || "");
+      setRequestFormEnabled(Boolean(r.requestFormEnabled));
+      setLeadCaptureEnabled(Boolean(r.leadCaptureEnabled));
+      setDirectDialForwardE164(r.directDialForwardE164 || "");
+      if (r.requestFormToken) {
+        setRequestFormUrl(`/f/mctb/${encodeURIComponent(r.requestFormToken)}`);
+      } else {
+        setRequestFormUrl(null);
+      }
       const line =
         payload.businessLineE164?.trim() ||
         payload.adminTest?.businessLineE164?.trim() ||
@@ -292,6 +312,10 @@ export function MctbSetupView() {
           allowedEndTime: businessHoursOnly ? allowedEndTime : null,
           timezone,
           businessLineE164: businessLineE164.trim() || null,
+          directDialForwardE164: directDialForwardE164.trim() || null,
+          defaultLinkUrl: defaultLinkUrl.trim() || null,
+          requestFormEnabled,
+          leadCaptureEnabled,
           triggerRules: triggers,
           activate,
         }),
@@ -601,6 +625,59 @@ export function MctbSetupView() {
               <p className="font-semibold text-[#111827]">Preview</p>
               <p className="mt-1 whitespace-pre-wrap">{previewMessage}</p>
             </div>
+          </Card>
+
+          <Card id="links" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Links & request form</h2>
+            <p className="text-[13px] text-muted-foreground">
+              Track link clicks in recovery texts and optionally send callers to a public request form.
+            </p>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold">Default link URL</span>
+              <input
+                className="h-10 w-full rounded-lg border px-3 text-[14px]"
+                placeholder="https://example.com/contact"
+                value={defaultLinkUrl}
+                onChange={(e) => setDefaultLinkUrl(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Use {"{{link}}"} in your message template. Only http/https URLs are allowed.
+              </p>
+            </label>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={requestFormEnabled}
+                onChange={(e) => setRequestFormEnabled(e.target.checked)}
+              />
+              Enable public request form (replaces default link when enabled)
+            </label>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={leadCaptureEnabled}
+                onChange={(e) => setLeadCaptureEnabled(e.target.checked)}
+              />
+              Upsert contacts from form submissions
+            </label>
+            {requestFormUrl ? (
+              <div className="rounded-lg bg-[#f9fafb] p-3 text-[12px]">
+                <p className="font-semibold text-[#111827]">Public form URL</p>
+                <p className="mt-1 break-all text-primary">{requestFormUrl}</p>
+              </div>
+            ) : null}
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold">Direct dial forward (optional)</span>
+              <input
+                className="h-10 w-full rounded-lg border px-3 text-[14px]"
+                placeholder="+15551234567"
+                value={directDialForwardE164}
+                onChange={(e) => setDirectDialForwardE164(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                When set, SIP ingress can forward callers directly without the consent prompt.
+              </p>
+            </label>
           </Card>
 
           <Card id="consent" className="scroll-mt-24 space-y-4 p-5">

@@ -326,6 +326,7 @@ model Workspace {
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
   callbackRequests CallbackRequest[]
+  mctbRequestFormSubmissions MctbRequestFormSubmission[]
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId])
@@ -2745,12 +2746,14 @@ model LinkClickEvent {
   messageId         String?
   campaignMessageId String?
   destinationUrl    String?
+  missedCallEventId String?
   userAgent         String?
   createdAt         DateTime @default(now())
   workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
   @@index([trackingToken])
+  @@index([missedCallEventId])
   @@map("link_click_events")
 }
 
@@ -3043,6 +3046,7 @@ model VoicemailMessage {
   recordingUrl    String?
   durationSeconds Int?
   transcriptText  String?
+  transcriptEnglish String?
   internalNotes   String?
   isResolved      Boolean  @default(false)
   isRead          Boolean  @default(false)
@@ -3604,11 +3608,34 @@ model MissedCallTextConfig {
   phoneNumberId           String?
   /** Outbound SMS sender DID (may differ from voice trigger DID). */
   smsPhoneNumberId        String?
+  /** Optional PSTN forward target for direct-dial MCTB ingress (bypasses consent prompt). */
+  directDialForwardE164   String?
+  requestFormEnabled      Boolean  @default(false)
+  requestFormToken        String?  @unique
+  defaultLinkUrl          String?
+  leadCaptureEnabled      Boolean  @default(false)
+  requestFormFieldsJson   Json?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("missed_call_text_configs")
+}
+
+model MctbRequestFormSubmission {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  missedCallEventId String?
+  contactId         String?
+  formToken         String
+  payloadJson       Json     @default("{}")
+  submittedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, submittedAt])
+  @@index([formToken])
+  @@map("mctb_request_form_submissions")
 }
 
 /// One row per qualifying missed-call attempt (idempotent per call leg).

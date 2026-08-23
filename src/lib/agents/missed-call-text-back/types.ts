@@ -78,6 +78,12 @@ export type MissedCallTextConfigRecord = {
   messageTemplateBusinessHours?: string | null;
   messageTemplateAfterHours?: string | null;
   requireCarrierForward?: boolean;
+  directDialForwardE164?: string | null;
+  requestFormEnabled?: boolean;
+  requestFormToken?: string | null;
+  defaultLinkUrl?: string | null;
+  leadCaptureEnabled?: boolean;
+  requestFormFieldsJson?: unknown;
 };
 
 export type MissedCallTextSettingsUpdate = {
@@ -103,6 +109,12 @@ export type MissedCallTextSettingsUpdate = {
   message_template_business_hours?: string | null;
   message_template_after_hours?: string | null;
   require_carrier_forward?: boolean;
+  direct_dial_forward_e164?: string | null;
+  request_form_enabled?: boolean;
+  request_form_token?: string | null;
+  default_link_url?: string | null;
+  lead_capture_enabled?: boolean;
+  request_form_fields_json?: unknown;
 };
 
 export const DEFAULT_MCTB_MESSAGE =
@@ -139,4 +151,10 @@ export const DEFAULT_MCTB_CONFIG: Omit<
   messageTemplateBusinessHours: null,
   messageTemplateAfterHours: null,
   requireCarrierForward: true,
+  directDialForwardE164: null,
+  requestFormEnabled: false,
+  requestFormToken: null,
+  defaultLinkUrl: null,
+  leadCaptureEnabled: false,
+  requestFormFieldsJson: null,
 };

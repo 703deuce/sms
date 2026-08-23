@@ -10,6 +10,7 @@ type VoiceRuntimeAction =
   | "resolve_dispatch_snapshot"
   | "capture_mctb_sip_inbound"
   | "resolve_mctb_sip_session"
+  | "resolve_mctb_direct_dial_prompt"
   | "record_mctb_sip_press_1_consent"
   | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
@@ -130,6 +131,26 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/mctb-sip-session"
         );
         result = await resolveMctbSipSessionForPython(payload as never);
+        break;
+      }
+
+      case "resolve_mctb_direct_dial_prompt": {
+        const { loadMissedCallTextConfig } = await import(
+          "@/lib/agents/missed-call-text-back/config"
+        );
+        const { buildDirectDialForwardPromptText, resolveMctbDirectDialForwardE164 } =
+          await import("@/lib/mctb/direct-dial-prompt");
+        const workspaceId = String(payload.workspaceId || "").trim();
+        if (!workspaceId) {
+          result = { ok: false, error: "workspaceId required" };
+          break;
+        }
+        const config = await loadMissedCallTextConfig(workspaceId);
+        result = {
+          ok: true,
+          directDialForwardE164: resolveMctbDirectDialForwardE164(config),
+          promptText: buildDirectDialForwardPromptText(config),
+        };
         break;
       }
 

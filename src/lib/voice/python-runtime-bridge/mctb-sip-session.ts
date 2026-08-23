@@ -67,6 +67,8 @@ export type ResolveMctbSipSessionResult = {
   confirmationText?: string;
   audioAssetId?: string;
   failClosed?: boolean;
+  directDialForwardE164?: string | null;
+  directDialPromptText?: string | null;
   forwardedFromE164?: string | null;
   diversionHeader?: string | null;
   businessE164: string;
@@ -155,6 +157,14 @@ export async function resolveMctbSipSessionForPython(
   const consentMode = mctbConfig.consentMode;
   const businessE164 = forwardedFromE164 || transovoNumberE164;
 
+  const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
+  const runtimeConfig = await loadMissedCallTextConfig(target.workspaceId);
+  const { buildDirectDialForwardPromptText, resolveMctbDirectDialForwardE164 } = await import(
+    "@/lib/mctb/direct-dial-prompt"
+  );
+  const directDialForwardE164 = resolveMctbDirectDialForwardE164(runtimeConfig);
+  const directDialPromptText = buildDirectDialForwardPromptText(runtimeConfig);
+
   let playUrl: string | undefined;
   let confirmationPlayUrl: string | undefined;
   let audioAssetId: string | undefined;
@@ -207,6 +217,8 @@ export async function resolveMctbSipSessionForPython(
     confirmationText: MCTB_PRESS_1_CONFIRMATION_TEXT,
     audioAssetId,
     failClosed,
+    directDialForwardE164,
+    directDialPromptText,
     forwardedFromE164,
     diversionHeader,
     businessE164,

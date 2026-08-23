@@ -89,7 +89,18 @@ export async function GET(_request: Request, ctx: Ctx) {
     return NextResponse.redirect(destination);
   }
 
-  const oneOff = await prisma.message.findUnique({ where: { trackingToken } });
+  const oneOff = await prisma.message.findUnique({
+    where: { trackingToken },
+    select: {
+      id: true,
+      workspaceId: true,
+      to: true,
+      status: true,
+      body: true,
+      destinationUrl: true,
+      idempotencyKey: true,
+    },
+  });
   if (oneOff) {
     if (oneOff.status !== "clicked") {
       await prisma.message.update({
@@ -102,11 +113,15 @@ export async function GET(_request: Request, ctx: Ctx) {
       await markFactsFromMessageClick(oneOff.workspaceId, oneOff.to).catch(() => undefined);
     }
     const { recordLinkClick } = await import("@/lib/links/click-events");
+    const { parseMctbRecoveryEventIdFromIdempotencyKey } = await import(
+      "@/lib/mctb/template-vars"
+    );
     await recordLinkClick({
       workspaceId: oneOff.workspaceId || "",
       trackingToken,
       phone: oneOff.to,
       messageId: oneOff.id,
+      missedCallEventId: parseMctbRecoveryEventIdFromIdempotencyKey(oneOff.idempotencyKey),
       destinationUrl:
         oneOff.destinationUrl ||
         oneOff.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||

@@ -26,9 +26,12 @@ const nav = buildVoiceNav({
 });
 const labels = nav.map((i) => i.label);
 assert.ok(labels.includes("Missed Calls"));
-assert.ok(labels.includes("Smart Routing"));
 assert.ok(labels.includes("Conversations"));
+assert.ok(nav.some((i) => i.href === "/smart-routing" && i.label === "Overview"));
+assert.ok(nav.some((i) => i.sectionLabel === "Smart Routing"));
 assert.equal(nav.find((i) => i.label === "Conversations")?.href, "/inbox");
+assert.ok(labels.includes("Visual Voicemail"));
+assert.ok(labels.includes("Callback Requests"));
 
 const srOnly = buildVoiceNav({
   productFeatures: {
@@ -39,7 +42,8 @@ const srOnly = buildVoiceNav({
   },
 });
 assert.ok(!srOnly.some((i) => i.label === "Missed Calls"));
-assert.ok(srOnly.some((i) => i.label === "Overview" && i.href === "/smart-routing"));
+assert.ok(srOnly.some((i) => i.href === "/smart-routing" && i.label === "Overview"));
+assert.ok(srOnly.some((i) => i.label === "Routing Analytics"));
 
 assert.ok(PLATFORM_BILLING_CATALOG.length >= 5);
 

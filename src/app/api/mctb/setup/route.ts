@@ -53,6 +53,10 @@ export type MctbSetupPayload = {
   timezone?: string;
   cooldownMinutes?: number;
   replyNotifications?: boolean;
+  directDialForwardE164?: string | null;
+  defaultLinkUrl?: string | null;
+  requestFormEnabled?: boolean;
+  leadCaptureEnabled?: boolean;
   activate?: boolean;
   existingConsentAttested?: boolean;
 };
@@ -195,6 +199,10 @@ export async function POST(req: Request) {
             end: body.allowedEndTime || undefined,
           }
         : undefined,
+      direct_dial_forward_e164: body.directDialForwardE164,
+      default_link_url: body.defaultLinkUrl,
+      request_form_enabled: body.requestFormEnabled,
+      lead_capture_enabled: body.leadCaptureEnabled,
     },
     actor: session.userId,
     source: "mctb_setup_page",

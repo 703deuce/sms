@@ -10,6 +10,11 @@ import {
 } from "@/lib/mctb/entitlement";
 
 import { resolveMctbMessageTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
+import {
+  resolveMctbLinkDestinationUrl,
+  resolveMctbTemplateVars,
+} from "@/lib/mctb/template-vars";
+import { wrapMctbMessageUrlsWithTracking } from "@/lib/mctb/link-tracking";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return renderMctbMessageTemplate(template, vars);
@@ -105,14 +110,29 @@ export async function executeMissedCallTextSend(input: {
         where: { workspaceId: input.workspaceId, phone: event.callerE164 },
       });
 
-  const body = demoMode
+  const templateVars = resolveMctbTemplateVars({
+    config,
+    callerE164: event.callerE164,
+    contact,
+    missedCallEventId: event.id,
+  });
+
+  const rawBody = demoMode
     ? getDemoMessageBody()
-    : renderTemplate(resolveMctbMessageTemplate(config), {
-        firstName: contact?.firstName || "there",
-        name: [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "there",
-        phone: event.callerE164,
-        business_name: "",
+    : renderTemplate(resolveMctbMessageTemplate(config), templateVars);
+
+  const destinationUrl = demoMode
+    ? null
+    : resolveMctbLinkDestinationUrl(config);
+
+  const tracked = demoMode
+    ? { body: rawBody, trackingToken: null as string | null, destinationUrl: null as string | null }
+    : wrapMctbMessageUrlsWithTracking({
+        body: rawBody,
+        destinationUrl,
       });
+
+  const body = tracked.body;
 
   await prisma.missedCallEvent.update({
     where: { id: event.id },
@@ -198,7 +218,8 @@ export async function executeMissedCallTextSend(input: {
       body,
       from: resolvedSender.e164,
       customerName: contact?.firstName || undefined,
-    idempotencyKey: `mctb-recovery:${event.id}`,
+      idempotencyKey: `mctb-recovery:${event.id}`,
+      destinationUrl: tracked.destinationUrl || undefined,
       demoBypass: demoMode,
       senderRoute: { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 },
     });

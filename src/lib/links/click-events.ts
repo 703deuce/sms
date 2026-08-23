@@ -9,6 +9,7 @@ export async function recordLinkClick(input: {
   messageId?: string | null;
   campaignMessageId?: string | null;
   destinationUrl?: string | null;
+  missedCallEventId?: string | null;
   userAgent?: string | null;
 }) {
   const prisma = getPrisma();
@@ -22,6 +23,7 @@ export async function recordLinkClick(input: {
       messageId: input.messageId || null,
       campaignMessageId: input.campaignMessageId || null,
       destinationUrl: input.destinationUrl || null,
+      missedCallEventId: input.missedCallEventId || null,
       userAgent: input.userAgent || null,
     },
   });

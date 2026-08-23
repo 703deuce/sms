@@ -202,6 +202,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   integrationOrder: "integration_orders",
   workspaceAiIntegrationPolicy: "workspace_ai_integration_policies",
   missedCallTextConfig: "missed_call_text_configs",
+  mctbRequestFormSubmission: "mctb_request_form_submissions",
   missedCallEvent: "missed_call_events",
   missedCallTextTrace: "missed_call_text_traces",
   mctbVoiceBridgeCallEvent: "mctb_voice_bridge_call_events",

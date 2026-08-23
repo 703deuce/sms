@@ -140,3 +140,25 @@ Run on deploy before using feature APIs in production.
 | Analytics (MCTB + SR) | ✅ `/voice/analytics` |
 | Build/typecheck | ✅ |
 | Live telephony smoke | ⚠️ Manual documented |
+
+---
+
+## Finish gaps (`cursor/transovo-finish-gaps-5c36`)
+
+| Deliverable | Status |
+|-------------|--------|
+| Link tracking in MCTB SMS | **VERIFIED** — `link-tracking.ts`, click attribution via idempotency key |
+| Public request form + lead capture | **VERIFIED** — `/f/mctb/[token]`, `mctb_request_form_submissions` |
+| Direct dial forward (SIP) | **PARTIAL** — config + Python early exit; live PSTN pending |
+| SR routing loop validation | **VERIFIED** — publish-time guard |
+| Platform admin snapshot | **VERIFIED** — `/api/admin/workspace/[workspaceId]` |
+| Multi-product dashboard summary | **VERIFIED** — `/api/platform/dashboard-summary` |
+| Trial grant API + UI | **VERIFIED** — `/api/platform/billing/trial` |
+| SR analytics page | **VERIFIED** — `/smart-routing/analytics` |
+| Expanded activity feed | **VERIFIED** — consent, clicks, forms, fallback |
+| Stripe subscription deleted deactivate | **VERIFIED** — platform metadata webhook path |
+| Callback Brevo email + VM notify | **VERIFIED** |
+| `test-transovo-finish-gaps.ts` | **VERIFIED** — hermetic unit tests |
+| Manual telephony matrix (12 cases) | **MISSING** — see `docs/transovo-manual-telephony-runbook.md` |
+
+Migration: `supabase/migrations/20260823_transovo_finish_gaps.sql`

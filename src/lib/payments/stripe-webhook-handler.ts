@@ -86,7 +86,40 @@ async function routeCheckoutSessionAsyncFailed(session: Stripe.Checkout.Session)
   return { subsystem: "none" as const, skipped: true };
 }
 
-async function routeSubscriptionEvent(subscription: Stripe.Subscription) {
+async function routeSubscriptionEvent(
+  subscription: Stripe.Subscription,
+  eventType?: string,
+) {
+  const metadata = (subscription.metadata || {}) as Record<string, string | undefined>;
+  const platformProductKey = metadata.platformProductKey;
+  const workspaceId = metadata.workspaceId;
+
+  if (platformProductKey && workspaceId) {
+    const { grantsForPlatformProduct } = await import(
+      "@/lib/products/platform-billing-catalog"
+    );
+    const { grantWorkspaceProductFeature } = await import(
+      "@/lib/products/feature-entitlements"
+    );
+    const features = grantsForPlatformProduct(platformProductKey);
+    const isDeleted =
+      eventType === "customer.subscription.deleted" ||
+      subscription.status === "canceled" ||
+      subscription.status === "unpaid";
+    for (const feature of features) {
+      await grantWorkspaceProductFeature(
+        workspaceId,
+        feature,
+        isDeleted ? "inactive" : "active",
+      );
+    }
+    return {
+      subsystem: "platform_product" as const,
+      productKey: platformProductKey,
+      deactivated: isDeleted,
+    };
+  }
+
   if (isMarketplaceStripeSubscription(subscription)) {
     return handleMarketplaceSubscriptionStripeEvent(subscription);
   }
@@ -149,7 +182,7 @@ async function processStripeEvent(event: Stripe.Event) {
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
-      return routeSubscriptionEvent(obj as unknown as Stripe.Subscription);
+      return routeSubscriptionEvent(obj as unknown as Stripe.Subscription, event.type);
     case "payment_intent.succeeded":
       if (isPremiumNumberCheckoutMetadata(metadataFromObject(obj))) {
         return handlePremiumNumberPaymentIntentSucceeded(obj as unknown as Stripe.PaymentIntent);
