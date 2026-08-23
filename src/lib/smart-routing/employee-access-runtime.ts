@@ -17,6 +17,8 @@ import type { OutboundContextType } from "./outbound-bridge";
 import { verifyAuthorizedCallerPin } from "./authorized-callers";
 import { loadSmartRoutingWorkspaceSettings } from "./workspace-settings";
 import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
+import { findLastRoutedCallerForEmployee } from "./last-caller-for-employee";
+import { buildOutboundBridgeMetadata } from "./dashboard-outbound-bridge";
 
 async function speakAndGather(
   callControlId: string,
@@ -99,14 +101,14 @@ async function playOutboundMenu(
   workspaceId: string,
 ) {
   const text =
-    "Press 1 for your latest missed call. Press 2 for your latest voicemail. Press 3 for your latest callback request. Press 4 to enter another number. Press 9 to repeat.";
+    "Press 1 to call back your last routed caller. Press 2 to enter a phone number. Press 3 for the latest callback request. Press 9 to repeat.";
   const clientState = encodeEmployeeAccessState({
     kind: "smart_routing_employee",
     accessSessionId,
     workspaceId,
     awaiting: "menu",
   });
-  await speakAndGather(callControlId, text, clientState, { validDigits: "12349" });
+  await speakAndGather(callControlId, text, clientState, { validDigits: "1239" });
 }
 
 export async function handleEmployeeAccessGather(input: {
@@ -176,51 +178,39 @@ export async function handleEmployeeAccessGather(input: {
     let destination: string | null = null;
     let contextType: OutboundContextType = "manual";
     let contextRefId: string | null = null;
+    let matchKind: string | null = null;
 
     if (digit === "1") {
-      const missed = await prisma.missedCallEvent.findFirst({
-        where: { workspaceId: input.workspaceId },
-        orderBy: { detectedAt: "desc" },
-      });
-      if (!missed?.callerE164) {
-        await speakOnCallRaw(input.callControlId, "There are no recent missed calls.");
+      if (!access.authorizedCallerId) {
+        await speakOnCallRaw(input.callControlId, "Your account is not configured for call back.");
         await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
         return { handled: true, done: false };
       }
-      destination = missed.callerE164;
-      contextType = "missed_call";
-      contextRefId = missed.id;
+      const caller = await prisma.smartRoutingAuthorizedCaller.findFirst({
+        where: { id: access.authorizedCallerId, workspaceId: input.workspaceId },
+      });
+      if (!caller) {
+        await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
+        return { handled: true, done: false };
+      }
+      const last = await findLastRoutedCallerForEmployee({
+        workspaceId: input.workspaceId,
+        employeePhoneE164: caller.phoneE164,
+        authorizedCallerId: caller.id,
+      });
+      if (!last?.callerE164) {
+        await speakOnCallRaw(
+          input.callControlId,
+          "There are no recent routed callers for your line.",
+        );
+        await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
+        return { handled: true, done: false };
+      }
+      destination = last.callerE164;
+      contextType = "last_call";
+      contextRefId = last.sessionId;
+      matchKind = last.matchKind;
     } else if (digit === "2") {
-      const vm = await prisma.voicemailMessage.findFirst({
-        where: { workspaceId: input.workspaceId, fromE164: { not: null } },
-        orderBy: { createdAt: "desc" },
-      });
-      if (!vm?.fromE164) {
-        await speakOnCallRaw(input.callControlId, "There are no recent voicemail callers.");
-        await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
-        return { handled: true, done: false };
-      }
-      destination = vm.fromE164;
-      contextType = "voicemail";
-      contextRefId = vm.id;
-    } else if (digit === "3") {
-      const cb = await prisma.callbackRequest.findFirst({
-        where: { workspaceId: input.workspaceId, status: { in: ["new", "contacted"] } },
-        orderBy: { requestedAt: "desc" },
-      });
-      if (!cb?.callerE164) {
-        await speakOnCallRaw(input.callControlId, "There are no callback requests waiting.");
-        await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
-        return { handled: true, done: false };
-      }
-      destination = cb.callerE164;
-      contextType = "callback_request";
-      contextRefId = cb.id;
-      await prisma.callbackRequest.update({
-        where: { id: cb.id },
-        data: { status: "contacted", contactedAt: new Date() },
-      });
-    } else if (digit === "4") {
       await prisma.smartRoutingAccessSession.update({
         where: { id: access.id },
         data: { state: "manual_entry" },
@@ -238,6 +228,23 @@ export async function handleEmployeeAccessGather(input: {
         { validDigits: "0123456789", finishOnKey: "#" },
       );
       return { handled: true, done: false };
+    } else if (digit === "3") {
+      const cb = await prisma.callbackRequest.findFirst({
+        where: { workspaceId: input.workspaceId, status: { in: ["new", "contacted"] } },
+        orderBy: { requestedAt: "desc" },
+      });
+      if (!cb?.callerE164) {
+        await speakOnCallRaw(input.callControlId, "There are no callback requests waiting.");
+        await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
+        return { handled: true, done: false };
+      }
+      destination = cb.callerE164;
+      contextType = "callback_request";
+      contextRefId = cb.id;
+      await prisma.callbackRequest.update({
+        where: { id: cb.id },
+        data: { status: "contacted", contactedAt: new Date() },
+      });
     } else {
       await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
       return { handled: true, done: false };
@@ -252,6 +259,7 @@ export async function handleEmployeeAccessGather(input: {
         contextType,
         contextRefId,
         state: "confirm",
+        stateJson: matchKind ? { lastCallerMatchKind: matchKind } : undefined,
       },
     });
 
@@ -319,6 +327,13 @@ export async function handleEmployeeAccessGather(input: {
     }
 
     try {
+      const accessMeta = access.stateJson as { lastCallerMatchKind?: string } | null;
+      const dialMethod =
+        (access.contextType as OutboundContextType) === "last_call"
+          ? "last_call"
+          : (access.contextType as OutboundContextType) === "manual"
+            ? "manual"
+            : "pin_menu";
       const outbound = await createOutboundCallRecord({
         workspaceId: input.workspaceId,
         authorizedCallerId: access.authorizedCallerId,
@@ -327,6 +342,11 @@ export async function handleEmployeeAccessGather(input: {
         contextType: (access.contextType as OutboundContextType) || "manual",
         contextRefId: access.contextRefId,
         employeeCallControlId: input.callControlId,
+        metadata: buildOutboundBridgeMetadata({
+          dialMethod,
+          accessNumberE164: access.calledNumber,
+          matchKind: accessMeta?.lastCallerMatchKind ?? null,
+        }),
       });
       await speakOnCallRaw(input.callControlId, "Please hold while we connect your call.");
       await originateCustomerLeg({
@@ -343,6 +363,18 @@ export async function handleEmployeeAccessGather(input: {
         err instanceof Error && err.message.includes("verified")
           ? "Outbound business calling is not available until your business number is verified."
           : "We could not place that call. Please try again later.";
+      const recent = await prisma.smartRoutingOutboundCall.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          employeeCallControlId: input.callControlId,
+          result: "initiated",
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recent) {
+        const { finalizeOutboundCall } = await import("./outbound-bridge");
+        await finalizeOutboundCall(recent.id, "failed", msg);
+      }
       await speakOnCallRaw(input.callControlId, msg);
       await hangupCall(input.callControlId);
       return { handled: true, done: true };

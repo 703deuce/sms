@@ -2,8 +2,6 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { telnyxRequest } from "@/lib/messaging/telnyx/client";
-import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
 import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { isBlockedCallbackDestination } from "./callback-destination-policy";
 import { encodeEmployeeAccessState } from "./employee-access-state";
@@ -25,6 +23,20 @@ function connectionId(): string {
     process.env.TELNYX_CALL_CONTROL_APP_ID?.trim();
   if (!id) throw new Error("TELNYX_CONNECTION_ID not configured");
   return id;
+}
+
+export function buildOutboundBridgeMetadata(input: {
+  dialMethod: "last_call" | "manual" | "dashboard" | "pin_menu";
+  accessNumberE164?: string | null;
+  initiatedByUserId?: string | null;
+  matchKind?: string | null;
+}): Record<string, unknown> {
+  return {
+    dialMethod: input.dialMethod,
+    ...(input.accessNumberE164 ? { accessNumberE164: input.accessNumberE164 } : {}),
+    ...(input.initiatedByUserId ? { initiatedByUserId: input.initiatedByUserId } : {}),
+    ...(input.matchKind ? { lastCallerMatchKind: input.matchKind } : {}),
+  };
 }
 
 export async function initiateDashboardOutboundBridge(input: {
@@ -113,8 +125,14 @@ export async function initiateDashboardOutboundBridge(input: {
     businessCallerIdE164: verifiedCallerId,
     contextType: input.contextType,
     contextRefId: input.contextRefId,
+    metadata: buildOutboundBridgeMetadata({
+      dialMethod: "dashboard",
+      accessNumberE164: fromNumber,
+      initiatedByUserId: input.initiatedByUserId,
+    }),
   });
 
+  const { isTelnyxVoiceConfigured } = await import("@/lib/voice/telnyx/assistant-sync");
   if (!isTelnyxVoiceConfigured()) {
     await prisma.smartRoutingOutboundCall.update({
       where: { id: outbound.id },
@@ -131,6 +149,7 @@ export async function initiateDashboardOutboundBridge(input: {
     outboundCallId: outbound.id,
   });
 
+  const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
   const res = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
     method: "POST",
     body: {

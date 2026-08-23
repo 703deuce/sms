@@ -20,6 +20,7 @@ export const TRANSOVO_LAUNCH_READINESS = {
     "Carrier forwarding setup on production business number",
   ],
   launchBlockers: [
+    "Employee PIN bridge: Press 1 last routed caller (employee-aware), Press 2 manual dial",
     "Live Telnyx outbound bridge on production (dashboard-initiated + PIN flows)",
     "Verified business caller ID on production workspace before outbound bridge",
     "Entitlement migration: existing workspaces grandfathered; new workspaces purchase-driven",

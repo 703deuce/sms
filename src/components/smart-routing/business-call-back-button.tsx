@@ -27,7 +27,7 @@ export function BusinessCallBackButton({
   size = "default",
 }: {
   destinationE164: string;
-  contextType?: "missed_call" | "voicemail" | "callback_request" | "manual";
+  contextType?: "last_call" | "missed_call" | "voicemail" | "callback_request" | "manual";
   contextRefId?: string | null;
   className?: string;
   size?: "default" | "sm";

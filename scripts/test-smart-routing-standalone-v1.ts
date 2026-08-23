@@ -9,6 +9,7 @@ import {
   decodeEmployeeAccessState,
   encodeEmployeeAccessState,
 } from "../src/lib/smart-routing/employee-access-state";
+import { isMissedRoutedOutcomeForEmployee } from "../src/lib/smart-routing/last-caller-heuristics";
 import { isWorkspaceInternalSmartRoutingNumberSync } from "../src/lib/smart-routing/internal-numbers";
 
 function isDomesticCallbackDestination(e164: string): boolean {
@@ -39,6 +40,10 @@ const state = encodeEmployeeAccessState({
   awaiting: "pin",
 });
 assert.equal(decodeEmployeeAccessState(state)?.accessSessionId, "sess1");
+
+assert.equal(isMissedRoutedOutcomeForEmployee("connected"), false);
+assert.equal(isMissedRoutedOutcomeForEmployee("no_answer"), true);
+assert.equal(isMissedRoutedOutcomeForEmployee(null), true);
 
 async function main() {
   const hash = await bcrypt.hash("1234", 4);

@@ -398,7 +398,7 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
               <div className="mt-4 space-y-3">
                 <BusinessCallBackButton
                   destinationE164={selected.callerNumber}
-                  contextType="missed_call"
+                  contextType="last_call"
                   contextRefId={selected.id}
                 />
               </div>

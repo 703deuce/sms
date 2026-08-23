@@ -9,10 +9,12 @@ import { resolveVerifiedBusinessCallerId } from "./workspace-settings";
 import { isBlockedCallbackDestination } from "./callback-destination-policy";
 
 export type OutboundContextType =
+  | "last_call"
   | "missed_call"
   | "voicemail"
   | "callback_request"
-  | "manual";
+  | "manual"
+  | "dashboard";
 
 import {
   encodeEmployeeAccessState,
@@ -35,6 +37,7 @@ export async function createOutboundCallRecord(input: {
   contextType: OutboundContextType;
   contextRefId?: string | null;
   employeeCallControlId?: string | null;
+  metadata?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
   return prisma.smartRoutingOutboundCall.create({
@@ -51,6 +54,7 @@ export async function createOutboundCallRecord(input: {
       employeeCallControlId: input.employeeCallControlId ?? null,
       employeeLegStartedAt: new Date(),
       result: "initiated",
+      metadata: input.metadata ?? undefined,
     },
   });
 }
@@ -137,7 +141,11 @@ export async function bridgeEmployeeToCustomer(input: {
   });
 }
 
-export async function finalizeOutboundCall(outboundCallId: string, result: string) {
+export async function finalizeOutboundCall(
+  outboundCallId: string,
+  result: string,
+  failureReason?: string,
+) {
   const prisma = getPrisma();
   const row = await prisma.smartRoutingOutboundCall.findUnique({ where: { id: outboundCallId } });
   if (!row) return;
@@ -146,8 +154,22 @@ export async function finalizeOutboundCall(outboundCallId: string, result: strin
   const durationSeconds = start
     ? Math.max(0, Math.round((endedAt.getTime() - start.getTime()) / 1000))
     : null;
+  const metadata =
+    failureReason
+      ? {
+          ...(typeof row.metadata === "object" && row.metadata
+            ? (row.metadata as Record<string, unknown>)
+            : {}),
+          failureReason,
+        }
+      : undefined;
   await prisma.smartRoutingOutboundCall.update({
     where: { id: outboundCallId },
-    data: { endedAt, result, durationSeconds },
+    data: {
+      endedAt,
+      result,
+      durationSeconds,
+      ...(metadata ? { metadata } : {}),
+    },
   });
 }
