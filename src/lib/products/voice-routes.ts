@@ -7,6 +7,8 @@ export const VOICE_APP_ROUTE_PREFIXES = [
   "/dashboard",
   "/outcomes",
   "/voice",
+  "/reviews",
+  "/tools",
   "/integrations",
   "/settings",
   "/getting-started",

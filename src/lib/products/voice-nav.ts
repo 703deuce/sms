@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import { buildReviewsNav, getReviewsPageTitle, isReviewsSectionPath } from "@/lib/products/reviews-nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
@@ -58,6 +59,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   return [
     ...main,
+    ...buildReviewsNav(),
     {
       label: "Numbers",
       href: "/voice/numbers",
@@ -92,6 +94,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/integrations")) return "Integrations";
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/contact")) return "Help";
+  if (isReviewsSectionPath(pathname)) return getReviewsPageTitle(pathname);
   return "";
 }
 
