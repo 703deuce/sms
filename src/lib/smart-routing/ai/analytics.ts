@@ -5,6 +5,14 @@ const MIN_SAMPLE_FOR_RECOMMENDATION = Number(
   process.env.SMART_ROUTING_AI_MIN_ANALYTICS_SAMPLE || "10",
 );
 
+type SessionAnalyticsRow = {
+  finalOutcome: string | null;
+  flowId: string;
+  startedAt: Date;
+  menuSelection: string | null;
+  smsTriggered: boolean;
+};
+
 export async function getRoutingAnalyticsSummary(
   workspaceId: string,
   days = 30,
@@ -14,7 +22,7 @@ export async function getRoutingAnalyticsSummary(
   since.setDate(since.getDate() - periodDays);
   const prisma = getPrisma();
 
-  const sessions = await prisma.smartRoutingCallSession.findMany({
+  const sessions = (await prisma.smartRoutingCallSession.findMany({
     where: { workspaceId, startedAt: { gte: since }, isTest: false },
     select: {
       finalOutcome: true,
@@ -23,18 +31,18 @@ export async function getRoutingAnalyticsSummary(
       menuSelection: true,
       smsTriggered: true,
     },
-  });
+  })) as SessionAnalyticsRow[];
 
   const total = sessions.length;
-  const answered = sessions.filter((s) =>
+  const answered = sessions.filter((s: SessionAnalyticsRow) =>
     ["answered", "completed", "transferred"].includes(
       String(s.finalOutcome || "").toLowerCase(),
     ),
   ).length;
-  const noAnswer = sessions.filter((s) =>
+  const noAnswer = sessions.filter((s: SessionAnalyticsRow) =>
     String(s.finalOutcome || "").toLowerCase().includes("no_answer"),
   ).length;
-  const voicemailCount = sessions.filter((s) =>
+  const voicemailCount = sessions.filter((s: SessionAnalyticsRow) =>
     String(s.finalOutcome || "").toLowerCase().includes("voicemail"),
   ).length;
 
@@ -56,7 +64,7 @@ export async function getRoutingAnalyticsSummary(
     where: { workspaceId, createdAt: { gte: since } },
   });
 
-  const mctbRecoveryCount = sessions.filter((s) => s.smsTriggered).length;
+  const mctbRecoveryCount = sessions.filter((s: SessionAnalyticsRow) => s.smsTriggered).length;
 
   return {
     periodDays,

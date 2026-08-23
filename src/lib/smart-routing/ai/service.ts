@@ -227,7 +227,7 @@ export async function createAiRoutingProposal(input: {
   }
   const ctx: AiRoutingToolContext = {
     workspaceId: input.workspaceId,
-    flowId,
+    flowId: flowId ?? undefined,
     userId: input.userId,
   };
 
@@ -282,7 +282,11 @@ export async function createAiRoutingProposal(input: {
   if (input.mode === "analyze" || input.mode === "improve") {
     const { facts, analytics } = await analyzeRoutingQuestion(ctx, input.prompt);
     if (input.mode === "improve") {
-      await generateRoutingRecommendations(input.workspaceId, analytics, flowId);
+      await generateRoutingRecommendations(
+        input.workspaceId,
+        analytics,
+        flowId ?? undefined,
+      );
     }
     const row = await prisma.smartRoutingAiProposal.create({
       data: {

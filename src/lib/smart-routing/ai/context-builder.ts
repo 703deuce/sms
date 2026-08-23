@@ -18,13 +18,21 @@ export async function loadAiRoutingDestinations(
     where: { workspaceId },
     orderBy: { label: "asc" },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    label: r.label,
-    phoneNumber: r.phoneNumber,
-    destinationType: r.destinationType,
-    active: r.active,
-  }));
+  return rows.map(
+    (r: {
+      id: string;
+      label: string;
+      phoneNumber: string | null;
+      destinationType: string;
+      active: boolean;
+    }) => ({
+      id: r.id,
+      label: r.label,
+      phoneNumber: r.phoneNumber,
+      destinationType: r.destinationType,
+      active: r.active,
+    }),
+  );
 }
 
 export function resolveDestinationByLabel(
@@ -96,7 +104,9 @@ export async function buildAiRoutingFlowContext(
 ): Promise<AiRoutingFlowContext | null> {
   const flow = await getFlow(workspaceId, flowId);
   if (!flow) return null;
-  const published = flow.versions?.find((v) => v.publishedAt);
+  const published = flow.versions?.find(
+    (v: { versionNumber: number; publishedAt?: string | Date | null }) => v.publishedAt,
+  );
   return {
     flowId: flow.id,
     name: flow.name,
