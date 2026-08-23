@@ -11,7 +11,7 @@ import {
 } from "@/lib/mctb/platform-demo-access";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { saveMctbOnboardingState } from "@/lib/mctb/onboarding/state";
-import { getMctbDemoIngressE164 } from "@/lib/mctb/onboarding/phone-numbers";
+import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 
 export type AdminMctbBootstrapResult = {
   link: {
@@ -58,7 +58,7 @@ function businessLineFromEnv(): string | null {
   }
 }
 
-/** One-click admin MCTB test account setup — links 571, wires runtime, grants entitlements. */
+/** One-click admin MCTB test account setup — links assigned MCTB DID, wires runtime, grants entitlements. */
 export async function bootstrapAdminMctbTestAccount(input: {
   workspaceId: string;
   userId: string;
@@ -135,6 +135,10 @@ export async function bootstrapAdminMctbTestAccount(input: {
     });
   }
 
+  const productionForwardTargetE164 = await getProductionMctbForwardTargetE164(
+    input.workspaceId,
+  );
+
   await prisma.workspace.update({
     where: { id: input.workspaceId },
     data: {
@@ -146,7 +150,9 @@ export async function bootstrapAdminMctbTestAccount(input: {
           adminTestAccount: true,
           unlimitedMctbTesting: true,
           ...(businessLineE164 ? { businessLineE164 } : {}),
-          productionForwardTargetE164: getMctbDemoIngressE164(),
+          ...(productionForwardTargetE164
+            ? { productionForwardTargetE164 }
+            : {}),
         },
       },
     },

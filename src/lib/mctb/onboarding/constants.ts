@@ -5,8 +5,16 @@
 export const MCTB_PLATFORM_DEMO_E164 =
   process.env.MCTB_PLATFORM_DEMO_E164?.trim() || "+15714073615";
 
-/** Human-readable display for onboarding UI. */
-export const MCTB_PLATFORM_DEMO_DISPLAY = "1-571-407-3615";
+function formatUsE164Display(e164: string): string {
+  const d = e164.replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) {
+    return `1-${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7)}`;
+  }
+  return e164;
+}
+
+/** Human-readable display for Try It / platform demo UI (derived from env). */
+export const MCTB_PLATFORM_DEMO_DISPLAY = formatUsE164Display(MCTB_PLATFORM_DEMO_E164);
 
 /** Label shown in onboarding — Telnyx A2P-approved platform line. */
 export const MCTB_PLATFORM_DEMO_LABEL = "Transovo Demo Line (A2P-approved)";

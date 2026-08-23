@@ -6,6 +6,7 @@ import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
 import { ensureNumberProvisioned } from "@/lib/telephony/provisioning/number-assignment";
 import { clearMctbSipIngressCache } from "@/lib/mctb/sip-ingress/resolver";
+import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 
 function mergeSettings(
   current: unknown,
@@ -37,7 +38,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
   delaySeconds?: number;
 }): Promise<ProvisionMctbTelnyxSipIngressResult> {
   const prisma = getPrisma();
-  const phone = await prisma.phoneNumber.findFirst({
+  let phone = await prisma.phoneNumber.findFirst({
     where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
     select: {
       id: true,
@@ -45,8 +46,29 @@ export async function provisionMctbTelnyxSipIngress(input: {
       provider: true,
       settingsJson: true,
       status: true,
+      workspaceId: true,
     },
   });
+
+  if (!phone) {
+    const candidate = await prisma.phoneNumber.findFirst({
+      where: { id: input.phoneNumberId },
+      select: {
+        id: true,
+        e164: true,
+        provider: true,
+        settingsJson: true,
+        status: true,
+        workspaceId: true,
+      },
+    });
+    if (
+      candidate &&
+      (await isWorkspaceAuthorizedForPlatformDemoNumber(input.workspaceId))
+    ) {
+      phone = candidate;
+    }
+  }
 
   if (!phone?.e164) {
     return {

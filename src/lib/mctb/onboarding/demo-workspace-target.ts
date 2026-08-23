@@ -58,8 +58,7 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
 
   const isPlatformDemo = isPlatformDemoNumber(transovoE164);
 
-  // Platform 571: tenant comes from active Try It / onboarding session (caller phone),
-  // not from DID ownership — otherwise Press-1 SMS and Try It progress never attach.
+  // Shared Try It demo DID only — paid customers use their assigned number via SIP ingress below.
   if (isPlatformDemo) {
     const target = await resolvePlatformDemoTarget({
       callerE164: input.callerE164,

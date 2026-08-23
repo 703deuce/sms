@@ -35,11 +35,9 @@ function envAllowlist(): Set<string> {
   return values;
 }
 
-/** Sync fast-path for tests and legacy 571 checks — does not hit DB. */
+/** Sync fast-path for platform demo env + optional MCTB_SIP_INGRESS_E164S — does not hit DB. */
 export function isMctbSipIngressTargetSync(toE164: string | null | undefined): boolean {
   const normalized = normalizeDid(toE164);
   if (!normalized) return false;
-  if (envAllowlist().has(normalized)) return true;
-  const digits = normalized.replace(/\D/g, "");
-  return digits.endsWith("5714073615");
+  return envAllowlist().has(normalized);
 }

@@ -162,13 +162,15 @@ export async function resolveMctbSipSessionForPython(
   let failClosed = false;
 
   if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
-    const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
-    const usePlatformFastPath = isPlatformDemoNumber(transovoNumberE164);
-    if (usePlatformFastPath) {
-      const immediate = getImmediate571ConsentGather();
-      if (immediate) {
-        playUrl = immediate.playUrl;
-        audioAssetId = immediate.audioAssetId;
+    // Try It demo only — production (paid) uses workspace consent audio via frozen SIP.
+    if (mctbConfig.demoMode) {
+      const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
+      if (isPlatformDemoNumber(transovoNumberE164)) {
+        const immediate = getImmediate571ConsentGather();
+        if (immediate) {
+          playUrl = immediate.playUrl;
+          audioAssetId = immediate.audioAssetId;
+        }
       }
     }
     if (!playUrl) {

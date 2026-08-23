@@ -10,6 +10,7 @@ import {
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
+import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
 
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
     const fields = await parseFields(request);
 
     const from = pick(fields, "From", "from", "Caller");
-    const to = pick(fields, "To", "to", "Called") || "+15714073615";
+    const to = pick(fields, "To", "to", "Called") || MCTB_PLATFORM_DEMO_E164;
     const digits = pick(fields, "Digits", "digits");
     const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
     const callStatus = pick(fields, "CallStatus", "CallStatus", "call_status");

@@ -122,14 +122,14 @@ function isOnboardingForwardOrLiveTestActive(state: MctbOnboardingState): boolea
   return state.currentStep === "connect" || state.currentStep === "live_test";
 }
 
-/** Match onboarding workspace for inbound calls to platform 571 (demo, forwarding, live test). */
+/** Match onboarding workspace for inbound calls to the platform demo DID (Try It + forward tests). */
 export async function resolveOnboardingWorkspaceForPlatformInbound(input: {
   callerE164: string;
   forwardedFrom?: string | null;
 }): Promise<string | null> {
   const businessLine = input.forwardedFrom?.trim();
 
-  // Production forward to 571 — match business line first; never treat as Try It demo.
+  // Production forward — match business line first; never treat as Try It demo.
   if (businessLine) {
     const { resolveWorkspaceByForwardedBusinessLine } = await import(
       "@/lib/mctb/platform-production-routing"

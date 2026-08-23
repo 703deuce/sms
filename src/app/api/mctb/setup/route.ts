@@ -21,7 +21,7 @@ import {
 } from "@/lib/mctb/platform-demo-access";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
-import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/onboarding/phone-numbers";
+import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
@@ -116,7 +116,7 @@ export async function GET() {
           {
             id: platformDemoPhone.phoneNumberId,
             e164: platformDemoPhone.e164,
-            friendlyName: "Transovo platform demo (571)",
+            friendlyName: "Transovo platform demo line",
             type: "local",
             a2pStatus: "APPROVED",
             status: "Active",
@@ -188,6 +188,8 @@ export async function GET() {
         (mctbSettings.consentMode as MctbConsentMode | undefined) ||
         (setupMeta.consentMode as MctbConsentMode | undefined) ||
         "press_1",
+      productionForwardTargetE164: productionForwardE164,
+      businessLineE164,
     },
   });
 }

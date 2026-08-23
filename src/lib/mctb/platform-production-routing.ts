@@ -63,8 +63,8 @@ function productionForwardActive(
 }
 
 /**
- * Production forward to 571: match workspace by forwardedFrom business line.
- * Used by frozen SIP + TeXML paths — not Try It (direct dial).
+ * Production forward: match workspace by forwardedFrom business line.
+ * Works for any customer-assigned MCTB DID — not Try It (direct dial to platform demo).
  */
 export async function resolveWorkspaceByForwardedBusinessLine(
   forwardedFromE164: string,

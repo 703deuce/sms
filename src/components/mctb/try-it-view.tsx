@@ -99,12 +99,7 @@ export function MctbTryItView() {
     }
   }
 
-  const demoDisplay =
-    status?.demoNumberDisplay ||
-    (() => {
-      const d = "+15714073615".replace(/\D/g, "");
-      return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
-    })();
+  const demoDisplay = status?.demoNumberDisplay || "—";
 
   const showPress1 = consentMode === "press_1";
   const started = Boolean(status?.sessionActive || status?.completed);

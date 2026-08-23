@@ -67,18 +67,21 @@ type SetupData = {
     campaignDescription: string;
     press1Consent: string;
   };
+  productionForwardTargetE164?: string | null;
+  businessLineE164?: string | null;
   solution: { setupId: string | null; status: string } | null;
 };
 
 const SECTIONS = [
   { id: "number", title: "1. Choose the number" },
-  { id: "triggers", title: "2. What counts as missed" },
-  { id: "message", title: "3. Text-back message" },
-  { id: "consent", title: "4. Consent method" },
-  { id: "hours", title: "5. Business hours" },
-  { id: "cooldown", title: "6. Cooldown" },
-  { id: "replies", title: "7. Reply handling" },
-  { id: "test", title: "8. Test" },
+  { id: "forwarding", title: "2. Carrier forwarding" },
+  { id: "triggers", title: "3. What counts as missed" },
+  { id: "message", title: "4. Text-back message" },
+  { id: "consent", title: "5. Consent method" },
+  { id: "hours", title: "6. Business hours" },
+  { id: "cooldown", title: "7. Cooldown" },
+  { id: "replies", title: "8. Reply handling" },
+  { id: "test", title: "9. Test" },
 ] as const;
 
 function fmtPhone(e164: string) {
@@ -152,9 +155,11 @@ export function MctbSetupView() {
       setCooldownMinutes(r.cooldownMinutes);
       setReplyNotifications(r.conversationEnabled);
       setEnabled(r.enabled);
-      if (payload.adminTest?.businessLineE164) {
-        setBusinessLineE164(payload.adminTest.businessLineE164);
-      }
+      const line =
+        payload.businessLineE164?.trim() ||
+        payload.adminTest?.businessLineE164?.trim() ||
+        "";
+      if (line) setBusinessLineE164(line);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -188,6 +193,10 @@ export function MctbSetupView() {
     () => data?.phoneNumbers.find((n) => n.id === phoneNumberId) || null,
     [data?.phoneNumbers, phoneNumberId],
   );
+
+  const productionForwardE164 = useMemo(() => {
+    return selectedNumber?.e164 || data?.productionForwardTargetE164 || null;
+  }, [selectedNumber, data?.productionForwardTargetE164]);
 
   const previewMessage = useMemo(() => {
     const name = selectedNumber?.friendlyName || "Your Business";
@@ -260,7 +269,7 @@ export function MctbSetupView() {
           <p className="font-semibold">Messaging setup incomplete</p>
           <p className="mt-1">
             {data?.adminTest?.isAdminTestWorkspace
-              ? "Select an A2P-approved number below, or use Admin test setup to link the platform 571 line."
+              ? "Select an A2P-approved number below, or use Admin test setup to link your assigned MCTB line."
               : "Complete verification before missed-call text back can go live."}{" "}
             <Link href="/compliance" className="font-semibold text-amber-900 underline">
               Open Messaging Compliance →
@@ -281,19 +290,21 @@ export function MctbSetupView() {
         <Card className="space-y-3 border-violet-200 bg-violet-50/40 p-5">
           <h2 className="text-[15px] font-semibold text-[#111827]">Admin test setup</h2>
           <p className="text-[13px] text-muted-foreground">
-            One-click setup for platform admin testing: links the 571 demo line to this workspace
-            (without moving DID ownership), wires MCTB runtime, and enables unlimited test sends.
-            Use this to run Try It, Test My Setup, and paid-customer flows in the browser.
+            One-click setup for platform admin testing: links your assigned MCTB number to this
+            workspace (without moving DID ownership), wires MCTB runtime, and enables unlimited test
+            sends. Use this to run Try It, Test My Setup, and paid-customer flows in the browser.
           </p>
           <p className="text-[13px] text-muted-foreground">
-            Production path (frozen SIP/TeXML engine): forward your business line to{" "}
-            <strong>{data.adminTest.productionForwardTargetE164 || "571"}</strong>, then call your
-            business line from another phone. Try It is the only direct-dial-to-571 demo — it does
-            not use forwarding.
+            Production path (frozen SIP engine): forward your business line to{" "}
+            <strong>
+              {productionForwardE164 ? fmtPhone(productionForwardE164) : "your assigned MCTB number"}
+            </strong>
+            , then call your business line from another phone. Try It is a separate direct-call demo
+            and does not use carrier forwarding.
           </p>
           <label className="block space-y-1.5">
             <span className="text-[12px] font-semibold text-[#374151]">
-              Your business line (forward this number to 571)
+              Your business line (forward this number to your assigned MCTB number)
             </span>
             <input
               className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
@@ -304,7 +315,7 @@ export function MctbSetupView() {
           </label>
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#4b5563]">
             <span>
-              Platform 571 linked:{" "}
+              Assigned MCTB number linked:{" "}
               <strong>{data.adminTest.platformDemoLinked ? "Yes" : "No"}</strong>
             </span>
             <span>·</span>
@@ -408,6 +419,51 @@ export function MctbSetupView() {
             <Link href="/voice/numbers" className="text-[13px] font-semibold text-primary hover:underline">
               Manage numbers →
             </Link>
+          </Card>
+
+          <Card id="forwarding" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Carrier forwarding</h2>
+            <p className="text-[13px] text-muted-foreground">
+              For production, forward your carrier business line to the MCTB number you chose above.
+              That same number sends recovery texts (once A2P or toll-free verification is approved)
+              and runs the frozen SIP handler — Press 1 or existing consent, depending on your setup.
+            </p>
+            {productionForwardE164 ? (
+              <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Forward your business line to
+                </p>
+                <p className="mt-1 font-mono text-lg font-semibold text-[#111827]">
+                  {fmtPhone(productionForwardE164)}
+                </p>
+                <p className="mt-2 text-[12px] text-muted-foreground">
+                  Call your business line from another phone after forwarding — do not dial this
+                  number directly for production tests (use{" "}
+                  <Link href="/voice/try-it" className="font-semibold text-primary hover:underline">
+                    Try It
+                  </Link>{" "}
+                  for a no-forwarding demo).
+                </p>
+              </div>
+            ) : (
+              <p className="text-[13px] text-amber-800">
+                Select and save an A2P-approved number above to see your forward target.
+              </p>
+            )}
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-[#374151]">
+                Your business line (the number customers call)
+              </span>
+              <input
+                className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
+                placeholder="+1..."
+                value={businessLineE164}
+                onChange={(e) => setBusinessLineE164(e.target.value)}
+              />
+              <p className="text-[12px] text-muted-foreground">
+                We use this to match forwarded calls to your workspace. Save setup after entering it.
+              </p>
+            </label>
           </Card>
 
           <Card id="triggers" className="scroll-mt-24 space-y-3 p-5">

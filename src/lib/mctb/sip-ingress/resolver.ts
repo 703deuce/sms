@@ -1,12 +1,12 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import {
   isMctbSipIngressTargetSync,
   isPhoneMctbSipIngress,
 } from "@/lib/mctb/sip-ingress/sync";
+import { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
 
 export type MctbSipIngressResolution = {
   isMctbSipIngress: boolean;
@@ -17,9 +17,36 @@ export type MctbSipIngressResolution = {
     | "platform_demo_e164"
     | "phone_settings"
     | "mctb_config_assignment"
+    | "linked_workspace_assignment"
     | "env_allowlist"
     | "none";
 };
+
+async function resolveWorkspaceForMctbPhoneAssignment(input: {
+  phoneNumberId: string;
+  ownerWorkspaceId: string;
+  settingsJson: unknown;
+}): Promise<string | null> {
+  const ownerConfig = await loadMissedCallTextConfig(input.ownerWorkspaceId);
+  if (ownerConfig.enabled && ownerConfig.phoneNumberId === input.phoneNumberId) {
+    return input.ownerWorkspaceId;
+  }
+
+  for (const linkedWorkspaceId of readAdminTestWorkspaceIds(input.settingsJson)) {
+    const linkedConfig = await loadMissedCallTextConfig(linkedWorkspaceId);
+    if (linkedConfig.enabled && linkedConfig.phoneNumberId === input.phoneNumberId) {
+      return linkedWorkspaceId;
+    }
+  }
+
+  const prisma = getPrisma();
+  const assigned = await prisma.missedCallTextConfig.findFirst({
+    where: { phoneNumberId: input.phoneNumberId, enabled: true },
+    select: { workspaceId: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  return assigned?.workspaceId || null;
+}
 
 const CACHE_TTL_MS = 15_000;
 const cache = new Map<string, { at: number; value: MctbSipIngressResolution }>();
@@ -89,16 +116,30 @@ export async function resolveMctbSipIngressByDid(
 
   if (pn && String(pn.status || "").toLowerCase() !== "released") {
     const settingsIngress = isPhoneMctbSipIngress(pn.settingsJson);
-    const config = await loadMissedCallTextConfig(pn.workspaceId);
-    const assignedIngress = config.enabled && config.phoneNumberId === pn.id;
+    const assignedWorkspaceId = await resolveWorkspaceForMctbPhoneAssignment({
+      phoneNumberId: pn.id,
+      ownerWorkspaceId: pn.workspaceId,
+      settingsJson: pn.settingsJson,
+    });
 
-    if (settingsIngress || assignedIngress) {
+    if (settingsIngress && assignedWorkspaceId) {
       resolution = {
         isMctbSipIngress: true,
-        workspaceId: pn.workspaceId,
+        workspaceId: assignedWorkspaceId,
         phoneNumberId: pn.id,
         e164,
-        source: settingsIngress ? "phone_settings" : "mctb_config_assignment",
+        source: "phone_settings",
+      };
+    } else if (assignedWorkspaceId) {
+      resolution = {
+        isMctbSipIngress: true,
+        workspaceId: assignedWorkspaceId,
+        phoneNumberId: pn.id,
+        e164,
+        source:
+          assignedWorkspaceId === pn.workspaceId
+            ? "mctb_config_assignment"
+            : "linked_workspace_assignment",
       };
     }
   }
