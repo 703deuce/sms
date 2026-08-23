@@ -114,11 +114,21 @@ export async function loadMctbWorkspaceConfig(
 
   let providerPhoneNumber: string | null = null;
   if (runtime.phoneNumberId) {
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { id: runtime.phoneNumberId, workspaceId },
-      select: { e164: true },
+    const { resolveMctbPhoneNumberIdForWorkspace } = await import(
+      "@/lib/mctb/platform-production-routing"
+    );
+    const phoneId = await resolveMctbPhoneNumberIdForWorkspace({
+      workspaceId,
+      phoneNumberId: runtime.phoneNumberId,
+      transovoNumberE164: input?.transovoNumberE164,
     });
-    providerPhoneNumber = pn?.e164 || null;
+    if (phoneId) {
+      const pn = await prisma.phoneNumber.findFirst({
+        where: { id: phoneId },
+        select: { e164: true },
+      });
+      providerPhoneNumber = pn?.e164 || null;
+    }
   }
 
   const transovoNumber = input?.transovoNumberE164 || providerPhoneNumber || "";

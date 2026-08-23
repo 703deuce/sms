@@ -60,6 +60,8 @@ type SetupData = {
     isAdminTestWorkspace: boolean;
     platformDemoLinked: boolean;
     canBootstrap: boolean;
+    productionForwardTargetE164?: string | null;
+    businessLineE164?: string | null;
   };
   prefills: {
     campaignDescription: string;
@@ -120,6 +122,7 @@ export function MctbSetupView() {
   } | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [bootstrapping, setBootstrapping] = useState(false);
+  const [businessLineE164, setBusinessLineE164] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,6 +152,9 @@ export function MctbSetupView() {
       setCooldownMinutes(r.cooldownMinutes);
       setReplyNotifications(r.conversationEnabled);
       setEnabled(r.enabled);
+      if (payload.adminTest?.businessLineE164) {
+        setBusinessLineE164(payload.adminTest.businessLineE164);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -213,6 +219,7 @@ export function MctbSetupView() {
           allowedStartTime: businessHoursOnly ? allowedStartTime : null,
           allowedEndTime: businessHoursOnly ? allowedEndTime : null,
           timezone,
+          businessLineE164: businessLineE164.trim() || null,
           triggerRules: triggers,
           activate,
         }),
@@ -278,6 +285,23 @@ export function MctbSetupView() {
             (without moving DID ownership), wires MCTB runtime, and enables unlimited test sends.
             Use this to run Try It, Test My Setup, and paid-customer flows in the browser.
           </p>
+          <p className="text-[13px] text-muted-foreground">
+            Production path (frozen SIP/TeXML engine): forward your business line to{" "}
+            <strong>{data.adminTest.productionForwardTargetE164 || "571"}</strong>, then call your
+            business line from another phone. Try It is the only direct-dial-to-571 demo — it does
+            not use forwarding.
+          </p>
+          <label className="block space-y-1.5">
+            <span className="text-[12px] font-semibold text-[#374151]">
+              Your business line (forward this number to 571)
+            </span>
+            <input
+              className="h-10 w-full rounded-lg border border-[#D1D5DB] px-3 text-[14px]"
+              placeholder="+1..."
+              value={businessLineE164}
+              onChange={(e) => setBusinessLineE164(e.target.value)}
+            />
+          </label>
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#4b5563]">
             <span>
               Platform 571 linked:{" "}

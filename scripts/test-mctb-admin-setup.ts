@@ -1,9 +1,10 @@
 /**
  * A2P detection + admin setup messaging readiness regression tests.
  *
- *   npx tsx scripts/test-mctb-admin-setup.ts
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-admin-setup.ts
  */
 import assert from "node:assert/strict";
+import { getPrisma } from "@/lib/db";
 import { getPhoneMessagingStatus } from "@/lib/messaging/compliance/phone-messaging-status";
 import { evaluateTrialActivationGates } from "@/lib/mctb/onboarding/trial-gates";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
@@ -19,7 +20,49 @@ function test(name: string, fn: () => void) {
   }
 }
 
-function main() {
+async function testProductionForwardRouting() {
+  const prisma = getPrisma();
+  const businessLine = `+1571${String(Date.now()).slice(-7)}`;
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: "MCTB production forward routing",
+      slug: `mctb-prod-fwd-${Date.now()}`,
+      type: "BUSINESS",
+      customFieldsConfig: {
+        mctb: {
+          adminTestAccount: true,
+          businessLineE164: businessLine,
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  try {
+    await prisma.missedCallTextConfig.create({
+      data: {
+        workspaceId: workspace.id,
+        enabled: true,
+        phoneNumberId: "pn_test",
+        messageTemplate: "test",
+        delaySeconds: 0,
+      },
+    });
+
+    const { resolveWorkspaceByForwardedBusinessLine } = await import(
+      "@/lib/mctb/platform-production-routing"
+    );
+    const resolved = await resolveWorkspaceByForwardedBusinessLine(businessLine);
+    assert.equal(resolved, workspace.id);
+  } finally {
+    await prisma.missedCallTextConfig
+      .deleteMany({ where: { workspaceId: workspace.id } })
+      .catch(() => undefined);
+    await prisma.workspace.delete({ where: { id: workspace.id } }).catch(() => undefined);
+  }
+}
+
+async function main() {
   test("test:a2p-approved-number-detected", () => {
     const status = getPhoneMessagingStatus({
       e164: "+15714073615",
@@ -85,7 +128,13 @@ function main() {
     assert.equal(ready, false);
   });
 
+  await testProductionForwardRouting();
+  console.log("✓ test:production-forward-routes-by-business-line");
+
   console.log("\nAll admin setup tests passed.");
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

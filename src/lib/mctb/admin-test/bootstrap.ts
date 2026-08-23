@@ -10,6 +10,8 @@ import {
   readAdminTestWorkspaceIds,
 } from "@/lib/mctb/platform-demo-access";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { saveMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { getMctbDemoIngressE164 } from "@/lib/mctb/onboarding/phone-numbers";
 
 export type AdminMctbBootstrapResult = {
   link: {
@@ -25,6 +27,7 @@ export type AdminMctbBootstrapResult = {
     delaySeconds: number | null | undefined;
   };
   userPhone: string | null;
+  businessLineE164: string | null;
   adminTestWorkspaceIds: string[];
 };
 
@@ -33,6 +36,19 @@ function callerPhoneFromEnv(): string | null {
     process.env.MCTB_TEST_CALLER_E164?.trim() ||
     process.env.OUTBOUND_TEST_PHONE?.trim() ||
     process.env.VOICE_TRANSFER_FALLBACK_E164?.trim() ||
+    null;
+  if (!raw) return null;
+  try {
+    return normalizeE164(raw);
+  } catch {
+    return null;
+  }
+}
+
+function businessLineFromEnv(): string | null {
+  const raw =
+    process.env.MCTB_TEST_BUSINESS_E164?.trim() ||
+    process.env.MCTB_PRODUCTION_FORWARD_E164?.trim() ||
     null;
   if (!raw) return null;
   try {
@@ -71,6 +87,7 @@ export async function bootstrapAdminMctbTestAccount(input: {
   }
 
   const callerE164 = callerPhoneFromEnv();
+  const businessLineE164 = businessLineFromEnv();
   const limits = await prisma.workspaceLimits.findUnique({ where: { workspaceId: input.workspaceId } });
 
   const link = await linkWorkspaceToPlatformDemoNumber({
@@ -108,6 +125,15 @@ export async function bootstrapAdminMctbTestAccount(input: {
 
   const cfg = asRecord(membership.workspace.customFieldsConfig);
   const mctb = asRecord(cfg.mctb);
+  const nowIso = new Date().toISOString();
+
+  if (businessLineE164) {
+    await saveMctbOnboardingState(input.workspaceId, {
+      businessNumberE164: businessLineE164,
+      forwardingConnectedAt: nowIso,
+      forwardingTestStartedAt: nowIso,
+    });
+  }
 
   await prisma.workspace.update({
     where: { id: input.workspaceId },
@@ -119,6 +145,8 @@ export async function bootstrapAdminMctbTestAccount(input: {
           ...mctb,
           adminTestAccount: true,
           unlimitedMctbTesting: true,
+          ...(businessLineE164 ? { businessLineE164 } : {}),
+          productionForwardTargetE164: getMctbDemoIngressE164(),
         },
       },
     },
@@ -165,6 +193,7 @@ export async function bootstrapAdminMctbTestAccount(input: {
       delaySeconds: runtime?.delaySeconds,
     },
     userPhone: refreshedUser?.phone || null,
+    businessLineE164: businessLineE164 || null,
     adminTestWorkspaceIds: readAdminTestWorkspaceIds(refreshedPn?.settingsJson),
   };
 }

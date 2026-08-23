@@ -21,6 +21,8 @@ import {
 } from "@/lib/mctb/platform-demo-access";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
+import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/onboarding/phone-numbers";
+import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -39,6 +41,7 @@ export type MctbSetupPayload = {
   messageTemplate?: string;
   delaySeconds?: number;
   consentMode?: MctbConsentMode;
+  businessLineE164?: string | null;
   businessHoursOnly?: boolean;
   allowedStartTime?: string | null;
   allowedEndTime?: string | null;
@@ -74,7 +77,8 @@ export async function GET() {
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
 
-  const [runtime, solution, phoneNumbers, compliance, reg] = await Promise.all([
+  const [runtime, solution, phoneNumbers, compliance, reg, adminFlags, onboarding, productionForwardE164] =
+    await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMissedCallTextBack(workspaceId),
     prisma.phoneNumber.findMany({
@@ -92,12 +96,18 @@ export async function GET() {
     }),
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId),
+    loadAdminMctbTestFlags(workspaceId),
+    loadMctbOnboardingState(workspaceId),
+    getProductionMctbForwardTargetE164(workspaceId),
   ]);
 
   const requiredActions = deriveRequiredActions(compliance.registration, reg);
   const platformDemoAuthorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
   const platformDemoPhone = platformDemoAuthorized ? await getPlatformDemoPhoneRecord() : null;
-  const adminFlags = await loadAdminMctbTestFlags(workspaceId);
+  const businessLineE164 =
+    (typeof mctbSettings.businessLineE164 === "string" ? mctbSettings.businessLineE164 : null) ||
+    onboarding.businessNumberE164 ||
+    null;
   const mergedPhoneNumbers =
     platformDemoPhone &&
     !phoneNumbers.some((n: { id: string }) => n.id === platformDemoPhone.phoneNumberId)
@@ -167,6 +177,8 @@ export async function GET() {
           adminFlags.adminUnlimitedMctb,
         platformDemoLinked: platformDemoAuthorized,
         canBootstrap: session.isAdmin,
+        productionForwardTargetE164: productionForwardE164,
+        businessLineE164,
       },
       prefills: {
         campaignDescription: DEFAULT_CAMPAIGN_DESCRIPTION,
@@ -291,7 +303,7 @@ export async function POST(req: Request) {
     }
   }
 
-  if (body.consentMode || body.replyNotifications !== undefined) {
+  if (body.consentMode || body.replyNotifications !== undefined || body.businessLineE164 !== undefined) {
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { customFieldsConfig: true },
@@ -304,6 +316,15 @@ export async function POST(req: Request) {
       customCfg.mctb && typeof customCfg.mctb === "object"
         ? (customCfg.mctb as Record<string, unknown>)
         : {};
+
+    if (body.businessLineE164?.trim()) {
+      const { saveMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
+      await saveMctbOnboardingState(workspaceId, {
+        businessNumberE164: body.businessLineE164.trim(),
+        forwardingConnectedAt: new Date().toISOString(),
+      });
+    }
+
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
@@ -314,6 +335,9 @@ export async function POST(req: Request) {
             ...(body.consentMode ? { consentMode: body.consentMode } : {}),
             ...(body.replyNotifications !== undefined
               ? { replyNotifications: body.replyNotifications }
+              : {}),
+            ...(body.businessLineE164 !== undefined
+              ? { businessLineE164: body.businessLineE164?.trim() || null }
               : {}),
           },
         },

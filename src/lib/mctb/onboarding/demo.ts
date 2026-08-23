@@ -127,25 +127,20 @@ export async function resolveOnboardingWorkspaceForPlatformInbound(input: {
   callerE164: string;
   forwardedFrom?: string | null;
 }): Promise<string | null> {
+  const businessLine = input.forwardedFrom?.trim();
+
+  // Production forward to 571 — match business line first; never treat as Try It demo.
+  if (businessLine) {
+    const { resolveWorkspaceByForwardedBusinessLine } = await import(
+      "@/lib/mctb/platform-production-routing"
+    );
+    const byForward = await resolveWorkspaceByForwardedBusinessLine(businessLine);
+    if (byForward) return byForward;
+    return null;
+  }
+
   const demo = await resolveDemoWorkspaceForCaller(input.callerE164);
   if (demo) return demo.workspaceId;
-
-  const businessLine = input.forwardedFrom?.trim();
-  if (!businessLine) return null;
-
-  const prisma = getPrisma();
-  const workspaces = await prisma.workspace.findMany({
-    where: { NOT: { customFieldsConfig: null } },
-    select: { id: true, customFieldsConfig: true },
-    take: 2000,
-  });
-
-  for (const ws of workspaces) {
-    const state = parseMctbOnboardingState(ws.customFieldsConfig);
-    if (!state.businessNumberE164 || !sameE164(state.businessNumberE164, businessLine)) continue;
-    if (!isOnboardingForwardOrLiveTestActive(state)) continue;
-    return ws.id;
-  }
 
   return null;
 }

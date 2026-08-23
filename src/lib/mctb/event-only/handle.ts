@@ -26,12 +26,13 @@ async function resolvePhoneNumberId(
   workspaceId: string,
   transovoNumberE164: string,
 ): Promise<string | null> {
-  const prisma = getPrisma();
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { workspaceId, e164: transovoNumberE164, releasedAt: null },
-    select: { id: true },
+  const { resolveMctbPhoneNumberIdForWorkspace } = await import(
+    "@/lib/mctb/platform-production-routing"
+  );
+  return resolveMctbPhoneNumberIdForWorkspace({
+    workspaceId,
+    transovoE164: transovoNumberE164,
   });
-  return pn?.id || null;
 }
 
 /**
