@@ -62,7 +62,7 @@ export function ReceptionistLandingPage() {
           </nav>
           <div className="flex items-center gap-2">
             <Link
-              href="/login?next=/voice/receptionist"
+              href="/login?next=/dashboard"
               className="rounded-lg px-3 py-2 text-sm font-semibold text-[#374151] hover:bg-[#f3f4f6]"
             >
               Log in
@@ -101,11 +101,11 @@ export function ReceptionistLandingPage() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href="/login?next=/voice/receptionist"
+                  href="/login?next=/dashboard"
                   className="inline-flex items-center gap-2 rounded-xl border border-[#d1d5db] bg-white px-5 py-3 text-sm font-semibold text-[#111827] hover:bg-[#f9fafb]"
                 >
                   <Phone className="h-4 w-4 text-[#6366f1]" />
-                  Log in to Receptionist
+                  Log in
                 </Link>
               </div>
               <ul className="mt-8 space-y-2 text-sm text-[#4b5563]">

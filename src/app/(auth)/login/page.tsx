@@ -7,6 +7,10 @@ import { Input, Label } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
+import {
+  clientSafeNextPath,
+  navigateAfterAuth,
+} from "@/lib/auth/post-login-navigation";
 
 function reservationFromNext(nextPath: string | null): string | undefined {
   if (!nextPath) return undefined;
@@ -19,15 +23,16 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 }
 
 function voiceProductNext(product: string | null): string | null {
-  if (product === "numbers") return "/api/products/open?product=numbers";
+  if (product === "numbers") return "/personal";
   if (product === "mctb") return "/onboarding/mctb";
+  if (product === "voice") return "/dashboard";
   return null;
 }
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const defaultNext = "/app";
+  const defaultNext = "/dashboard";
   const productNext = voiceProductNext(params.get("product"));
   const nextPath = params.get("next") || productNext || defaultNext;
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
@@ -63,8 +68,11 @@ function LoginForm() {
       return;
     }
     const json = (await res.json().catch(() => ({}))) as { redirectPath?: string };
-    router.push(json.redirectPath || nextPath || "/app");
-    router.refresh();
+    const redirect =
+      clientSafeNextPath(json.redirectPath) ||
+      clientSafeNextPath(nextPath) ||
+      "/dashboard";
+    navigateAfterAuth(redirect, router);
   }
 
   const displayOauthError =

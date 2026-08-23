@@ -8,6 +8,11 @@ import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
+import {
+  clientSafeNextPath,
+  navigateAfterAuth,
+  voiceProductOpenPath,
+} from "@/lib/auth/post-login-navigation";
 
 type WorkspaceChoice = "PERSONAL" | "BUSINESS";
 
@@ -24,8 +29,8 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 }
 
 function voiceProductNext(product: string | null): string | null {
-  if (product === "voice" || product === "mctb") return "/api/products/open?product=voice";
-  if (product === "numbers") return "/api/products/open?product=numbers";
+  if (product === "voice" || product === "mctb") return voiceProductOpenPath();
+  if (product === "numbers") return "/personal";
   return null;
 }
 
@@ -39,7 +44,9 @@ function SignupForm() {
   const router = useRouter();
   const params = useSearchParams();
   const productNext = voiceProductNext(params.get("product"));
-  const nextPath = params.get("next") || productNext || (numbersPlatformOnly ? "/personal" : "/onboarding/mctb");
+  const defaultNext = numbersPlatformOnly ? "/personal" : "/onboarding/mctb";
+  const resolvedNext = params.get("next") || productNext || defaultNext;
+  const displayNext = clientSafeNextPath(resolvedNext, defaultNext);
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,7 +77,7 @@ function SignupForm() {
         workspaceType,
         phone,
         productIntent: resolveProductIntent(params.get("product")),
-        next: nextPath,
+        next: resolvedNext,
       }),
     });
     setLoading(false);
@@ -79,8 +86,7 @@ function SignupForm() {
       setError(json.error || "Unable to create account.");
       return;
     }
-    router.push(nextPath);
-    router.refresh();
+    navigateAfterAuth(resolvedNext, router);
   }
 
   return (
@@ -99,7 +105,7 @@ function SignupForm() {
         </p>
       </div>
 
-      <GoogleSignInButton nextPath={nextPath} reservationId={reservationId} className="mb-4" />
+      <GoogleSignInButton nextPath={resolvedNext} reservationId={reservationId} className="mb-4" />
 
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
@@ -185,7 +191,11 @@ function SignupForm() {
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link
-          href={nextPath !== "/personal" ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"}
+          href={
+            displayNext !== defaultNext
+              ? `/login?next=${encodeURIComponent(resolvedNext)}`
+              : "/login"
+          }
           className="font-medium text-primary hover:underline"
         >
           Sign in

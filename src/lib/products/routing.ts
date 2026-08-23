@@ -18,6 +18,8 @@ function isSafeNextPath(next: string | null | undefined): next is string {
   if (!next?.trim()) return false;
   if (!next.startsWith("/") || next.startsWith("//")) return false;
   if (next.startsWith("/login") || next.startsWith("/signup")) return false;
+  // Client navigations cannot treat API routes as pages; server redirects handle those.
+  if (next.startsWith("/api/")) return false;
   return true;
 }
 

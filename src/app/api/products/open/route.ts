@@ -24,10 +24,14 @@ export async function GET(request: Request) {
   if (!session) {
     const loginUrl = publicRedirectUrl("/login", request);
     const product = new URL(request.url).searchParams.get("product");
-    if (product === "voice" || product === "numbers" || product === "sms") {
-      loginUrl.searchParams.set("next", `/api/products/open?product=${product}`);
+    if (product === "voice" || product === "mctb") {
+      loginUrl.searchParams.set("product", "voice");
+    } else if (product === "numbers") {
+      loginUrl.searchParams.set("product", "numbers");
+    } else if (product === "sms") {
+      loginUrl.searchParams.set("product", "sms");
     } else {
-      loginUrl.searchParams.set("next", "/app");
+      loginUrl.searchParams.set("next", "/dashboard");
     }
     return NextResponse.redirect(loginUrl);
   }
