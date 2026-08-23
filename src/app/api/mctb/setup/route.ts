@@ -141,10 +141,29 @@ export async function GET() {
       a2pStatus?: string | null;
       status?: string | null;
       settingsJson?: unknown;
-    }) => ({
-      ...n,
-      messagingStatus: getPhoneMessagingStatus(n),
-    }),
+    }) => {
+      const isLinkedProductionDid =
+        platformDemoPhone && n.id === platformDemoPhone.phoneNumberId;
+      const row = isLinkedProductionDid
+        ? {
+            ...n,
+            a2pStatus: "APPROVED",
+            settingsJson: {
+              ...(n.settingsJson && typeof n.settingsJson === "object" && !Array.isArray(n.settingsJson)
+                ? (n.settingsJson as Record<string, unknown>)
+                : {}),
+              ...telnyxLocalA2pSettings({
+                role: "customer_production",
+                a2pApproved: true,
+              }),
+            },
+          }
+        : n;
+      return {
+        ...row,
+        messagingStatus: getPhoneMessagingStatus(row),
+      };
+    },
   );
   const messagingReady = isMctbSetupMessagingReady({
     phoneNumbers: mergedPhoneNumbers,
