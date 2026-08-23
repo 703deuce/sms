@@ -42,6 +42,8 @@ export type MctbSetupPayload = {
     afterHours?: boolean;
   };
   messageTemplate?: string;
+  messageTemplateBusinessHours?: string | null;
+  messageTemplateAfterHours?: string | null;
   delaySeconds?: number;
   consentMode?: MctbConsentMode;
   businessLineE164?: string | null;
@@ -172,6 +174,8 @@ export async function POST(req: Request) {
       enabled: body.enabled,
       delay_seconds: body.delaySeconds,
       initial_message: body.messageTemplate,
+      message_template_business_hours: body.messageTemplateBusinessHours,
+      message_template_after_hours: body.messageTemplateAfterHours,
       phone_number_id: body.phoneNumberId,
       sms_phone_number_id: body.smsPhoneNumberId,
       cooldown_minutes: body.cooldownMinutes,

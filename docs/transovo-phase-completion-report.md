@@ -1,7 +1,7 @@
 # Transovo Platform — Phases 2–7 Completion Report
 
 **Date:** 2026-08-23  
-**Branch:** `cursor/transovo-platform-phases-5c36`
+**Branch:** `master` (via `cursor/transovo-phase-finishing-5c36`)
 
 ## Summary
 
@@ -17,6 +17,7 @@ All phases implemented **without replacing** MCTB or Smart Routing runtimes. Wor
 | Products | `mctb`, `smart_routing`, `visual_voicemail`, `callback_requests` |
 | Stripe platform catalog | `src/lib/products/platform-billing-catalog.ts` + env `STRIPE_PRICE_PLATFORM_*` |
 | Checkout API | `POST /api/platform/billing/checkout` |
+| Checkout UI | `PlatformProductsPanel` on `/settings/billing` |
 | Webhook grants | `stripe-webhook-handler.ts` on `platformProductKey` metadata |
 | Features API | `GET /api/platform/features` |
 
@@ -40,11 +41,14 @@ All phases implemented **without replacing** MCTB or Smart Routing runtimes. Wor
 
 | Deliverable | Implementation |
 |-------------|----------------|
-| BH/AH SMS templates | `messageTemplateBusinessHours`, `messageTemplateAfterHours` on config + `message-template.ts` |
-| `NOT_FORWARD_EVENT` | Enforced in `eligibility.ts` when `requireCarrierForward` (default true) |
+| BH/AH SMS templates | Config fields + setup UI + `message-template.ts` |
+| `NOT_FORWARD_EVENT` | Enforced in `eligibility.ts` when `requireCarrierForward` |
 | MCTB analytics API | `GET /api/mctb/analytics` |
-| Exclusion list API | `GET/POST/DELETE /api/mctb/exclusions` (Suppression `mctb_exclusion`) |
-| Merge variables | Extended `renderMctbMessageTemplate` in send path |
+| MCTB analytics UI | `/voice/analytics` recovery section |
+| Exclusion list API | `GET/POST/DELETE /api/mctb/exclusions` |
+| Exclusion list UI | Setup section “Do-not-text list” |
+| Repeat caller badges | Missed-calls table “Called N× today” |
+| Merge variables | `renderMctbMessageTemplate` in send path |
 
 ---
 
@@ -52,8 +56,10 @@ All phases implemented **without replacing** MCTB or Smart Routing runtimes. Wor
 
 | Deliverable | Implementation |
 |-------------|----------------|
-| Publish entitlement gate | `flows/[id]/publish` requires `smart_routing` feature |
+| Publish entitlement gate | `flows/[id]/publish` requires `smart_routing` |
 | Routing analytics API | `GET /api/smart-routing/analytics` |
+| Routing analytics UI | `/voice/analytics` routing section |
+| `CALLBACK` node | Telnyx + Twilio runtimes → `CallbackRequest` product |
 | Cross-sell | Dashboard banner for SR when MCTB-only |
 
 **Preserved:** Telnyx/Twilio runtimes, compiler, all 6 UI pages, SR↔MCTB consent sync.
@@ -64,8 +70,10 @@ All phases implemented **without replacing** MCTB or Smart Routing runtimes. Wor
 
 | Add-on | Implementation |
 |--------|----------------|
-| Visual Voicemail | Feature gate on `/personal/voicemail`; marketplace + platform SKU |
-| Callback Requests | `CallbackRequest` model, `/voice/callback-requests` UI, `/api/callback-requests`, in-app notify |
+| Visual Voicemail | Feature gate on `/personal/voicemail`; billing SKU |
+| Voicemail notes | `update_message_notes` API + Personal UI |
+| Voicemail summary | Transcript excerpt in UI |
+| Callback Requests | Model, `/voice/callback-requests`, API, SR `CALLBACK` node |
 
 **Preserved:** Existing `VoicemailBox`/`VoicemailMessage`, queue overflow callback in softphone.
 
@@ -75,9 +83,10 @@ All phases implemented **without replacing** MCTB or Smart Routing runtimes. Wor
 
 | Check | Result |
 |-------|--------|
-| `npx tsx scripts/test-transovo-platform.ts` | PASS |
+| `npm run test:transovo-platform` | PASS |
 | `npx tsx scripts/test-nav-crosswalk.ts` | PASS |
 | `npm run build` | PASS |
+| Legacy cleanup | Removed orphan wizard + `syncConfigFromSolutionSetup` |
 
 ---
 
@@ -95,7 +104,8 @@ Run on deploy before using feature APIs in production.
 2. MCTB automatic mode (`existing_consent`)
 3. Smart Routing live PSTN — `SMART_ROUTING_LIVE_TEST=1`
 4. Combined SR → MCTB fallback with ANI preservation
-5. Stripe checkout → webhook feature grant (production Stripe)
+5. SR menu → `CALLBACK` node with `callback_requests` entitlement
+6. Stripe checkout → webhook feature grant (production Stripe)
 
 ---
 
@@ -112,11 +122,8 @@ Run on deploy before using feature APIs in production.
 
 ## Known limitations
 
-- Voice analytics page still shows voice-AI metrics; MCTB recovery KPIs on dashboard + `/api/mctb/analytics`
-- Repeat caller UI badges not yet on missed-calls table (API/helpers ready: `repeat-caller.ts`)
-- SR `CALLBACK` menu node not added — callback product uses API + softphone overflow
-- Voicemail translation/summary not implemented
-- Legacy 571 TeXML ingress paths preserved (not removed)
+- Voicemail AI translation (multi-language) not implemented — transcript + notes only
+- Legacy 571 TeXML ingress paths preserved (not removed) per preserve-first policy
 
 ---
 
@@ -126,9 +133,10 @@ Run on deploy before using feature APIs in production.
 |------|--------|
 | MCTB + both modes preserved | ✅ Code paths unchanged |
 | Smart Routing preserved | ✅ No runtime rewrite |
-| Standalone SR purchasable | ✅ Stripe + entitlement |
+| Standalone SR purchasable | ✅ Stripe + entitlement + billing UI |
 | Bundle support | ✅ `bundle_mctb_sr` catalog |
 | Nav consolidation | ✅ |
 | Add-ons gated | ✅ |
+| Analytics (MCTB + SR) | ✅ `/voice/analytics` |
 | Build/typecheck | ✅ |
 | Live telephony smoke | ⚠️ Manual documented |

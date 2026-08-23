@@ -384,6 +384,35 @@ export async function buildTwimlForNode(sessionId: string, nodeId: string): Prom
           await completeNodeExecution(execution.id, { skipped: "ai_receptionist_not_launched" });
           return { twiml: twiml(parts.join("")) };
         }
+        case "CALLBACK": {
+          const promptText = String(
+            node.config.promptText ?? "Thanks. We'll call you back as soon as we can.",
+          );
+          if (!session.isTest) {
+            const { hasWorkspaceProductFeature } = await import(
+              "@/lib/products/feature-entitlements"
+            );
+            const entitled = await hasWorkspaceProductFeature(
+              session.workspaceId,
+              "callback_requests",
+            );
+            if (entitled) {
+              const { createCallbackRequest } = await import("@/lib/callback-requests/service");
+              await createCallbackRequest({
+                workspaceId: session.workspaceId,
+                callerE164: session.callerNumber,
+                businessE164: session.calledNumber,
+                smartRoutingSessionId: sessionId,
+                sourceRoute: String(node.config.label ?? "smart_routing"),
+                reason: String(node.config.reason ?? "menu_callback"),
+              });
+            }
+          }
+          parts.push(`<Say>${promptText}</Say><Hangup/>`);
+          await finalizeSession(sessionId, "callback_requested");
+          await completeNodeExecution(execution.id, { callback: true });
+          return { twiml: twiml(parts.join("")) };
+        }
         case "HANGUP": {
           parts.push("<Hangup/>");
           await finalizeSession(sessionId, "caller_hung_up");

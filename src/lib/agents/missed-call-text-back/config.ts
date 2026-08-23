@@ -201,27 +201,3 @@ export async function updateMissedCallTextConfig(input: {
 
   return { ok: true, config: configToRecord(row), changed };
 }
-
-/** Sync legacy SolutionSetup wizard config into canonical MissedCallTextConfig. */
-export async function syncConfigFromSolutionSetup(workspaceId: string) {
-  const prisma = getPrisma();
-  const setup = await prisma.solutionSetup.findFirst({
-    where: { workspaceId, solutionType: "missed-call-text-back" },
-  });
-  if (!setup?.configJson) return null;
-  const c = setup.configJson as Record<string, unknown>;
-  const delaySeconds =
-    Number(c.initialDelaySeconds || 0) > 0
-      ? Number(c.initialDelaySeconds)
-      : Math.max(0, Number(c.initialDelayMinutes || 0) * 60);
-  return updateMissedCallTextConfig({
-    workspaceId,
-    patch: {
-      enabled: setup.status === "ACTIVE" && c.activate !== false,
-      delay_seconds: delaySeconds,
-      initial_message: String(c.firstMessage || DEFAULT_MCTB_MESSAGE),
-      phone_number_id: (c.phoneNumberId as string) || null,
-    },
-    source: "solution_setup_sync",
-  });
-}

@@ -344,6 +344,36 @@ export async function executeNode(input: {
         await completeNodeExecution(execution.id, { skipped: "ai_receptionist_not_launched" });
         return { done: true };
       }
+      case "CALLBACK": {
+        const promptText = String(
+          node.config.promptText ?? "Thanks. We'll call you back as soon as we can.",
+        );
+        if (!session.isTest) {
+          const { hasWorkspaceProductFeature } = await import(
+            "@/lib/products/feature-entitlements"
+          );
+          const entitled = await hasWorkspaceProductFeature(
+            session.workspaceId,
+            "callback_requests",
+          );
+          if (entitled) {
+            const { createCallbackRequest } = await import("@/lib/callback-requests/service");
+            await createCallbackRequest({
+              workspaceId: session.workspaceId,
+              callerE164: session.callerNumber,
+              businessE164: session.calledNumber,
+              smartRoutingSessionId: input.sessionId,
+              sourceRoute: String(node.config.label ?? "smart_routing"),
+              reason: String(node.config.reason ?? "menu_callback"),
+            });
+          }
+        }
+        await speakOnCall(controlId, promptText, clientBase, input.sessionId);
+        await hangupCall(controlId, input.sessionId);
+        await finalizeSession(input.sessionId, "callback_requested");
+        await completeNodeExecution(execution.id, { callback: true });
+        return { done: true };
+      }
       case "HANGUP": {
         await hangupCall(controlId, input.sessionId);
         await finalizeSession(input.sessionId, "caller_hung_up");

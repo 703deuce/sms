@@ -10,6 +10,7 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { settingsTabs, personalSettingsTabs } from "@/lib/settings-tabs";
+import { PlatformProductsPanel } from "@/components/settings/platform-products-panel";
 
 type UsageRow = {
   id: string;
@@ -75,7 +76,11 @@ function cents(n: number) {
   return formatCurrency(n / 100);
 }
 
-export function BillingSettingsPanel() {
+export function BillingSettingsPanel({
+  highlightProduct,
+}: {
+  highlightProduct?: string | null;
+}) {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [billing, setBilling] = useState<Billing | null>(null);
@@ -307,6 +312,8 @@ export function BillingSettingsPanel() {
       </div>
 
       {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
+
+      <PlatformProductsPanel highlightProduct={highlightProduct} />
 
       <Card className="mt-4">
         <CardTitle>Credit ledger</CardTitle>

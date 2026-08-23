@@ -58,4 +58,7 @@ assert.ok(typeof tmpl === "string");
 const rendered = renderMctbMessageTemplate("Hi {{firstName}}", { firstName: "Sam" });
 assert.equal(rendered, "Hi Sam");
 
+import { SMART_ROUTING_NODE_TYPES } from "../src/lib/smart-routing/types";
+assert.ok(SMART_ROUTING_NODE_TYPES.includes("CALLBACK"));
+
 console.log("test-transovo-platform: ok");

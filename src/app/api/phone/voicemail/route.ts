@@ -110,6 +110,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (body.action === "update_message_notes" && body.messageId) {
+      const notes = String((body as { internalNotes?: string }).internalNotes ?? "").trim();
+      const updated = await getPrisma().voicemailMessage.updateMany({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+        data: { internalNotes: notes || null },
+      });
+      if (!updated.count) {
+        return NextResponse.json({ error: "Message not found" }, { status: 404 });
+      }
+      const row = await getPrisma().voicemailMessage.findFirst({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+      });
+      return NextResponse.json({ data: row });
+    }
+
     if (body.action === "update_box" && body.boxId) {
       const normalizedGreetingUrl =
         body.greetingUrl !== undefined

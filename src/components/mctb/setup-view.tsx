@@ -36,6 +36,8 @@ type SetupData = {
     phoneNumberId: string | null;
     smsPhoneNumberId: string | null;
     messageTemplate: string;
+    messageTemplateBusinessHours?: string | null;
+    messageTemplateAfterHours?: string | null;
     delaySeconds: number;
     sendAfterNoAnswer: boolean;
     sendAfterBusy: boolean;
@@ -83,8 +85,17 @@ const SECTIONS = [
   { id: "hours", title: "6. Business hours" },
   { id: "cooldown", title: "7. Cooldown" },
   { id: "replies", title: "8. Reply handling" },
-  { id: "test", title: "9. Test" },
+  { id: "exclusions", title: "9. Do-not-text list" },
+  { id: "test", title: "10. Test" },
 ] as const;
+
+type ExclusionRow = {
+  id: string;
+  phone: string;
+  reason: string | null;
+  source: string;
+  createdAt: string;
+};
 
 function fmtPhone(e164: string) {
   const d = e164.replace(/\D/g, "");
@@ -104,6 +115,8 @@ export function MctbSetupView() {
 
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [messageTemplate, setMessageTemplate] = useState("");
+  const [messageTemplateBusinessHours, setMessageTemplateBusinessHours] = useState("");
+  const [messageTemplateAfterHours, setMessageTemplateAfterHours] = useState("");
   const [delaySeconds, setDelaySeconds] = useState(0);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>(MCTB_CONSENT_MODE_VERIFIED);
   const [triggers, setTriggers] = useState({
@@ -129,6 +142,22 @@ export function MctbSetupView() {
   const [enabled, setEnabled] = useState(true);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [businessLineE164, setBusinessLineE164] = useState("");
+  const [exclusions, setExclusions] = useState<ExclusionRow[]>([]);
+  const [exclusionPhone, setExclusionPhone] = useState("");
+  const [exclusionReason, setExclusionReason] = useState("Do not text");
+  const [exclusionBusy, setExclusionBusy] = useState(false);
+
+  const loadExclusions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/mctb/exclusions", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.data)) {
+        setExclusions(json.data as ExclusionRow[]);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,6 +170,8 @@ export function MctbSetupView() {
       const r = payload.runtime;
       setPhoneNumberId(r.phoneNumberId);
       setMessageTemplate(r.messageTemplate);
+      setMessageTemplateBusinessHours(r.messageTemplateBusinessHours || "");
+      setMessageTemplateAfterHours(r.messageTemplateAfterHours || "");
       setDelaySeconds(r.delaySeconds);
       setConsentMode(payload.consentMode);
       setTriggers({
@@ -172,7 +203,8 @@ export function MctbSetupView() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadExclusions();
+  }, [load, loadExclusions]);
 
   useEffect(() => {
     if (!setupTest?.started || setupTest.verified) return;
@@ -247,6 +279,8 @@ export function MctbSetupView() {
           phoneNumberId,
           enabled,
           messageTemplate,
+          messageTemplateBusinessHours: messageTemplateBusinessHours.trim() || null,
+          messageTemplateAfterHours: messageTemplateAfterHours.trim() || null,
           delaySeconds,
           consentMode,
           existingConsentAttested:
@@ -531,6 +565,28 @@ export function MctbSetupView() {
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-[#374151]">
+                Business hours message (optional)
+              </span>
+              <textarea
+                className="min-h-[80px] w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-[14px]"
+                placeholder="Used during your business hours when set"
+                value={messageTemplateBusinessHours}
+                onChange={(e) => setMessageTemplateBusinessHours(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-[#374151]">
+                After hours message (optional)
+              </span>
+              <textarea
+                className="min-h-[80px] w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-[14px]"
+                placeholder="Used outside business hours when set"
+                value={messageTemplateAfterHours}
+                onChange={(e) => setMessageTemplateAfterHours(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-[#374151]">
                 Delay before sending (seconds)
               </span>
               <input
@@ -686,9 +742,82 @@ export function MctbSetupView() {
               />
               Route replies to Conversations and notify your team
             </label>
-            <Link href="/voice/conversations" className="text-[13px] font-semibold text-primary hover:underline">
+            <Link href="/inbox" className="text-[13px] font-semibold text-primary hover:underline">
               Open Conversations →
             </Link>
+          </Card>
+
+          <Card id="exclusions" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Do-not-text list</h2>
+            <p className="text-[13px] text-muted-foreground">
+              Numbers on this list will not receive missed-call text back messages.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                className="h-10 min-w-[180px] rounded-lg border px-3 text-[14px]"
+                placeholder="Phone number"
+                value={exclusionPhone}
+                onChange={(e) => setExclusionPhone(e.target.value)}
+              />
+              <input
+                className="h-10 min-w-[200px] rounded-lg border px-3 text-[14px]"
+                placeholder="Reason"
+                value={exclusionReason}
+                onChange={(e) => setExclusionReason(e.target.value)}
+              />
+              <Button
+                variant="outline"
+                disabled={exclusionBusy || !exclusionPhone.trim()}
+                onClick={async () => {
+                  setExclusionBusy(true);
+                  try {
+                    await fetch("/api/mctb/exclusions", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        phone: exclusionPhone,
+                        reason: exclusionReason,
+                      }),
+                    });
+                    setExclusionPhone("");
+                    await loadExclusions();
+                  } finally {
+                    setExclusionBusy(false);
+                  }
+                }}
+              >
+                Add number
+              </Button>
+            </div>
+            {exclusions.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No exclusions yet.</p>
+            ) : (
+              <ul className="divide-y rounded-lg border text-[13px]">
+                {exclusions.map((row) => (
+                  <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <div>
+                      <p className="font-semibold text-[#111827]">{fmtPhone(row.phone)}</p>
+                      <p className="text-[12px] text-muted-foreground">
+                        {row.reason || "Excluded"}
+                        {row.source === "personal_blocked" ? " · personal block" : ""}
+                      </p>
+                    </div>
+                    {row.source === "mctb_exclusion" ? (
+                      <button
+                        type="button"
+                        className="text-[12px] font-semibold text-rose-600 hover:underline"
+                        onClick={async () => {
+                          await fetch(`/api/mctb/exclusions?id=${row.id}`, { method: "DELETE" });
+                          await loadExclusions();
+                        }}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card id="test" className="scroll-mt-24 space-y-3 p-5">
@@ -744,7 +873,7 @@ export function MctbSetupView() {
               <Link href="/voice/missed-calls">
                 <Button variant="outline">View missed call log</Button>
               </Link>
-              <Link href="/voice/conversations">
+              <Link href="/inbox">
                 <Button variant="outline">View conversations</Button>
               </Link>
             </div>

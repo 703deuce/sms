@@ -68,6 +68,7 @@ type VmMessage = {
   durationSec: number;
   transcript?: string;
   summary?: string;
+  internalNotes?: string;
   readAt: string | null;
   createdAt: string;
   isDemo: boolean;
@@ -251,6 +252,10 @@ export function PersonalVoicemailUI({
           : numbers[0]?.friendlyName,
         durationSec: m.durationSec,
         transcript: m.transcript ?? undefined,
+        summary: m.transcript
+          ? m.transcript.replace(/\s+/g, " ").trim().slice(0, 160)
+          : undefined,
+        internalNotes: m.internalNotes ?? undefined,
         readAt: m.readAt ?? null,
         createdAt: m.createdAt,
         isDemo: false,
@@ -1059,6 +1064,36 @@ export function PersonalVoicemailUI({
                   Suggested action: Call back
                 </button>
               </div>
+
+              {!selected.isDemo ? (
+                <div className="rounded-lg border border-[#e5e7eb] p-4">
+                  <p className="text-[12px] font-semibold text-[#111827]">Internal notes</p>
+                  <textarea
+                    className="mt-2 min-h-[80px] w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px]"
+                    value={selected.internalNotes ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setMessages((prev) =>
+                        prev.map((m) =>
+                          m.id === selected.id ? { ...m, internalNotes: value } : m,
+                        ),
+                      );
+                    }}
+                    onBlur={async (e) => {
+                      await fetch("/api/phone/voicemail", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "update_message_notes",
+                          messageId: selected.id,
+                          internalNotes: e.target.value,
+                        }),
+                      });
+                    }}
+                    placeholder="Team notes about this voicemail…"
+                  />
+                </div>
+              ) : null}
             </div>
           )}
         </PersonalMockSection>

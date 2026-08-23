@@ -32,6 +32,7 @@ export const SMART_ROUTING_NODE_TYPES = [
   "SMS_CONSENT",
   "SEND_SMS",
   "PLAY_CONFIRMATION",
+  "CALLBACK",
   "HANGUP",
   "SUBFLOW",
 ] as const;

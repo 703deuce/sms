@@ -4,6 +4,7 @@ export type PersonalVoicemailMessage = {
   durationSec: number;
   createdAt: string;
   transcript?: string | null;
+  internalNotes?: string | null;
   readAt?: string | null;
   boxId?: string;
 };
@@ -24,6 +25,7 @@ export function mapVoicemailMessage(row: {
   durationSeconds?: number | null;
   createdAt: Date | string;
   transcriptText?: string | null;
+  internalNotes?: string | null;
   isRead?: boolean;
   boxId?: string;
 }): PersonalVoicemailMessage {
@@ -34,6 +36,7 @@ export function mapVoicemailMessage(row: {
     createdAt:
       row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     transcript: row.transcriptText,
+    internalNotes: row.internalNotes,
     readAt: row.isRead ? new Date().toISOString() : null,
     boxId: row.boxId,
   };
@@ -55,6 +58,7 @@ export function parseVoicemailApiPayload(data: unknown): {
       durationSeconds?: number | null;
       createdAt: string;
       transcriptText?: string | null;
+      internalNotes?: string | null;
       isRead?: boolean;
       boxId?: string;
     }>;

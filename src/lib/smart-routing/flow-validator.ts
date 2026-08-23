@@ -6,7 +6,12 @@ import type {
 } from "./types";
 import { compileDraftConfig } from "./flow-compiler";
 
-const TERMINATING: SmartRoutingNodeType[] = ["HANGUP", "VOICEMAIL", "AI_RECEPTIONIST"];
+const TERMINATING: SmartRoutingNodeType[] = [
+  "HANGUP",
+  "VOICEMAIL",
+  "AI_RECEPTIONIST",
+  "CALLBACK",
+];
 
 export function validateDraftConfig(
   draft: DraftConfig,
