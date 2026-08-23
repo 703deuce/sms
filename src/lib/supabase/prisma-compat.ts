@@ -221,6 +221,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   smartRoutingAiProposal: "smart_routing_ai_proposals",
   smartRoutingAiRecommendation: "smart_routing_ai_recommendations",
   productEntitlement: "ProductEntitlement",
+  workspaceProductFeature: "workspace_product_features",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -496,10 +497,18 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   productEntitlement: {
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
+  workspaceProductFeature: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
   workspace: {
     phoneNumbers: { table: "PhoneNumber", fk: "workspaceId", pk: "id" },
     messagingRegistration: { table: "messaging_registrations", fk: "workspaceId", pk: "id" },
     productEntitlements: { table: "ProductEntitlement", fk: "workspaceId", pk: "id" },
+    workspaceProductFeatures: {
+      table: "workspace_product_features",
+      fk: "workspaceId",
+      pk: "id",
+    },
   },
   smartRoutingFlow: {
     workspace: { table: "Workspace", fk: "workspaceId" },
@@ -633,6 +642,8 @@ function reviveValue(v: unknown): unknown {
 function reviveRow<T>(row: T): T {
   return reviveValue(row) as T;
 }
+
+/** workspace_product_features table uses Prisma camelCase columns (workspaceId, featureKey, …). */
 
 function serializeValue(v: unknown): unknown {
   if (v instanceof Date) return v.toISOString();
@@ -1047,6 +1058,23 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       continue;
     }
 
+    if (rel === "workspaceProductFeatures" && model === "workspace") {
+      const ids = out.map((r) => r.id as string);
+      const { data, error } = ids.length
+        ? await db.from("workspace_product_features").select("*").in("workspaceId", ids)
+        : { data: [] as Row[], error: null };
+      if (error) throw new DbError(error.message, error.code);
+      const by = new Map<string, Row[]>();
+      for (const row of data ?? []) {
+        const revived = reviveRow(row as Row);
+        const list = by.get(revived.workspaceId as string) ?? [];
+        list.push(revived);
+        by.set(revived.workspaceId as string, list);
+      }
+      out = out.map((r) => ({ ...r, workspaceProductFeatures: by.get(r.id as string) ?? [] }));
+      continue;
+    }
+
     if (rel === "steps" && model === "automationExecution") {
       const ids = out.map((r) => r.id as string);
       const { data } = await db.from("AutomationStepExecution").select("*").in("executionId", ids);
@@ -1102,7 +1130,7 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
   return out;
 }
 
-function prepareData(data: Args, { isCreate }: { isCreate: boolean }): Row {
+function prepareData(data: Args, { isCreate, model }: { isCreate: boolean; model?: string }): Row {
   const out: Row = {};
   for (const [k, v] of Object.entries(data)) {
     if (isObject(v) && "connect" in v && isObject(v.connect) && "id" in v.connect) {
@@ -1181,7 +1209,10 @@ function modelApi(model: string): ModelApi {
           for (const o of orders) {
             if (!isObject(o)) continue;
             for (const [col, dir] of Object.entries(o)) {
-              q = q.order(col, { ascending: dir !== "desc", nullsFirst: dir === "desc" ? false : undefined });
+              q = q.order(col, {
+                ascending: dir !== "desc",
+                nullsFirst: dir === "desc" ? false : undefined,
+              });
             }
           }
         }
@@ -1194,7 +1225,7 @@ function modelApi(model: string): ModelApi {
 
         const { data, error } = await q;
         if (error) throw new DbError(error.message, error.code);
-        const rows = ((data ?? []) as Row[]).map(reviveRow);
+        const rows = ((data ?? []) as Row[]).map((r) => reviveRow(r));
         return applyInclude(rows, args.include, model);
       });
     },
@@ -1202,12 +1233,13 @@ function modelApi(model: string): ModelApi {
     async create({ data, include }: Args) {
       return withTransientPostgrestRetry(async () => {
         const db = getSupabaseAdmin();
-        const row = prepareData(data, { isCreate: true });
+        const row = prepareData(data, { isCreate: true, model });
         let transientRetries = 0;
         for (let attempt = 0; ; attempt++) {
           const { data: created, error } = await db.from(t).insert(row).select("*").single();
           if (!error) {
-            const hydrated = await applyInclude([reviveRow(created as Row)], include, model);
+            const revived = reviveRow(created as Row);
+            const hydrated = await applyInclude([revived], include, model);
             return hydrated[0];
           }
           const col = missingColumnFromError(error);
@@ -1230,7 +1262,9 @@ function modelApi(model: string): ModelApi {
 
     async createMany({ data, skipDuplicates }: Args) {
       const db = getSupabaseAdmin();
-      const rows = (Array.isArray(data) ? data : [data]).map((d) => prepareData(d, { isCreate: true }));
+      const rows = (Array.isArray(data) ? data : [data]).map((d) =>
+        prepareData(d, { isCreate: true, model }),
+      );
       for (let attempt = 0; ; attempt++) {
         const { data: inserted, error } = await db.from(t).insert(rows).select("id");
         if (!error) return { count: inserted?.length ?? 0 };
@@ -1248,7 +1282,7 @@ function modelApi(model: string): ModelApi {
       return withTransientPostgrestRetry(async () => {
         const db = getSupabaseAdmin();
         const resolved = await resolveNestedWhere(model, where);
-        let patch = prepareData(data, { isCreate: false });
+        let patch = prepareData(data, { isCreate: false, model });
         patch = await applyIncrements(model, resolved ?? {}, patch);
         let transientRetries = 0;
         for (let attempt = 0; ; attempt++) {
@@ -1257,7 +1291,8 @@ function modelApi(model: string): ModelApi {
           const { data: updated, error } = await q.maybeSingle();
           if (!error) {
             if (!updated) throw new DbError(`Update failed: no row matched on ${t}`, "P2025");
-            const hydrated = await applyInclude([reviveRow(updated as Row)], include, model);
+            const revived = reviveRow(updated as Row);
+            const hydrated = await applyInclude([revived], include, model);
             return hydrated[0];
           }
           const col = missingColumnFromError(error);
@@ -1281,7 +1316,7 @@ function modelApi(model: string): ModelApi {
     async updateMany({ where, data }: Args) {
       const db = getSupabaseAdmin();
       const resolved = await resolveNestedWhere(model, where);
-      let patch = prepareData(data, { isCreate: false });
+      let patch = prepareData(data, { isCreate: false, model });
 
       const incKeys = Object.entries(patch).filter(([, v]) => isObject(v) && "increment" in v);
       if (incKeys.length) {

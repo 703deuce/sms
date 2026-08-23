@@ -1,4 +1,5 @@
 -- Transovo platform product features, callback requests, MCTB template extensions
+-- Column names match Prisma @@map models (camelCase), not snake_case.
 
 DO $$ BEGIN
   CREATE TYPE "WorkspaceProductFeatureKey" AS ENUM (
@@ -13,45 +14,45 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS workspace_product_features (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  feature_key "WorkspaceProductFeatureKey" NOT NULL,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
+  "featureKey" "WorkspaceProductFeatureKey" NOT NULL,
   status "ProductAccessStatus" NOT NULL DEFAULT 'ACTIVE',
-  activated_at TIMESTAMPTZ,
-  deactivated_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (workspace_id, feature_key)
+  "activatedAt" TIMESTAMPTZ,
+  "deactivatedAt" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE ("workspaceId", "featureKey")
 );
 
 CREATE INDEX IF NOT EXISTS workspace_product_features_workspace_id_idx
-  ON workspace_product_features (workspace_id);
+  ON workspace_product_features ("workspaceId");
 CREATE INDEX IF NOT EXISTS workspace_product_features_feature_key_status_idx
-  ON workspace_product_features (feature_key, status);
+  ON workspace_product_features ("featureKey", status);
 
 CREATE TABLE IF NOT EXISTS callback_requests (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  caller_e164 TEXT NOT NULL,
-  business_e164 TEXT,
-  phone_number_id TEXT,
-  smart_routing_session_id TEXT,
-  source_route TEXT,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
+  "callerE164" TEXT NOT NULL,
+  "businessE164" TEXT,
+  "phoneNumberId" TEXT,
+  "smartRoutingSessionId" TEXT,
+  "sourceRoute" TEXT,
   reason TEXT,
   status TEXT NOT NULL DEFAULT 'new',
   notes TEXT,
-  requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  contacted_at TIMESTAMPTZ,
-  completed_at TIMESTAMPTZ,
-  dismissed_at TIMESTAMPTZ,
+  "requestedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "contactedAt" TIMESTAMPTZ,
+  "completedAt" TIMESTAMPTZ,
+  "dismissedAt" TIMESTAMPTZ,
   metadata JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS callback_requests_workspace_status_idx
-  ON callback_requests (workspace_id, status, requested_at);
+  ON callback_requests ("workspaceId", status, "requestedAt");
 CREATE INDEX IF NOT EXISTS callback_requests_workspace_caller_idx
-  ON callback_requests (workspace_id, caller_e164);
+  ON callback_requests ("workspaceId", "callerE164");
 
 ALTER TABLE missed_call_text_configs
   ADD COLUMN IF NOT EXISTS message_template_business_hours TEXT,

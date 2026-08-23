@@ -71,9 +71,15 @@ export function defaultFeaturesForWorkspaceType(
   ];
 }
 
+function isCompatRepoMissing(err: unknown): boolean {
+  return err instanceof TypeError;
+}
+
 /** Idempotent baseline feature rows for a workspace. */
 export async function ensureWorkspaceProductFeatures(workspaceId: string): Promise<void> {
   const prisma = getPrisma();
+  const repo = prisma.workspaceProductFeature as { create?: unknown } | undefined;
+  if (!repo?.create) return;
   try {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -124,8 +130,8 @@ export async function ensureWorkspaceProductFeatures(workspaceId: string): Promi
       });
     }
   } catch (err) {
-    if (isSchemaUnavailable(err)) return;
-    throw err;
+    if (isSchemaUnavailable(err) || isCompatRepoMissing(err)) return;
+    console.warn("[ensureWorkspaceProductFeatures] non-fatal:", err);
   }
 }
 
@@ -134,6 +140,13 @@ export async function getWorkspaceProductFeatures(
 ): Promise<WorkspaceFeatureSnapshot> {
   await ensureWorkspaceProductFeatures(workspaceId);
   const prisma = getPrisma();
+  const repo = prisma.workspaceProductFeature as { findMany?: unknown } | undefined;
+  if (!repo?.findMany) {
+    const fallback = defaultSnapshot();
+    fallback.mctb = "active";
+    fallback.smart_routing = "active";
+    return fallback;
+  }
   try {
     const rows = await prisma.workspaceProductFeature.findMany({
       where: { workspaceId },
@@ -154,7 +167,7 @@ export async function getWorkspaceProductFeatures(
     }
     return snap;
   } catch (err) {
-    if (isSchemaUnavailable(err)) {
+    if (isSchemaUnavailable(err) || isCompatRepoMissing(err)) {
       const fallback = defaultSnapshot();
       fallback.mctb = "active";
       fallback.smart_routing = "active";
@@ -178,6 +191,8 @@ export async function grantWorkspaceProductFeature(
   status: ProductAccessStatus = "active",
 ): Promise<void> {
   const prisma = getPrisma();
+  const repo = prisma.workspaceProductFeature as { upsert?: unknown } | undefined;
+  if (!repo?.upsert) return;
   const prismaKey = PRISMA_FEATURE_MAP[feature];
   const prismaStatus = status.toUpperCase() as "ACTIVE" | "TRIAL" | "INACTIVE";
   try {
@@ -196,8 +211,8 @@ export async function grantWorkspaceProductFeature(
       },
     });
   } catch (err) {
-    if (isSchemaUnavailable(err)) return;
-    throw err;
+    if (isSchemaUnavailable(err) || isCompatRepoMissing(err)) return;
+    console.warn("[grantWorkspaceProductFeature] non-fatal:", err);
   }
 }
 

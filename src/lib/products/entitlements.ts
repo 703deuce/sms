@@ -272,10 +272,13 @@ export async function ensureProductWorkspace(
 ): Promise<{ workspaceId: string; workspaceType: WorkspaceType }> {
   const prisma = getPrisma();
   const preferredType: WorkspaceType = product === "numbers" ? "PERSONAL" : "BUSINESS";
-  const memberships = await prisma.membership.findMany({
-    where: { userId, workspace: { type: preferredType } },
+  const allMemberships = await prisma.membership.findMany({
+    where: { userId },
     include: { workspace: { select: { id: true, type: true } } },
   });
+  const memberships = allMemberships.filter(
+    (m: { workspace: { type: string } }) => m.workspace.type === preferredType,
+  );
 
   if (memberships.length) {
     let best = memberships[0] as (typeof memberships)[number];
