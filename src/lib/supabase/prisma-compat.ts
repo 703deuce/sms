@@ -218,6 +218,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   smartRoutingAuthorizedCaller: "smart_routing_authorized_callers",
   smartRoutingAccessSession: "smart_routing_access_sessions",
   smartRoutingOutboundCall: "smart_routing_outbound_calls",
+  smartRoutingAiProposal: "smart_routing_ai_proposals",
+  smartRoutingAiRecommendation: "smart_routing_ai_recommendations",
   productEntitlement: "ProductEntitlement",
 };
 

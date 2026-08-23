@@ -321,6 +321,8 @@ model Workspace {
   smartRoutingAuthorizedCallers SmartRoutingAuthorizedCaller[]
   smartRoutingOutboundCalls SmartRoutingOutboundCall[]
   smartRoutingAccessSessions SmartRoutingAccessSession[]
+  smartRoutingAiProposals SmartRoutingAiProposal[]
+  smartRoutingAiRecommendations SmartRoutingAiRecommendation[]
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
   callbackRequests CallbackRequest[]
@@ -4008,4 +4010,61 @@ model SmartRoutingOutboundCall {
   @@index([workspaceId, createdAt])
   @@index([authorizedCallerId])
   @@map("smart_routing_outbound_calls")
+}
+
+/// AI Routing Assistant — draft proposals awaiting human approval.
+model SmartRoutingAiProposal {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  flowId                String?
+  status                String    @default("ai_proposed")
+  intent                String
+  userPrompt            String
+  summary               String?
+  assumptionsJson       Json      @default("[]")
+  warningsJson          Json      @default("[]")
+  proposedChangesJson   Json      @default("[]")
+  clarificationQuestion String?
+  currentSnapshotJson   Json?
+  proposedDraftJson     Json?
+  validationJson        Json?
+  baseFlowUpdatedAt     DateTime?
+  flowRevisionBefore    String?
+  invocationJson        Json?
+  temporaryOverrideJson Json?
+  undoSnapshotJson      Json?
+  createdBy             String?
+  approvedBy            String?
+  rejectedBy            String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  publishedAt           DateTime?
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, flowId, status])
+  @@map("smart_routing_ai_proposals")
+}
+
+/// Proactive routing optimization recommendations from AI analysis.
+model SmartRoutingAiRecommendation {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  flowId             String?
+  kind               String
+  title              String
+  body               String
+  recommendationJson Json?
+  metricsJson        Json?
+  status             String    @default("active")
+  createdAt          DateTime  @default(now())
+  dismissedAt        DateTime?
+  appliedAt          DateTime?
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@map("smart_routing_ai_recommendations")
 }

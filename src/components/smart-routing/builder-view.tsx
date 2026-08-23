@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioRecorderUpload } from "@/components/smart-routing/audio-recorder-upload";
+import { SmartRoutingAiAssistant } from "@/components/smart-routing/ai-assistant";
 import { GreetingVoicePicker } from "@/components/smart-routing/greeting-voice-picker";
 import {
   SrBackLink,
@@ -382,6 +383,13 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
             </SrPrimaryButton>
           </div>
         </div>
+
+        <SmartRoutingAiAssistant
+          flowId={flowId}
+          compact
+          onApplied={() => load()}
+          className="mt-4"
+        />
 
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">

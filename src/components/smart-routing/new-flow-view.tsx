@@ -7,6 +7,7 @@ import {
   SrPrimaryButton,
   srCard,
 } from "@/components/smart-routing/shared";
+import { SmartRoutingAiAssistant } from "@/components/smart-routing/ai-assistant";
 import { cn } from "@/lib/utils";
 import {
   Check,
@@ -110,6 +111,11 @@ export function SmartRoutingNewFlowView({ templates }: { templates: Template[] }
             Continue →
           </SrPrimaryButton>
         </div>
+
+        <SmartRoutingAiAssistant
+          className="mt-6"
+          onApplied={(id) => router.push(`/smart-routing/${id}`)}
+        />
 
         <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <div className="space-y-6">

@@ -9,6 +9,7 @@ import {
   srCard,
 } from "@/components/smart-routing/shared";
 import { OverviewStatusSection } from "@/components/smart-routing/overview-status-section";
+import { SmartRoutingAiAssistant } from "@/components/smart-routing/ai-assistant";
 import { CloseNowControl } from "@/components/smart-routing/close-now-control";
 import {
   derivePrimaryDestination,
@@ -204,6 +205,11 @@ export function SmartRoutingOverviewView({
           onUpdated={onWorkspaceRefresh}
         />
       ) : null}
+
+      <SmartRoutingAiAssistant
+        flowId={workspaceStatus?.primaryFlow?.id}
+        onApplied={() => onWorkspaceRefresh?.()}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SrMetricCard
