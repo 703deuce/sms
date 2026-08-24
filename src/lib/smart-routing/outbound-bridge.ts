@@ -83,7 +83,14 @@ export async function originateCustomerLeg(input: {
     throw new Error("Destination is not allowed");
   }
 
-  const verifiedCallerId = await resolveVerifiedBusinessCallerId(input.workspaceId);
+  const verifiedCallerId =
+    (
+      await prisma.smartRoutingOutboundCall.findUnique({
+        where: { id: input.outboundCallId },
+        select: { businessCallerIdE164: true },
+      })
+    )?.businessCallerIdE164?.trim() ||
+    (await resolveVerifiedBusinessCallerId(input.workspaceId));
   if (!verifiedCallerId) {
     throw new Error("Business caller ID is not verified");
   }

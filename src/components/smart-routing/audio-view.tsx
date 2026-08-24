@@ -1,5 +1,6 @@
 "use client";
 
+import { HoldMusicPanel } from "@/components/smart-routing/hold-music-panel";
 import {
   SrBackLink,
   SrFieldLabel,
@@ -439,6 +440,8 @@ export function SmartRoutingAudioView() {
           <SrOutlineButton className="mt-4 w-full">Clean Up Drafts</SrOutlineButton>
         </div>
       </div>
+
+      <HoldMusicPanel />
     </SrPageShell>
   );
 }

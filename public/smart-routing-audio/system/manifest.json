@@ -1,0 +1,85 @@
+{
+  "tracks": [
+    {
+      "slug": "hold-modern-corporate",
+      "title": "Modern Corporate",
+      "file": "hold-modern-corporate.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T02:59:28.322Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-calm-acoustic",
+      "title": "Calm Acoustic",
+      "file": "hold-calm-acoustic.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T02:59:40.840Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-soft-piano",
+      "title": "Soft Piano",
+      "file": "hold-soft-piano.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T02:59:52.124Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-light-jazz",
+      "title": "Light Jazz",
+      "file": "hold-light-jazz.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:00:05.876Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-upbeat-business",
+      "title": "Upbeat Business",
+      "file": "hold-upbeat-business.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:00:19.557Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-ambient",
+      "title": "Ambient",
+      "file": "hold-ambient.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:00:33.131Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-minimal",
+      "title": "Minimal",
+      "file": "hold-minimal.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:00:45.823Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-classic",
+      "title": "Classic Hold",
+      "file": "hold-classic.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:00:59.670Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-soft-electronic",
+      "title": "Soft Electronic",
+      "file": "hold-soft-electronic.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:01:16.676Z",
+      "source": "elevenlabs"
+    },
+    {
+      "slug": "hold-warm-lounge",
+      "title": "Warm Lounge",
+      "file": "hold-warm-lounge.mp3",
+      "durationMs": 90000,
+      "generatedAt": "2026-08-24T03:01:29.986Z",
+      "source": "elevenlabs"
+    }
+  ],
+  "defaultSlug": "hold-modern-corporate"
+}

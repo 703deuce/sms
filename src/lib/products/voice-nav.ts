@@ -116,11 +116,6 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
         icon: PhoneMissed,
       },
       {
-        label: "Analytics",
-        href: "/voice/analytics",
-        icon: BarChart3,
-      },
-      {
         label: "Setup",
         href: "/voice/setup",
         icon: SlidersHorizontal,
@@ -164,7 +159,11 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       href: "/compliance",
       icon: ShieldCheck,
     },
-    { label: "Integrations", href: "/integrations", icon: Puzzle },
+    {
+      label: "Analytics",
+      href: "/voice/analytics",
+      icon: BarChart3,
+    },
   ];
 
   items.push(...manage);
@@ -246,8 +245,8 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   }
   if (hasSr) {
     items.push({ label: "Routing", href: "/smart-routing" });
-    items.push({ label: "Analytics", href: "/smart-routing/analytics" });
   }
+  items.push({ label: "Analytics", href: "/voice/analytics" });
   items.push({ label: "Voicemail", href: "/voice/voicemail" });
   items.push({ label: "Callbacks", href: "/voice/callback-requests" });
   return items;

@@ -153,6 +153,10 @@ export async function playbackOnCall(
   );
 }
 
+export async function stopPlaybackOnCall(callControlId: string, sessionId?: string) {
+  return telnyxAction(callControlId, "playback_stop", {}, sessionId);
+}
+
 export async function gatherUsingSpeak(input: {
   callControlId: string;
   text: string;

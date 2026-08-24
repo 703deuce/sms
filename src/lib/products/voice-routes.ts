@@ -7,6 +7,7 @@ export const VOICE_APP_ROUTE_PREFIXES = [
   "/dashboard",
   "/outcomes",
   "/voice",
+  "/inbox",
   "/integrations",
   "/settings",
   "/getting-started",
@@ -30,7 +31,6 @@ export const VOICE_DEEP_ROUTE_PREFIXES = [
 
 /** SMS standalone routes — hidden from primary nav but preserved in codebase. */
 export const SMS_HIDDEN_ROUTE_PREFIXES = [
-  "/inbox",
   "/send",
   "/campaigns",
   "/contacts",

@@ -55,6 +55,9 @@ export async function initiateDashboardOutboundBridge(input: {
   contextRefId?: string | null;
   initiatedByUserId?: string | null;
   destinationContactName?: string | null;
+  employeePhoneE164?: string | null;
+  businessCallerIdE164?: string | null;
+  bridgeMetadata?: Record<string, unknown>;
 }) {
   const entitled = await hasWorkspaceProductFeature(input.workspaceId, "smart_routing");
   if (!entitled) throw new Error("Smart Routing is not enabled for this workspace");
@@ -98,8 +101,15 @@ export async function initiateDashboardOutboundBridge(input: {
     throw new Error("That destination number is not allowed");
   }
 
-  const employeePhone = resolveAuthorizedCallerCallbackPhone(authorizedCaller);
-  const fromNumber = settings.routingNumberE164 ?? verifiedCallerId;
+  const employeePhone = input.employeePhoneE164
+    ? normalizeE164(input.employeePhoneE164)
+    : resolveAuthorizedCallerCallbackPhone(authorizedCaller);
+  const outboundCallerId =
+    input.businessCallerIdE164?.trim()
+      ? normalizeE164(input.businessCallerIdE164)
+      : verifiedCallerId;
+  const fromNumber = settings.routingNumberE164 ?? outboundCallerId;
+
   if (!fromNumber) throw new Error("Assign a routing number in Smart Routing setup");
 
   if (input.contextType === "callback_request" && input.contextRefId) {
@@ -135,10 +145,10 @@ export async function initiateDashboardOutboundBridge(input: {
     authorizedCallerId: input.authorizedCallerId,
     employeePhoneE164: employeePhone,
     destinationE164: destination,
-    businessCallerIdE164: verifiedCallerId,
+    businessCallerIdE164: outboundCallerId,
     contextType: input.contextType,
     contextRefId: input.contextRefId,
-    metadata: buildOutboundBridgeMetadata({
+    metadata: input.bridgeMetadata ?? buildOutboundBridgeMetadata({
       dialMethod: "dashboard",
       accessNumberE164: fromNumber,
       initiatedByUserId: input.initiatedByUserId,
@@ -218,6 +228,11 @@ export async function handleDashboardEmployeeAnswered(input: {
     meta?.destinationContactName,
   );
 
+  const settings = await loadSmartRoutingWorkspaceSettings(input.workspaceId);
+  const businessName = settings?.publicBusinessE164
+    ? "your business"
+    : "Transovo";
+
   const clientState = encodeEmployeeAccessState({
     kind: "smart_routing_employee",
     accessSessionId: access.id,
@@ -229,10 +244,10 @@ export async function handleDashboardEmployeeAnswered(input: {
   const { gatherUsingSpeakRaw } = await import("./telnyx-provider");
   await gatherUsingSpeakRaw({
     callControlId: input.callControlId,
-    text: `Transovo business callback. Press 1 to connect your call to ${destinationLabel}.`,
+    text: `${businessName} business callback to ${destinationLabel}. Press 1 to continue.`,
     validDigits: "1",
     maxDigits: 1,
-    timeoutMs: 15000,
+    timeoutMs: 8000,
     clientStateBase64: clientState,
   });
 }

@@ -468,6 +468,19 @@ export async function processSmartRoutingWebhookEvent(input: {
         where: { id: sessionId },
         data: { recordingUrl: url },
       });
+      const recordingRow = await prisma.smartRoutingCallRecording.findFirst({
+        where: { callSessionId: sessionId, storagePath: null },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recordingRow) {
+        const { finalizeCallRecordingFromProvider } = await import("./call-recording-service");
+        await finalizeCallRecordingFromProvider({
+          workspaceId: session.workspaceId,
+          recordingId: recordingRow.id,
+          downloadUrl: url,
+          durationSeconds: Number(input.eventPayload.recording_duration_secs ?? 0) || null,
+        });
+      }
       await emitSmartRoutingEvent({
         workspaceId: session.workspaceId,
         type: "VOICEMAIL_RECEIVED",

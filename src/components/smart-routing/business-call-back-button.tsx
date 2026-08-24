@@ -56,6 +56,12 @@ export function BusinessCallBackButton({
   destinationContactName,
   className,
   size = "default",
+  employeeToken,
+  businessCallerIdE164,
+  label: customLabel,
+  variant = "default",
+  disabled: disabledProp,
+  authorizedCallerId: fixedAuthorizedCallerId,
 }: {
   destinationE164: string;
   contextType?:
@@ -70,6 +76,12 @@ export function BusinessCallBackButton({
   destinationContactName?: string | null;
   className?: string;
   size?: "default" | "sm";
+  employeeToken?: string;
+  businessCallerIdE164?: string;
+  label?: string;
+  variant?: "default" | "compact";
+  disabled?: boolean;
+  authorizedCallerId?: string;
 }) {
   const [callers, setCallers] = useState<AuthorizedCaller[]>([]);
   const [meta, setMeta] = useState<SetupMeta | null>(null);
@@ -131,6 +143,7 @@ export function BusinessCallBackButton({
   );
 
   const load = useCallback(async () => {
+    if (employeeToken) return;
     const featRes = await fetch("/api/platform/features", { cache: "no-store" });
     const featJson = await featRes.json().catch(() => ({}));
     const features = featJson.data as WorkspaceFeatureSnapshot | undefined;
@@ -150,13 +163,13 @@ export function BusinessCallBackButton({
       (c) => c.active && c.outboundEnabled,
     );
     setCallers(active);
-    setCallerId((prev) => prev || active[0]?.id || "");
+    setCallerId((prev) => prev || fixedAuthorizedCallerId || active[0]?.id || "");
     setMeta({
       businessLabel: data.workspaceName?.trim() || "your business",
       callerIdVerified: data.callerId?.status === "verified",
       outboundEnabled: Boolean(data.settings?.outboundEnabled),
     });
-  }, []);
+  }, [fixedAuthorizedCallerId]);
 
   useEffect(() => {
     void load();
@@ -169,16 +182,38 @@ export function BusinessCallBackButton({
     setStatusLabel(null);
     setUiStatus("calling_employee");
     try {
-      const res = await fetch("/api/smart-routing/business-callback", {
+      const endpoint = employeeToken
+        ? `/api/e/call/${employeeToken}/callback`
+        : "/api/smart-routing/business-callback";
+      const sourceTypeMap: Record<string, string> = {
+        last_call: "routing_activity",
+        missed_call: "missed_call",
+        voicemail: "voicemail",
+        callback_request: "callback_request",
+        manual: "manual",
+        activity: "routing_activity",
+        conversation: "conversation",
+      };
+      const body = employeeToken
+        ? {
+            destinationE164,
+            businessCallerIdE164,
+            sourceType: sourceTypeMap[contextType] ?? "manual",
+            sourceId: contextRefId,
+            destinationContactName,
+          }
+        : {
+            destinationE164,
+            authorizedCallerId: callerId,
+            contextType,
+            contextRefId,
+            destinationContactName,
+            businessCallerIdE164,
+          };
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          destinationE164,
-          authorizedCallerId: callerId,
-          contextType,
-          contextRefId,
-          destinationContactName,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -204,6 +239,41 @@ export function BusinessCallBackButton({
       setUiStatus("idle");
       setLoading(false);
     }
+  }
+
+  const terminalStatuses: UiStatus[] = [
+    "idle",
+    "completed",
+    "mock",
+    "employee_no_answer",
+    "employee_confirmation_timeout",
+    "employee_rejected",
+    "customer_no_answer",
+    "customer_busy",
+    "customer_rejected",
+    "failed",
+    "cancelled",
+  ];
+
+  if (employeeToken) {
+    const inProgress = loading || !terminalStatuses.includes(uiStatus);
+    const btnLabel = customLabel ?? "Call Back";
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          disabled={inProgress || disabledProp}
+          onClick={() => void startCallBack()}
+          className="rounded-lg bg-[#6366f1] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+        >
+          {inProgress ? statusLabel ?? "Calling your phone…" : btnLabel}
+        </button>
+        {statusLabel && !inProgress ? (
+          <p className="mt-1 text-[11px] text-emerald-700">{statusLabel}</p>
+        ) : null}
+        {error ? <p className="mt-1 text-[11px] text-red-600">{error}</p> : null}
+      </div>
+    );
   }
 
   if (!smartRoutingActive) {
@@ -257,22 +327,24 @@ export function BusinessCallBackButton({
     );
   }
 
-  const label = `Call Back as ${meta.businessLabel}`;
+  const label = customLabel ?? `Call Back as ${meta.businessLabel}`;
   const selected = callers.find((c) => c.id === callerId);
-  const terminalStatuses: UiStatus[] = [
-    "idle",
-    "completed",
-    "mock",
-    "employee_no_answer",
-    "employee_confirmation_timeout",
-    "employee_rejected",
-    "customer_no_answer",
-    "customer_busy",
-    "customer_rejected",
-    "failed",
-    "cancelled",
-  ];
   const inProgress = loading || !terminalStatuses.includes(uiStatus);
+
+  if (variant === "compact") {
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          disabled={inProgress || !callerId || disabledProp}
+          onClick={() => void startCallBack()}
+          className="rounded-md border border-[#e5e7eb] px-2 py-1 text-[11px] font-semibold text-[#6366f1]"
+        >
+          {inProgress ? "…" : customLabel ?? "Call"}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>

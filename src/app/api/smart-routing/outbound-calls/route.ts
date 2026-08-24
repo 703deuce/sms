@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
       take: limit,
       include: {
-        authorizedCaller: { select: { name: true } },
+        authorizedCaller: { select: { id: true, name: true } },
       },
     });
     return NextResponse.json({ data: rows });

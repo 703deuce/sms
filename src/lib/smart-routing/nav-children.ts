@@ -12,7 +12,6 @@ export function buildSmartRoutingNavChildren() {
     { label: "People & Destinations", href: "/smart-routing/destinations" },
     { label: "Business Hours", href: "/smart-routing/hours" },
     { label: "Activity", href: "/smart-routing/activity" },
-    { label: "Analytics", href: "/smart-routing/analytics" },
   ];
 
   if (showSrBusinessCallBack()) {

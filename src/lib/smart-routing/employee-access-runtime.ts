@@ -101,7 +101,7 @@ async function playOutboundMenu(
   workspaceId: string,
 ) {
   const text =
-    "Press 1 to call back your last routed caller. Press 2 to enter a phone number. Press 3 for the latest callback request. Press 9 to repeat.";
+    "Press 1 for your last caller. Press 2 to enter a number. Press 3 for recent callers. Press 9 to repeat.";
   const clientState = encodeEmployeeAccessState({
     kind: "smart_routing_employee",
     accessSessionId,
@@ -204,6 +204,51 @@ export async function handleEmployeeAccessGather(input: {
     return { handled: true, done: false };
   }
 
+  if (access.state === "recent_menu") {
+    const meta = access.stateJson as {
+      recentCallers?: Array<{ callerE164: string; sessionId: string; rank: number }>;
+    } | null;
+    const recent = meta?.recentCallers ?? [];
+    if (digits === "9") {
+      await prisma.smartRoutingAccessSession.update({
+        where: { id: access.id },
+        data: { state: "menu" },
+      });
+      await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
+      return { handled: true, done: false };
+    }
+    const idx = Number(digits.charAt(0)) - 1;
+    const pick = recent[idx];
+    if (!pick) {
+      await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
+      return { handled: true, done: false };
+    }
+    await prisma.smartRoutingAccessSession.update({
+      where: { id: access.id },
+      data: {
+        pendingDestination: pick.callerE164,
+        contextType: "last_call",
+        contextRefId: pick.sessionId,
+        state: "confirm",
+        stateJson: { recentCallerRank: pick.rank },
+      },
+    });
+    const last10 = pick.callerE164.replace(/\D/g, "").slice(-10);
+    const clientState = encodeEmployeeAccessState({
+      kind: "smart_routing_employee",
+      accessSessionId: access.id,
+      workspaceId: input.workspaceId,
+      awaiting: "confirm",
+    });
+    await speakAndGather(
+      input.callControlId,
+      `Calling ${last10}. Press 1 to continue or 2 to go back.`,
+      clientState,
+      { validDigits: "12" },
+    );
+    return { handled: true, done: false };
+  }
+
   if (access.state === "menu") {
     const digit = digits.charAt(0);
     if (digit === "9") {
@@ -265,22 +310,50 @@ export async function handleEmployeeAccessGather(input: {
       );
       return { handled: true, done: false };
     } else if (digit === "3") {
-      const cb = await prisma.callbackRequest.findFirst({
-        where: { workspaceId: input.workspaceId, status: { in: ["new", "contacted"] } },
-        orderBy: { requestedAt: "desc" },
+      const caller = await prisma.smartRoutingAuthorizedCaller.findFirst({
+        where: { id: access.authorizedCallerId ?? "", workspaceId: input.workspaceId },
       });
-      if (!cb?.callerE164) {
-        await speakOnCallRaw(input.callControlId, "There are no callback requests waiting.");
+      if (!caller) {
         await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
         return { handled: true, done: false };
       }
-      destination = cb.callerE164;
-      contextType = "callback_request";
-      contextRefId = cb.id;
-      await prisma.callbackRequest.update({
-        where: { id: cb.id },
-        data: { status: "contacted", contactedAt: new Date() },
+      const { findRecentBusinessCallersForEmployee } = await import("./recent-callers-for-employee");
+      const recent = await findRecentBusinessCallersForEmployee({
+        workspaceId: input.workspaceId,
+        employeePhoneE164: caller.phoneE164,
+        limit: 5,
       });
+      if (!recent.length) {
+        await speakOnCallRaw(input.callControlId, "There are no recent business callers for your line.");
+        await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
+        return { handled: true, done: false };
+      }
+      await prisma.smartRoutingAccessSession.update({
+        where: { id: access.id },
+        data: {
+          state: "recent_menu",
+          stateJson: { recentCallers: recent },
+        },
+      });
+      const parts = recent
+        .map((r, i) => {
+          const mins = Math.max(1, Math.round((Date.now() - r.calledAt.getTime()) / 60000));
+          return `Press ${i + 1} for ${r.callerE164.replace(/\D/g, "").slice(-10)}, called ${mins} minutes ago.`;
+        })
+        .join(" ");
+      const clientState = encodeEmployeeAccessState({
+        kind: "smart_routing_employee",
+        accessSessionId: access.id,
+        workspaceId: input.workspaceId,
+        awaiting: "recent_menu",
+      });
+      await speakAndGather(
+        input.callControlId,
+        `${parts} Press 9 to go back.`,
+        clientState,
+        { validDigits: "123459" },
+      );
+      return { handled: true, done: false };
     } else {
       await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
       return { handled: true, done: false };

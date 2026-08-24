@@ -212,7 +212,7 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        {!isLauncher && currentProduct !== "numbers" ? (
+        {!isLauncher && currentProduct !== "numbers" && currentProduct !== "voice" ? (
           <WorkspaceModeToggle
             workspaceId={workspaceId}
             workspaceType={workspaceType}
@@ -235,15 +235,6 @@ export function Header({
         )}
 
         <div className="flex-1" />
-
-        {currentProduct === "voice" ? (
-          <Link
-            href="/voice/receptionist"
-            className="hidden h-9 items-center gap-1.5 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8] sm:inline-flex"
-          >
-            Test Receptionist
-          </Link>
-        ) : null}
 
         {currentProduct === "sms" ? (
           <SmsCreateMenu variant="header" className="hidden sm:block" />

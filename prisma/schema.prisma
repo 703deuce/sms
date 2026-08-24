@@ -323,6 +323,9 @@ model Workspace {
   smartRoutingAccessSessions SmartRoutingAccessSession[]
   smartRoutingAiProposals SmartRoutingAiProposal[]
   smartRoutingAiRecommendations SmartRoutingAiRecommendation[]
+  smartRoutingEmployeeAccessTokens SmartRoutingEmployeeAccessToken[]
+  smartRoutingCallRecordings SmartRoutingCallRecording[]
+  smartRoutingCallControlSessions SmartRoutingCallControlSession[]
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
   callbackRequests CallbackRequest[]
@@ -3819,6 +3822,10 @@ model SmartRoutingDestination {
   unavailableUntil         DateTime?
   assignedUserId           String?
   answerConfirmationEnabled Boolean  @default(false)
+  transferCode              String?
+  allowTransferTo           Boolean  @default(true)
+  transferWhisperLabel      String?
+  onBusinessCall            Boolean  @default(false)
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
   workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3968,6 +3975,18 @@ model SmartRoutingWorkspaceSettings {
   outboundEnabled           Boolean   @default(true)
   scheduleOverrideJson      Json?
   setupCompletedAt          DateTime?
+  holdMusicSlug             String?   @default("hold-modern-corporate")
+  holdMusicAssetId          String?
+  holdMusicMode             String?   @default("music")
+  recordingEnabledInbound   Boolean   @default(false)
+  recordingEnabledOutbound  Boolean   @default(false)
+  recordingTranscriptionEnabled Boolean @default(false)
+  recordingSummaryEnabled   Boolean   @default(false)
+  recordingRetentionDays    Int       @default(90)
+  recordingAnnouncementEnabled Boolean @default(true)
+  employeeAuthMode          String    @default("remembered")
+  transferDtmfKey           String?   @default("*2")
+  conferenceDtmfKey         String?   @default("*3")
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3983,6 +4002,8 @@ model SmartRoutingAuthorizedCaller {
   phoneE164         String
   /** Preferred phone for one-click dashboard callbacks (defaults to phoneE164). */
   preferredCallbackPhoneE164 String?
+  alternatePhoneE164       String?
+  defaultBusinessCallerIdE164 String?
   pinHash           String
   active            Boolean   @default(true)
   outboundEnabled   Boolean   @default(true)
@@ -3994,6 +4015,7 @@ model SmartRoutingAuthorizedCaller {
   updatedAt         DateTime  @updatedAt
   workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   outboundCalls     SmartRoutingOutboundCall[]
+  employeeAccessTokens SmartRoutingEmployeeAccessToken[]
 
   @@unique([workspaceId, phoneE164])
   @@index([workspaceId, active])
@@ -4051,6 +4073,75 @@ model SmartRoutingOutboundCall {
   @@index([workspaceId, createdAt])
   @@index([authorizedCallerId])
   @@map("smart_routing_outbound_calls")
+}
+
+/// Passwordless employee mini-page access (hashed token, revocable).
+model SmartRoutingEmployeeAccessToken {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  authorizedCallerId String
+  tokenHash          String    @unique
+  label              String?
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  lastUsedAt         DateTime?
+  useCount           Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  authorizedCaller   SmartRoutingAuthorizedCaller @relation(fields: [authorizedCallerId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([authorizedCallerId])
+  @@map("smart_routing_employee_access_tokens")
+}
+
+/// Call recording metadata — audio stored in Supabase Storage.
+model SmartRoutingCallRecording {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  callSessionId       String?
+  outboundCallId      String?
+  provider            String   @default("telnyx")
+  providerRecordingId String?
+  storagePath         String?
+  storageBucket       String?  @default("call-recordings")
+  mimeType            String?
+  durationSeconds     Int?
+  direction           String?
+  transcriptText      String?
+  transcriptStatus    String   @default("pending")
+  aiSummary           String?
+  summaryStatus       String   @default("pending")
+  retentionExpiresAt  DateTime?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([callSessionId])
+  @@map("smart_routing_call_recordings")
+}
+
+/// Active call control state for DTMF transfer/conference.
+model SmartRoutingCallControlSession {
+  id                       String   @id @default(cuid())
+  workspaceId              String
+  callSessionId            String
+  employeeCallControlId    String
+  customerCallControlId    String?
+  controlState             String   @default("normal")
+  transferPathJson         Json?    @default("[]")
+  heldParticipant          String?
+  consultationCallControlId String?
+  metadata                 Json?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([callSessionId])
+  @@map("smart_routing_call_control_sessions")
 }
 
 /// AI Routing Assistant — draft proposals awaiting human approval.

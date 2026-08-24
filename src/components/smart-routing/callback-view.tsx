@@ -1,6 +1,8 @@
 "use client";
 
 import { AuthorizedCallersPanel } from "@/components/smart-routing/authorized-callers-panel";
+import { EmployeeLinksPanel } from "@/components/smart-routing/employee-links-panel";
+import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import { BusinessCallbackGuide } from "@/components/smart-routing/business-callback-guide";
 import { OneClickBusinessCallbackPanel } from "@/components/smart-routing/one-click-business-callback-panel";
 import { CallerIdVerificationPanel } from "@/components/smart-routing/caller-id-verification-panel";
@@ -47,7 +49,7 @@ export function SmartRoutingCallbackView() {
       destinationE164: string;
       businessCallerIdE164: string | null;
       createdAt: string;
-      authorizedCaller?: { name: string } | null;
+      authorizedCaller?: { id: string; name: string } | null;
     }>
   >([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +143,17 @@ export function SmartRoutingCallbackView() {
             <AuthorizedCallersPanel callers={data?.authorizedCallers ?? []} onUpdated={load} />
           </div>
 
+          {data?.authorizedCallers?.length ? (
+            <div className={cn(srCard, "p-5")}>
+              <EmployeeLinksPanel
+                authorizedCallers={data.authorizedCallers.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                }))}
+              />
+            </div>
+          ) : null}
+
           {callbackE164 ? (
             <div className={cn(srCard, "p-5")}>
               <BusinessCallbackGuide
@@ -190,9 +203,19 @@ export function SmartRoutingCallbackView() {
                         {fmtPhoneDisplay(row.destinationE164)}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(row.createdAt).toLocaleString()}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(row.createdAt).toLocaleString()}
+                      </span>
+                      <BusinessCallBackButton
+                        destinationE164={row.destinationE164}
+                        contextType="manual"
+                        authorizedCallerId={row.authorizedCaller?.id}
+                        businessCallerIdE164={row.businessCallerIdE164 ?? undefined}
+                        label="Call Again"
+                        size="sm"
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
