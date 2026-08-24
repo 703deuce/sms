@@ -14,6 +14,8 @@ import type { ExplicitDispatchMetadata } from "../dispatch-metadata";
 import { PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY } from "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot";
 import { liveKitDidLookupVariants, toLiveKitInboundDid } from "./did";
 import { getLiveKitSipClient } from "./client";
+import type { MediaBackend } from "@/lib/voice/media-backend/types";
+import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
 
 /** Per-DID dispatch rules carry the runtime snapshot in agent job metadata. */
 export const TRANSOVO_DID_DISPATCH_RULE_PREFIX = "transovo-did-dispatch-";
@@ -123,8 +125,9 @@ function buildDispatchRuleInfo(input: {
 async function upsertDispatchRuleInfo(
   existingRuleId: string | undefined,
   dispatchRule: SIPDispatchRuleInfo,
+  backend: MediaBackend = getActiveMediaBackend(),
 ): Promise<SdkDispatchRuleInfo> {
-  const client = getLiveKitSipClient();
+  const client = getLiveKitSipClient(backend);
   if (existingRuleId) {
     dispatchRule.sipDispatchRuleId = existingRuleId;
     return client.updateSipDispatchRule(existingRuleId, dispatchRule);
@@ -163,8 +166,9 @@ async function upsertDispatchRuleInfo(
 
 export async function findDidDispatchRuleByName(
   e164: string,
+  backend: MediaBackend = getActiveMediaBackend(),
 ): Promise<SdkDispatchRuleInfo | null> {
-  const client = getLiveKitSipClient();
+  const client = getLiveKitSipClient(backend);
   const name = dispatchRuleNameForDid(e164);
   const rules = await client.listSipDispatchRule();
   return rules.find((rule) => rule.name === name) || null;
@@ -178,9 +182,11 @@ export async function syncDidDispatchRuleSnapshot(input: {
   e164: string;
   trunkId: string;
   dispatchMetadata: ExplicitDispatchMetadata;
+  backend?: MediaBackend;
 }): Promise<{ ruleId: string; created: boolean; actions: string[] }> {
+  const backend = input.backend ?? getActiveMediaBackend();
   const jobMetadata = buildLiveKitAgentJobMetadata(input.dispatchMetadata);
-  const existing = await findDidDispatchRuleByName(input.e164);
+  const existing = await findDidDispatchRuleByName(input.e164, backend);
   const ruleInfo = buildDispatchRuleInfo({
     e164: input.e164,
     trunkId: input.trunkId,
@@ -189,7 +195,7 @@ export async function syncDidDispatchRuleSnapshot(input: {
   });
 
   const actions: string[] = [];
-  const rule = await upsertDispatchRuleInfo(existing?.sipDispatchRuleId, ruleInfo);
+  const rule = await upsertDispatchRuleInfo(existing?.sipDispatchRuleId, ruleInfo, backend);
   actions.push(
     existing?.sipDispatchRuleId
       ? "livekit_updated_did_dispatch_snapshot"

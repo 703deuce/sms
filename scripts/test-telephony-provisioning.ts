@@ -52,10 +52,20 @@ if (prevSipUri) process.env.LIVEKIT_SIP_URI = prevSipUri;
 
 process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
 process.env.LIVEKIT_SIP_URI = "stale-other.sip.livekit.cloud";
+const prevMode = process.env.MEDIA_BACKEND_MODE;
+const prevSelfHostedUrl = process.env.LIVEKIT_SELF_HOSTED_URL;
+const prevSelfHostedHost = process.env.LIVEKIT_SELF_HOSTED_SIP_HOST;
+delete process.env.MEDIA_BACKEND_MODE;
+delete process.env.LIVEKIT_SELF_HOSTED_URL;
+delete process.env.LIVEKIT_SELF_HOSTED_SIP_HOST;
+delete process.env.LIVEKIT_SIP_HOST;
 assert.equal(
   getAuthoritativeLiveKitSipHost().host,
   "stale-other.sip.livekit.cloud",
 );
+if (prevMode) process.env.MEDIA_BACKEND_MODE = prevMode;
+if (prevSelfHostedUrl) process.env.LIVEKIT_SELF_HOSTED_URL = prevSelfHostedUrl;
+if (prevSelfHostedHost) process.env.LIVEKIT_SELF_HOSTED_SIP_HOST = prevSelfHostedHost;
 process.env.LIVEKIT_SIP_URI = prevSipUri;
 
 assert.equal(toLiveKitInboundDid("+18663464256"), "+18663464256");

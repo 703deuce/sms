@@ -3,13 +3,14 @@ import type { SIPOutboundTrunkInfo } from "livekit-server-sdk";
 import { getLiveKitSipClient } from "./client";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
+import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
 
 export const TRANSOVO_LIVEKIT_OUTBOUND_TRUNK_NAME =
   process.env.LIVEKIT_OUTBOUND_TRUNK_NAME?.trim() || "transovo-telnyx-outbound";
 
 /** Platform-wide shared Telnyx → LiveKit outbound trunk (not per customer). */
 export function resolvePlatformOutboundTrunkIdFromEnv(
-  backend: MediaBackend = "livekit_cloud",
+  backend: MediaBackend = getActiveMediaBackend(),
 ): string | null {
   try {
     const cfg = getLiveKitBackendConfig(backend);
@@ -34,7 +35,7 @@ export function getStoredLiveKitOutboundTrunkId(): string | null {
 
 export async function findOutboundTrunkByName(
   name: string,
-  backend: MediaBackend = "livekit_cloud",
+  backend: MediaBackend = getActiveMediaBackend(),
 ): Promise<SIPOutboundTrunkInfo | null> {
   const client = getLiveKitSipClient(backend);
   const trunks = await client.listSipOutboundTrunk();
@@ -48,7 +49,7 @@ export async function ensureLiveKitOutboundTrunk(input: {
   authPassword?: string;
   backend?: MediaBackend;
 }): Promise<{ trunk: SIPOutboundTrunkInfo; created: boolean; actions: string[] }> {
-  const backend = input.backend || "livekit_cloud";
+  const backend = input.backend ?? getActiveMediaBackend();
   const client = getLiveKitSipClient(backend);
   const trunkName = getLiveKitBackendConfig(backend).outboundTrunkName;
   const actions: string[] = [];
@@ -121,7 +122,7 @@ export async function resolvePlatformOutboundTrunkId(input?: {
   callerIdE164?: string | null;
   backend?: MediaBackend;
 }): Promise<string | null> {
-  const backend = input?.backend || "livekit_cloud";
+  const backend = input?.backend ?? getActiveMediaBackend();
   const callerId = input?.callerIdE164?.trim();
   if (callerId) {
     try {

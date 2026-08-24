@@ -25,3 +25,4 @@ export {
 } from "./resolver";
 
 export { mediaBackendMetadataStamp, pinMediaBackendOnCall } from "./pinning";
+export { resolveAuthoritativeLiveKitSipHost } from "./sip-host";

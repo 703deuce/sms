@@ -10,10 +10,11 @@ import { isTransovoDidDispatchRuleName } from "./dispatch-snapshot-sync";
 import { getLiveKitSipClient } from "./client";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
+import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
 
 export async function findDispatchRuleByName(
   name: string,
-  backend: MediaBackend = "livekit_cloud",
+  backend: MediaBackend = getActiveMediaBackend(),
 ): Promise<SIPDispatchRuleInfo | null> {
   const client = getLiveKitSipClient(backend);
   const rules = await client.listSipDispatchRule();
@@ -24,7 +25,7 @@ export async function ensureSharedDispatchRule(input: {
   trunkId: string;
   backend?: MediaBackend;
 }): Promise<{ rule: SIPDispatchRuleInfo; created: boolean; actions: string[] }> {
-  const backend = input.backend || "livekit_cloud";
+  const backend = input.backend ?? getActiveMediaBackend();
   const client = getLiveKitSipClient(backend);
   const dispatchRuleName = getLiveKitBackendConfig(backend).dispatchRuleName;
   const actions: string[] = [];

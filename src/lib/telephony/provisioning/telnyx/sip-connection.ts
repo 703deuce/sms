@@ -31,9 +31,12 @@ export async function ensureTelnyxLiveKitFqdnConnection(): Promise<{
   const actions: string[] = [];
   const { host: sipHost } = getAuthoritativeLiveKitSipHost();
   if (!sipHost) {
-    throw new Error(
-      "LiveKit SIP host not found — set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint",
-    );
+    const mode = process.env.MEDIA_BACKEND_MODE?.trim().toLowerCase();
+    const hint =
+      mode === "self_hosted"
+        ? "Set LIVEKIT_SELF_HOSTED_URL and LIVEKIT_SELF_HOSTED_SIP_HOST (or SIP_URI)"
+        : "Set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint";
+    throw new Error(`LiveKit SIP host not found — ${hint}`);
   }
 
   const storedId = getStoredTelnyxFqdnConnectionId();

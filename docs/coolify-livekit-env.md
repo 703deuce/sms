@@ -30,8 +30,28 @@ MEDIA_BACKEND_MODE=self_hosted   # use self-hosted LiveKit server
 
 Rollback: set `MEDIA_BACKEND_MODE=livekit_cloud` and redeploy. No other config changes.
 
+## Full switch to self-hosted (not just the API URL)
+
+Setting `MEDIA_BACKEND_MODE=self_hosted` makes the app and voice worker talk to self-hosted LiveKit. Inbound PSTN also requires Telnyx SIP ingress to target the self-hosted SIP hostname env var. // pragma: allowlist secret
+
+When `MEDIA_BACKEND_MODE=self_hosted`:
+
+1. Runtime + worker use `LIVEKIT_SELF_HOSTED_*` credentials
+2. Telnyx FQDN provisioning uses the self-hosted SIP host (ignores Cloud `LIVEKIT_SIP_URI`)
+3. LiveKit trunk/dispatch provisioning targets the self-hosted server
+
+After deploy, run on the server (with production env loaded):
+
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/switch-active-media-backend-ingress.ts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/switch-active-media-backend-ingress.ts --apply
+```
+
+Optional single number: `--e164 +15714073615`
+
 ## After deploy
 
 1. Redeploy `transovo-web` and `transovo-voice`
-2. Confirm logs show `mediaBackend=self_hosted` when mode is set
-3. Call your existing 571-407 business number
+2. `npx tsx scripts/verify-media-backend-mode.ts` → `resolvedBackend: self_hosted`
+3. Run ingress switch script with `--apply`
+4. Call your business number; logs should show `mediaBackend=self_hosted`

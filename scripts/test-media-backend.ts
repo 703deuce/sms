@@ -52,6 +52,36 @@ async function main() {
     assert.equal(isMediaBackendConfigured("livekit_cloud"), true);
   });
 
+  await check("authoritative_sip_host_follows_self_hosted_mode", () => {
+    const prevMode = process.env.MEDIA_BACKEND_MODE;
+    const prevCloudUri = process.env.LIVEKIT_SIP_URI;
+    const prevSelfUrl = process.env.LIVEKIT_SELF_HOSTED_URL;
+    const prevSelfHost = process.env.LIVEKIT_SELF_HOSTED_SIP_HOST;
+
+    process.env.MEDIA_BACKEND_MODE = "self_hosted";
+    process.env.LIVEKIT_SIP_URI = "cloud-only.sip.livekit.cloud";
+    process.env.LIVEKIT_SELF_HOSTED_URL = "wss://voice.example.com";
+    process.env.LIVEKIT_SELF_HOSTED_API_KEY = "test-key";
+    process.env.LIVEKIT_SELF_HOSTED_API_SECRET = "test-secret";
+    process.env.LIVEKIT_SELF_HOSTED_SIP_HOST = "voice.example.com";
+
+    const { resolveAuthoritativeLiveKitSipHost } = require("../src/lib/voice/media-backend/sip-host") as typeof import("../src/lib/voice/media-backend/sip-host");
+    const sip = resolveAuthoritativeLiveKitSipHost();
+    assert.equal(sip.host, "voice.example.com");
+    assert.equal(sip.source, "LIVEKIT_SELF_HOSTED_SIP_HOST");
+
+    if (prevMode) process.env.MEDIA_BACKEND_MODE = prevMode;
+    else delete process.env.MEDIA_BACKEND_MODE;
+    if (prevCloudUri) process.env.LIVEKIT_SIP_URI = prevCloudUri;
+    else delete process.env.LIVEKIT_SIP_URI;
+    if (prevSelfUrl) process.env.LIVEKIT_SELF_HOSTED_URL = prevSelfUrl;
+    else delete process.env.LIVEKIT_SELF_HOSTED_URL;
+    delete process.env.LIVEKIT_SELF_HOSTED_API_KEY;
+    delete process.env.LIVEKIT_SELF_HOSTED_API_SECRET;
+    if (prevSelfHost) process.env.LIVEKIT_SELF_HOSTED_SIP_HOST = prevSelfHost;
+    else delete process.env.LIVEKIT_SELF_HOSTED_SIP_HOST;
+  });
+
   resetLiveKitClientsForTests();
 
   if (failures.length) {

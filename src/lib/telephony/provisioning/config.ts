@@ -94,7 +94,7 @@ export function resolveLiveKitSipHost(): LiveKitSipHostResolution {
 
 /** LiveKit SIP ingress host, e.g. sms-xxxxx.sip.livekit.cloud */
 export function getLiveKitSipHost(): string {
-  return resolveLiveKitSipHost().host;
+  return getAuthoritativeLiveKitSipHost().host;
 }
 
 /**
@@ -102,11 +102,17 @@ export function getLiveKitSipHost(): string {
  * LiveKit Cloud often uses a different SIP subdomain than the project URL.
  */
 export function getAuthoritativeLiveKitSipHost(): LiveKitSipHostResolution {
+  const mode = process.env.MEDIA_BACKEND_MODE?.trim().toLowerCase();
+  if (mode === "self_hosted") {
+    const { resolveAuthoritativeLiveKitSipHost } =
+      require("@/lib/voice/media-backend/sip-host") as typeof import("@/lib/voice/media-backend/sip-host");
+    return resolveAuthoritativeLiveKitSipHost();
+  }
   return resolveLiveKitSipHost();
 }
 
 export function getLiveKitSipHostSource(): string | null {
-  return resolveLiveKitSipHost().source;
+  return getAuthoritativeLiveKitSipHost().source;
 }
 
 export function getStoredLiveKitTrunkId(): string | null {
@@ -153,11 +159,13 @@ export function getLiveKitProjectAlignment(): {
 
 export function assertLiveKitProvisioningEnv() {
   const { url, apiKey, apiSecret } = requireLiveKitEnv();
-  const sipHost = getLiveKitSipHost();
+  const { host: sipHost, source } = getAuthoritativeLiveKitSipHost();
   if (!sipHost) {
-    throw new Error(
-      "LiveKit SIP host not found. Set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint",
-    );
+    const hint =
+      process.env.MEDIA_BACKEND_MODE?.trim().toLowerCase() === "self_hosted"
+        ? "Set LIVEKIT_SELF_HOSTED_URL and LIVEKIT_SELF_HOSTED_SIP_HOST (or SIP_URI)"
+        : "Set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint";
+    throw new Error(`LiveKit SIP host not found (${source || "unset"}). ${hint}`);
   }
   return { url, apiKey, apiSecret, sipHost };
 }

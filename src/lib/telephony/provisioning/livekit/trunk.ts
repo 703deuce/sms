@@ -13,6 +13,7 @@ import {
 import { getLiveKitSipClient } from "./client";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
+import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
 
 async function assertTrunkHasNumber(
   trunkId: string,
@@ -33,7 +34,7 @@ async function assertTrunkHasNumber(
 
 export async function findInboundTrunkByName(
   name: string,
-  backend: MediaBackend = "livekit_cloud",
+  backend: MediaBackend = getActiveMediaBackend(),
 ): Promise<SIPInboundTrunkInfo | null> {
   const client = getLiveKitSipClient(backend);
   const trunks = await client.listSipInboundTrunk();
@@ -55,7 +56,7 @@ export async function ensureSharedInboundTrunk(input?: {
   e164?: string;
   backend?: MediaBackend;
 }): Promise<{ trunk: SIPInboundTrunkInfo; created: boolean; actions: string[] }> {
-  const backend = input?.backend || "livekit_cloud";
+  const backend = input?.backend ?? getActiveMediaBackend();
   const client = getLiveKitSipClient(backend);
   const trunkName = getLiveKitBackendConfig(backend).inboundTrunkName;
   const actions: string[] = [];
@@ -105,7 +106,7 @@ export async function ensureInboundTrunkForNumber(
   created: boolean;
   actions: string[];
 }> {
-  const backend = options?.backend || "livekit_cloud";
+  const backend = options?.backend ?? getActiveMediaBackend();
   const client = getLiveKitSipClient(backend);
   const trunkName = getLiveKitBackendConfig(backend).inboundTrunkName;
   const actions: string[] = [];
