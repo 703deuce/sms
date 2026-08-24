@@ -164,6 +164,10 @@ export async function ensureInboundTrunkForNumber(
   const hasBareVariant = currentNumbers.includes(trunkDid);
 
   if (!hasBareVariant || hasPlusVariant) {
+    // Self-hosted trunks are often pre-provisioned with +E.164; skip destructive rewrite.
+    if (backend === "self_hosted" && hasPlusVariant) {
+      return { trunk: keeper, created: false, actions: [...actions, "skip_trunk_number_rewrite_self_hosted"] };
+    }
     const nextNumbers = [
       ...currentNumbers.filter((n) => !liveKitDidLookupVariants(e164).includes(n)),
       trunkDid,
