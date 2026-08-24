@@ -7,6 +7,9 @@ function readEnv(name: string): string {
 }
 
 function readCloudEnv(suffix: string): string {
+  const cloudPrefixed = readEnv(`LIVEKIT_CLOUD_${suffix}`);
+  if (cloudPrefixed) return cloudPrefixed;
+
   const legacyMap: Record<string, string> = {
     URL: "LIVEKIT_URL",
     API_KEY: "LIVEKIT_API_KEY",

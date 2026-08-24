@@ -49,6 +49,22 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/switch
 
 Optional single number: `--e164 +15714073615`
 
+Self-hosted inbound trunk must match LiveKit Cloud: **no IP allowlist**, **all codecs allowed**. If PSTN rings then fails with "not in service" / `PROGRESS_TIMEOUT` in Telnyx CDR:
+
+```bash
+MEDIA_BACKEND_MODE=self_hosted npx tsx scripts/fix-self-hosted-trunk-match-cloud.ts --apply
+MEDIA_BACKEND_MODE=self_hosted npx tsx scripts/mctb-trace-pipeline.ts
+```
+
+Update `LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID` in Coolify if the script reports a new trunk id.
+
+Emergency rollback to LiveKit Cloud SIP:
+
+```bash
+npx tsx scripts/rollback-telnyx-fqdn-to-cloud.ts --apply
+# set MEDIA_BACKEND_MODE=livekit_cloud and ensure LIVEKIT_CLOUD_* vars are set
+```
+
 ## After deploy
 
 1. Redeploy `transovo-web` and `transovo-voice`

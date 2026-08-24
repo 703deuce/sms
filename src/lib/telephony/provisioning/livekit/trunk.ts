@@ -187,7 +187,11 @@ export async function ensureInboundTrunkForNumber(
   }
 
   const allowlist = await ensureTelnyxSignalingAllowlist({ trunkId, backend });
-  actions.push(...allowlist.actions);
+  if (backend !== "self_hosted") {
+    actions.push(...allowlist.actions);
+  } else {
+    actions.push("skip_telnyx_allowlist_self_hosted_match_cloud");
+  }
 
   return { trunk: keeper, created: false, actions };
 }
