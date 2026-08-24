@@ -1,4 +1,5 @@
 import { NumberSettingsForm } from "@/components/numbers/number-settings-form";
+import { CallHandlingModePanel } from "@/components/numbers/call-handling-mode-panel";
 import {
   NumberAssignmentForm,
   NumberMessagingForm,
@@ -20,6 +21,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPrisma } from "@/lib/db";
+import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 
 const detailTabs = [
   { id: "overview", label: "Overview" },
@@ -53,6 +55,10 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
   const registration = await getPrisma().messagingRegistration.findUnique({
     where: { workspaceId },
   });
+  const [mctbEntitled, smartRoutingEntitled] = await Promise.all([
+    hasWorkspaceProductFeature(workspaceId, "mctb"),
+    hasWorkspaceProductFeature(workspaceId, "smart_routing"),
+  ]);
   const isRegistrationNumber = registration?.phoneE164 === number.number;
 
   function statusLabel(status?: string | null) {
@@ -171,7 +177,16 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
         </>
       )}
 
-      {tab === "voice" && <NumberProvisionPanel numberId={numberId} />}
+      {tab === "voice" && (
+        <div className="space-y-4">
+          <CallHandlingModePanel
+            numberId={numberId}
+            e164={number.number}
+            entitlements={{ mctb: mctbEntitled, smart_routing: smartRoutingEntitled }}
+          />
+          <NumberProvisionPanel numberId={numberId} />
+        </div>
+      )}
 
       {tab === "messaging" && (
         <Card>

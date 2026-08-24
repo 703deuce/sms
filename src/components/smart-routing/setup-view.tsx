@@ -208,26 +208,45 @@ export function SmartRoutingSetupView() {
           Forward your existing business number to this number. Incoming customer calls are routed
           through your Smart Routing setup. Do not advertise this as your public business number.
         </p>
-        <select
-          className="h-10 w-full rounded-lg border px-3 text-sm"
-          value={routingPhoneId}
-          onChange={(e) => setRoutingPhoneId(e.target.value)}
-        >
-          <option value="">Select routing number…</option>
-          {data?.phoneNumbers
-            .filter((p) => p.id !== callbackPhoneId)
-            .map((p) => (
-              <option key={p.id} value={p.id}>
-                {fmtPhoneDisplay(p.e164)} {p.friendlyName ? `(${p.friendlyName})` : ""}
-              </option>
-            ))}
-        </select>
-        {routingE164 ? (
-          <p className="text-sm font-semibold">{fmtPhoneDisplay(routingE164)}</p>
-        ) : null}
-        <Button variant="outline" onClick={() => void saveRoutingNumber()}>
-          Save routing number
-        </Button>
+        {!data?.phoneNumbers.length ? (
+          <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-sm">
+            <p className="font-medium">You need a Transovo routing number first.</p>
+            <p className="mt-1 text-muted-foreground">
+              Buy an inexpensive local number through the customer UI. Provisioning will attach Telnyx
+              voice automatically — no manual DB or provider setup.
+            </p>
+            <Link href="/numbers/buy" className="mt-3 inline-flex">
+              <Button size="sm">Find a number</Button>
+            </Link>
+          </div>
+        ) : (
+          <>
+            <select
+              className="h-10 w-full rounded-lg border px-3 text-sm"
+              value={routingPhoneId}
+              onChange={(e) => setRoutingPhoneId(e.target.value)}
+            >
+              <option value="">Select routing number…</option>
+              {data.phoneNumbers
+                .filter((p) => p.id !== callbackPhoneId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {fmtPhoneDisplay(p.e164)} {p.friendlyName ? `(${p.friendlyName})` : ""}
+                  </option>
+                ))}
+            </select>
+            {routingE164 ? (
+              <p className="text-sm font-semibold">{fmtPhoneDisplay(routingE164)}</p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Saving assigns Smart Routing call handling to this number (disables MCTB on the same
+              DID).
+            </p>
+            <Button variant="outline" onClick={() => void saveRoutingNumber()}>
+              Save routing number
+            </Button>
+          </>
+        )}
       </Card>
 
       <Card className="space-y-4 p-5" id="callback-number">

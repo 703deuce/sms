@@ -1,0 +1,26 @@
+{
+  "capturedAt": "2026-08-24T17:07:20.614Z",
+  "allPass": true,
+  "rows": [
+    {
+      "name": "mctb-sip-ingress-send-gate",
+      "ok": true,
+      "output": "> sms@0.1.0 test:mctb-sip-ingress-send-gate\n> tsx scripts/test-mctb-sip-ingress-send-gate.ts\n\ntest-mctb-sip-ingress-send-gate: ok"
+    },
+    {
+      "name": "mctb-consent-log",
+      "ok": true,
+      "output": "> sms@0.1.0 test:mctb-consent-log\n> tsx scripts/test-mctb-consent-log.ts\n\ntest-mctb-consent-log: ok"
+    },
+    {
+      "name": "mctb-press1-consent-db",
+      "ok": true,
+      "output": "test:mctb-press1-consent-db PASS {\n  phoneNumberId: 'cmsgtjms84g6l2h0o255w1e3v',\n  consentId: 'cmt7ho3152u514o644z0c5p37',\n  duplicateBlocked: true\n}"
+    },
+    {
+      "name": "mctb-sip-e2e-trace",
+      "ok": true,
+      "output": "test-mctb-sip-e2e-trace: PASS"
+    }
+  ]
+}

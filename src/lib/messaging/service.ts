@@ -362,6 +362,7 @@ export const messagingOnboarding = {
         purchasedAt: new Date(),
         a2pStatus: "PENDING",
         settingsJson: {
+          callHandlingMode: "none",
           provisioning: {
             state: purchased.sid.startsWith("ORDER:")
               ? "pending_activation"

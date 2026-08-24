@@ -7,7 +7,7 @@ import {
   updateSmartRoutingWorkspaceSettings,
   type SmartRoutingWorkspaceSettingsRecord,
 } from "./workspace-settings";
-import { transitionNumberService } from "@/lib/numbers/state-service";
+import { setCallHandlingMode } from "@/lib/numbers/call-handling-mode";
 
 function readRoutingOwner(settingsJson: unknown): string | null {
   if (!settingsJson || typeof settingsJson !== "object") return null;
@@ -30,7 +30,11 @@ export async function assignRoutingPhoneNumber(
     throw new Error("Cannot use the Business Callback Number as the Routing Number");
   }
 
-  await transitionNumberService(workspaceId, phoneNumberId, "set_smart_routing_owner");
+  await setCallHandlingMode({
+    workspaceId,
+    phoneNumberId,
+    mode: "smart_routing",
+  });
   await updateSmartRoutingWorkspaceSettings(workspaceId, {
     assignedPhoneNumberId: phoneNumberId,
     routingNumberE164: pn.e164,
