@@ -80,9 +80,16 @@ export async function loadPlatformActivityFeed(
     prisma.smartRoutingSmsConsentEvent
       .findMany({
         where: { workspaceId },
-        orderBy: { createdAt: "desc" },
+        orderBy: { consentedAt: "desc" },
         take: limit,
-        select: { id: true, callerNumber: true, consentStatus: true, createdAt: true },
+        select: {
+          id: true,
+          callerNumber: true,
+          affirmativeInput: true,
+          method: true,
+          consentedAt: true,
+          callSessionId: true,
+        },
       })
       .catch(() => []),
   ]);
@@ -166,9 +173,10 @@ export async function loadPlatformActivityFeed(
     items.push({
       id: `consent:${ce.id}`,
       type: "consent",
-      label: `SMS consent ${ce.consentStatus || "event"}${ce.callerNumber ? ` — ${ce.callerNumber}` : ""}`,
-      at: ce.createdAt.toISOString(),
-      href: "/smart-routing",
+      label: `Press-${ce.affirmativeInput || "1"} SMS consent${ce.callerNumber ? ` — ${ce.callerNumber}` : ""}`,
+      at: ce.consentedAt.toISOString(),
+      href: "/voice/missed-calls",
+      meta: { method: ce.method, callSessionId: ce.callSessionId },
     });
   }
 
