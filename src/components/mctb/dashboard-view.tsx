@@ -76,30 +76,38 @@ export function MctbDashboardView({
 
   useEffect(() => {
     fetch("/api/mctb/setup", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.data) {
-          setSetup({
-            compliance: j.data.compliance,
-            runtime: {
-              enabled: j.data.runtime.enabled,
-              phoneNumberId: j.data.runtime.phoneNumberId,
-            },
-          });
-        }
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok || !j.data) return;
+        setSetup({
+          compliance: j.data.compliance,
+          runtime: {
+            enabled: j.data.runtime.enabled,
+            phoneNumberId: j.data.runtime.phoneNumberId,
+          },
+        });
       })
       .catch(() => undefined);
     fetch("/api/mctb/missed-calls?limit=1", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setMissed(j.data?.summary || null))
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) return;
+        setMissed(j.data?.summary || null);
+      })
       .catch(() => undefined);
     fetch("/api/platform/activity?limit=12", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setActivity(j.data || []))
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) return;
+        setActivity(j.data || []);
+      })
       .catch(() => undefined);
     fetch("/api/platform/dashboard-summary", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setSummary(j.data || null))
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) return;
+        setSummary(j.data || null);
+      })
       .catch(() => undefined);
   }, []);
 

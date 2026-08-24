@@ -40,8 +40,10 @@ export function CloseNowControl({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "close_now", until: until.toISOString() }),
+      }).then((res) => {
+        if (!res.ok) return;
+        onUpdated();
       });
-      onUpdated();
     } finally {
       setLoading(false);
     }
@@ -54,8 +56,10 @@ export function CloseNowControl({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "clear_override" }),
+      }).then((res) => {
+        if (!res.ok) return;
+        onUpdated();
       });
-      onUpdated();
     } finally {
       setLoading(false);
     }

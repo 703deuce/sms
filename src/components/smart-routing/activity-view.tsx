@@ -27,6 +27,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductCrossSellBanner } from "@/components/products/product-cross-sell-banner";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
+import { isActiveEntitlement } from "@/lib/products/types";
 
 type Session = {
   id: string;
@@ -107,9 +108,6 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
         setSessions(list);
         setSelectedId((prev) => prev ?? list[0]?.id ?? null);
       });
-    fetch("/api/smart-routing/outbound-calls?limit=30")
-      .then((r) => r.json())
-      .then((j) => setOutboundCalls(j.data ?? []));
   }, [flowId]);
 
   useEffect(() => {
@@ -117,7 +115,17 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
     fetch("/api/platform/features")
       .then((r) => r.json())
       .then((j) => {
-        if (j.data) setProductFeatures(j.data as WorkspaceFeatureSnapshot);
+        if (j.data) {
+          setProductFeatures(j.data as WorkspaceFeatureSnapshot);
+          if (isActiveEntitlement(j.data.smart_routing)) {
+            fetch("/api/smart-routing/outbound-calls?limit=30")
+              .then((r) => r.json())
+              .then((out) => setOutboundCalls(out.data ?? []))
+              .catch(() => setOutboundCalls([]));
+          } else {
+            setOutboundCalls([]);
+          }
+        }
       })
       .catch(() => undefined);
   }, [load]);
@@ -436,9 +444,9 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
         <div className={cn(srCard, "p-5")}>
           <h2 className="text-[15px] font-bold text-[#111827]">Activity Insights</h2>
           <ul className="mt-3 space-y-2 text-[12px] text-[#374151]">
-            <li>Most callers selected Press 1 when a menu was offered.</li>
             <li>{metrics.text} calls requested a text-back follow-up.</li>
             <li>{metrics.failures} calls hit routing failures this period.</li>
+            <li>{metrics.connected} calls were answered by your team.</li>
           </ul>
           <div className="mt-4">
             <p className="text-[11px] font-semibold text-[#6b7280]">Outcome Distribution</p>

@@ -54,11 +54,17 @@ export function DestinationsPanel({
   }
 
   async function patch(id: string, data: Record<string, unknown>) {
-    await fetch("/api/smart-routing/destinations", {
+    const res = await fetch("/api/smart-routing/destinations", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...data }),
     });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(toSmartRoutingCustomerError(json.error || "Could not update destination"));
+      return;
+    }
+    setError("");
     onUpdated();
   }
 

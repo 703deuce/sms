@@ -203,7 +203,13 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
   const hasSr = featureActive(features, "smart_routing", false);
-  const items = [{ label: "Dashboard", href: "/dashboard" }];
+  const hasVm = featureActive(features, "visual_voicemail", false);
+  const hasCallback = featureActive(features, "callback_requests", false);
+
+  const items = [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Attention", href: "/voice/needs-attention" },
+  ];
   if (options.showTryIt && hasMctb) {
     items.push({ label: "Try It", href: "/voice/try-it" });
   }
@@ -218,7 +224,12 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     items.push({ label: "Routing", href: "/smart-routing" });
     items.push({ label: "Analytics", href: "/smart-routing/analytics" });
   }
-  items.push({ label: "Attention", href: "/voice/needs-attention" });
-  items.push({ label: "Voicemail", href: "/voice/voicemail" });
+  items.push({
+    label: "Voicemail",
+    href: hasVm ? "/voice/voicemail" : "/settings/billing?upgrade=visual_voicemail",
+  });
+  if (hasCallback) {
+    items.push({ label: "Callbacks", href: "/voice/callback-requests" });
+  }
   return items;
 }

@@ -52,7 +52,6 @@ export async function GET() {
     });
     const destinations = await prisma.smartRoutingDestination.findMany({
       where: { workspaceId: auth.workspaceId },
-      select: { id: true, label: true, phoneNumber: true, active: true, destinationType: true },
       orderBy: { label: "asc" },
     });
 

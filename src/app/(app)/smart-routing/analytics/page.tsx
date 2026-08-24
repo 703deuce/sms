@@ -17,7 +17,21 @@ type AnalyticsData = {
 export default function SmartRoutingAnalyticsPage() {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [flowNames, setFlowNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/smart-routing/setup", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const map: Record<string, string> = {};
+        for (const f of j.data?.flows ?? []) {
+          if (f.id && f.name) map[f.id] = f.name;
+        }
+        setFlowNames(map);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -95,7 +109,9 @@ export default function SmartRoutingAnalyticsPage() {
                       href={flowId === "unknown" ? "/smart-routing/flows" : `/smart-routing/${flowId}`}
                       className="text-primary hover:underline"
                     >
-                      {flowId === "unknown" ? "Unassigned flow" : flowId}
+                      {flowId === "unknown"
+                        ? "Unassigned flow"
+                        : flowNames[flowId] || flowId}
                     </Link>
                     <span className="font-medium tabular-nums">{count}</span>
                   </li>

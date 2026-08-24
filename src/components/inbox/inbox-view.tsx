@@ -235,7 +235,7 @@ export function InboxView({
       body: JSON.stringify({ status }),
     });
     const json = (await res.json()) as { data?: Conversation };
-    if (json.data) {
+    if (res.ok && json.data) {
       setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
     }
   }
@@ -250,7 +250,7 @@ export function InboxView({
       }),
     });
     const json = (await res.json()) as { data?: Conversation };
-    if (json.data) {
+    if (res.ok && json.data) {
       setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
     }
   }

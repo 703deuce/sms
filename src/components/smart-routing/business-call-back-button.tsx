@@ -2,6 +2,8 @@
 
 import { SrOutlineButton, SrPrimaryButton } from "@/components/smart-routing/shared";
 import { fmtPhoneDisplay } from "@/lib/smart-routing/display";
+import { isActiveEntitlement } from "@/lib/products/types";
+import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { PhoneForwarded } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -38,8 +40,15 @@ export function BusinessCallBackButton({
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [smartRoutingActive, setSmartRoutingActive] = useState(true);
 
   const load = useCallback(async () => {
+    const featRes = await fetch("/api/platform/features", { cache: "no-store" });
+    const featJson = await featRes.json().catch(() => ({}));
+    const features = featJson.data as WorkspaceFeatureSnapshot | undefined;
+    const srActive = features ? isActiveEntitlement(features.smart_routing) : true;
+    setSmartRoutingActive(srActive);
+
     const res = await fetch("/api/smart-routing/setup", { cache: "no-store" });
     const json = await res.json();
     if (!res.ok) return;
@@ -98,6 +107,18 @@ export function BusinessCallBackButton({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!smartRoutingActive) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Business Call Back requires{" "}
+        <a href="/settings/billing?upgrade=smart_routing" className="font-semibold text-primary hover:underline">
+          Smart Routing
+        </a>
+        .
+      </p>
+    );
   }
 
   if (!meta?.outboundEnabled) {

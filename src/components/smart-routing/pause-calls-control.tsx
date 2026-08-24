@@ -34,11 +34,12 @@ export function PauseCallsControl({ className }: { className?: string }) {
   async function pause(preset: "manual" | "1h" | "tomorrow") {
     setBusy(true);
     try {
-      await fetch("/api/smart-routing/availability", {
+      const res = await fetch("/api/smart-routing/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "pause", preset }),
       });
+      if (!res.ok) return;
       await load();
     } finally {
       setBusy(false);
@@ -48,11 +49,12 @@ export function PauseCallsControl({ className }: { className?: string }) {
   async function resume() {
     setBusy(true);
     try {
-      await fetch("/api/smart-routing/availability", {
+      const res = await fetch("/api/smart-routing/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "resume" }),
       });
+      if (!res.ok) return;
       await load();
     } finally {
       setBusy(false);

@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     if (body.action === "mark_resolved" && body.messageId) {
       await getPrisma().voicemailMessage.updateMany({
         where: { id: body.messageId, workspaceId: auth.workspaceId },
-        data: { isResolved: true },
+        data: { isResolved: true, isRead: true },
       });
       return NextResponse.json({ ok: true });
     }

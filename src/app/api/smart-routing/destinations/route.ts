@@ -6,6 +6,14 @@ import { isWorkspaceInternalSmartRoutingNumber } from "@/lib/smart-routing/ingre
 import { pauseDurationUntil } from "@/lib/smart-routing/destination-availability";
 import { routeOverridePayload } from "@/lib/smart-routing/route-override";
 
+async function loadScheduleOverrideJson(workspaceId: string): Promise<Record<string, unknown>> {
+  const settings = await getPrisma().smartRoutingWorkspaceSettings.findUnique({
+    where: { workspaceId },
+    select: { scheduleOverrideJson: true },
+  });
+  return (settings?.scheduleOverrideJson as Record<string, unknown> | null) ?? {};
+}
+
 export async function GET() {
   try {
     const auth = await requireSession();
@@ -114,16 +122,20 @@ export async function PUT(request: Request) {
       const until = body.until
         ? new Date(body.until)
         : new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const base = await loadScheduleOverrideJson(auth.workspaceId);
       await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
         scheduleOverrideJson: {
+          ...base,
           scheduleOverride: { mode: "closed_now", expiresAt: until.toISOString() },
         },
       });
       return NextResponse.json({ data: { mode: "closed_now", until: until.toISOString() } });
     }
     if (body.action === "clear_override") {
+      const base = await loadScheduleOverrideJson(auth.workspaceId);
+      const { scheduleOverride: _closed, ...rest } = base;
       await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
-        scheduleOverrideJson: null,
+        scheduleOverrideJson: Object.keys(rest).length ? rest : null,
       });
       return NextResponse.json({ ok: true });
     }
@@ -133,12 +145,7 @@ export async function PUT(request: Request) {
       const until = body.until
         ? new Date(body.until)
         : new Date(Date.now() + 4 * 60 * 60 * 1000);
-      const existing = await getPrisma().smartRoutingWorkspaceSettings.findUnique({
-        where: { workspaceId: auth.workspaceId },
-        select: { scheduleOverrideJson: true },
-      });
-      const base =
-        (existing?.scheduleOverrideJson as Record<string, unknown> | null) ?? {};
+      const base = await loadScheduleOverrideJson(auth.workspaceId);
       await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
         scheduleOverrideJson: {
           ...base,
@@ -150,12 +157,7 @@ export async function PUT(request: Request) {
       });
     }
     if (body.action === "clear_route_override") {
-      const existing = await getPrisma().smartRoutingWorkspaceSettings.findUnique({
-        where: { workspaceId: auth.workspaceId },
-        select: { scheduleOverrideJson: true },
-      });
-      const base =
-        (existing?.scheduleOverrideJson as Record<string, unknown> | null) ?? {};
+      const base = await loadScheduleOverrideJson(auth.workspaceId);
       const { routeOverride: _, ...rest } = base;
       await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
         scheduleOverrideJson: Object.keys(rest).length ? rest : null,

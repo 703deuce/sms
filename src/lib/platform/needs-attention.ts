@@ -195,7 +195,9 @@ export async function loadNeedsAttentionItems(
   }
 
   for (const sub of formSubs) {
-    const phone = String((sub.payloadJson as { phone?: string })?.phone ?? "").trim();
+    const payload = (sub.payloadJson as { phone?: string; dismissed?: boolean }) ?? {};
+    if (payload.dismissed) continue;
+    const phone = String(payload.phone ?? "").trim();
     if (!phone) continue;
     upsert({
       id: normalizeCaller(phone),

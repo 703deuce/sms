@@ -138,7 +138,13 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
           <ul className="space-y-2 text-sm">
             {history.slice(0, 12).map((h) => (
               <li key={h.id} className="flex justify-between gap-3">
-                <span>{h.label}</span>
+                {h.href ? (
+                  <Link href={h.href} className="text-primary hover:underline truncate">
+                    {h.label}
+                  </Link>
+                ) : (
+                  <span>{h.label}</span>
+                )}
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {new Date(h.at).toLocaleString()}
                 </span>

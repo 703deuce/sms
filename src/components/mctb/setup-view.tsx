@@ -848,7 +848,7 @@ export function MctbSetupView() {
                 onClick={async () => {
                   setExclusionBusy(true);
                   try {
-                    await fetch("/api/mctb/exclusions", {
+                    const res = await fetch("/api/mctb/exclusions", {
                       method: "POST",
                       headers: { "content-type": "application/json" },
                       body: JSON.stringify({
@@ -856,6 +856,7 @@ export function MctbSetupView() {
                         reason: exclusionReason,
                       }),
                     });
+                    if (!res.ok) return;
                     setExclusionPhone("");
                     await loadExclusions();
                   } finally {
@@ -884,7 +885,10 @@ export function MctbSetupView() {
                         type="button"
                         className="text-[12px] font-semibold text-rose-600 hover:underline"
                         onClick={async () => {
-                          await fetch(`/api/mctb/exclusions?id=${row.id}`, { method: "DELETE" });
+                          const res = await fetch(`/api/mctb/exclusions?id=${row.id}`, {
+                            method: "DELETE",
+                          });
+                          if (!res.ok) return;
                           await loadExclusions();
                         }}
                       >

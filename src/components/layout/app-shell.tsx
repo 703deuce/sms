@@ -149,6 +149,7 @@ export function AppShell({
         realtorMode={realtorMode}
         currentProduct={currentProduct}
         showTryIt={showTryIt}
+        productFeatures={productFeatures}
         onMore={() => setMenuOpen(true)}
       />
     </div>

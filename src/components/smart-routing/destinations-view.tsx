@@ -19,9 +19,13 @@ export function SmartRoutingDestinationsView() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/smart-routing/setup", { cache: "no-store" });
+      const res = await fetch("/api/smart-routing/destinations", { cache: "no-store" });
       const json = await res.json();
-      setDestinations(json.data?.destinations ?? []);
+      if (!res.ok) {
+        setDestinations([]);
+        return;
+      }
+      setDestinations(json.data ?? []);
     } finally {
       setLoading(false);
     }

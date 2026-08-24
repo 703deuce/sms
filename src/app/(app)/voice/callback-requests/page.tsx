@@ -29,11 +29,12 @@ export default function CallbackRequestsPage() {
   }, []);
 
   async function setStatus(id: string, status: string) {
-    await fetch("/api/callback-requests", {
+    const res = await fetch("/api/callback-requests", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, status }),
     });
+    if (!res.ok) return;
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
   }
 

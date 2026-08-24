@@ -107,10 +107,10 @@ export function SmartRoutingOverviewView({
         recovered: metrics?.recovered ?? 0,
         failures: metrics?.failures ?? 0,
         trends: {
-          activeFlows: metrics?.activeFlows ? 12 : null,
-          routedToday: metrics?.routedToday ? 15 : null,
-          recovered: metrics?.recovered ? 9 : null,
-          failures: metrics?.failures ? -25 : null,
+          activeFlows: null,
+          routedToday: null,
+          recovered: null,
+          failures: null,
         },
       };
 

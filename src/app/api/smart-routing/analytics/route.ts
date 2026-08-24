@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     });
     const total = sessions.length;
     const answered = sessions.filter((s: { finalOutcome: string | null }) =>
-      ["answered", "completed", "transferred"].includes(String(s.finalOutcome || "").toLowerCase()),
+      ["answered", "completed", "transferred", "connected"].includes(String(s.finalOutcome || "").toLowerCase()),
     ).length;
     const noAnswer = sessions.filter((s: { finalOutcome: string | null }) =>
       String(s.finalOutcome || "").toLowerCase().includes("no_answer"),

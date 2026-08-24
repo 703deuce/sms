@@ -165,6 +165,8 @@ export function PersonalVoicemailUI({
   const [showGreetingEditor, setShowGreetingEditor] = useState(false);
   const greetingRef = useRef<HTMLDivElement>(null);
   const greetingPreviewRef = useRef<HTMLAudioElement>(null);
+  const messageAudioRef = useRef<HTMLAudioElement>(null);
+  const [vmActionMessage, setVmActionMessage] = useState<string | null>(null);
 
   async function ensureVoicemailBoxId(): Promise<string | undefined> {
     if (numberId) {
@@ -228,6 +230,12 @@ export function PersonalVoicemailUI({
   useEffect(() => {
     setInboxPage(1);
   }, [inboxFilter, searchQuery, numberId]);
+
+  useEffect(() => {
+    if (messageAudioRef.current) {
+      messageAudioRef.current.playbackRate = playSpeed;
+    }
+  }, [playSpeed, playingId]);
 
   const sourceMessages: VmMessage[] = useWireframe
     ? WIREFRAME_VOICEMAIL_MESSAGES.map((m) => ({
@@ -977,6 +985,7 @@ export function PersonalVoicemailUI({
                   </button>
                   {playingId === selected.id && !selected.isDemo ? (
                     <audio
+                      ref={messageAudioRef}
                       controls
                       autoPlay
                       className="flex-1"
@@ -1072,11 +1081,18 @@ export function PersonalVoicemailUI({
                   icon={Phone}
                   label="Needs callback"
                   onClick={async () => {
-                    await fetch("/api/phone/voicemail", {
+                    setVmActionMessage(null);
+                    const res = await fetch("/api/phone/voicemail", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ action: "needs_callback", messageId: selected.id }),
                     });
+                    const json = await res.json();
+                    if (!res.ok) {
+                      setVmActionMessage(json.error || "Could not create callback request");
+                      return;
+                    }
+                    setVmActionMessage("Callback request created.");
                   }}
                 />
                 <ActionBtn
@@ -1091,11 +1107,18 @@ export function PersonalVoicemailUI({
                   tone="danger"
                   onClick={async () => {
                     if (!selected.callerNumber) return;
-                    await fetch("/api/personal/blocked", {
+                    setVmActionMessage(null);
+                    const res = await fetch("/api/mctb/exclusions", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ phone: selected.callerNumber }),
+                      body: JSON.stringify({ phone: selected.callerNumber, reason: "Blocked from voicemail" }),
                     });
+                    if (!res.ok) {
+                      const json = await res.json();
+                      setVmActionMessage(json.error || "Could not block caller");
+                      return;
+                    }
+                    setVmActionMessage("Caller added to do-not-text list.");
                   }}
                 />
                 <ActionBtn
@@ -1118,6 +1141,10 @@ export function PersonalVoicemailUI({
                   onClick={() => deleteMessage(selected.id)}
                 />
               </div>
+
+              {vmActionMessage ? (
+                <p className="mt-2 text-xs text-[#374151]">{vmActionMessage}</p>
+              ) : null}
 
               <div className="rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-4">
                 <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#111827]">

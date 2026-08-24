@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import type { CurrentProduct } from "@/lib/products/types";
 
 const voiceMobileIcons = [LayoutDashboard, PhoneCall, AudioLines, BookOpen];
@@ -22,14 +23,16 @@ export function MobileNav({
   realtorMode = false,
   currentProduct = null,
   showTryIt = false,
+  productFeatures = null,
 }: {
   onMore: () => void;
   realtorMode?: boolean;
   currentProduct?: CurrentProduct;
   showTryIt?: boolean;
+  productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
   const pathname = usePathname();
-  const voiceItems = buildVoiceMobileNav({ showTryIt }).map((item, i) => ({
+  const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
     ...item,
     icon: voiceMobileIcons[i] ?? LayoutDashboard,
   }));

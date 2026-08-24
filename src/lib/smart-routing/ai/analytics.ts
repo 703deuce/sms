@@ -35,7 +35,7 @@ export async function getRoutingAnalyticsSummary(
 
   const total = sessions.length;
   const answered = sessions.filter((s: SessionAnalyticsRow) =>
-    ["answered", "completed", "transferred"].includes(
+    ["answered", "completed", "transferred", "connected"].includes(
       String(s.finalOutcome || "").toLowerCase(),
     ),
   ).length;

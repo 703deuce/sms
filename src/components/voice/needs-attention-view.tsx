@@ -37,16 +37,20 @@ export function NeedsAttentionView() {
     void load();
   }, [load]);
 
-  async function markDone(kind: string, id: string) {
+  async function markDone(item: NeedsAttentionItem) {
     await fetch("/api/voice/needs-attention", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "mark_done", kind, id }),
+      body: JSON.stringify({
+        action: "mark_done_all",
+        events: item.events.map((e) => ({ kind: e.kind, id: e.id })),
+      }),
     });
     await load();
   }
 
   async function assign(kind: string, id: string, assignedToUserId?: string) {
+    if (kind !== "callback_request" && kind !== "voicemail") return;
     await fetch("/api/voice/needs-attention", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -135,25 +139,35 @@ export function NeedsAttentionView() {
                         Call Back as Business
                       </Button>
                     )}
-                    {item.primaryKind === "mctb_reply" ? (
+                    {item.primaryKind === "mctb_reply" || item.primaryKind === "missed_call" ? (
                       <Link
-                        href="/inbox"
+                        href={`/voice/missed-calls/${item.primaryRefId}`}
                         className="text-xs font-semibold text-primary hover:underline"
                       >
-                        Open conversation
+                        Open missed call
+                      </Link>
+                    ) : item.primaryKind === "voicemail" ? (
+                      <Link
+                        href="/voice/voicemail"
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        Open voicemail
                       </Link>
                     ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs"
-                      onClick={() =>
-                        void assign(item.primaryKind, item.primaryRefId)
-                      }
-                    >
-                      Assign to me
-                    </Button>
-                    {members.length > 1 ? (
+                    {(item.primaryKind === "callback_request" || item.primaryKind === "voicemail") ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs"
+                        onClick={() =>
+                          void assign(item.primaryKind, item.primaryRefId)
+                        }
+                      >
+                        Assign to me
+                      </Button>
+                    ) : null}
+                    {(item.primaryKind === "callback_request" || item.primaryKind === "voicemail") &&
+                    members.length > 1 ? (
                       <select
                         className="h-8 rounded border px-2 text-xs"
                         defaultValue=""
@@ -172,7 +186,7 @@ export function NeedsAttentionView() {
                       size="sm"
                       variant="ghost"
                       className="text-xs text-emerald-700"
-                      onClick={() => void markDone(item.primaryKind, item.primaryRefId)}
+                      onClick={() => void markDone(item)}
                     >
                       Mark done
                     </Button>

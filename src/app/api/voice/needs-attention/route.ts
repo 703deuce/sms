@@ -3,6 +3,57 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { loadNeedsAttentionItems } from "@/lib/platform/needs-attention";
 import { getPrisma } from "@/lib/db";
 
+async function markDoneForKind(
+  prisma: ReturnType<typeof getPrisma>,
+  workspaceId: string,
+  userId: string,
+  kind: string,
+  id: string,
+) {
+  if (kind === "callback_request") {
+    await prisma.callbackRequest.updateMany({
+      where: { id, workspaceId },
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        completedByUserId: userId,
+      },
+    });
+    return;
+  }
+  if (kind === "voicemail") {
+    await prisma.voicemailMessage.updateMany({
+      where: { id, workspaceId },
+      data: { isResolved: true, isRead: true },
+    });
+    return;
+  }
+  if (kind === "mctb_reply" || kind === "missed_call") {
+    await prisma.missedCallEvent.updateMany({
+      where: { id, workspaceId },
+      data: { status: "RESOLVED" },
+    });
+    return;
+  }
+  if (kind === "form_submission") {
+    const row = await prisma.mctbRequestFormSubmission.findFirst({
+      where: { id, workspaceId },
+      select: { payloadJson: true },
+    });
+    if (!row) return;
+    const payload =
+      row.payloadJson && typeof row.payloadJson === "object" && !Array.isArray(row.payloadJson)
+        ? { ...(row.payloadJson as Record<string, unknown>) }
+        : {};
+    payload.dismissed = true;
+    payload.dismissedAt = new Date().toISOString();
+    await prisma.mctbRequestFormSubmission.update({
+      where: { id, workspaceId },
+      data: { payloadJson: payload },
+    });
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const auth = await requireSession();
@@ -64,25 +115,20 @@ export async function PATCH(request: Request) {
     }
 
     if (body.action === "mark_done" && kind && id) {
-      if (kind === "callback_request") {
-        await prisma.callbackRequest.updateMany({
-          where: { id, workspaceId: auth.workspaceId },
-          data: {
-            status: "completed",
-            completedAt: new Date(),
-            completedByUserId: auth.session.userId,
-          },
-        });
-      } else if (kind === "voicemail") {
-        await prisma.voicemailMessage.updateMany({
-          where: { id, workspaceId: auth.workspaceId },
-          data: { isResolved: true, isRead: true },
-        });
-      } else if (kind === "missed_call") {
-        await prisma.missedCallEvent.updateMany({
-          where: { id, workspaceId: auth.workspaceId },
-          data: { status: "RESOLVED" },
-        });
+      await markDoneForKind(prisma, auth.workspaceId, auth.session.userId, kind, id);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "mark_done_all" && Array.isArray(body.events)) {
+      for (const event of body.events as Array<{ kind?: string; id?: string }>) {
+        if (!event.kind || !event.id) continue;
+        await markDoneForKind(
+          prisma,
+          auth.workspaceId,
+          auth.session.userId,
+          event.kind,
+          event.id,
+        );
       }
       return NextResponse.json({ ok: true });
     }

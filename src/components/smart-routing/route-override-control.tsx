@@ -16,6 +16,7 @@ export function RouteOverrideControl({
   const [duration, setDuration] = useState<"1h" | "4h" | "tomorrow">("4h");
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState<{ destinationId?: string; until?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch("/api/smart-routing/setup", { cache: "no-store" })
@@ -31,6 +32,7 @@ export function RouteOverrideControl({
   async function apply() {
     if (!destinationId) return;
     setLoading(true);
+    setError(null);
     try {
       let until = new Date();
       if (duration === "1h") until = new Date(Date.now() + 60 * 60 * 1000);
@@ -40,7 +42,7 @@ export function RouteOverrideControl({
         until.setDate(until.getDate() + 1);
         until.setHours(8, 0, 0, 0);
       }
-      await fetch("/api/smart-routing/destinations", {
+      const res = await fetch("/api/smart-routing/destinations", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,6 +51,11 @@ export function RouteOverrideControl({
           until: until.toISOString(),
         }),
       });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Could not apply route override");
+        return;
+      }
       setActive({ destinationId, until: until.toISOString() });
       onUpdated?.();
     } finally {
@@ -58,12 +65,18 @@ export function RouteOverrideControl({
 
   async function clear() {
     setLoading(true);
+    setError(null);
     try {
-      await fetch("/api/smart-routing/destinations", {
+      const res = await fetch("/api/smart-routing/destinations", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "clear_route_override" }),
       });
+      if (!res.ok) {
+        const json = await res.json();
+        setError(json.error || "Could not clear route override");
+        return;
+      }
       setActive(null);
       onUpdated?.();
     } finally {
@@ -118,6 +131,7 @@ export function RouteOverrideControl({
       <Button size="sm" disabled={loading || !destinationId} onClick={() => void apply()}>
         Apply temporary route
       </Button>
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   );
 }
