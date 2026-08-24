@@ -225,9 +225,13 @@ async function handleLegEvents(input: {
       }
     }
     if (input.eventType === "call.hangup") {
-      const { finalizeOutboundCall } = await import("./outbound-bridge");
       if (employeeState.outboundCallId) {
-        await finalizeOutboundCall(employeeState.outboundCallId, "completed");
+        const { handleOutboundLegHangup } = await import("./outbound-bridge");
+        await handleOutboundLegHangup({
+          outboundCallId: employeeState.outboundCallId,
+          callControlId,
+          hangupCause: String(input.eventPayload.hangup_cause ?? ""),
+        });
       }
       return { handled: true as const, kind: "employee_hangup" };
     }

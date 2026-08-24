@@ -125,6 +125,42 @@ export async function handleEmployeeAccessGather(input: {
 
   const digits = input.digits.replace(/\D/g, "");
 
+  if (access.state === "awaiting_confirmation") {
+    const outboundId =
+      (
+        await prisma.smartRoutingOutboundCall.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            employeeCallControlId: input.callControlId,
+            endedAt: null,
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      )?.id ?? null;
+
+    if (digits === "1" && outboundId) {
+      const { handleDashboardEmployeeConfirmed } = await import("./dashboard-outbound-bridge");
+      await handleDashboardEmployeeConfirmed({
+        callControlId: input.callControlId,
+        accessSessionId: access.id,
+        workspaceId: input.workspaceId,
+        outboundCallId: outboundId,
+      });
+      return { handled: true, done: false };
+    }
+
+    if (outboundId) {
+      const { handleDashboardConfirmationTimeout } = await import("./dashboard-outbound-bridge");
+      await handleDashboardConfirmationTimeout({
+        callControlId: input.callControlId,
+        outboundCallId: outboundId,
+      });
+    } else {
+      await hangupCall(input.callControlId);
+    }
+    return { handled: true, done: true };
+  }
+
   if (access.state === "pin_entry") {
     if (!access.authorizedCallerId) {
       await hangupCall(input.callControlId);

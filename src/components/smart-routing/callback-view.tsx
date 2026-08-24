@@ -2,6 +2,7 @@
 
 import { AuthorizedCallersPanel } from "@/components/smart-routing/authorized-callers-panel";
 import { BusinessCallbackGuide } from "@/components/smart-routing/business-callback-guide";
+import { OneClickBusinessCallbackPanel } from "@/components/smart-routing/one-click-business-callback-panel";
 import { CallerIdVerificationPanel } from "@/components/smart-routing/caller-id-verification-panel";
 import { SrPageShell, srCard } from "@/components/smart-routing/shared";
 import { fmtPhoneDisplay } from "@/lib/smart-routing/display";
@@ -11,6 +12,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type SetupSlice = {
+  workspaceName?: string;
   settings: {
     publicBusinessE164: string | null;
     routingNumberE164: string | null;
@@ -25,6 +27,7 @@ type SetupSlice = {
     id: string;
     name: string;
     phoneE164: string;
+    preferredCallbackPhoneE164?: string | null;
     active: boolean;
     outboundEnabled: boolean;
   }>;
@@ -84,6 +87,13 @@ export function SmartRoutingCallbackView() {
         <p className="text-sm text-muted-foreground">Loading Business Callback…</p>
       ) : (
         <div className="space-y-6">
+          <OneClickBusinessCallbackPanel
+            businessLabel={data?.workspaceName?.trim() || "Business"}
+            businessNumberE164={businessNumber}
+            verified={verified}
+            authorizedCallers={data?.authorizedCallers ?? []}
+          />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className={cn(srCard, "p-5")}>
               <h2 className="text-sm font-semibold text-[#111827]">Business Caller ID</h2>

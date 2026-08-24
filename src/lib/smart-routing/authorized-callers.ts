@@ -17,6 +17,7 @@ export async function listAuthorizedCallers(workspaceId: string) {
       id: true,
       name: true,
       phoneE164: true,
+      preferredCallbackPhoneE164: true,
       active: true,
       outboundEnabled: true,
       userId: true,
@@ -35,9 +36,13 @@ export async function createAuthorizedCaller(input: {
   phoneE164: string;
   pin: string;
   userId?: string | null;
+  preferredCallbackPhoneE164?: string | null;
 }) {
   const prisma = getPrisma();
   const phone = normalizeE164(input.phoneE164);
+  const preferred = input.preferredCallbackPhoneE164?.trim()
+    ? normalizeE164(input.preferredCallbackPhoneE164)
+    : null;
   const pin = String(input.pin || "").trim();
   if (!/^\d{4,6}$/.test(pin)) {
     throw new Error("PIN must be 4–6 digits");
@@ -48,6 +53,7 @@ export async function createAuthorizedCaller(input: {
       workspaceId: input.workspaceId,
       name: input.name.trim(),
       phoneE164: phone,
+      preferredCallbackPhoneE164: preferred,
       pinHash,
       userId: input.userId ?? null,
     },
@@ -55,6 +61,7 @@ export async function createAuthorizedCaller(input: {
       id: true,
       name: true,
       phoneE164: true,
+      preferredCallbackPhoneE164: true,
       active: true,
       outboundEnabled: true,
       createdAt: true,
@@ -65,16 +72,36 @@ export async function createAuthorizedCaller(input: {
 export async function updateAuthorizedCaller(
   workspaceId: string,
   id: string,
-  patch: Partial<{ name: string; active: boolean; outboundEnabled: boolean }>,
+  patch: Partial<{
+    name: string;
+    active: boolean;
+    outboundEnabled: boolean;
+    preferredCallbackPhoneE164: string | null;
+  }>,
 ) {
   const prisma = getPrisma();
+  const data: {
+    name?: string;
+    active?: boolean;
+    outboundEnabled?: boolean;
+    preferredCallbackPhoneE164?: string | null;
+  } = {};
+  if (patch.name !== undefined) data.name = patch.name;
+  if (patch.active !== undefined) data.active = patch.active;
+  if (patch.outboundEnabled !== undefined) data.outboundEnabled = patch.outboundEnabled;
+  if (patch.preferredCallbackPhoneE164 !== undefined) {
+    data.preferredCallbackPhoneE164 = patch.preferredCallbackPhoneE164
+      ? normalizeE164(patch.preferredCallbackPhoneE164)
+      : null;
+  }
   return prisma.smartRoutingAuthorizedCaller.update({
     where: { id, workspaceId },
-    data: patch,
+    data,
     select: {
       id: true,
       name: true,
       phoneE164: true,
+      preferredCallbackPhoneE164: true,
       active: true,
       outboundEnabled: true,
     },

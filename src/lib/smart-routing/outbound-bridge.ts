@@ -14,7 +14,9 @@ export type OutboundContextType =
   | "voicemail"
   | "callback_request"
   | "manual"
-  | "dashboard";
+  | "dashboard"
+  | "activity"
+  | "conversation";
 
 import {
   encodeEmployeeAccessState,
@@ -118,6 +120,7 @@ export async function originateCustomerLeg(input: {
       customerCallControlId,
       customerLegStartedAt: new Date(),
       businessCallerIdE164: verifiedCallerId,
+      result: "customer_ringing",
     },
   });
   await prisma.smartRoutingAccessSession.update({
@@ -144,23 +147,25 @@ export async function bridgeEmployeeToCustomer(input: {
 export async function finalizeOutboundCall(
   outboundCallId: string,
   result: string,
-  failureReason?: string,
+  failureReason?: string | null,
 ) {
   const prisma = getPrisma();
   const row = await prisma.smartRoutingOutboundCall.findUnique({ where: { id: outboundCallId } });
   if (!row) return;
+  if (row.endedAt) return;
   const endedAt = new Date();
   const start = row.bridgedAt ?? row.customerLegStartedAt ?? row.employeeLegStartedAt;
   const durationSeconds = start
     ? Math.max(0, Math.round((endedAt.getTime() - start.getTime()) / 1000))
     : null;
+  const reason = failureReason ?? undefined;
   const metadata =
-    failureReason
+    reason
       ? {
           ...(typeof row.metadata === "object" && row.metadata
             ? (row.metadata as Record<string, unknown>)
             : {}),
-          failureReason,
+          failureReason: reason,
         }
       : undefined;
   await prisma.smartRoutingOutboundCall.update({
@@ -172,4 +177,76 @@ export async function finalizeOutboundCall(
       ...(metadata ? { metadata } : {}),
     },
   });
+}
+
+export async function cancelCustomerLegIfActive(outboundCallId: string) {
+  const prisma = getPrisma();
+  const row = await prisma.smartRoutingOutboundCall.findUnique({ where: { id: outboundCallId } });
+  if (!row?.customerCallControlId || row.bridgedAt) return;
+  const { hangupCall } = await import("./telnyx-provider");
+  try {
+    await hangupCall(row.customerCallControlId);
+  } catch {
+    // leg may already be down
+  }
+}
+
+export async function handleOutboundLegHangup(input: {
+  outboundCallId: string;
+  callControlId: string;
+  hangupCause?: string | null;
+}) {
+  const prisma = getPrisma();
+  const row = await prisma.smartRoutingOutboundCall.findUnique({ where: { id: input.outboundCallId } });
+  if (!row || row.endedAt) return;
+
+  const isEmployeeLeg = row.employeeCallControlId === input.callControlId;
+  const isCustomerLeg = row.customerCallControlId === input.callControlId;
+
+  if (isEmployeeLeg) {
+    await cancelCustomerLegIfActive(input.outboundCallId);
+    if (row.bridgedAt) {
+      await finalizeOutboundCall(input.outboundCallId, "completed");
+      return;
+    }
+    const prior = (row.result ?? "").toLowerCase();
+    if (prior === "awaiting_confirmation") {
+      await finalizeOutboundCall(
+        input.outboundCallId,
+        "employee_confirmation_timeout",
+        input.hangupCause,
+      );
+      return;
+    }
+    if (prior === "employee_ringing" || prior === "initiated") {
+      await finalizeOutboundCall(input.outboundCallId, "employee_no_answer", input.hangupCause);
+      return;
+    }
+    await finalizeOutboundCall(input.outboundCallId, "cancelled", input.hangupCause);
+    return;
+  }
+
+  if (isCustomerLeg) {
+    if (row.bridgedAt) {
+      await finalizeOutboundCall(input.outboundCallId, "completed");
+      return;
+    }
+    const cause = (input.hangupCause ?? "").toLowerCase();
+    if (cause.includes("busy")) {
+      await finalizeOutboundCall(input.outboundCallId, "customer_busy", input.hangupCause);
+    } else if (cause.includes("reject")) {
+      await finalizeOutboundCall(input.outboundCallId, "customer_rejected", input.hangupCause);
+    } else {
+      await finalizeOutboundCall(input.outboundCallId, "customer_no_answer", input.hangupCause);
+    }
+    const { hangupCall } = await import("./telnyx-provider");
+    if (row.employeeCallControlId) {
+      try {
+        await hangupCall(row.employeeCallControlId);
+      } catch {
+        // ignore
+      }
+    }
+    return;
+  }
 }

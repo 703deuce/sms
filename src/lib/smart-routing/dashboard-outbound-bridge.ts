@@ -11,6 +11,10 @@ import {
   type OutboundContextType,
 } from "./outbound-bridge";
 import {
+  formatCallbackPromptDestination,
+  resolveAuthorizedCallerCallbackPhone,
+} from "./business-callback-status";
+import {
   loadSmartRoutingWorkspaceSettings,
   resolveVerifiedBusinessCallerId,
 } from "./workspace-settings";
@@ -30,12 +34,16 @@ export function buildOutboundBridgeMetadata(input: {
   accessNumberE164?: string | null;
   initiatedByUserId?: string | null;
   matchKind?: string | null;
+  destinationContactName?: string | null;
 }): Record<string, unknown> {
   return {
     dialMethod: input.dialMethod,
     ...(input.accessNumberE164 ? { accessNumberE164: input.accessNumberE164 } : {}),
     ...(input.initiatedByUserId ? { initiatedByUserId: input.initiatedByUserId } : {}),
     ...(input.matchKind ? { lastCallerMatchKind: input.matchKind } : {}),
+    ...(input.destinationContactName
+      ? { destinationContactName: input.destinationContactName }
+      : {}),
   };
 }
 
@@ -46,6 +54,7 @@ export async function initiateDashboardOutboundBridge(input: {
   contextType: OutboundContextType;
   contextRefId?: string | null;
   initiatedByUserId?: string | null;
+  destinationContactName?: string | null;
 }) {
   const entitled = await hasWorkspaceProductFeature(input.workspaceId, "smart_routing");
   if (!entitled) throw new Error("Smart Routing is not enabled for this workspace");
@@ -89,7 +98,7 @@ export async function initiateDashboardOutboundBridge(input: {
     throw new Error("That destination number is not allowed");
   }
 
-  const employeePhone = normalizeE164(authorizedCaller.phoneE164);
+  const employeePhone = resolveAuthorizedCallerCallbackPhone(authorizedCaller);
   const fromNumber = settings.routingNumberE164 ?? verifiedCallerId;
   if (!fromNumber) throw new Error("Assign a routing number in Smart Routing setup");
 
@@ -107,6 +116,7 @@ export async function initiateDashboardOutboundBridge(input: {
   const accessSession = await prisma.smartRoutingAccessSession.create({
     data: {
       workspaceId: input.workspaceId,
+      callControlId: `pending-${Date.now()}`,
       callerNumber: employeePhone,
       calledNumber: normalizeE164(fromNumber),
       authorizedCallerId: input.authorizedCallerId,
@@ -114,6 +124,9 @@ export async function initiateDashboardOutboundBridge(input: {
       pendingDestination: destination,
       contextType: input.contextType,
       contextRefId: input.contextRefId ?? null,
+      stateJson: input.destinationContactName
+        ? { destinationContactName: input.destinationContactName }
+        : undefined,
     },
   });
 
@@ -129,6 +142,7 @@ export async function initiateDashboardOutboundBridge(input: {
       dialMethod: "dashboard",
       accessNumberE164: fromNumber,
       initiatedByUserId: input.initiatedByUserId,
+      destinationContactName: input.destinationContactName,
     }),
   });
 
@@ -167,7 +181,7 @@ export async function initiateDashboardOutboundBridge(input: {
   });
   await prisma.smartRoutingOutboundCall.update({
     where: { id: outbound.id },
-    data: { employeeCallControlId },
+    data: { employeeCallControlId, result: "employee_ringing" },
   });
 
   return {
@@ -191,13 +205,64 @@ export async function handleDashboardEmployeeAnswered(input: {
 
   await prisma.smartRoutingAccessSession.update({
     where: { id: access.id },
+    data: { callControlId: input.callControlId, state: "awaiting_confirmation" },
+  });
+  await prisma.smartRoutingOutboundCall.update({
+    where: { id: input.outboundCallId },
+    data: { result: "awaiting_confirmation" },
+  });
+
+  const meta = access.stateJson as { destinationContactName?: string } | null;
+  const destinationLabel = formatCallbackPromptDestination(
+    access.pendingDestination,
+    meta?.destinationContactName,
+  );
+
+  const clientState = encodeEmployeeAccessState({
+    kind: "smart_routing_employee",
+    accessSessionId: access.id,
+    workspaceId: input.workspaceId,
+    awaiting: "dashboard_confirm",
+    outboundCallId: input.outboundCallId,
+  });
+
+  const { gatherUsingSpeakRaw } = await import("./telnyx-provider");
+  await gatherUsingSpeakRaw({
+    callControlId: input.callControlId,
+    text: `Transovo business callback. Press 1 to connect your call to ${destinationLabel}.`,
+    validDigits: "1",
+    maxDigits: 1,
+    timeoutMs: 15000,
+    clientStateBase64: clientState,
+  });
+}
+
+export async function handleDashboardEmployeeConfirmed(input: {
+  callControlId: string;
+  accessSessionId: string;
+  workspaceId: string;
+  outboundCallId: string;
+}) {
+  const prisma = getPrisma();
+  const access = await prisma.smartRoutingAccessSession.findFirst({
+    where: { id: input.accessSessionId, workspaceId: input.workspaceId },
+  });
+  if (!access?.pendingDestination) return;
+
+  await prisma.smartRoutingAccessSession.update({
+    where: { id: access.id },
     data: { callControlId: input.callControlId, state: "bridging" },
   });
 
   const { speakOnCallRaw } = await import("./telnyx-provider");
-  await speakOnCallRaw(input.callControlId, "Please hold while we connect your call.");
+  await speakOnCallRaw(input.callControlId, "Connecting your call now.");
 
   const settings = await loadSmartRoutingWorkspaceSettings(input.workspaceId);
+  await prisma.smartRoutingOutboundCall.update({
+    where: { id: input.outboundCallId },
+    data: { result: "customer_ringing" },
+  });
+
   await originateCustomerLeg({
     workspaceId: input.workspaceId,
     accessSessionId: access.id,
@@ -206,4 +271,15 @@ export async function handleDashboardEmployeeAnswered(input: {
     destinationE164: access.pendingDestination,
     fromRoutingE164: settings?.routingNumberE164 ?? access.calledNumber,
   });
+}
+
+export async function handleDashboardConfirmationTimeout(input: {
+  callControlId: string;
+  outboundCallId: string;
+}) {
+  const { speakOnCallRaw, hangupCall } = await import("./telnyx-provider");
+  const { finalizeOutboundCall } = await import("./outbound-bridge");
+  await speakOnCallRaw(input.callControlId, "Confirmation timed out. Goodbye.");
+  await finalizeOutboundCall(input.outboundCallId, "employee_confirmation_timeout");
+  await hangupCall(input.callControlId);
 }

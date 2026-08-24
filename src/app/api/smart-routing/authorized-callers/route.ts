@@ -47,6 +47,7 @@ export async function POST(request: Request) {
         name: body.name,
         active: body.active,
         outboundEnabled: body.outboundEnabled,
+        preferredCallbackPhoneE164: body.preferredCallbackPhoneE164,
       });
       return NextResponse.json({ data });
     }

@@ -3981,6 +3981,8 @@ model SmartRoutingAuthorizedCaller {
   workspaceId       String
   name              String
   phoneE164         String
+  /** Preferred phone for one-click dashboard callbacks (defaults to phoneE164). */
+  preferredCallbackPhoneE164 String?
   pinHash           String
   active            Boolean   @default(true)
   outboundEnabled   Boolean   @default(true)
