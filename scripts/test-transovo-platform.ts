@@ -19,6 +19,7 @@ assert.ok(businessDefaults.some((d) => d.feature === "smart_routing" && d.status
 
 const srNav = buildSmartRoutingNavChildren();
 assert.ok(srNav.some((i) => i.label === "Business Call Back"));
+assert.ok(srNav.some((i) => i.label === "AI Routing Assistant"));
 assert.ok(srNav.some((i) => i.href === "/smart-routing/analytics"));
 assert.ok(!srNav.some((i) => i.label === "Routing Analytics"));
 

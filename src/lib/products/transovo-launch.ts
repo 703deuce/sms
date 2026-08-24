@@ -20,7 +20,8 @@ export function showAiReceptionistNode(): boolean {
 /** AI Routing Assistant nav entry (`/smart-routing/ai`) — config helper, not live call handling. */
 export function showAiRoutingAssistantInNav(): boolean {
   if (!isTransovoLaunchMode()) return true;
-  return envTrue("TRANSOVO_SHOW_AI_ROUTING_ASSISTANT_NAV");
+  if (process.env.TRANSOVO_HIDE_AI_ROUTING_ASSISTANT_NAV === "1") return false;
+  return true;
 }
 
 /**

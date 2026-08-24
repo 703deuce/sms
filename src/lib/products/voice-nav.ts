@@ -47,6 +47,7 @@ function featureActive(
 
 const SR_NAV_ICONS: Record<string, NavItem["icon"]> = {
   "/smart-routing": LayoutDashboard,
+  "/smart-routing/ai": Sparkles,
   "/smart-routing/flows": GitBranch,
   "/smart-routing/destinations": Users,
   "/smart-routing/hours": Clock,
