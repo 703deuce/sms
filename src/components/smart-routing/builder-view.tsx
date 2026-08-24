@@ -71,6 +71,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
   const [numbers, setNumbers] = useState<PhoneNumber[]>([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [greetingText, setGreetingText] = useState("");
   const [voiceId, setVoiceId] = useState(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
   const [greetingAudioAssetId, setGreetingAudioAssetId] = useState<string | null>(null);
@@ -330,6 +331,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
   }
 
   async function publishFlow() {
+    setPublishError(null);
     if (
       voiceSource === "elevenlabs" &&
       greetingText.trim() &&
@@ -339,10 +341,19 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
       await generateAudio({ silent: true });
     }
     await saveDraft();
+    if (!flow?.assignedPhoneNumberId) {
+      setPublishError("Assign a phone number to this flow before publishing.");
+      return;
+    }
     setPublishing(true);
     const res = await fetch(`/api/smart-routing/flows/${flowId}/publish`, { method: "POST" });
+    const json = await res.json().catch(() => ({}));
     setPublishing(false);
-    if (res.ok) load();
+    if (!res.ok) {
+      setPublishError(json.error || "Publish failed — check menu destinations and greeting audio.");
+      return;
+    }
+    load();
   }
 
   async function generateAudioPreview() {
@@ -385,6 +396,9 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
               {publishing ? "Publishing…" : "Publish Flow"}
             </SrPrimaryButton>
           </div>
+          {publishError ? (
+            <p className="mt-2 text-sm text-rose-600">{publishError}</p>
+          ) : null}
         </div>
 
         <SmartRoutingAiAssistant

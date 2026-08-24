@@ -11,45 +11,62 @@ function slugify(input: string) {
   );
 }
 
+/** Ensure owner membership exists (prisma-compat does not support nested membership create). */
+export async function ensureWorkspaceOwnerMembership(workspaceId: string, userId: string) {
+  const prisma = getPrisma();
+  const existing = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId } },
+  });
+  if (existing) return existing;
+  return prisma.membership.create({
+    data: { userId, workspaceId, role: "OWNER" },
+  });
+}
+
+/** Ensure business workspace onboarding rows exist. */
+export async function ensureBusinessWorkspaceOnboarding(workspaceId: string) {
+  const prisma = getPrisma();
+  await prisma.messagingRegistration.upsert({
+    where: { workspaceId },
+    create: { workspaceId },
+    update: {},
+  });
+  const limits = await prisma.workspaceLimits.findUnique({ where: { workspaceId } });
+  if (!limits) {
+    await prisma.workspaceLimits.create({
+      data: {
+        workspaceId,
+        limits: { dailyCap: 500, maxNumbers: 1, trialDays: 14, requireCard: false },
+      },
+    });
+  }
+}
+
 export async function createWorkspaceForUser(
   userId: string,
   name: string,
   type: WorkspaceType,
 ) {
+  const prisma = getPrisma();
   const slugBase =
     type === "PERSONAL" ? `personal-${userId.slice(-8)}` : slugify(name);
   let slug = slugBase;
-  const taken = await getPrisma().workspace.findUnique({ where: { slug } });
+  const taken = await prisma.workspace.findUnique({ where: { slug } });
   if (taken) slug = `${slug}-${Date.now().toString(36)}`;
 
-  const data: {
-    name: string;
-    slug: string;
-    type: WorkspaceType;
-    ownerUserId: string;
-    memberships: { create: { userId: string; role: "OWNER" } };
-    messagingRegistration?: { create: Record<string, never> };
-    workspaceLimits?: { create: { limits: Record<string, unknown> } };
-  } = {
-    name: name.trim(),
-    slug,
-    type,
-    ownerUserId: userId,
-    memberships: { create: { userId, role: "OWNER" } },
-  };
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: name.trim(),
+      slug,
+      type,
+      ownerUserId: userId,
+    },
+  });
 
+  await ensureWorkspaceOwnerMembership(workspace.id, userId);
   if (type === "BUSINESS") {
-    data.messagingRegistration = { create: {} };
-    data.workspaceLimits = {
-      create: {
-        limits: {
-          dailyCap: 500,
-          maxNumbers: 1,
-          trialDays: 14,
-        },
-      },
-    };
+    await ensureBusinessWorkspaceOnboarding(workspace.id);
   }
 
-  return getPrisma().workspace.create({ data });
+  return workspace;
 }
