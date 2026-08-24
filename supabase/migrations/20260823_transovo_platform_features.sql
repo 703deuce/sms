@@ -55,10 +55,10 @@ CREATE INDEX IF NOT EXISTS callback_requests_workspace_caller_idx
   ON callback_requests ("workspaceId", "callerE164");
 
 ALTER TABLE missed_call_text_configs
-  ADD COLUMN IF NOT EXISTS message_template_business_hours TEXT,
-  ADD COLUMN IF NOT EXISTS message_template_after_hours TEXT,
-  ADD COLUMN IF NOT EXISTS require_carrier_forward BOOLEAN NOT NULL DEFAULT true;
+  ADD COLUMN IF NOT EXISTS "messageTemplateBusinessHours" TEXT,
+  ADD COLUMN IF NOT EXISTS "messageTemplateAfterHours" TEXT,
+  ADD COLUMN IF NOT EXISTS "requireCarrierForward" BOOLEAN NOT NULL DEFAULT true;
 
 ALTER TABLE voicemail_messages
-  ADD COLUMN IF NOT EXISTS internal_notes TEXT,
-  ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS "internalNotes" TEXT,
+  ADD COLUMN IF NOT EXISTS "isResolved" BOOLEAN NOT NULL DEFAULT false;
