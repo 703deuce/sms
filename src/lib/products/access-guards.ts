@@ -8,6 +8,11 @@ import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
 import { isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
+/** Standard business number console (buy, list, detail) — voice customers, not SMS-only. */
+function isBusinessNumbersConsolePath(pathname: string): boolean {
+  return pathname === "/numbers" || pathname.startsWith("/numbers/");
+}
+
 /** Edge-safe product route guards (no DB / server-only imports). */
 
 export const SMS_PREVIEW_ACCESS = false;
@@ -21,6 +26,9 @@ export function productAccessDeniedRedirect(
   options?: { authenticated?: boolean },
 ): string | null {
   if (isMctbAppPath(pathname)) {
+    return null;
+  }
+  if (isBusinessNumbersConsolePath(pathname) && access.hasVoice) {
     return null;
   }
   if (isVoiceProductPath(pathname) && !access.hasVoice) {

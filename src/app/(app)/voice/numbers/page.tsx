@@ -66,7 +66,7 @@ export default async function VoiceNumbersPage() {
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-muted-foreground">
                   No numbers yet.{" "}
-                  <Link href="/voice/numbers/buy" className="font-semibold text-primary underline">
+                  <Link href="/numbers/buy" className="font-semibold text-primary underline">
                     Add your first business number
                   </Link>{" "}
                   to start missed-call recovery.
