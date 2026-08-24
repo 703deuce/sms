@@ -18,6 +18,10 @@ import {
 } from "../src/lib/telephony/provisioning/livekit/outbound-trunk";
 import { getVoicePipelineConfig } from "../src/lib/voice/runtime-provider/config";
 import {
+  missingTelnyxSignalingIps,
+  telnyxSignalingIpAllowed,
+} from "../src/lib/telephony/provisioning/livekit/telnyx-allowlist";
+import {
   parseDispatchAttributes,
   parseRoomMetadata,
   roomMetadataSchema,
@@ -71,6 +75,12 @@ process.env.LIVEKIT_SIP_URI = prevSipUri;
 assert.equal(toLiveKitInboundDid("+18663464256"), "+18663464256");
 assert.equal(trunkNumbersIncludeDid(["+18663464256"], "+18663464256"), true);
 assert.equal(trunkNumbersIncludeDid(["18663464256"], "+18663464256"), true);
+
+assert.equal(telnyxSignalingIpAllowed("192.76.120.10", ["192.76.120.0/22"]), true);
+assert.equal(telnyxSignalingIpAllowed("64.16.250.10", ["192.76.120.0/22"]), false);
+assert.deepEqual(missingTelnyxSignalingIps(["192.76.120.0/22"]), ["64.16.250.10"]);
+assert.deepEqual(missingTelnyxSignalingIps(["192.76.120.0/22", "64.16.250.10"]), []);
+assert.deepEqual(missingTelnyxSignalingIps([]), []);
 
 assert.equal(
   parseRoomMetadata(JSON.stringify({ toE164: "+18663464256" }))?.toE164,

@@ -5,10 +5,12 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  const mediaBackendMode = process.env.MEDIA_BACKEND_MODE?.trim() || "livekit_cloud";
   console.log(
     JSON.stringify({
       service: "transovo-web",
       event: "web_boot_started",
+      mediaBackendMode,
       timestamp: new Date().toISOString(),
     }),
   );

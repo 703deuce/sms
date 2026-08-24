@@ -11,6 +11,7 @@ import {
   trunkNumbersIncludeDid,
 } from "./did";
 import { getLiveKitSipClient } from "./client";
+import { ensureTelnyxSignalingAllowlist } from "./telnyx-allowlist";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
 import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
@@ -184,6 +185,9 @@ export async function ensureInboundTrunkForNumber(
     keeper = await assertTrunkHasNumber(trunkId, e164);
     actions.push("livekit_trunk_number_ok");
   }
+
+  const allowlist = await ensureTelnyxSignalingAllowlist({ trunkId, backend });
+  actions.push(...allowlist.actions);
 
   return { trunk: keeper, created: false, actions };
 }

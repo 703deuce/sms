@@ -2,6 +2,7 @@ import type { SIPDispatchRuleInfo, SIPInboundTrunkInfo } from "livekit-server-sd
 import { getLiveKitSipHost, getLiveKitSipHostSource } from "../config";
 import { trunkNumbersIncludeDid } from "./did";
 import { getLiveKitSipClient } from "./client";
+import { missingTelnyxSignalingIps } from "./telnyx-allowlist";
 import { TELNYX_US_SIGNALING_IPS } from "./telnyx-ips";
 
 export type LiveKitTrunkSnapshot = {
@@ -98,11 +99,11 @@ export function diagnoseLiveKitSipIssues(
   ) {
     issues.push("trunk_missing_explicit_did");
   }
-  if (
-    inspect.trunkContainingDid.allowedAddresses.length > 0 &&
-    !isWildcardTelnyxTrunk(inspect.trunkContainingDid)
-  ) {
-    issues.push("trunk_has_ip_allowlist");
+  if (inspect.trunkContainingDid.allowedAddresses.length > 0) {
+    const missingIps = missingTelnyxSignalingIps(inspect.trunkContainingDid.allowedAddresses);
+    if (missingIps.length) {
+      issues.push(`telnyx_signaling_ip_missing:${missingIps.join(",")}`);
+    }
   }
   if (inspect.dispatchRulesForTrunk.length === 0) {
     const hasGlobalRule = inspect.dispatchRules.some((r) => (r.trunkIds || []).length === 0);
