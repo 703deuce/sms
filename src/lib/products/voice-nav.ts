@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CreditCard,
   GitBranch,
   Hash,
   LayoutDashboard,
@@ -14,9 +15,9 @@ import {
   Voicemail,
   Clock,
   Users,
-  Music,
   Activity,
   Bell,
+  ShoppingCart,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
@@ -32,6 +33,7 @@ export type VoiceNavOptions = {
   showTryIt?: boolean;
   smartRoutingFlowId?: string | null;
   productFeatures?: WorkspaceFeatureSnapshot | null;
+  showBillingNav?: boolean;
 };
 
 function featureActive(
@@ -45,18 +47,16 @@ function featureActive(
 
 const SR_NAV_ICONS: Record<string, NavItem["icon"]> = {
   "/smart-routing": LayoutDashboard,
-  "/smart-routing/ai": Sparkles,
   "/smart-routing/flows": GitBranch,
   "/smart-routing/destinations": Users,
   "/smart-routing/hours": Clock,
-  "/smart-routing/callback": PhoneForwarded,
-  "/smart-routing/audio": Music,
   "/smart-routing/activity": Activity,
   "/smart-routing/analytics": BarChart3,
+  "/smart-routing/callback": PhoneForwarded,
   "/smart-routing/setup": SlidersHorizontal,
 };
 
-/** Flat Smart Routing links for the voice sidebar (launch-simplified by default). */
+/** Flat Smart Routing links for the voice sidebar. */
 function buildSmartRoutingNavItems(firstSectionLabel?: string): NavItem[] {
   const pages: NavItem[] = buildSmartRoutingNavChildren().map((item) => ({
     ...item,
@@ -70,7 +70,7 @@ function buildSmartRoutingNavItems(firstSectionLabel?: string): NavItem[] {
 
 /**
  * Transovo inbound platform sidebar — product bands:
- * Dashboard → Missed Call Text Back → Smart Routing → Manage → Account.
+ * Dashboard → Missed Call Text Back → Smart Routing → Add-ons → Manage → Account.
  */
 export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
@@ -84,6 +84,8 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       label: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
+      sectionLabel: "Dashboard",
+      matchExact: true,
     },
     {
       label: "Needs Attention",
@@ -113,6 +115,11 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
         icon: PhoneMissed,
       },
       {
+        label: "Analytics",
+        href: "/voice/analytics",
+        icon: BarChart3,
+      },
+      {
         label: "Setup",
         href: "/voice/setup",
         icon: SlidersHorizontal,
@@ -126,14 +133,14 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   items.push({
     label: "Visual Voicemail",
-    href: hasVm ? "/voice/voicemail" : "/settings/billing?upgrade=visual_voicemail",
+    href: "/voice/voicemail",
     icon: Voicemail,
     sectionLabel: "Add-ons",
     badge: hasVm ? undefined : "Add-on",
   });
   items.push({
     label: "Callback Requests",
-    href: hasCallback ? "/voice/callback-requests" : "/settings/billing?upgrade=callback_requests",
+    href: "/voice/callback-requests",
     icon: PhoneForwarded,
     badge: hasCallback ? undefined : "Add-on",
   });
@@ -144,24 +151,39 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       href: "/voice/numbers",
       icon: Hash,
       sectionLabel: "Manage",
+      matchExact: true,
+    },
+    {
+      label: "Buy Numbers",
+      href: "/voice/numbers/buy",
+      icon: ShoppingCart,
     },
     {
       label: "Messaging Compliance",
       href: "/compliance",
       icon: ShieldCheck,
     },
-    { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
   ];
 
   items.push(...manage);
 
-  items.push({
-    label: "Settings",
-    href: "/settings/business",
-    icon: Settings,
-    sectionLabel: "Account",
-  });
+  const account: NavItem[] = [
+    {
+      label: "Settings",
+      href: "/settings/business",
+      icon: Settings,
+      sectionLabel: "Account",
+    },
+  ];
+  if (options.showBillingNav) {
+    account.push({
+      label: "Billing",
+      href: "/settings/billing",
+      icon: CreditCard,
+    });
+  }
+  items.push(...account);
 
   return items;
 }
@@ -174,6 +196,8 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/setup")) return "Setup";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
   if (pathname.startsWith("/voice/needs-attention")) return "Needs Attention";
+  if (pathname === "/voice/analytics") return "Analytics";
+  if (pathname.startsWith("/voice/reports")) return "Overall Reports";
   if (pathname === "/smart-routing/analytics") return "Analytics";
   if (isSmartRoutingSectionPath(pathname)) {
     if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
@@ -190,10 +214,11 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/voicemail") || pathname.startsWith("/personal/voicemail")) {
     return "Visual Voicemail";
   }
+  if (pathname === "/voice/numbers/buy") return "Buy Numbers";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
-  if (pathname.startsWith("/voice/analytics")) return "Analytics";
   if (pathname.startsWith("/compliance")) return "Messaging Compliance";
   if (pathname.startsWith("/integrations")) return "Integrations";
+  if (pathname.startsWith("/settings/billing")) return "Billing";
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/contact")) return "Help";
   return "";
@@ -203,8 +228,6 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
   const hasSr = featureActive(features, "smart_routing", false);
-  const hasVm = featureActive(features, "visual_voicemail", false);
-  const hasCallback = featureActive(features, "callback_requests", false);
 
   const items = [
     { label: "Dashboard", href: "/dashboard" },
@@ -224,12 +247,7 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     items.push({ label: "Routing", href: "/smart-routing" });
     items.push({ label: "Analytics", href: "/smart-routing/analytics" });
   }
-  items.push({
-    label: "Voicemail",
-    href: hasVm ? "/voice/voicemail" : "/settings/billing?upgrade=visual_voicemail",
-  });
-  if (hasCallback) {
-    items.push({ label: "Callbacks", href: "/voice/callback-requests" });
-  }
+  items.push({ label: "Voicemail", href: "/voice/voicemail" });
+  items.push({ label: "Callbacks", href: "/voice/callback-requests" });
   return items;
 }

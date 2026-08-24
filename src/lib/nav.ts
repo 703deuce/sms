@@ -43,6 +43,8 @@ export type NavItem = {
   children?: NavChild[];
   badge?: string | number;
   emphasize?: boolean;
+  /** When true, only exact pathname match counts as active (not subpaths). */
+  matchExact?: boolean;
   /** Major sidebar band (Solutions / Manage / Advanced). */
   sectionLabel?: string;
   /** Product-area header under a major band (AI Receptionist, SMS, …). */

@@ -1,26 +1,18 @@
-import {
-  showAiRoutingAssistantInNav,
-  showSrAudioInNav,
-  showSrBusinessCallBack,
-} from "@/lib/products/transovo-launch";
+import { showSrBusinessCallBack } from "@/lib/products/transovo-launch";
 
-/** Smart Routing sidebar children (shared by MCTB, Numbers, and Personal nav). */
+/**
+ * Smart Routing sidebar children — launch-simplified product nav.
+ * AI assistant, audio library, and flow templates remain reachable via routes and in-page links.
+ */
 export function buildSmartRoutingNavChildren() {
-  const items: Array<{ label: string; href: string }> = [
-    { label: "Overview", href: "/smart-routing" },
-  ];
-
-  if (showAiRoutingAssistantInNav()) {
-    items.push({ label: "AI Routing Assistant", href: "/smart-routing/ai" });
-  }
-
-  items.push(
+  const items: Array<{ label: string; href: string; matchExact?: boolean }> = [
+    { label: "Overview", href: "/smart-routing", matchExact: true },
     { label: "Call Flows", href: "/smart-routing/flows" },
     { label: "People & Destinations", href: "/smart-routing/destinations" },
     { label: "Business Hours", href: "/smart-routing/hours" },
     { label: "Activity", href: "/smart-routing/activity" },
     { label: "Analytics", href: "/smart-routing/analytics" },
-  );
+  ];
 
   if (showSrBusinessCallBack()) {
     items.push({
@@ -30,10 +22,6 @@ export function buildSmartRoutingNavChildren() {
   }
 
   items.push({ label: "Setup", href: "/smart-routing/setup" });
-
-  if (showSrAudioInNav()) {
-    items.push({ label: "Audio", href: "/smart-routing/audio" });
-  }
 
   return items;
 }

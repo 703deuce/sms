@@ -147,7 +147,14 @@ function bestExpandedKey(
       score = Math.max(score, base);
     }
 
-    if (item.label === "Setup" && pathname.startsWith("/voice/setup")) {
+    if (item.label === "Setup" && item.href === "/voice/setup" && pathname.startsWith("/voice/setup")) {
+      score = Math.max(score, 60_000);
+    }
+    if (
+      item.label === "Setup" &&
+      item.href === "/smart-routing/setup" &&
+      pathname.startsWith("/smart-routing/setup")
+    ) {
       score = Math.max(score, 60_000);
     }
     if (item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls")) {
@@ -308,6 +315,7 @@ export function Sidebar({
         showTryIt,
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
         productFeatures,
+        showBillingNav: true,
       });
     }
     return buildVoiceNav({
@@ -315,6 +323,7 @@ export function Sidebar({
       showTryIt,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       productFeatures,
+      showBillingNav: true,
     });
   }, [
     primaryVoiceAgentId,
@@ -407,23 +416,20 @@ export function Sidebar({
           const tryItOwned =
             (item.label === "Try It" || item.label === "Try Missed Call Text Back") &&
             pathname.startsWith("/voice/try-it");
-          const setupOwned =
-            (item.label === "Setup" || item.label === "Missed Call Setup") &&
-            pathname.startsWith("/voice/setup");
+          const mctbSetupOwned =
+            item.href === "/voice/setup" && pathname.startsWith("/voice/setup");
+          const srSetupOwned =
+            item.href === "/smart-routing/setup" && pathname.startsWith("/smart-routing/setup");
           const missedCallsOwned =
             item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls");
           const complianceOwned =
             item.label === "Messaging Compliance" && pathname.startsWith("/compliance");
-          const smartRoutingOwned =
-            (item.label === "Smart Routing" ||
-              item.href === "/smart-routing" ||
-              item.href.startsWith("/smart-routing/")) &&
-            isSmartRoutingSectionPathExport(pathname);
           const expandKey = itemExpandKey(item);
           const personalOverviewExactOnly =
             currentProduct === "numbers" && item.href === "/personal" && pathname !== "/personal";
-          const itemHrefActive =
-            isNavHrefActive(pathname, search, item.href) && !personalOverviewExactOnly;
+          const itemHrefActive = item.matchExact
+            ? pathname === hrefPath(item.href)
+            : isNavHrefActive(pathname, search, item.href) && !personalOverviewExactOnly;
           const growOwned = item.label === "Grow" && pathname.startsWith("/grow");
           const smsNumbersOwned =
             item.label === "Numbers" &&
@@ -435,17 +441,18 @@ export function Sidebar({
             (pathname === "/settings" || pathname.startsWith("/settings/"));
           const ownedOutcome =
             tryItOwned ||
-            setupOwned ||
+            mctbSetupOwned ||
+            srSetupOwned ||
             missedCallsOwned ||
             complianceOwned ||
-            smartRoutingOwned ||
             growOwned ||
             smsNumbersOwned ||
             settingsOwned ||
             (currentProduct === "numbers" && item.href === "/personal"
               ? pathname === "/personal"
-              : pathname.startsWith(`${hrefPath(item.href)}/`) ||
-                pathname === hrefPath(item.href));
+              : !item.matchExact &&
+                (pathname.startsWith(`${hrefPath(item.href)}/`) ||
+                  pathname === hrefPath(item.href)));
           const active =
             itemHrefActive ||
             Boolean(childActive) ||

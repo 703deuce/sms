@@ -37,7 +37,10 @@ assert.ok(nav.some((i) => i.href === "/smart-routing" && i.label === "Overview")
 assert.ok(nav.some((i) => i.sectionLabel === "Smart Routing"));
 assert.equal(nav.find((i) => i.label === "Conversations")?.href, "/inbox");
 assert.ok(labels.includes("Visual Voicemail"));
-assert.ok(labels.includes("Callback Requests"));
+assert.ok(labels.includes("Buy Numbers"));
+assert.ok(nav.some((i) => i.href === "/voice/analytics" && i.label === "Analytics"));
+assert.ok(!nav.some((i) => i.href === "/voice/analytics" && i.sectionLabel === "Manage"));
+assert.equal(nav.find((i) => i.label === "Callback Requests")?.href, "/voice/callback-requests");
 assert.ok(labels.includes("Business Call Back"));
 
 const srOnly = buildVoiceNav({
