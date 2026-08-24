@@ -11,6 +11,8 @@ import {
   trunkNumbersIncludeDid,
 } from "./did";
 import { getLiveKitSipClient } from "./client";
+import type { MediaBackend } from "@/lib/voice/media-backend/types";
+import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
 
 async function assertTrunkHasNumber(
   trunkId: string,
@@ -31,8 +33,9 @@ async function assertTrunkHasNumber(
 
 export async function findInboundTrunkByName(
   name: string,
+  backend: MediaBackend = "livekit_cloud",
 ): Promise<SIPInboundTrunkInfo | null> {
-  const client = getLiveKitSipClient();
+  const client = getLiveKitSipClient(backend);
   const trunks = await client.listSipInboundTrunk();
   return trunks.find((t) => t.name === name) || null;
 }
@@ -50,8 +53,11 @@ export async function findInboundTrunkContainingNumber(
 export async function ensureSharedInboundTrunk(input?: {
   initialNumbers?: string[];
   e164?: string;
+  backend?: MediaBackend;
 }): Promise<{ trunk: SIPInboundTrunkInfo; created: boolean; actions: string[] }> {
-  const client = getLiveKitSipClient();
+  const backend = input?.backend || "livekit_cloud";
+  const client = getLiveKitSipClient(backend);
+  const trunkName = getLiveKitBackendConfig(backend).inboundTrunkName;
   const actions: string[] = [];
   const seedNumbers = input?.initialNumbers?.length
     ? input.initialNumbers
@@ -59,7 +65,8 @@ export async function ensureSharedInboundTrunk(input?: {
       ? [input.e164]
       : [];
 
-  const storedId = getStoredLiveKitTrunkId();
+  const storedId =
+    backend === "livekit_cloud" ? getStoredLiveKitTrunkId() : getLiveKitBackendConfig(backend).inboundTrunkId;
   if (storedId) {
     const listed = await client.listSipInboundTrunk({ trunkIds: [storedId] });
     if (listed[0]) {
@@ -68,7 +75,7 @@ export async function ensureSharedInboundTrunk(input?: {
     actions.push("env_trunk_id_stale");
   }
 
-  let trunk = await findInboundTrunkByName(TRANSOVO_LIVEKIT_TRUNK_NAME);
+  let trunk = await findInboundTrunkByName(trunkName, backend);
   if (trunk) {
     return { trunk, created: false, actions: ["reuse_named_trunk"] };
   }
@@ -79,7 +86,7 @@ export async function ensureSharedInboundTrunk(input?: {
     );
   }
 
-  trunk = await client.createSipInboundTrunk(TRANSOVO_LIVEKIT_TRUNK_NAME, seedNumbers, {
+  trunk = await client.createSipInboundTrunk(trunkName, seedNumbers, {
     metadata: JSON.stringify({ owner: "transovo", kind: "shared_telnyx_inbound" }),
   });
   actions.push("created_inbound_trunk");
@@ -90,12 +97,17 @@ export async function ensureSharedInboundTrunk(input?: {
  * Ensure one canonical Transovo inbound trunk owns the DID.
  * SaaS repair: delete stale inbound trunks instead of leaving invalid empty trunks behind.
  */
-export async function ensureInboundTrunkForNumber(e164: string): Promise<{
+export async function ensureInboundTrunkForNumber(
+  e164: string,
+  options?: { backend?: MediaBackend },
+): Promise<{
   trunk: SIPInboundTrunkInfo;
   created: boolean;
   actions: string[];
 }> {
-  const client = getLiveKitSipClient();
+  const backend = options?.backend || "livekit_cloud";
+  const client = getLiveKitSipClient(backend);
+  const trunkName = getLiveKitBackendConfig(backend).inboundTrunkName;
   const actions: string[] = [];
   const trunkDid = toLiveKitInboundDid(e164);
 
@@ -103,10 +115,14 @@ export async function ensureInboundTrunkForNumber(e164: string): Promise<{
   // Prefer a trunk that already owns the DID — a named empty trunk must not win over it.
   let keeper =
     allTrunks.find((t) => trunkNumbersIncludeDid(t.numbers || [], e164)) ||
-    allTrunks.find((t) => t.name === TRANSOVO_LIVEKIT_TRUNK_NAME) ||
-    (getStoredLiveKitTrunkId()
+    allTrunks.find((t) => t.name === trunkName) ||
+    (backend === "livekit_cloud" && getStoredLiveKitTrunkId()
       ? allTrunks.find((t) => t.sipTrunkId === getStoredLiveKitTrunkId())
-      : null) ||
+      : getLiveKitBackendConfig(backend).inboundTrunkId
+        ? allTrunks.find(
+            (t) => t.sipTrunkId === getLiveKitBackendConfig(backend).inboundTrunkId,
+          )
+        : null) ||
     null;
 
   for (const trunk of allTrunks) {
@@ -135,7 +151,7 @@ export async function ensureInboundTrunkForNumber(e164: string): Promise<{
   }
 
   if (!keeper) {
-    const created = await ensureSharedInboundTrunk({ e164: trunkDid });
+    const created = await ensureSharedInboundTrunk({ e164: trunkDid, backend });
     actions.push(...created.actions);
     return created;
   }

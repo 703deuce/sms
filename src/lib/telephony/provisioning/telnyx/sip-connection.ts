@@ -1,16 +1,8 @@
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import {
-  getAuthoritativeLiveKitSipHost,
-  getStoredTelnyxFqdnConnectionId,
-  TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
-} from "../config";
+import { ensureTelnyxFqdnConnectionForBackend } from "@/lib/voice/media-backend/telnyx-failover";
 
 type TelnyxRecord = Record<string, unknown>;
-
-function asRecord(v: unknown): TelnyxRecord | null {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as TelnyxRecord) : null;
-}
 
 export async function findFqdnConnectionByName(
   name: string,
@@ -22,136 +14,20 @@ export async function findFqdnConnectionByName(
   return rows.find((r) => String(r.connection_name || "") === name) || null;
 }
 
+/** Cloud LiveKit SIP FQDN connection (backward-compatible wrapper). */
 export async function ensureTelnyxLiveKitFqdnConnection(): Promise<{
   connectionId: string;
   fqdnId: string;
   created: boolean;
   actions: string[];
 }> {
-  const actions: string[] = [];
-  const { host: sipHost } = getAuthoritativeLiveKitSipHost();
-  if (!sipHost) {
-    throw new Error(
-      "LiveKit SIP host not found — set LIVEKIT_SIP_HOST, LIVEKIT_SIP_URI, or LIVEKIT_URL to your *.sip.livekit.cloud endpoint",
-    );
-  }
-
-  const storedId = getStoredTelnyxFqdnConnectionId();
-  if (storedId) {
-    try {
-      const res = await telnyxRequest<{ data?: TelnyxRecord }>(
-        `/fqdn_connections/${encodeURIComponent(storedId)}`,
-      );
-      const row = asRecord(res.data);
-      if (row?.id) {
-        if (row.active === false) {
-          await telnyxRequest(`/fqdn_connections/${encodeURIComponent(storedId)}`, {
-            method: "PATCH",
-            body: { active: true },
-          });
-          actions.push("enabled_stored_fqdn_connection");
-        }
-        const fqdnId = await ensureFqdnRecord(String(row.id), sipHost, actions);
-        return {
-          connectionId: String(row.id),
-          fqdnId,
-          created: false,
-          actions: [...actions, "reuse_env_fqdn_connection_id"],
-        };
-      }
-    } catch {
-      actions.push("env_fqdn_connection_id_stale");
-    }
-  }
-
-  let conn = await findFqdnConnectionByName(TRANSOVO_TELNYX_FQDN_CONNECTION_NAME);
-  if (!conn) {
-    const created = await telnyxRequest<{ data?: TelnyxRecord }>("/fqdn_connections", {
-      method: "POST",
-      body: {
-        active: true,
-        anchorsite_override: "Latency",
-        connection_name: TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
-        inbound: {
-          ani_number_format: "+E.164",
-          dnis_number_format: "+e164",
-        },
-        transport_protocol: "TCP",
-      },
-    });
-    conn = asRecord(created.data);
-    actions.push("created_fqdn_connection");
-  } else if (conn.active === false) {
-    await telnyxRequest(`/fqdn_connections/${encodeURIComponent(String(conn.id))}`, {
-      method: "PATCH",
-      body: { active: true },
-    });
-    actions.push("enabled_existing_fqdn_connection");
-  }
-
-  const connectionId = String(conn?.id || "");
-  if (!connectionId) throw new Error("Telnyx FQDN connection missing id");
-
-  const fqdnId = await ensureFqdnRecord(connectionId, sipHost, actions);
+  const result = await ensureTelnyxFqdnConnectionForBackend("livekit_cloud");
   return {
-    connectionId,
-    fqdnId,
-    created: actions.includes("created_fqdn_connection"),
-    actions,
+    connectionId: result.connectionId,
+    fqdnId: result.fqdnId,
+    created: result.created,
+    actions: result.actions,
   };
-}
-
-async function ensureFqdnRecord(
-  connectionId: string,
-  sipHost: string,
-  actions: string[],
-): Promise<string> {
-  const listed = await telnyxRequest<{ data?: TelnyxRecord[] }>("/fqdns", {
-    query: { "filter[connection_id]": connectionId },
-  });
-  const rows = listed.data || [];
-  let target = rows.find(
-    (r) => String(r.fqdn || "").toLowerCase() === sipHost.toLowerCase(),
-  );
-
-  if (!target?.id) {
-    const created = await telnyxRequest<{ data?: TelnyxRecord }>("/fqdns", {
-      method: "POST",
-      body: {
-        connection_id: connectionId,
-        fqdn: sipHost,
-        port: 5060,
-        dns_record_type: "a",
-      },
-    });
-    target = asRecord(created.data) || undefined;
-    actions.push("created_fqdn_record");
-  }
-
-  const fqdnId = String(target?.id || "");
-  if (!fqdnId) throw new Error(`Telnyx FQDN record missing for ${sipHost}`);
-
-  const conn = await telnyxRequest<{ data?: TelnyxRecord }>(
-    `/fqdn_connections/${encodeURIComponent(connectionId)}`,
-  );
-  const primaryId = String(
-    (conn.data?.inbound as TelnyxRecord | undefined)?.default_primary_fqdn_id || "",
-  );
-  if (primaryId !== fqdnId) {
-    await telnyxRequest(`/fqdn_connections/${encodeURIComponent(connectionId)}`, {
-      method: "PATCH",
-      body: {
-        inbound: {
-          default_primary_fqdn_id: fqdnId,
-          default_secondary_fqdn_id: null,
-          default_tertiary_fqdn_id: null,
-        },
-      },
-    });
-    actions.push(`set_primary_fqdn_${sipHost}`);
-  }
-
-  return fqdnId;
 }
 
 export async function routeTelnyxNumberToConnection(input: {

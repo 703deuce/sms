@@ -1,4 +1,6 @@
 import { getPrisma } from "@/lib/db";
+import { mediaBackendMetadataStamp } from "@/lib/voice/media-backend/pinning";
+import { resolveMediaBackend } from "@/lib/voice/media-backend/resolver";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { VoiceRuntimeProvider, InboundSessionMetadata } from "./types";
 import { realEstateCallConfigStamp } from "@/lib/voice/real-estate/publish";
@@ -14,6 +16,12 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
 
   async bootstrapSession(metadata: InboundSessionMetadata): Promise<{ callId: string }> {
     const prisma = getPrisma();
+    const mediaBackend =
+      metadata.mediaBackend ||
+      (await resolveMediaBackend({
+        callId: metadata.callId,
+        toE164: metadata.toE164,
+      }));
     let callId = metadata.callId;
 
     if (!callId) {
@@ -68,6 +76,7 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
           answeredAt: new Date(),
           metadata: {
             source: "livekit_voice_runtime",
+            ...mediaBackendMetadataStamp(mediaBackend),
             livekitRoomName: metadata.livekitRoomName,
             livekitParticipantId: metadata.livekitParticipantId,
             realtorAgentConfig: configStamp,
@@ -97,6 +106,7 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
             metadata: {
               ...prior,
               source: prior.source || "livekit_voice_runtime",
+              ...mediaBackendMetadataStamp(mediaBackend),
               ...(metadata.livekitRoomName ? { livekitRoomName: metadata.livekitRoomName } : {}),
               ...(metadata.livekitParticipantId
                 ? { livekitParticipantId: metadata.livekitParticipantId }

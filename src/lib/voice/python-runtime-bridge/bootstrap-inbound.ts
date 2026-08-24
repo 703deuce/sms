@@ -31,6 +31,12 @@ import {
   getPythonRuntimeBootstrapSnapshot,
 } from "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot";
 import type { PythonRuntimeBootstrapInput, PythonRuntimeBootstrapResult, PythonRuntimeError } from "./types";
+import {
+  parseMediaBackend,
+  resolveMediaBackend,
+} from "@/lib/voice/media-backend/resolver";
+import { pinMediaBackendOnCall } from "@/lib/voice/media-backend/pinning";
+import { resolvePlatformOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 
 function parseJobMetadata(raw: PythonRuntimeBootstrapInput["jobMetadata"]): Record<string, unknown> | null {
   if (!raw) return null;
@@ -212,6 +218,14 @@ export async function bootstrapInboundForPython(
     }
   }
 
+  const mediaBackend = await resolveMediaBackend({
+    callId: input.predeterminedCallId || roomMeta?.callId,
+    toE164: normalizedTo || toE164,
+    mediaBackend:
+      parseMediaBackend(jobMetaRaw?.mediaBackend) ||
+      parseMediaBackend((roomMeta as { mediaBackend?: unknown } | null)?.mediaBackend),
+  });
+
   if (await isMctbSipIngressTarget(normalizedTo || toE164)) {
     logLivekitDispatchEvaluated({
       toE164: normalizedTo || toE164,
@@ -271,6 +285,7 @@ export async function bootstrapInboundForPython(
       livekitRoomName: input.roomName,
       livekitParticipantId: input.participantIdentity,
       lightweightBootstrap: true,
+      mediaBackend,
     }),
     loadVoiceAgentConfigForCall({
       workspaceId: routing.workspaceId,
@@ -279,6 +294,12 @@ export async function bootstrapInboundForPython(
     }),
   ]);
   mark("parallel_call_create_config", t);
+
+  await pinMediaBackendOnCall({ callId, mediaBackend });
+  const sipOutboundTrunkId = await resolvePlatformOutboundTrunkId({
+    callerIdE164: normalizedTo || routing.e164,
+    backend: mediaBackend,
+  });
 
   const snapshot =
     getPythonRuntimeBootstrapSnapshot(
@@ -315,7 +336,7 @@ export async function bootstrapInboundForPython(
       realtimeVoice: snapshot.realtimeVoice,
       realtimeSpeed: snapshot.realtimeSpeed,
       eventTypeUri: snapshot.eventTypeUri,
-      sipOutboundTrunkId: null,
+      sipOutboundTrunkId,
       sipCallerIdE164: normalizedTo || routing.e164 || null,
     };
     mark("snapshot_fast_path", t);
@@ -323,6 +344,7 @@ export async function bootstrapInboundForPython(
       path: "snapshot",
       agentTemplate: result.agentTemplate,
       payloadBytes: JSON.stringify(result).length,
+      mediaBackend,
     });
     return {
       ...result,
@@ -339,7 +361,7 @@ export async function bootstrapInboundForPython(
     routing,
     pinnedVersionId: pinnedVersionId || loaded.agentVersionId || undefined,
     agentConfig: loaded.config,
-    sipOutboundTrunkId: null,
+    sipOutboundTrunkId,
     jobMetaRaw,
     roomMeta,
     explicitTemplate: typeof explicit?.agentTemplate === "string" ? explicit.agentTemplate : undefined,
@@ -350,6 +372,7 @@ export async function bootstrapInboundForPython(
     path: "compiled",
     agentTemplate: result.agentTemplate,
     payloadBytes: JSON.stringify(result).length,
+    mediaBackend,
   });
 
   return {

@@ -73,7 +73,12 @@ export async function resolveTransferForPython(input: {
     select: { toE164: true },
   });
   const callerIdE164 = call?.toE164?.trim() || null;
-  const sipOutboundTrunkId = await resolvePlatformOutboundTrunkId({ callerIdE164 });
+  const { resolveMediaBackend } = await import("@/lib/voice/media-backend/resolver");
+  const mediaBackend = await resolveMediaBackend({ callId: input.callId });
+  const sipOutboundTrunkId = await resolvePlatformOutboundTrunkId({
+    callerIdE164,
+    backend: mediaBackend,
+  });
 
   return {
     ok: true,

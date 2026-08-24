@@ -3,6 +3,9 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { realEstateCallConfigStamp } from "@/lib/voice/real-estate/publish";
 
+import { mediaBackendMetadataStamp } from "@/lib/voice/media-backend/pinning";
+import type { MediaBackend } from "@/lib/voice/media-backend/types";
+
 export type PersistInboundCallInput = {
   callId: string;
   workspaceId: string;
@@ -12,6 +15,7 @@ export type PersistInboundCallInput = {
   toE164?: string;
   livekitRoomName?: string;
   livekitParticipantId?: string;
+  mediaBackend?: MediaBackend;
 };
 
 export async function persistInboundCallForPython(
@@ -86,6 +90,7 @@ export async function persistInboundCallForPython(
       metadata: {
         source: "livekit_voice_runtime",
         bootstrapPath: "async_persist",
+        ...(input.mediaBackend ? mediaBackendMetadataStamp(input.mediaBackend) : {}),
         ...(input.livekitRoomName ? { livekitRoomName: input.livekitRoomName } : {}),
         ...(input.livekitParticipantId
           ? { livekitParticipantId: input.livekitParticipantId }

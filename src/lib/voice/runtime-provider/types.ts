@@ -14,6 +14,7 @@ export type InboundSessionMetadata = {
   telnyxCallControlId?: string | null;
   livekitRoomName?: string | null;
   livekitParticipantId?: string | null;
+  mediaBackend?: import("@/lib/voice/media-backend/types").MediaBackend | null;
   /** Frontdesk profile — skip Amy workflow/realtime session bootstrap for faster answer. */
   lightweightBootstrap?: boolean;
 };

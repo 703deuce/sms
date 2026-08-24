@@ -92,6 +92,7 @@ export async function domainRequestHuman(input: {
         roomName: livekitRoomName,
         participantIdentity: livekitParticipantId,
         destinationE164: destination,
+        callId: input.ctx.callId,
       });
       transferOk = xfer.ok;
       if (!xfer.ok) {

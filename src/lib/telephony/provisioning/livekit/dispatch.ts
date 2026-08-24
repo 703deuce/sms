@@ -8,22 +8,31 @@ import {
 } from "../config";
 import { isTransovoDidDispatchRuleName } from "./dispatch-snapshot-sync";
 import { getLiveKitSipClient } from "./client";
+import type { MediaBackend } from "@/lib/voice/media-backend/types";
+import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
 
 export async function findDispatchRuleByName(
   name: string,
+  backend: MediaBackend = "livekit_cloud",
 ): Promise<SIPDispatchRuleInfo | null> {
-  const client = getLiveKitSipClient();
+  const client = getLiveKitSipClient(backend);
   const rules = await client.listSipDispatchRule();
   return rules.find((r) => r.name === name) || null;
 }
 
 export async function ensureSharedDispatchRule(input: {
   trunkId: string;
+  backend?: MediaBackend;
 }): Promise<{ rule: SIPDispatchRuleInfo; created: boolean; actions: string[] }> {
-  const client = getLiveKitSipClient();
+  const backend = input.backend || "livekit_cloud";
+  const client = getLiveKitSipClient(backend);
+  const dispatchRuleName = getLiveKitBackendConfig(backend).dispatchRuleName;
   const actions: string[] = [];
 
-  const storedId = getStoredLiveKitDispatchRuleId();
+  const storedId =
+    backend === "livekit_cloud"
+      ? getStoredLiveKitDispatchRuleId()
+      : getLiveKitBackendConfig(backend).dispatchRuleId;
   if (storedId) {
     const listed = await client.listSipDispatchRule({ dispatchRuleIds: [storedId] });
     if (listed[0]) {
@@ -40,7 +49,7 @@ export async function ensureSharedDispatchRule(input: {
     actions.push("env_dispatch_rule_id_stale");
   }
 
-  let rule = await findDispatchRuleByName(TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME);
+  let rule = await findDispatchRuleByName(dispatchRuleName, backend);
   if (rule) {
     const current = rule.trunkIds || [];
     const next = current.includes(input.trunkId) ? current : [...current, input.trunkId];
@@ -64,7 +73,7 @@ export async function ensureSharedDispatchRule(input: {
       roomPrefix: TRANSOVO_LIVEKIT_ROOM_PREFIX,
     },
     {
-      name: TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
+      name: dispatchRuleName,
       trunkIds: [input.trunkId],
       hidePhoneNumber: false,
       metadata: JSON.stringify({
