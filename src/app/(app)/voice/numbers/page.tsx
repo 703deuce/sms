@@ -35,7 +35,7 @@ export default async function VoiceNumbersPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/voice/numbers/buy"
+              href="/numbers/buy"
               className="inline-flex h-9 items-center rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-white hover:bg-primary-hover"
             >
               Add number
