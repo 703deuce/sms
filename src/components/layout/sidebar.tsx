@@ -11,6 +11,7 @@ import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildSmsNav } from "@/lib/products/sms-nav";
 import { buildVoiceNav } from "@/lib/products/voice-nav";
+import { isVoiceShellRoute } from "@/lib/products/voice-routes";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { productLogoHome, productContextLabel } from "@/lib/products/context";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
@@ -147,11 +148,11 @@ function bestExpandedKey(
       score = Math.max(score, base);
     }
 
-    if (item.label === "Setup" && item.href === "/voice/setup" && pathname.startsWith("/voice/setup")) {
+    if (item.label === "Configure" && item.href === "/voice/setup" && pathname.startsWith("/voice/setup")) {
       score = Math.max(score, 60_000);
     }
     if (
-      item.label === "Setup" &&
+      item.label === "Routing Setup" &&
       item.href === "/smart-routing/setup" &&
       pathname.startsWith("/smart-routing/setup")
     ) {
@@ -306,7 +307,11 @@ export function Sidebar({
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
     }
-    if (currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) {
+    const voiceOwnsShell = hasVoice && isVoiceShellRoute(pathname);
+    if (
+      currentProduct === "sms" ||
+      (hasSms && isSmsShellRoute(pathname) && !voiceOwnsShell)
+    ) {
       return buildSmsNav({ inboxBadge });
     }
     if (currentProduct === "voice" || hasVoice) {
@@ -404,7 +409,9 @@ export function Sidebar({
             + Add Line
           </Link>
         ) : null}
-        {(currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname))) && !collapsed ? (
+        {(currentProduct === "sms" ||
+          (hasSms && isSmsShellRoute(pathname) && !(hasVoice && isVoiceShellRoute(pathname)))) &&
+        !collapsed ? (
           <SmsCreateMenu variant="sidebar" />
         ) : null}
       </div>
@@ -416,7 +423,7 @@ export function Sidebar({
           const tryItOwned =
             (item.label === "Try It" || item.label === "Try Missed Call Text Back") &&
             pathname.startsWith("/voice/try-it");
-          const mctbSetupOwned =
+          const mctbConfigureOwned =
             item.href === "/voice/setup" && pathname.startsWith("/voice/setup");
           const srSetupOwned =
             item.href === "/smart-routing/setup" && pathname.startsWith("/smart-routing/setup");
@@ -441,7 +448,7 @@ export function Sidebar({
             (pathname === "/settings" || pathname.startsWith("/settings/"));
           const ownedOutcome =
             tryItOwned ||
-            mctbSetupOwned ||
+            mctbConfigureOwned ||
             srSetupOwned ||
             missedCallsOwned ||
             complianceOwned ||

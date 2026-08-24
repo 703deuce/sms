@@ -77,7 +77,7 @@ const solutionsHrefs = new Set(collectNavHrefs(solutionsNav));
 assert.ok(solutionsHrefs.has("/dashboard"), "Dashboard required");
 assert.ok(solutionsHrefs.has("/inbox"), "Inbox required for SMS conversations");
 assert.ok(solutionsHrefs.has("/voice/missed-calls"), "Missed Calls required");
-assert.ok(solutionsHrefs.has("/voice/setup"), "Setup required");
+assert.ok(solutionsHrefs.has("/voice/setup"), "Configure required");
 assert.ok(solutionsHrefs.has("/voice/numbers"), "Numbers required");
 assert.ok(solutionsHrefs.has("/compliance"), "Compliance required");
 assert.ok(solutionsHrefs.has("/integrations"), "Integrations required");
@@ -92,7 +92,7 @@ const expectedTopLevel = [
   "Overview",
   "Conversations",
   "Missed Calls",
-  "Setup",
+  "Configure",
   "Smart Routing",
   "Numbers",
   "Messaging Compliance",

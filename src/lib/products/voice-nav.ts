@@ -102,13 +102,6 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       icon: MessageSquare,
       sectionLabel: "Missed Call Text Back",
     });
-    if (options.showTryIt) {
-      items.push({
-        label: "Try It",
-        href: "/voice/try-it",
-        icon: Sparkles,
-      });
-    }
     items.push(
       {
         label: "Missed Calls",
@@ -116,11 +109,18 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
         icon: PhoneMissed,
       },
       {
-        label: "Setup",
+        label: "Configure",
         href: "/voice/setup",
         icon: SlidersHorizontal,
       },
     );
+    if (options.showTryIt) {
+      items.push({
+        label: "Try It",
+        href: "/voice/try-it",
+        icon: Sparkles,
+      });
+    }
   }
 
   if (hasSr) {
@@ -193,7 +193,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/try-it")) return "Try It";
   if (pathname.startsWith("/inbox")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
-  if (pathname.startsWith("/voice/setup")) return "Setup";
+  if (pathname.startsWith("/voice/setup")) return "Configure";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
   if (pathname.startsWith("/voice/needs-attention")) return "Needs Attention";
   if (pathname === "/voice/analytics") return "Analytics";
@@ -208,7 +208,7 @@ export function getVoicePageTitle(pathname: string): string {
     if (pathname === "/smart-routing/activity") return "Activity";
     if (pathname === "/smart-routing/new") return "Create Flow";
     if (pathname === "/smart-routing/audio") return "Audio Library";
-    if (pathname === "/smart-routing/setup") return "Smart Routing Setup";
+    if (pathname === "/smart-routing/setup") return "Routing Setup";
     return "";
   }
   if (pathname.startsWith("/voice/voicemail") || pathname.startsWith("/personal/voicemail")) {
@@ -240,7 +240,7 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     items.push(
       { label: "Chats", href: "/inbox" },
       { label: "Missed", href: "/voice/missed-calls" },
-      { label: "Setup", href: "/voice/setup" },
+      { label: "Configure", href: "/voice/setup" },
     );
   }
   if (hasSr) {

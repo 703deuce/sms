@@ -21,7 +21,7 @@ export function buildSmartRoutingNavChildren() {
     });
   }
 
-  items.push({ label: "Setup", href: "/smart-routing/setup" });
+  items.push({ label: "Routing Setup", href: "/smart-routing/setup" });
 
   return items;
 }
