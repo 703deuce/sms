@@ -51,6 +51,7 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
   const [leadCaptureEnabled, setLeadCaptureEnabled] = useState(false);
   const [history, setHistory] = useState<CallerHistoryEntry[]>([]);
   const [showCallBack, setShowCallBack] = useState(false);
+  const [consent, setConsent] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     void fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" })
@@ -63,6 +64,7 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         setLinkClicks(json.linkClicks || []);
         setFormSubmissions(json.formSubmissions || []);
         setLeadCaptureEnabled(Boolean(json.leadCaptureEnabled));
+        setConsent(json.consent || null);
         const caller = String(json.event?.callerE164 || "");
         if (caller) {
           void fetch(`/api/voice/caller-history?callerE164=${encodeURIComponent(caller)}`)
@@ -114,6 +116,41 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
           <p className="text-emerald-700">Lead capture enabled for this workspace</p>
         ) : null}
       </Card>
+
+      {consent ? (
+        <Card className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[15px] font-semibold">Press-1 consent</h2>
+            <Link href="/voice/consent-log" className="text-sm font-semibold text-primary hover:underline">
+              Open consent log
+            </Link>
+          </div>
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            <p>
+              <span className="font-semibold">Recorded:</span>{" "}
+              {consent.consentedAt
+                ? new Date(String(consent.consentedAt)).toLocaleString()
+                : "—"}
+            </p>
+            <p>
+              <span className="font-semibold">Digit pressed:</span>{" "}
+              {String(consent.affirmativeInput || "1")}
+            </p>
+            <p>
+              <span className="font-semibold">Method:</span> {String(consent.method || "—")}
+            </p>
+            <p>
+              <span className="font-semibold">Scope:</span> {String(consent.consentScope || "—")}
+            </p>
+            {consent.callSessionId ? (
+              <p className="sm:col-span-2">
+                <span className="font-semibold">Call reference:</span>{" "}
+                <code className="text-xs">{String(consent.callSessionId)}</code>
+              </p>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       {event?.callerE164 ? (
         <Card className="space-y-3 p-4">

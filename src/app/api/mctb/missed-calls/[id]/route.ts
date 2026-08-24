@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { buildMctbEventTimeline } from "@/lib/mctb/timeline";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
+import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 
 type Params = { params: Promise<{ id: string }> };
@@ -23,7 +24,7 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const [repeatCaller, linkClicks, formSubmissions, config] = await Promise.all([
+    const [repeatCaller, linkClicks, formSubmissions, config, consent] = await Promise.all([
       countCallerMissedEventsToday(workspaceId, event.callerE164),
       prisma.linkClickEvent.findMany({
         where: { workspaceId, missedCallEventId: id },
@@ -40,6 +41,7 @@ export async function GET(_request: Request, { params }: Params) {
         })
         .catch(() => []),
       loadMissedCallTextConfig(workspaceId),
+      loadConsentForMissedCallEvent({ workspaceId, missedCallEventId: id }),
     ]);
 
     return NextResponse.json({
@@ -56,6 +58,7 @@ export async function GET(_request: Request, { params }: Params) {
         submittedAt: s.submittedAt.toISOString(),
       })),
       leadCaptureEnabled: config.leadCaptureEnabled,
+      consent,
     });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

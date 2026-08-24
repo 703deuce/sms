@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ClipboardCheck,
   CreditCard,
   GitBranch,
   Hash,
@@ -109,6 +110,11 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
         icon: PhoneMissed,
       },
       {
+        label: "Consent log",
+        href: "/voice/consent-log",
+        icon: ClipboardCheck,
+      },
+      {
         label: "Configure",
         href: "/voice/setup",
         icon: SlidersHorizontal,
@@ -193,6 +199,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/try-it")) return "Try It";
   if (pathname.startsWith("/inbox")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
+  if (pathname.startsWith("/voice/consent-log")) return "Consent log";
   if (pathname.startsWith("/voice/setup")) return "Configure";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
   if (pathname.startsWith("/voice/needs-attention")) return "Needs Attention";
@@ -240,6 +247,7 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     items.push(
       { label: "Chats", href: "/inbox" },
       { label: "Missed", href: "/voice/missed-calls" },
+      { label: "Consent", href: "/voice/consent-log" },
       { label: "Configure", href: "/voice/setup" },
     );
   }

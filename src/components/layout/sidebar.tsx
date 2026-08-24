@@ -161,6 +161,9 @@ function bestExpandedKey(
     if (item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls")) {
       score = Math.max(score, 60_000);
     }
+    if (item.label === "Consent log" && pathname.startsWith("/voice/consent-log")) {
+      score = Math.max(score, 60_000);
+    }
     if (item.label === "Try It" && pathname.startsWith("/voice/try-it")) {
       score = Math.max(score, 60_000);
     }
@@ -429,6 +432,8 @@ export function Sidebar({
             item.href === "/smart-routing/setup" && pathname.startsWith("/smart-routing/setup");
           const missedCallsOwned =
             item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls");
+          const consentLogOwned =
+            item.label === "Consent log" && pathname.startsWith("/voice/consent-log");
           const complianceOwned =
             item.label === "Messaging Compliance" && pathname.startsWith("/compliance");
           const expandKey = itemExpandKey(item);
@@ -451,6 +456,7 @@ export function Sidebar({
             mctbConfigureOwned ||
             srSetupOwned ||
             missedCallsOwned ||
+            consentLogOwned ||
             complianceOwned ||
             growOwned ||
             smsNumbersOwned ||

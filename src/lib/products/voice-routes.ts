@@ -66,6 +66,9 @@ export function isMctbAppPath(pathname: string): boolean {
   if (pathname === "/voice/missed-calls" || pathname.startsWith("/voice/missed-calls/")) {
     return true;
   }
+  if (pathname === "/voice/consent-log" || pathname.startsWith("/voice/consent-log/")) {
+    return true;
+  }
   return false;
 }
 

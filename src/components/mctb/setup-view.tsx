@@ -954,6 +954,9 @@ export function MctbSetupView() {
               <Link href="/voice/missed-calls">
                 <Button variant="outline">View missed call log</Button>
               </Link>
+              <Link href="/voice/consent-log">
+                <Button variant="outline">View consent log</Button>
+              </Link>
               <Link href="/inbox">
                 <Button variant="outline">View conversations</Button>
               </Link>
