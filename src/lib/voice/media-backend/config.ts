@@ -3,7 +3,7 @@ import { normalizeLiveKitApiUrl } from "@/lib/voice/runtime-provider/config";
 import type { LiveKitBackendConfig, MediaBackend, MediaBackendMode } from "./types";
 
 function readEnv(name: string): string {
-  return process.env[name]?.trim() || "";
+  return (process.env[name]?.trim() || "").replace(/^["']|["']$/g, "");
 }
 
 function readCloudEnv(suffix: string): string {
