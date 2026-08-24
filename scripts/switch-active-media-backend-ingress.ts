@@ -54,18 +54,27 @@ async function main() {
   console.log("\nTelnyx FQDN:", telnyx);
 
   const prisma = getPrisma();
-  const phones = e164Arg
+  const allPhones = e164Arg
     ? await prisma.phoneNumber.findMany({
         where: { e164: e164Arg, status: { not: "released" } },
-        select: { id: true, e164: true, workspaceId: true },
+        select: { id: true, e164: true, workspaceId: true, settingsJson: true },
       })
     : await prisma.phoneNumber.findMany({
-        where: {
-          status: { not: "released" },
-          routingMode: "livekit_sip",
-        },
-        select: { id: true, e164: true, workspaceId: true },
+        where: { status: { not: "released" } },
+        select: { id: true, e164: true, workspaceId: true, settingsJson: true },
       });
+
+  const phones = allPhones.filter((phone) => {
+    if (e164Arg) return true;
+    const settings = (phone.settingsJson || {}) as Record<string, unknown>;
+    const telephony = (settings.telephony || {}) as Record<string, unknown>;
+    const provision = (settings.provisioning || telephony.provision || {}) as Record<
+      string,
+      unknown
+    >;
+    const routingMode = provision.routingMode || telephony.routingMode;
+    return routingMode === "livekit_sip" || routingMode === undefined;
+  });
 
   if (!phones.length) {
     throw new Error(e164Arg ? `No active number for ${e164Arg}` : "No LiveKit-routed numbers found");
