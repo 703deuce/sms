@@ -157,7 +157,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     },
     {
       label: "Buy Numbers",
-      href: "/voice/numbers/buy",
+      href: "/numbers/buy",
       icon: ShoppingCart,
     },
     {
@@ -221,7 +221,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/voicemail") || pathname.startsWith("/personal/voicemail")) {
     return "Visual Voicemail";
   }
-  if (pathname === "/voice/numbers/buy") return "Buy Numbers";
+  if (pathname === "/numbers/buy") return "Buy Numbers";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/compliance")) return "Messaging Compliance";
   if (pathname.startsWith("/integrations")) return "Integrations";

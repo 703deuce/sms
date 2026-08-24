@@ -35,7 +35,7 @@ export default async function VoiceNumbersPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/voice/numbers/buy"
+              href="/numbers/buy"
               className="inline-flex h-9 items-center rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-white hover:bg-primary-hover"
             >
               Add number
@@ -66,7 +66,7 @@ export default async function VoiceNumbersPage() {
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-muted-foreground">
                   No numbers yet.{" "}
-                  <Link href="/voice/numbers/buy" className="font-semibold text-primary underline">
+                  <Link href="/numbers/buy" className="font-semibold text-primary underline">
                     Add your first business number
                   </Link>{" "}
                   to start missed-call recovery.

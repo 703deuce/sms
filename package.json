@@ -62,6 +62,8 @@
     "test:ai-transcription": "tsx scripts/test-ai-transcription.ts",
     "test:mctb-sip-ingress-send-gate": "tsx scripts/test-mctb-sip-ingress-send-gate.ts",
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",
+    "test:call-handling-mode": "tsx scripts/test-call-handling-mode.ts",
+    "test:mctb-regression-baseline": "tsx scripts/mctb-regression-baseline.ts --write",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
     "test:transovo-voicemail": "tsx scripts/test-transovo-voicemail.ts",

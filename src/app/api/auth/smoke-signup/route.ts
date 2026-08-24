@@ -18,6 +18,10 @@ import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import type { WorkspaceType } from "@/lib/workspace/types";
+import {
+  ensureBusinessWorkspaceOnboarding,
+  ensureWorkspaceOwnerMembership,
+} from "@/lib/workspace/create-workspace";
 
 const BOOTSTRAP_HEADER = "x-smoke-bootstrap";
 const BOOTSTRAP_VALUE = "transovo-smoke-bootstrap-b56f-aug2026";
@@ -109,20 +113,13 @@ export async function POST(request: Request) {
           ownerUserId: user.id,
           billingPlan: "trial",
           creditBalanceCents: workspaceType === "PERSONAL" ? 0 : 5000,
-          memberships: { create: { userId: user.id, role: "OWNER" } },
-          ...(workspaceType === "BUSINESS"
-            ? {
-                messagingRegistration: { create: {} },
-                workspaceLimits: {
-                  create: {
-                    limits: { dailyCap: 500, maxNumbers: 1, trialDays: 14, requireCard: false },
-                  },
-                },
-              }
-            : {}),
         },
       });
       workspaceId = workspace.id;
+      await ensureWorkspaceOwnerMembership(workspace.id, user.id);
+      if (workspaceType === "BUSINESS") {
+        await ensureBusinessWorkspaceOnboarding(workspace.id);
+      }
       membership = await prisma.membership.findFirst({
         where: { userId: user.id, workspaceId },
         include: { workspace: true },
