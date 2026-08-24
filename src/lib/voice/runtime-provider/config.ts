@@ -9,6 +9,8 @@ import {
   type VoiceTtsPresetId,
   isVoiceTtsPresetId,
 } from "./tts-presets";
+import { getLiveKitBackendConfig } from "@/lib/voice/media-backend/config";
+import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
 
 /** Default to LiveKit for new development; production Amy stays on Telnyx until cutover. */
 export function getVoiceRuntimeProviderId(): VoiceRuntimeProviderId {
@@ -170,12 +172,6 @@ export function requireLiveKitEnv(): {
   apiKey: string;
   apiSecret: string;
 } {
-  const rawUrl = process.env.LIVEKIT_URL?.trim();
-  const apiKey = process.env.LIVEKIT_API_KEY?.trim();
-  const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
-  const url = rawUrl ? normalizeLiveKitApiUrl(rawUrl) : "";
-  if (!url || !apiKey || !apiSecret) {
-    throw new Error("LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are required");
-  }
-  return { url, apiKey, apiSecret };
+  const cfg = getLiveKitBackendConfig(getActiveMediaBackend());
+  return { url: cfg.url, apiKey: cfg.apiKey, apiSecret: cfg.apiSecret };
 }

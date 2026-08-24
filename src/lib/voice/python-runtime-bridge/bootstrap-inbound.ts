@@ -220,7 +220,6 @@ export async function bootstrapInboundForPython(
 
   const mediaBackend = await resolveMediaBackend({
     callId: input.predeterminedCallId || roomMeta?.callId,
-    toE164: normalizedTo || toE164,
     mediaBackend:
       parseMediaBackend(jobMetaRaw?.mediaBackend) ||
       parseMediaBackend((roomMeta as { mediaBackend?: unknown } | null)?.mediaBackend),

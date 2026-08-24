@@ -1,25 +1,20 @@
 import { SipClient } from "livekit-server-sdk";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import {
+  getActiveMediaBackend,
+  resolveMediaBackend,
+} from "@/lib/voice/media-backend/resolver";
+import {
   getLiveKitSipClientForBackend,
   resetLiveKitClientsForTests,
-  resolveMediaBackend,
-} from "@/lib/voice/media-backend";
-
-let defaultBackend: MediaBackend | null = null;
+} from "@/lib/voice/media-backend/client";
 
 /**
- * LiveKit SIP client for the given backend, or LiveKit Cloud when omitted.
+ * LiveKit SIP client for the active media backend, or an explicit override.
  * Prefer getLiveKitSipClientForCall(callId) for active calls.
  */
 export function getLiveKitSipClient(backend?: MediaBackend): SipClient {
-  if (backend) {
-    return getLiveKitSipClientForBackend(backend);
-  }
-  if (defaultBackend) {
-    return getLiveKitSipClientForBackend(defaultBackend);
-  }
-  return getLiveKitSipClientForBackend("livekit_cloud");
+  return getLiveKitSipClientForBackend(backend ?? getActiveMediaBackend());
 }
 
 export async function getLiveKitSipClientForCall(
@@ -39,12 +34,11 @@ export async function getLiveKitSipClientResolved(
   };
 }
 
-/** @internal test hook — avoid async resolve in unit tests */
-export function setDefaultLiveKitSipBackendForTests(backend: MediaBackend | null) {
-  defaultBackend = backend;
+/** @internal test hook */
+export function setDefaultLiveKitSipBackendForTests(_backend: MediaBackend | null) {
+  // no-op: active backend comes from MEDIA_BACKEND_MODE only
 }
 
 export function resetLiveKitSipClientForTests() {
-  defaultBackend = null;
   resetLiveKitClientsForTests();
 }

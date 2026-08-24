@@ -31,8 +31,6 @@ import {
   ensureTelnyxLiveKitFqdnConnection,
   routeTelnyxNumberToConnection,
 } from "./telnyx/sip-connection";
-import { ensureTelnyxFqdnConnectionForBackend } from "@/lib/voice/media-backend/telnyx-failover";
-import { resolveMediaBackend } from "@/lib/voice/media-backend/resolver";
 import { resolveAgentByCalledNumber } from "./agent-routing";
 import type {
   AssignNumberToAgentInput,
@@ -200,10 +198,9 @@ export async function ensureNumberProvisioned(
   }
 
   try {
-    const mediaBackend = await resolveMediaBackend({ toE164: phone.e164 });
     const { connectionId, fqdnId, actions: telnyxActions } =
-      await ensureTelnyxFqdnConnectionForBackend(mediaBackend);
-    actions.push(...telnyxActions, `media_backend:${mediaBackend}`);
+      await ensureTelnyxLiveKitFqdnConnection();
+    actions.push(...telnyxActions);
 
     const route = await routeTelnyxNumberToConnection({
       e164: phone.e164,
@@ -216,9 +213,7 @@ export async function ensureNumberProvisioned(
       actions.push("telnyx_route_ok");
     }
 
-    const { trunk, actions: trunkActions } = await ensureInboundTrunkForNumber(phone.e164, {
-      backend: mediaBackend,
-    });
+    const { trunk, actions: trunkActions } = await ensureInboundTrunkForNumber(phone.e164);
     actions.push(...trunkActions);
 
     const trunkId = trunk.sipTrunkId || "";
@@ -226,7 +221,6 @@ export async function ensureNumberProvisioned(
 
     const { rule, actions: dispatchActions } = await ensureSharedDispatchRule({
       trunkId,
-      backend: mediaBackend,
     });
     actions.push(...dispatchActions);
 
@@ -259,10 +253,7 @@ export async function ensureNumberProvisioned(
     let livekitOutboundTrunkId: string | undefined;
     try {
       const { trunk: outboundTrunk, actions: outboundActions } =
-        await ensureLiveKitOutboundTrunk({
-          callerIdE164: phone.e164,
-          backend: mediaBackend,
-        });
+        await ensureLiveKitOutboundTrunk({ callerIdE164: phone.e164 });
       actions.push(...outboundActions);
       livekitOutboundTrunkId = outboundTrunk.sipTrunkId || undefined;
     } catch (outboundErr) {

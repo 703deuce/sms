@@ -1,46 +1,37 @@
-# Coolify env — self-hosted LiveKit primary
+# LiveKit media backend selector
 
-Production uses **self-hosted LiveKit** at your production WebSocket URL. LiveKit Cloud credentials stay in `LIVEKIT_CLOUD_*` for rollback.
+The app supports two LiveKit configurations side by side. **Existing Cloud env vars are unchanged.**
 
-## Primary (set on `transovo-web` and `transovo-voice`)
+## Cloud (default — existing production)
 
-| Variable | Value |
-|----------|--------|
-| `LIVEKIT_URL` | Self-hosted WebSocket URL |
-| `LIVEKIT_API_KEY` | Self-hosted API key (from Hetzner server env) |
-| `LIVEKIT_API_SECRET` | Self-hosted API secret |
-| `LIVEKIT_SIP_URI` | Self-hosted SIP ingress hostname |
-| `LIVEKIT_SIP_HOST` | Same as SIP URI |
-| `LIVEKIT_INBOUND_TRUNK_ID` | Self-hosted inbound trunk id |
-| `LIVEKIT_DEFAULT_OUTBOUND_TRUNK_ID` | Self-hosted outbound trunk id |
-| `LIVEKIT_DISPATCH_RULE_ID` | Self-hosted dispatch rule id |
+Already in Coolify; do not rename or repurpose:
 
-## Cloud fallback (keep for rollback — do not delete)
+- `LIVEKIT_URL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_SIP_URI` / trunk / dispatch vars as today
 
-| Variable | Value |
-|----------|--------|
-| `LIVEKIT_CLOUD_URL` | Previous Cloud WebSocket URL |
-| `LIVEKIT_CLOUD_API_KEY` | Previous Cloud API key |
-| `LIVEKIT_CLOUD_API_SECRET` | Previous Cloud API secret |
-| `LIVEKIT_CLOUD_SIP_URI` | Previous `*.sip.livekit.cloud` SIP URI |
-| `LIVEKIT_CLOUD_INBOUND_TRUNK_ID` | Cloud inbound trunk id |
-| `LIVEKIT_CLOUD_OUTBOUND_TRUNK_ID` | Cloud outbound trunk id |
-| `LIVEKIT_CLOUD_DISPATCH_RULE_ID` | Cloud dispatch rule id |
+## Self-hosted (add alongside Cloud)
 
-## Swap helper
+- `LIVEKIT_SELF_HOSTED_URL`
+- `LIVEKIT_SELF_HOSTED_API_KEY`
+- `LIVEKIT_SELF_HOSTED_API_SECRET`
+- `LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID`
+- `LIVEKIT_SELF_HOSTED_OUTBOUND_TRUNK_ID`
+- `LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID`
+- `LIVEKIT_SELF_HOSTED_SIP_HOST` (optional; derived from URL if omitted)
 
-```bash
-node scripts/switch-livekit-primary-to-self-hosted.mjs print   # env checklist (redacted)
-node scripts/switch-livekit-primary-to-self-hosted.mjs verify  # API auth to self-hosted server
+## Selector (both `transovo-web` and `transovo-voice`)
+
+```
+MEDIA_BACKEND_MODE=livekit_cloud   # default — existing behavior
+MEDIA_BACKEND_MODE=self_hosted   # use self-hosted LiveKit server
 ```
 
-## After updating Coolify
+Rollback: set `MEDIA_BACKEND_MODE=livekit_cloud` and redeploy. No other config changes.
 
-1. Redeploy **transovo-web** and **transovo-voice**
-2. Run `verify` — expect TLS 200 and no auth errors in logs
-3. Call your existing **571-407** business number
-4. Confirm voice worker logs show self-hosted host, not livekit.cloud
+## After deploy
 
-## Rollback to Cloud
-
-Restore `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` from `LIVEKIT_CLOUD_*` values and redeploy.
+1. Redeploy `transovo-web` and `transovo-voice`
+2. Confirm logs show `mediaBackend=self_hosted` when mode is set
+3. Call your existing 571-407 business number

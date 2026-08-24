@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 /**
- * Media backend integration tests (resolver, health, pinning, backend audit).
+ * Media backend selector tests.
  * Run: npx tsx scripts/test-media-backend.ts
  */
 import assert from "node:assert/strict";
 import {
+  getActiveMediaBackend,
   getMediaBackendMode,
   isMediaBackendConfigured,
   parseMediaBackend,
-  resetMediaBackendHealthForTests,
   resetLiveKitClientsForTests,
 } from "../src/lib/voice/media-backend";
-import { setDefaultLiveKitSipBackendForTests } from "../src/lib/telephony/provisioning/livekit/client";
 
 async function main() {
   const failures: string[] = [];
@@ -32,20 +31,28 @@ async function main() {
     assert.equal(parseMediaBackend("invalid"), null);
   });
 
-  await check("media_backend_mode_default", () => {
+  await check("media_backend_mode_default_cloud", () => {
     const prev = process.env.MEDIA_BACKEND_MODE;
     delete process.env.MEDIA_BACKEND_MODE;
-    assert.equal(getMediaBackendMode(), "auto");
+    assert.equal(getMediaBackendMode(), "livekit_cloud");
+    assert.equal(getActiveMediaBackend(), "livekit_cloud");
     if (prev) process.env.MEDIA_BACKEND_MODE = prev;
+  });
+
+  await check("media_backend_mode_self_hosted", () => {
+    const prev = process.env.MEDIA_BACKEND_MODE;
+    process.env.MEDIA_BACKEND_MODE = "self_hosted";
+    assert.equal(getMediaBackendMode(), "self_hosted");
+    assert.equal(getActiveMediaBackend(), "self_hosted");
+    if (prev) process.env.MEDIA_BACKEND_MODE = prev;
+    else delete process.env.MEDIA_BACKEND_MODE;
   });
 
   await check("cloud_backend_configured", () => {
     assert.equal(isMediaBackendConfigured("livekit_cloud"), true);
   });
 
-  resetMediaBackendHealthForTests();
   resetLiveKitClientsForTests();
-  setDefaultLiveKitSipBackendForTests(null);
 
   if (failures.length) {
     console.error("\nFailures:", failures);

@@ -20,7 +20,6 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
       metadata.mediaBackend ||
       (await resolveMediaBackend({
         callId: metadata.callId,
-        toE164: metadata.toE164,
       }));
     let callId = metadata.callId;
 

@@ -1,10 +1,8 @@
-/** LiveKit media plane — self-hosted Hetzner or LiveKit Cloud. */
+/** LiveKit media plane — self-hosted or LiveKit Cloud. */
 export type MediaBackend = "self_hosted" | "livekit_cloud";
 
-/** Admin override for which backend new app-originated calls use. */
-export type MediaBackendMode = "auto" | MediaBackend;
-
-export type MediaBackendHealthStatus = "healthy" | "degraded" | "unavailable";
+/** Which backend new calls use. Default `livekit_cloud` preserves existing behavior. */
+export type MediaBackendMode = MediaBackend;
 
 export type LiveKitBackendConfig = {
   backend: MediaBackend;
@@ -23,23 +21,8 @@ export type LiveKitBackendConfig = {
 export type ResolveMediaBackendContext = {
   /** Existing call — never change backend mid-call. */
   callId?: string | null;
-  /** Inbound DID when known. */
-  toE164?: string | null;
-  /** Hint from dispatch metadata / SIP trunk id. */
+  /** Hint from dispatch metadata / room metadata. */
   mediaBackend?: MediaBackend | null;
-  /** Force backend for provisioning or tests. */
+  /** Force backend for tests. */
   forceBackend?: MediaBackend | null;
-};
-
-export type MediaBackendHealthSnapshot = {
-  backend: MediaBackend;
-  status: MediaBackendHealthStatus;
-  checkedAt: string;
-  checks: Array<{
-    name: string;
-    ok: boolean;
-    detail?: string;
-  }>;
-  consecutiveFailures: number;
-  consecutiveSuccesses: number;
 };
