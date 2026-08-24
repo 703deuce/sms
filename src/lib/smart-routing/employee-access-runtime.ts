@@ -78,6 +78,24 @@ export async function tryStartEmployeeAccess(input: {
     },
   });
 
+  const { shouldSkipPinForAuthorizedCaller, touchAuthorizedCallerAccess } = await import(
+    "./employee-auth-mode"
+  );
+  const skipPin = await shouldSkipPinForAuthorizedCaller({
+    workspaceId: input.workspaceId,
+    authorizedCallerId: input.authorizedCallerId,
+    callerPhoneE164: input.callerE164,
+  });
+  if (skipPin) {
+    await touchAuthorizedCallerAccess(input.authorizedCallerId);
+    await prisma.smartRoutingAccessSession.update({
+      where: { id: session.id },
+      data: { state: "menu" },
+    });
+    await playOutboundMenu(input.callControlId, session.id, input.workspaceId);
+    return { started: true as const, accessSessionId: session.id, employeeAccess: true as const };
+  }
+
   const clientState = encodeEmployeeAccessState({
     kind: "smart_routing_employee",
     accessSessionId: session.id,
@@ -171,13 +189,23 @@ export async function handleEmployeeAccessGather(input: {
       callerId: access.authorizedCallerId,
       pin: digits,
     });
-    if (!verified.ok) {
+    let pinOk = verified.ok;
+    if (!pinOk && access.authorizedCallerId) {
+      const { verifyTemporaryCallbackCode } = await import("./callback-code-service");
+      const codeCheck = await verifyTemporaryCallbackCode({
+        workspaceId: input.workspaceId,
+        authorizedCallerId: access.authorizedCallerId,
+        code: digits,
+      });
+      pinOk = codeCheck.ok;
+    }
+    if (!pinOk) {
       const attempts = access.pinAttempts + 1;
       await prisma.smartRoutingAccessSession.update({
         where: { id: access.id },
         data: { pinAttempts: attempts },
       });
-      if (attempts >= 5 || verified.reason === "locked") {
+      if (attempts >= 5 || (!verified.ok && verified.reason === "locked")) {
         await speakOnCallRaw(input.callControlId, "Too many incorrect attempts. Goodbye.");
         await hangupCall(input.callControlId);
         return { handled: true, done: true };
@@ -200,6 +228,10 @@ export async function handleEmployeeAccessGather(input: {
       where: { id: access.id },
       data: { state: "menu", pinAttempts: 0 },
     });
+    if (access.authorizedCallerId) {
+      const { touchAuthorizedCallerAccess } = await import("./employee-auth-mode");
+      await touchAuthorizedCallerAccess(access.authorizedCallerId);
+    }
     await playOutboundMenu(input.callControlId, access.id, input.workspaceId);
     return { handled: true, done: false };
   }

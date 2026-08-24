@@ -8,6 +8,7 @@ import {
 } from "@/lib/smart-routing/workspace-settings";
 import { getCallerIdVerificationStatus } from "@/lib/smart-routing/caller-id-verification";
 import { listAuthorizedCallers } from "@/lib/smart-routing/authorized-callers";
+import { listApprovedCallerIdentities } from "@/lib/smart-routing/caller-id-resolver";
 import { CARRIER_FORWARDING_GUIDES } from "@/lib/smart-routing/forwarding-service";
 import { computeSetupReadiness } from "@/lib/smart-routing/setup-readiness";
 import { evaluateScheduleBranch } from "@/lib/smart-routing/schedule-engine";
@@ -25,6 +26,7 @@ export async function GET() {
     const settings = await ensureCallbackNumberAssigned(auth.workspaceId);
     const callerId = await getCallerIdVerificationStatus(auth.workspaceId);
     const authorizedCallers = await listAuthorizedCallers(auth.workspaceId);
+    const callerIdentities = await listApprovedCallerIdentities(auth.workspaceId);
     const prisma = getPrisma();
     const workspace = await prisma.workspace.findUnique({
       where: { id: auth.workspaceId },
@@ -142,6 +144,7 @@ export async function GET() {
         workspaceName: workspace?.name ?? null,
         settings,
         callerId,
+        callerIdentities,
         authorizedCallers,
         phoneNumbers,
         flows,

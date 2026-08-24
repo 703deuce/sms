@@ -226,6 +226,16 @@ export async function executeNode(input: {
           break;
         }
         const { startWhisperTransfer } = await import("./whisper-service");
+        const { buildRichWhisperText } = await import("./whisper-text-builder");
+        const acceptDigit = String(node.config.acceptDigit ?? "1");
+        const whisperText = await buildRichWhisperText({
+          workspaceId: session.workspaceId,
+          sessionId: input.sessionId,
+          callerE164: session.callerNumber,
+          routeLabel: String(node.config.routeLabel ?? node.config.label ?? ""),
+          destinationWhisperLabel: String(node.config.whisperText ?? node.config.text ?? ""),
+          acceptDigit,
+        });
         await startWhisperTransfer({
           sessionId: input.sessionId,
           workspaceId: session.workspaceId,
@@ -234,12 +244,8 @@ export async function executeNode(input: {
           callerControlId: controlId,
           agentPhone: phone,
           fromNumber: session.calledNumber,
-          whisperText: String(
-            node.config.whisperText ??
-              node.config.text ??
-              "Incoming business call. Press 1 to accept.",
-          ),
-          acceptDigit: String(node.config.acceptDigit ?? "1"),
+          whisperText,
+          acceptDigit,
         });
         await completeNodeExecution(execution.id, { whisperTo: phone });
         return { done: false, awaiting: "whisper" };
@@ -273,10 +279,11 @@ export async function executeNode(input: {
         const greeting = String(
           node.config.greeting ?? "Please leave a message after the tone.",
         );
+        const notifyEmail = String(node.config.notifyEmail ?? "").trim() || null;
         await speakOnCall(controlId, greeting, clientBase, input.sessionId);
         await startRecording(controlId, input.sessionId);
         await updateSessionState(input.sessionId, {
-          stateJson: { ...state, awaitingEvent: "voicemail" },
+          stateJson: { ...state, awaitingEvent: "voicemail", voicemailNotifyEmail: notifyEmail },
         });
         await completeNodeExecution(execution.id, { recording: true });
         return { done: false, awaiting: "voicemail" };

@@ -55,6 +55,16 @@ export async function tryStartSmartRoutingInbound(input: {
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
   if (!flow?.publishedVersionId) return { started: false as const };
 
+  const { isCallerBlockedForSmartRouting } = await import("./blocked-callers");
+  if (await isCallerBlockedForSmartRouting(input.workspaceId, input.fromE164)) {
+    if (callControlId) {
+      const { speakOnCallRaw, hangupCall } = await import("./telnyx-provider");
+      await speakOnCallRaw(callControlId, "Your call cannot be completed as dialed. Goodbye.");
+      await hangupCall(callControlId);
+    }
+    return { started: false as const, blocked: true as const };
+  }
+
   const prisma = getPrisma();
   const existing = await prisma.smartRoutingCallSession.findFirst({
     where: { callControlId },
@@ -168,6 +178,55 @@ async function handleLegEvents(input: {
       ? input.eventPayload.client_state
       : undefined;
   const anyState = decodeAnySmartRoutingState(rawState);
+
+  if (anyState?.kind === "smart_routing_ring_confirm") {
+    const confirmState = anyState as {
+      sessionId: string;
+      workspaceId: string;
+      parentCallControlId: string;
+      winningLegId: string;
+      destinationId?: string;
+    };
+    if (
+      input.eventType === "call.gather.ended" ||
+      input.eventType === "call.dtmf.received"
+    ) {
+      const digit = String(input.eventPayload.digits ?? input.eventPayload.digit ?? "").trim();
+      if (digit === "1") {
+        const { completeRingLegAccept } = await import("./ring-group-service");
+        await completeRingLegAccept({
+          sessionId: confirmState.sessionId,
+          parentCallControlId: confirmState.parentCallControlId,
+          winningLegId: confirmState.winningLegId,
+          workspaceId: confirmState.workspaceId,
+          destinationId: confirmState.destinationId,
+        });
+        await finalizeSession(confirmState.sessionId, "connected");
+        return { handled: true as const, kind: "ring_confirmed" };
+      }
+      const { handleTransferResult } = await import("./flow-runtime");
+      await telnyxHangup(String(input.eventPayload.call_control_id ?? ""));
+      return {
+        handled: true as const,
+        ...(await handleTransferResult({
+          sessionId: confirmState.sessionId,
+          answered: false,
+        })),
+      };
+    }
+  }
+
+  if (input.eventType === "call.dtmf.received") {
+    const digit = String(input.eventPayload.digit ?? "").trim();
+    const callControlId = String(input.eventPayload.call_control_id ?? "");
+    if (digit && callControlId) {
+      const { handleConnectedCallDtmf } = await import("./call-control-service");
+      const dtmf = await handleConnectedCallDtmf({ callControlId, digit });
+      if (dtmf.handled) {
+        return { handled: true as const, kind: "connected_dtmf", action: dtmf.action };
+      }
+    }
+  }
 
   const employeeState = decodeEmployeeAccessState(rawState);
   if (employeeState) {
@@ -428,6 +487,42 @@ export async function processSmartRoutingWebhookEvent(input: {
     }
     const digits =
       String(input.eventPayload.digits ?? input.eventPayload.digit ?? "").trim();
+    if (clientState.awaiting === "transfer_menu") {
+      const employeeCallControlId = String(input.eventPayload.call_control_id ?? "");
+      const { handleTransferMenuDigit } = await import("./call-control-service");
+      const menu = await handleTransferMenuDigit({
+        sessionId,
+        workspaceId: clientState.workspaceId,
+        flowId: clientState.flowId,
+        employeeCallControlId,
+        digit: digits.charAt(0) || "",
+      });
+      return { handled: true as const, action: menu.action, kind: "transfer_menu" };
+    }
+    if (clientState.awaiting === "transfer_pick_destination") {
+      const employeeCallControlId = String(input.eventPayload.call_control_id ?? "");
+      const { handleTransferDestinationPick } = await import("./call-control-service");
+      await handleTransferDestinationPick({
+        sessionId,
+        workspaceId: clientState.workspaceId,
+        flowId: clientState.flowId,
+        employeeCallControlId,
+        digit: digits.charAt(0) || "",
+      });
+      return { handled: true as const, kind: "transfer_pick" };
+    }
+    if (clientState.awaiting === "transfer_manual_entry") {
+      const employeeCallControlId = String(input.eventPayload.call_control_id ?? "");
+      const { handleTransferManualEntry } = await import("./call-control-service");
+      await handleTransferManualEntry({
+        sessionId,
+        workspaceId: clientState.workspaceId,
+        flowId: clientState.flowId,
+        employeeCallControlId,
+        digits,
+      });
+      return { handled: true as const, kind: "transfer_manual" };
+    }
     const status = String(input.eventPayload.status ?? "");
     const result = await handleGatherResult({
       sessionId,
@@ -487,6 +582,16 @@ export async function processSmartRoutingWebhookEvent(input: {
         sessionId,
         payload: { url },
       });
+      const state = (session.stateJson as SessionState) ?? {};
+      const notifyEmail = (state.voicemailNotifyEmail as string | undefined) ?? null;
+      const { notifySmartRoutingVoicemailReceived } = await import("./voicemail-notify");
+      await notifySmartRoutingVoicemailReceived({
+        workspaceId: session.workspaceId,
+        sessionId,
+        callerE164: session.callerNumber,
+        recordingUrl: url,
+        notifyEmail,
+      });
       const { finalizeSession } = await import("./flow-runtime");
       await finalizeSession(sessionId, "voicemail");
     }
@@ -499,6 +604,8 @@ export async function processSmartRoutingWebhookEvent(input: {
       where: { id: sessionId, completedAt: null },
       data: { completedAt: new Date(), finalOutcome: "caller_hung_up" },
     });
+    const { teardownConnectedCallControl } = await import("./call-control-service");
+    await teardownConnectedCallControl(sessionId, session.workspaceId);
     return { handled: true as const, kind: "hangup" };
   }
 

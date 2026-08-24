@@ -109,6 +109,14 @@ export type SessionState = {
   ringLegIds?: string[];
   ringMode?: "simultaneous" | "sequential";
   ringPhones?: string[];
+  ringDestinationMeta?: Array<{
+    phone: string;
+    destinationId: string;
+    answerConfirmationEnabled: boolean;
+  }>;
+  ringConfirmLegId?: string;
+  ringConfirmDestinationId?: string;
+  voicemailNotifyEmail?: string | null;
   recordingAssetId?: string;
 };
 

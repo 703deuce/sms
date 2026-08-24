@@ -326,6 +326,7 @@ model Workspace {
   smartRoutingEmployeeAccessTokens SmartRoutingEmployeeAccessToken[]
   smartRoutingCallRecordings SmartRoutingCallRecording[]
   smartRoutingCallControlSessions SmartRoutingCallControlSession[]
+  smartRoutingCallbackCodes SmartRoutingCallbackCode[]
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
   callbackRequests CallbackRequest[]
@@ -4016,6 +4017,7 @@ model SmartRoutingAuthorizedCaller {
   workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   outboundCalls     SmartRoutingOutboundCall[]
   employeeAccessTokens SmartRoutingEmployeeAccessToken[]
+  callbackCodes          SmartRoutingCallbackCode[]
 
   @@unique([workspaceId, phoneE164])
   @@index([workspaceId, active])
@@ -4142,6 +4144,26 @@ model SmartRoutingCallControlSession {
 
   @@index([callSessionId])
   @@map("smart_routing_call_control_sessions")
+}
+
+/// Short-lived numeric codes for PIN bypass on callback access number.
+model SmartRoutingCallbackCode {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  authorizedCallerId String
+  codeHash           String
+  label              String?
+  expiresAt          DateTime
+  usedAt             DateTime?
+  revokedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  authorizedCaller   SmartRoutingAuthorizedCaller @relation(fields: [authorizedCallerId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, authorizedCallerId])
+  @@index([expiresAt])
+  @@map("smart_routing_callback_codes")
 }
 
 /// AI Routing Assistant — draft proposals awaiting human approval.

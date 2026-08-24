@@ -131,6 +131,19 @@ export async function PUT(request: Request) {
       });
       return NextResponse.json({ data: { mode: "closed_now", until: until.toISOString() } });
     }
+    if (body.action === "open_now") {
+      const until = body.until
+        ? new Date(body.until)
+        : new Date(Date.now() + 4 * 60 * 60 * 1000);
+      const base = await loadScheduleOverrideJson(auth.workspaceId);
+      await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
+        scheduleOverrideJson: {
+          ...base,
+          scheduleOverride: { mode: "open_now", expiresAt: until.toISOString() },
+        },
+      });
+      return NextResponse.json({ data: { mode: "open_now", until: until.toISOString() } });
+    }
     if (body.action === "clear_override") {
       const base = await loadScheduleOverrideJson(auth.workspaceId);
       const { scheduleOverride: _closed, ...rest } = base;

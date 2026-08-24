@@ -90,6 +90,7 @@ export async function startWhisperTransfer(input: {
       whisperAgentControlId: agentLegId,
       whisperText: input.whisperText,
       acceptDigit: input.acceptDigit ?? "1",
+      whisperAgentPhone: input.agentPhone,
     } as SessionState,
     currentNodeId: input.nodeId,
   });
@@ -133,9 +134,35 @@ export async function completeWhisperAccept(input: {
   sessionId: string;
   parentCallControlId: string;
   agentControlId: string;
+  workspaceId?: string;
 }) {
+  const session = await import("./session-store").then((m) => m.loadCallSession(input.sessionId));
+  if (session) {
+    const { maybePlayRecordingAnnouncement } = await import("./recording-announcement");
+    await maybePlayRecordingAnnouncement({
+      workspaceId: session.workspaceId,
+      customerCallControlId: input.parentCallControlId,
+      sessionId: input.sessionId,
+      direction: "inbound",
+    });
+  }
+
   await unholdCall(input.parentCallControlId, input.sessionId);
   await bridgeCalls(input.parentCallControlId, input.agentControlId, input.sessionId);
+
+  if (session) {
+    const state = (session.stateJson as SessionState) ?? {};
+    const agentPhone = state.whisperAgentPhone as string | undefined;
+    const { registerConnectedCallControl } = await import("./call-control-service");
+    await registerConnectedCallControl({
+      workspaceId: session.workspaceId,
+      callSessionId: input.sessionId,
+      employeeCallControlId: input.agentControlId,
+      customerCallControlId: input.parentCallControlId,
+      employeePhoneE164: agentPhone,
+    });
+  }
+
   await updateSessionState(input.sessionId, {
     answeredAt: new Date(),
     stateJson: { awaitingEvent: undefined, whisperPending: false } as SessionState,

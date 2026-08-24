@@ -144,11 +144,34 @@ export async function bridgeEmployeeToCustomer(input: {
   outboundCallId: string;
 }) {
   const prisma = getPrisma();
+  const outbound = await prisma.smartRoutingOutboundCall.findUnique({
+    where: { id: input.outboundCallId },
+  });
+  if (outbound) {
+    const { maybePlayRecordingAnnouncement } = await import("./recording-announcement");
+    await maybePlayRecordingAnnouncement({
+      workspaceId: outbound.workspaceId,
+      customerCallControlId: input.customerCallControlId,
+      direction: "outbound",
+    });
+  }
+
   await bridgeCalls(input.employeeCallControlId, input.customerCallControlId);
   await prisma.smartRoutingOutboundCall.update({
     where: { id: input.outboundCallId },
     data: { bridgedAt: new Date(), result: "bridged" },
   });
+
+  if (outbound) {
+    const { registerConnectedCallControl } = await import("./call-control-service");
+    await registerConnectedCallControl({
+      workspaceId: outbound.workspaceId,
+      callSessionId: outbound.contextRefId ?? outbound.id,
+      employeeCallControlId: input.employeeCallControlId,
+      customerCallControlId: input.customerCallControlId,
+      employeePhoneE164: outbound.employeePhoneE164,
+    });
+  }
 }
 
 export async function finalizeOutboundCall(

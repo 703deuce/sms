@@ -192,6 +192,16 @@ export async function processInboundMessage(input: {
     }
   }
 
+  const { tryHandleEmployeeSmsCommand } = await import("@/lib/smart-routing/employee-sms-commands");
+  const employeeCmd = await tryHandleEmployeeSmsCommand({
+    workspaceId: input.workspaceId,
+    fromE164: from,
+    body,
+  });
+  if (employeeCmd.handled) {
+    return { kind: "message", replyText: employeeCmd.replyText };
+  }
+
   if (stopKeywords.includes(upper)) {
     const suppressionKey = `${input.workspaceId}:p:${from}`;
     try {

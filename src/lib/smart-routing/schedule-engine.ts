@@ -18,6 +18,10 @@ export async function evaluateScheduleBranch(
   const wsOverride = wsSettings?.scheduleOverrideJson as
     | { scheduleOverride?: { mode?: string; expiresAt?: string } }
     | null;
+  if (wsOverride?.scheduleOverride?.mode === "open_now" && wsOverride.scheduleOverride.expiresAt) {
+    const exp = new Date(wsOverride.scheduleOverride.expiresAt);
+    if (exp > at) return "open";
+  }
   if (wsOverride?.scheduleOverride?.mode === "closed_now" && wsOverride.scheduleOverride.expiresAt) {
     const exp = new Date(wsOverride.scheduleOverride.expiresAt);
     if (exp > at) return "temporary_closure";

@@ -20,6 +20,8 @@ import {
   mapContextTypeFromSource,
   type InitiateBusinessCallbackInput,
 } from "../src/lib/smart-routing/business-callback-types";
+import { isDestinationAvailable } from "../src/lib/smart-routing/destination-availability";
+import { isDomesticCallbackDestination, isBlockedCallbackDestination } from "../src/lib/smart-routing/callback-destination-policy";
 
 assert.equal(resolveAuthorizedCallerCallbackPhone({
   phoneE164: "+15715551234",
@@ -58,5 +60,10 @@ const input: InitiateBusinessCallbackInput = {
   initiationMethod: "employee_link",
 };
 assert.equal(mapContextTypeFromSource(input.sourceType), "activity");
+
+assert.equal(isDestinationAvailable({ active: true, onBusinessCall: true }), false);
+assert.equal(isDestinationAvailable({ active: true, onBusinessCall: false }), true);
+assert.equal(isBlockedCallbackDestination("+15551234567", { routingNumberE164: "+15559999999" }), false);
+assert.equal(isDomesticCallbackDestination("+17035551234"), true);
 
 console.log("test-transovo-phone-complete: ok");

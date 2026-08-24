@@ -6,6 +6,8 @@ import { BusinessCallBackButton } from "@/components/smart-routing/business-call
 import { BusinessCallbackGuide } from "@/components/smart-routing/business-callback-guide";
 import { OneClickBusinessCallbackPanel } from "@/components/smart-routing/one-click-business-callback-panel";
 import { CallerIdVerificationPanel } from "@/components/smart-routing/caller-id-verification-panel";
+import { CallerIdHealthPanel } from "@/components/smart-routing/caller-id-health-panel";
+import { CallbackSecurityPolicyPanel } from "@/components/smart-routing/callback-security-policy-panel";
 import { SrPageShell, srCard } from "@/components/smart-routing/shared";
 import { fmtPhoneDisplay } from "@/lib/smart-routing/display";
 import { cn } from "@/lib/utils";
@@ -25,6 +27,12 @@ type SetupSlice = {
     publicBusinessE164: string | null;
     method: string | null;
   };
+  callerIdentities?: Array<{
+    e164: string;
+    label: string;
+    verified: boolean;
+    callerNameStatus?: "registered" | "pending" | "not_configured";
+  }>;
   authorizedCallers: Array<{
     id: string;
     name: string;
@@ -138,6 +146,13 @@ export function SmartRoutingCallbackView() {
               onVerified={load}
             />
           </div>
+
+          <CallerIdHealthPanel
+            identities={data?.callerIdentities ?? []}
+            status={data?.callerId?.status ?? "not_verified"}
+          />
+
+          <CallbackSecurityPolicyPanel />
 
           <div className={cn(srCard, "p-5")}>
             <AuthorizedCallersPanel callers={data?.authorizedCallers ?? []} onUpdated={load} />

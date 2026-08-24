@@ -49,6 +49,19 @@ export function NeedsAttentionView() {
     await load();
   }
 
+  async function claim(item: NeedsAttentionItem) {
+    await fetch("/api/voice/needs-attention", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "claim",
+        kind: item.primaryKind,
+        id: item.primaryRefId,
+      }),
+    });
+    await load();
+  }
+
   async function assign(kind: string, id: string, assignedToUserId?: string) {
     if (kind !== "callback_request" && kind !== "voicemail") return;
     await fetch("/api/voice/needs-attention", {
@@ -154,6 +167,14 @@ export function NeedsAttentionView() {
                         Open voicemail
                       </Link>
                     ) : null}
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="text-xs"
+                      onClick={() => void claim(item)}
+                    >
+                      I&apos;ll handle this
+                    </Button>
                     {(item.primaryKind === "callback_request" || item.primaryKind === "voicemail") ? (
                       <Button
                         size="sm"

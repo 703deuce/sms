@@ -3,9 +3,7 @@ import "server-only";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { getPrisma } from "@/lib/db";
-import { isDestinationAvailable } from "./destination-availability";
-import { holdCall, recordCommandReceipt } from "./telnyx-provider";
+import { holdCall, recordCommandReceipt, gatherUsingSpeak } from "./telnyx-provider";
 import { updateSessionState } from "./session-store";
 import type { SessionState } from "./types";
 
@@ -32,16 +30,24 @@ export function decodeRingLegState(raw?: string): RingLegState | null {
 }
 
 async function resolvePhones(workspaceId: string, destinationIds: string[]) {
-  const prisma = getPrisma();
   const phones: string[] = [];
+  const meta: Array<{
+    phone: string;
+    destinationId: string;
+    answerConfirmationEnabled: boolean;
+  }> = [];
   for (const id of destinationIds) {
-    const dest = await prisma.smartRoutingDestination.findFirst({
-      where: { id, workspaceId },
+    const { resolveDestinationForRouting } = await import("./destination-resolver");
+    const dest = await resolveDestinationForRouting(workspaceId, id);
+    if (!dest) continue;
+    phones.push(dest.phone);
+    meta.push({
+      phone: dest.phone,
+      destinationId: dest.id,
+      answerConfirmationEnabled: dest.answerConfirmationEnabled,
     });
-    if (!dest?.phoneNumber || !isDestinationAvailable(dest)) continue;
-    phones.push(dest.phoneNumber.trim());
   }
-  return phones.filter(Boolean);
+  return { phones, meta };
 }
 
 export async function startRingGroup(input: {
@@ -57,10 +63,17 @@ export async function startRingGroup(input: {
   ringIndex?: number;
 }) {
   let phones: string[] = [];
+  let ringMeta: Array<{
+    phone: string;
+    destinationId: string;
+    answerConfirmationEnabled: boolean;
+  }> = [];
   if (input.phoneNumbers?.length) {
     phones = input.phoneNumbers.map((p) => p.trim()).filter(Boolean);
   } else if (input.destinationIds?.length) {
-    phones = await resolvePhones(input.workspaceId, input.destinationIds);
+    const resolved = await resolvePhones(input.workspaceId, input.destinationIds);
+    phones = resolved.phones;
+    ringMeta = resolved.meta;
   }
 
   if (!phones.length) return { legs: [], error: "no_destinations" };
@@ -122,6 +135,7 @@ export async function startRingGroup(input: {
       ringIndex: input.ringIndex ?? 0,
       ringMode: mode,
       ringPhones: phones,
+      ringDestinationMeta: ringMeta,
     } as SessionState,
   });
 
@@ -143,6 +157,14 @@ export async function handleRingLegAnswered(input: {
   const session = await import("./session-store").then((m) => m.loadCallSession(input.sessionId));
   const state = (session?.stateJson as SessionState) ?? {};
   const allLegs = state.ringLegIds ?? [];
+  const ringMeta = (state.ringDestinationMeta as Array<{
+    phone: string;
+    destinationId: string;
+    answerConfirmationEnabled: boolean;
+  }> | undefined) ?? [];
+  const legIndex = input.ringState.legIndex;
+  const destMeta = ringMeta[legIndex];
+  const needsConfirm = Boolean(destMeta?.answerConfirmationEnabled);
 
   for (const legId of allLegs) {
     if (legId !== input.winningLegId) {
@@ -153,6 +175,43 @@ export async function handleRingLegAnswered(input: {
     }
   }
 
+  if (needsConfirm) {
+    await gatherUsingSpeak({
+      callControlId: input.winningLegId,
+      text: "Incoming business call. Press 1 to accept.",
+      validDigits: "1",
+      timeoutMs: 8000,
+      clientState: {
+        kind: "smart_routing_ring_confirm",
+        sessionId: input.sessionId,
+        workspaceId: input.ringState.workspaceId,
+        flowId: input.ringState.flowId,
+        nodeId: input.ringState.nodeId,
+        parentCallControlId: input.parentCallControlId,
+        winningLegId: input.winningLegId,
+        destinationId: destMeta?.destinationId,
+      } as unknown as import("./telnyx-provider").SmartRoutingClientState,
+      sessionId: input.sessionId,
+    });
+    await updateSessionState(input.sessionId, {
+      stateJson: {
+        ...state,
+        awaitingEvent: "ring_confirm",
+        ringConfirmLegId: input.winningLegId,
+        ringConfirmDestinationId: destMeta?.destinationId,
+      } as SessionState,
+    });
+    return { connected: false, awaiting_confirm: true };
+  }
+
+  const { maybePlayRecordingAnnouncement } = await import("./recording-announcement");
+  await maybePlayRecordingAnnouncement({
+    workspaceId: input.ringState.workspaceId,
+    customerCallControlId: input.parentCallControlId,
+    sessionId: input.sessionId,
+    direction: "inbound",
+  });
+
   await telnyxRequest(`/calls/${input.parentCallControlId}/actions/unhold`, {
     method: "POST",
     body: {},
@@ -162,6 +221,16 @@ export async function handleRingLegAnswered(input: {
     body: { call_control_id: input.winningLegId },
   }).catch(() => undefined);
 
+  const { registerConnectedCallControl } = await import("./call-control-service");
+  await registerConnectedCallControl({
+    workspaceId: input.ringState.workspaceId,
+    callSessionId: input.sessionId,
+    employeeCallControlId: input.winningLegId,
+    customerCallControlId: input.parentCallControlId,
+    destinationId: destMeta?.destinationId,
+    employeePhoneE164: destMeta?.phone,
+  });
+
   await updateSessionState(input.sessionId, {
     answeredAt: new Date(),
     finalOutcome: "connected",
@@ -169,5 +238,49 @@ export async function handleRingLegAnswered(input: {
     completedAt: new Date(),
   });
 
+  return { connected: true };
+}
+
+export async function completeRingLegAccept(input: {
+  sessionId: string;
+  parentCallControlId: string;
+  winningLegId: string;
+  workspaceId: string;
+  destinationId?: string | null;
+  employeePhoneE164?: string | null;
+}) {
+  const { maybePlayRecordingAnnouncement } = await import("./recording-announcement");
+  await maybePlayRecordingAnnouncement({
+    workspaceId: input.workspaceId,
+    customerCallControlId: input.parentCallControlId,
+    sessionId: input.sessionId,
+    direction: "inbound",
+  });
+
+  await telnyxRequest(`/calls/${input.parentCallControlId}/actions/unhold`, {
+    method: "POST",
+    body: {},
+  }).catch(() => undefined);
+  await telnyxRequest(`/calls/${input.parentCallControlId}/actions/bridge`, {
+    method: "POST",
+    body: { call_control_id: input.winningLegId },
+  }).catch(() => undefined);
+
+  const { registerConnectedCallControl } = await import("./call-control-service");
+  await registerConnectedCallControl({
+    workspaceId: input.workspaceId,
+    callSessionId: input.sessionId,
+    employeeCallControlId: input.winningLegId,
+    customerCallControlId: input.parentCallControlId,
+    destinationId: input.destinationId,
+    employeePhoneE164: input.employeePhoneE164,
+  });
+
+  await updateSessionState(input.sessionId, {
+    answeredAt: new Date(),
+    finalOutcome: "connected",
+    stateJson: { awaitingEvent: undefined } as SessionState,
+    completedAt: new Date(),
+  });
   return { connected: true };
 }

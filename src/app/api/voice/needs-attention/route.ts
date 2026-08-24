@@ -96,6 +96,27 @@ export async function PATCH(request: Request) {
     const id = String(body.id || "");
     const prisma = getPrisma();
 
+    if (body.action === "claim" && kind && id) {
+      const assignedToUserId = auth.session.userId;
+      if (kind === "callback_request") {
+        await prisma.callbackRequest.updateMany({
+          where: { id, workspaceId: auth.workspaceId },
+          data: { assignedToUserId, status: "in_progress" },
+        });
+      } else if (kind === "voicemail") {
+        await prisma.voicemailMessage.updateMany({
+          where: { id, workspaceId: auth.workspaceId },
+          data: { assignedToUserId },
+        });
+      } else if (kind === "missed_call" || kind === "mctb_reply") {
+        await prisma.missedCallEvent.updateMany({
+          where: { id, workspaceId: auth.workspaceId },
+          data: { status: "IN_PROGRESS" },
+        });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     if (body.action === "assign" && kind && id) {
       const assignedToUserId = body.assignedToUserId
         ? String(body.assignedToUserId)

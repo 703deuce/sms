@@ -410,6 +410,19 @@ export function SmartRoutingActivityView({ flowId }: { flowId: string }) {
                   contextType="last_call"
                   contextRefId={selected.id}
                 />
+                <button
+                  type="button"
+                  className="text-[12px] font-semibold text-red-700 hover:underline"
+                  onClick={() =>
+                    void fetch("/api/smart-routing/blocked-callers", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ callerE164: selected.callerNumber }),
+                    })
+                  }
+                >
+                  Block caller
+                </button>
               </div>
               <Link
                 href={`/voice/calls`}
