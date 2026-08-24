@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { buildVoiceNav } from "../src/lib/products/voice-nav";
+import { workspaceHasAdminFullEntitlements } from "../src/lib/products/feature-entitlements";
 import { buildSmartRoutingNavChildren } from "../src/lib/smart-routing/nav-children";
 import {
   defaultFeaturesForWorkspaceType,
@@ -79,4 +80,7 @@ assert.ok(SMART_ROUTING_NODE_TYPES.includes("CALLBACK"));
 import { showSrBusinessCallBack } from "../src/lib/products/transovo-launch";
 assert.equal(showSrBusinessCallBack(), true);
 
-console.log("test-transovo-platform: ok");
+(async () => {
+  assert.equal(await workspaceHasAdminFullEntitlements("ws-test", { isPlatformAdmin: true }), true);
+  console.log("test-transovo-platform: ok");
+})();

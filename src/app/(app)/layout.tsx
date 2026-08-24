@@ -37,7 +37,7 @@ export default async function AppLayout({
     loadPrimaryVoiceAgentId(workspaceId),
     loadWorkspace(workspaceId),
     getUserProductAccess(session.userId),
-    getWorkspaceProductFeatures(workspaceId),
+    getWorkspaceProductFeatures(workspaceId, { isPlatformAdmin: session.isAdmin }),
   ]);
   const workspaceName =
     (workspaceRow as { displayName?: string | null; name?: string } | null)?.displayName ||

@@ -9,7 +9,9 @@ export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const features = await getWorkspaceProductFeatures(auth.workspaceId);
+    const features = await getWorkspaceProductFeatures(auth.workspaceId, {
+      isPlatformAdmin: auth.session.isAdmin,
+    });
     return NextResponse.json({ data: features });
   } catch (err) {
     return jsonError(err);

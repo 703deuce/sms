@@ -9,8 +9,10 @@ export default async function VoiceVoicemailPage({
 }: {
   searchParams: Promise<{ numberId?: string }>;
 }) {
-  const { workspaceId } = await requireWorkspaceContext();
-  const entitled = await hasWorkspaceProductFeature(workspaceId, "visual_voicemail");
+  const { workspaceId, session } = await requireWorkspaceContext();
+  const entitled = await hasWorkspaceProductFeature(workspaceId, "visual_voicemail", {
+    isPlatformAdmin: session.isAdmin,
+  });
 
   if (!entitled) {
     return <AddOnUpgradeCard feature="visual_voicemail" />;

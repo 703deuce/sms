@@ -31,7 +31,9 @@ export default async function MctbDashboardPage({
   }
   const params = await searchParams;
   const range = parseRange(params.range);
-  const productFeatures = await getWorkspaceProductFeatures(workspaceId);
+  const productFeatures = await getWorkspaceProductFeatures(workspaceId, {
+    isPlatformAdmin: session.isAdmin,
+  });
   return (
     <MctbDashboardView
       userName={session.name}

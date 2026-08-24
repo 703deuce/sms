@@ -3,6 +3,10 @@ import { DbError } from "@/lib/supabase/prisma-compat";
 import type { ProductAccessStatus } from "@/lib/products/types";
 import { isActiveEntitlement } from "@/lib/products/types";
 import { transovoEntitlementGrandfatherEnv } from "@/lib/products/transovo-launch";
+import {
+  isAdminMctbTestWorkspace,
+  type AdminMctbTestFlags,
+} from "@/lib/mctb/admin-test-workspace-shared";
 
 /** Transovo sellable product features (workspace-scoped). */
 export type TransovoProductFeature =
@@ -29,6 +33,20 @@ const PRISMA_FEATURE_MAP: Record<
 };
 
 export type WorkspaceFeatureSnapshot = Record<TransovoProductFeature, ProductAccessStatus>;
+
+export type FeatureEntitlementOptions = {
+  /** Logged-in platform admin — grant full Transovo features for QA. */
+  isPlatformAdmin?: boolean;
+};
+
+function allActiveSnapshot(): WorkspaceFeatureSnapshot {
+  return {
+    mctb: "active",
+    smart_routing: "active",
+    visual_voicemail: "active",
+    callback_requests: "active",
+  };
+}
 
 function defaultSnapshot(): WorkspaceFeatureSnapshot {
   return {
@@ -126,8 +144,70 @@ function isCompatRepoMissing(err: unknown): boolean {
   return err instanceof TypeError;
 }
 
+async function workspaceHasPlatformAdminMember(workspaceId: string): Promise<boolean> {
+  const prisma = getPrisma();
+  const row = await prisma.membership.findFirst({
+    where: { workspaceId, user: { isPlatformAdmin: true } },
+    select: { id: true },
+  });
+  return Boolean(row);
+}
+
+async function loadAdminMctbTestFlagsForWorkspace(workspaceId: string): Promise<AdminMctbTestFlags> {
+  const prisma = getPrisma();
+  const [ws, limitsRow] = await Promise.all([
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { customFieldsConfig: true },
+    }),
+    prisma.workspaceLimits.findUnique({
+      where: { workspaceId },
+      select: { limits: true },
+    }),
+  ]);
+  const cfg =
+    ws?.customFieldsConfig && typeof ws.customFieldsConfig === "object"
+      ? (ws.customFieldsConfig as Record<string, unknown>)
+      : {};
+  const mctb =
+    cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
+  const limits =
+    limitsRow?.limits && typeof limitsRow.limits === "object"
+      ? (limitsRow.limits as Record<string, unknown>)
+      : {};
+  return {
+    adminTestAccount: mctb.adminTestAccount === true,
+    unlimitedMctbTesting: mctb.unlimitedMctbTesting === true,
+    adminUnlimitedMctb: limits.adminUnlimitedMctb === true,
+  };
+}
+
+/** Admin QA workspaces and platform-admin memberships get every sellable feature. */
+export async function workspaceHasAdminFullEntitlements(
+  workspaceId: string,
+  options?: FeatureEntitlementOptions,
+): Promise<boolean> {
+  if (options?.isPlatformAdmin) return true;
+  const flags = await loadAdminMctbTestFlagsForWorkspace(workspaceId);
+  if (isAdminMctbTestWorkspace(flags)) return true;
+  return workspaceHasPlatformAdminMember(workspaceId);
+}
+
+async function persistAdminFullEntitlements(workspaceId: string): Promise<void> {
+  for (const feature of FEATURE_KEYS) {
+    await grantWorkspaceProductFeature(workspaceId, feature, "active");
+  }
+}
+
 /** Idempotent baseline feature rows for a workspace. */
-export async function ensureWorkspaceProductFeatures(workspaceId: string): Promise<void> {
+export async function ensureWorkspaceProductFeatures(
+  workspaceId: string,
+  options?: FeatureEntitlementOptions,
+): Promise<void> {
+  if (await workspaceHasAdminFullEntitlements(workspaceId, options)) {
+    await persistAdminFullEntitlements(workspaceId);
+    return;
+  }
   const prisma = getPrisma();
   const repo = prisma.workspaceProductFeature as { create?: unknown } | undefined;
   if (!repo?.create) return;
@@ -198,8 +278,13 @@ export async function ensureWorkspaceProductFeatures(workspaceId: string): Promi
 
 export async function getWorkspaceProductFeatures(
   workspaceId: string,
+  options?: FeatureEntitlementOptions,
 ): Promise<WorkspaceFeatureSnapshot> {
-  await ensureWorkspaceProductFeatures(workspaceId);
+  if (await workspaceHasAdminFullEntitlements(workspaceId, options)) {
+    await persistAdminFullEntitlements(workspaceId);
+    return allActiveSnapshot();
+  }
+  await ensureWorkspaceProductFeatures(workspaceId, options);
   const prisma = getPrisma();
   const repo = prisma.workspaceProductFeature as { findMany?: unknown } | undefined;
   if (!repo?.findMany) {
@@ -235,8 +320,10 @@ export async function getWorkspaceProductFeatures(
 export async function hasWorkspaceProductFeature(
   workspaceId: string,
   feature: TransovoProductFeature,
+  options?: FeatureEntitlementOptions,
 ): Promise<boolean> {
-  const snap = await getWorkspaceProductFeatures(workspaceId);
+  if (await workspaceHasAdminFullEntitlements(workspaceId, options)) return true;
+  const snap = await getWorkspaceProductFeatures(workspaceId, options);
   return isActiveEntitlement(snap[feature]);
 }
 
