@@ -65,7 +65,7 @@ export async function recordSmsConsent(input: {
       orderBy: { consentedAt: "desc" },
       take: 20,
     });
-    const byMeta = recent.find((row) => {
+    const byMeta = recent.find((row: { metadataJson: unknown }) => {
       const meta = (row.metadataJson || {}) as Record<string, unknown>;
       return meta.providerCallId === providerCallId;
     });
