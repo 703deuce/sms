@@ -43,7 +43,7 @@ export async function createCallRecordingRow(input: {
       providerRecordingId: input.providerRecordingId ?? null,
       direction: input.direction ?? "inbound",
       retentionExpiresAt,
-      transcriptStatus: settings?.recordingTranscriptionEnabled ? "pending" : "disabled",
+      transcriptStatus: "pending",
       summaryStatus: settings?.recordingSummaryEnabled ? "pending" : "disabled",
     },
   });
@@ -85,10 +85,8 @@ export async function finalizeCallRecordingFromProvider(input: {
     },
   });
 
-  if (row.transcriptStatus !== "disabled") {
-    const { queueRecordingTranscription } = await import("./call-recording-pipeline");
-    await queueRecordingTranscription(row.id);
-  }
+  const { queueRecordingTranscription } = await import("./call-recording-pipeline");
+  await queueRecordingTranscription(row.id);
 
   return row.id;
 }

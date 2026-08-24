@@ -27,6 +27,12 @@ const FEATURE_COPY: Record<
       "Queue callers who asked to be contacted later from your menu or overflow routes.",
     upgradeParam: "callback_requests",
   },
+  ai_transcription: {
+    title: "AI Transcription",
+    description:
+      "Turn recorded calls and voicemails into searchable, readable transcripts. AI summaries included.",
+    upgradeParam: "ai_transcription",
+  },
 };
 
 export function AddOnUpgradeCard({

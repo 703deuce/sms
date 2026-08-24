@@ -59,6 +59,8 @@
     "test:transovo-platform": "tsx scripts/test-transovo-platform.ts",
     "test:platform-bundle-pricing": "tsx scripts/test-platform-bundle-pricing.ts",
     "test:platform-stripe-catalog": "tsx scripts/test-platform-stripe-catalog.ts",
+    "test:ai-transcription": "tsx scripts/test-ai-transcription.ts",
+    "test:mctb-sip-ingress-send-gate": "tsx scripts/test-mctb-sip-ingress-send-gate.ts",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
     "test:transovo-voicemail": "tsx scripts/test-transovo-voicemail.ts",

@@ -118,6 +118,7 @@ enum WorkspaceProductFeatureKey {
   SMART_ROUTING
   VISUAL_VOICEMAIL
   CALLBACK_REQUESTS
+  AI_TRANSCRIPTION
 }
 
 model User {
@@ -330,6 +331,7 @@ model Workspace {
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
   platformProductSubscriptions PlatformProductSubscription[]
+  platformTranscriptionUsageRecords PlatformTranscriptionUsageRecord[]
   callbackRequests CallbackRequest[]
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -386,6 +388,7 @@ model PlatformProductSubscription {
   cancelAtPeriodEnd     Boolean   @default(false)
   includedMinutes       Int?
   minutesUsedThisPeriod Int       @default(0)
+  transcriptionMinutesUsedThisPeriod Int @default(0)
   usagePeriodStart      DateTime?
   usagePeriodEnd        DateTime?
   overageMinutesBilled  Int       @default(0)
@@ -394,6 +397,7 @@ model PlatformProductSubscription {
   updatedAt             DateTime  @updatedAt
   workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   usageRecords          PlatformSmartRoutingUsageRecord[]
+  transcriptionUsageRecords PlatformTranscriptionUsageRecord[]
 
   @@unique([workspaceId, productFamily])
   @@index([workspaceId, status])
@@ -415,6 +419,31 @@ model PlatformSmartRoutingUsageRecord {
   @@index([workspaceId, recordedAt])
   @@index([subscriptionId])
   @@map("platform_smart_routing_usage_records")
+}
+
+/// AI transcription usage — separate from Smart Routing conversation minutes.
+model PlatformTranscriptionUsageRecord {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  subscriptionId      String?
+  sourceType          String
+  sourceId            String
+  provider            String?
+  audioDurationSeconds Int?
+  transcriptionMinutes Int
+  transcriptionProvider String  @default("deepgram")
+  transcriptionModel  String    @default("nova-3")
+  status              String    @default("completed")
+  idempotencyKey      String    @unique
+  recordedAt          DateTime  @default(now())
+  billingPeriodStart  DateTime?
+  errorMessage        String?
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscription        PlatformProductSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, recordedAt])
+  @@index([subscriptionId])
+  @@map("platform_transcription_usage_records")
 }
 
 model CallbackRequest {
@@ -3102,6 +3131,11 @@ model VoicemailMessage {
   durationSeconds Int?
   transcriptText  String?
   transcriptEnglish String?
+  transcriptStatus String?  @default("pending")
+  transcriptionMinutes Int?
+  transcriptionProvider String?
+  transcriptionModel String?
+  transcriptionError String?
   aiSummary       String?
   internalNotes   String?
   isResolved      Boolean  @default(false)

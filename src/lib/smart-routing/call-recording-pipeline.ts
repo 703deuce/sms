@@ -8,28 +8,29 @@ export async function queueRecordingTranscription(recordingId: string) {
   const row = await prisma.smartRoutingCallRecording.findUnique({ where: { id: recordingId } });
   if (!row?.storagePath || !row.storageBucket) return;
 
-  try {
-    const signedUrl = await createSignedRecordingUrl(row.storageBucket, row.storagePath, 600);
-    const { transcribeAudioUrl } = await import("@/lib/phone/voicemail-transcribe");
-    const result = await transcribeAudioUrl(signedUrl);
-    const text = result.text?.trim() || null;
+  const { workspaceHasAiTranscriptionEntitlement } = await import(
+    "@/lib/transcription/entitlement"
+  );
+  const entitled = await workspaceHasAiTranscriptionEntitlement(row.workspaceId);
+  if (!entitled) {
     await prisma.smartRoutingCallRecording.update({
       where: { id: recordingId },
-      data: {
-        transcriptText: text,
-        transcriptStatus: text ? "ready" : "failed",
-      },
+      data: { transcriptStatus: "disabled" },
     });
-
-    if (text && row.summaryStatus !== "disabled") {
-      await queueRecordingSummary(recordingId, text);
-    }
-  } catch {
-    await prisma.smartRoutingCallRecording.update({
-      where: { id: recordingId },
-      data: { transcriptStatus: "failed" },
-    });
+    return;
   }
+
+  const signedUrl = await createSignedRecordingUrl(row.storageBucket, row.storagePath, 600);
+  const { enqueueTranscriptionJob } = await import("@/lib/transcription/service");
+  await enqueueTranscriptionJob({
+    workspaceId: row.workspaceId,
+    sourceType: "smart_routing_recording",
+    sourceId: recordingId,
+    recordingUrl: signedUrl,
+    provider: row.provider,
+    durationSeconds: row.durationSeconds,
+    diarize: true,
+  });
 }
 
 export async function queueRecordingSummary(recordingId: string, transcript?: string) {
@@ -37,6 +38,12 @@ export async function queueRecordingSummary(recordingId: string, transcript?: st
   const row = await prisma.smartRoutingCallRecording.findUnique({ where: { id: recordingId } });
   const text = transcript ?? row?.transcriptText;
   if (!text?.trim()) return;
+
+  const settings = await prisma.smartRoutingWorkspaceSettings.findUnique({
+    where: { workspaceId: row?.workspaceId ?? "" },
+    select: { recordingSummaryEnabled: true },
+  });
+  if (!settings?.recordingSummaryEnabled) return;
 
   try {
     const { summarizeVoicemailTranscript } = await import("@/lib/phone/voicemail-post-process");

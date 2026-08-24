@@ -10,7 +10,7 @@ import {
   BUNDLE_PRICING_MATRIX,
   bundleMonthlyTotalCents,
 } from "@/lib/products/platform-bundle-pricing";
-import type { MctbTier, SmartRoutingTier } from "@/lib/products/platform-billing-catalog-definitions";
+import type { MctbTier, SmartRoutingTier, AiTranscriptionTier } from "@/lib/products/platform-billing-catalog-definitions";
 import { useEffect, useMemo, useState } from "react";
 
 type FeatureSnapshot = Record<TransovoProductFeature, ProductAccessStatus>;
@@ -49,6 +49,7 @@ export function PlatformProductsPanel({
   const [message, setMessage] = useState("");
   const [selectedMctb, setSelectedMctb] = useState<MctbTier>("starter");
   const [selectedSr, setSelectedSr] = useState<SmartRoutingTier>("starter");
+  const [selectedAt, setSelectedAt] = useState<AiTranscriptionTier>("starter");
 
   async function refresh() {
     const [featRes, catRes] = await Promise.all([
@@ -73,6 +74,7 @@ export function PlatformProductsPanel({
 
   const mctbProducts = products.filter((p) => p.family === "mctb");
   const srProducts = products.filter((p) => p.family === "smart_routing");
+  const atProducts = products.filter((p) => p.family === "ai_transcription");
   const addonProducts = products.filter((p) => p.family === "addon");
 
   const preview = useMemo(() => {
@@ -220,7 +222,8 @@ export function PlatformProductsPanel({
     <Card className="mt-4">
       <CardTitle>Platform products</CardTitle>
       <p className="mt-2 text-sm text-muted-foreground">
-        Choose any MCTB tier with any Smart Routing tier. Subscribe to both and save 20%.
+        Choose any MCTB tier with any Smart Routing tier. Subscribe to both and save 20%. AI
+        Transcription is an optional add-on with its own tier — independent of Smart Routing.
       </p>
       {dualDiscountActive ? (
         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
@@ -260,6 +263,81 @@ export function PlatformProductsPanel({
           )}
         </div>
       )}
+      {!loading && atProducts.length > 0 ? (
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            AI Transcription
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Turn recorded calls and voicemails into searchable, readable transcripts. AI summaries
+            included. Call recording is included with Smart Routing — transcription is optional.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {atProducts.map((product) => {
+              const tier = product.tier || "";
+              const isActive = activeTier("ai_transcription") === tier;
+              const highlighted = highlightProduct === product.productKey;
+              return (
+                <div
+                  key={product.productKey}
+                  className={`rounded-lg border p-4 ${
+                    highlighted ? "border-indigo-400 bg-indigo-50/50" : "border-border"
+                  } ${selectedAt === tier ? "ring-2 ring-indigo-300" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium capitalize">{tier}</p>
+                      {product.includedMinutes ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {product.includedMinutes.toLocaleString()} transcription minutes / month
+                        </p>
+                      ) : null}
+                    </div>
+                    {isActive ? (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                        Active
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm font-semibold tabular-nums">
+                    {formatCurrency(product.amountCents / 100)}
+                    <span className="text-xs font-normal text-muted-foreground"> / month</span>
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedAt(tier as AiTranscriptionTier)}
+                      disabled={isActive}
+                    >
+                      {selectedAt === tier ? "Selected" : "Select"}
+                    </Button>
+                    {!isActive ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={trialKey === product.productKey}
+                          onClick={() => startTrial(product.productKey)}
+                        >
+                          Trial
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={checkoutKey === product.productKey}
+                          onClick={() => startCheckout(product.productKey)}
+                        >
+                          Subscribe
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       {!featureActive("mctb") && !featureActive("smart_routing") && preview ? (
         <div className="mt-4">
           <Button

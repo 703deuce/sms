@@ -388,8 +388,8 @@ export async function listVoicemailMessages(workspaceId: string, boxId?: string)
 }
 
 /**
- * Telnyx voicemail: attach recording then transcribe via Transovo Whisper path.
- * Twilio numbers must use twilio-voicemail-pipeline (Twilio transcription).
+ * Carrier-agnostic voicemail recording attach + optional AI transcription queue.
+ * Transcription uses Deepgram Nova-3 when workspace has ai_transcription entitlement.
  */
 export async function attachVoicemailRecordingAndTranscribe(input: {
   workspaceId: string;
@@ -399,9 +399,6 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
   durationSeconds?: number | null;
   upstreamProvider?: "telnyx" | "twilio";
 }) {
-  if (input.upstreamProvider === "twilio") {
-    throw new Error("Twilio voicemails must use the Twilio transcription pipeline");
-  }
   const prisma = getPrisma();
   const msg = input.messageId
     ? await prisma.voicemailMessage.findFirst({
@@ -466,84 +463,19 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
   }
 
   if (!box?.transcriptionEnabled) return updated;
-  if (updated.transcriptText && !updated.transcriptText.startsWith("[Transcription")) return updated;
 
-  try {
-    const { transcribeAudioUrl } = await import("./voicemail-transcribe");
-    const { summarizeVoicemailTranscript, translateVoicemailToEnglish } = await import(
-      "./voicemail-post-process"
-    );
-    const transcription = await transcribeAudioUrl(input.recordingUrl);
-    const transcript = transcription.text;
-    if (!transcript) {
-      return prisma.voicemailMessage.update({
-        where: { id: msg.id },
-        data: {
-          transcriptText:
-            "[Transcription pending — set OPENAI_API_KEY to enable Whisper transcripts]",
-        },
-      });
-    }
+  const { enqueueTranscriptionJob } = await import("@/lib/transcription/service");
+  await enqueueTranscriptionJob({
+    workspaceId: input.workspaceId,
+    sourceType: "voicemail_message",
+    sourceId: msg.id,
+    recordingUrl: input.recordingUrl,
+    provider: input.upstreamProvider ?? "telnyx",
+    durationSeconds: input.durationSeconds ?? updated.durationSeconds,
+    diarize: false,
+  }).catch((err) => {
+    console.warn("[voicemail] transcription enqueue failed", err);
+  });
 
-    const transcriptEnglish = await translateVoicemailToEnglish(
-      transcript,
-      transcription.language,
-    );
-    const aiSummary = await summarizeVoicemailTranscript(transcript);
-
-    const withTranscript = await prisma.voicemailMessage.update({
-      where: { id: msg.id },
-      data: {
-        transcriptText: transcript,
-        transcriptEnglish: transcriptEnglish ?? null,
-        aiSummary: aiSummary ?? null,
-      },
-    });
-
-    await notifyVoicemailTranscriptReady({
-      workspaceId: input.workspaceId,
-      messageId: msg.id,
-      fromE164: withTranscript.fromE164,
-    });
-
-    if (notifyTargets.length > 0) {
-      try {
-        const { sendTransactionalEmail } = await import("@/lib/email/brevo");
-        const appUrl = process.env.APP_URL?.replace(/\/$/, "") || "";
-        const englishBlock = transcriptEnglish
-          ? `<p><strong>English:</strong> ${transcriptEnglish}</p>`
-          : "";
-        const summaryBlock = aiSummary ? `<p><strong>Summary:</strong> ${aiSummary}</p>` : "";
-        for (const to of notifyTargets) {
-          await sendTransactionalEmail({
-            to: String(to),
-            subject: `Voicemail transcript from ${withTranscript.fromE164 || "unknown"}`,
-            htmlContent: `<p>Transcript: ${transcript}</p>${englishBlock}${summaryBlock}${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open inbox</a></p>` : ""}`,
-            textContent: [transcript, transcriptEnglish, aiSummary].filter(Boolean).join("\n\n"),
-          });
-        }
-      } catch {
-        // ignore secondary email errors
-      }
-    }
-
-    if (box?.smsNotifyE164?.trim()) {
-      await sendVoicemailSmsAlert({
-        workspaceId: input.workspaceId,
-        messageId: msg.id,
-        fromE164: withTranscript.fromE164,
-        smsNotifyE164: box.smsNotifyE164,
-      });
-    }
-
-    return withTranscript;
-  } catch (err) {
-    console.warn("[voicemail] transcription failed", err);
-    return prisma.voicemailMessage.update({
-      where: { id: msg.id },
-      data: {
-        transcriptText: `[Transcription failed: ${err instanceof Error ? err.message.slice(0, 120) : "error"}]`,
-      },
-    });
-  }
+  return updated;
 }

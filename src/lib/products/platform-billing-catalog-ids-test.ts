@@ -30,6 +30,26 @@ export const PLATFORM_BILLING_CATALOG_TEST: PlatformCatalogIds = {
       },
     },
   },
+  ai_transcription: {
+    stripeProductId: "prod_test_at_placeholder",
+    tiers: {
+      starter: {
+        stripePriceId: "price_test_at_starter",
+        monthlyPriceCents: 799,
+        includedMinutes: 750,
+      },
+      business: {
+        stripePriceId: "price_test_at_business",
+        monthlyPriceCents: 1999,
+        includedMinutes: 2000,
+      },
+      pro: {
+        stripePriceId: "price_test_at_pro",
+        monthlyPriceCents: 3999,
+        includedMinutes: 4000,
+      },
+    },
+  },
   discounts: {
     dualProduct: { stripeCouponId: "coupon_test_dual_product", percentOff: 20 },
   },

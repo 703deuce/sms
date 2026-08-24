@@ -12,6 +12,11 @@ import {
   SMART_ROUTING_PRODUCT_NAME,
   SMART_ROUTING_TIER_PRICES_CENTS,
   SMART_ROUTING_TIERS,
+  AI_TRANSCRIPTION_INCLUDED_MINUTES,
+  AI_TRANSCRIPTION_PRODUCT_NAME,
+  AI_TRANSCRIPTION_TIER_PRICES_CENTS,
+  AI_TRANSCRIPTION_TIERS,
+  type AiTranscriptionTier,
   type MctbTier,
   type PlatformCatalogIds,
   type SmartRoutingTier,
@@ -269,6 +274,42 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
     };
   }
 
+  const atProduct = dryRun
+    ? ({ id: "prod_at_dry_run" } as Stripe.Product)
+    : await ensureProduct(
+        stripe,
+        products,
+        {
+          name: AI_TRANSCRIPTION_PRODUCT_NAME,
+          description:
+            "Automatically turn voicemails and recorded calls into readable transcripts.",
+          transovoProduct: "ai_transcription",
+        },
+        audit,
+      );
+
+  const atTiers = {} as PlatformCatalogIds["ai_transcription"]["tiers"];
+  for (const tier of AI_TRANSCRIPTION_TIERS) {
+    const amountCents = AI_TRANSCRIPTION_TIER_PRICES_CENTS[tier as AiTranscriptionTier];
+    const includedMinutes = AI_TRANSCRIPTION_INCLUDED_MINUTES[tier as AiTranscriptionTier];
+    const price = dryRun
+      ? ({ id: `price_at_${tier}_dry_run` } as Stripe.Price)
+      : await ensureMonthlyPrice(
+          stripe,
+          atProduct.id,
+          "ai_transcription",
+          tier,
+          amountCents,
+          { included_minutes: String(includedMinutes) },
+          audit,
+        );
+    atTiers[tier as AiTranscriptionTier] = {
+      stripePriceId: price.id,
+      monthlyPriceCents: amountCents,
+      includedMinutes,
+    };
+  }
+
   const coupon = dryRun
     ? ({ id: "coupon_dual_dry_run" } as Stripe.Coupon)
     : await ensureDualProductCoupon(stripe, audit);
@@ -312,6 +353,10 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
       smart_routing: {
         stripeProductId: srProduct.id,
         tiers: srTiers,
+      },
+      ai_transcription: {
+        stripeProductId: atProduct.id,
+        tiers: atTiers,
       },
       discounts: {
         dualProduct: {

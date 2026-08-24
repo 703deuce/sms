@@ -1,5 +1,6 @@
 import {
   ADDON_PRODUCT_DEFS,
+  type AiTranscriptionTier,
   type MctbTier,
   type PlatformCatalogIds,
   type PlatformProductFamily,
@@ -9,7 +10,7 @@ import { PLATFORM_BILLING_CATALOG_LIVE } from "@/lib/products/platform-billing-c
 import { PLATFORM_BILLING_CATALOG_TEST } from "@/lib/products/platform-billing-catalog-ids-test";
 import type { TransovoProductFeature } from "@/lib/products/feature-entitlements";
 
-export type { MctbTier, SmartRoutingTier, PlatformProductFamily, PlatformCatalogIds };
+export type { MctbTier, SmartRoutingTier, AiTranscriptionTier, PlatformProductFamily, PlatformCatalogIds };
 
 export function stripeBillingMode(): "test" | "live" {
   const key = process.env.STRIPE_SECRET_KEY?.trim() || "";
@@ -30,6 +31,10 @@ export function resolveSmartRoutingPriceId(tier: SmartRoutingTier): string {
   return getPlatformBillingCatalog().smart_routing.tiers[tier].stripePriceId;
 }
 
+export function resolveAiTranscriptionPriceId(tier: AiTranscriptionTier): string {
+  return getPlatformBillingCatalog().ai_transcription.tiers[tier].stripePriceId;
+}
+
 export function resolveAddonPriceId(productKey: string): string {
   const addon = getPlatformBillingCatalog().addons[productKey];
   if (!addon) throw new Error(`Unknown addon product: ${productKey}`);
@@ -44,7 +49,12 @@ export function includedMinutesForSmartRoutingTier(tier: SmartRoutingTier): numb
   return getPlatformBillingCatalog().smart_routing.tiers[tier].includedMinutes ?? 0;
 }
 
+export function includedMinutesForAiTranscriptionTier(tier: AiTranscriptionTier): number {
+  return getPlatformBillingCatalog().ai_transcription.tiers[tier].includedMinutes ?? 0;
+}
+
 export function featureForProductFamily(family: PlatformProductFamily): TransovoProductFeature {
+  if (family === "ai_transcription") return "ai_transcription";
   return family;
 }
 
@@ -89,10 +99,26 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
       family: "smart_routing",
       tier,
       displayName: `Smart Routing ${tier.charAt(0).toUpperCase()}${tier.slice(1)}`,
-      description: "Professional call menu and routing on your existing business number.",
+      description:
+        "Professional call menu and routing. Call recording and AI summaries included.",
       amountCents: row.monthlyPriceCents,
       includedMinutes: row.includedMinutes,
       feature: "smart_routing",
+    });
+  }
+
+  for (const tier of ["starter", "business", "pro"] as AiTranscriptionTier[]) {
+    const row = catalog.ai_transcription.tiers[tier];
+    items.push({
+      productKey: `ai_transcription_${tier}`,
+      family: "ai_transcription",
+      tier,
+      displayName: `AI Transcription ${tier.charAt(0).toUpperCase()}${tier.slice(1)}`,
+      description:
+        "Turn recorded calls and voicemails into searchable, readable transcripts. AI summaries included.",
+      amountCents: row.monthlyPriceCents,
+      includedMinutes: row.includedMinutes,
+      feature: "ai_transcription",
     });
   }
 
@@ -114,7 +140,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
 
 export function parseCheckoutSelection(productKey: string): {
   family: PlatformProductFamily | "addon";
-  tier?: MctbTier | SmartRoutingTier;
+  tier?: MctbTier | SmartRoutingTier | AiTranscriptionTier;
   stripePriceId: string;
   feature: TransovoProductFeature;
 } {
@@ -134,6 +160,15 @@ export function parseCheckoutSelection(productKey: string): {
       tier,
       stripePriceId: resolveSmartRoutingPriceId(tier),
       feature: "smart_routing",
+    };
+  }
+  if (productKey.startsWith("ai_transcription_")) {
+    const tier = productKey.replace("ai_transcription_", "") as AiTranscriptionTier;
+    return {
+      family: "ai_transcription",
+      tier,
+      stripePriceId: resolveAiTranscriptionPriceId(tier),
+      feature: "ai_transcription",
     };
   }
   const addonFeatureKey = addonFeature(productKey);

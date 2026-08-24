@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { changePlatformSubscriptionTier } from "@/lib/products/platform-subscriptions";
-import type { MctbTier, SmartRoutingTier } from "@/lib/products/platform-billing-catalog-definitions";
+import type { AiTranscriptionTier, MctbTier, SmartRoutingTier } from "@/lib/products/platform-billing-catalog-definitions";
 
 export async function POST(request: Request) {
   try {
@@ -14,14 +14,14 @@ export async function POST(request: Request) {
     if (!productFamily || !tier) {
       return jsonError(new Error("productFamily and tier required"), 400);
     }
-    if (productFamily !== "mctb" && productFamily !== "smart_routing") {
+    if (productFamily !== "mctb" && productFamily !== "smart_routing" && productFamily !== "ai_transcription") {
       return jsonError(new Error("invalid productFamily"), 400);
     }
 
     await changePlatformSubscriptionTier({
       workspaceId: auth.workspaceId,
       productFamily,
-      newTier: tier as MctbTier | SmartRoutingTier,
+      newTier: tier as MctbTier | SmartRoutingTier | AiTranscriptionTier,
     });
 
     return NextResponse.json({ data: { ok: true } });

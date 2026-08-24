@@ -40,9 +40,11 @@ export async function executeMissedCallTextSend(input: {
       ? (event.metadata as Record<string, unknown>)
       : {};
   const demoMode = eventMeta.demoMode === true;
-  const isEventOnlyCapture =
-    eventMeta.captureMode === "EVENT_ONLY" || eventMeta.captureMode === "SIP_INGRESS";
+  const captureMode = String(eventMeta.captureMode || "");
+  const isEventOnlyCapture = captureMode === "EVENT_ONLY" || captureMode === "SIP_INGRESS";
   const isEventOnly = isEventOnlyCapture;
+  // EVENT_ONLY = carrier-forward Existing Consent. SIP_INGRESS = Press-1 IVR consent per call.
+  const requiresExistingConsentAttestation = captureMode === "EVENT_ONLY";
 
   const config = await loadMissedCallTextConfig(input.workspaceId);
   if (!config.enabled && !demoMode) {
@@ -53,7 +55,7 @@ export async function executeMissedCallTextSend(input: {
     return { ok: false, reason: "FEATURE_DISABLED" };
   }
 
-  if (isEventOnly) {
+  if (requiresExistingConsentAttestation) {
     const { validateExistingConsentAttestation } = await import(
       "@/lib/mctb/event-only/attestation"
     );

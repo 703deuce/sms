@@ -13,23 +13,26 @@ export type TransovoProductFeature =
   | "mctb"
   | "smart_routing"
   | "visual_voicemail"
-  | "callback_requests";
+  | "callback_requests"
+  | "ai_transcription";
 
 const FEATURE_KEYS: TransovoProductFeature[] = [
   "mctb",
   "smart_routing",
   "visual_voicemail",
   "callback_requests",
+  "ai_transcription",
 ];
 
 const PRISMA_FEATURE_MAP: Record<
   TransovoProductFeature,
-  "MCTB" | "SMART_ROUTING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS"
+  "MCTB" | "SMART_ROUTING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS" | "AI_TRANSCRIPTION"
 > = {
   mctb: "MCTB",
   smart_routing: "SMART_ROUTING",
   visual_voicemail: "VISUAL_VOICEMAIL",
   callback_requests: "CALLBACK_REQUESTS",
+  ai_transcription: "AI_TRANSCRIPTION",
 };
 
 export type WorkspaceFeatureSnapshot = Record<TransovoProductFeature, ProductAccessStatus>;
@@ -45,6 +48,7 @@ function allActiveSnapshot(): WorkspaceFeatureSnapshot {
     smart_routing: "active",
     visual_voicemail: "active",
     callback_requests: "active",
+    ai_transcription: "active",
   };
 }
 
@@ -54,6 +58,7 @@ function defaultSnapshot(): WorkspaceFeatureSnapshot {
     smart_routing: "inactive",
     visual_voicemail: "inactive",
     callback_requests: "inactive",
+    ai_transcription: "inactive",
   };
 }
 
@@ -88,6 +93,7 @@ export function defaultFeaturesForWorkspaceType(
     { feature: "smart_routing", status: "inactive" },
     { feature: "visual_voicemail", status: "inactive" },
     { feature: "callback_requests", status: "inactive" },
+    { feature: "ai_transcription", status: "inactive" },
   ];
 }
 
@@ -305,7 +311,9 @@ export async function getWorkspaceProductFeatures(
               ? "visual_voicemail"
               : row.featureKey === "CALLBACK_REQUESTS"
                 ? "callback_requests"
-                : null;
+                : row.featureKey === "AI_TRANSCRIPTION"
+                  ? "ai_transcription"
+                  : null;
       if (mapped) snap[mapped] = prismaStatusToApp(row.status);
     }
     return snap;

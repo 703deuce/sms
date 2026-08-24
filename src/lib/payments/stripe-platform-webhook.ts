@@ -106,18 +106,30 @@ export async function handlePlatformInvoicePaid(invoice: Stripe.Invoice): Promis
 
   const prisma = getPrisma();
   const subs = await prisma.platformProductSubscription.findMany({
-    where: { stripeCustomerId: customerId, productFamily: "smart_routing" },
+    where: { stripeCustomerId: customerId },
   });
   for (const sub of subs) {
-    await prisma.platformProductSubscription.update({
-      where: { id: sub.id },
-      data: {
-        minutesUsedThisPeriod: 0,
-        overageMinutesBilled: 0,
-        usagePeriodStart: sub.currentPeriodStart,
-        usagePeriodEnd: sub.currentPeriodEnd,
-      },
-    });
+    if (sub.productFamily === "smart_routing") {
+      await prisma.platformProductSubscription.update({
+        where: { id: sub.id },
+        data: {
+          minutesUsedThisPeriod: 0,
+          overageMinutesBilled: 0,
+          usagePeriodStart: sub.currentPeriodStart,
+          usagePeriodEnd: sub.currentPeriodEnd,
+        },
+      });
+    }
+    if (sub.productFamily === "ai_transcription") {
+      await prisma.platformProductSubscription.update({
+        where: { id: sub.id },
+        data: {
+          transcriptionMinutesUsedThisPeriod: 0,
+          usagePeriodStart: sub.currentPeriodStart,
+          usagePeriodEnd: sub.currentPeriodEnd,
+        },
+      });
+    }
   }
 }
 

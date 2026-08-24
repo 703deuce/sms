@@ -76,6 +76,33 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       }
       return executeMissedCallTextSend({ workspaceId, missedCallEventId, traceId });
     }
+    case "ai_transcription_run": {
+      const { executeTranscriptionJob } = await import("@/lib/transcription/service");
+      const workspaceId = String(payload.workspaceId || "");
+      const sourceType = payload.sourceType as "voicemail_message" | "smart_routing_recording";
+      const sourceId = String(payload.sourceId || "");
+      const recordingUrl = String(payload.recordingUrl || "");
+      if (!workspaceId || !sourceId || !recordingUrl) {
+        throw new Error("workspaceId, sourceId, and recordingUrl required");
+      }
+      try {
+        return await executeTranscriptionJob({
+          workspaceId,
+          sourceType,
+          sourceId,
+          recordingUrl,
+          provider: payload.provider ? String(payload.provider) : null,
+          durationSeconds:
+            typeof payload.durationSeconds === "number" ? payload.durationSeconds : null,
+          diarize: payload.diarize === true,
+        });
+      } catch (err) {
+        throw new JobDeferredError(
+          err instanceof Error ? err.message : "transcription_failed",
+          120_000,
+        );
+      }
+    }
     case "voice_outbound_ai_call": {
       const workspaceId = String(payload.workspaceId || "");
       const agentId = String(payload.agentId || "");

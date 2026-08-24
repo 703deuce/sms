@@ -39,6 +39,26 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
       }
     }
   },
+  "ai_transcription": {
+    "stripeProductId": "prod_V8HGvQuxjhyCvL",
+    "tiers": {
+      "starter": {
+        "stripePriceId": "price_1U80hiKjM2RWgyrvSM8oFa7d",
+        "monthlyPriceCents": 799,
+        "includedMinutes": 750
+      },
+      "business": {
+        "stripePriceId": "price_1U80hjKjM2RWgyrvKBbKR7XG",
+        "monthlyPriceCents": 1999,
+        "includedMinutes": 2000
+      },
+      "pro": {
+        "stripePriceId": "price_1U80hjKjM2RWgyrvbKZyutoT",
+        "monthlyPriceCents": 3999,
+        "includedMinutes": 4000
+      }
+    }
+  },
   "discounts": {
     "dualProduct": {
       "stripeCouponId": "metJ8xAZ",

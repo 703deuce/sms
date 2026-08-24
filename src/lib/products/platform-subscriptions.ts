@@ -8,9 +8,11 @@ import {
   featureForProductFamily,
   getPlatformBillingCatalog,
   includedMinutesForSmartRoutingTier,
+  includedMinutesForAiTranscriptionTier,
   type MctbTier,
   type PlatformProductFamily,
   type SmartRoutingTier,
+  type AiTranscriptionTier,
 } from "@/lib/products/platform-billing-catalog";
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { getOrCreateStripeCustomer } from "@/lib/settings/billing";
@@ -32,8 +34,10 @@ function parseFamilyFromMetadata(
 ): PlatformProductFamily | null {
   const family = metadata.platformProductFamily || metadata.platformProductKey?.split("_")[0];
   if (family === "mctb" || family === "smart_routing") return family;
+  if (family === "ai_transcription") return "ai_transcription";
   if (metadata.platformProductKey?.startsWith("mctb")) return "mctb";
   if (metadata.platformProductKey?.startsWith("smart_routing")) return "smart_routing";
+  if (metadata.platformProductKey?.startsWith("ai_transcription")) return "ai_transcription";
   return null;
 }
 
@@ -58,6 +62,7 @@ export function isPlatformProductSubscription(
   return (
     key.startsWith("mctb") ||
     key.startsWith("smart_routing") ||
+    key.startsWith("ai_transcription") ||
     key === "mctb" ||
     key === "smart_routing" ||
     key === "bundle_mctb_sr"
@@ -84,7 +89,9 @@ export async function upsertPlatformProductSubscriptionFromStripe(
   const includedMinutes =
     family === "smart_routing"
       ? includedMinutesForSmartRoutingTier(tier as SmartRoutingTier)
-      : null;
+      : family === "ai_transcription"
+        ? includedMinutesForAiTranscriptionTier(tier as AiTranscriptionTier)
+        : null;
 
   const { periodStart, periodEnd } = subscriptionBillingPeriod(subscription);
 
@@ -283,7 +290,7 @@ async function prismaHasActiveFamily(
 export async function changePlatformSubscriptionTier(input: {
   workspaceId: string;
   productFamily: PlatformProductFamily;
-  newTier: MctbTier | SmartRoutingTier;
+  newTier: MctbTier | SmartRoutingTier | AiTranscriptionTier;
 }): Promise<void> {
   const stripe = getStripe();
   if (!stripe) throw new Error("Stripe is not configured");
@@ -302,7 +309,9 @@ export async function changePlatformSubscriptionTier(input: {
   const newPriceId =
     input.productFamily === "mctb"
       ? catalog.mctb.tiers[input.newTier as MctbTier].stripePriceId
-      : catalog.smart_routing.tiers[input.newTier as SmartRoutingTier].stripePriceId;
+      : input.productFamily === "smart_routing"
+        ? catalog.smart_routing.tiers[input.newTier as SmartRoutingTier].stripePriceId
+        : catalog.ai_transcription.tiers[input.newTier as AiTranscriptionTier].stripePriceId;
 
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
   const itemId = stripeSub.items.data[0]?.id;

@@ -45,6 +45,12 @@ assert.ok(catalog.discounts.dualProduct.stripeCouponId.length > 0);
 const products = listPlatformPurchasableProducts();
 assert.equal(products.filter((p) => p.family === "mctb").length, 3);
 assert.equal(products.filter((p) => p.family === "smart_routing").length, 3);
+assert.equal(products.filter((p) => p.family === "ai_transcription").length, 3);
+
+for (const atTier of ["starter", "business", "pro"] as const) {
+  const at = parseCheckoutSelection(`ai_transcription_${atTier}`);
+  assert.equal(at.stripePriceId, catalog.ai_transcription.tiers[atTier].stripePriceId);
+}
 
 for (const mctbTier of ["starter", "growth", "pro"] as const) {
   for (const srTier of ["starter", "business", "pro"] as const) {

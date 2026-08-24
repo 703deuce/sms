@@ -72,6 +72,7 @@ export function MctbDashboardView({
     smart_routing: "inactive",
     visual_voicemail: "inactive",
     callback_requests: "inactive",
+    ai_transcription: "inactive",
   };
 
   useEffect(() => {

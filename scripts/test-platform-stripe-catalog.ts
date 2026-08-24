@@ -10,6 +10,8 @@ import {
   MCTB_TIER_PRICES_CENTS,
   SMART_ROUTING_INCLUDED_MINUTES,
   SMART_ROUTING_TIER_PRICES_CENTS,
+  AI_TRANSCRIPTION_INCLUDED_MINUTES,
+  AI_TRANSCRIPTION_TIER_PRICES_CENTS,
 } from "../src/lib/products/platform-billing-catalog-definitions.ts";
 
 async function main() {
@@ -56,6 +58,15 @@ async function main() {
       catalog.smart_routing.tiers[tier].stripePriceId,
       SMART_ROUTING_TIER_PRICES_CENTS[tier],
       { included_minutes: String(SMART_ROUTING_INCLUDED_MINUTES[tier]) },
+    );
+  }
+
+  for (const tier of ["starter", "business", "pro"] as const) {
+    await checkPrice(
+      `AT ${tier}`,
+      catalog.ai_transcription.tiers[tier].stripePriceId,
+      AI_TRANSCRIPTION_TIER_PRICES_CENTS[tier],
+      { included_minutes: String(AI_TRANSCRIPTION_INCLUDED_MINUTES[tier]) },
     );
   }
 
