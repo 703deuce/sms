@@ -27,6 +27,13 @@ import {
   handleMarketplaceSubscriptionStripeEvent,
   isMarketplaceStripeSubscription,
 } from "@/lib/payments/stripe-service-subscription-webhook";
+import {
+  handlePlatformCheckoutCompleted,
+  handlePlatformInvoicePaid,
+  handlePlatformInvoiceUpcoming,
+  handlePlatformSubscriptionEvent,
+} from "@/lib/payments/stripe-platform-webhook";
+import { isPlatformProductSubscription } from "@/lib/products/platform-subscriptions";
 import { invoiceSubscriptionId } from "@/lib/payments/stripe-type-helpers";
 
 type MinimalEvent = {
@@ -50,16 +57,7 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   const platformProductKey = session.metadata?.platformProductKey;
   const platformWorkspaceId = session.metadata?.workspaceId;
   if (platformProductKey && platformWorkspaceId) {
-    const { grantsForPlatformProduct } = await import(
-      "@/lib/products/platform-billing-catalog"
-    );
-    const { grantWorkspaceProductFeature } = await import(
-      "@/lib/products/feature-entitlements"
-    );
-    for (const feature of grantsForPlatformProduct(platformProductKey)) {
-      await grantWorkspaceProductFeature(platformWorkspaceId, feature, "active");
-    }
-    return { subsystem: "platform_product" as const, productKey: platformProductKey };
+    return handlePlatformCheckoutCompleted(session);
   }
   if (tx === "marketplace_number_purchase" || isPremiumNumberCheckoutMetadata(session.metadata as Record<string, string>)) {
     return handlePremiumNumberCheckoutSession(session);
@@ -90,6 +88,10 @@ async function routeSubscriptionEvent(
   subscription: Stripe.Subscription,
   eventType?: string,
 ) {
+  if (isPlatformProductSubscription(subscription)) {
+    return handlePlatformSubscriptionEvent(subscription, eventType);
+  }
+
   const metadata = (subscription.metadata || {}) as Record<string, string | undefined>;
   const platformProductKey = metadata.platformProductKey;
   const workspaceId = metadata.workspaceId;
@@ -128,6 +130,7 @@ async function routeSubscriptionEvent(
 }
 
 async function routeInvoicePaid(invoice: Stripe.Invoice) {
+  await handlePlatformInvoicePaid(invoice);
   const subscriptionId = invoiceSubscriptionId(invoice);
   if (subscriptionId) {
     const stripe = getStripe();
@@ -174,6 +177,9 @@ async function processStripeEvent(event: Stripe.Event) {
       return routeCheckoutSessionAsyncSucceeded(obj as unknown as Stripe.Checkout.Session);
     case "checkout.session.async_payment_failed":
       return routeCheckoutSessionAsyncFailed(obj as unknown as Stripe.Checkout.Session);
+    case "invoice.upcoming":
+      await handlePlatformInvoiceUpcoming(obj as unknown as Stripe.Invoice);
+      return { subsystem: "platform_product" as const, action: "overage_billed" };
     case "invoice.paid":
     case "invoice.payment_succeeded":
       return routeInvoicePaid(obj as unknown as Stripe.Invoice);

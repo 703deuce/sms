@@ -1,0 +1,330 @@
+import "server-only";
+
+import type Stripe from "stripe";
+import { getPrisma } from "@/lib/db";
+import { getStripe } from "@/lib/stripe/client";
+import {
+  dualProductCouponId,
+  featureForProductFamily,
+  getPlatformBillingCatalog,
+  includedMinutesForSmartRoutingTier,
+  type MctbTier,
+  type PlatformProductFamily,
+  type SmartRoutingTier,
+} from "@/lib/products/platform-billing-catalog";
+import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
+import { getOrCreateStripeCustomer } from "@/lib/settings/billing";
+import { subscriptionBillingPeriod } from "@/lib/payments/stripe-type-helpers";
+
+const ACTIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+export type PlatformSubscriptionRow = {
+  id: string;
+  workspaceId: string;
+  productFamily: string;
+  tier: string;
+  stripeSubscriptionId: string;
+  status: string;
+};
+
+function parseFamilyFromMetadata(
+  metadata: Record<string, string | undefined>,
+): PlatformProductFamily | null {
+  const family = metadata.platformProductFamily || metadata.platformProductKey?.split("_")[0];
+  if (family === "mctb" || family === "smart_routing") return family;
+  if (metadata.platformProductKey?.startsWith("mctb")) return "mctb";
+  if (metadata.platformProductKey?.startsWith("smart_routing")) return "smart_routing";
+  return null;
+}
+
+function parseTierFromMetadata(
+  metadata: Record<string, string | undefined>,
+  family: PlatformProductFamily,
+): string | null {
+  if (metadata.platformTier) return metadata.platformTier;
+  const key = metadata.platformProductKey || "";
+  const prefix = `${family}_`;
+  if (key.startsWith(prefix)) return key.slice(prefix.length);
+  return null;
+}
+
+export function isPlatformProductSubscription(
+  subscription: Stripe.Subscription,
+): boolean {
+  const md = (subscription.metadata || {}) as Record<string, string | undefined>;
+  if (!md.workspaceId) return false;
+  if (parseFamilyFromMetadata(md)) return true;
+  const key = md.platformProductKey || "";
+  return (
+    key.startsWith("mctb") ||
+    key.startsWith("smart_routing") ||
+    key === "mctb" ||
+    key === "smart_routing" ||
+    key === "bundle_mctb_sr"
+  );
+}
+
+export async function upsertPlatformProductSubscriptionFromStripe(
+  subscription: Stripe.Subscription,
+): Promise<PlatformSubscriptionRow | null> {
+  const metadata = (subscription.metadata || {}) as Record<string, string | undefined>;
+  const workspaceId = metadata.workspaceId;
+  const family = parseFamilyFromMetadata(metadata);
+  if (!workspaceId || !family) return null;
+
+  const tier = parseTierFromMetadata(metadata, family);
+  if (!tier) return null;
+
+  const item = subscription.items.data[0];
+  const stripePriceId = item?.price?.id || "";
+  const prisma = getPrisma();
+  const status = subscription.status;
+  const active = ACTIVE_STATUSES.has(status);
+
+  const includedMinutes =
+    family === "smart_routing"
+      ? includedMinutesForSmartRoutingTier(tier as SmartRoutingTier)
+      : null;
+
+  const { periodStart, periodEnd } = subscriptionBillingPeriod(subscription);
+
+  const row = await prisma.platformProductSubscription.upsert({
+    where: {
+      workspaceId_productFamily: { workspaceId, productFamily: family },
+    },
+    create: {
+      workspaceId,
+      productFamily: family,
+      tier,
+      stripeCustomerId:
+        typeof subscription.customer === "string"
+          ? subscription.customer
+          : subscription.customer?.id || null,
+      stripeSubscriptionId: subscription.id,
+      stripePriceId,
+      status,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      includedMinutes,
+      usagePeriodStart: periodStart,
+      usagePeriodEnd: periodEnd,
+      metadataJson: metadata as object,
+    },
+    update: {
+      tier,
+      stripeSubscriptionId: subscription.id,
+      stripePriceId,
+      status,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      includedMinutes,
+      metadataJson: metadata as object,
+    },
+  });
+
+  await grantWorkspaceProductFeature(
+    workspaceId,
+    featureForProductFamily(family),
+    active ? "active" : "inactive",
+  );
+
+  await syncDualProductDiscountForWorkspace(workspaceId);
+
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    productFamily: row.productFamily,
+    tier: row.tier,
+    stripeSubscriptionId: row.stripeSubscriptionId,
+    status: row.status,
+  };
+}
+
+export async function listActivePlatformSubscriptions(
+  workspaceId: string,
+): Promise<PlatformSubscriptionRow[]> {
+  const prisma = getPrisma();
+  const rows = await prisma.platformProductSubscription.findMany({
+    where: { workspaceId },
+  });
+  return rows
+    .filter((r: { status: string }) => ACTIVE_STATUSES.has(r.status))
+    .map((r: {
+      id: string;
+      workspaceId: string;
+      productFamily: string;
+      tier: string;
+      stripeSubscriptionId: string;
+      status: string;
+    }) => ({
+      id: r.id,
+      workspaceId: r.workspaceId,
+      productFamily: r.productFamily,
+      tier: r.tier,
+      stripeSubscriptionId: r.stripeSubscriptionId,
+      status: r.status,
+    }));
+}
+
+export async function workspaceHasDualProductDiscountEligibility(
+  workspaceId: string,
+): Promise<boolean> {
+  const active = await listActivePlatformSubscriptions(workspaceId);
+  const families = new Set(active.map((r) => r.productFamily));
+  return families.has("mctb") && families.has("smart_routing");
+}
+
+/** Apply or remove 20% coupon on all platform subscriptions for a workspace. */
+export async function syncDualProductDiscountForWorkspace(workspaceId: string): Promise<void> {
+  const stripe = getStripe();
+  if (!stripe) return;
+
+  const prisma = getPrisma();
+  const subs = await prisma.platformProductSubscription.findMany({
+    where: { workspaceId, status: { in: Array.from(ACTIVE_STATUSES) } },
+  });
+  const eligible =
+    subs.some((s: { productFamily: string }) => s.productFamily === "mctb") &&
+    subs.some((s: { productFamily: string }) => s.productFamily === "smart_routing");
+  const couponId = dualProductCouponId();
+
+  for (const sub of subs) {
+    try {
+      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+      const hasCoupon = (stripeSub.discounts || []).some((d) => {
+        if (typeof d === "string") return d === couponId;
+        const row = d as { coupon?: string | { id?: string } };
+        const couponRef =
+          typeof row.coupon === "string" ? row.coupon : row.coupon?.id;
+        return couponRef === couponId;
+      });
+      if (eligible && !hasCoupon) {
+        await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+          discounts: [{ coupon: couponId }],
+        });
+      } else if (!eligible && hasCoupon) {
+        await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+          discounts: [],
+        });
+      }
+    } catch (err) {
+      console.warn("[platform-subscription] discount sync failed", sub.stripeSubscriptionId, err);
+    }
+  }
+}
+
+export async function createPlatformCheckoutSession(input: {
+  workspaceId: string;
+  userId: string;
+  userEmail: string;
+  productKey: string;
+  origin: string;
+  successPath?: string;
+  nextProductKey?: string;
+}): Promise<{ url: string | null; sessionId: string }> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+
+  const { parseCheckoutSelection } = await import("@/lib/products/platform-billing-catalog");
+  const selection = parseCheckoutSelection(input.productKey);
+  const customerId = await getOrCreateStripeCustomer(input.workspaceId);
+
+  const willHaveBoth =
+    (selection.family === "mctb" &&
+      (await prismaHasActiveFamily(input.workspaceId, "smart_routing"))) ||
+    (selection.family === "smart_routing" &&
+      (await prismaHasActiveFamily(input.workspaceId, "mctb")));
+
+  const applyDiscountOnCheckout = willHaveBoth;
+
+  const successParams = new URLSearchParams({ platform_checkout: "success", product: input.productKey });
+  if (input.nextProductKey) successParams.set("next_product", input.nextProductKey);
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    line_items: [{ price: selection.stripePriceId, quantity: 1 }],
+    success_url: `${input.origin}${input.successPath || "/settings/billing"}?${successParams}`,
+    cancel_url: `${input.origin}/settings/billing?platform_checkout=cancel`,
+    metadata: {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      platformProductKey: input.productKey,
+      platformProductFamily: selection.family,
+      platformTier: String(selection.tier || ""),
+    },
+    subscription_data: {
+      metadata: {
+        workspaceId: input.workspaceId,
+        platformProductKey: input.productKey,
+        platformProductFamily: selection.family,
+        platformTier: String(selection.tier || ""),
+      },
+    },
+    discounts: applyDiscountOnCheckout ? [{ coupon: dualProductCouponId() }] : undefined,
+  });
+
+  return { url: session.url, sessionId: session.id };
+}
+
+async function prismaHasActiveFamily(
+  workspaceId: string,
+  family: PlatformProductFamily,
+): Promise<boolean> {
+  const prisma = getPrisma();
+  const row = await prisma.platformProductSubscription.findFirst({
+    where: { workspaceId, productFamily: family, status: { in: Array.from(ACTIVE_STATUSES) } },
+  });
+  return Boolean(row);
+}
+
+export async function changePlatformSubscriptionTier(input: {
+  workspaceId: string;
+  productFamily: PlatformProductFamily;
+  newTier: MctbTier | SmartRoutingTier;
+}): Promise<void> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+  const prisma = getPrisma();
+  const sub = await prisma.platformProductSubscription.findUnique({
+    where: {
+      workspaceId_productFamily: {
+        workspaceId: input.workspaceId,
+        productFamily: input.productFamily,
+      },
+    },
+  });
+  if (!sub) throw new Error("No active subscription for product family");
+
+  const catalog = getPlatformBillingCatalog();
+  const newPriceId =
+    input.productFamily === "mctb"
+      ? catalog.mctb.tiers[input.newTier as MctbTier].stripePriceId
+      : catalog.smart_routing.tiers[input.newTier as SmartRoutingTier].stripePriceId;
+
+  const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+  const itemId = stripeSub.items.data[0]?.id;
+  if (!itemId) throw new Error("Subscription has no items");
+
+  await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+    items: [{ id: itemId, price: newPriceId }],
+    proration_behavior: "create_prorations",
+    metadata: {
+      ...((stripeSub.metadata || {}) as Record<string, string>),
+      platformTier: input.newTier,
+      platformProductKey: `${input.productFamily}_${input.newTier}`,
+    },
+  });
+}
+
+export async function getPlatformBillingSnapshot(workspaceId: string) {
+  const prisma = getPrisma();
+  const subs = await prisma.platformProductSubscription.findMany({
+    where: { workspaceId },
+    orderBy: { productFamily: "asc" },
+  });
+  const dualDiscount = await workspaceHasDualProductDiscountEligibility(workspaceId);
+  return { subscriptions: subs, dualDiscountActive: dualDiscount };
+}

@@ -92,6 +92,20 @@ export async function updateSessionState(
       smsTriggered: patch.smsTriggered ?? existing.smsTriggered,
       recordingUrl: patch.recordingUrl ?? existing.recordingUrl,
     },
+  }).then(async (updated: Awaited<ReturnType<typeof prisma.smartRoutingCallSession.update>>) => {
+    if (patch.completedAt && !existing.completedAt && !existing.isTest) {
+      const { recordSmartRoutingConversationMinutes } = await import(
+        "./conversation-minutes"
+      );
+      await recordSmartRoutingConversationMinutes({
+        workspaceId: existing.workspaceId,
+        callSessionId: sessionId,
+        startedAt: existing.startedAt,
+        answeredAt: patch.answeredAt ?? existing.answeredAt,
+        completedAt: patch.completedAt,
+      }).catch(() => undefined);
+    }
+    return updated;
   });
 }
 

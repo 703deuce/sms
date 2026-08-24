@@ -329,6 +329,7 @@ model Workspace {
   smartRoutingCallbackCodes SmartRoutingCallbackCode[]
   productEntitlements ProductEntitlement[]
   workspaceProductFeatures WorkspaceProductFeature[]
+  platformProductSubscriptions PlatformProductSubscription[]
   callbackRequests CallbackRequest[]
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -368,6 +369,52 @@ model WorkspaceProductFeature {
   @@index([workspaceId])
   @@index([featureKey, status])
   @@map("workspace_product_features")
+}
+
+/// Workspace-level Transovo product subscriptions (MCTB, Smart Routing) — one Stripe sub per family.
+model PlatformProductSubscription {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  productFamily         String
+  tier                  String
+  stripeCustomerId      String?
+  stripeSubscriptionId  String    @unique
+  stripePriceId         String
+  status                String    @default("active")
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean   @default(false)
+  includedMinutes       Int?
+  minutesUsedThisPeriod Int       @default(0)
+  usagePeriodStart      DateTime?
+  usagePeriodEnd        DateTime?
+  overageMinutesBilled  Int       @default(0)
+  metadataJson          Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  usageRecords          PlatformSmartRoutingUsageRecord[]
+
+  @@unique([workspaceId, productFamily])
+  @@index([workspaceId, status])
+  @@index([stripeCustomerId])
+  @@map("platform_product_subscriptions")
+}
+
+/// Idempotent Smart Routing conversation-minute accounting.
+model PlatformSmartRoutingUsageRecord {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  subscriptionId    String
+  callSessionId     String   @unique
+  conversationMinutes Int
+  recordedAt        DateTime @default(now())
+  billingPeriodStart DateTime?
+  subscription      PlatformProductSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, recordedAt])
+  @@index([subscriptionId])
+  @@map("platform_smart_routing_usage_records")
 }
 
 model CallbackRequest {

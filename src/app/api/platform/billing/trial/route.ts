@@ -4,7 +4,7 @@ import {
   grantWorkspaceProductFeature,
   type TransovoProductFeature,
 } from "@/lib/products/feature-entitlements";
-import { grantsForPlatformProduct } from "@/lib/products/platform-billing-catalog";
+import { parseCheckoutSelection, grantsForPlatformProduct } from "@/lib/products/platform-billing-catalog";
 
 const FEATURE_ALIASES: Record<string, TransovoProductFeature[]> = {
   mctb: ["mctb"],
@@ -25,7 +25,13 @@ export async function POST(request: Request) {
 
     const features =
       FEATURE_ALIASES[productKey] ??
-      grantsForPlatformProduct(productKey);
+      (() => {
+        try {
+          return [parseCheckoutSelection(productKey).feature];
+        } catch {
+          return grantsForPlatformProduct(productKey);
+        }
+      })();
 
     if (!features.length) {
       return jsonError(new Error(`Unknown product: ${productKey}`), 400);

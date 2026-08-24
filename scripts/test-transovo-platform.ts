@@ -10,7 +10,7 @@ import {
   defaultFeaturesForWorkspaceType,
   activeTransovoFeatures,
 } from "../src/lib/products/feature-entitlements";
-import { PLATFORM_BILLING_CATALOG } from "../src/lib/products/platform-billing-catalog";
+import { grantsForPlatformProduct, listPlatformPurchasableProducts } from "../src/lib/products/platform-billing-catalog";
 import { renderMctbMessageTemplate, resolveMctbMessageTemplate } from "../src/lib/mctb/message-template";
 import { DEFAULT_MCTB_CONFIG } from "../src/lib/agents/missed-call-text-back/types";
 
@@ -57,7 +57,7 @@ assert.ok(!srOnly.some((i) => i.label === "Missed Calls"));
 assert.ok(srOnly.some((i) => i.href === "/smart-routing" && i.label === "Overview"));
 assert.ok(srOnly.some((i) => i.label === "Analytics" && i.href === "/smart-routing/analytics"));
 
-assert.ok(PLATFORM_BILLING_CATALOG.length >= 5);
+assert.ok(listPlatformPurchasableProducts().length >= 8);
 
 const tmpl = resolveMctbMessageTemplate({
   ...DEFAULT_MCTB_CONFIG,
