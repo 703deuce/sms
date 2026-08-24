@@ -52,6 +52,13 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     return { ok: false, reason: "INVALID_PHONE", traceId };
   }
 
+  let businessE164 = input.businessE164;
+  try {
+    businessE164 = normalizeE164(input.businessE164);
+  } catch {
+    // keep raw when forwarded business line is unavailable
+  }
+
   let contactId = input.contactId || null;
   if (!contactId) {
     const { ensureInboundCallerContact } = await import(
@@ -84,7 +91,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
       humanCallId: input.humanCallId || null,
       contactId,
       callerE164: caller,
-      businessE164: input.businessE164,
+      businessE164,
       phoneNumberId: input.phoneNumberId || null,
       reason: classification,
       disposition: input.call.disposition || null,
@@ -105,7 +112,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     voiceCallId: input.voiceCallId || null,
     humanCallId: input.humanCallId || null,
     kind: "call.missed",
-    detail: { classification, caller, business: input.businessE164 },
+    detail: { classification, caller, business: businessE164 },
   });
 
   if (input.demoMode) {
@@ -119,7 +126,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
   const eligibility = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: caller,
-    businessE164: input.businessE164,
+    businessE164,
     phoneNumberId: input.phoneNumberId,
     idempotencyKey,
     demoMode: input.demoMode,
@@ -133,7 +140,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     transovoNumberE164:
       typeof input.eventMetadata?.transovoNumberE164 === "string"
         ? input.eventMetadata.transovoNumberE164
-        : input.businessE164,
+        : businessE164,
     call: input.call,
   });
 
@@ -200,7 +207,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     await recordExistingConsentAttestation({
       workspaceId: input.workspaceId,
       callerNumber: caller,
-      businessNumber: input.businessE164,
+      businessNumber: businessE164,
       voiceCallId: input.voiceCallId,
       contactId,
       metadata: {

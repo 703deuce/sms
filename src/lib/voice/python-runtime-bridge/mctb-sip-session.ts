@@ -231,7 +231,9 @@ export type RecordMctbSipPress1ConsentInput = {
   workspaceId: string;
   callerNumber: string;
   businessNumber: string;
+  transovoNumberE164?: string;
   providerCallId: string;
+  livekitRoomName?: string | null;
   forwardedFrom?: string | null;
   audioAssetId?: string | null;
   dtmfDigit?: string;
@@ -246,11 +248,14 @@ export async function recordMctbSipPress1ConsentForPython(
 
   const digit = String(input.dtmfDigit || "1");
   const mediaBackend = getActiveMediaBackend();
+  const transovoNumberE164 = String(input.transovoNumberE164 || input.businessNumber || "").trim();
   const observability = {
     path: "livekit_sip_mctb",
     captureMode: "SIP_INGRESS",
     consentMode: "press_1",
     providerCallId: input.providerCallId,
+    transovoNumberE164,
+    livekitRoomName: input.livekitRoomName || null,
     forwardedFrom: input.forwardedFrom || null,
     ...mediaBackendMetadataStamp(mediaBackend),
   };

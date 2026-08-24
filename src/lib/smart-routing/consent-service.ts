@@ -3,6 +3,10 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
+import {
+  normalizeBusinessE164ForStorage,
+  resolveInboundPhoneNumberId,
+} from "@/lib/mctb/resolve-inbound-phone-number";
 import { emitSmartRoutingEvent } from "./events";
 
 export async function recordSmsConsent(input: {
@@ -35,16 +39,39 @@ export async function recordSmsConsent(input: {
   });
   const workspaceId = target.workspaceId;
 
-  const existing = await prisma.smartRoutingSmsConsentEvent.findFirst({
-    where: {
-      workspaceId,
-      callSessionId: input.callSessionId ?? undefined,
-      callerNumber: input.callerNumber,
-    },
-    orderBy: { consentedAt: "desc" },
-  });
-  if (existing && input.callSessionId) {
-    return { consent: existing, duplicate: true };
+  const providerCallId =
+    input.callSessionId ||
+    (typeof input.metadata?.providerCallId === "string" ? input.metadata.providerCallId : null);
+
+  if (providerCallId) {
+    const bySession = await prisma.smartRoutingSmsConsentEvent.findFirst({
+      where: {
+        workspaceId,
+        callerNumber: input.callerNumber,
+        callSessionId: providerCallId,
+      },
+      orderBy: { consentedAt: "desc" },
+    });
+    if (bySession) {
+      return { consent: bySession, duplicate: true };
+    }
+
+    const recent = await prisma.smartRoutingSmsConsentEvent.findMany({
+      where: {
+        workspaceId,
+        callerNumber: input.callerNumber,
+        consentedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { consentedAt: "desc" },
+      take: 20,
+    });
+    const byMeta = recent.find((row) => {
+      const meta = (row.metadataJson || {}) as Record<string, unknown>;
+      return meta.providerCallId === providerCallId;
+    });
+    if (byMeta) {
+      return { consent: byMeta, duplicate: true };
+    }
   }
 
   const consent = await prisma.smartRoutingSmsConsentEvent.create({
@@ -113,20 +140,35 @@ export async function triggerMissedCallTextFromConsent(input: {
     "@/lib/agents/missed-call-text-back/process"
   );
 
-  const pn = await prisma.phoneNumber.findFirst({
-    where: target.isPlatformDemo
-      ? { e164: input.businessNumber }
-      : { workspaceId: target.workspaceId, e164: input.businessNumber },
+  const transovoNumberE164 =
+    typeof input.eventMetadata?.transovoNumberE164 === "string"
+      ? input.eventMetadata.transovoNumberE164
+      : input.businessNumber;
+
+  const phoneNumberId = await resolveInboundPhoneNumberId({
+    workspaceId: target.workspaceId,
+    transovoNumberE164,
+    businessE164: input.businessNumber,
+    isPlatformDemo: target.isPlatformDemo,
   });
+
+  const businessE164 = normalizeBusinessE164ForStorage(
+    input.businessNumber,
+    transovoNumberE164,
+  );
 
   const result = await processMissedInboundCall({
     workspaceId: target.workspaceId,
     callerE164: input.callerNumber,
-    businessE164: input.businessNumber,
-    phoneNumberId: pn?.id,
+    businessE164,
+    phoneNumberId,
     providerCallId: input.callSessionId,
     demoMode: target.demoMode,
-    eventMetadata: input.eventMetadata,
+    eventMetadata: {
+      ...input.eventMetadata,
+      transovoNumberE164,
+      phoneNumberId,
+    },
     call: {
       direction: "INBOUND",
       status: "NO_ANSWER",
