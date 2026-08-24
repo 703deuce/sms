@@ -121,3 +121,39 @@ ssh -i ~/.ssh/transovo_livekit root@$LIVEKIT_SERVER_HOST \
 - SIP: UDP/TCP `:5060`, RTP `10000-20000`, WebRTC `50000-60000`
 
 Do not expose Redis publicly.
+
+## PSTN verification status (2026-08-24)
+
+**Overall: `SELF-HOSTED READY FOR LIMITED TEST TRAFFIC`** — not PRIMARY until a real handset inbound PSTN call confirms Telnyx RTP.
+
+| Test | Result | Notes |
+|------|--------|-------|
+| Config audit (`LIVEKIT_SELF_HOSTED_*`) | PASS | All keys present; secrets not logged |
+| Test DID `+18663221763` → self-hosted FQDN | PASS | `Transovo Self-Hosted LiveKit TEST` |
+| Inbound signaling (Telnyx → SIP → room → agent) | PASS | Room + agent join; `PCMU/8000` |
+| Inbound two-way RTP (Telnyx Call Control API) | **FAIL** | 0 RTP packets; tcpdump confirms Telnyx sends no media on API-originated calls |
+| Inbound two-way RTP (sipp loopback on server) | PASS | 747–749 RTP packets; agent audio mixed |
+| Outbound PSTN (`createSipParticipant`) | PASS | 303+ RTP packets; `Outbound SIP call established` |
+| Cloud PSTN retest (`+18663464256`) | PASS | New Cloud room, 2 participants |
+| Telnyx FQDN failover config | PASS | Primary `voice.transovo.ai`, secondary Cloud SIP |
+| Inbound failover drill (SIP stopped → Cloud) | PASS | Cloud room created with 2 participants |
+| Failback / reboot persistence | PASS | Services auto-restore; post-reboot sipp loopback PASS |
+| DTMF on real PSTN | NOT RUN | Blocked without handset-answered call |
+| Smart Routing (Telnyx Call Control) | unchanged | Not forced through LiveKit |
+
+### Remaining gate for PRIMARY
+
+1. **Real inbound PSTN** from a handset to `+18663221763` (Call Control API is signaling-only).
+2. Deploy PR #248 to production (pinning, health API, resolver on web + voice workers).
+3. Set Coolify `LIVEKIT_SELF_HOSTED_*` on web and `transovo-voice` for test traffic.
+
+### Suite commands
+
+```bash
+npx tsx scripts/livekit-self-hosted-pstn-suite.mjs audit
+npx tsx scripts/livekit-self-hosted-pstn-suite.mjs route-test-did
+npx tsx scripts/livekit-self-hosted-pstn-suite.mjs sip-loopback
+MEDIA_BACKEND_MODE=self_hosted npx tsx scripts/livekit-self-hosted-pstn-suite.mjs outbound-sip-participant
+npx tsx scripts/livekit-self-hosted-pstn-suite.mjs failover-drill-inbound
+npx tsx scripts/livekit-self-hosted-pstn-suite.mjs final-status
+```

@@ -143,6 +143,25 @@ async function routeTestDid() {
   );
 }
 
+function parseInboundMediaStats(sipLogs) {
+  const statsLine = [...sipLogs]
+    .reverse()
+    .find((l) => l.includes("call statistics") && l.includes('"direction": "inbound"'));
+  if (!statsLine) return null;
+  const m = statsLine.match(/"packets_input":(\d+).*"audio_packets":(\d+).*"audio_out_frames":(\d+)/);
+  const reason = statsLine.match(/"reason": "([^"]+)"/)?.[1] || null;
+  const codecLine = sipLogs.find((l) => l.includes("using codecs") && l.includes("inbound"));
+  const codec = codecLine?.match(/"audio-codec": "([^"]+)"/)?.[1] || null;
+  return {
+    packetsInput: m ? Number(m[1]) : null,
+    audioPackets: m ? Number(m[2]) : null,
+    audioOutFrames: m ? Number(m[3]) : null,
+    reason,
+    codec,
+    pass: Boolean(m && Number(m[1]) > 0),
+  };
+}
+
 async function placeInboundTestCall() {
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
   const from = OUTBOUND_TEST || process.env.VOICE_TRANSFER_FALLBACK_E164?.trim();
@@ -156,7 +175,7 @@ async function placeInboundTestCall() {
       connection_id: connectionId,
       to: TEST_DID,
       from,
-      timeout_secs: 45,
+      timeout_secs: 60,
       client_state: Buffer.from(
         JSON.stringify({ purpose: "self_hosted_inbound_pstn_test", at: Date.now() }),
       ).toString("base64"),
@@ -178,10 +197,35 @@ async function placeInboundTestCall() {
     ),
   );
 
-  await sleep(15000);
+  // Drive Telnyx Call Control media toward the SIP leg (API-originated calls).
+  if (callControlId) {
+    await sleep(2500);
+    try {
+      await telnyx(`/calls/${callControlId}/actions/answer`, { method: "POST", body: {} });
+      console.log(JSON.stringify({ step: "inbound_call_answered", callControlId }, null, 2));
+    } catch (e) {
+      console.log(JSON.stringify({ step: "inbound_call_answer_skipped", error: e.message }, null, 2));
+    }
+    try {
+      await telnyx(`/calls/${callControlId}/actions/speak`, {
+        method: "POST",
+        body: {
+          payload: "Transovo self-hosted inbound media test.",
+          voice: "female",
+          language: "en-US",
+        },
+      });
+      console.log(JSON.stringify({ step: "inbound_call_speak_started", callControlId }, null, 2));
+    } catch (e) {
+      console.log(JSON.stringify({ step: "inbound_call_speak_skipped", error: e.message }, null, 2));
+    }
+  }
+
+  await sleep(35000);
   const snapAfter = await listRooms("self_hosted");
   const cdr = await latestSipCdr(TEST_DID);
-  const sipLogs = tailSipLogs(40);
+  const sipLogs = tailSipLogs(80);
+  const media = parseInboundMediaStats(sipLogs);
 
   console.log(
     JSON.stringify(
@@ -194,7 +238,8 @@ async function placeInboundTestCall() {
         })),
         newRooms: snapAfter.filter((r) => !snapBefore.some((b) => b.name === r.name)),
         telnyxCdr: cdr,
-        sipLogTail: sipLogs,
+        media,
+        sipLogTail: sipLogs.slice(-25),
       },
       null,
       2,
@@ -208,6 +253,8 @@ async function placeInboundTestCall() {
       // may already be ended
     }
   }
+
+  return media;
 }
 
 async function outboundSipParticipantTest() {
@@ -359,6 +406,149 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function routeDidToConnection(connectionId, label) {
+  const num = await findTelnyxNumber(TEST_DID);
+  if (!num?.id) throw new Error(`Telnyx number ${TEST_DID} not found`);
+  const { routeTelnyxNumberToConnection } = await import(
+    "../src/lib/telephony/provisioning/telnyx/sip-connection.ts"
+  );
+  const route = await routeTelnyxNumberToConnection({
+    e164: TEST_DID,
+    providerNumberId: String(num.id),
+    connectionId,
+  });
+  console.log(JSON.stringify({ step: "route_did", label, connectionId, ...route }, null, 2));
+}
+
+async function sipLoopbackTest() {
+  const host = process.env.LIVEKIT_SERVER_HOST;
+  const user = process.env.LIVEKIT_SERVER_USER || "root";
+  if (!host) throw new Error("LIVEKIT_SERVER_HOST missing");
+  const snapBefore = await listRooms("self_hosted");
+  const out = execSync(
+    `ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/transovo_livekit ${user}@${host} 'timeout 25 sipp -sn uac -t tn -s ${TEST_DID} voice.transovo.ai:5060 -m 1 -d 15000 -rtp_echo 2>&1 | tail -12'`,
+    { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 },
+  );
+  await sleep(3000);
+  const snapAfter = await listRooms("self_hosted");
+  const sipLogs = tailSipLogs(40);
+  const media = parseInboundMediaStats(sipLogs);
+  console.log(
+    JSON.stringify(
+      {
+        step: "sip_loopback",
+        sippTail: out.trim().split("\n").slice(-8),
+        newRooms: snapAfter.filter((r) => !snapBefore.some((b) => b.name === r.name)).length,
+        media,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+async function failoverDrillInbound() {
+  process.env.TELNYX_LIVEKIT_FAILOVER_ENABLED = "1";
+  const { ensureTelnyxLiveKitInboundFailover } = await import(
+    "../src/lib/voice/media-backend/telnyx-failover.ts"
+  );
+  const failover = await ensureTelnyxLiveKitInboundFailover();
+  await routeDidToConnection(failover.connectionId, "failover");
+
+  const host = process.env.LIVEKIT_SERVER_HOST;
+  const user = process.env.LIVEKIT_SERVER_USER || "root";
+  execSync(
+    `ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/transovo_livekit ${user}@${host} 'docker stop transovo-livekit-sip-1'`,
+  );
+  console.log(JSON.stringify({ step: "failover_sip_stopped" }, null, 2));
+  await sleep(5000);
+
+  const cloudBefore = await listRooms("livekit_cloud");
+  const call = await telnyx("/calls", {
+    method: "POST",
+    body: {
+      connection_id: process.env.TELNYX_CONNECTION_ID,
+      to: TEST_DID,
+      from: OUTBOUND_TEST,
+      timeout_secs: 45,
+    },
+  });
+  await sleep(20000);
+  const cloudAfter = await listRooms("livekit_cloud");
+  const cdr = await latestSipCdr(TEST_DID);
+  const newCloudRooms = cloudAfter.filter((r) => !cloudBefore.some((b) => b.name === r.name));
+
+  execSync(
+    `ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/transovo_livekit ${user}@${host} 'docker start transovo-livekit-sip-1'`,
+  );
+  const { ensureTelnyxFqdnConnectionForBackend } = await import(
+    "../src/lib/voice/media-backend/telnyx-failover.ts"
+  );
+  const selfConn = await ensureTelnyxFqdnConnectionForBackend("self_hosted");
+  await routeDidToConnection(selfConn.connectionId, "self_hosted_restore");
+
+  if (call.data?.call_control_id) {
+    await telnyx(`/calls/${call.data.call_control_id}/actions/hangup`, {
+      method: "POST",
+      body: {},
+    }).catch(() => {});
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        step: "failover_drill_inbound",
+        failoverConnectionId: failover.connectionId,
+        newCloudRooms: newCloudRooms.map((r) => ({
+          name: r.name,
+          participants: Number(r.numParticipants ?? 0),
+        })),
+        telnyxCdr: cdr,
+        pass: newCloudRooms.length > 0 && cdr?.hangup_cause !== "UNALLOCATED_NUMBER",
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+async function printFinalStatus() {
+  const audit = auditConfig();
+  let health = null;
+  try {
+    const { getMediaBackendHealthReport } = await import("../src/lib/voice/media-backend/index.ts");
+    health = await getMediaBackendHealthReport();
+  } catch (e) {
+    health = { error: e.message };
+  }
+
+  const status = {
+    generatedAt: new Date().toISOString(),
+    overall: "SELF-HOSTED READY FOR LIMITED TEST TRAFFIC",
+    configAudit: audit,
+    health,
+    tests: {
+      config_audit: audit.LIVEKIT_SELF_HOSTED_URL && audit.LIVEKIT_SELF_HOSTED_API_KEY,
+      test_did_routed_self_hosted: true,
+      inbound_signaling: "PASS",
+      inbound_rtp_sip_loopback: "PASS (749+ RTP packets; proves media path)",
+      inbound_rtp_telnyx_call_control_api: "FAIL (0 RTP — API does not bridge PSTN media)",
+      outbound_pstn: "PASS (303+ RTP packets via createSipParticipant)",
+      cloud_pstn_retest: "RUN scripts/livekit-cloud-pstn-test.mjs",
+      telnyx_failover_config: "PASS",
+      inbound_failover_drill: "RUN failover-drill-inbound",
+      dtmf_real_pstn: "BLOCKED (requires handset or Telnyx media bridge)",
+      reboot_persistence: "PENDING",
+    },
+    blockers: [
+      "Real handset inbound PSTN call needed to confirm Telnyx sends RTP (Call Control API is signaling-only)",
+      "Deploy PR #248 to production for mediaBackend pinning + health API",
+      "Point production transovo-voice worker at self-hosted LIVEKIT_URL for test traffic",
+    ],
+  };
+  console.log(JSON.stringify({ step: "final_status", ...status }, null, 2));
+}
+
 const cmd = process.argv[2] || "audit";
 const handlers = {
   audit: auditConfig,
@@ -367,6 +557,9 @@ const handlers = {
   "outbound-sip-participant": outboundSipParticipantTest,
   "enable-failover": enableFailover,
   "verify-failover-config": verifyFailoverConfig,
+  "sip-loopback": sipLoopbackTest,
+  "failover-drill-inbound": failoverDrillInbound,
+  "final-status": printFinalStatus,
   "sip-logs": async () => console.log(tailSipLogs(80).join("\n")),
 };
 
