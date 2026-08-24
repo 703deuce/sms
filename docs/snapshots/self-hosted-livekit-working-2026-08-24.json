@@ -1,0 +1,38 @@
+{
+  "frozenAt": "2026-08-24T12:33:00.000Z",
+  "gitCommit": "d150e0e0",
+  "label": "production-proof-self-hosted-mctb-press-1",
+  "verifiedCall": {
+    "at": "2026-08-24T12:33:00.000Z",
+    "sipCorrelationId": "SCL_xQ2UyyRPdWMg",
+    "livekitRoom": "RM_WwKFXVYK3Vgp",
+    "consentRecorded": true,
+    "smsSent": true,
+    "missedCallEventId": "cmt77w79m1564281e3f0s0e5d",
+    "note": "See docs/self-hosted-livekit-working-snapshot.md for E.164 and SIP host details"
+  },
+  "mediaBackend": {
+    "mode": "self_hosted",
+    "inboundTrunkId": "ST_acZETLdoDQ8o",
+    "dispatchRuleId": "SDR_anLzF5j5kqpU",
+    "outboundTrunkIdEnvVar": "LIVEKIT_SELF_HOSTED_OUTBOUND_TRUNK_ID"
+  },
+  "telnyx": {
+    "fqdnConnectionId": "3022029259041408870",
+    "fqdnConnectionName": "Transovo LiveKit Inbound"
+  },
+  "cloudRollback": {
+    "mode": "livekit_cloud",
+    "cloudInboundTrunkId571": "ST_niZH3LgKj7Po",
+    "note": "LIVEKIT_CLOUD_* and legacy LIVEKIT_* vars preserved in Coolify"
+  },
+  "superseded": {
+    "selfHostedInboundTrunkId": "ST_9v6jM2L5ktzr",
+    "reason": "Restrictive IP allowlist missed Telnyx secondary IP; PCMU/PCMA-only codecs"
+  },
+  "rollbackSteps": [
+    "npx tsx scripts/rollback-telnyx-fqdn-to-cloud.ts --apply",
+    "Set MEDIA_BACKEND_MODE=livekit_cloud in Coolify (transovo-web + transovo-voice)",
+    "Redeploy both services"
+  ]
+}

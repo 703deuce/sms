@@ -71,3 +71,25 @@ npx tsx scripts/rollback-telnyx-fqdn-to-cloud.ts --apply
 2. `npx tsx scripts/verify-media-backend-mode.ts` → `resolvedBackend: self_hosted`
 3. Run ingress switch script with `--apply`
 4. Call your business number; logs should show `mediaBackend=self_hosted`
+
+## Freeze working self-hosted state
+
+After a verified production call, capture rollback state:
+
+```bash
+npx tsx scripts/freeze-self-hosted-livekit-snapshot.ts --write docs/snapshots/self-hosted-livekit-working-latest.json
+```
+
+See `docs/self-hosted-livekit-working-snapshot.md` for the frozen 2026-08-24 proof point and rollback steps.
+
+Trace DB visibility (MCTB SIP uses `missedCallEvent`, not `voiceCall`):
+
+```bash
+npx tsx scripts/mctb-trace-recent-571-calls.ts +15714073615 24h
+```
+
+If phone `settingsJson` trunk IDs are stale after a trunk rebuild:
+
+```bash
+npx tsx scripts/sync-phone-livekit-trunk-ids-from-env.ts --e164 +15714073615 --apply
+```
