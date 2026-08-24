@@ -80,6 +80,10 @@ export function resolveLiveKitSipHost(): LiveKitSipHostResolution {
       if (host.includes(".sip.livekit.cloud")) {
         return { host, source: "LIVEKIT_URL(sip)" };
       }
+      // Self-hosted production — SIP and API share the host.
+      if (host.endsWith(".transovo.ai") || host.endsWith(".example.com")) {
+        return { host, source: "LIVEKIT_URL(self_hosted)" };
+      }
     } catch {
       // ignore
     }

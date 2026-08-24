@@ -33,15 +33,23 @@ assert.equal(
 );
 
 const prevUrl = process.env.LIVEKIT_URL;
+const prevSipHost = process.env.LIVEKIT_SIP_HOST;
+const prevSipUri = process.env.LIVEKIT_SIP_URI;
+delete process.env.LIVEKIT_SIP_HOST;
+delete process.env.LIVEKIT_SIP_URI;
 process.env.LIVEKIT_URL = "sms-project.sip.livekit.cloud";
 assert.equal(resolveLiveKitSipHost().source, "LIVEKIT_URL(sip)");
 assert.equal(resolveLiveKitSipHost().host, "sms-project.sip.livekit.cloud");
 process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
 assert.equal(resolveLiveKitSipHost().source, "LIVEKIT_URL(derived)");
 assert.equal(resolveLiveKitSipHost().host, "sms-project.sip.livekit.cloud");
+process.env.LIVEKIT_URL = "wss://voice.example.com"; // pragma: allowlist secret
+assert.equal(resolveLiveKitSipHost().source, "LIVEKIT_URL(self_hosted)");
+assert.equal(resolveLiveKitSipHost().host, "voice.example.com");
 process.env.LIVEKIT_URL = prevUrl;
+if (prevSipHost) process.env.LIVEKIT_SIP_HOST = prevSipHost;
+if (prevSipUri) process.env.LIVEKIT_SIP_URI = prevSipUri;
 
-const prevSipUri = process.env.LIVEKIT_SIP_URI;
 process.env.LIVEKIT_URL = "wss://sms-project.livekit.cloud";
 process.env.LIVEKIT_SIP_URI = "stale-other.sip.livekit.cloud";
 assert.equal(
