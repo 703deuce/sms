@@ -15,6 +15,8 @@ import {
   normalizeForwardedFromE164,
   parseTelnyxForwardedFrom,
 } from "@/lib/voice/telnyx/forwarded-from";
+import { getActiveMediaBackend } from "@/lib/voice/media-backend";
+import { mediaBackendMetadataStamp } from "@/lib/voice/media-backend/pinning";
 
 const FALLBACK_WORKSPACE_ID =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
@@ -243,19 +245,26 @@ export async function recordMctbSipPress1ConsentForPython(
   );
 
   const digit = String(input.dtmfDigit || "1");
+  const mediaBackend = getActiveMediaBackend();
+  const observability = {
+    path: "livekit_sip_mctb",
+    captureMode: "SIP_INGRESS",
+    consentMode: "press_1",
+    providerCallId: input.providerCallId,
+    forwardedFrom: input.forwardedFrom || null,
+    ...mediaBackendMetadataStamp(mediaBackend),
+  };
+
   const consent = await recordSmsConsent({
     workspaceId: input.workspaceId,
     callerNumber: input.callerNumber,
     businessNumber: input.businessNumber,
+    callSessionId: input.providerCallId,
     affirmativeInput: digit,
     consentScope: "CUSTOMER_CARE_SMS",
     promptAssetId: input.audioAssetId || undefined,
     forwardedFrom: input.forwardedFrom || null,
-    metadata: {
-      path: "livekit_sip_mctb",
-      providerCallId: input.providerCallId,
-      forwardedFrom: input.forwardedFrom || null,
-    },
+    metadata: observability,
   });
 
   const sms = await triggerMissedCallTextFromConsent({
@@ -264,6 +273,7 @@ export async function recordMctbSipPress1ConsentForPython(
     businessNumber: input.businessNumber,
     callSessionId: input.providerCallId,
     forwardedFrom: input.forwardedFrom || null,
+    eventMetadata: observability,
   });
 
   return {

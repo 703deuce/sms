@@ -82,6 +82,7 @@ export async function triggerMissedCallTextFromConsent(input: {
   callSessionId: string;
   isTest?: boolean;
   forwardedFrom?: string | null;
+  eventMetadata?: Record<string, unknown>;
 }) {
   if (input.isTest) {
     return { triggered: false, reason: "test_mode" };
@@ -125,6 +126,7 @@ export async function triggerMissedCallTextFromConsent(input: {
     phoneNumberId: pn?.id,
     providerCallId: input.callSessionId,
     demoMode: target.demoMode,
+    eventMetadata: input.eventMetadata,
     call: {
       direction: "INBOUND",
       status: "NO_ANSWER",

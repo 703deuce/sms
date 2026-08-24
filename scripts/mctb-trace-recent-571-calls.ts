@@ -1,5 +1,5 @@
 #!/usr/bin/env npx tsx
-/** Trace recent 571 MCTB call activity across Telnyx, DB, and LiveKit. */
+/** Trace recent MCTB call activity across Telnyx, DB, and LiveKit. */
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getPrisma } from "@/lib/db";
 import { RoomServiceClient } from "livekit-server-sdk";
@@ -12,6 +12,9 @@ const HOURS = Number(process.argv.find((a) => /^\d+h?$/.test(a))?.replace("h", "
 async function main() {
   const since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
   console.log(`\n══ MCTB call trace for ${E164} (last ${HOURS}h since ${since.toISOString()}) ══\n`);
+  console.log(
+    "Note: MCTB SIP (Press-1) does not create voiceCall rows. Check missedCallEvent + sms_consent below.\n",
+  );
 
   // Telnyx SIP CDR
   try {
@@ -75,12 +78,13 @@ async function main() {
     console.log("Telnyx voice CDR error:", e instanceof Error ? e.message : e);
   }
 
-  // DB
   const prisma = getPrisma();
+
+  // voiceCall — rare for MCTB SIP; included for SR / agent paths
   const calls = await prisma.voiceCall.findMany({
     where: {
       createdAt: { gte: since },
-      OR: [{ toE164: E164 }, { toNumber: E164 }],
+      toE164: E164,
     },
     orderBy: { createdAt: "desc" },
     take: 10,
@@ -90,13 +94,12 @@ async function main() {
       fromE164: true,
       toE164: true,
       status: true,
-      provider: true,
-      metadataJson: true,
+      metadata: true,
     },
   });
-  console.log(`\nDB voiceCall (${calls.length}):`);
+  console.log(`\nDB voiceCall (${calls.length}) — usually empty for MCTB SIP:`);
   for (const c of calls) {
-    const meta = (c.metadataJson || {}) as Record<string, unknown>;
+    const meta = (c.metadata || {}) as Record<string, unknown>;
     console.log(
       " ",
       JSON.stringify({
@@ -104,33 +107,116 @@ async function main() {
         at: c.createdAt,
         from: c.fromE164,
         status: c.status,
-        provider: c.provider,
+        mediaBackend: meta.mediaBackend,
         source: meta.source,
       }),
     );
   }
-  if (!calls.length) console.log("  (none)");
+  if (!calls.length) console.log("  (none — expected for MCTB SIP Press-1)");
 
   const missed = await prisma.missedCallEvent.findMany({
-    where: { createdAt: { gte: since }, businessNumber: E164 },
+    where: {
+      createdAt: { gte: since },
+      OR: [{ businessE164: E164 }, { businessE164: { contains: E164.replace("+", "") } }],
+    },
     orderBy: { createdAt: "desc" },
     take: 10,
-    select: { id: true, createdAt: true, callerNumber: true, status: true, suppressionReason: true },
+    select: {
+      id: true,
+      createdAt: true,
+      callerE164: true,
+      businessE164: true,
+      status: true,
+      suppressionReason: true,
+      smsSentAt: true,
+      metadata: true,
+      traceId: true,
+    },
   });
   console.log(`\nDB missedCallEvent (${missed.length}):`);
   for (const m of missed) {
+    const meta = (m.metadata || {}) as Record<string, unknown>;
     console.log(
       " ",
       JSON.stringify({
         id: m.id,
         at: m.createdAt,
-        caller: m.callerNumber,
+        caller: m.callerE164,
+        business: m.businessE164,
         status: m.status,
         suppress: m.suppressionReason,
+        smsSentAt: m.smsSentAt,
+        traceId: m.traceId,
+        path: meta.path,
+        mediaBackend: meta.mediaBackend,
+        providerCallId: meta.providerCallId,
+        captureMode: meta.captureMode,
       }),
     );
   }
   if (!missed.length) console.log("  (none)");
+
+  const consents = await prisma.smartRoutingSmsConsentEvent.findMany({
+    where: {
+      consentedAt: { gte: since },
+      businessNumber: E164,
+    },
+    orderBy: { consentedAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      consentedAt: true,
+      callerNumber: true,
+      callSessionId: true,
+      affirmativeInput: true,
+      metadataJson: true,
+    },
+  });
+  console.log(`\nDB smartRoutingSmsConsentEvent (${consents.length}):`);
+  for (const c of consents) {
+    const meta = (c.metadataJson || {}) as Record<string, unknown>;
+    console.log(
+      " ",
+      JSON.stringify({
+        id: c.id,
+        at: c.consentedAt,
+        caller: c.callerNumber,
+        digit: c.affirmativeInput,
+        providerCallId: c.callSessionId,
+        path: meta.path,
+        mediaBackend: meta.mediaBackend,
+      }),
+    );
+  }
+  if (!consents.length) console.log("  (none)");
+
+  if (missed.length) {
+    const traceIds = [...new Set(missed.map((m) => m.traceId).filter(Boolean))];
+    const traces = await prisma.missedCallTextTrace.findMany({
+      where: {
+        createdAt: { gte: since },
+        traceId: { in: traceIds },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, createdAt: true, kind: true, missedCallEventId: true, traceId: true },
+    });
+    if (traces.length) {
+      console.log(`\nDB missedCallTextTrace (${traces.length} for above events):`);
+      for (const t of traces) {
+        console.log(
+          " ",
+          JSON.stringify({
+            id: t.id,
+            at: t.createdAt,
+            kind: t.kind,
+            missedCallEventId: t.missedCallEventId,
+            traceId: t.traceId,
+          }),
+        );
+      }
+    }
+  }
 
   // LiveKit rooms
   const backend = getActiveMediaBackend();
@@ -149,6 +235,11 @@ async function main() {
   if (pn) {
     const settings = (pn.settingsJson || {}) as Record<string, unknown>;
     const telephony = (settings.telephony || settings.provisioning || {}) as Record<string, unknown>;
+    const envCfg = getLiveKitBackendConfig(backend);
+    const trunkStale =
+      telephony.livekitInboundTrunkId &&
+      envCfg.inboundTrunkId &&
+      telephony.livekitInboundTrunkId !== envCfg.inboundTrunkId;
     console.log("\nPhoneNumber row:");
     console.log(
       " ",
@@ -160,8 +251,15 @@ async function main() {
         routingMode: telephony.routingMode,
         livekitInboundTrunkId: telephony.livekitInboundTrunkId,
         livekitDispatchRuleId: telephony.livekitDispatchRuleId,
+        envInboundTrunkId: envCfg.inboundTrunkId,
+        trunkIdStale: trunkStale || false,
       }),
     );
+    if (trunkStale) {
+      console.log(
+        "  ⚠ settingsJson trunk ID differs from env — run: npx tsx scripts/sync-phone-livekit-trunk-ids-from-env.ts --apply",
+      );
+    }
   }
 }
 
