@@ -75,7 +75,7 @@ pass("SCHEMA: FaxAccount", srcIncludes("prisma/schema.prisma", "model FaxAccount
 pass("SCHEMA: VerifyCreditLedger", srcIncludes("prisma/schema.prisma", "model VerifyCreditLedger"));
 
 // UI
-pass("UI: fax dashboard", fileExists("src/app/(app)/fax/page.tsx"));
+pass("UI: fax dashboard", fileExists("src/app/(app)/fax/overview/page.tsx"));
 pass("UI: verify dashboard", fileExists("src/app/(app)/verify/page.tsx"));
 pass("LANDING: /fax", fileExists("src/app/fax/page.tsx"));
 pass("LANDING: /phone-verification", fileExists("src/app/phone-verification/page.tsx"));

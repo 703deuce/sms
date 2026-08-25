@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const links = [
-  { href: "/fax", label: "Overview", exact: true },
+  { href: "/fax/overview", label: "Overview", exact: true },
   { href: "/fax/inbox", label: "Inbox" },
   { href: "/fax/spam", label: "Spam" },
   { href: "/fax/send", label: "Send Fax" },

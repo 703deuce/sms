@@ -50,6 +50,8 @@ const publicExact = new Set([
   "/sms-marketing",
   "/maintenance",
   "/app",
+  "/fax",
+  "/phone-verification",
 ]);
 
 const authPages = new Set(["/login", "/signup", "/forgot-password"]);
@@ -217,6 +219,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (session && !isPublic) {
+    if (pathname === "/fax") {
+      return siteRedirect(request, "/fax/overview");
+    }
+
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,

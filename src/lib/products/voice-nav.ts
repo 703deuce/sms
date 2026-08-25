@@ -153,7 +153,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   if (hasFax || options.showTryIt) {
     items.push({
       label: "Fax",
-      href: "/fax",
+      href: "/fax/overview",
       icon: Printer,
       sectionLabel: "Products",
       matchExact: true,
@@ -252,8 +252,8 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/call-forwarding/setup")) return "Setup";
   if (pathname.startsWith("/call-forwarding")) return "Call Forwarding";
   if (pathname.startsWith("/fax")) {
+    if (pathname === "/fax/overview" || pathname === "/fax") return "Fax";
     if (pathname === "/fax/send") return "Send Fax";
-    if (pathname === "/fax/inbox") return "Inbox";
     if (pathname === "/fax/sent") return "Sent";
     if (pathname === "/fax/numbers") return "Fax Numbers";
     if (pathname === "/fax/settings") return "Fax Settings";
