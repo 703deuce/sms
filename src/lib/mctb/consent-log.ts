@@ -3,6 +3,8 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import {
   asConsentMetadata,
+  buildConsentLogScopeFromMissedEvents,
+  buildConsentLogWhereClause,
   missedCallIdempotencyKey,
 } from "@/lib/mctb/consent-log-shared";
 
@@ -35,45 +37,56 @@ export async function loadConsentLogRows(
   const limit = Math.min(200, Math.max(1, options?.limit ?? 100));
   const callerFilter = options?.caller?.trim();
 
-  const consents = await prisma.smartRoutingSmsConsentEvent.findMany({
-    where: {
-      workspaceId,
-      ...(callerFilter ? { callerNumber: { contains: callerFilter.replace(/\D/g, "") } } : {}),
+  const missedEvents = await prisma.missedCallEvent.findMany({
+    where: { workspaceId },
+    select: {
+      id: true,
+      status: true,
+      smsSentAt: true,
+      idempotencyKey: true,
+      metadata: true,
+      callerE164: true,
+      businessE164: true,
     },
+    orderBy: { detectedAt: "desc" },
+    take: 500,
+  });
+
+  const { sessionIds, missedBySession } = buildConsentLogScopeFromMissedEvents(
+    workspaceId,
+    missedEvents,
+  );
+
+  const where = buildConsentLogWhereClause(workspaceId, sessionIds, callerFilter);
+
+  for (const evt of missedEvents.slice(0, 100)) {
+    const caller = evt.callerE164?.trim();
+    if (!caller) continue;
+    const meta = asConsentMetadata(evt.metadata);
+    const businessRaw =
+      typeof meta.transovoNumberE164 === "string" && meta.transovoNumberE164.trim()
+        ? meta.transovoNumberE164.trim()
+        : evt.businessE164?.trim() || "";
+    const digits = businessRaw.replace(/\D/g, "");
+    const businessVariants = new Set<string>();
+    if (businessRaw) businessVariants.add(businessRaw);
+    if (digits) {
+      businessVariants.add(digits);
+      businessVariants.add(`+${digits}`);
+    }
+    for (const businessNumber of businessVariants) {
+      (where.OR as Array<Record<string, unknown>>).push({
+        callerNumber: caller,
+        businessNumber,
+      });
+    }
+  }
+
+  const consents = await prisma.smartRoutingSmsConsentEvent.findMany({
+    where: where as never,
     orderBy: { consentedAt: "desc" },
     take: limit,
   });
-
-  const sessionIds = consents
-    .map((c: { callSessionId: string | null }) => c.callSessionId)
-    .filter((id: string | null): id is string => Boolean(id?.trim()));
-
-  const missedBySession = new Map<
-    string,
-    { id: string; status: string; smsSentAt: Date | null }
-  >();
-
-  if (sessionIds.length > 0) {
-    const missedCalls = await prisma.missedCallEvent.findMany({
-      where: {
-        workspaceId,
-        idempotencyKey: {
-          in: sessionIds.map((id: string) => missedCallIdempotencyKey(workspaceId, id)),
-        },
-      },
-      select: { id: true, status: true, smsSentAt: true, idempotencyKey: true },
-    });
-    for (const evt of missedCalls) {
-      const sessionId = evt.idempotencyKey.split(":").pop();
-      if (sessionId) {
-        missedBySession.set(sessionId, {
-          id: evt.id,
-          status: evt.status,
-          smsSentAt: evt.smsSentAt,
-        });
-      }
-    }
-  }
 
   const rows: ConsentLogRow[] = consents.map((c: (typeof consents)[number]) => {
     const meta = asConsentMetadata(c.metadataJson);
@@ -101,11 +114,14 @@ export async function loadConsentLogRows(
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
+  const todayWhere = {
+    ...where,
+    consentedAt: { gte: start },
+  };
+
   const [total, today, withSmsToday] = await Promise.all([
-    prisma.smartRoutingSmsConsentEvent.count({ where: { workspaceId } }),
-    prisma.smartRoutingSmsConsentEvent.count({
-      where: { workspaceId, consentedAt: { gte: start } },
-    }),
+    prisma.smartRoutingSmsConsentEvent.count({ where: where as never }),
+    prisma.smartRoutingSmsConsentEvent.count({ where: todayWhere as never }),
     prisma.missedCallEvent.count({
       where: {
         workspaceId,
@@ -128,17 +144,29 @@ export async function loadConsentForMissedCallEvent(input: {
   const prisma = getPrisma();
   const event = await prisma.missedCallEvent.findFirst({
     where: { id: input.missedCallEventId, workspaceId: input.workspaceId },
-    select: { metadata: true, status: true, smsSentAt: true },
+    select: { metadata: true, status: true, smsSentAt: true, idempotencyKey: true },
   });
   if (!event) return null;
 
   const meta = asConsentMetadata(event.metadata);
   const callSessionId =
     typeof meta.providerCallId === "string" ? meta.providerCallId.trim() : "";
-  if (!callSessionId) return null;
+  const fromIdempotency = event.idempotencyKey?.startsWith(
+    `missed-call-text:${input.workspaceId}:`,
+  )
+    ? event.idempotencyKey.slice(`missed-call-text:${input.workspaceId}:`.length)
+    : "";
+
+  const sessionId = callSessionId || fromIdempotency;
+  if (!sessionId) return null;
 
   const consent = await prisma.smartRoutingSmsConsentEvent.findFirst({
-    where: { workspaceId: input.workspaceId, callSessionId },
+    where: {
+      OR: [
+        { workspaceId: input.workspaceId, callSessionId: sessionId },
+        { callSessionId: sessionId },
+      ],
+    },
     orderBy: { consentedAt: "desc" },
   });
   if (!consent) return null;

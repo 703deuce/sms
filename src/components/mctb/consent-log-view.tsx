@@ -71,20 +71,30 @@ export function MctbConsentLogView() {
   const [events, setEvents] = useState<ConsentLogEvent[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [callerFilter, setCallerFilter] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (callerFilter.trim()) params.set("caller", callerFilter.trim());
       const res = await fetch(`/api/mctb/consent-log?${params}`, { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok && json.data) {
-        setEvents(json.data.events || []);
-        setSummary(json.data.summary || null);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json?.error || "Could not load consent log");
+        setEvents([]);
+        setSummary(null);
+        return;
       }
+      setEvents(json.data?.events || []);
+      setSummary(json.data?.summary || null);
+    } catch {
+      setError("Could not load consent log");
+      setEvents([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -151,6 +161,10 @@ export function MctbConsentLogView() {
         ))}
       </div>
 
+      {error ? (
+        <Card className="mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</Card>
+      ) : null}
+
       <Card className="overflow-hidden p-0">
         {loading ? (
           <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading…</div>
@@ -158,7 +172,9 @@ export function MctbConsentLogView() {
           <div className="px-6 py-12 text-center">
             <p className="text-sm font-medium text-[#111827]">No consent events yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              When callers press 1 on your consent prompt, those events appear here.
+              {summary && summary.total > 0
+                ? "Consent records exist for this account but did not match the current filter. Clear the caller filter and try again."
+                : "When callers press 1 on your consent prompt, those events appear here."}
             </p>
             <Link href="/voice/setup" className="mt-4 inline-block text-sm font-semibold text-primary">
               Review consent setup →
