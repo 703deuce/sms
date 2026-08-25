@@ -51,6 +51,14 @@ Compared to safety tag `pre-mctb-extraction-2026-08-25`:
 - Off-chain realtor/outbound/real-estate compile code
 - Customer-facing dormant product routes (see `PRODUCTION-ROUTE-MANIFEST.md`)
 
+## Bulk prune reverted (2026-08-25)
+
+Commit `bc24a6bf` (`scripts/prune-non-mctb.mjs`) deleted ~636 backend files that MCTB still needs at runtime — including voicemail pipeline, Telnyx webhook handlers, and shared voice libs. That broke call pickup and voicemail fallback.
+
+**Action:** branch `cursor/restore-pre-prune-9cca` resets to `55ce648f` (state immediately before the bulk prune). The pragmatic page extraction (~996 dormant routes) is kept; only the destructive import-graph prune is undone.
+
+**Do not re-run** `scripts/prune-non-mctb.mjs` without a manual audit of telephony/voicemail/MCTB import chains.
+
 ## Merge readiness
 
 | Gate | Status |
@@ -58,9 +66,10 @@ Compared to safety tag `pre-mctb-extraction-2026-08-25`:
 | Archive remote verified | **YES** |
 | Build passes | **YES** |
 | MCTB core not deleted | **YES** |
+| Backend voice/voicemail libs restored | **YES** (pre-prune) |
 | MCTB unit/integration tests | **YES** |
-| Live PSTN smoke documented | **Pending** (post-merge ops) |
-| Safe to merge | **Ready for review** — recommend human sign-off after staging deploy |
+| Live PSTN smoke documented | **Pending** (post-deploy ops) |
+| Safe to merge | **Ready** — merge restore branch to replace `bc24a6bf` on `master` |
 
 ## Out of scope (do not touch in this workstream)
 
