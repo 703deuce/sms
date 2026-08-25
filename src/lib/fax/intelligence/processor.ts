@@ -37,6 +37,17 @@ export async function processFaxIntelligence(transmissionId: string) {
   if (transmission.intelligence?.status === "completed") {
     return { ok: true, skipped: true };
   }
+  if (transmission.isSpam) {
+    return { ok: true, skipped: true, reason: "spam" };
+  }
+  const fromBlocked = transmission.fromE164
+    ? await import("../fax-blocked-senders").then((m) =>
+        m.isSenderBlocked(transmission.workspaceId, transmission.fromE164!),
+      )
+    : false;
+  if (fromBlocked) {
+    return { ok: true, skipped: true, reason: "blocked_sender" };
+  }
 
   const account = await prisma.faxAccount.findUnique({
     where: { workspaceId: transmission.workspaceId },

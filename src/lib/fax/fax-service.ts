@@ -14,6 +14,8 @@ import {
 import { assertFaxPageAllowance, getOrCreateFaxAccount } from "./fax-usage";
 import { sendTelnyxFax } from "./telnyx-fax-client";
 import { mapFaxError } from "./fax-errors";
+import { computeFaxPageAccounting, mergePageAccountingIntoMetadata } from "./fax-pages";
+import { mapToFaxDisplayStatus } from "./fax-status";
 
 export async function logFaxActivity(input: {
   workspaceId: string;
@@ -62,7 +64,8 @@ export async function sendOutboundFax(input: {
   if (!docCheck.ok) throw new Error(docCheck.error);
 
   const estimatedPages = (await estimatePdfPageCount(input.documentBytes)) || 1;
-  await assertFaxPageAllowance(input.workspaceId, estimatedPages);
+  const accounting = computeFaxPageAccounting(estimatedPages);
+  await assertFaxPageAllowance(input.workspaceId, accounting.billablePages);
 
   const prisma = getPrisma();
   const account = await getOrCreateFaxAccount(input.workspaceId);
@@ -95,7 +98,11 @@ export async function sendOutboundFax(input: {
       documentSizeBytes: input.documentBytes.length,
       scheduledFor: input.scheduledFor || null,
       folder: "sent",
-      metadataJson: { estimatedPages } as object,
+      pageCount: accounting.documentPages,
+      metadataJson: mergePageAccountingIntoMetadata(
+        { estimatedPages: accounting.documentPages, displayStatus: input.scheduledFor ? "scheduled" : "preparing" },
+        accounting,
+      ) as object,
     },
   });
 

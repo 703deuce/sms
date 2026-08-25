@@ -12,11 +12,11 @@ export default function FaxLandingPage() {
   return (
     <main className="mx-auto max-w-4xl px-6 py-16">
       <h1 className="text-4xl font-bold tracking-tight">
-        Online Fax That Actually Understands Your Documents
+        Reliable Online Fax + Intelligent Document Processing
       </h1>
       <p className="mt-4 text-lg text-muted-foreground">
-        Send and receive faxes online. Transovo turns incoming documents into searchable text,
-        summaries, and usable business data — no fax machine required.
+        Send and receive faxes online with simple page accounting, clear delivery status, and
+        optional AI document intelligence — no fax machine required.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
@@ -40,7 +40,8 @@ export default function FaxLandingPage() {
       <section className="mt-16 border-t pt-10">
         <h2 className="text-lg font-semibold">Plans from $9.99/month</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Starter includes 200 pages/month. Business and Pro add more pages and the same AI features.
+          Starter $9.99/mo · 200 included pages · $0.05/page overage · 1 fax number included.
+          Business and Pro add more pages with the same reliability-first experience.
         </p>
       </section>
     </main>

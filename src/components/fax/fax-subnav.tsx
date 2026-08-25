@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 const links = [
   { href: "/fax", label: "Overview", exact: true },
   { href: "/fax/inbox", label: "Inbox" },
+  { href: "/fax/spam", label: "Spam" },
   { href: "/fax/send", label: "Send Fax" },
   { href: "/fax/sent", label: "Sent" },
   { href: "/fax/numbers", label: "Numbers" },
+  { href: "/fax/billing", label: "Billing" },
   { href: "/fax/settings", label: "Settings" },
 ];
 

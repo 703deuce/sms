@@ -7,6 +7,10 @@ import { downloadFaxDocument, uploadFaxDocument } from "./fax-storage";
 import { logFaxActivity } from "./fax-service";
 import { mapTelnyxFaxStatus } from "./telnyx-fax-client";
 import { recordFaxPageUsage } from "./fax-usage";
+import { computeFaxPageAccounting, mergePageAccountingIntoMetadata } from "./fax-pages";
+import { mapToFaxDisplayStatus } from "./fax-status";
+import { mapFaxError } from "./fax-errors";
+import { isSenderBlocked } from "./fax-blocked-senders";
 import type { TelnyxFaxPayload } from "./types";
 
 function decodeClientState(raw: string | undefined): Record<string, unknown> {
@@ -74,16 +78,29 @@ export async function processTelnyxFaxWebhook(input: {
   }
 
   const pageCount = faxPayload.page_count ?? transmission.pageCount ?? 1;
+  const accounting = computeFaxPageAccounting(pageCount);
+  const existingMeta = (transmission.metadataJson || {}) as Record<string, unknown>;
+  const displayStatus = mapToFaxDisplayStatus({
+    status,
+    eventType: input.eventType,
+    direction: transmission.direction,
+  });
+
   const patch: Record<string, unknown> = {
     status,
-    pageCount,
+    pageCount: accounting.documentPages,
     telnyxFaxId: telnyxFaxId || transmission.telnyxFaxId,
+    metadataJson: mergePageAccountingIntoMetadata(
+      { ...existingMeta, displayStatus, providerStatus: faxPayload.status || status },
+      accounting,
+    ),
   };
 
   if (status === "delivered") patch.deliveredAt = new Date();
   if (status === "failed") {
     patch.failedAt = new Date();
-    patch.failureReason = faxPayload.failure_reason || "Delivery failed";
+    patch.failureReason = mapFaxError(faxPayload.failure_reason || "Delivery failed");
+    patch.failureCode = String(faxPayload.failure_reason || "").slice(0, 120);
   }
   if (status === "received") patch.receivedAt = new Date();
 
@@ -92,10 +109,10 @@ export async function processTelnyxFaxWebhook(input: {
     data: patch as never,
   });
 
-  if ((status === "delivered" || status === "received") && pageCount > 0) {
+  if ((status === "delivered" || status === "received") && accounting.billablePages > 0) {
     await recordFaxPageUsage({
       workspaceId: transmission.workspaceId,
-      pages: pageCount,
+      pages: accounting.billablePages,
       idempotencyKey: `fax-pages:${input.eventId}`,
     });
   }
@@ -109,14 +126,18 @@ export async function processTelnyxFaxWebhook(input: {
   });
 
   if (transmission.direction === "inbound" && status === "received") {
-    await enqueueJob({
-      jobType: "fax_intelligence_process",
-      queueName: "automations",
-      workspaceId: transmission.workspaceId,
-      payload: { transmissionId: transmission.id },
-      idempotencyKey: `fax-intel:${transmission.id}`,
-      runAfter: new Date(),
-    });
+    const blocked = await isSenderBlocked(transmission.workspaceId, transmission.fromE164 || "");
+    const skipAi = blocked || transmission.isSpam;
+    if (!skipAi) {
+      await enqueueJob({
+        jobType: "fax_intelligence_process",
+        queueName: "automations",
+        workspaceId: transmission.workspaceId,
+        payload: { transmissionId: transmission.id },
+        idempotencyKey: `fax-intel:${transmission.id}`,
+        runAfter: new Date(),
+      });
+    }
     await maybeNotifyInboundFax(transmission.workspaceId, transmission.id);
   }
 
@@ -146,6 +167,8 @@ async function handleInboundFax(faxPayload: TelnyxFaxPayload, eventType: string)
   const blocked = await prisma.faxBlockedSender.findFirst({
     where: { workspaceId: faxNumber.workspaceId, faxE164: String(faxPayload.from || "") },
   });
+
+  const pageAccounting = computeFaxPageAccounting(faxPayload.page_count ?? 1);
 
   const transmissionId = createId();
   let bucket: string | null = null;
@@ -181,14 +204,14 @@ async function handleInboundFax(faxPayload: TelnyxFaxPayload, eventType: string)
       fromE164: faxPayload.from || null,
       toE164,
       telnyxFaxId: faxPayload.id,
-      pageCount: faxPayload.page_count ?? null,
+      pageCount: pageAccounting.documentPages,
       receivedAt: new Date(),
       folder: blocked ? "spam" : "inbox",
       isSpam: Boolean(blocked),
       documentStorageBucket: bucket,
       documentStoragePath: path,
       documentMimeType: bucket ? "application/pdf" : null,
-      metadataJson: { eventType } as object,
+      metadataJson: mergePageAccountingIntoMetadata({ eventType, blockedSender: Boolean(blocked) }, pageAccounting),
     },
   });
 

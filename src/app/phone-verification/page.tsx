@@ -11,10 +11,12 @@ export const metadata: Metadata = {
 export default function PhoneVerificationLandingPage() {
   return (
     <main className="mx-auto max-w-4xl px-6 py-16">
-      <h1 className="text-4xl font-bold tracking-tight">Clean and Verify Your Phone List</h1>
+      <h1 className="text-4xl font-bold tracking-tight">
+        Clean Your Phone List Before You Call or Text It
+      </h1>
       <p className="mt-4 text-lg text-muted-foreground">
-        Know which numbers are mobile, landline, VoIP, or invalid before you call or text. Pay only
-        for what you verify.
+        Remove invalid numbers, segment mobile vs landline vs VoIP, and stop wasting spend on lists
+        that will never convert. Verification does not create SMS or call consent.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
@@ -30,7 +32,7 @@ export default function PhoneVerificationLandingPage() {
 
       <section className="mt-16 grid gap-6 sm:grid-cols-2">
         <Feature title="Single lookup" body="Enter one number and get carrier, line type, and format validation." />
-        <Feature title="Bulk CSV cleaning" body="Upload a list, dedupe numbers, and export enriched results." />
+        <Feature title="Bulk CSV cleaning" body="Upload campaigns, CRM exports, or purchased lead lists. Deduped credits — pay once per unique number." />
         <Feature title="Credit packs" body="Buy 1,000 to 50,000 credits — no large subscription required." />
         <Feature title="Business telecom data" body="List intelligence for campaigns — not reverse person search." />
       </section>

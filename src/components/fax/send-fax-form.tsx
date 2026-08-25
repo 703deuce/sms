@@ -3,17 +3,45 @@
 import { useState } from "react";
 import Link from "next/link";
 
+type SendEstimate = {
+  documentPages: number;
+  billablePages: number;
+  pagesRemaining: number;
+  overagePages: number;
+  overageCents: number;
+  requiresConfirmation: boolean;
+  message: string;
+};
+
 export function SendFaxForm({ fromNumber }: { fromNumber?: string | null }) {
   const [to, setTo] = useState("");
   const [recipientName, setRecipientName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [estimate, setEstimate] = useState<SendEstimate | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [confirmedOverage, setConfirmedOverage] = useState(false);
+
+  async function onFileChange(next: File | null) {
+    setFile(next);
+    setEstimate(null);
+    setConfirmedOverage(false);
+    if (!next) return;
+    const form = new FormData();
+    form.append("document", next);
+    const res = await fetch("/api/fax/send/estimate", { method: "POST", body: form });
+    const json = await res.json();
+    if (res.ok && json.data) setEstimate(json.data);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) {
       setStatus("Please choose a PDF document.");
+      return;
+    }
+    if (estimate?.requiresConfirmation && !confirmedOverage) {
+      setStatus("Please confirm the estimated overage charge before sending.");
       return;
     }
     setLoading(true);
@@ -30,6 +58,8 @@ export function SendFaxForm({ fromNumber }: { fromNumber?: string | null }) {
       setTo("");
       setRecipientName("");
       setFile(null);
+      setEstimate(null);
+      setConfirmedOverage(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Send failed");
     } finally {
@@ -71,7 +101,7 @@ export function SendFaxForm({ fromNumber }: { fromNumber?: string | null }) {
           className="mt-1 block w-full text-sm"
           type="file"
           accept="application/pdf,.pdf"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={(e) => onFileChange(e.target.files?.[0] || null)}
           required
         />
         {file ? (
@@ -80,6 +110,21 @@ export function SendFaxForm({ fromNumber }: { fromNumber?: string | null }) {
           </p>
         ) : null}
       </div>
+      {estimate ? (
+        <div className="rounded-md border bg-muted/40 p-3 text-sm">
+          <p>{estimate.message}</p>
+          {estimate.requiresConfirmation ? (
+            <label className="mt-2 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={confirmedOverage}
+                onChange={(e) => setConfirmedOverage(e.target.checked)}
+              />
+              I understand and approve the estimated overage charge.
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       <button
         type="submit"
         disabled={loading || !fromNumber}

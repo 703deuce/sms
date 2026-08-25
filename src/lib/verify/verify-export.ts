@@ -45,8 +45,10 @@ export async function exportBulkVerifyJobCsv(
     const status = String(lookup?.lookupStatus || row.status).toLowerCase();
     if (filter === "mobile") return line.includes("mobile");
     if (filter === "landline") return line.includes("landline");
+    if (filter === "fixed_voip") return line === "fixed_voip";
+    if (filter === "non_fixed_voip") return line === "non_fixed_voip";
     if (filter === "voip") return line.includes("voip");
-    if (filter === "toll-free") return line.includes("toll");
+    if (filter === "toll-free" || filter === "toll_free") return line.includes("toll");
     if (filter === "invalid") return status === "invalid_format";
     if (filter === "unknown") return !line || line === "unknown";
     if (filter === "error") return status === "provider_error" || row.status === "failed";
@@ -64,6 +66,7 @@ export async function exportBulkVerifyJobCsv(
       return {
         transovo_normalized_phone: lookup?.normalizedE164 || "",
         transovo_line_type: lookup?.lineType || "",
+        transovo_reachability: "not_tested",
         transovo_carrier: lookup?.carrier || "",
         transovo_country: lookup?.country || "",
         transovo_ported: lookup?.ported || "",

@@ -52,6 +52,10 @@ export function FaxNumberSetup() {
   return (
     <div className="rounded-lg border p-6 space-y-4 max-w-xl">
       <h2 className="font-semibold">Choose a fax number</h2>
+      <p className="text-sm text-muted-foreground">
+        Your Transovo fax number is a real business phone number assigned to your account. You may
+        request to port it to another provider later, subject to normal carrier requirements.
+      </p>
       <div className="flex gap-2">
         <input
           className="w-24 rounded-md border px-3 py-2 text-sm"

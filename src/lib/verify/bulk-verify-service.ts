@@ -5,8 +5,12 @@ import { createId } from "@/lib/supabase/id";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { parseCsv, suggestPhoneColumn, rowsToObjects } from "./csv";
 import { normalizeVerifyPhone } from "./phone-normalization";
-import { reserveVerifyCredits, settleVerifyReservation } from "./verify-credits";
-import { runSingleVerify } from "./verify-service";
+import {
+  appendVerifyCreditLedger,
+  reserveVerifyCredits,
+  settleVerifyReservation,
+} from "./verify-credits";
+import { verifyPhoneNumber } from "./verify-phone-number";
 
 const BATCH_SIZE = 25;
 
@@ -39,7 +43,8 @@ export async function createBulkVerifyJob(input: {
   });
 
   const uniqueNumbers = unique.size;
-  const duplicateRows = rows.length - uniqueNumbers;
+  const blankRows = objects.filter((obj) => !String(obj[phoneColumn] || "").trim()).length;
+  const duplicateRows = Math.max(0, rows.length - uniqueNumbers - blankRows);
 
   const reservation = await reserveVerifyCredits({
     workspaceId: input.workspaceId,
@@ -110,11 +115,7 @@ export async function processBulkVerifyJob(jobId: string) {
   });
 
   if (!pending.length) {
-    await settleVerifyReservation(job.reservationId!, job.workspaceId);
-    await prisma.verifyBulkJob.update({
-      where: { id: jobId },
-      data: { status: "completed", completedAt: new Date() },
-    });
+    await finalizeBulkJob(jobId);
     return;
   }
 
@@ -128,14 +129,14 @@ export async function processBulkVerifyJob(jobId: string) {
 
   const lookupResults = new Map<string, string>();
   for (const [key, raw] of uniquePhones) {
-  try {
-      const result = await runSingleVerify({
+    try {
+      const result = await verifyPhoneNumber({
         workspaceId: job.workspaceId,
         phone: raw,
         bulkJobId: jobId,
         reservationId: job.reservationId || undefined,
       });
-      lookupResults.set(key, result.lookupId);
+      lookupResults.set(key, result.lookupStatus === "success" ? result.lookupId : "");
     } catch {
       lookupResults.set(key, "");
     }
@@ -144,41 +145,154 @@ export async function processBulkVerifyJob(jobId: string) {
   for (const row of pending) {
     const key = row.normalizedE164 || row.inputRaw || row.id;
     const lookupId = lookupResults.get(key);
+    const lookupStatus = lookupId ? "completed" : row.normalizedE164 ? "failed" : "invalid";
     await prisma.verifyBulkJobRow.update({
       where: { id: row.id },
       data: {
-        status: lookupId ? "completed" : "failed",
+        status: lookupStatus,
         lookupId: lookupId || null,
       },
     });
   }
 
-  const processed = await prisma.verifyBulkJobRow.count({
-    where: { bulkJobId: jobId, status: { in: ["completed", "failed", "skipped"] } },
+  await updateBulkJobStats(jobId);
+
+  const remaining = await prisma.verifyBulkJobRow.count({
+    where: { bulkJobId: jobId, status: "pending" },
   });
-  const successful = await prisma.verifyBulkJobRow.count({
-    where: { bulkJobId: jobId, status: "completed" },
+  if (remaining > 0) {
+    await enqueueJob({
+      jobType: "verify_bulk_process",
+      queueName: "automations",
+      workspaceId: job.workspaceId,
+      payload: { jobId },
+      idempotencyKey: `verify-bulk:${jobId}:cont:${Date.now()}`,
+      runAfter: new Date(Date.now() + 500),
+    });
+  }
+}
+
+async function updateBulkJobStats(jobId: string) {
+  const prisma = getPrisma();
+  const rows = await prisma.verifyBulkJobRow.findMany({
+    where: { bulkJobId: jobId },
+    select: { status: true },
   });
-  const failed = await prisma.verifyBulkJobRow.count({
-    where: { bulkJobId: jobId, status: "failed" },
+  const processedRows = rows.filter((r: { status: string }) => r.status !== "pending").length;
+  const successfulLookups = rows.filter((r: { status: string }) => r.status === "completed").length;
+  const failedLookups = rows.filter(
+    (r: { status: string }) => r.status === "failed" || r.status === "invalid",
+  ).length;
+
+  await prisma.verifyBulkJob.update({
+    where: { id: jobId },
+    data: { processedRows, successfulLookups, failedLookups },
+  });
+}
+
+async function finalizeBulkJob(jobId: string) {
+  const prisma = getPrisma();
+  const job = await prisma.verifyBulkJob.findUnique({ where: { id: jobId } });
+  if (!job) return;
+
+  await updateBulkJobStats(jobId);
+
+  const rows = await prisma.verifyBulkJobRow.findMany({
+    where: { bulkJobId: jobId },
+    select: { status: true },
+  });
+  const successfulLookups = rows.filter((r: { status: string }) => r.status === "completed").length;
+  const invalidRows = rows.filter((r: { status: string }) => r.status === "invalid").length;
+  const lookupErrors = rows.filter((r: { status: string }) => r.status === "failed").length;
+  const skippedRows = rows.filter((r: { status: string }) => r.status === "skipped").length;
+
+  const hasHardFailure = successfulLookups === 0 && rows.length > 0;
+  const status = hasHardFailure ? "failed" : "completed";
+  const errorMessage =
+    lookupErrors > 0 || invalidRows > 0
+      ? `${successfulLookups} verified · ${invalidRows} invalid input · ${lookupErrors} lookup errors${skippedRows ? ` · ${skippedRows} skipped` : ""}`
+      : null;
+
+  if (job.reservationId) {
+    const reservation = await prisma.verifyCreditReservation.findFirst({
+      where: { id: job.reservationId, workspaceId: job.workspaceId },
+    });
+    if (reservation) {
+      const unused = reservation.reservedCredits - reservation.consumedCredits;
+      if (unused > 0) {
+        await appendVerifyCreditLedger({
+          workspaceId: job.workspaceId,
+          entryType: "refund",
+          amount: unused,
+          referenceType: "bulk_job",
+          referenceId: jobId,
+          idempotencyKey: `verify-bulk-refund:${jobId}`,
+          description: `Unused credits from bulk job (${unused} returned)`,
+        });
+      }
+      await settleVerifyReservation(job.reservationId, job.workspaceId);
+    }
+  }
+
+  await prisma.verifyBulkJob.update({
+    where: { id: jobId },
+    data: {
+      status,
+      completedAt: new Date(),
+      creditsConsumed: successfulLookups,
+      errorMessage,
+    },
+  });
+}
+
+export async function retryFailedBulkVerifyRows(workspaceId: string, jobId: string) {
+  const prisma = getPrisma();
+  const job = await prisma.verifyBulkJob.findFirst({ where: { id: jobId, workspaceId } });
+  if (!job) throw new Error("JOB_NOT_FOUND");
+
+  const failed = await prisma.verifyBulkJobRow.findMany({
+    where: { bulkJobId: jobId, workspaceId, status: { in: ["failed"] } },
+  });
+  if (!failed.length) return { retried: 0 };
+
+  const reservation = await reserveVerifyCredits({
+    workspaceId,
+    credits: failed.length,
+    bulkJobId: jobId,
+  });
+
+  await prisma.verifyBulkJobRow.updateMany({
+    where: { bulkJobId: jobId, workspaceId, status: "failed" },
+    data: { status: "pending", lookupId: null },
   });
 
   await prisma.verifyBulkJob.update({
     where: { id: jobId },
     data: {
-      processedRows: processed,
-      successfulLookups: successful,
-      failedLookups: failed,
-      creditsConsumed: successful,
+      status: "processing",
+      reservationId: reservation.id,
+      completedAt: null,
+      errorMessage: null,
     },
   });
 
   await enqueueJob({
     jobType: "verify_bulk_process",
     queueName: "automations",
-    workspaceId: job.workspaceId,
+    workspaceId,
     payload: { jobId },
-    idempotencyKey: `verify-bulk:${jobId}:cont:${processed}`,
-    runAfter: new Date(Date.now() + 500),
+    idempotencyKey: `verify-bulk-retry:${jobId}:${Date.now()}`,
+    runAfter: new Date(),
   });
+
+  return { retried: failed.length };
+}
+
+export async function deleteBulkVerifyJob(workspaceId: string, jobId: string) {
+  const prisma = getPrisma();
+  const job = await prisma.verifyBulkJob.findFirst({ where: { id: jobId, workspaceId } });
+  if (!job) throw new Error("JOB_NOT_FOUND");
+
+  await prisma.verifyBulkJobRow.deleteMany({ where: { bulkJobId: jobId, workspaceId } });
+  await prisma.verifyBulkJob.delete({ where: { id: jobId } });
 }

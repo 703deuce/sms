@@ -1,13 +1,19 @@
 const FAX_ERROR_MAP: Record<string, string> = {
-  file_size_limit_exceeded: "This file is larger than the maximum allowed size (50 MB).",
-  page_limit_exceeded: "This document has more pages than allowed (350 pages).",
-  invalid_media: "This file format is not supported. Please upload a PDF.",
-  invalid_destination: "The destination fax number is not valid.",
+  file_size_limit_exceeded: "The document could not be processed — file is too large (max 50 MB).",
+  page_limit_exceeded: "The document could not be processed — too many pages (max 350).",
+  invalid_media: "The document could not be processed. Please upload a PDF.",
+  invalid_destination: "The destination number appears invalid.",
+  invalid_number: "The destination number appears invalid.",
   destination_unreachable: "The destination fax number could not be reached.",
-  busy: "The destination fax line was busy. Try again later.",
-  no_answer: "The destination did not answer.",
+  busy: "Recipient line was busy. Try again later.",
+  no_answer: "No fax machine answered.",
+  no_fax_machine: "No fax machine answered.",
+  timeout: "The transmission timed out.",
+  timed_out: "The transmission timed out.",
   fax_disabled: "Fax is not enabled on your account. Please check billing.",
   insufficient_pages: "You have used all included fax pages for this billing period.",
+  call_rejected: "The destination rejected the call.",
+  communication_error: "A communication error occurred during transmission.",
 };
 
 export function mapFaxError(codeOrMessage: string | null | undefined): string {

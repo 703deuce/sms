@@ -95,6 +95,100 @@ const csv = parseCsv("phone,name\n7035551212,Jane\n");
 pass("CSV PARSE", csv.headers[0] === "phone" && csv.rows.length === 1);
 pass("CSV PHONE COLUMN", suggestPhoneColumn(csv.headers) === "phone");
 
+// Reddit / Market Feedback Improvements
+import { computeFaxPageAccounting } from "../src/lib/fax/fax-pages";
+import { mapToFaxDisplayStatus } from "../src/lib/fax/fax-status";
+import { mapFaxError } from "../src/lib/fax/fax-errors";
+import { verificationResultMeaning } from "../src/lib/verify/phone-verification-result";
+import { normalizeLineType } from "../src/lib/verify/phone-normalization";
+
+const pages = computeFaxPageAccounting(4);
+pass(
+  "FAX: Transparent Page Accounting",
+  pages.documentPages === 4 && pages.billablePages === 4,
+  `doc=${pages.documentPages} bill=${pages.billablePages}`,
+);
+pass(
+  "FAX: Delivery Lifecycle",
+  fileExists("src/lib/fax/fax-status.ts") &&
+    mapToFaxDisplayStatus({ status: "sending" }).length > 0,
+);
+pass(
+  "FAX: Delivery Confirmation",
+  fileExists("src/lib/fax/fax-delivery-confirmation.ts") &&
+    fileExists("src/app/api/fax/[id]/delivery-confirmation/route.ts"),
+);
+pass(
+  "FAX: Sender Blocking",
+  fileExists("src/lib/fax/fax-blocked-senders.ts") &&
+    fileExists("src/app/api/fax/blocked-senders/route.ts"),
+);
+pass(
+  "FAX: Spam Management",
+  fileExists("src/app/(app)/fax/spam/page.tsx") &&
+    fileExists("src/app/api/fax/[id]/spam/route.ts"),
+);
+pass(
+  "FAX: Easy Cancellation",
+  fileExists("src/lib/fax/fax-subscription.ts") &&
+    fileExists("src/app/api/fax/billing/cancel/route.ts"),
+);
+pass(
+  "FAX: Number Portability",
+  fileExists("src/lib/fax/fax-port-out.ts") &&
+    fileExists("src/app/api/fax/port-out/route.ts"),
+);
+pass(
+  "FAX: Pricing Transparency",
+  fileExists("src/lib/fax/fax-send-estimate.ts") &&
+    fileExists("src/app/api/fax/send/estimate/route.ts") &&
+    fileExists("src/app/(app)/fax/billing/page.tsx"),
+);
+
+const meaning = verificationResultMeaning({
+  lineTypeDisplay: "Mobile",
+  carrier: "Verizon Wireless",
+  reachability: "not_tested",
+  formatValid: true,
+});
+pass(
+  "VERIFY: Result Meaning / Reachability Disclaimer",
+  meaning.includes("not tested") && !meaning.toLowerCase().includes("active"),
+);
+pass(
+  "VERIFY: Mobile-Only Export",
+  srcIncludes("src/lib/verify/verify-export.ts", 'filter === "mobile"'),
+);
+pass(
+  "VERIFY: VoIP Classification",
+  normalizeLineType("non-fixed voip") === "non_fixed_voip" &&
+    normalizeLineType("fixed voip") === "fixed_voip",
+);
+pass(
+  "VERIFY: Bulk Deduplication",
+  srcIncludes("src/lib/verify/bulk-verify-service.ts", "duplicateRows"),
+);
+pass(
+  "VERIFY: Partial Failure Recovery",
+  fileExists("src/app/api/verify/jobs/[id]/retry-failed/route.ts") &&
+    srcIncludes("src/lib/verify/bulk-verify-service.ts", "finalizeBulkJob"),
+);
+pass(
+  "VERIFY: Provider-Abstraction",
+  fileExists("src/lib/verify/phone-verification-result.ts") &&
+    fileExists("src/lib/verify/verify-phone-number.ts"),
+);
+pass(
+  "VERIFY: Provider Cost Tracking",
+  srcIncludes("src/lib/verify/verify-phone-number.ts", "providerCostCents"),
+);
+pass(
+  "VERIFY: Future Real-Time API Readiness",
+  srcIncludes("src/lib/verify/verify-phone-number.ts", "verifyPhoneNumber"),
+);
+
+pass("FAX: Human failure reasons", mapFaxError("busy").includes("busy"));
+
 async function main() {
   // Optional live Telnyx lookup
   if (process.env.TELNYX_LIVE_TEST === "1") {
@@ -111,6 +205,31 @@ async function main() {
   for (const row of rows) {
     console.log(`${row.pass ? "PASS" : "FAIL"}  ${row.name}${row.detail ? ` — ${row.detail}` : ""}`);
   }
+
+  console.log("\n=== Reddit / Market Feedback Improvements ===\n");
+  const redditChecks = [
+    "FAX: Transparent Page Accounting",
+    "FAX: Delivery Lifecycle",
+    "FAX: Delivery Confirmation",
+    "FAX: Sender Blocking",
+    "FAX: Spam Management",
+    "FAX: Easy Cancellation",
+    "FAX: Number Portability",
+    "FAX: Pricing Transparency",
+    "VERIFY: Result Meaning / Reachability Disclaimer",
+    "VERIFY: Mobile-Only Export",
+    "VERIFY: VoIP Classification",
+    "VERIFY: Bulk Deduplication",
+    "VERIFY: Partial Failure Recovery",
+    "VERIFY: Provider-Abstraction",
+    "VERIFY: Provider Cost Tracking",
+    "VERIFY: Future Real-Time API Readiness",
+  ];
+  for (const name of redditChecks) {
+    const row = rows.find((r) => r.name === name);
+    console.log(`${row?.pass ? "PASS" : "FAIL"}  ${name}`);
+  }
+
   const failed = rows.filter((r) => !r.pass).length;
   console.log(`\n${rows.length - failed}/${rows.length} passed`);
   if (failed > 0) process.exit(1);

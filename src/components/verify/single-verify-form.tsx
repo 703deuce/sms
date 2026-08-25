@@ -4,14 +4,19 @@ import { useState } from "react";
 
 type VerifyResult = {
   normalizedE164: string | null;
+  normalizedNumber?: string | null;
+  formatValid?: boolean;
   lineType: string;
+  lineTypeDisplay?: string;
   carrier: string | null;
   country: string | null;
   ported: string | null;
+  reachability?: string;
   lookupStatus: string;
   smsSuitability: string | null;
   creditsCharged: number;
   cacheHit: boolean;
+  meaning?: string;
 };
 
 export function SingleVerifyForm() {
@@ -41,6 +46,10 @@ export function SingleVerifyForm() {
     }
   }
 
+  const formatValid =
+    result?.formatValid ??
+    (result?.lookupStatus === "success" || result?.lookupStatus === "provider_error");
+
   return (
     <div className="max-w-xl space-y-6">
       <form onSubmit={onSubmit} className="space-y-4 rounded-lg border p-6">
@@ -67,17 +76,28 @@ export function SingleVerifyForm() {
 
       {result ? (
         <div className="rounded-lg border p-6 text-sm">
-          <h3 className="text-lg font-semibold">{result.normalizedE164 || phone}</h3>
+          <h3 className="text-lg font-semibold">
+            {result.normalizedNumber || result.normalizedE164 || phone}
+          </h3>
           <dl className="mt-4 grid gap-2">
-            <Row label="Valid format" value={result.lookupStatus === "success" ? "✓" : "—"} />
-            <Row label="Line type" value={result.lineType} />
+            <Row label="Number format" value={formatValid ? "Valid" : "Invalid"} />
+            <Row label="Line type" value={result.lineTypeDisplay || result.lineType} />
             <Row label="Carrier" value={result.carrier || "Unknown"} />
             <Row label="Country" value={result.country || "Unknown"} />
+            <Row label="Reachability" value={result.reachability === "not_tested" ? "Not tested" : result.reachability || "Not tested"} />
             <Row label="Ported" value={result.ported || "Unknown"} />
             <Row label="SMS suitability" value={result.smsSuitability || "Unknown"} />
             <Row label="Credits used" value={String(result.creditsCharged)} />
             {result.cacheHit ? <Row label="Source" value="Cached result" /> : null}
           </dl>
+          {result.meaning ? (
+            <div className="mt-4 rounded-md bg-muted/50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                What this result means
+              </p>
+              <p className="mt-2">{result.meaning}</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

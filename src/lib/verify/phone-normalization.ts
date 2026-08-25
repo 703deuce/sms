@@ -26,19 +26,38 @@ export function normalizeVerifyPhone(
 }
 
 export function displayLineType(raw: string | null | undefined): string {
-  const t = String(raw || "").toLowerCase();
-  if (!t) return "Unknown";
-  if (t.includes("mobile") || t.includes("wireless")) return "Mobile";
-  if (t.includes("landline") || t.includes("fixed")) return "Landline";
-  if (t.includes("voip") || t.includes("non-fixed")) return "VoIP";
-  if (t.includes("toll")) return "Toll-Free";
+  const t = normalizeLineType(raw);
+  if (t === "mobile") return "Mobile";
+  if (t === "landline") return "Landline";
+  if (t === "fixed_voip") return "Fixed VoIP";
+  if (t === "non_fixed_voip") return "Non-Fixed VoIP";
+  if (t === "voip") return "VoIP";
+  if (t === "toll_free") return "Toll-Free";
   return "Unknown";
 }
 
+/** Normalize Telnyx/raw carrier type into stable internal line type. */
+export function normalizeLineType(raw: string | null | undefined): import("./phone-verification-result").PhoneLineType {
+  const t = String(raw || "").toLowerCase();
+  if (!t) return "unknown";
+  if (t.includes("non-fixed") || t.includes("nonfixed") || t.includes("non_fixed")) {
+    return "non_fixed_voip";
+  }
+  if (t.includes("fixed") && t.includes("voip")) return "fixed_voip";
+  if (t.includes("mobile") || t.includes("wireless")) return "mobile";
+  if (t.includes("landline")) return "landline";
+  if (t.includes("voip")) return "voip";
+  if (t.includes("toll")) return "toll_free";
+  if (t.includes("fixed")) return "landline";
+  return "unknown";
+}
+
 export function smsSuitabilityFromLineType(lineType: string): string | null {
-  if (lineType === "Mobile") return "Generally suitable for SMS";
+  if (lineType === "Mobile") return "Generally suitable for SMS (does not imply consent)";
   if (lineType === "Landline") return "Not suitable for SMS";
-  if (lineType === "VoIP") return "May support SMS depending on carrier";
+  if (lineType === "Fixed VoIP" || lineType === "Non-Fixed VoIP" || lineType === "VoIP") {
+    return "SMS support varies by carrier";
+  }
   if (lineType === "Toll-Free") return "SMS support varies";
   return null;
 }

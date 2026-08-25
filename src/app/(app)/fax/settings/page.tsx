@@ -1,4 +1,5 @@
 import { FaxSettingsForm } from "@/components/fax/fax-settings-form";
+import { FaxBlockedSendersPanel } from "@/components/fax/fax-blocked-senders-panel";
 import { FaxSubnav } from "@/components/fax/fax-subnav";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { getOrCreateFaxAccount } from "@/lib/fax/fax-usage";
@@ -23,6 +24,7 @@ export default async function FaxSettingsPage() {
           }}
         />
       </div>
+      <FaxBlockedSendersPanel />
     </div>
   );
 }
