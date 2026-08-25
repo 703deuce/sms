@@ -1,11 +1,19 @@
 import type { MessagingRegistration, MessagingStepStatus } from "@/lib/domain";
 import type { RegistrationProgressStep } from "./types";
 import { getMessagingProviderName } from "./provider-config";
-import { looksLikeTwilioMessagingServiceSid } from "./provider-ids";
 import {
-  isApprovedBrandStatus,
-  isApprovedCampaignStatus,
-} from "./telnyx/status-map";
+  isProviderA2pApproved,
+} from "./messaging-authority";
+
+export {
+  isMessagingReady,
+  isMessagingSendAuthorized,
+  isTelnyxRegistrationProviderReady,
+  isTelnyxProviderA2pApproved,
+  isProviderA2pApproved,
+  isOnboardingSubmissionIncomplete,
+  telnyxProviderApprovedRegistrationPatch,
+} from "./messaging-authority";
 
 export function registrationProviderName(
   reg: MessagingRegistration | null | undefined,
@@ -15,78 +23,6 @@ export function registrationProviderName(
     return stored;
   }
   return getMessagingProviderName();
-}
-
-export function isMessagingReady(reg: MessagingRegistration | null | undefined): boolean {
-  if (!reg) return false;
-  if (reg.paused) return false;
-
-  const provider = registrationProviderName(reg);
-
-  // Telnyx: provider approval is source of truth — UI flags must not block production SMS.
-  if (provider === "telnyx" && isTelnyxRegistrationProviderReady(reg)) {
-    return true;
-  }
-
-  if (!reg.messagingEnabled) return false;
-  if (reg.overallStatus !== "ready") return false;
-  if (!reg.phoneAttached || !reg.phoneE164) return false;
-  if (reg.phoneSid?.startsWith("PENDING:")) return false;
-
-  if (provider === "telnyx") {
-    const profileId =
-      (reg as MessagingRegistration & { messagingProfileId?: string | null }).messagingProfileId ||
-      (looksLikeTwilioMessagingServiceSid(reg.messagingServiceSid)
-        ? null
-        : reg.messagingServiceSid);
-    const campaignId =
-      (reg as MessagingRegistration & { campaignId?: string | null }).campaignId ||
-      reg.a2pCampaignSid;
-    if (!profileId || !campaignId) return false;
-    if (reg.brandStatus !== "approved") return false;
-    if (reg.campaignStatus !== "approved") return false;
-    return true;
-  }
-
-  // Twilio / mock path
-  if (!reg.messagingServiceSid) return false;
-  if (reg.subaccountSid?.startsWith("PENDING:")) return false;
-  return true;
-}
-
-/** Telnyx brand/campaign approved + number attached — ignores stale UI flags. */
-export function isTelnyxRegistrationProviderReady(
-  reg: MessagingRegistration | null | undefined,
-): boolean {
-  if (!reg || reg.paused) return false;
-  if (registrationProviderName(reg) !== "telnyx") return false;
-  if (!reg.phoneAttached || !reg.phoneE164) return false;
-  if (reg.phoneSid?.startsWith("PENDING:")) return false;
-
-  const profileId =
-    (reg as MessagingRegistration & { messagingProfileId?: string | null }).messagingProfileId ||
-    (looksLikeTwilioMessagingServiceSid(reg.messagingServiceSid)
-      ? null
-      : reg.messagingServiceSid);
-  const campaignId =
-    (reg as MessagingRegistration & { campaignId?: string | null }).campaignId ||
-    reg.a2pCampaignSid;
-  if (!profileId || !campaignId) return false;
-
-  const brandOk =
-    reg.brandStatus === "approved" ||
-    isApprovedBrandStatus(String(reg.brandStatusRaw || ""));
-  const campaignOk =
-    reg.campaignStatus === "approved" ||
-    isApprovedCampaignStatus(String(reg.campaignStatusRaw || ""));
-  return brandOk && campaignOk;
-}
-
-/** Outbound SMS allowed — same as isMessagingReady (Telnyx uses provider state). */
-export function isMessagingSendAuthorized(
-  reg: MessagingRegistration | null | undefined,
-): boolean {
-  return isMessagingReady(reg);
 }
 
 export function buildProgressSteps(reg: MessagingRegistration): RegistrationProgressStep[] {
@@ -118,7 +54,7 @@ export function buildProgressSteps(reg: MessagingRegistration): RegistrationProg
     {
       key: "ready",
       label: "Ready to send",
-      status: isMessagingReady(reg) ? "ready" : ("not_started" as MessagingStepStatus),
+      status: isProviderA2pApproved(reg) ? "ready" : ("not_started" as MessagingStepStatus),
     },
   ];
 }
@@ -131,7 +67,7 @@ export function toPublicRegistration(reg: MessagingRegistration) {
   return {
     ...safe,
     progress: buildProgressSteps(reg),
-    ready: isMessagingReady(reg),
+    ready: isProviderA2pApproved(reg),
     liveMode: provider === "twilio" || provider === "telnyx",
     messagingProvider: provider,
   };

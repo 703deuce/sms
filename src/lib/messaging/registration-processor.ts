@@ -155,12 +155,12 @@ export async function advanceMessagingRegistration(workspaceId: string) {
       return reg;
     }
 
-    // Live path requires certified submission with business + use case filled
+    // Live path requires certified submission with business + use case filled (onboarding gate only).
     if (!reg.certifiedAt || !reg.legalBusinessName || !reg.useCase) {
-      await log(reg, "advance_skipped", "Not certified / incomplete business or use case");
+      await log(reg, "advance_skipped", "Not certified / incomplete business or use case (onboarding only)");
       await getPrisma().messagingRegistration.updateMany({
         where: { workspaceId, lastError: lockToken },
-        data: { overallStatus: "action_required", lastError: null, lastAdvancedAt: new Date() },
+        data: { lastError: null, lastAdvancedAt: new Date() },
       });
       return reg;
     }

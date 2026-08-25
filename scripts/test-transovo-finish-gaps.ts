@@ -108,7 +108,11 @@ assert.equal(flowCheck.valid, false);
 assert.ok(flowCheck.issues.length > 0);
 
 // Messaging gate regression (c4beb69d): stale messagingEnabled must not block when Telnyx approved
-import { isMessagingSendAuthorized } from "../src/lib/messaging/status";
+import {
+  isMessagingSendAuthorized,
+  isOnboardingSubmissionIncomplete,
+  isProviderA2pApproved,
+} from "../src/lib/messaging/messaging-authority";
 const staleTelnyxApproved = {
   paused: false,
   messagingEnabled: false,
@@ -122,6 +126,8 @@ const staleTelnyxApproved = {
   campaignId: "camp_test",
 } as never;
 assert.equal(isMessagingSendAuthorized(staleTelnyxApproved), true);
+assert.equal(isProviderA2pApproved(staleTelnyxApproved), true);
+assert.equal(isOnboardingSubmissionIncomplete(staleTelnyxApproved), true);
 const blocked = {
   paused: false,
   messagingEnabled: false,

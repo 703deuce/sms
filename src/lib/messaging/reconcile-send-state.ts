@@ -2,44 +2,34 @@ import "server-only";
 
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistration } from "./store";
 import {
-  isTelnyxRegistrationProviderReady,
-  registrationProviderName,
-} from "./status";
+  isTelnyxProviderA2pApproved,
+  telnyxProviderApprovedRegistrationPatch,
+} from "./messaging-authority";
+import { registrationProviderName } from "./status";
 
 /**
- * When Telnyx brand/campaign/number are approved at the provider, heal stale UI flags
- * (messagingEnabled, overallStatus) that background advance jobs may have cleared.
+ * Sync Telnyx provider approval inward — never downgrade based on local form fields.
  */
 export async function reconcileTelnyxSendStateIfNeeded(workspaceId: string): Promise<boolean> {
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!reg || registrationProviderName(reg) !== "telnyx") return false;
-  if (!isTelnyxRegistrationProviderReady(reg)) return false;
+  if (!isTelnyxProviderA2pApproved(reg)) return false;
 
-  const staleOnboardingError =
-    typeof reg.lastError === "string" &&
-    /complete business details|use case before registration/i.test(reg.lastError);
-
+  const patch = telnyxProviderApprovedRegistrationPatch(reg);
   const needsHeal =
     !reg.messagingEnabled ||
     reg.overallStatus !== "ready" ||
-    staleOnboardingError;
+    (typeof reg.lastError === "string" && reg.lastError.length > 0);
 
   if (!needsHeal) return false;
 
-  const updated = await updateRegistration(workspaceId, {
-    overallStatus: "ready",
-    messagingEnabled: true,
-    messagingActivationStatus: "approved",
-    numberStatus: reg.phoneAttached ? "ready" : reg.numberStatus,
-    lastError: null,
-    registrationApprovedAt: reg.registrationApprovedAt || new Date(),
-  });
+  const updated = await updateRegistration(workspaceId, patch);
 
   await appendRegistrationEvent({
     workspaceId,
     registrationId: updated.id,
-    eventType: "telnyx_send_state_reconciled",
-    message: "Healed stale messagingEnabled/overallStatus — Telnyx provider already approved",
+    eventType: "telnyx_provider_state_synced",
+    message: "Synced inward from Telnyx provider approval (no local form re-judge)",
     payload: {
       previousOverallStatus: reg.overallStatus,
       previousMessagingEnabled: reg.messagingEnabled,
@@ -50,7 +40,7 @@ export async function reconcileTelnyxSendStateIfNeeded(workspaceId: string): Pro
   console.log(
     JSON.stringify({
       service: "transovo-web",
-      event: "telnyx_send_state_reconciled",
+      event: "telnyx_provider_state_synced",
       workspaceId,
       previousOverallStatus: reg.overallStatus,
       previousMessagingEnabled: reg.messagingEnabled,

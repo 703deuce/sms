@@ -21,7 +21,11 @@ import {
   isRejectedBrandStatus as isRejectedBrand,
   isRejectedCampaignStatus as isRejectedCampaign,
 } from "./status-map";
-import { isTelnyxRegistrationProviderReady } from "../status";
+import {
+  isOnboardingSubmissionIncomplete,
+  isTelnyxProviderA2pApproved,
+  telnyxProviderApprovedRegistrationPatch,
+} from "../messaging-authority";
 
 async function log(
   reg: MessagingRegistration,
@@ -96,24 +100,13 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       return reg;
     }
 
-    if (!reg.legalBusinessName || !reg.businessRegistrationId || !reg.websiteUrl || !reg.useCase) {
-      await log(reg, "advance_skipped", "Incomplete business/use-case details");
-      if (isTelnyxRegistrationProviderReady(reg)) {
-        reg = await lockedUpdate({
-          overallStatus: "ready",
-          messagingEnabled: true,
-          messagingActivationStatus: "approved",
-          numberStatus: reg.phoneAttached ? "ready" : reg.numberStatus,
-          lastError: null,
-          registrationApprovedAt: reg.registrationApprovedAt || new Date(),
-        });
+    if (isOnboardingSubmissionIncomplete(reg)) {
+      await log(reg, "advance_skipped", "Incomplete business/use-case details (onboarding only)");
+      if (isTelnyxProviderA2pApproved(reg)) {
+        reg = await lockedUpdate(telnyxProviderApprovedRegistrationPatch(reg));
         return reg;
       }
-      reg = await lockedUpdate({
-        overallStatus: "action_required",
-        messagingEnabled: false,
-        lastError: "Complete business details and use case before registration can advance",
-      });
+      // Do not mutate messagingEnabled/overallStatus — validate at submit, not in background.
       return reg;
     }
 
@@ -250,7 +243,6 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
             ? "brand_approved"
             : "brand_pending",
         overallStatus: brandFail ? "failed" : brandOk ? reg.overallStatus : "in_review",
-        messagingEnabled: brandOk ? reg.messagingEnabled : false,
         registrationFailureReason: brandFail ? `Brand ${brand.status}` : null,
       });
       if (brandFail) throw new JobFailedError(`Brand ${brand.status}`);
@@ -296,7 +288,6 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
             ? "approved"
             : "campaign_pending",
         overallStatus: campFail ? "failed" : campOk ? reg.overallStatus : "in_review",
-        messagingEnabled: campOk ? reg.messagingEnabled : false,
         registrationFailureReason: campFail ? `Campaign ${campaign.status}` : null,
       });
       if (campFail) throw new JobFailedError(`Campaign ${campaign.status}`);
@@ -353,7 +344,7 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
   } catch (err) {
     if (err instanceof JobDeferredError) {
       const preserveReady =
-        reg.overallStatus === "ready" || isTelnyxRegistrationProviderReady(reg);
+        reg.overallStatus === "ready" || isTelnyxProviderA2pApproved(reg);
       await getPrisma().messagingRegistration.updateMany({
         where: { workspaceId, lastError: lockToken },
         data: {
@@ -366,7 +357,7 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       throw err;
     }
     const message = err instanceof Error ? err.message : String(err);
-    const providerStillReady = isTelnyxRegistrationProviderReady(reg);
+    const providerStillReady = isTelnyxProviderA2pApproved(reg);
     await getPrisma().messagingRegistration.updateMany({
       where: { workspaceId, lastError: lockToken },
       data: {
