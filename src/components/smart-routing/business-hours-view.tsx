@@ -10,6 +10,7 @@ import {
   type MessagingRuntimeSettings,
 } from "@/lib/messaging/messaging-settings";
 import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
