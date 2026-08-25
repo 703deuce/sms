@@ -12,6 +12,9 @@ source "$SCRIPT_DIR/lib.sh"
 ROOT="$(repo_root)"
 cd "$ROOT"
 
+# Always target the local stack, even if hosted Supabase secrets are injected.
+use_local_env
+
 echo "==> [1/7] System packages (postgresql, nginx, xz, curl)"
 need_pkgs=()
 command -v nginx >/dev/null 2>&1 || need_pkgs+=(nginx-light)
@@ -98,9 +101,14 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 NOTIFY pgrst, 'reload schema';
 SQL
 
-echo "==> [7/7] Seed demo workspace (idempotent upsert)"
-set -a; # shellcheck disable=SC1091
-source "$ROOT/.env"; set +a
-npm run db:seed
+echo "==> [7/7] Seed demo workspace"
+# prisma/seed.ts generates a fresh id each run and upserts on the primary key,
+# so re-seeding collides on the unique email. Guard it to stay idempotent.
+seeded="$(psql_super -tAc "SELECT 1 FROM \"User\" WHERE email = 'alex@harborhome.co' LIMIT 1" || true)"
+if [ "$seeded" = "1" ]; then
+  echo "    demo workspace already seeded — skipping"
+else
+  npm run db:seed
+fi
 
 echo "==> install complete. Login: alex@harborhome.co / demo1234"

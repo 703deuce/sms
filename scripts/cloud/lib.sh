@@ -35,6 +35,21 @@ repo_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd
 }
 
+# Force the local stack even when real Supabase/Telnyx secrets are injected into
+# the environment (Cursor Cloud secrets take precedence over .env otherwise).
+# This keeps development fully local and prevents accidental writes to a shared
+# hosted database. Comment this out / unset these to target real Supabase.
+use_local_env() {
+  export DATABASE_URL="$LOCAL_DATABASE_URL"
+  export NEXT_PUBLIC_SUPABASE_URL="$LOCAL_SUPABASE_URL"
+  export NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY"
+  export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+  export APP_URL="$LOCAL_APP_URL"
+  export NEXT_PUBLIC_APP_URL="$LOCAL_APP_URL"
+  export MESSAGING_PROVIDER="mock"
+  export CRON_SECRET="$LOCAL_CRON_SECRET"
+}
+
 pg_bindir() {
   local d
   d="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)"
