@@ -120,7 +120,7 @@ export async function extractCallDestinationFromSms(body: string): Promise<SmsCa
     maxTokens: 256,
   });
   if (!result) return null;
-  const json = extractJsonFromLlm(result.content) as Partial<SmsCallExtract>;
+  const json = extractJsonFromLlm(result) as Partial<SmsCallExtract>;
   const intent = json.intent === "place_call" ? "place_call" : "other";
   let destination: string | null = null;
   if (json.destination) {
@@ -150,7 +150,7 @@ export async function verifySmsCallExtraction(
     maxTokens: 256,
   });
   if (!result) return { approved: false, destination: null };
-  const json = extractJsonFromLlm(result.content) as Partial<SmsCallVerify>;
+  const json = extractJsonFromLlm(result) as Partial<SmsCallVerify>;
   let destination: string | null = null;
   if (json.destination) {
     try {

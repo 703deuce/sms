@@ -12,13 +12,20 @@ import {
 import { listCallForwardingAuthorizedCallers } from "./authorized-callers";
 import { hasActiveCallForwardingOnNumber } from "./service";
 
+type CfSetupPhoneRow = {
+  id: string;
+  e164: string;
+  friendlyName: string | null;
+  settingsJson: unknown;
+};
+
 export async function loadCallForwardingSetup(workspaceId: string) {
   await ensureCallForwardingWorkspaceSettings(workspaceId);
   const ws = await loadCallForwardingWorkspaceSettings(workspaceId);
   const entitled = await hasWorkspaceProductFeature(workspaceId, "call_forwarding");
   const prisma = getPrisma();
 
-  const phoneNumbers = await prisma.phoneNumber.findMany({
+  const phoneNumbers: CfSetupPhoneRow[] = await prisma.phoneNumber.findMany({
     where: { workspaceId, releasedAt: null, status: { not: "Released" } },
     select: { id: true, e164: true, friendlyName: true, settingsJson: true },
     orderBy: { purchasedAt: "desc" },

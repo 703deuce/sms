@@ -76,7 +76,7 @@ export function addonFeature(productKey: string): TransovoProductFeature | null 
 export type PlatformProductListItem = {
   productKey: string;
   family: PlatformProductFamily | "addon";
-  tier?: MctbTier | SmartRoutingTier;
+  tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier;
   displayName: string;
   description: string;
   amountCents: number;
