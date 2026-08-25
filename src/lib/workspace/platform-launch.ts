@@ -10,8 +10,8 @@ export const VOICE_PRIMARY_LAUNCH = true;
 /** Standalone SMS platform hidden from primary nav/launcher — infrastructure preserved. */
 export const SMS_STANDALONE_HIDDEN = true;
 
-/** Smart Routing in primary product sidebar (MCTB + Numbers when enabled). */
-export const SMART_ROUTING_IN_V1_NAV = true;
+/** Smart Routing hidden from V1 customer nav — code preserved, deferred. */
+export const SMART_ROUTING_IN_V1_NAV = false;
 
 /** Legacy SMS marketing landing — hidden at numbers v1 launch. */
 export const HIDE_SMS_MARKETING_AT_LAUNCH = true;

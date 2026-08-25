@@ -229,8 +229,7 @@ export function PlatformProductsPanel({
     <Card className="mt-4">
       <CardTitle>Platform products</CardTitle>
       <p className="mt-2 text-sm text-muted-foreground">
-        Choose any MCTB tier with any Smart Routing tier. Subscribe to both and save 20%. AI
-        Transcription is an optional add-on with its own tier — independent of Smart Routing.
+        V1 launch products: Missed Call Text Back and Fax. Subscribe to both MCTB + Smart Routing and save 20% when Smart Routing returns.
       </p>
       {dualDiscountActive ? (
         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
@@ -261,13 +260,15 @@ export function PlatformProductsPanel({
             selectedMctb,
             (t) => setSelectedMctb(t as MctbTier),
           )}
-          {renderTierColumn(
-            "Smart Routing",
-            "smart_routing",
-            srProducts,
-            selectedSr,
-            (t) => setSelectedSr(t as SmartRoutingTier),
-          )}
+          {srProducts.length > 0
+            ? renderTierColumn(
+                "Smart Routing",
+                "smart_routing",
+                srProducts,
+                selectedSr,
+                (t) => setSelectedSr(t as SmartRoutingTier),
+              )
+            : null}
         </div>
       )}
       {!loading && cfProducts.length > 0 ? (

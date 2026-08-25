@@ -35,6 +35,8 @@ import {
   type SmartRoutingTier,
   type VerifyCreditPack,
 } from "@/lib/products/platform-billing-catalog-definitions";
+import { isVerifyLaunchEnabled } from "@/lib/products/v1-product-status";
+import { getPlatformBillingCatalog } from "@/lib/products/platform-billing-catalog";
 
 export type CatalogSyncResult = {
   mode: "test" | "live";
@@ -426,39 +428,46 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
     };
   }
 
-  const verifyProduct = dryRun
-    ? ({ id: "prod_verify_dry_run" } as Stripe.Product)
-    : await ensureProduct(
-        stripe,
-        products,
-        {
-          name: VERIFY_PRODUCT_NAME,
-          description: "Phone number verification and list cleaning credits.",
-          transovoProduct: "verify",
-        },
-        audit,
-      );
+  const verifyProduct = isVerifyLaunchEnabled()
+    ? dryRun
+      ? ({ id: "prod_verify_dry_run" } as Stripe.Product)
+      : await ensureProduct(
+          stripe,
+          products,
+          {
+            name: VERIFY_PRODUCT_NAME,
+            description: "Phone number verification and list cleaning credits.",
+            transovoProduct: "verify",
+          },
+          audit,
+        )
+    : ({ id: getPlatformBillingCatalog().verify.stripeProductId } as Stripe.Product);
 
   const verifyPacks = {} as PlatformCatalogIds["verify"]["packs"];
-  for (const pack of VERIFY_CREDIT_PACKS) {
-    const amountCents = VERIFY_CREDIT_PACK_PRICES_CENTS[pack as VerifyCreditPack];
-    const credits = VERIFY_CREDIT_PACK_QUANTITIES[pack as VerifyCreditPack];
-    const price = dryRun
-      ? ({ id: `price_verify_${pack}_dry_run` } as Stripe.Price)
-      : await ensureOneTimePrice(
-          stripe,
-          verifyProduct.id,
-          "verify",
-          pack,
-          amountCents,
-          { credits: String(credits) },
-          audit,
-        );
-    verifyPacks[pack as VerifyCreditPack] = {
-      stripePriceId: price.id,
-      amountCents,
-      credits,
-    };
+  if (isVerifyLaunchEnabled()) {
+    for (const pack of VERIFY_CREDIT_PACKS) {
+      const amountCents = VERIFY_CREDIT_PACK_PRICES_CENTS[pack as VerifyCreditPack];
+      const credits = VERIFY_CREDIT_PACK_QUANTITIES[pack as VerifyCreditPack];
+      const price = dryRun
+        ? ({ id: `price_verify_${pack}_dry_run` } as Stripe.Price)
+        : await ensureOneTimePrice(
+            stripe,
+            verifyProduct.id,
+            "verify",
+            pack,
+            amountCents,
+            { credits: String(credits) },
+            audit,
+          );
+      verifyPacks[pack as VerifyCreditPack] = {
+        stripePriceId: price.id,
+        amountCents,
+        credits,
+      };
+    }
+  } else {
+    audit.warnings.push("Verify Stripe catalog sync skipped — product dormant for V1");
+    Object.assign(verifyPacks, getPlatformBillingCatalog().verify.packs);
   }
 
   const coupon = dryRun

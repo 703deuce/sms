@@ -4,6 +4,20 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## V1 launch scope (frozen)
+
+**ACTIVE V1 products:** Missed Call Text Back · Transovo Fax
+
+**DORMANT (preserved, not customer-facing):** Transovo Verify — see `docs/verify-dormant.md`
+
+**DEFERRED:** Smart Routing, AI Receptionist, call forwarding, other live-call products
+
+Do not add new products or expand Fax/MCTB feature scope until production certification completes. Focus: correctness, live provider verification, billing, security, browser validation.
+
+Certification: `docs/V1-PRODUCTION-CERTIFICATION.md` · Gate: `npm run test:v1-production-readiness`
+
+---
+
 ## Transovo production build — preserve first, extend second
 
 **This is an extension/consolidation job, not a rewrite.**

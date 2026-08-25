@@ -14,12 +14,15 @@ import { verifyPhoneNumber } from "./verify-phone-number";
 
 const BATCH_SIZE = 25;
 
+import { assertVerifyCustomerAccess } from "@/lib/products/v1-product-status";
+
 export async function createBulkVerifyJob(input: {
   workspaceId: string;
   csvText: string;
   filename?: string;
   phoneColumn?: string;
 }) {
+  assertVerifyCustomerAccess();
   const { headers, rows } = parseCsv(input.csvText);
   if (!headers.length || !rows.length) throw new Error("CSV is empty or invalid.");
 

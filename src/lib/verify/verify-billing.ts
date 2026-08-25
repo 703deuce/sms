@@ -12,6 +12,8 @@ import {
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { appendVerifyCreditLedger } from "./verify-credits";
 
+import { assertVerifyCustomerAccess } from "@/lib/products/v1-product-status";
+
 export async function createVerifyCreditsCheckoutSession(input: {
   workspaceId: string;
   userId: string;
@@ -19,6 +21,7 @@ export async function createVerifyCreditsCheckoutSession(input: {
   origin: string;
   returnPath?: string;
 }): Promise<{ url: string | null; sessionId: string }> {
+  assertVerifyCustomerAccess();
   const stripe = getStripe();
   if (!stripe) throw new Error("Stripe is not configured");
 

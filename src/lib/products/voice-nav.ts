@@ -30,6 +30,7 @@ import {
 import { isActiveEntitlement } from "@/lib/products/types";
 import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 import { isMctbFocusedCustomerNav } from "@/lib/products/mctb-focused-nav";
+import { isDeferredProductNavVisible, isVerifyLaunchEnabled } from "@/lib/products/v1-product-status";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
@@ -115,8 +116,8 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const hasVm = featureActive(features, "visual_voicemail", false);
   const hasTranscription = featureActive(features, "ai_transcription", false);
   const hasFax = featureActive(features, "fax", false);
-  const hasVerify = featureActive(features, "verify", false);
   const mctbFocused = isMctbFocusedCustomerNav();
+  const showDeferred = isDeferredProductNavVisible();
 
   const items: NavItem[] = [
     {
@@ -146,7 +147,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     }
   }
 
-  if (!mctbFocused) {
+  if (!mctbFocused && showDeferred) {
     items.push(...buildLegacyProductNav(features));
   }
 
@@ -160,28 +161,32 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     });
   }
 
-  items.push({
-    label: "Verify",
-    href: "/verify",
-    icon: BadgeCheck,
-    sectionLabel: hasFax ? undefined : "Products",
-    badge: hasVerify ? undefined : "Credits",
-    matchExact: true,
-  });
+  if (isVerifyLaunchEnabled() && featureActive(features, "verify", false)) {
+    items.push({
+      label: "Verify",
+      href: "/verify",
+      icon: BadgeCheck,
+      sectionLabel: "Products",
+      badge: "Credits",
+      matchExact: true,
+    });
+  }
 
-  items.push({
-    label: "Visual Voicemail",
-    href: "/voice/voicemail",
-    icon: Voicemail,
-    sectionLabel: "Add-ons",
-    badge: hasVm ? undefined : "Add-on",
-  });
-  items.push({
-    label: "Transcription",
-    href: "/voice/transcription",
-    icon: FileText,
-    badge: hasTranscription ? undefined : "Add-on",
-  });
+  if (showDeferred) {
+    items.push({
+      label: "Visual Voicemail",
+      href: "/voice/voicemail",
+      icon: Voicemail,
+      sectionLabel: "Add-ons",
+      badge: hasVm ? undefined : "Add-on",
+    });
+    items.push({
+      label: "Transcription",
+      href: "/voice/transcription",
+      icon: FileText,
+      badge: hasTranscription ? undefined : "Add-on",
+    });
+  }
 
   items.push(
     {

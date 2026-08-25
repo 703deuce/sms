@@ -12,6 +12,7 @@ import {
 import { PLATFORM_BILLING_CATALOG_LIVE } from "@/lib/products/platform-billing-catalog-ids-live";
 import { PLATFORM_BILLING_CATALOG_TEST } from "@/lib/products/platform-billing-catalog-ids-test";
 import type { TransovoProductFeature } from "@/lib/products/feature-entitlements";
+import { isPlatformFamilyPurchasable } from "@/lib/products/v1-product-status";
 
 export type { MctbTier, SmartRoutingTier, CallForwardingTier, AiTranscriptionTier, FaxTier, VerifyCreditPack, PlatformProductFamily, PlatformCatalogIds };
 
@@ -121,6 +122,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
   }
 
   for (const tier of ["starter", "business", "pro"] as SmartRoutingTier[]) {
+    if (!isPlatformFamilyPurchasable("smart_routing")) continue;
     const row = catalog.smart_routing.tiers[tier];
     items.push({
       productKey: `smart_routing_${tier}`,
@@ -136,6 +138,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
   }
 
   for (const tier of ["standard"] as CallForwardingTier[]) {
+    if (!isPlatformFamilyPurchasable("call_forwarding")) continue;
     const row = catalog.call_forwarding.tiers[tier];
     items.push({
       productKey: `call_forwarding_${tier}`,
@@ -151,6 +154,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
   }
 
   for (const tier of ["starter", "business", "pro"] as AiTranscriptionTier[]) {
+    if (!isPlatformFamilyPurchasable("ai_transcription")) continue;
     const row = catalog.ai_transcription.tiers[tier];
     items.push({
       productKey: `ai_transcription_${tier}`,
@@ -179,6 +183,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
   }
 
   for (const pack of ["1000", "5000", "10000", "50000"] as VerifyCreditPack[]) {
+    if (!isPlatformFamilyPurchasable("verify_pack")) continue;
     const row = catalog.verify.packs[pack];
     items.push({
       productKey: `verify_${pack}`,
@@ -191,6 +196,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
   }
 
   for (const def of ADDON_PRODUCT_DEFS) {
+    if (!isPlatformFamilyPurchasable("addon")) continue;
     const addon = catalog.addons[def.productKey];
     if (!addon) continue;
     items.push({
@@ -259,6 +265,9 @@ export function parseCheckoutSelection(productKey: string): {
     };
   }
   if (productKey.startsWith("verify_")) {
+    if (!isPlatformFamilyPurchasable("verify_pack")) {
+      throw new Error("VERIFY_DORMANT");
+    }
     const pack = productKey.replace("verify_", "") as VerifyCreditPack;
     return {
       family: "verify_pack",

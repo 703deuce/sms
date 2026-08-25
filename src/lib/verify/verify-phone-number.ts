@@ -15,6 +15,7 @@ import {
   getVerifyCreditBalance,
 } from "./verify-credits";
 import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
+import { assertVerifyCustomerAccess } from "@/lib/products/v1-product-status";
 import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import {
@@ -44,6 +45,7 @@ async function assertVerifyAccess(workspaceId: string) {
 export async function verifyPhoneNumber(
   input: VerifyPhoneNumberInput,
 ): Promise<VerifyPhoneNumberOutput> {
+  assertVerifyCustomerAccess();
   await assertVerifyAccess(input.workspaceId);
 
   const normalized = normalizeVerifyPhone(input.phone);

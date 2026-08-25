@@ -261,6 +261,8 @@ export async function createPlatformCheckoutSession(input: {
   const selection = parseCheckoutSelection(input.productKey);
 
   if (selection.family === "verify_pack") {
+    const { isVerifyLaunchEnabled } = await import("@/lib/products/v1-product-status");
+    if (!isVerifyLaunchEnabled()) throw new Error("VERIFY_DORMANT");
     const { createVerifyCreditsCheckoutSession } = await import("@/lib/verify/verify-billing");
     return createVerifyCreditsCheckoutSession({
       workspaceId: input.workspaceId,
