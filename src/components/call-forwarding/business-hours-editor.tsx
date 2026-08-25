@@ -119,7 +119,7 @@ export function CallForwardingBusinessHoursEditor() {
         <div className="mt-4 flex gap-2">
           <Button
             type="button"
-            variant={scheduleMode === "always" ? "default" : "outline"}
+            variant={scheduleMode === "always" ? "primary" : "outline"}
             size="sm"
             onClick={() => setScheduleMode("always")}
           >
@@ -127,7 +127,7 @@ export function CallForwardingBusinessHoursEditor() {
           </Button>
           <Button
             type="button"
-            variant={scheduleMode === "custom" ? "default" : "outline"}
+            variant={scheduleMode === "custom" ? "primary" : "outline"}
             size="sm"
             onClick={() => setScheduleMode("custom")}
           >
