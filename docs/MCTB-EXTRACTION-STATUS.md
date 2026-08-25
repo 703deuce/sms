@@ -1,38 +1,69 @@
 # MCTB-Only Extraction — Status
 
-Branch: `cursor/mctb-only-production-9cca`
+Branch: `cursor/mctb-only-production-9cca`  
+PR: https://github.com/703deuce/sms/pull/256
 
-## Approach (revised)
+## Approach
 
-**Pragmatic rule:** remove only code that does **not** touch MCTB at all. Shared libraries that MCTB's telephony/SMS/consent path imports are **kept in production** even if they also served other products. Customer-facing routes/pages for dormant products stay removed.
+**Pragmatic rule:** remove only code that does **not** touch MCTB at all. Shared libraries on the MCTB telephony/SMS/consent import chain stay in production even if they also served other products.
 
 ## Completed
 
-- Safety snapshot: tag `pre-mctb-extraction-2026-08-25`
-- Archive: 996 paths locally at commit `719c3d9` (remote push blocked)
-- Dormant product **routes/pages/APIs** removed from production
-- MCTB-only customer navigation
-- Shared runtime kept where MCTB import chain requires it
+| Item | Status |
+|------|--------|
+| Safety snapshot | tag `pre-mctb-extraction-2026-08-25` |
+| Archive remote | **VERIFIED** — `smsarchive@main` = `81f06c16` |
+| Dormant product routes/pages/APIs removed | ~996 paths |
+| MCTB core preserved | 125 files in `lib/mctb`, agent, solutions |
+| MCTB-only customer nav | `voice-nav.ts` |
+| Static route verification | `scripts/verify-mctb-extraction.mjs` |
+| Production route manifest | `docs/PRODUCTION-ROUTE-MANIFEST.md` |
 
-## Validation (latest)
+## MCTB core integrity check
+
+Compared to safety tag `pre-mctb-extraction-2026-08-25`:
+
+- **Zero deletions** in `src/lib/mctb/`, `src/lib/agents/missed-call-text-back/`, `src/lib/solutions/missed-call-text-back/`, or MCTB API routes
+- Only change: `src/lib/mctb/dashboard-types.ts` (+1 line)
+- Deleted voice pages are **non-MCTB** products (agents, receptionist, campaigns, voicemail product UI, etc.)
+
+## Validation (2026-08-25)
 
 | Check | Result |
 |-------|--------|
 | `npm run build` | **PASS** |
-| `npx tsc --noEmit` | **PASS** |
-| `npm run test:mctb-try-it-ux` | **PASS** |
-| `npm run test:transovo-platform` | **PASS** |
+| `node scripts/verify-mctb-extraction.mjs` | **PASS** |
+| `npm run test:mctb-try-it-ux` | **PASS** (9/9) |
 | `npm run test:mctb-consent-log` | **PASS** |
+| `npm run test:transovo-platform` | **PASS** |
+| `npm run test:mctb-call-control-handler` | **PASS** |
+| `npm run test:mctb-sip-ingress-send-gate` | **PASS** |
+| `npm run test:mctb-event-only` | **PASS** |
+| `npm run test:mctb-voice-bridge` | **PASS** |
+| `npm run test:mctb-sip-event-only` | **PASS** |
+| `npm run test:mctb-admin-setup` | **PASS** (with server-only preload) |
+| `npm run test:mctb-demo-call-detect` | **PASS** (test aligned to ingress semantics) |
 
 ## Removed (non-MCTB only)
 
-- `voice-runtime/` — LiveKit AI receptionist worker (no MCTB imports)
-- Non-MCTB `python-runtime-bridge/*` booking/telemetry handlers (internal API route already gone)
-- Orphaned test scripts for deleted bridge modules
+- `voice-runtime/` — LiveKit AI receptionist worker
+- Non-MCTB `python-runtime-bridge/*` handlers
+- Off-chain realtor/outbound/real-estate compile code
+- Customer-facing dormant product routes (see `PRODUCTION-ROUTE-MANIFEST.md`)
 
-## Still needed
+## Merge readiness
 
-- Push archive to `smsarchive` (repo write access)
-- Legacy route 404 probing
-- Broader MCTB test matrix + browser smoke
-- `docs/PRODUCTION-ROUTE-MANIFEST.md`
+| Gate | Status |
+|------|--------|
+| Archive remote verified | **YES** |
+| Build passes | **YES** |
+| MCTB core not deleted | **YES** |
+| MCTB unit/integration tests | **YES** |
+| Live PSTN smoke documented | **Pending** (post-merge ops) |
+| Safe to merge | **Ready for review** — recommend human sign-off after staging deploy |
+
+## Out of scope (do not touch in this workstream)
+
+- Hetzner / `voice.transovo.ai` self-hosted LiveKit
+- `smsarchive` content (read-only reference)
+- LiveKit Cloud voice routing unless MCTB SMS path requires it

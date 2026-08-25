@@ -120,8 +120,11 @@ async function testTexmlTargetResolution(
   });
   assert.equal(target.workspaceId, workspaceId);
   assert.equal(target.isPlatformDemo, true);
-  assert.equal(target.demoMode, true);
-  console.log("  ✓ resolveMctbTargetWorkspaceForInboundCall (demoMode + forwardedFrom)");
+  // Carrier-forwarded metadata => production activation ingress, not direct Try It demo.
+  assert.equal(target.demoMode, false);
+  console.log(
+    "  ✓ resolveMctbTargetWorkspaceForInboundCall (platform demo + forwardedFrom => production ingress)",
+  );
 }
 
 async function testProductionForwardedFromShapeDoesNotThrow() {
