@@ -130,6 +130,7 @@ const blocked = {
   messagingProvider: "telnyx",
 } as never;
 assert.equal(isMessagingSendAuthorized(blocked), false);
+// sendViaRegistration uses isMessagingSendAuthorized (not isMessagingReady alone) — see registration-processor.ts
 
 import * as outbound from "../src/lib/mctb/messaging/outbound-sms-route";
 assert.equal(typeof outbound.resolveMctbOutboundSmsRoute, "function");

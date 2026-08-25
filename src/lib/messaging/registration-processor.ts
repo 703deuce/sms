@@ -9,7 +9,7 @@ import { getMessagingProviderName } from "./provider-config";
 import { looksLikeTwilioMessagingServiceSid } from "./provider-ids";
 import { appendRegistrationEvent, getRegistrationByWorkspace, updateRegistration, updateRegistrationIfLocked } from "./store";
 import { JobDeferredError, JobFailedError } from "./types";
-import { isMessagingReady } from "./status";
+import { isMessagingReady, isMessagingSendAuthorized } from "./status";
 import { isLiveMessagingAdapter } from "./twilio-config";
 import { twilioAdapter } from "./twilio-adapter";
 import { advanceTelnyxRegistration, ensureTelnyxWorkspace } from "./telnyx/advance";
@@ -476,8 +476,11 @@ export async function sendViaRegistration(
   fromOverride?: string,
 ) {
   const reg = await getRegistrationByWorkspace(workspaceId);
-  if (!isMessagingReady(reg)) {
+  if (!isMessagingSendAuthorized(reg)) {
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
+  }
+  if (!reg) {
+    throw new Error("Messaging registration not found for this workspace.");
   }
 
   const provider = getMessagingProviderForRegistration(reg!);
