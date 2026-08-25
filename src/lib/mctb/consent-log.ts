@@ -7,11 +7,18 @@ import {
   buildConsentLogWhereClause,
   missedCallIdempotencyKey,
 } from "@/lib/mctb/consent-log-shared";
+import { hydrateConsentIdentityFromRow } from "@/lib/mctb/consent-identity";
 
 export type ConsentLogRow = {
   id: string;
   callerNumber: string;
   businessNumber: string;
+  consentingCallerNumber: string | null;
+  customerBusinessNumber: string | null;
+  transovoIngressNumber: string;
+  callerIdentityStatus: string;
+  consentIdentityVerified: boolean;
+  consentMethod: string;
   consentedAt: string;
   affirmativeInput: string;
   method: string;
@@ -91,10 +98,21 @@ export async function loadConsentLogRows(
   const rows: ConsentLogRow[] = consents.map((c: (typeof consents)[number]) => {
     const meta = asConsentMetadata(c.metadataJson);
     const linked = c.callSessionId ? missedBySession.get(c.callSessionId) : undefined;
+    const identity = hydrateConsentIdentityFromRow({
+      callerNumber: c.callerNumber,
+      businessNumber: c.businessNumber,
+      metadataJson: c.metadataJson,
+    });
     return {
       id: c.id,
       callerNumber: c.callerNumber,
       businessNumber: c.businessNumber,
+      consentingCallerNumber: identity.consentingCallerNumber,
+      customerBusinessNumber: identity.customerBusinessNumber,
+      transovoIngressNumber: identity.transovoIngressNumber,
+      callerIdentityStatus: identity.callerIdentityStatus,
+      consentIdentityVerified: identity.consentIdentityVerified,
+      consentMethod: identity.consentMethod,
       consentedAt: c.consentedAt.toISOString(),
       affirmativeInput: c.affirmativeInput,
       method: c.method,
@@ -172,10 +190,21 @@ export async function loadConsentForMissedCallEvent(input: {
   if (!consent) return null;
 
   const consentMeta = asConsentMetadata(consent.metadataJson);
+  const identity = hydrateConsentIdentityFromRow({
+    callerNumber: consent.callerNumber,
+    businessNumber: consent.businessNumber,
+    metadataJson: consent.metadataJson,
+  });
   return {
     id: consent.id,
     callerNumber: consent.callerNumber,
     businessNumber: consent.businessNumber,
+    consentingCallerNumber: identity.consentingCallerNumber,
+    customerBusinessNumber: identity.customerBusinessNumber,
+    transovoIngressNumber: identity.transovoIngressNumber,
+    callerIdentityStatus: identity.callerIdentityStatus,
+    consentIdentityVerified: identity.consentIdentityVerified,
+    consentMethod: identity.consentMethod,
     consentedAt: consent.consentedAt.toISOString(),
     affirmativeInput: consent.affirmativeInput,
     method: consent.method,
