@@ -21,9 +21,21 @@ export async function startTestCall(input: {
   }
   const pn = flow.assignedPhoneNumberId
     ? await prisma.phoneNumber.findFirst({
-        where: { id: flow.assignedPhoneNumberId, workspaceId: input.workspaceId },
+        where: {
+          id: flow.assignedPhoneNumberId,
+          workspaceId: input.workspaceId,
+          releasedAt: null,
+          status: { not: "Released" },
+        },
       })
-    : await prisma.phoneNumber.findFirst({ where: { workspaceId: input.workspaceId } });
+    : await prisma.phoneNumber.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          releasedAt: null,
+          status: { not: "Released" },
+        },
+        orderBy: { createdAt: "asc" },
+      });
   if (!pn) throw new Error("Assign a phone number to this flow");
 
   const provider = resolvePhoneNumberProvider(pn);

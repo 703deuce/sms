@@ -2,11 +2,13 @@
 
 export type MctbTier = "starter" | "growth" | "pro";
 export type SmartRoutingTier = "starter" | "business" | "pro";
+export type CallForwardingTier = "standard";
 export type AiTranscriptionTier = "starter" | "business" | "pro";
-export type PlatformProductFamily = "mctb" | "smart_routing" | "ai_transcription";
+export type PlatformProductFamily = "mctb" | "smart_routing" | "call_forwarding" | "ai_transcription";
 
 export const MCTB_TIERS: MctbTier[] = ["starter", "growth", "pro"];
 export const SMART_ROUTING_TIERS: SmartRoutingTier[] = ["starter", "business", "pro"];
+export const CALL_FORWARDING_TIERS: CallForwardingTier[] = ["standard"];
 export const AI_TRANSCRIPTION_TIERS: AiTranscriptionTier[] = ["starter", "business", "pro"];
 
 export const MCTB_TIER_PRICES_CENTS: Record<MctbTier, number> = {
@@ -19,6 +21,14 @@ export const SMART_ROUTING_TIER_PRICES_CENTS: Record<SmartRoutingTier, number> =
   starter: 1999,
   business: 3999,
   pro: 6999,
+};
+
+export const CALL_FORWARDING_TIER_PRICES_CENTS: Record<CallForwardingTier, number> = {
+  standard: 2999,
+};
+
+export const CALL_FORWARDING_INCLUDED_MINUTES: Record<CallForwardingTier, number> = {
+  standard: 2000,
 };
 
 export const SMART_ROUTING_INCLUDED_MINUTES: Record<SmartRoutingTier, number> = {
@@ -44,6 +54,7 @@ export const SMART_ROUTING_OVERAGE_CENTS_PER_MINUTE = 2;
 
 export const MCTB_PRODUCT_NAME = "Transovo Missed Call Text Back";
 export const SMART_ROUTING_PRODUCT_NAME = "Transovo Smart Routing";
+export const CALL_FORWARDING_PRODUCT_NAME = "Transovo Call Forwarding";
 export const AI_TRANSCRIPTION_PRODUCT_NAME = SMART_ROUTING_PRODUCT_NAME.replace(
   "Smart Routing",
   "AI Transcription",
@@ -83,6 +94,10 @@ export type PlatformCatalogIds = {
   smart_routing: {
     stripeProductId: string;
     tiers: Record<SmartRoutingTier, PlatformCatalogTierIds>;
+  };
+  call_forwarding: {
+    stripeProductId: string;
+    tiers: Record<CallForwardingTier, PlatformCatalogTierIds>;
   };
   ai_transcription: {
     stripeProductId: string;

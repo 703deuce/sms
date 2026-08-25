@@ -3,6 +3,7 @@ import { messagingOnboarding } from "@/lib/messaging/service";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { getNumberProvider } from "@/lib/numbers/providers/number-search-service";
 import { resolvePhoneNumberProvider } from "@/lib/numbers/providers/normalize";
+import { customerSmartRoutingFlowWhere } from "@/lib/smart-routing/flow-kind";
 import { normalizeTelnyxError } from "./telnyx-errors";
 
 export type ReleaseNumberResult = {
@@ -117,6 +118,8 @@ export async function releaseWorkspaceNumber(
         parked: true,
         personalParked: true,
         routingOwner: null,
+        callHandlingMode: null,
+        mctbSipIngress: false,
       },
     },
   });
@@ -127,9 +130,62 @@ export async function releaseWorkspaceNumber(
   });
 
   await prisma.smartRoutingFlow.updateMany({
-    where: { workspaceId, assignedPhoneNumberId: numberId, status: "active" },
+    where: {
+      workspaceId,
+      assignedPhoneNumberId: numberId,
+      status: "active",
+      ...customerSmartRoutingFlowWhere,
+    },
     data: { status: "paused" },
   });
+
+  const { loadSmartRoutingWorkspaceSettings, updateSmartRoutingWorkspaceSettings } = await import(
+    "@/lib/smart-routing/workspace-settings"
+  );
+  const { sameSmartRoutingE164 } = await import("@/lib/smart-routing/internal-numbers");
+  const srSettings = await loadSmartRoutingWorkspaceSettings(workspaceId);
+  if (
+    srSettings?.assignedPhoneNumberId === numberId ||
+    (srSettings?.routingNumberE164 && sameSmartRoutingE164(srSettings.routingNumberE164, row.e164))
+  ) {
+    await updateSmartRoutingWorkspaceSettings(workspaceId, {
+      assignedPhoneNumberId: null,
+      routingNumberE164: null,
+    });
+  }
+  if (
+    srSettings?.assignedCallbackPhoneNumberId === numberId ||
+    (srSettings?.callbackNumberE164 && sameSmartRoutingE164(srSettings.callbackNumberE164, row.e164))
+  ) {
+    await updateSmartRoutingWorkspaceSettings(workspaceId, {
+      assignedCallbackPhoneNumberId: null,
+      callbackNumberE164: null,
+    });
+  }
+
+  const { loadCallForwardingWorkspaceSettings, updateCallForwardingWorkspaceSettings } = await import(
+    "@/lib/call-forwarding/workspace-settings"
+  );
+  const cfSettings = await loadCallForwardingWorkspaceSettings(workspaceId);
+  if (cfSettings) {
+    const cfPatch: Partial<{
+      assignedPhoneNumberId: string | null;
+      businessNumberE164: string | null;
+      controlPhoneNumberId: string | null;
+      controlNumberE164: string | null;
+    }> = {};
+    if (cfSettings.assignedPhoneNumberId === numberId) {
+      cfPatch.assignedPhoneNumberId = null;
+      cfPatch.businessNumberE164 = null;
+    }
+    if (cfSettings.controlPhoneNumberId === numberId) {
+      cfPatch.controlPhoneNumberId = null;
+      cfPatch.controlNumberE164 = null;
+    }
+    if (Object.keys(cfPatch).length > 0) {
+      await updateCallForwardingWorkspaceSettings(workspaceId, cfPatch);
+    }
+  }
 
   return { ok: true, releasedE164: row.e164, providerReleased };
 }

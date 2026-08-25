@@ -11,6 +11,7 @@ import {
   type ForwardUnansweredAction,
   type IncomingCallHandling,
 } from "./personal-call-settings";
+import { isSmartRoutingCallHandlingActive, readCallHandlingMode } from "./call-handling-mode-shared";
 import { requiresPress1Screening, effectiveForwardRingSeconds } from "./forward-screening";
 import {
   readPersonalForwardSchedule,
@@ -46,11 +47,22 @@ export function resolveNumberInboundRoute(row: PhoneNumber): NumberInboundRoute 
   const routingOwner = settings.routingOwner as string | undefined;
 
   if (routingOwner === "smart_routing") {
-    return { kind: "default" };
+    return { kind: "unavailable" };
+  }
+  if (isSmartRoutingCallHandlingActive(settings)) {
+    return { kind: "unavailable" };
   }
 
   if (routingOwner === "smart_routing_callback") {
     return { kind: "unavailable" };
+  }
+
+  const mode = readCallHandlingMode(settings);
+  if (mode === "call_forwarding") {
+    const cfSettings = readPersonalCallSettings(row);
+    if (!cfSettings.forwardingEnabled || cfSettings.forwardTargets.length === 0) {
+      return { kind: "unavailable" };
+    }
   }
 
   const callSettings = readPersonalCallSettings(row);

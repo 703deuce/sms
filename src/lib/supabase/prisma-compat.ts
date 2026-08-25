@@ -216,6 +216,10 @@ const MODEL_TO_TABLE: Record<string, string> = {
   smartRoutingCommandReceipt: "smart_routing_command_receipts",
   smartRoutingSmsConsentEvent: "smart_routing_sms_consent_events",
   smartRoutingWorkspaceSettings: "smart_routing_workspace_settings",
+  callForwardingWorkspaceSettings: "call_forwarding_workspace_settings",
+  callForwardingAuthorizedCaller: "call_forwarding_authorized_callers",
+  callForwardingOutboundCall: "call_forwarding_outbound_calls",
+  platformCallForwardingUsageRecord: "platform_call_forwarding_usage_records",
   smartRoutingAuthorizedCaller: "smart_routing_authorized_callers",
   smartRoutingAccessSession: "smart_routing_access_sessions",
   smartRoutingOutboundCall: "smart_routing_outbound_calls",
@@ -543,6 +547,12 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   },
   smartRoutingSmsConsentEvent: { workspace: { table: "Workspace", fk: "workspaceId" } },
   smartRoutingWorkspaceSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callForwardingWorkspaceSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callForwardingAuthorizedCaller: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callForwardingOutboundCall: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    authorizedCaller: { table: "CallForwardingAuthorizedCaller", fk: "authorizedCallerId" },
+  },
   smartRoutingAuthorizedCaller: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     outboundCalls: {

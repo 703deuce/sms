@@ -5,6 +5,7 @@ import {
   NumberWebhooksForm,
 } from "@/components/numbers/number-config-forms";
 import { NumberProvisionPanel } from "@/components/numbers/number-provision-panel";
+import { CallHandlingModePanel } from "@/components/numbers/call-handling-mode-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -171,7 +172,16 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
         </>
       )}
 
-      {tab === "voice" && <NumberProvisionPanel numberId={numberId} />}
+      {tab === "voice" && (
+        <>
+          <CallHandlingModePanel
+            numberId={numberId}
+            e164={number.number}
+            settingsJson={number.settingsJson}
+          />
+          <NumberProvisionPanel numberId={numberId} />
+        </>
+      )}
 
       {tab === "messaging" && (
         <Card>

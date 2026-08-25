@@ -95,7 +95,16 @@ export const messagingOnboarding = {
           body.upstreamProvider === "twilio" || body.upstreamProvider === "telnyx"
             ? body.upstreamProvider
             : undefined;
-        return this.purchaseNumber(workspaceId, String(body.phoneNumber || ""), upstream);
+        const { parseCallHandlingModePurchase } = await import(
+          "@/lib/numbers/call-handling-mode"
+        );
+        const callHandlingMode = parseCallHandlingModePurchase(body.callHandlingMode);
+        return this.purchaseNumber(
+          workspaceId,
+          String(body.phoneNumber || ""),
+          upstream,
+          { callHandlingMode },
+        );
       case "release_number":
         return this.releaseNumber(workspaceId);
       case "submit":
@@ -250,6 +259,9 @@ export const messagingOnboarding = {
     workspaceId: string,
     phoneNumber: string,
     upstreamProvider?: NumberUpstreamProvider,
+    options?: {
+      callHandlingMode?: import("@/lib/numbers/call-handling-mode").CallHandlingModePurchaseOption | null;
+    },
   ) {
     const { assertCanPurchaseNumber } = await import("@/lib/numbers/acquire-guard");
     const guard = await assertCanPurchaseNumber(workspaceId, { source: "standard" });
@@ -416,7 +428,41 @@ export const messagingOnboarding = {
     }
 
     await enqueueMessagingRegistrationAdvance(workspaceId);
-    return toPublicRegistration(reg);
+
+    let callHandling: {
+      phoneNumberId: string;
+      flowId?: string;
+      mode?: string | null;
+    } = { phoneNumberId: phoneRow.id };
+    try {
+      const { applyCallHandlingAfterPurchase } = await import(
+        "@/lib/numbers/call-handling-mode"
+      );
+      callHandling = {
+        ...await applyCallHandlingAfterPurchase(
+          workspaceId,
+          phoneRow.id,
+          options?.callHandlingMode ?? null,
+        ),
+        mode: options?.callHandlingMode ?? null,
+      };
+    } catch (err) {
+      console.error("[purchaseNumber] call-handling apply failed", err);
+      if (options?.callHandlingMode) {
+        throw new Error(
+          `Number purchased but call-handling setup failed (${options.callHandlingMode}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    return {
+      ...toPublicRegistration(reg),
+      purchasedPhoneNumberId: phoneRow.id,
+      purchasedE164: phoneRow.e164,
+      callHandling,
+    };
   },
 
   async releaseNumber(workspaceId: string) {

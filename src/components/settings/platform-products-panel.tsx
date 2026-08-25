@@ -74,8 +74,14 @@ export function PlatformProductsPanel({
 
   const mctbProducts = products.filter((p) => p.family === "mctb");
   const srProducts = products.filter((p) => p.family === "smart_routing");
+  const cfProducts = products.filter((p) => p.family === "call_forwarding");
   const atProducts = products.filter((p) => p.family === "ai_transcription");
   const addonProducts = products.filter((p) => p.family === "addon");
+
+  const resolvedHighlight =
+    highlightProduct === "call_forwarding"
+      ? cfProducts[0]?.productKey ?? highlightProduct
+      : highlightProduct;
 
   const preview = useMemo(() => {
     const bothSelected = Boolean(selectedMctb && selectedSr);
@@ -154,7 +160,7 @@ export function PlatformProductsPanel({
         {items.map((product) => {
           const tier = product.tier || "";
           const isActive = active === tier;
-          const highlighted = highlightProduct === product.productKey;
+          const highlighted = resolvedHighlight === product.productKey;
           return (
             <div
               key={product.productKey}
@@ -263,6 +269,54 @@ export function PlatformProductsPanel({
           )}
         </div>
       )}
+      {!loading && cfProducts.length > 0 ? (
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Call Forwarding
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            One business number, one destination. Rings your existing phone — no app required for inbound calls.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {cfProducts.map((product) => {
+              const isActive = activeTier("call_forwarding") === product.tier;
+              return (
+                <div key={product.productKey} className="rounded-lg border border-border p-4">
+                  <p className="font-medium">{product.displayName}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{product.description}</p>
+                  <p className="mt-3 text-sm font-semibold tabular-nums">
+                    {formatCurrency(product.amountCents / 100)}
+                    <span className="text-xs font-normal text-muted-foreground"> / month</span>
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    {!isActive ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={trialKey === product.productKey}
+                          onClick={() => startTrial(product.productKey)}
+                        >
+                          Trial
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={checkoutKey === product.productKey}
+                          onClick={() => startCheckout(product.productKey)}
+                        >
+                          Subscribe
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-sm text-emerald-700 font-medium">Active</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       {!loading && atProducts.length > 0 ? (
         <div className="mt-6">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -276,7 +330,7 @@ export function PlatformProductsPanel({
             {atProducts.map((product) => {
               const tier = product.tier || "";
               const isActive = activeTier("ai_transcription") === tier;
-              const highlighted = highlightProduct === product.productKey;
+              const highlighted = resolvedHighlight === product.productKey;
               return (
                 <div
                   key={product.productKey}

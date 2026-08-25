@@ -39,6 +39,16 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
       }
     }
   },
+  "call_forwarding": {
+    "stripeProductId": "prod_V8OoJZEcLqHRbd",
+    "tiers": {
+      "standard": {
+        "stripePriceId": "price_1U880iKjM2RWgyrvUDvhHpIe",
+        "monthlyPriceCents": 2999,
+        "includedMinutes": 2000
+      }
+    }
+  },
   "ai_transcription": {
     "stripeProductId": "prod_V8HGvQuxjhyCvL",
     "tiers": {

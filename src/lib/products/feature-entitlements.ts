@@ -12,6 +12,7 @@ import {
 export type TransovoProductFeature =
   | "mctb"
   | "smart_routing"
+  | "call_forwarding"
   | "visual_voicemail"
   | "callback_requests"
   | "ai_transcription";
@@ -19,6 +20,7 @@ export type TransovoProductFeature =
 const FEATURE_KEYS: TransovoProductFeature[] = [
   "mctb",
   "smart_routing",
+  "call_forwarding",
   "visual_voicemail",
   "callback_requests",
   "ai_transcription",
@@ -26,10 +28,11 @@ const FEATURE_KEYS: TransovoProductFeature[] = [
 
 const PRISMA_FEATURE_MAP: Record<
   TransovoProductFeature,
-  "MCTB" | "SMART_ROUTING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS" | "AI_TRANSCRIPTION"
+  "MCTB" | "SMART_ROUTING" | "CALL_FORWARDING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS" | "AI_TRANSCRIPTION"
 > = {
   mctb: "MCTB",
   smart_routing: "SMART_ROUTING",
+  call_forwarding: "CALL_FORWARDING",
   visual_voicemail: "VISUAL_VOICEMAIL",
   callback_requests: "CALLBACK_REQUESTS",
   ai_transcription: "AI_TRANSCRIPTION",
@@ -46,6 +49,7 @@ function allActiveSnapshot(): WorkspaceFeatureSnapshot {
   return {
     mctb: "active",
     smart_routing: "active",
+    call_forwarding: "active",
     visual_voicemail: "active",
     callback_requests: "active",
     ai_transcription: "active",
@@ -56,6 +60,7 @@ function defaultSnapshot(): WorkspaceFeatureSnapshot {
   return {
     mctb: "inactive",
     smart_routing: "inactive",
+    call_forwarding: "inactive",
     visual_voicemail: "inactive",
     callback_requests: "inactive",
     ai_transcription: "inactive",
@@ -91,6 +96,7 @@ export function defaultFeaturesForWorkspaceType(
   return [
     { feature: "mctb", status: "inactive" },
     { feature: "smart_routing", status: "inactive" },
+    { feature: "call_forwarding", status: "inactive" },
     { feature: "visual_voicemail", status: "inactive" },
     { feature: "callback_requests", status: "inactive" },
     { feature: "ai_transcription", status: "inactive" },
@@ -307,6 +313,8 @@ export async function getWorkspaceProductFeatures(
           ? "mctb"
           : row.featureKey === "SMART_ROUTING"
             ? "smart_routing"
+            : row.featureKey === "CALL_FORWARDING"
+              ? "call_forwarding"
             : row.featureKey === "VISUAL_VOICEMAIL"
               ? "visual_voicemail"
               : row.featureKey === "CALLBACK_REQUESTS"

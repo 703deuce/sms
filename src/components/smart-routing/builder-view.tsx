@@ -27,6 +27,8 @@ import {
   DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
 } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
 import { showAiReceptionistNode } from "@/lib/products/transovo-launch";
+import { readCallHandlingMode } from "@/lib/numbers/call-handling-mode-client";
+import { isFrozenMctbSipIngress } from "@/lib/numbers/call-handling-mode-shared";
 import { cn } from "@/lib/utils";
 import {
   Bot,
@@ -56,7 +58,12 @@ type Flow = {
   versions?: Array<{ versionNumber: number; publishedAt?: string | null }>;
 };
 
-type PhoneNumber = { id: string; e164: string; label?: string };
+type PhoneNumber = {
+  id: string;
+  e164: string;
+  label?: string;
+  settingsJson?: Record<string, unknown> | null;
+};
 
 const TRIGGER_OPTIONS = [
   { id: "every_call", label: "Every Call" },
@@ -71,6 +78,8 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
   const [numbers, setNumbers] = useState<PhoneNumber[]>([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [greetingText, setGreetingText] = useState("");
   const [voiceId, setVoiceId] = useState(DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID);
   const [greetingAudioAssetId, setGreetingAudioAssetId] = useState<string | null>(null);
@@ -167,6 +176,21 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
     load();
   }, [load]);
 
+  const assignableNumbers = useMemo(() => {
+    const filtered = numbers.filter((n) => {
+      const settings = n.settingsJson ?? {};
+      if (isFrozenMctbSipIngress(settings)) return false;
+      if (settings.routingOwner === "smart_routing_callback") return false;
+      return readCallHandlingMode(settings) !== "mctb";
+    });
+    const currentId = flow?.assignedPhoneNumberId;
+    if (currentId && !filtered.some((n) => n.id === currentId)) {
+      const current = numbers.find((n) => n.id === currentId);
+      if (current) filtered.push(current);
+    }
+    return filtered;
+  }, [numbers, flow?.assignedPhoneNumberId]);
+
   const assignedNumber = useMemo(() => {
     if (!flow) return "—";
     if (flow.businessNumberE164) return fmtPhoneDisplay(flow.businessNumberE164);
@@ -256,24 +280,36 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
   async function saveDraft() {
     if (!flow) return;
     setSaving(true);
-    const draftConfig = await buildDraftConfig();
-    if (!draftConfig) return;
-    await fetch(`/api/smart-routing/flows/${flowId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: flow.name,
-        draftConfig,
-        triggerMode: flow.triggerMode,
-        timezone: flow.timezone,
-        businessNumberE164: flow.businessNumberE164,
-        routingNumberE164: flow.routingNumberE164,
-        numberMode: flow.numberMode,
-        assignedPhoneNumberId: flow.assignedPhoneNumberId,
-      }),
-    });
-    setSaving(false);
-    load();
+    setSaveError(null);
+    try {
+      const draftConfig = await buildDraftConfig();
+      if (!draftConfig) return;
+      const res = await fetch(`/api/smart-routing/flows/${flowId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: flow.name,
+          draftConfig,
+          triggerMode: flow.triggerMode,
+          timezone: flow.timezone,
+          businessNumberE164: flow.businessNumberE164,
+          routingNumberE164: flow.routingNumberE164,
+          numberMode: flow.numberMode,
+          assignedPhoneNumberId: flow.assignedPhoneNumberId,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string" ? json.error : "Failed to save draft",
+        );
+      }
+      load();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save draft");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function generateAudio(opts?: { silent?: boolean }) {
@@ -340,9 +376,21 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
     }
     await saveDraft();
     setPublishing(true);
-    const res = await fetch(`/api/smart-routing/flows/${flowId}/publish`, { method: "POST" });
-    setPublishing(false);
-    if (res.ok) load();
+    setPublishError(null);
+    try {
+      const res = await fetch(`/api/smart-routing/flows/${flowId}/publish`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string" ? json.error : "Publish failed",
+        );
+      }
+      load();
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : "Publish failed");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function generateAudioPreview() {
@@ -386,6 +434,9 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
             </SrPrimaryButton>
           </div>
         </div>
+        {(saveError || publishError) && (
+          <p className="mt-2 text-[13px] text-red-600">{saveError ?? publishError}</p>
+        )}
 
         <SmartRoutingAiAssistant
           flowId={flowId}
@@ -433,7 +484,7 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
                     }
                   >
                     <option value="">Select a number</option>
-                    {numbers.map((n) => (
+                    {assignableNumbers.map((n) => (
                       <option key={n.id} value={n.id}>{n.e164}</option>
                     ))}
                   </SrSelect>
@@ -733,17 +784,36 @@ export function SmartRoutingBuilderView({ flowId }: { flowId: string }) {
             </SrSectionCard>
 
             <SrSectionCard number={5} title="Routing Destinations">
-              <div className="space-y-2">
-                {menuOptions.map((o) => (
+              <p className="mb-3 text-[12px] text-[#6b7280]">
+                Enter the external number each menu option should ring. Press-1 acceptance protection
+                applies on whisper transfers.
+              </p>
+              <div className="space-y-3">
+                {menuOptions.map((o, idx) => (
                   <div
                     key={o.digit}
-                    className="flex items-center justify-between rounded-lg border border-[#e5e7eb] px-3 py-2"
+                    className="rounded-lg border border-[#e5e7eb] px-3 py-3"
                   >
-                    <div>
-                      <p className="text-[13px] font-semibold text-[#111827]">{o.label || "Destination"}</p>
-                      <p className="text-[11px] text-[#6b7280]">{fmtPhoneDisplay(o.phoneNumber)}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[13px] font-semibold text-[#111827]">
+                          Press {o.digit}: {o.label || "Destination"}
+                        </p>
+                      </div>
+                      <SrStatusBadge status={o.phoneNumber ? "active" : "draft"} />
                     </div>
-                    <SrStatusBadge status="active" />
+                    <div className="mt-2">
+                      <SrFieldLabel>External number</SrFieldLabel>
+                      <SrInput
+                        placeholder="+1 555 0100"
+                        value={o.phoneNumber}
+                        onChange={(e) => {
+                          const next = [...menuOptions];
+                          next[idx] = { ...o, phoneNumber: e.target.value };
+                          setMenuOptions(next);
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
                 {menuOptions.length === 0 ? (

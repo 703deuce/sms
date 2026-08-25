@@ -116,6 +116,7 @@ enum ProductAccessStatus {
 enum WorkspaceProductFeatureKey {
   MCTB
   SMART_ROUTING
+  CALL_FORWARDING
   VISUAL_VOICEMAIL
   CALLBACK_REQUESTS
   AI_TRANSCRIPTION
@@ -319,6 +320,9 @@ model Workspace {
   smartRoutingCallSessions SmartRoutingCallSession[]
   smartRoutingSmsConsentEvents SmartRoutingSmsConsentEvent[]
   smartRoutingWorkspaceSettings SmartRoutingWorkspaceSettings?
+  callForwardingWorkspaceSettings CallForwardingWorkspaceSettings?
+  callForwardingAuthorizedCallers CallForwardingAuthorizedCaller[]
+  callForwardingOutboundCalls CallForwardingOutboundCall[]
   smartRoutingAuthorizedCallers SmartRoutingAuthorizedCaller[]
   smartRoutingOutboundCalls SmartRoutingOutboundCall[]
   smartRoutingAccessSessions SmartRoutingAccessSession[]
@@ -397,6 +401,7 @@ model PlatformProductSubscription {
   updatedAt             DateTime  @updatedAt
   workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   usageRecords          PlatformSmartRoutingUsageRecord[]
+  callForwardingUsageRecords PlatformCallForwardingUsageRecord[]
   transcriptionUsageRecords PlatformTranscriptionUsageRecord[]
 
   @@unique([workspaceId, productFamily])
@@ -4074,6 +4079,83 @@ model SmartRoutingWorkspaceSettings {
   workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("smart_routing_workspace_settings")
+}
+
+/// Workspace-level Call Forwarding product settings.
+model CallForwardingWorkspaceSettings {
+  id                    String    @id @default(cuid())
+  workspaceId           String    @unique
+  assignedPhoneNumberId String?
+  businessNumberE164    String?
+  controlPhoneNumberId  String?
+  controlNumberE164     String?
+  smsOutboundEnabled    Boolean   @default(true)
+  setupCompletedAt      DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("call_forwarding_workspace_settings")
+}
+
+/// Authorized employees who may initiate outbound calls via SMS to the control number.
+model CallForwardingAuthorizedCaller {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  phoneE164   String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outboundCalls CallForwardingOutboundCall[]
+
+  @@unique([workspaceId, phoneE164])
+  @@index([workspaceId, active])
+  @@map("call_forwarding_authorized_callers")
+}
+
+/// SMS-initiated outbound callback legs for Call Forwarding product.
+model CallForwardingOutboundCall {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  authorizedCallerId    String?
+  employeePhoneE164     String
+  destinationE164       String
+  businessCallerIdE164  String?
+  smsBody               String?
+  provider              String   @default("telnyx")
+  employeeCallControlId String?
+  customerCallControlId String?
+  employeeLegStartedAt  DateTime?
+  customerLegStartedAt  DateTime?
+  bridgedAt             DateTime?
+  endedAt               DateTime?
+  durationSeconds       Int?
+  result                String?
+  metadata              Json?
+  createdAt             DateTime @default(now())
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  authorizedCaller      CallForwardingAuthorizedCaller? @relation(fields: [authorizedCallerId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([authorizedCallerId])
+  @@map("call_forwarding_outbound_calls")
+}
+
+/// Idempotent Call Forwarding conversation-minute accounting.
+model PlatformCallForwardingUsageRecord {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  subscriptionId      String
+  humanCallId         String   @unique
+  conversationMinutes Int
+  recordedAt          DateTime @default(now())
+  billingPeriodStart  DateTime?
+  subscription        PlatformProductSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, recordedAt])
+  @@map("platform_call_forwarding_usage_records")
 }
 
 /// Authorized team members who may place business callbacks via private routing DID.

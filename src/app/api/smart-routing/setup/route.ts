@@ -11,11 +11,13 @@ import { listAuthorizedCallers } from "@/lib/smart-routing/authorized-callers";
 import { listApprovedCallerIdentities } from "@/lib/smart-routing/caller-id-resolver";
 import { CARRIER_FORWARDING_GUIDES } from "@/lib/smart-routing/forwarding-service";
 import { computeSetupReadiness } from "@/lib/smart-routing/setup-readiness";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 import { evaluateScheduleBranch } from "@/lib/smart-routing/schedule-engine";
 import {
   assignCallbackPhoneNumber,
   assignRoutingPhoneNumber,
   ensureCallbackNumberAssigned,
+  sanitizeSmartRoutingWorkspaceNumberAssignments,
 } from "@/lib/smart-routing/number-provisioning";
 
 export async function GET() {
@@ -23,6 +25,7 @@ export async function GET() {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     await ensureSmartRoutingWorkspaceSettings(auth.workspaceId);
+    await sanitizeSmartRoutingWorkspaceNumberAssignments(auth.workspaceId);
     const settings = await ensureCallbackNumberAssigned(auth.workspaceId);
     const callerId = await getCallerIdVerificationStatus(auth.workspaceId);
     const authorizedCallers = await listAuthorizedCallers(auth.workspaceId);
@@ -33,8 +36,12 @@ export async function GET() {
       select: { name: true },
     });
     const phoneNumbers = await prisma.phoneNumber.findMany({
-      where: { workspaceId: auth.workspaceId },
-      select: { id: true, e164: true, friendlyName: true },
+      where: {
+        workspaceId: auth.workspaceId,
+        releasedAt: null,
+        status: { not: "Released" },
+      },
+      select: { id: true, e164: true, friendlyName: true, settingsJson: true },
       orderBy: { createdAt: "desc" },
     });
     const flows = await prisma.smartRoutingFlow.findMany({
@@ -112,7 +119,10 @@ export async function GET() {
       return fwd.status === "verified";
     });
 
-    const activeFlow = flows.find((f: { status: string }) => f.status === "active");
+    const activeFlow = flows.find(
+      (f: { status: string; type?: string; name?: string }) =>
+        f.status === "active" && isCustomerSmartRoutingFlow(f),
+    );
     const scheduleBranch = activeFlow
       ? await evaluateScheduleBranch(
           auth.workspaceId,
@@ -199,13 +209,42 @@ export async function POST(request: Request) {
     }
 
     if (body.assignedPhoneNumberId) {
+      const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
+      await grantWorkspaceProductFeature(auth.workspaceId, "smart_routing", "trial");
       await assignRoutingPhoneNumber(auth.workspaceId, String(body.assignedPhoneNumberId));
+    } else if (body.assignedPhoneNumberId === null || body.assignedPhoneNumberId === "") {
+      const ws = await loadSmartRoutingWorkspaceSettings(auth.workspaceId);
+      if (ws?.assignedPhoneNumberId) {
+        const priorId = ws.assignedPhoneNumberId;
+        await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
+          assignedPhoneNumberId: null,
+          routingNumberE164: null,
+        });
+        const { releaseRoutingRuntimeForAssignedNumber } = await import(
+          "@/lib/smart-routing/flow-service"
+        );
+        await releaseRoutingRuntimeForAssignedNumber(auth.workspaceId, priorId);
+      }
     }
     if (body.assignedCallbackPhoneNumberId) {
       await assignCallbackPhoneNumber(
         auth.workspaceId,
         String(body.assignedCallbackPhoneNumberId),
       );
+    } else if (body.assignedCallbackPhoneNumberId === null || body.assignedCallbackPhoneNumberId === "") {
+      const ws = await loadSmartRoutingWorkspaceSettings(auth.workspaceId);
+      if (ws?.assignedCallbackPhoneNumberId) {
+        const { transitionNumberService } = await import("@/lib/numbers/state-service");
+        await transitionNumberService(
+          auth.workspaceId,
+          ws.assignedCallbackPhoneNumberId,
+          "clear_smart_routing_callback_owner",
+        );
+        await updateSmartRoutingWorkspaceSettings(auth.workspaceId, {
+          assignedCallbackPhoneNumberId: null,
+          callbackNumberE164: null,
+        });
+      }
     }
 
     const refreshed = await loadSmartRoutingWorkspaceSettings(auth.workspaceId);

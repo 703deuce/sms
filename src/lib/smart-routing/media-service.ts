@@ -231,10 +231,26 @@ export async function ensureDraftGreetingAudio(
   draft: DraftConfig,
 ): Promise<DraftConfig> {
   const greeting = draft.greeting;
-  if (!greeting || greeting.source !== "elevenlabs") return draft;
-  if (greeting.audioAssetId) return draft;
+  if (!greeting) return draft;
   const text = greeting.text?.trim();
   if (!text) return draft;
+
+  if (greeting.source === "telnyx_tts") return draft;
+
+  if (greeting.audioAssetId) return draft;
+
+  if (greeting.source !== "elevenlabs") return draft;
+
+  if (!isElevenLabsConfigured()) {
+    return {
+      ...draft,
+      greeting: {
+        ...greeting,
+        source: "telnyx_tts",
+        text,
+      },
+    };
+  }
 
   const {
     DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
@@ -244,23 +260,35 @@ export async function ensureDraftGreetingAudio(
     greeting.voiceId ?? DEFAULT_RECEPTIONIST_ELEVENLABS_VOICE_ID,
   );
 
-  const asset = await generatePromptAudio({
-    workspaceId,
-    name: "Main greeting",
-    text,
-    voiceId,
-    speed: greeting.speed ?? 1,
-  });
-
-  return {
-    ...draft,
-    greeting: {
-      ...greeting,
-      source: "elevenlabs",
+  try {
+    const asset = await generatePromptAudio({
+      workspaceId,
+      name: "Main greeting",
+      text,
       voiceId,
-      audioAssetId: asset.id,
-    },
-  };
+      speed: greeting.speed ?? 1,
+    });
+
+    return {
+      ...draft,
+      greeting: {
+        ...greeting,
+        source: "elevenlabs",
+        voiceId,
+        audioAssetId: asset.id,
+      },
+    };
+  } catch (err) {
+    console.warn("[ensureDraftGreetingAudio] ElevenLabs failed — falling back to Telnyx TTS", err);
+    return {
+      ...draft,
+      greeting: {
+        ...greeting,
+        source: "telnyx_tts",
+        text,
+      },
+    };
+  }
 }
 
 export function hashUpload(buffer: Buffer): string {

@@ -31,6 +31,49 @@ function edge(
   };
 }
 
+export function purchasedNumberPhoneMenuDraft(): DraftConfig {
+  return {
+    greeting: {
+      source: "elevenlabs",
+      text: "Thanks for calling. Press 1 for Sales or 2 for Support.",
+    },
+    menuOptions: [
+      { digit: "1", label: "Sales", action: "transfer", phoneNumber: "" },
+      { digit: "2", label: "Support", action: "transfer", phoneNumber: "" },
+    ],
+    nodes: [
+      node("entry", "ENTRY"),
+      node("menu", "MENU", {
+        promptText: "Thanks for calling. Press 1 for Sales or 2 for Support.",
+      }),
+      node("opt1", "TRANSFER_EXTERNAL", {
+        label: "Sales",
+        whisperEnabled: true,
+        whisperText: "Sales caller. Press 1 to accept.",
+      }),
+      node("opt2", "TRANSFER_EXTERNAL", {
+        label: "Support",
+        whisperEnabled: true,
+        whisperText: "Support caller. Press 1 to accept.",
+      }),
+      node("vm", "VOICEMAIL", {
+        promptText: "Please leave a message after the tone.",
+        transcriptionEnabled: true,
+      }),
+      node("hangup", "HANGUP"),
+    ],
+    edges: [
+      edge("entry", "menu"),
+      edge("menu", "opt1", "digit", "1"),
+      edge("menu", "opt2", "digit", "2"),
+      edge("menu", "vm", "timeout"),
+      edge("opt1", "vm", "no_answer"),
+      edge("opt2", "vm", "no_answer"),
+      edge("vm", "hangup"),
+    ],
+  };
+}
+
 export const SMART_ROUTING_TEMPLATES: TemplateDef[] = [
   {
     type: "phone_menu",

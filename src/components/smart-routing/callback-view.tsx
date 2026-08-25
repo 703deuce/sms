@@ -10,6 +10,7 @@ import { CallerIdHealthPanel } from "@/components/smart-routing/caller-id-health
 import { CallbackSecurityPolicyPanel } from "@/components/smart-routing/callback-security-policy-panel";
 import { SrPageShell, srCard } from "@/components/smart-routing/shared";
 import { fmtPhoneDisplay } from "@/lib/smart-routing/display";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 import { cn } from "@/lib/utils";
 import { Check, PhoneForwarded } from "lucide-react";
 import Link from "next/link";
@@ -41,7 +42,7 @@ type SetupSlice = {
     active: boolean;
     outboundEnabled: boolean;
   }>;
-  flows: Array<{ id: string; name: string; status: string }>;
+  flows: Array<{ id: string; name: string; status: string; type?: string }>;
   recentOutbound: {
     at: string;
     destination: string;
@@ -86,7 +87,9 @@ export function SmartRoutingCallbackView() {
   const callbackE164 = data?.settings.callbackNumberE164 ?? "";
   const routingE164 = data?.settings.routingNumberE164 ?? "";
   const verified = data?.callerId.status === "verified";
-  const activeFlow = data?.flows.find((f) => f.status === "active");
+  const activeFlow = data?.flows.find(
+    (f) => f.status === "active" && isCustomerSmartRoutingFlow(f),
+  );
 
   return (
     <SrPageShell

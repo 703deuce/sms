@@ -1,12 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadSmartRoutingWorkspaceSettings } from "./workspace-settings";
-import {
-  isWorkspaceInternalSmartRoutingNumberSync,
-  sameSmartRoutingE164,
-} from "./internal-numbers";
+import { isWorkspaceInternalSmartRoutingNumberSync } from "./internal-numbers";
 
 export type SmartRoutingIngressKind = "inbound_routing" | "employee_callback" | "none";
 
@@ -20,39 +16,28 @@ export async function resolveSmartRoutingIngress(input: {
   calledE164: string;
 }): Promise<{ kind: SmartRoutingIngressKind }> {
   const settings = await loadSmartRoutingWorkspaceSettings(input.workspaceId);
-  const called = normalizeE164(input.calledE164);
-
-  if (
-    settings?.callbackNumberE164 &&
-    sameSmartRoutingE164(settings.callbackNumberE164, called)
-  ) {
-    return { kind: "employee_callback" };
-  }
-  if (settings?.assignedCallbackPhoneNumberId === input.phoneNumberId) {
-    return { kind: "employee_callback" };
-  }
-
-  if (
-    settings?.routingNumberE164 &&
-    sameSmartRoutingE164(settings.routingNumberE164, called)
-  ) {
-    return { kind: "inbound_routing" };
-  }
-  if (settings?.assignedPhoneNumberId === input.phoneNumberId) {
-    return { kind: "inbound_routing" };
-  }
-
   const prisma = getPrisma();
-  const flow = await prisma.smartRoutingFlow.findFirst({
+  const callbackNumberLive = await prisma.phoneNumber.findFirst({
     where: {
+      id: input.phoneNumberId,
       workspaceId: input.workspaceId,
-      assignedPhoneNumberId: input.phoneNumberId,
-      status: "active",
-      publishedVersionId: { not: null },
+      releasedAt: null,
+      status: { not: "Released" },
     },
     select: { id: true },
   });
-  if (flow) return { kind: "inbound_routing" };
+
+  if (
+    callbackNumberLive &&
+    settings?.assignedCallbackPhoneNumberId === input.phoneNumberId
+  ) {
+    return { kind: "employee_callback" };
+  }
+
+  const { hasActiveSmartRoutingOnNumber } = await import("./flow-service");
+  if (await hasActiveSmartRoutingOnNumber(input.workspaceId, input.phoneNumberId)) {
+    return { kind: "inbound_routing" };
+  }
 
   return { kind: "none" };
 }

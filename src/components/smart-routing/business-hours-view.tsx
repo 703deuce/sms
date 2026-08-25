@@ -9,7 +9,7 @@ import {
   type BusinessHoursJson,
   type MessagingRuntimeSettings,
 } from "@/lib/messaging/messaging-settings";
-import { cn } from "@/lib/utils";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -23,7 +23,7 @@ const DAY_LABELS: Record<string, string> = {
   sat: "Saturday",
 };
 
-type ActiveFlow = { id: string; name: string; status: string } | null;
+type ActiveFlow = { id: string; name: string; status: string; type?: string } | null;
 
 export function SmartRoutingBusinessHoursView() {
   const [runtime, setRuntime] = useState<MessagingRuntimeSettings | null>(null);
@@ -53,7 +53,10 @@ export function SmartRoutingBusinessHoursView() {
       const setup = setupJson.data;
       if (setup) {
         setScheduleOverride(setup.scheduleOverride ?? null);
-        const flow = (setup.flows ?? []).find((f: { status: string }) => f.status === "active");
+        const flow = (setup.flows ?? []).find(
+          (f: { status: string; type?: string; name?: string }) =>
+            f.status === "active" && isCustomerSmartRoutingFlow(f),
+        );
         setActiveFlow(flow ?? null);
       }
     } finally {

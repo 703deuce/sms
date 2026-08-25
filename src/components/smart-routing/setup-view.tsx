@@ -12,7 +12,12 @@ import { SetupStepper } from "@/components/smart-routing/setup-stepper";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { fmtPhoneDisplay } from "@/lib/smart-routing/display";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 import type { SetupReadiness } from "@/lib/smart-routing/setup-readiness";
+import {
+  isFrozenMctbSipIngress,
+  readCallHandlingMode,
+} from "@/lib/numbers/call-handling-mode-shared";
 import { Check } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -39,7 +44,12 @@ type SetupPayload = {
     active: boolean;
     outboundEnabled: boolean;
   }>;
-  phoneNumbers: Array<{ id: string; e164: string; friendlyName: string | null }>;
+  phoneNumbers: Array<{
+    id: string;
+    e164: string;
+    friendlyName: string | null;
+    settingsJson?: unknown;
+  }>;
   destinations: Array<{
     id: string;
     label: string;
@@ -153,7 +163,35 @@ export function SmartRoutingSetupView() {
   const callbackE164 =
     data?.settings.callbackNumberE164 ||
     data?.phoneNumbers.find((p) => p.id === callbackPhoneId)?.e164;
-  const activeFlow = data?.flows.find((f) => f.status === "active");
+  const activeFlow = data?.flows.find(
+    (f) => f.status === "active" && isCustomerSmartRoutingFlow(f),
+  );
+  const routingSelectableNumbers =
+    data?.phoneNumbers.filter((p) => {
+      if (isFrozenMctbSipIngress(p.settingsJson)) return false;
+      const settings =
+        p.settingsJson && typeof p.settingsJson === "object"
+          ? (p.settingsJson as Record<string, unknown>)
+          : {};
+      if (settings.routingOwner === "smart_routing_callback") return false;
+      return readCallHandlingMode(p.settingsJson) !== "mctb";
+    }) ?? [];
+  const callbackSelectableNumbers =
+    data?.phoneNumbers.filter((p) => {
+      if (isFrozenMctbSipIngress(p.settingsJson)) return false;
+      const settings =
+        p.settingsJson && typeof p.settingsJson === "object"
+          ? (p.settingsJson as Record<string, unknown>)
+          : {};
+      if (
+        settings.routingOwner === "smart_routing" ||
+        settings.routingOwner === "smart_routing_callback"
+      ) {
+        return false;
+      }
+      const mode = readCallHandlingMode(p.settingsJson);
+      return mode !== "mctb" && mode !== "smart_routing";
+    }) ?? [];
   const verified = data?.callerId.status === "verified";
   const forwardingDetected =
     data?.forwardingTest.detected ||
@@ -214,7 +252,7 @@ export function SmartRoutingSetupView() {
           onChange={(e) => setRoutingPhoneId(e.target.value)}
         >
           <option value="">Select routing number…</option>
-          {data?.phoneNumbers
+          {routingSelectableNumbers
             .filter((p) => p.id !== callbackPhoneId)
             .map((p) => (
               <option key={p.id} value={p.id}>
@@ -243,7 +281,7 @@ export function SmartRoutingSetupView() {
           onChange={(e) => setCallbackPhoneId(e.target.value)}
         >
           <option value="">Select Business Callback Number…</option>
-          {data?.phoneNumbers
+          {callbackSelectableNumbers
             .filter((p) => p.id !== routingPhoneId)
             .map((p) => (
               <option key={p.id} value={p.id}>

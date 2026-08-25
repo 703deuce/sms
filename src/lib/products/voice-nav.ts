@@ -78,6 +78,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
   const hasSr = featureActive(features, "smart_routing", false);
+  const hasCf = featureActive(features, "call_forwarding", false);
   const hasVm = featureActive(features, "visual_voicemail", false);
   const hasCallback = featureActive(features, "callback_requests", false);
 
@@ -131,6 +132,21 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 
   if (hasSr) {
     items.push(...buildSmartRoutingNavItems("Smart Routing"));
+  }
+
+  if (hasCf) {
+    items.push({
+      label: "Call Forwarding",
+      href: "/call-forwarding",
+      icon: PhoneForwarded,
+      sectionLabel: hasSr ? undefined : "Call Forwarding",
+      matchExact: true,
+    });
+    items.push(
+      { label: "Setup", href: "/call-forwarding/setup", icon: SlidersHorizontal },
+      { label: "Business hours", href: "/call-forwarding/hours", icon: Clock },
+      { label: "Outbound calling", href: "/call-forwarding/outbound", icon: PhoneForwarded },
+    );
   }
 
   items.push({
@@ -227,6 +243,10 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/integrations")) return "Integrations";
   if (pathname.startsWith("/settings/billing")) return "Billing";
   if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/call-forwarding/outbound")) return "Outbound calling";
+  if (pathname.startsWith("/call-forwarding/hours")) return "Business hours";
+  if (pathname.startsWith("/call-forwarding/setup")) return "Setup";
+  if (pathname.startsWith("/call-forwarding")) return "Call Forwarding";
   if (pathname.startsWith("/contact")) return "Help";
   return "";
 }

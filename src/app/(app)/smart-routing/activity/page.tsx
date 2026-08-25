@@ -1,6 +1,7 @@
 "use client";
 
 import { SmartRoutingActivityView } from "@/components/smart-routing/activity-view";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -16,8 +17,9 @@ export default function SmartRoutingActivityPage() {
     ])
       .then(([setupJson, outboundJson]) => {
         const flows = setupJson.data?.flows ?? [];
-        const active = flows.find((f: { status: string }) => f.status === "active");
-        const fallback = flows[0];
+        const customerFlows = flows.filter(isCustomerSmartRoutingFlow);
+        const active = customerFlows.find((f: { status: string }) => f.status === "active");
+        const fallback = customerFlows[0];
         setFlowId(active?.id ?? fallback?.id ?? null);
         setOutboundCount((outboundJson.data ?? []).length);
       })

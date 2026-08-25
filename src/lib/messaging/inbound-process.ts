@@ -193,6 +193,17 @@ export async function processInboundMessage(input: {
   }
 
   const { tryHandleEmployeeSmsCommand } = await import("@/lib/smart-routing/employee-sms-commands");
+  const { tryHandleCallForwardingSms } = await import("@/lib/call-forwarding/sms-outbound");
+  const cfSms = await tryHandleCallForwardingSms({
+    workspaceId: input.workspaceId,
+    toE164: input.to,
+    fromE164: from,
+    body,
+  });
+  if (cfSms.handled) {
+    return { kind: "message" };
+  }
+
   const employeeCmd = await tryHandleEmployeeSmsCommand({
     workspaceId: input.workspaceId,
     fromE164: from,

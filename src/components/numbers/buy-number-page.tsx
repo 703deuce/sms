@@ -93,6 +93,7 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
   const [searchError, setSearchError] = useState("");
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState("");
+  const [callHandlingMode, setCallHandlingMode] = useState<"call_forwarding" | "smart_routing" | "mctb" | "">("");
 
   async function searchNumbers(e: React.FormEvent) {
     e.preventDefault();
@@ -140,11 +141,31 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
           workspaceId,
           phoneNumber: e164,
           upstreamProvider: row?.upstreamProvider,
+          ...(callHandlingMode ? { callHandlingMode } : {}),
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Purchase failed");
-      router.push("/numbers");
+      const data = json.data as {
+        purchasedPhoneNumberId?: string;
+        callHandling?: { flowId?: string; mode?: string | null };
+      };
+      const numberId = data.purchasedPhoneNumberId;
+      const flowId = data.callHandling?.flowId;
+      const mode = data.callHandling?.mode || callHandlingMode;
+      if (mode === "smart_routing" && flowId) {
+        router.push(`/smart-routing/${flowId}`);
+      } else if (mode === "smart_routing") {
+        router.push("/smart-routing");
+      } else if (mode === "mctb" && numberId) {
+        router.push(`/voice/setup`);
+      } else if (mode === "call_forwarding" && numberId) {
+        router.push("/call-forwarding/setup");
+      } else if (numberId) {
+        router.push(`/numbers/${numberId}?tab=voice`);
+      } else {
+        router.push("/numbers");
+      }
       router.refresh();
     } catch (err) {
       setPurchaseError(err instanceof Error ? err.message : "Purchase failed");
@@ -229,6 +250,26 @@ export function BuyNumberPageClient({ workspaceId }: Props) {
               <option value="sms">SMS only</option>
               <option value="sms-mms">SMS + MMS</option>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="callHandlingMode">Inbound call handling</Label>
+            <Select
+              id="callHandlingMode"
+              name="callHandlingMode"
+              value={callHandlingMode}
+              onChange={(e) =>
+                setCallHandlingMode(e.target.value as "call_forwarding" | "smart_routing" | "mctb" | "")
+              }
+            >
+              <option value="">Choose after purchase</option>
+              <option value="call_forwarding">Call Forwarding</option>
+              <option value="smart_routing">Smart Routing</option>
+              <option value="mctb">Missed Call Text Back</option>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Select how inbound calls on this number should be handled. You can switch later without
+              losing configuration.
+            </p>
           </div>
           <div className="flex items-end">
             <Button type="submit" className="w-full" disabled={searching}>

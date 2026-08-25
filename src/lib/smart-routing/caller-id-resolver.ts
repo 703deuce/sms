@@ -41,7 +41,11 @@ export async function listApprovedCallerIdentities(workspaceId: string): Promise
   add(settings?.routingNumberE164, "Routing number");
 
   const numbers = await getPrisma().phoneNumber.findMany({
-    where: { workspaceId, status: "active" },
+    where: {
+      workspaceId,
+      releasedAt: null,
+      status: { not: "Released" },
+    },
     select: { e164: true, friendlyName: true },
     take: 20,
   });

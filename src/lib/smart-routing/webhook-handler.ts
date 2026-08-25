@@ -41,6 +41,11 @@ export async function tryStartSmartRoutingInbound(input: {
 }) {
   const callControlId = input.callControlId;
 
+  const { hasActiveSmartRoutingOnNumber } = await import("./flow-service");
+  if (!(await hasActiveSmartRoutingOnNumber(input.workspaceId, input.phoneNumberId))) {
+    return { started: false as const };
+  }
+
   // Answer before any DB — AT&T forward legs to 571 die in ~5s total.
   if (callControlId) {
     await answerCall(callControlId).catch((err) => {
@@ -53,7 +58,15 @@ export async function tryStartSmartRoutingInbound(input: {
   }
 
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
-  if (!flow?.publishedVersionId) return { started: false as const };
+  if (!flow?.publishedVersionId) {
+    if (callControlId) {
+      const { hangupCall } = await import("./telnyx-provider");
+      await hangupCall(callControlId).catch((err) => {
+        console.error("[smart-routing] hangup after missing flow failed", { callControlId, err });
+      });
+    }
+    return { started: false as const };
+  }
 
   const { isCallerBlockedForSmartRouting } = await import("./blocked-callers");
   if (await isCallerBlockedForSmartRouting(input.workspaceId, input.fromE164)) {
@@ -76,7 +89,18 @@ export async function tryStartSmartRoutingInbound(input: {
 
   const { loadPublishedCompiledFlow } = await import("./session-store");
   const published = await loadPublishedCompiledFlow(flow.id);
-  if (!published?.compiled) return { started: false as const };
+  if (!published?.compiled) {
+    if (callControlId) {
+      const { hangupCall } = await import("./telnyx-provider");
+      await hangupCall(callControlId).catch((err) => {
+        console.error("[smart-routing] hangup after missing compiled flow failed", {
+          callControlId,
+          err,
+        });
+      });
+    }
+    return { started: false as const };
+  }
 
   const { resolvePlatformConsentFastPath } = await import("./platform-consent-fast-path");
   const { startFlowForInboundCall } = await import("./flow-runtime");

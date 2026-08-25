@@ -8,10 +8,12 @@ import {
   featureForProductFamily,
   getPlatformBillingCatalog,
   includedMinutesForSmartRoutingTier,
+  includedMinutesForCallForwardingTier,
   includedMinutesForAiTranscriptionTier,
   type MctbTier,
   type PlatformProductFamily,
   type SmartRoutingTier,
+  type CallForwardingTier,
   type AiTranscriptionTier,
 } from "@/lib/products/platform-billing-catalog";
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
@@ -33,10 +35,11 @@ function parseFamilyFromMetadata(
   metadata: Record<string, string | undefined>,
 ): PlatformProductFamily | null {
   const family = metadata.platformProductFamily || metadata.platformProductKey?.split("_")[0];
-  if (family === "mctb" || family === "smart_routing") return family;
+  if (family === "mctb" || family === "smart_routing" || family === "call_forwarding") return family;
   if (family === "ai_transcription") return "ai_transcription";
   if (metadata.platformProductKey?.startsWith("mctb")) return "mctb";
   if (metadata.platformProductKey?.startsWith("smart_routing")) return "smart_routing";
+  if (metadata.platformProductKey?.startsWith("call_forwarding")) return "call_forwarding";
   if (metadata.platformProductKey?.startsWith("ai_transcription")) return "ai_transcription";
   return null;
 }
@@ -62,9 +65,11 @@ export function isPlatformProductSubscription(
   return (
     key.startsWith("mctb") ||
     key.startsWith("smart_routing") ||
+    key.startsWith("call_forwarding") ||
     key.startsWith("ai_transcription") ||
     key === "mctb" ||
     key === "smart_routing" ||
+    key === "call_forwarding" ||
     key === "bundle_mctb_sr"
   );
 }
@@ -89,9 +94,11 @@ export async function upsertPlatformProductSubscriptionFromStripe(
   const includedMinutes =
     family === "smart_routing"
       ? includedMinutesForSmartRoutingTier(tier as SmartRoutingTier)
-      : family === "ai_transcription"
-        ? includedMinutesForAiTranscriptionTier(tier as AiTranscriptionTier)
-        : null;
+      : family === "call_forwarding"
+        ? includedMinutesForCallForwardingTier(tier as CallForwardingTier)
+        : family === "ai_transcription"
+          ? includedMinutesForAiTranscriptionTier(tier as AiTranscriptionTier)
+          : null;
 
   const { periodStart, periodEnd } = subscriptionBillingPeriod(subscription);
 

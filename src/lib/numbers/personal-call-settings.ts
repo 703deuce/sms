@@ -212,6 +212,12 @@ export function derivePersonalDisplayState(
     return "PARKED";
   }
   if (settings.routingOwner === "smart_routing") return "SMART_ROUTING";
+  if (settings.routingOwner === "call_forwarding") return "CALL_FORWARDING";
+  const mode = settings.callHandlingMode;
+  if (mode === "call_forwarding") return "CALL_FORWARDING_PAUSED";
+  if (mode === "smart_routing") return "SMART_ROUTING_PAUSED";
+  if (mode === "mctb") return "MCTB";
+  if (settings.routingOwner === "smart_routing_callback") return "SMART_ROUTING_CALLBACK";
   const callSettings = readPersonalCallSettings(row);
   if (callSettings.incomingCallHandling === "announcement_only") return "ANNOUNCEMENT";
   if (callSettings.forwardingEnabled && callSettings.forwardTargets.length > 0) {

@@ -18,15 +18,25 @@ export async function POST(request: Request) {
         where: { id: body.flowId, workspaceId: auth.workspaceId },
       });
       if (flow?.assignedPhoneNumberId) {
-        const pn = await prisma.phoneNumber.findUnique({
-          where: { id: flow.assignedPhoneNumberId },
+        const pn = await prisma.phoneNumber.findFirst({
+          where: {
+            id: flow.assignedPhoneNumberId,
+            workspaceId: auth.workspaceId,
+            releasedAt: null,
+            status: { not: "Released" },
+          },
         });
         fromNumber = pn?.e164;
       }
     }
     if (!fromNumber) {
       const pn = await prisma.phoneNumber.findFirst({
-        where: { workspaceId: auth.workspaceId, status: "Active" },
+        where: {
+          workspaceId: auth.workspaceId,
+          releasedAt: null,
+          status: { not: "Released" },
+        },
+        orderBy: { createdAt: "asc" },
       });
       fromNumber = pn?.e164;
     }

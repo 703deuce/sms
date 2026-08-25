@@ -25,6 +25,11 @@ export async function tryStartTwilioSmartRoutingInbound(input: {
   callSid: string;
   forwardedFrom?: string;
 }) {
+  const { hasActiveSmartRoutingOnNumber } = await import("./flow-service");
+  if (!(await hasActiveSmartRoutingOnNumber(input.workspaceId, input.phoneNumberId))) {
+    return { started: false as const };
+  }
+
   const flow = await resolveActiveFlowForNumber(input.workspaceId, input.phoneNumberId);
   if (!flow?.publishedVersionId) return { started: false as const };
 

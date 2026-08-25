@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { loadMctbSupportSnapshot } from "@/lib/mctb/admin/support-snapshot";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 
 export type PlatformAdminSnapshot = {
   workspace: {
@@ -69,7 +70,7 @@ export async function loadPlatformAdminSnapshot(
     loadMctbSupportSnapshot(workspaceId),
     prisma.smartRoutingFlow.findMany({
       where: { workspaceId },
-      select: { status: true },
+      select: { status: true, type: true, name: true },
     }),
     prisma.smartRoutingWorkspaceSettings.findUnique({
       where: { workspaceId },
@@ -107,8 +108,11 @@ export async function loadPlatformAdminSnapshot(
     productFeatures,
     mctb,
     smartRouting: {
-      activeFlows: flows.filter((f: { status: string }) => f.status === "active").length,
-      totalFlows: flows.length,
+      activeFlows: flows.filter(
+        (f: { status: string; type?: string; name?: string }) =>
+          f.status === "active" && isCustomerSmartRoutingFlow(f),
+      ).length,
+      totalFlows: flows.filter(isCustomerSmartRoutingFlow).length,
       routingNumberE164: srSettings?.routingNumberE164 ?? null,
       callbackNumberE164: srSettings?.callbackNumberE164 ?? null,
       callsLast7Days,

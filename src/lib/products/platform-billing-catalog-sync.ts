@@ -12,9 +12,13 @@ import {
   SMART_ROUTING_PRODUCT_NAME,
   SMART_ROUTING_TIER_PRICES_CENTS,
   SMART_ROUTING_TIERS,
-  AI_TRANSCRIPTION_INCLUDED_MINUTES,
+  CALL_FORWARDING_PRODUCT_NAME,
+  CALL_FORWARDING_INCLUDED_MINUTES,
+  CALL_FORWARDING_TIER_PRICES_CENTS,
+  CALL_FORWARDING_TIERS,
   AI_TRANSCRIPTION_PRODUCT_NAME,
   AI_TRANSCRIPTION_TIER_PRICES_CENTS,
+  AI_TRANSCRIPTION_INCLUDED_MINUTES,
   AI_TRANSCRIPTION_TIERS,
   type AiTranscriptionTier,
   type MctbTier,
@@ -274,6 +278,42 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
     };
   }
 
+  const cfProduct = dryRun
+    ? ({ id: "prod_cf_dry_run" } as Stripe.Product)
+    : await ensureProduct(
+        stripe,
+        products,
+        {
+          name: CALL_FORWARDING_PRODUCT_NAME,
+          description:
+            "Business number that rings your existing phone. Voicemail and app-free callbacks included.",
+          transovoProduct: "call_forwarding",
+        },
+        audit,
+      );
+
+  const cfTiers = {} as PlatformCatalogIds["call_forwarding"]["tiers"];
+  for (const tier of CALL_FORWARDING_TIERS) {
+    const amountCents = CALL_FORWARDING_TIER_PRICES_CENTS[tier];
+    const includedMinutes = CALL_FORWARDING_INCLUDED_MINUTES[tier];
+    const price = dryRun
+      ? ({ id: `price_cf_${tier}_dry_run` } as Stripe.Price)
+      : await ensureMonthlyPrice(
+          stripe,
+          cfProduct.id,
+          "call_forwarding",
+          tier,
+          amountCents,
+          { included_minutes: String(includedMinutes) },
+          audit,
+        );
+    cfTiers[tier] = {
+      stripePriceId: price.id,
+      monthlyPriceCents: amountCents,
+      includedMinutes,
+    };
+  }
+
   const atProduct = dryRun
     ? ({ id: "prod_at_dry_run" } as Stripe.Product)
     : await ensureProduct(
@@ -353,6 +393,10 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
       smart_routing: {
         stripeProductId: srProduct.id,
         tiers: srTiers,
+      },
+      call_forwarding: {
+        stripeProductId: cfProduct.id,
+        tiers: cfTiers,
       },
       ai_transcription: {
         stripeProductId: atProduct.id,

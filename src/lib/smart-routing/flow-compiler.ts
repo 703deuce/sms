@@ -93,3 +93,39 @@ export function compileDraftConfig(draft: DraftConfig): CompiledFlow {
     nodes: compiledNodes,
   };
 }
+
+/** Copy menu option phone numbers onto linked TRANSFER_EXTERNAL nodes before validate/publish. */
+export function syncDraftMenuDestinations(draft: DraftConfig): DraftConfig {
+  const menuOptions = draft.menuOptions ?? [];
+  if (menuOptions.length === 0) return draft;
+  const nodes = [...(draft.nodes ?? [])];
+  const edges = draft.edges ?? [];
+  const menuNode = nodes.find((n) => n.type === "MENU");
+  if (!menuNode) return draft;
+
+  for (const opt of menuOptions) {
+    const edge = edges.find(
+      (e) =>
+        e.fromNodeId === menuNode.id &&
+        e.conditionType === "digit" &&
+        e.conditionValue === opt.digit,
+    );
+    if (!edge) continue;
+    const idx = nodes.findIndex((n) => n.id === edge.toNodeId);
+    if (idx < 0) continue;
+    const target = nodes[idx];
+    if (target.type !== "TRANSFER_EXTERNAL" && target.type !== "CALL_WHISPER") continue;
+    nodes[idx] = {
+      ...target,
+      config: {
+        ...target.config,
+        phoneNumber: opt.phoneNumber,
+        label: opt.label,
+        whisperEnabled: true,
+        whisperText: `${opt.label || `Option ${opt.digit}`} caller. Press 1 to accept.`,
+      },
+    };
+  }
+
+  return { ...draft, nodes };
+}

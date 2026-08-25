@@ -1,6 +1,7 @@
 import {
   ADDON_PRODUCT_DEFS,
   type AiTranscriptionTier,
+  type CallForwardingTier,
   type MctbTier,
   type PlatformCatalogIds,
   type PlatformProductFamily,
@@ -10,7 +11,7 @@ import { PLATFORM_BILLING_CATALOG_LIVE } from "@/lib/products/platform-billing-c
 import { PLATFORM_BILLING_CATALOG_TEST } from "@/lib/products/platform-billing-catalog-ids-test";
 import type { TransovoProductFeature } from "@/lib/products/feature-entitlements";
 
-export type { MctbTier, SmartRoutingTier, AiTranscriptionTier, PlatformProductFamily, PlatformCatalogIds };
+export type { MctbTier, SmartRoutingTier, CallForwardingTier, AiTranscriptionTier, PlatformProductFamily, PlatformCatalogIds };
 
 export function stripeBillingMode(): "test" | "live" {
   const key = process.env.STRIPE_SECRET_KEY?.trim() || "";
@@ -29,6 +30,10 @@ export function resolveMctbPriceId(tier: MctbTier): string {
 
 export function resolveSmartRoutingPriceId(tier: SmartRoutingTier): string {
   return getPlatformBillingCatalog().smart_routing.tiers[tier].stripePriceId;
+}
+
+export function resolveCallForwardingPriceId(tier: CallForwardingTier = "standard"): string {
+  return getPlatformBillingCatalog().call_forwarding.tiers[tier].stripePriceId;
 }
 
 export function resolveAiTranscriptionPriceId(tier: AiTranscriptionTier): string {
@@ -51,6 +56,10 @@ export function includedMinutesForSmartRoutingTier(tier: SmartRoutingTier): numb
 
 export function includedMinutesForAiTranscriptionTier(tier: AiTranscriptionTier): number {
   return getPlatformBillingCatalog().ai_transcription.tiers[tier].includedMinutes ?? 0;
+}
+
+export function includedMinutesForCallForwardingTier(tier: CallForwardingTier = "standard"): number {
+  return getPlatformBillingCatalog().call_forwarding.tiers[tier].includedMinutes ?? 0;
 }
 
 export function featureForProductFamily(family: PlatformProductFamily): TransovoProductFeature {
@@ -107,6 +116,21 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
     });
   }
 
+  for (const tier of ["standard"] as CallForwardingTier[]) {
+    const row = catalog.call_forwarding.tiers[tier];
+    items.push({
+      productKey: `call_forwarding_${tier}`,
+      family: "call_forwarding",
+      tier,
+      displayName: "Call Forwarding",
+      description:
+        "Business number that rings your existing phone. Voicemail, business hours, and app-free callbacks.",
+      amountCents: row.monthlyPriceCents,
+      includedMinutes: row.includedMinutes,
+      feature: "call_forwarding",
+    });
+  }
+
   for (const tier of ["starter", "business", "pro"] as AiTranscriptionTier[]) {
     const row = catalog.ai_transcription.tiers[tier];
     items.push({
@@ -140,7 +164,7 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
 
 export function parseCheckoutSelection(productKey: string): {
   family: PlatformProductFamily | "addon";
-  tier?: MctbTier | SmartRoutingTier | AiTranscriptionTier;
+  tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier;
   stripePriceId: string;
   feature: TransovoProductFeature;
 } {
@@ -160,6 +184,15 @@ export function parseCheckoutSelection(productKey: string): {
       tier,
       stripePriceId: resolveSmartRoutingPriceId(tier),
       feature: "smart_routing",
+    };
+  }
+  if (productKey.startsWith("call_forwarding_")) {
+    const tier = productKey.replace("call_forwarding_", "") as CallForwardingTier;
+    return {
+      family: "call_forwarding",
+      tier,
+      stripePriceId: resolveCallForwardingPriceId(tier),
+      feature: "call_forwarding",
     };
   }
   if (productKey.startsWith("ai_transcription_")) {

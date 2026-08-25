@@ -2,6 +2,7 @@
 
 import { SmartRoutingOverviewView } from "@/components/smart-routing/overview-view";
 import type { SetupReadiness } from "@/lib/smart-routing/setup-readiness";
+import { isCustomerSmartRoutingFlow } from "@/lib/smart-routing/flow-kind";
 import type { DraftConfig } from "@/lib/smart-routing/types";
 import { useCallback, useEffect, useState } from "react";
 
@@ -60,7 +61,8 @@ export default function SmartRoutingOverviewPage() {
         const setup = setupJson.data;
         if (setup) {
           const activeFlow = (setup.flows ?? []).find(
-            (f: { status: string }) => f.status === "active",
+            (f: { status: string; type?: string; name?: string }) =>
+              f.status === "active" && isCustomerSmartRoutingFlow(f),
           );
           setScheduleOverride(setup.scheduleOverride ?? null);
           setWorkspaceStatus({

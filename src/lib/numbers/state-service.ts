@@ -17,8 +17,11 @@ export type NumberServiceAction =
   | "disable_voicemail"
   | "set_vault_voicemail"
   | "set_vault_message_only"
+  | "set_call_forwarding_owner"
+  | "clear_call_forwarding_owner"
   | "set_smart_routing_owner"
   | "clear_smart_routing_owner"
+  | "set_mctb_owner"
   | "set_smart_routing_callback_owner"
   | "clear_smart_routing_callback_owner";
 
@@ -240,6 +243,76 @@ export async function transitionNumberService(
         }) as Parameters<typeof mapPhoneNumber>[0],
       );
 
+    case "set_call_forwarding_owner": {
+      const dest = payload?.destination?.trim();
+      let voiceForwardTo = row.voiceForwardTo;
+      let mergedSettings = { ...settings };
+
+      if (dest) {
+        const validated = validateForwardingDestination({
+          destination: dest,
+          numberE164: row.e164,
+        });
+        if (!validated.ok) throw new Error(validated.error);
+        const applied = applyPersonalCallSettingsToRow(row, {
+          incomingCallHandling: "forward",
+          forwardingEnabled: true,
+          forwardDestination: validated.e164,
+          forwardMode: "single",
+          forwardRingSeconds: 20,
+          forwardUnansweredAction: "transovo_voicemail",
+          forwardBusyAction: "voicemail",
+          forwardFailedAction: "voicemail",
+          voicemailEnabled: true,
+          directVoicemail: false,
+        });
+        voiceForwardTo = applied.voiceForwardTo;
+        mergedSettings = applied.settingsJson as Record<string, unknown>;
+      }
+
+      const updated = await prisma.phoneNumber.update({
+        where: { id: numberId },
+        data: {
+          voiceForwardTo,
+          settingsJson: withDisplayState(
+            {
+              ...mergedSettings,
+              parked: false,
+              personalParked: false,
+              routingOwner: "call_forwarding",
+              callHandlingMode: "call_forwarding",
+              mctbSipIngress: false,
+              personalServiceState: "CALL_FORWARDING",
+            },
+            { voiceForwardTo },
+          ),
+        },
+      });
+      const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+      await ensureNumberVoicemailBox(workspaceId, numberId);
+      return mapPhoneNumber(updated as Parameters<typeof mapPhoneNumber>[0]);
+    }
+
+    case "clear_call_forwarding_owner": {
+      const clearedOwner =
+        settings.routingOwner === "call_forwarding" ? null : settings.routingOwner;
+      return mapPhoneNumber(
+        await prisma.phoneNumber.update({
+          where: { id: numberId },
+          data: {
+            settingsJson: withDisplayState(
+              {
+                ...settings,
+                routingOwner: clearedOwner,
+                forwardingEnabled: false,
+              },
+              { voiceForwardTo: row.voiceForwardTo },
+            ),
+          },
+        }) as Parameters<typeof mapPhoneNumber>[0],
+      );
+    }
+
     case "set_smart_routing_owner":
       return mapPhoneNumber(
         await prisma.phoneNumber.update({
@@ -252,6 +325,8 @@ export async function transitionNumberService(
                 parked: false,
                 personalParked: false,
                 routingOwner: "smart_routing",
+                callHandlingMode: "smart_routing",
+                mctbSipIngress: false,
                 personalServiceState: "SMART_ROUTING",
               },
               { voiceForwardTo: null },
@@ -260,13 +335,40 @@ export async function transitionNumberService(
         }) as Parameters<typeof mapPhoneNumber>[0],
       );
 
+    case "set_mctb_owner":
+      return mapPhoneNumber(
+        await prisma.phoneNumber.update({
+          where: { id: numberId },
+          data: {
+            voiceForwardTo: null,
+            settingsJson: withDisplayState(
+              {
+                ...settings,
+                parked: false,
+                personalParked: false,
+                routingOwner: null,
+                callHandlingMode: "mctb",
+                mctbSipIngress: false,
+                personalServiceState: "MCTB",
+              },
+              { voiceForwardTo: null },
+            ),
+          },
+        }) as Parameters<typeof mapPhoneNumber>[0],
+      );
+
     case "clear_smart_routing_owner":
+      const clearedRoutingOwner =
+        settings.routingOwner === "smart_routing" ? null : settings.routingOwner;
       return mapPhoneNumber(
         await prisma.phoneNumber.update({
           where: { id: numberId },
           data: {
             settingsJson: withDisplayState(
-              { ...settings, routingOwner: null },
+              {
+                ...settings,
+                routingOwner: clearedRoutingOwner,
+              },
               { voiceForwardTo: row.voiceForwardTo },
             ),
           },

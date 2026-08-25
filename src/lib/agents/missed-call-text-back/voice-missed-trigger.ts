@@ -10,6 +10,7 @@ import type { VoiceCall } from "@prisma/client";
 import { getPrisma } from "@/lib/db";
 import { classifyInboundCallOutcome, classificationTriggersMctb } from "@/lib/agents/missed-call-text-back/classify";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { readCallHandlingMode } from "@/lib/numbers/call-handling-mode-shared";
 
 const MISSED_STATUSES = new Set(["NO_ANSWER", "BUSY", "CANCELLED", "FAILED"]);
 
@@ -28,6 +29,14 @@ export function isMissedInboundVoiceCall(call: Pick<
   // Terminal without a real answer event (answeredAt only set on call.answered).
   if (!call.answeredAt && status === "COMPLETED") return true;
   return false;
+}
+
+async function activeCallForwardingOnNumber(
+  workspaceId: string,
+  phoneNumberId: string | null | undefined,
+) {
+  const { hasActiveCallForwardingOnNumber } = await import("@/lib/call-forwarding/service");
+  return hasActiveCallForwardingOnNumber(workspaceId, phoneNumberId);
 }
 
 async function activeSmartRoutingOnNumber(
@@ -119,18 +128,46 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     routingWorkspaceId,
     routingPhoneNumberId,
   );
+  const callForwarding = await activeCallForwardingOnNumber(
+    routingWorkspaceId,
+    routingPhoneNumberId,
+  );
 
-  // Verified Call Consent: smart routing must own inbound before MCTB direct-send.
+  if (routingPhoneNumberId) {
+    const routingPn = await getPrisma().phoneNumber.findFirst({
+      where: { id: routingPhoneNumberId, workspaceId: routingWorkspaceId },
+      select: { settingsJson: true },
+    });
+    if (
+      routingPn &&
+      readCallHandlingMode(routingPn.settingsJson) === "smart_routing" &&
+      !smartRouting
+    ) {
+      return { triggered: false, reason: "smart_routing_mode_paused" };
+    }
+    if (
+      routingPn &&
+      readCallHandlingMode(routingPn.settingsJson) === "call_forwarding" &&
+      !callForwarding
+    ) {
+      return { triggered: false, reason: "call_forwarding_mode_paused" };
+    }
+  }
+
+  // Verified Call Consent: smart routing / call forwarding must own inbound before MCTB.
   if (consentMode === "press_1") {
-    if (smartRouting) {
-      return { triggered: false, reason: "smart_routing_active" };
+    if (smartRouting || callForwarding) {
+      return { triggered: false, reason: smartRouting ? "smart_routing_active" : "call_forwarding_active" };
     }
     return { triggered: false, reason: "consent_prompt_not_published" };
   }
 
-  // Existing Consent: proceed directly (no Press-1). Production still defers if unrelated SR active.
-  if (!isDemo && smartRouting) {
-    return { triggered: false, reason: "smart_routing_active" };
+  // Existing Consent: proceed directly (no Press-1). Production still defers if unrelated SR/CF active.
+  if (!isDemo && (smartRouting || callForwarding)) {
+    return {
+      triggered: false,
+      reason: smartRouting ? "smart_routing_active" : "call_forwarding_active",
+    };
   }
 
   const config = await loadMissedCallTextConfig(targetWorkspaceId);

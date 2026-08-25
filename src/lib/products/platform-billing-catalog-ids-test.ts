@@ -30,6 +30,16 @@ export const PLATFORM_BILLING_CATALOG_TEST: PlatformCatalogIds = {
       },
     },
   },
+  call_forwarding: {
+    stripeProductId: "prod_test_cf_placeholder",
+    tiers: {
+      standard: {
+        stripePriceId: "price_test_cf_standard",
+        monthlyPriceCents: 2999,
+        includedMinutes: 2000,
+      },
+    },
+  },
   ai_transcription: {
     stripeProductId: "prod_test_at_placeholder",
     tiers: {

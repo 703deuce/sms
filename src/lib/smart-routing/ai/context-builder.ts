@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { parseDraftConfig } from "../session-store";
 import { getFlow } from "../flow-service";
+import { customerSmartRoutingFlowWhere } from "../flow-kind";
 import { loadSmartRoutingWorkspaceSettings } from "../workspace-settings";
 import type {
   AiRoutingContextDestination,
@@ -124,13 +125,13 @@ export async function buildAiRoutingFlowContext(
 export async function getPrimaryFlowId(workspaceId: string): Promise<string | null> {
   const prisma = getPrisma();
   const active = await prisma.smartRoutingFlow.findFirst({
-    where: { workspaceId, status: "active" },
+    where: { workspaceId, status: "active", ...customerSmartRoutingFlowWhere },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
   if (active) return active.id;
   const draft = await prisma.smartRoutingFlow.findFirst({
-    where: { workspaceId },
+    where: { workspaceId, ...customerSmartRoutingFlowWhere },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });

@@ -226,6 +226,21 @@ export async function processVoiceWebhookEvent(input: {
   }
 
   if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+    const { processCallForwardingWebhookEvent } = await import(
+      "@/lib/call-forwarding/webhook-handler"
+    );
+    const cfLeg = await processCallForwardingWebhookEvent({
+      eventType,
+      eventPayload,
+    });
+    if (cfLeg.handled) {
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return { ok: true, kind: "call_forwarding_webhook", detail: cfLeg.kind };
+    }
+
     const { processSmartRoutingWebhookEvent } = await import(
       "@/lib/smart-routing/webhook-handler"
     );
@@ -247,6 +262,21 @@ export async function processVoiceWebhookEvent(input: {
     eventType === "call.hangup" ||
     eventType === "call.recording.saved"
   ) {
+    const { processCallForwardingWebhookEvent } = await import(
+      "@/lib/call-forwarding/webhook-handler"
+    );
+    const cfEvent = await processCallForwardingWebhookEvent({
+      eventType,
+      eventPayload,
+    }).catch(() => ({ handled: false as const }));
+    if (cfEvent.handled) {
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId: input.providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return { ok: true, kind: "call_forwarding_webhook", detail: cfEvent.kind };
+    }
+
     const { processSmartRoutingWebhookEvent } = await import(
       "@/lib/smart-routing/webhook-handler"
     );
@@ -335,7 +365,9 @@ export async function processVoiceWebhookEvent(input: {
     const to = String(eventPayload.to || "");
     const from = String(eventPayload.from || "");
     const callControlId = String(eventPayload.call_control_id || "");
-    const pn = await prisma.phoneNumber.findFirst({ where: { e164: to } });
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { e164: to, releasedAt: null, status: { not: "Released" } },
+    });
     if (pn && callControlId) {
       const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
       const { resolveSmartRoutingIngress } = await import(
@@ -393,7 +425,24 @@ export async function processVoiceWebhookEvent(input: {
         }
       }
 
-      if (ingress.kind === "inbound_routing" || ingress.kind === "none") {
+      if (ingress.kind === "inbound_routing") {
+        const { hasActiveCallForwardingOnNumber } = await import("@/lib/call-forwarding/service");
+        const cfActive = await hasActiveCallForwardingOnNumber(pn.workspaceId, pn.id);
+        if (cfActive) {
+          const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
+          await processSoftphoneInbound({
+            workspaceId: pn.workspaceId,
+            fromE164: from,
+            toE164: to,
+            telnyxCallControlId: callControlId,
+          });
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return { ok: true, kind: "call_forwarding" };
+        }
+
         const { tryStartSmartRoutingInbound } = await import(
           "@/lib/smart-routing/webhook-handler"
         );
@@ -424,6 +473,23 @@ export async function processVoiceWebhookEvent(input: {
       }
 
       if (!call) {
+        const { hasActiveCallForwardingOnNumber } = await import("@/lib/call-forwarding/service");
+        const cfActive = await hasActiveCallForwardingOnNumber(pn.workspaceId, pn.id);
+        if (cfActive && callControlId) {
+          const { processSoftphoneInbound } = await import("@/lib/phone/inbound-runtime");
+          await processSoftphoneInbound({
+            workspaceId: pn.workspaceId,
+            fromE164: from,
+            toE164: to,
+            telnyxCallControlId: callControlId,
+          });
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId: input.providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return { ok: true, kind: "call_forwarding" };
+        }
+
         const { resolveIvrForNumber, startIvrGather } = await import("@/lib/phone/ivr-service");
         const ivr = await resolveIvrForNumber(pn.workspaceId, to);
         if (ivr) {

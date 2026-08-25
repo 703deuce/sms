@@ -1,4 +1,5 @@
 import type { SmartRoutingWorkspaceSettingsRecord } from "./workspace-settings";
+import { isCustomerSmartRoutingFlow } from "./flow-kind";
 
 export type SetupStepKey =
   | "business_number"
@@ -32,7 +33,7 @@ export type SetupReadiness = {
 export function computeSetupReadiness(input: {
   settings: SmartRoutingWorkspaceSettingsRecord | null;
   callerIdStatus: string;
-  flows: Array<{ id: string; status: string; scheduleJson?: unknown }>;
+  flows: Array<{ id: string; status: string; type?: string; name?: string; scheduleJson?: unknown }>;
   destinations: Array<{ active: boolean }>;
   authorizedCallers: Array<{ active: boolean; outboundEnabled: boolean }>;
   forwardingDetected: boolean;
@@ -45,17 +46,20 @@ export function computeSetupReadiness(input: {
   const callerVerified = input.callerIdStatus === "verified";
   const hasRoutingNumber = Boolean(settings?.routingNumberE164?.trim());
   const hasCallbackNumber = Boolean(settings?.callbackNumberE164?.trim());
-  const activeFlows = input.flows.filter((f) => f.status === "active");
+  const customerFlows = input.flows.filter(isCustomerSmartRoutingFlow);
+  const activeFlows = customerFlows.filter((f) => f.status === "active");
   const hasPublishedRoute = activeFlows.length > 0;
   const pausedOnly =
-    input.flows.length > 0 && activeFlows.length === 0 && input.flows.every((f) => f.status === "paused");
+    customerFlows.length > 0 &&
+    activeFlows.length === 0 &&
+    customerFlows.every((f) => f.status === "paused");
   const activeDestinations = input.destinations.filter((d) => d.active).length;
   const activeCallbackUsers = input.authorizedCallers.filter(
     (c) => c.active && c.outboundEnabled,
   ).length;
 
   const hasHours =
-    input.flows.some((f) => {
+    customerFlows.some((f) => {
       const schedule = (f.scheduleJson as Record<string, unknown>) ?? {};
       return Boolean(schedule.windows) || Boolean(schedule.forwarding);
     }) || Boolean(settings?.scheduleOverrideJson);

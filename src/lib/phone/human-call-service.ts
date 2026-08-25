@@ -2026,6 +2026,34 @@ export async function processHumanCallWebhookEvent(input: {
     } catch (err) {
       console.warn("[human-call] crm completed event failed", call.id, err);
     }
+
+    if (call.direction === "inbound") {
+      try {
+        const inboundPn = await prisma.phoneNumber.findFirst({
+          where: { workspaceId: call.workspaceId, e164: call.to, releasedAt: null },
+          select: { id: true },
+        });
+        if (inboundPn) {
+          const { hasActiveCallForwardingOnNumber } = await import(
+            "@/lib/call-forwarding/service"
+          );
+          if (await hasActiveCallForwardingOnNumber(call.workspaceId, inboundPn.id)) {
+            const { recordCallForwardingConversationMinutes } = await import(
+              "@/lib/call-forwarding/usage"
+            );
+            await recordCallForwardingConversationMinutes({
+              workspaceId: call.workspaceId,
+              humanCallId: call.id,
+              startedAt: call.startedAt,
+              answeredAt: call.answeredAt,
+              completedAt: patch.endedAt instanceof Date ? patch.endedAt : new Date(),
+            }).catch(() => undefined);
+          }
+        }
+      } catch (err) {
+        console.warn("[human-call] call-forwarding usage failed", call.id, err);
+      }
+    }
   }
 
   return { ok: true, callId: call.id, missed: isMissed };
