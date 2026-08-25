@@ -23,26 +23,30 @@ export type MctbSipIngressResolution = {
     | "none";
 };
 
+/**
+ * Resolve which workspace owns MCTB on this phone number for SIP ingress.
+ * Paused/disabled MCTB must still answer calls — pause only blocks outbound SMS.
+ */
 async function resolveWorkspaceForMctbPhoneAssignment(input: {
   phoneNumberId: string;
   ownerWorkspaceId: string;
   settingsJson: unknown;
 }): Promise<string | null> {
   const ownerConfig = await loadMissedCallTextConfig(input.ownerWorkspaceId);
-  if (ownerConfig.enabled && ownerConfig.phoneNumberId === input.phoneNumberId) {
+  if (ownerConfig.phoneNumberId === input.phoneNumberId) {
     return input.ownerWorkspaceId;
   }
 
   for (const linkedWorkspaceId of readAdminTestWorkspaceIds(input.settingsJson)) {
     const linkedConfig = await loadMissedCallTextConfig(linkedWorkspaceId);
-    if (linkedConfig.enabled && linkedConfig.phoneNumberId === input.phoneNumberId) {
+    if (linkedConfig.phoneNumberId === input.phoneNumberId) {
       return linkedWorkspaceId;
     }
   }
 
   const prisma = getPrisma();
   const assigned = await prisma.missedCallTextConfig.findFirst({
-    where: { phoneNumberId: input.phoneNumberId, enabled: true },
+    where: { phoneNumberId: input.phoneNumberId },
     select: { workspaceId: true },
     orderBy: { updatedAt: "desc" },
   });
@@ -117,11 +121,12 @@ export async function resolveMctbSipIngressByDid(
 
   if (pn && String(pn.status || "").toLowerCase() !== "released") {
     const settingsIngress = isPhoneMctbSipIngress(pn.settingsJson);
-    const assignedWorkspaceId = await resolveWorkspaceForMctbPhoneAssignment({
-      phoneNumberId: pn.id,
-      ownerWorkspaceId: pn.workspaceId,
-      settingsJson: pn.settingsJson,
-    });
+    const assignedWorkspaceId =
+      (await resolveWorkspaceForMctbPhoneAssignment({
+        phoneNumberId: pn.id,
+        ownerWorkspaceId: pn.workspaceId,
+        settingsJson: pn.settingsJson,
+      })) ?? (settingsIngress ? pn.workspaceId : null);
 
     if (settingsIngress && assignedWorkspaceId) {
       resolution = {
