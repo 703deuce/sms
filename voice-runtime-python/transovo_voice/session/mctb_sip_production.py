@@ -201,6 +201,33 @@ async def run_mctb_sip_production_session(
                 eligible=capture.get("eligible"),
                 deduped=capture.get("deduped"),
             )
+            from transovo_voice.session.mctb_voicemail_fallback import run_mctb_voicemail_terminal
+
+            await run_mctb_voicemail_terminal(
+                ctx,
+                trace=trace,
+                participant=participant,
+                answer_session=answer_session,
+                session=session,
+                sip_status=sip_status,
+                terminal_reason="existing_consent",
+                hold_note="terminal_path_after_existing_consent_capture",
+                disconnect_reason="existing_consent_voicemail_complete",
+            )
+            log_event(
+                "mctb_sip_production_complete",
+                call_id=trace.correlation_id,
+                room=ctx.room.name,
+                extra={
+                    "toE164": trace.to_e164,
+                    "fromE164": trace.from_e164,
+                    "forwardedFrom": session.get("forwardedFromE164") or trace.forwarded_from,
+                    "consentMode": consent_mode,
+                    "workspaceId": session.get("workspaceId"),
+                    "source": LOG_SOURCE,
+                },
+            )
+            return
         else:
             if session.get("failClosed"):
                 trace.log("mctb_consent_audio_fail_closed", workspaceId=session.get("workspaceId"))

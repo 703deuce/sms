@@ -193,7 +193,9 @@ export async function resolveMctbSipSessionForPython(
   let voicemailPlayUrl: string | undefined;
   let voicemailSayText: string | undefined;
 
-  if (!mctbAutomationActive) {
+  const needsVoicemailGreeting =
+    !mctbAutomationActive || consentMode === MCTB_CONSENT_MODE_EXISTING;
+  if (needsVoicemailGreeting) {
     const { resolveMctbVoicemailFallbackPlayback } = await import(
       "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback"
     );
@@ -203,7 +205,9 @@ export async function resolveMctbSipSessionForPython(
     );
     voicemailPlayUrl = voicemail.playUrl || undefined;
     voicemailSayText = voicemail.sayText || undefined;
-  } else if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
+  }
+
+  if (mctbAutomationActive && consentMode !== MCTB_CONSENT_MODE_EXISTING) {
     if (mctbConfig.demoMode) {
       const { ensureTryItDemoVoiceReady } = await import("@/lib/mctb/try-it/demo-voice");
       try {

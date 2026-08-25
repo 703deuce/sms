@@ -80,9 +80,27 @@ assert.match(
 );
 
 assert.match(
+  sessionSrc,
+  /needsVoicemailGreeting/,
+  "session resolver must load voicemail for existing_consent and paused automation",
+);
+
+assert.match(
   productionSrc,
-  /run_mctb_voicemail_fallback/,
-  "production flow must invoke voicemail fallback runner",
+  /run_mctb_voicemail_terminal/,
+  "production flow must play voicemail terminal phase for existing_consent",
+);
+
+assert.match(
+  productionSrc,
+  /existing_consent_voicemail_complete/,
+  "existing_consent path must complete with voicemail disconnect reason",
+);
+
+assert.doesNotMatch(
+  productionSrc,
+  /press_1_not_received[\s\S]*run_mctb_voicemail_terminal/,
+  "press-1 incomplete path must not fall through to voicemail terminal",
 );
 
 assert.match(
