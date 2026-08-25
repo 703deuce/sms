@@ -71,6 +71,7 @@
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
+    "test:v1-api-products": "tsx scripts/test-v1-api-products.ts",
     "test:transovo-voicemail": "tsx scripts/test-transovo-voicemail.ts",
     "test:transovo-callback": "tsx scripts/test-transovo-callback.ts",
     "test:e2e": "playwright test",
