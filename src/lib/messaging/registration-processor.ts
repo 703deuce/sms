@@ -475,6 +475,9 @@ export async function sendViaRegistration(
   mediaUrls?: string[],
   fromOverride?: string,
 ) {
+  const { reconcileTelnyxSendStateIfNeeded } = await import("./reconcile-send-state");
+  await reconcileTelnyxSendStateIfNeeded(workspaceId);
+
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!isMessagingSendAuthorized(reg)) {
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");

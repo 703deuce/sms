@@ -40,6 +40,9 @@ export async function executeMissedCallTextSend(input: {
       ? (event.metadata as Record<string, unknown>)
       : {};
   const demoMode = eventMeta.demoMode === true;
+
+  const { reconcileTelnyxSendStateIfNeeded } = await import("@/lib/messaging/reconcile-send-state");
+  await reconcileTelnyxSendStateIfNeeded(input.workspaceId);
   const captureMode = String(eventMeta.captureMode || "");
   const isEventOnlyCapture = captureMode === "EVENT_ONLY" || captureMode === "SIP_INGRESS";
   const isEventOnly = isEventOnlyCapture;

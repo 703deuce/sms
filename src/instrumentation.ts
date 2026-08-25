@@ -19,6 +19,32 @@ export async function register() {
   const { startInProcessWorker } = await import("@/lib/jobs/inprocess-worker");
   await startInProcessWorker();
 
+  void (async () => {
+    try {
+      const { resolvePlatformDemoOwnerWorkspaceId } = await import(
+        "@/lib/mctb/onboarding/platform-demo"
+      );
+      const { reconcileCriticalMessagingSendState } = await import(
+        "@/lib/messaging/reconcile-send-state"
+      );
+      const ownerId = await resolvePlatformDemoOwnerWorkspaceId();
+      const ids = ownerId ? [ownerId] : [];
+      const healed = await reconcileCriticalMessagingSendState(ids);
+      if (healed > 0) {
+        console.log(
+          JSON.stringify({
+            service: "transovo-web",
+            event: "messaging_send_state_boot_reconcile",
+            healed,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      }
+    } catch (err) {
+      console.warn("[instrumentation] messaging send-state reconcile failed", err);
+    }
+  })();
+
   const { voiceRuntimeInternalSecret } = await import(
     "@/lib/voice/python-runtime-bridge/auth"
   );

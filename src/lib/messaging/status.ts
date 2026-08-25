@@ -20,12 +20,19 @@ export function registrationProviderName(
 export function isMessagingReady(reg: MessagingRegistration | null | undefined): boolean {
   if (!reg) return false;
   if (reg.paused) return false;
+
+  const provider = registrationProviderName(reg);
+
+  // Telnyx: provider approval is source of truth — UI flags must not block production SMS.
+  if (provider === "telnyx" && isTelnyxRegistrationProviderReady(reg)) {
+    return true;
+  }
+
   if (!reg.messagingEnabled) return false;
   if (reg.overallStatus !== "ready") return false;
   if (!reg.phoneAttached || !reg.phoneE164) return false;
   if (reg.phoneSid?.startsWith("PENDING:")) return false;
 
-  const provider = registrationProviderName(reg);
   if (provider === "telnyx") {
     const profileId =
       (reg as MessagingRegistration & { messagingProfileId?: string | null }).messagingProfileId ||
@@ -75,11 +82,11 @@ export function isTelnyxRegistrationProviderReady(
   return brandOk && campaignOk;
 }
 
-/** Outbound SMS allowed when registration row is ready OR Telnyx provider state is approved. */
+/** Outbound SMS allowed — same as isMessagingReady (Telnyx uses provider state). */
 export function isMessagingSendAuthorized(
   reg: MessagingRegistration | null | undefined,
 ): boolean {
-  return isMessagingReady(reg) || isTelnyxRegistrationProviderReady(reg);
+  return isMessagingReady(reg);
 }
 
 export function buildProgressSteps(reg: MessagingRegistration): RegistrationProgressStep[] {

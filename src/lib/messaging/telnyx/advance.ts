@@ -21,6 +21,7 @@ import {
   isRejectedBrandStatus as isRejectedBrand,
   isRejectedCampaignStatus as isRejectedCampaign,
 } from "./status-map";
+import { isTelnyxRegistrationProviderReady } from "../status";
 
 async function log(
   reg: MessagingRegistration,
@@ -97,6 +98,17 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
 
     if (!reg.legalBusinessName || !reg.businessRegistrationId || !reg.websiteUrl || !reg.useCase) {
       await log(reg, "advance_skipped", "Incomplete business/use-case details");
+      if (isTelnyxRegistrationProviderReady(reg)) {
+        reg = await lockedUpdate({
+          overallStatus: "ready",
+          messagingEnabled: true,
+          messagingActivationStatus: "approved",
+          numberStatus: reg.phoneAttached ? "ready" : reg.numberStatus,
+          lastError: null,
+          registrationApprovedAt: reg.registrationApprovedAt || new Date(),
+        });
+        return reg;
+      }
       reg = await lockedUpdate({
         overallStatus: "action_required",
         messagingEnabled: false,
@@ -341,9 +353,7 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
   } catch (err) {
     if (err instanceof JobDeferredError) {
       const preserveReady =
-        reg.overallStatus === "ready" &&
-        reg.brandStatus === "approved" &&
-        reg.campaignStatus === "approved";
+        reg.overallStatus === "ready" || isTelnyxRegistrationProviderReady(reg);
       await getPrisma().messagingRegistration.updateMany({
         where: { workspaceId, lastError: lockToken },
         data: {
@@ -356,15 +366,16 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       throw err;
     }
     const message = err instanceof Error ? err.message : String(err);
+    const providerStillReady = isTelnyxRegistrationProviderReady(reg);
     await getPrisma().messagingRegistration.updateMany({
       where: { workspaceId, lastError: lockToken },
       data: {
         lastError: message,
         lastAdvancedAt: new Date(),
-        overallStatus: "failed",
-        messagingEnabled: false,
-        messagingActivationStatus: "rejected",
-        registrationFailureReason: message,
+        overallStatus: providerStillReady ? "ready" : "failed",
+        messagingEnabled: providerStillReady,
+        messagingActivationStatus: providerStillReady ? "approved" : "rejected",
+        registrationFailureReason: providerStillReady ? null : message,
       },
     });
     await log(reg, "advance_failed", message);
