@@ -31,25 +31,56 @@ async function main() {
     assert.equal(parseMediaBackend("invalid"), null);
   });
 
-  await check("media_backend_mode_default_cloud", () => {
+  await check("media_backend_mode_default_self_hosted", () => {
     const prev = process.env.MEDIA_BACKEND_MODE;
     delete process.env.MEDIA_BACKEND_MODE;
-    assert.equal(getMediaBackendMode(), "livekit_cloud");
-    assert.equal(getActiveMediaBackend(), "livekit_cloud");
+    assert.equal(getMediaBackendMode(), "self_hosted");
+    assert.equal(getActiveMediaBackend(), "self_hosted");
     if (prev) process.env.MEDIA_BACKEND_MODE = prev;
   });
 
-  await check("media_backend_mode_self_hosted", () => {
+  await check("media_backend_mode_cloud_override", () => {
     const prev = process.env.MEDIA_BACKEND_MODE;
-    process.env.MEDIA_BACKEND_MODE = "self_hosted";
-    assert.equal(getMediaBackendMode(), "self_hosted");
-    assert.equal(getActiveMediaBackend(), "self_hosted");
+    process.env.MEDIA_BACKEND_MODE = "livekit_cloud";
+    assert.equal(getMediaBackendMode(), "livekit_cloud");
+    assert.equal(getActiveMediaBackend(), "livekit_cloud");
     if (prev) process.env.MEDIA_BACKEND_MODE = prev;
     else delete process.env.MEDIA_BACKEND_MODE;
   });
 
   await check("cloud_backend_configured", () => {
     assert.equal(isMediaBackendConfigured("livekit_cloud"), true);
+  });
+
+  await check("self_hosted_frozen_trunk_and_dispatch", () => {
+    const prevMode = process.env.MEDIA_BACKEND_MODE;
+    const prevKey = process.env.LIVEKIT_SELF_HOSTED_API_KEY;
+    const prevSecret = process.env.LIVEKIT_SELF_HOSTED_API_SECRET;
+
+    process.env.MEDIA_BACKEND_MODE = "self_hosted";
+    process.env.LIVEKIT_SELF_HOSTED_API_KEY = "test-key";
+    process.env.LIVEKIT_SELF_HOSTED_API_SECRET = "test-secret";
+
+    const { getLiveKitBackendConfig } = require("../src/lib/voice/media-backend/config") as typeof import("../src/lib/voice/media-backend/config");
+    const {
+      LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID,
+      LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID,
+      LIVEKIT_SELF_HOSTED_SIP_HOST,
+      LIVEKIT_SELF_HOSTED_WSS_URL,
+    } = require("../src/lib/voice/media-backend/constants") as typeof import("../src/lib/voice/media-backend/constants");
+
+    const cfg = getLiveKitBackendConfig("self_hosted");
+    assert.equal(cfg.url, LIVEKIT_SELF_HOSTED_WSS_URL);
+    assert.equal(cfg.sipHost, LIVEKIT_SELF_HOSTED_SIP_HOST);
+    assert.equal(cfg.inboundTrunkId, LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID);
+    assert.equal(cfg.dispatchRuleId, LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID);
+
+    if (prevMode) process.env.MEDIA_BACKEND_MODE = prevMode;
+    else delete process.env.MEDIA_BACKEND_MODE;
+    if (prevKey) process.env.LIVEKIT_SELF_HOSTED_API_KEY = prevKey;
+    else delete process.env.LIVEKIT_SELF_HOSTED_API_KEY;
+    if (prevSecret) process.env.LIVEKIT_SELF_HOSTED_API_SECRET = prevSecret;
+    else delete process.env.LIVEKIT_SELF_HOSTED_API_SECRET;
   });
 
   await check("authoritative_sip_host_follows_self_hosted_mode", () => {

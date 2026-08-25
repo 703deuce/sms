@@ -1,5 +1,14 @@
 import { normalizeLiveKitSipHost } from "@/lib/telephony/provisioning/config";
 import { normalizeLiveKitApiUrl } from "@/lib/voice/runtime-provider/config";
+import {
+  DEFAULT_MEDIA_BACKEND_MODE,
+  LIVEKIT_CLOUD_DISPATCH_RULE_ID,
+  LIVEKIT_CLOUD_INBOUND_TRUNK_ID,
+  LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID,
+  LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID,
+  LIVEKIT_SELF_HOSTED_SIP_HOST,
+  LIVEKIT_SELF_HOSTED_WSS_URL,
+} from "./constants";
 import type { LiveKitBackendConfig, MediaBackend, MediaBackendMode } from "./types";
 
 function readEnv(name: string): string {
@@ -40,9 +49,15 @@ function readBackendEnv(backend: MediaBackend, suffix: string): string {
 }
 
 function resolveSipHost(backend: MediaBackend, rawUrl: string): string {
-  const explicit =
-    readBackendEnv(backend, "SIP_HOST") ||
-    readBackendEnv(backend, "SIP_URI");
+  if (backend === "self_hosted") {
+    const explicit =
+      readSelfHostedEnv("SIP_HOST") ||
+      readSelfHostedEnv("SIP_URI");
+    if (explicit) return normalizeLiveKitSipHost(explicit);
+    return LIVEKIT_SELF_HOSTED_SIP_HOST;
+  }
+
+  const explicit = readCloudEnv("SIP_HOST") || readCloudEnv("SIP_URI");
   if (explicit) return normalizeLiveKitSipHost(explicit);
 
   if (rawUrl) {
@@ -68,7 +83,8 @@ function resolveSipHost(backend: MediaBackend, rawUrl: string): string {
 export function getMediaBackendMode(): MediaBackendMode {
   const raw = readEnv("MEDIA_BACKEND_MODE").toLowerCase();
   if (raw === "self_hosted") return "self_hosted";
-  return "livekit_cloud";
+  if (raw === "livekit_cloud") return "livekit_cloud";
+  return DEFAULT_MEDIA_BACKEND_MODE;
 }
 
 export function isMediaBackendConfigured(backend: MediaBackend): boolean {
@@ -81,13 +97,24 @@ export function isMediaBackendConfigured(backend: MediaBackend): boolean {
 }
 
 export function getLiveKitBackendConfig(backend: MediaBackend): LiveKitBackendConfig {
-  const rawUrl = readBackendEnv(backend, "URL");
+  const rawUrl =
+    backend === "self_hosted"
+      ? readSelfHostedEnv("URL") || LIVEKIT_SELF_HOSTED_WSS_URL
+      : readCloudEnv("URL");
   const apiKey = readBackendEnv(backend, "API_KEY");
   const apiSecret = readBackendEnv(backend, "API_SECRET");
 
-  if (!rawUrl || !apiKey || !apiSecret) {
+  if (!apiKey || !apiSecret) {
     const prefix = backend === "self_hosted" ? "LIVEKIT_SELF_HOSTED" : "LIVEKIT";
-    throw new Error(`${prefix}_URL, _API_KEY, and _API_SECRET are required for ${backend}`);
+    throw new Error(`${prefix}_API_KEY and _API_SECRET are required for ${backend}`);
+  }
+
+  if (!rawUrl) {
+    throw new Error(
+      backend === "self_hosted"
+        ? "Self-hosted LiveKit URL missing (unexpected — check constants)"
+        : "LIVEKIT_URL (or LIVEKIT_CLOUD_URL) is required for livekit_cloud",
+    );
   }
 
   const url = normalizeLiveKitApiUrl(rawUrl);
@@ -112,15 +139,22 @@ export function getLiveKitBackendConfig(backend: MediaBackend): LiveKitBackendCo
             readEnv("LIVEKIT_DISPATCH_RULE_NAME") || "transovo-inbound-dispatch",
         };
 
+  const frozenTrunkId =
+    backend === "self_hosted" ? LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID : LIVEKIT_CLOUD_INBOUND_TRUNK_ID;
+  const frozenDispatchId =
+    backend === "self_hosted"
+      ? LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID
+      : LIVEKIT_CLOUD_DISPATCH_RULE_ID;
+
   return {
     backend,
     url,
     apiKey,
     apiSecret,
     sipHost,
-    inboundTrunkId: readBackendEnv(backend, "INBOUND_TRUNK_ID") || null,
+    inboundTrunkId: readBackendEnv(backend, "INBOUND_TRUNK_ID") || frozenTrunkId,
     outboundTrunkId: readBackendEnv(backend, "OUTBOUND_TRUNK_ID") || null,
-    dispatchRuleId: readBackendEnv(backend, "DISPATCH_RULE_ID") || null,
+    dispatchRuleId: readBackendEnv(backend, "DISPATCH_RULE_ID") || frozenDispatchId,
     ...defaultNames,
   };
 }

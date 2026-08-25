@@ -21,9 +21,16 @@ import {
   resolveAuthoritativeLiveKitSipHost,
 } from "@/lib/voice/media-backend";
 
-const FROZEN_INBOUND_TRUNK = "ST_acZETLdoDQ8o";
-const FROZEN_DISPATCH_RULE = "SDR_anLzF5j5kqpU";
-const STALE_TRUNK = "ST_9v6jM2L5ktzr";
+import {
+  DEFAULT_MEDIA_BACKEND_MODE,
+  LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID,
+  LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID,
+  LIVEKIT_SELF_HOSTED_STALE_INBOUND_TRUNK_ID,
+} from "@/lib/voice/media-backend/constants";
+
+const FROZEN_INBOUND_TRUNK = LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID;
+const FROZEN_DISPATCH_RULE = LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID;
+const STALE_TRUNK = LIVEKIT_SELF_HOSTED_STALE_INBOUND_TRUNK_ID;
 const PROOF_MISSED_CALL_EVENT_ID = "cmt77w79m1564281e3f0s0e5d";
 
 type Row = { feature: string; result: string; evidence: string; blocker?: string };
@@ -52,27 +59,40 @@ function runTest(label: string, cmd: string): boolean {
 
 async function auditFrozenConfig() {
   const backend = getActiveMediaBackend();
+  const cloudOk = isMediaBackendConfigured("livekit_cloud");
+
+  if (!isMediaBackendConfigured(backend)) {
+    add(
+      "Frozen: backend credentials",
+      "FAIL",
+      `${backend} not configured — set LIVEKIT_${backend === "self_hosted" ? "SELF_HOSTED" : ""}_API_KEY and _API_SECRET`,
+      "Only API keys belong in env; trunk/dispatch/SIP host are hardcoded in media-backend/constants.ts",
+    );
+    add(
+      "Cloud rollback vars present",
+      cloudOk ? "PASS" : "FAIL",
+      cloudOk ? "livekit_cloud backend configured" : "LIVEKIT_* missing",
+    );
+    return;
+  }
+
   const sip = resolveAuthoritativeLiveKitSipHost();
   const cfg = getLiveKitBackendConfig(backend);
-  const envTrunk = cfg.inboundTrunkId || "";
-  const cloudOk = isMediaBackendConfigured("livekit_cloud");
 
   add(
     "Frozen: MEDIA_BACKEND_MODE=self_hosted",
     backend === "self_hosted" ? "PASS" : "FAIL",
-    `resolved=${backend}`,
-    backend !== "self_hosted" ? "Set MEDIA_BACKEND_MODE=self_hosted in Coolify" : undefined,
+    `resolved=${backend} default=${DEFAULT_MEDIA_BACKEND_MODE}`,
+    backend !== "self_hosted"
+      ? "Unset MEDIA_BACKEND_MODE defaults to self_hosted; set livekit_cloud only for cloud rollback"
+      : undefined,
   );
 
   add(
     "Frozen: inbound trunk ID",
-    envTrunk === FROZEN_INBOUND_TRUNK ? "PASS" : "FAIL",
-    `env=${envTrunk || "(unset)"} expected=${FROZEN_INBOUND_TRUNK}`,
-    envTrunk === STALE_TRUNK
-      ? "Update LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID in Coolify"
-      : envTrunk !== FROZEN_INBOUND_TRUNK
-        ? "Env trunk mismatch"
-        : undefined,
+    cfg.inboundTrunkId === FROZEN_INBOUND_TRUNK ? "PASS" : "FAIL",
+    `resolved=${cfg.inboundTrunkId || "(unset)"} expected=${FROZEN_INBOUND_TRUNK}`,
+    cfg.inboundTrunkId === STALE_TRUNK ? "Stale trunk id in config — update constants" : undefined,
   );
 
   add(

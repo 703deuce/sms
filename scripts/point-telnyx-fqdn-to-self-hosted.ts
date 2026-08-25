@@ -9,14 +9,10 @@
  */
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { MCTB_571_SIP_FQDN_CONNECTION_ID } from "@/lib/mctb/sip-diagnostic/constants";
-import { normalizeLiveKitSipHost } from "@/lib/telephony/provisioning/config";
+import { LIVEKIT_SELF_HOSTED_SIP_HOST } from "@/lib/voice/media-backend/constants";
 
 const apply = process.argv.includes("--apply");
-const selfHostedSipHost = normalizeLiveKitSipHost(
-  process.env.LIVEKIT_SELF_HOSTED_SIP_HOST?.trim() ||
-    process.env.LIVEKIT_SELF_HOSTED_SIP_URI?.trim() ||
-    "voice.transovo.ai",
-);
+const selfHostedSipHost = LIVEKIT_SELF_HOSTED_SIP_HOST;
 
 async function main() {
   const fqdns = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>("/fqdns", {

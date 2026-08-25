@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /** Verify MEDIA_BACKEND_MODE resolves and LiveKit API auth works. */
 import { RoomServiceClient } from "livekit-server-sdk";
-import { getActiveMediaBackend, getLiveKitBackendConfig } from "@/lib/voice/media-backend";
+import { getActiveMediaBackend, getLiveKitBackendConfig, getMediaBackendMode } from "@/lib/voice/media-backend";
 
 async function main() {
   const backend = getActiveMediaBackend();
@@ -12,7 +12,7 @@ async function main() {
   console.log(
     JSON.stringify(
       {
-        mediaBackendMode: process.env.MEDIA_BACKEND_MODE || "livekit_cloud",
+        mediaBackendMode: getMediaBackendMode(),
         resolvedBackend: backend,
         url: cfg.url,
         sipHost: cfg.sipHost,

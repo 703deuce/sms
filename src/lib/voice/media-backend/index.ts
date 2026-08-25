@@ -12,6 +12,17 @@ export {
 } from "./config";
 
 export {
+  DEFAULT_MEDIA_BACKEND_MODE,
+  LIVEKIT_CLOUD_DISPATCH_RULE_ID,
+  LIVEKIT_CLOUD_INBOUND_TRUNK_ID,
+  LIVEKIT_SELF_HOSTED_DISPATCH_RULE_ID,
+  LIVEKIT_SELF_HOSTED_INBOUND_TRUNK_ID,
+  LIVEKIT_SELF_HOSTED_SIP_HOST,
+  LIVEKIT_SELF_HOSTED_STALE_INBOUND_TRUNK_ID,
+  LIVEKIT_SELF_HOSTED_WSS_URL,
+} from "./constants";
+
+export {
   getLiveKitRoomClientForBackend,
   getLiveKitSipClientForBackend,
   resetLiveKitClientsForTests,

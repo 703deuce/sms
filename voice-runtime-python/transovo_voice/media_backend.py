@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import os
 
+from transovo_voice.media_backend_constants import (
+    DEFAULT_MEDIA_BACKEND_MODE,
+    LIVEKIT_SELF_HOSTED_WSS_URL,
+)
+
 
 def apply_media_backend_env() -> str:
-    mode = (os.getenv("MEDIA_BACKEND_MODE") or "livekit_cloud").strip().lower()
+    mode = (os.getenv("MEDIA_BACKEND_MODE") or DEFAULT_MEDIA_BACKEND_MODE).strip().lower()
     if mode != "self_hosted":
         return "livekit_cloud"
 
@@ -19,6 +24,9 @@ def apply_media_backend_env() -> str:
         value = os.getenv(source, "").strip()
         if value:
             os.environ[target] = value
+
+    if not os.getenv("LIVEKIT_URL", "").strip():
+        os.environ["LIVEKIT_URL"] = LIVEKIT_SELF_HOSTED_WSS_URL
 
     outbound = os.getenv("LIVEKIT_SELF_HOSTED_OUTBOUND_TRUNK_ID", "").strip()
     if outbound:

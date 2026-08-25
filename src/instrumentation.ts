@@ -5,7 +5,8 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const mediaBackendMode = process.env.MEDIA_BACKEND_MODE?.trim() || "livekit_cloud";
+  const { getMediaBackendMode } = await import("@/lib/voice/media-backend");
+  const mediaBackendMode = getMediaBackendMode();
   console.log(
     JSON.stringify({
       service: "transovo-web",

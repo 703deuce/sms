@@ -1,8 +1,7 @@
 import { isMctbSipIngressTargetSync } from "@/lib/mctb/sip-ingress/sync";
 
 /** Transovo LiveKit Inbound FQDN — only Telnyx connection type with delayed-offer SIP controls. */
-export const MCTB_571_SIP_FQDN_CONNECTION_ID =
-  process.env.TELNYX_LIVEKIT_FQDN_CONNECTION_ID?.trim() || "3022029259041408870";
+export const MCTB_571_SIP_FQDN_CONNECTION_ID = "3022029259041408870";
 
 export const MCTB_571_SIP_FQDN_CONNECTION_NAME = "Transovo LiveKit Inbound";
 
