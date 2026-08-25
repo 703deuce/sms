@@ -36,7 +36,7 @@ async function tick() {
     if (result.processed > 0) {
       console.log(
         `[web-worker] processed=${result.processed}`,
-        result.results.map((r) => `${r.jobType}:${r.ok ? "ok" : r.error}`).join(", "),
+        result.results.map((r) => `${r.id}:${r.ok ? "ok" : r.error}`).join(", "),
       );
     }
   } catch (err) {

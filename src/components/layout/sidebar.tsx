@@ -2,13 +2,6 @@
 
 import { flattenNavLinks, isNavGroup } from "@/lib/nav";
 import type { NavChild, NavItem, NavLink } from "@/lib/nav";
-import {
-  isSmartRoutingSectionPathExport,
-  smartRoutingFlowIdFromPath,
-  type SolutionNavInstance,
-} from "@/lib/solutions-nav";
-import { buildRealtorNav } from "@/lib/realtor/nav";
-import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildSmsNav } from "@/lib/products/sms-nav";
 import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isVoiceShellRoute } from "@/lib/products/voice-routes";
@@ -281,7 +274,7 @@ export function Sidebar({
   workspaceName?: string;
   open?: boolean;
   onClose?: () => void;
-  outcomeInstances?: Record<string, SolutionNavInstance[]>;
+  outcomeInstances?: Record<string, never>;
   primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
   currentProduct?: CurrentProduct;
@@ -303,48 +296,17 @@ export function Sidebar({
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const navItems: NavItem[] = useMemo(() => {
-    if (realtorMode) return buildRealtorNav(inboxBadge);
-    if (isLauncher) return [];
-    if (currentProduct === "numbers") {
-      return buildNumbersNav({
-        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
-      });
-    }
     const voiceOwnsShell = hasVoice && isVoiceShellRoute(pathname);
-    if (
-      currentProduct === "sms" ||
-      (hasSms && isSmsShellRoute(pathname) && !voiceOwnsShell)
-    ) {
+    if (currentProduct === "sms" || (hasSms && isSmsShellRoute(pathname) && !voiceOwnsShell)) {
       return buildSmsNav({ inboxBadge });
-    }
-    if (currentProduct === "voice" || hasVoice) {
-      return buildVoiceNav({
-        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
-        showTryIt,
-        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
-        productFeatures,
-        showBillingNav: true,
-      });
     }
     return buildVoiceNav({
       primaryVoiceAgentId: primaryVoiceAgentId ?? null,
       showTryIt,
-      smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       productFeatures,
       showBillingNav: true,
     });
-  }, [
-    primaryVoiceAgentId,
-    showTryIt,
-    productFeatures,
-    pathname,
-    realtorMode,
-    currentProduct,
-    isLauncher,
-    inboxBadge,
-    hasVoice,
-    hasSms,
-  ]);
+  }, [primaryVoiceAgentId, showTryIt, productFeatures, pathname, inboxBadge, hasVoice, hasSms, currentProduct]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
@@ -370,15 +332,7 @@ export function Sidebar({
     >
       <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
         <Link
-          href={
-            realtorMode
-              ? "/realtor/dashboard"
-              : isLauncher
-                ? "/app"
-                : currentProduct
-                  ? productLogoHome(currentProduct)
-                  : "/app"
-          }
+          href={currentProduct ? productLogoHome(currentProduct) : "/dashboard"}
           className="flex items-start gap-2.5"
           onClick={onClose}
         >

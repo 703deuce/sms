@@ -1,14 +1,6 @@
-import { PremiumNumbersPageClient } from "@/components/numbers/premium-numbers-page";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { redirect } from "next/navigation";
 
-export default async function VoiceBuyNumbersPage() {
-  const { workspaceId } = await requireWorkspaceContext();
-
-  return (
-    <PremiumNumbersPageClient
-      workspaceId={workspaceId}
-      initialMode="business"
-      layout="find-mockup"
-    />
-  );
+/** Number purchase UI archived — manage numbers on the Numbers page. */
+export default function VoiceBuyNumbersPage() {
+  redirect("/voice/numbers");
 }

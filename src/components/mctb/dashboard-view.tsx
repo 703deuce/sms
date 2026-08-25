@@ -1,6 +1,6 @@
 "use client";
 
-import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
+import type { DashboardDateRange } from "@/lib/mctb/dashboard-types";
 import { DashboardNeedsAttentionPanel } from "@/components/mctb/dashboard-needs-attention-panel";
 import { cn } from "@/lib/utils";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";

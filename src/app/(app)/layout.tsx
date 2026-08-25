@@ -5,8 +5,6 @@ import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/
 import { getUserProductAccess } from "@/lib/products/entitlements";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
-import { loadOutcomeInstances } from "@/lib/outcomes/instances";
-import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
 import { getMaintenanceState } from "@/lib/platform-flags";
 import { loadShellData, loadWorkspace } from "@/lib/workspace-data";
 import { redirect } from "next/navigation";
@@ -30,11 +28,8 @@ export default async function AppLayout({
 
   const workspaceId = await getActiveWorkspaceId();
   const workspaceType = await getActiveWorkspaceType();
-  const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow, productAccess, productFeatures] =
-    await Promise.all([
+  const [shell, workspaceRow, productAccess, productFeatures] = await Promise.all([
     loadShellData(session.userId, workspaceId),
-    loadOutcomeInstances(workspaceId),
-    loadPrimaryVoiceAgentId(workspaceId),
     loadWorkspace(workspaceId),
     getUserProductAccess(session.userId),
     getWorkspaceProductFeatures(workspaceId, { isPlatformAdmin: session.isAdmin }),
@@ -61,29 +56,26 @@ export default async function AppLayout({
 
   return (
     <>
-    <ServiceWorkerRegister />
-    <AppShell
-      userName={session.name}
-      isAdmin={session.isAdmin}
-      workspaceId={workspaceId}
-      workspaceName={workspaceName}
-      workspaceType={workspaceType}
-      workspaces={shell.workspaces}
-      phoneNumbers={shell.phoneNumbers}
-      metrics={shell.metrics}
-      activeFromNumberId={shell.activeFromNumberId}
-      unreadNotifications={shell.unreadNotifications}
-      outcomeInstances={outcomeInstances}
-      primaryVoiceAgentId={primaryVoiceAgentId}
-      realtorMode={false}
-      hasVoice={productAccess.hasVoice}
-      hasSms={productAccess.hasSms}
-      hasNumbers={productAccess.hasNumbers}
-      showTryIt={showTryIt}
-      productFeatures={productFeatures}
-    >
-      {children}
-    </AppShell>
+      <ServiceWorkerRegister />
+      <AppShell
+        userName={session.name}
+        isAdmin={session.isAdmin}
+        workspaceId={workspaceId}
+        workspaceName={workspaceName}
+        workspaceType={workspaceType}
+        workspaces={shell.workspaces}
+        phoneNumbers={shell.phoneNumbers}
+        metrics={shell.metrics}
+        activeFromNumberId={shell.activeFromNumberId}
+        unreadNotifications={shell.unreadNotifications}
+        hasVoice={productAccess.hasVoice}
+        hasSms={productAccess.hasSms}
+        hasNumbers={productAccess.hasNumbers}
+        showTryIt={showTryIt}
+        productFeatures={productFeatures}
+      >
+        {children}
+      </AppShell>
     </>
   );
 }

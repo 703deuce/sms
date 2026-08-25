@@ -1,5 +1,5 @@
 import { MctbDashboardView } from "@/components/mctb/dashboard-view";
-import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
+import type { DashboardDateRange } from "@/lib/mctb/dashboard-types";
 import { getPrisma } from "@/lib/db";
 import { isOnboardingComplete, loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
