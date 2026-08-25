@@ -1,5 +1,16 @@
 import { getPrisma } from "@/lib/db";
-import { formatBookedTimeLabel } from "../../../../voice-runtime/src/frontdesk/booking-recovery";
+
+function formatBookedTimeLabel(startTime: Date, timezone: string): string {
+  return startTime.toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+}
 
 export type VoiceAppointmentRow = {
   id: string;

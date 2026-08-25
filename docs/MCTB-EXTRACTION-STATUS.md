@@ -1,23 +1,38 @@
-# MCTB-Only Extraction — Work In Progress
+# MCTB-Only Extraction — Status
 
-Branch: `cleanup/mctb-only-production`
+Branch: `cursor/mctb-only-production-9cca`
+
+## Approach (revised)
+
+**Pragmatic rule:** remove only code that does **not** touch MCTB at all. Shared libraries that MCTB's telephony/SMS/consent path imports are **kept in production** even if they also served other products. Customer-facing routes/pages for dormant products stay removed.
 
 ## Completed
 
-- Safety snapshot: tag `pre-mctb-extraction-2026-08-25`, branch `archive/pre-mctb-extraction-2026-08-25`
-- Product inventory: `docs/PRODUCT-CODE-INVENTORY.md`
-- Archive: 996 paths copied locally, commit `719c3d9` (GitHub push blocked — needs repo write access)
-- Removed dormant UI routes, APIs, and ~996 product files from production
-- MCTB-only navigation (`voice-nav.ts`, `app-shell`, `sidebar`)
-- MCTB job handler slim-down
-- Docs: `docs/ARCHIVED-PRODUCTS.md`
+- Safety snapshot: tag `pre-mctb-extraction-2026-08-25`
+- Archive: 996 paths locally at commit `719c3d9` (remote push blocked)
+- Dormant product **routes/pages/APIs** removed from production
+- MCTB-only customer navigation
+- Shared runtime kept where MCTB import chain requires it
 
-## Blocked / In progress
+## Validation (latest)
 
-- **Archive push:** `403` — grant `cursor[bot]` write access to `703deuce/smsarchive` or push manually from `/tmp/transovo-archive`
-- **Production build:** shared runtime dependencies (smart-routing consent, phone voicemail, solutions save, voice webhooks) still being reconciled
-- **Typecheck:** ~90 files with transitive imports to archived modules
+| Check | Result |
+|-------|--------|
+| `npm run build` | **PASS** |
+| `npx tsc --noEmit` | **PASS** |
+| `npm run test:mctb-try-it-ux` | **PASS** |
+| `npm run test:transovo-platform` | **PASS** |
+| `npm run test:mctb-consent-log` | **PASS** |
 
-## MCTB shared runtime (intentionally kept)
+## Removed (non-MCTB only)
 
-Press-1 consent and Telnyx ingress use `lib/smart-routing/` consent/media modules — not the Smart Routing product UI.
+- `voice-runtime/` — LiveKit AI receptionist worker (no MCTB imports)
+- Non-MCTB `python-runtime-bridge/*` booking/telemetry handlers (internal API route already gone)
+- Orphaned test scripts for deleted bridge modules
+
+## Still needed
+
+- Push archive to `smsarchive` (repo write access)
+- Legacy route 404 probing
+- Broader MCTB test matrix + browser smoke
+- `docs/PRODUCTION-ROUTE-MANIFEST.md`
