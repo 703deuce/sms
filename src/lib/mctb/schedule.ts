@@ -168,6 +168,15 @@ export function isMctbSchedulePaused(
   return !Number.isNaN(until.getTime()) && until > now;
 }
 
+/** Whether missed-call text-back automation may run (consent + SMS). Inbound call handling stays on. */
+export function isMctbAutomationActive(
+  settings: MctbScheduleSettings,
+  config: Pick<MissedCallTextConfigRecord, "enabled">,
+  now = new Date(),
+): boolean {
+  return !isMctbSchedulePaused(settings, config, now);
+}
+
 export function isWithinMctbSendWindow(
   now: Date,
   config: MissedCallTextConfigRecord,

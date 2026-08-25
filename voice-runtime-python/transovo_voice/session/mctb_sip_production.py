@@ -141,6 +141,21 @@ async def run_mctb_sip_production_session(
             )
             return
 
+        handling_mode = str(session.get("handlingMode") or "mctb")
+        mctb_automation_active = bool(session.get("mctbAutomationActive", True))
+        if not mctb_automation_active or handling_mode == "voicemail_fallback":
+            from transovo_voice.session.mctb_voicemail_fallback import run_mctb_voicemail_fallback
+
+            await run_mctb_voicemail_fallback(
+                ctx,
+                trace=trace,
+                participant=participant,
+                answer_session=answer_session,
+                session=session,
+                sip_status=sip_status,
+            )
+            return
+
         direct_dial_forward = str(session.get("directDialForwardE164") or "").strip()
         if direct_dial_forward:
             from transovo_voice.session.mctb_direct_dial_forward import run_mctb_direct_dial_forward

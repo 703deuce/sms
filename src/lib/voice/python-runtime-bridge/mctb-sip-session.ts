@@ -58,17 +58,23 @@ export type ResolveMctbSipSessionInput = {
   sipAttributes?: Record<string, string>;
 };
 
+export type MctbSipHandlingMode = "mctb" | "voicemail_fallback";
+
 export type ResolveMctbSipSessionResult = {
   ok: boolean;
   workspaceId: string;
   demoMode: boolean;
   consentMode: MctbConsentMode;
   consentDigit: string;
+  mctbAutomationActive: boolean;
+  handlingMode: MctbSipHandlingMode;
   playUrl?: string;
   confirmationPlayUrl?: string;
   confirmationText?: string;
   audioAssetId?: string;
   failClosed?: boolean;
+  voicemailPlayUrl?: string;
+  voicemailSayText?: string;
   directDialForwardE164?: string | null;
   directDialPromptText?: string | null;
   forwardedFromE164?: string | null;
@@ -139,6 +145,8 @@ export async function resolveMctbSipSessionForPython(
       demoMode: false,
       consentMode: "press_1",
       consentDigit: "1",
+      mctbAutomationActive: false,
+      handlingMode: "voicemail_fallback",
       businessE164: transovoNumberE164,
       error: "missing_caller_or_transovo_number",
     };
@@ -161,18 +169,41 @@ export async function resolveMctbSipSessionForPython(
 
   const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
   const runtimeConfig = await loadMissedCallTextConfig(target.workspaceId);
+  const { loadMctbScheduleSettings, isMctbAutomationActive } = await import("@/lib/mctb/schedule");
+  const scheduleSettings = await loadMctbScheduleSettings(target.workspaceId, runtimeConfig);
+  const mctbAutomationActive = isMctbAutomationActive(scheduleSettings, runtimeConfig);
+  const handlingMode: MctbSipHandlingMode = mctbAutomationActive
+    ? "mctb"
+    : "voicemail_fallback";
+
   const { buildDirectDialForwardPromptText, resolveMctbDirectDialForwardE164 } = await import(
     "@/lib/mctb/direct-dial-prompt"
   );
-  const directDialForwardE164 = resolveMctbDirectDialForwardE164(runtimeConfig);
-  const directDialPromptText = buildDirectDialForwardPromptText(runtimeConfig);
+  const directDialForwardE164 = mctbAutomationActive
+    ? resolveMctbDirectDialForwardE164(runtimeConfig)
+    : null;
+  const directDialPromptText = mctbAutomationActive
+    ? buildDirectDialForwardPromptText(runtimeConfig)
+    : null;
 
   let playUrl: string | undefined;
   let confirmationPlayUrl: string | undefined;
   let audioAssetId: string | undefined;
   let failClosed = false;
+  let voicemailPlayUrl: string | undefined;
+  let voicemailSayText: string | undefined;
 
-  if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
+  if (!mctbAutomationActive) {
+    const { resolveMctbVoicemailFallbackPlayback } = await import(
+      "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback"
+    );
+    const voicemail = await resolveMctbVoicemailFallbackPlayback(
+      target.workspaceId,
+      transovoNumberE164,
+    );
+    voicemailPlayUrl = voicemail.playUrl || undefined;
+    voicemailSayText = voicemail.sayText || undefined;
+  } else if (consentMode !== MCTB_CONSENT_MODE_EXISTING) {
     if (mctbConfig.demoMode) {
       const { ensureTryItDemoVoiceReady } = await import("@/lib/mctb/try-it/demo-voice");
       try {
@@ -214,11 +245,15 @@ export async function resolveMctbSipSessionForPython(
     demoMode: mctbConfig.demoMode,
     consentMode,
     consentDigit: "1",
+    mctbAutomationActive,
+    handlingMode,
     playUrl,
     confirmationPlayUrl,
     confirmationText: MCTB_PRESS_1_CONFIRMATION_TEXT,
     audioAssetId,
     failClosed,
+    voicemailPlayUrl,
+    voicemailSayText,
     directDialForwardE164,
     directDialPromptText,
     forwardedFromE164,
@@ -242,6 +277,20 @@ export type RecordMctbSipPress1ConsentInput = {
 export async function recordMctbSipPress1ConsentForPython(
   input: RecordMctbSipPress1ConsentInput,
 ) {
+  const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
+  const { loadMctbScheduleSettings, isMctbAutomationActive } = await import("@/lib/mctb/schedule");
+  const runtimeConfig = await loadMissedCallTextConfig(input.workspaceId);
+  const scheduleSettings = await loadMctbScheduleSettings(input.workspaceId, runtimeConfig);
+  if (!isMctbAutomationActive(scheduleSettings, runtimeConfig)) {
+    return {
+      ok: true,
+      consentRecorded: false,
+      duplicateConsent: false,
+      sms: { ok: true, scheduled: false, eligible: false, reason: "FEATURE_DISABLED" },
+      mctbAutomationSuppressed: true,
+    };
+  }
+
   const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
     "@/lib/smart-routing/consent-service"
   );
