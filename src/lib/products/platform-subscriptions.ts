@@ -37,10 +37,12 @@ function parseFamilyFromMetadata(
   const family = metadata.platformProductFamily || metadata.platformProductKey?.split("_")[0];
   if (family === "mctb" || family === "smart_routing" || family === "call_forwarding") return family;
   if (family === "ai_transcription") return "ai_transcription";
+  if (family === "fax") return "fax";
   if (metadata.platformProductKey?.startsWith("mctb")) return "mctb";
   if (metadata.platformProductKey?.startsWith("smart_routing")) return "smart_routing";
   if (metadata.platformProductKey?.startsWith("call_forwarding")) return "call_forwarding";
   if (metadata.platformProductKey?.startsWith("ai_transcription")) return "ai_transcription";
+  if (metadata.platformProductKey?.startsWith("fax")) return "fax";
   return null;
 }
 
@@ -67,9 +69,11 @@ export function isPlatformProductSubscription(
     key.startsWith("smart_routing") ||
     key.startsWith("call_forwarding") ||
     key.startsWith("ai_transcription") ||
+    key.startsWith("fax") ||
     key === "mctb" ||
     key === "smart_routing" ||
     key === "call_forwarding" ||
+    key === "fax" ||
     key === "bundle_mctb_sr"
   );
 }
@@ -143,6 +147,18 @@ export async function upsertPlatformProductSubscriptionFromStripe(
     featureForProductFamily(family),
     active ? "active" : "inactive",
   );
+
+  if (family === "fax") {
+    const { syncFaxAccountFromSubscription } = await import("@/lib/fax/fax-billing");
+    await syncFaxAccountFromSubscription({
+      workspaceId,
+      tier: tier as import("@/lib/fax/types").FaxTier,
+      active,
+      stripeSubscriptionId: subscription.id,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+    });
+  }
 
   await syncDualProductDiscountForWorkspace(workspaceId);
 
@@ -243,6 +259,18 @@ export async function createPlatformCheckoutSession(input: {
 
   const { parseCheckoutSelection } = await import("@/lib/products/platform-billing-catalog");
   const selection = parseCheckoutSelection(input.productKey);
+
+  if (selection.family === "verify_pack") {
+    const { createVerifyCreditsCheckoutSession } = await import("@/lib/verify/verify-billing");
+    return createVerifyCreditsCheckoutSession({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      productKey: input.productKey,
+      origin: input.origin,
+      returnPath: input.successPath,
+    });
+  }
+
   const customerId = await getOrCreateStripeCustomer(input.workspaceId);
 
   const willHaveBoth =

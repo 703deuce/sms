@@ -20,10 +20,20 @@ import {
   AI_TRANSCRIPTION_TIER_PRICES_CENTS,
   AI_TRANSCRIPTION_INCLUDED_MINUTES,
   AI_TRANSCRIPTION_TIERS,
+  FAX_PRODUCT_NAME,
+  FAX_TIER_PRICES_CENTS,
+  FAX_TIER_INCLUDED_PAGES,
+  FAX_TIERS,
+  VERIFY_PRODUCT_NAME,
+  VERIFY_CREDIT_PACK_PRICES_CENTS,
+  VERIFY_CREDIT_PACK_QUANTITIES,
+  VERIFY_CREDIT_PACKS,
   type AiTranscriptionTier,
+  type FaxTier,
   type MctbTier,
   type PlatformCatalogIds,
   type SmartRoutingTier,
+  type VerifyCreditPack,
 } from "@/lib/products/platform-billing-catalog-definitions";
 
 export type CatalogSyncResult = {
@@ -162,6 +172,37 @@ async function ensureMonthlyPrice(
     },
   });
   audit.created.push(`price:${transovoProduct}:${tier}:${created.id}`);
+  return created;
+}
+
+async function ensureOneTimePrice(
+  stripe: Stripe,
+  productId: string,
+  transovoProduct: string,
+  pack: string,
+  amountCents: number,
+  extraMetadata: Record<string, string> = {},
+  audit: { created: string[]; reused: string[] },
+): Promise<Stripe.Price> {
+  const prices = await listActivePrices(stripe, productId);
+  const existing = findTierPrice(prices, transovoProduct, pack, amountCents);
+  if (existing) {
+    audit.reused.push(`price:${transovoProduct}:${pack}:${existing.id}`);
+    return existing;
+  }
+  const created = await stripe.prices.create({
+    product: productId,
+    currency: "usd",
+    unit_amount: amountCents,
+    metadata: {
+      transovo_product: transovoProduct,
+      tier: pack,
+      billing_version: BILLING_VERSION,
+      catalog: "platform",
+      ...extraMetadata,
+    },
+  });
+  audit.created.push(`price:${transovoProduct}:${pack}:${created.id}`);
   return created;
 }
 
@@ -350,6 +391,76 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
     };
   }
 
+  const faxProduct = dryRun
+    ? ({ id: "prod_fax_dry_run" } as Stripe.Product)
+    : await ensureProduct(
+        stripe,
+        products,
+        {
+          name: FAX_PRODUCT_NAME,
+          description: "Send and receive faxes online with AI document intelligence.",
+          transovoProduct: "fax",
+        },
+        audit,
+      );
+
+  const faxTiers = {} as PlatformCatalogIds["fax"]["tiers"];
+  for (const tier of FAX_TIERS) {
+    const amountCents = FAX_TIER_PRICES_CENTS[tier as FaxTier];
+    const includedPages = FAX_TIER_INCLUDED_PAGES[tier as FaxTier];
+    const price = dryRun
+      ? ({ id: `price_fax_${tier}_dry_run` } as Stripe.Price)
+      : await ensureMonthlyPrice(
+          stripe,
+          faxProduct.id,
+          "fax",
+          tier,
+          amountCents,
+          { included_pages: String(includedPages) },
+          audit,
+        );
+    faxTiers[tier as FaxTier] = {
+      stripePriceId: price.id,
+      monthlyPriceCents: amountCents,
+      includedPages,
+    };
+  }
+
+  const verifyProduct = dryRun
+    ? ({ id: "prod_verify_dry_run" } as Stripe.Product)
+    : await ensureProduct(
+        stripe,
+        products,
+        {
+          name: VERIFY_PRODUCT_NAME,
+          description: "Phone number verification and list cleaning credits.",
+          transovoProduct: "verify",
+        },
+        audit,
+      );
+
+  const verifyPacks = {} as PlatformCatalogIds["verify"]["packs"];
+  for (const pack of VERIFY_CREDIT_PACKS) {
+    const amountCents = VERIFY_CREDIT_PACK_PRICES_CENTS[pack as VerifyCreditPack];
+    const credits = VERIFY_CREDIT_PACK_QUANTITIES[pack as VerifyCreditPack];
+    const price = dryRun
+      ? ({ id: `price_verify_${pack}_dry_run` } as Stripe.Price)
+      : await ensureOneTimePrice(
+          stripe,
+          verifyProduct.id,
+          "verify",
+          pack,
+          amountCents,
+          { credits: String(credits) },
+          audit,
+        );
+    verifyPacks[pack as VerifyCreditPack] = {
+      stripePriceId: price.id,
+      amountCents,
+      credits,
+    };
+  }
+
   const coupon = dryRun
     ? ({ id: "coupon_dual_dry_run" } as Stripe.Coupon)
     : await ensureDualProductCoupon(stripe, audit);
@@ -401,6 +512,14 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
       ai_transcription: {
         stripeProductId: atProduct.id,
         tiers: atTiers,
+      },
+      fax: {
+        stripeProductId: faxProduct.id,
+        tiers: faxTiers,
+      },
+      verify: {
+        stripeProductId: verifyProduct.id,
+        packs: verifyPacks,
       },
       discounts: {
         dualProduct: {

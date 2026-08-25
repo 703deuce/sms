@@ -60,6 +60,35 @@ export const PLATFORM_BILLING_CATALOG_TEST: PlatformCatalogIds = {
       },
     },
   },
+  fax: {
+    stripeProductId: "prod_test_fax_placeholder",
+    tiers: {
+      starter: {
+        stripePriceId: "price_test_fax_starter",
+        monthlyPriceCents: 999,
+        includedPages: 200,
+      },
+      business: {
+        stripePriceId: "price_test_fax_business",
+        monthlyPriceCents: 1499,
+        includedPages: 500,
+      },
+      pro: {
+        stripePriceId: "price_test_fax_pro",
+        monthlyPriceCents: 2499,
+        includedPages: 1000,
+      },
+    },
+  },
+  verify: {
+    stripeProductId: "prod_test_verify_placeholder",
+    packs: {
+      "1000": { stripePriceId: "price_test_verify_1000", amountCents: 999, credits: 1000 },
+      "5000": { stripePriceId: "price_test_verify_5000", amountCents: 1999, credits: 5000 },
+      "10000": { stripePriceId: "price_test_verify_10000", amountCents: 3499, credits: 10000 },
+      "50000": { stripePriceId: "price_test_verify_50000", amountCents: 9900, credits: 50000 },
+    },
+  },
   discounts: {
     dualProduct: { stripeCouponId: "coupon_test_dual_product", percentOff: 20 },
   },

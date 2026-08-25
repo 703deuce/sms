@@ -4,12 +4,21 @@ export type MctbTier = "starter" | "growth" | "pro";
 export type SmartRoutingTier = "starter" | "business" | "pro";
 export type CallForwardingTier = "standard";
 export type AiTranscriptionTier = "starter" | "business" | "pro";
-export type PlatformProductFamily = "mctb" | "smart_routing" | "call_forwarding" | "ai_transcription";
+export type FaxTier = "starter" | "business" | "pro";
+export type VerifyCreditPack = "1000" | "5000" | "10000" | "50000";
+export type PlatformProductFamily =
+  | "mctb"
+  | "smart_routing"
+  | "call_forwarding"
+  | "ai_transcription"
+  | "fax";
 
 export const MCTB_TIERS: MctbTier[] = ["starter", "growth", "pro"];
 export const SMART_ROUTING_TIERS: SmartRoutingTier[] = ["starter", "business", "pro"];
 export const CALL_FORWARDING_TIERS: CallForwardingTier[] = ["standard"];
 export const AI_TRANSCRIPTION_TIERS: AiTranscriptionTier[] = ["starter", "business", "pro"];
+export const FAX_TIERS: FaxTier[] = ["starter", "business", "pro"];
+export const VERIFY_CREDIT_PACKS: VerifyCreditPack[] = ["1000", "5000", "10000", "50000"];
 
 export const MCTB_TIER_PRICES_CENTS: Record<MctbTier, number> = {
   starter: 1999,
@@ -48,6 +57,37 @@ export const AI_TRANSCRIPTION_INCLUDED_MINUTES: Record<AiTranscriptionTier, numb
   business: 2000,
   pro: 4000,
 };
+
+export const FAX_TIER_PRICES_CENTS: Record<FaxTier, number> = {
+  starter: 999,
+  business: 1499,
+  pro: 2499,
+};
+
+export const FAX_TIER_INCLUDED_PAGES: Record<FaxTier, number> = {
+  starter: 200,
+  business: 500,
+  pro: 1000,
+};
+
+export const FAX_OVERAGE_CENTS_PER_PAGE = 5;
+
+export const VERIFY_CREDIT_PACK_PRICES_CENTS: Record<VerifyCreditPack, number> = {
+  "1000": 999,
+  "5000": 1999,
+  "10000": 3499,
+  "50000": 9900,
+};
+
+export const VERIFY_CREDIT_PACK_QUANTITIES: Record<VerifyCreditPack, number> = {
+  "1000": 1000,
+  "5000": 5000,
+  "10000": 10000,
+  "50000": 50000,
+};
+
+export const FAX_PRODUCT_NAME = "Transovo Fax";
+export const VERIFY_PRODUCT_NAME = "Transovo Verify";
 
 export const DUAL_PRODUCT_DISCOUNT_PERCENT = 20;
 export const SMART_ROUTING_OVERAGE_CENTS_PER_MINUTE = 2;
@@ -102,6 +142,17 @@ export type PlatformCatalogIds = {
   ai_transcription: {
     stripeProductId: string;
     tiers: Record<AiTranscriptionTier, PlatformCatalogTierIds>;
+  };
+  fax: {
+    stripeProductId: string;
+    tiers: Record<FaxTier, PlatformCatalogTierIds & { includedPages: number }>;
+  };
+  verify: {
+    stripeProductId: string;
+    packs: Record<
+      VerifyCreditPack,
+      { stripePriceId: string; amountCents: number; credits: number }
+    >;
   };
   discounts: {
     dualProduct: {

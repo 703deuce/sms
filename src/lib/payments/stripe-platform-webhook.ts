@@ -17,8 +17,14 @@ import {
 } from "@/lib/products/platform-billing-catalog";
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import type { TransovoProductFeature } from "@/lib/products/feature-entitlements";
+import { handleVerifyCreditsCheckoutCompleted } from "@/lib/verify/verify-billing";
 
 export async function handlePlatformCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const verifyResult = await handleVerifyCreditsCheckoutCompleted(session);
+  if (verifyResult.handled) {
+    return { handled: true, subsystem: "verify_credits" as const, credits: verifyResult.credits };
+  }
+
   const stripe = getStripe();
   const workspaceId = session.metadata?.workspaceId;
   const productKey = session.metadata?.platformProductKey;
@@ -85,11 +91,15 @@ export async function handlePlatformSubscriptionEvent(
         data: { status: subscription.status, cancelAtPeriodEnd: subscription.cancel_at_period_end },
       });
       const feature =
-        family === "mctb" || family === "smart_routing"
-          ? (family as "mctb" | "smart_routing")
+        family === "mctb" || family === "smart_routing" || family === "fax"
+          ? (family as "mctb" | "smart_routing" | "fax")
           : null;
       if (feature) {
         await grantWorkspaceProductFeature(workspaceId, feature, "inactive");
+      }
+      if (family === "fax" && workspaceId) {
+        const { deactivateFaxAccount } = await import("@/lib/fax/fax-billing");
+        await deactivateFaxAccount(workspaceId);
       }
       await syncDualProductDiscountForWorkspace(workspaceId);
     }
@@ -129,6 +139,10 @@ export async function handlePlatformInvoicePaid(invoice: Stripe.Invoice): Promis
           usagePeriodEnd: sub.currentPeriodEnd,
         },
       });
+    }
+    if (sub.productFamily === "fax" && sub.currentPeriodStart && sub.currentPeriodEnd) {
+      const { resetFaxUsagePeriod } = await import("@/lib/fax/fax-billing");
+      await resetFaxUsagePeriod(sub.workspaceId, sub.currentPeriodStart, sub.currentPeriodEnd);
     }
   }
 }

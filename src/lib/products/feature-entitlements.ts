@@ -15,7 +15,9 @@ export type TransovoProductFeature =
   | "call_forwarding"
   | "visual_voicemail"
   | "callback_requests"
-  | "ai_transcription";
+  | "ai_transcription"
+  | "fax"
+  | "verify";
 
 const FEATURE_KEYS: TransovoProductFeature[] = [
   "mctb",
@@ -24,11 +26,13 @@ const FEATURE_KEYS: TransovoProductFeature[] = [
   "visual_voicemail",
   "callback_requests",
   "ai_transcription",
+  "fax",
+  "verify",
 ];
 
 const PRISMA_FEATURE_MAP: Record<
   TransovoProductFeature,
-  "MCTB" | "SMART_ROUTING" | "CALL_FORWARDING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS" | "AI_TRANSCRIPTION"
+  "MCTB" | "SMART_ROUTING" | "CALL_FORWARDING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS" | "AI_TRANSCRIPTION" | "FAX" | "VERIFY"
 > = {
   mctb: "MCTB",
   smart_routing: "SMART_ROUTING",
@@ -36,6 +40,8 @@ const PRISMA_FEATURE_MAP: Record<
   visual_voicemail: "VISUAL_VOICEMAIL",
   callback_requests: "CALLBACK_REQUESTS",
   ai_transcription: "AI_TRANSCRIPTION",
+  fax: "FAX",
+  verify: "VERIFY",
 };
 
 export type WorkspaceFeatureSnapshot = Record<TransovoProductFeature, ProductAccessStatus>;
@@ -53,6 +59,8 @@ function allActiveSnapshot(): WorkspaceFeatureSnapshot {
     visual_voicemail: "active",
     callback_requests: "active",
     ai_transcription: "active",
+    fax: "active",
+    verify: "active",
   };
 }
 
@@ -64,6 +72,8 @@ function defaultSnapshot(): WorkspaceFeatureSnapshot {
     visual_voicemail: "inactive",
     callback_requests: "inactive",
     ai_transcription: "inactive",
+    fax: "inactive",
+    verify: "inactive",
   };
 }
 
@@ -100,6 +110,8 @@ export function defaultFeaturesForWorkspaceType(
     { feature: "visual_voicemail", status: "inactive" },
     { feature: "callback_requests", status: "inactive" },
     { feature: "ai_transcription", status: "inactive" },
+    { feature: "fax", status: "inactive" },
+    { feature: "verify", status: "inactive" },
   ];
 }
 

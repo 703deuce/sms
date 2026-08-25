@@ -2,16 +2,18 @@ import {
   ADDON_PRODUCT_DEFS,
   type AiTranscriptionTier,
   type CallForwardingTier,
+  type FaxTier,
   type MctbTier,
   type PlatformCatalogIds,
   type PlatformProductFamily,
   type SmartRoutingTier,
+  type VerifyCreditPack,
 } from "@/lib/products/platform-billing-catalog-definitions";
 import { PLATFORM_BILLING_CATALOG_LIVE } from "@/lib/products/platform-billing-catalog-ids-live";
 import { PLATFORM_BILLING_CATALOG_TEST } from "@/lib/products/platform-billing-catalog-ids-test";
 import type { TransovoProductFeature } from "@/lib/products/feature-entitlements";
 
-export type { MctbTier, SmartRoutingTier, CallForwardingTier, AiTranscriptionTier, PlatformProductFamily, PlatformCatalogIds };
+export type { MctbTier, SmartRoutingTier, CallForwardingTier, AiTranscriptionTier, FaxTier, VerifyCreditPack, PlatformProductFamily, PlatformCatalogIds };
 
 export function stripeBillingMode(): "test" | "live" {
   const key = process.env.STRIPE_SECRET_KEY?.trim() || "";
@@ -40,6 +42,22 @@ export function resolveAiTranscriptionPriceId(tier: AiTranscriptionTier): string
   return getPlatformBillingCatalog().ai_transcription.tiers[tier].stripePriceId;
 }
 
+export function resolveFaxPriceId(tier: FaxTier): string {
+  return getPlatformBillingCatalog().fax.tiers[tier].stripePriceId;
+}
+
+export function resolveVerifyCreditPackPriceId(pack: VerifyCreditPack): string {
+  return getPlatformBillingCatalog().verify.packs[pack].stripePriceId;
+}
+
+export function creditsForVerifyPack(pack: VerifyCreditPack): number {
+  return getPlatformBillingCatalog().verify.packs[pack].credits;
+}
+
+export function includedPagesForFaxTier(tier: FaxTier): number {
+  return getPlatformBillingCatalog().fax.tiers[tier].includedPages;
+}
+
 export function resolveAddonPriceId(productKey: string): string {
   const addon = getPlatformBillingCatalog().addons[productKey];
   if (!addon) throw new Error(`Unknown addon product: ${productKey}`);
@@ -64,6 +82,7 @@ export function includedMinutesForCallForwardingTier(tier: CallForwardingTier = 
 
 export function featureForProductFamily(family: PlatformProductFamily): TransovoProductFeature {
   if (family === "ai_transcription") return "ai_transcription";
+  if (family === "fax") return "fax";
   return family;
 }
 
@@ -75,7 +94,7 @@ export function addonFeature(productKey: string): TransovoProductFeature | null 
 /** Legacy flat list for trial route compatibility. */
 export type PlatformProductListItem = {
   productKey: string;
-  family: PlatformProductFamily | "addon";
+  family: PlatformProductFamily | "addon" | "verify_pack";
   tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier;
   displayName: string;
   description: string;
@@ -146,6 +165,31 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
     });
   }
 
+  for (const tier of ["starter", "business", "pro"] as FaxTier[]) {
+    const row = catalog.fax.tiers[tier];
+    items.push({
+      productKey: `fax_${tier}`,
+      family: "fax",
+      tier,
+      displayName: `Fax ${tier.charAt(0).toUpperCase()}${tier.slice(1)}`,
+      description: "Send and receive faxes online with AI document intelligence.",
+      amountCents: row.monthlyPriceCents,
+      feature: "fax",
+    });
+  }
+
+  for (const pack of ["1000", "5000", "10000", "50000"] as VerifyCreditPack[]) {
+    const row = catalog.verify.packs[pack];
+    items.push({
+      productKey: `verify_${pack}`,
+      family: "verify_pack",
+      displayName: `${row.credits.toLocaleString()} Verification Credits`,
+      description: "Phone number verification and list cleaning credits.",
+      amountCents: row.amountCents,
+      feature: "verify",
+    });
+  }
+
   for (const def of ADDON_PRODUCT_DEFS) {
     const addon = catalog.addons[def.productKey];
     if (!addon) continue;
@@ -163,8 +207,9 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
 }
 
 export function parseCheckoutSelection(productKey: string): {
-  family: PlatformProductFamily | "addon";
-  tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier;
+  family: PlatformProductFamily | "addon" | "verify_pack";
+  tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier | FaxTier;
+  verifyPack?: VerifyCreditPack;
   stripePriceId: string;
   feature: TransovoProductFeature;
 } {
@@ -202,6 +247,24 @@ export function parseCheckoutSelection(productKey: string): {
       tier,
       stripePriceId: resolveAiTranscriptionPriceId(tier),
       feature: "ai_transcription",
+    };
+  }
+  if (productKey.startsWith("fax_")) {
+    const tier = productKey.replace("fax_", "") as FaxTier;
+    return {
+      family: "fax",
+      tier,
+      stripePriceId: resolveFaxPriceId(tier),
+      feature: "fax",
+    };
+  }
+  if (productKey.startsWith("verify_")) {
+    const pack = productKey.replace("verify_", "") as VerifyCreditPack;
+    return {
+      family: "verify_pack",
+      verifyPack: pack,
+      stripePriceId: resolveVerifyCreditPackPriceId(pack),
+      feature: "verify",
     };
   }
   const addonFeatureKey = addonFeature(productKey);

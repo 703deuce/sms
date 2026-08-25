@@ -9,6 +9,7 @@ import {
   MessageSquare,
   PhoneForwarded,
   PhoneMissed,
+  Printer,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -18,6 +19,7 @@ import {
   ShoppingCart,
   Users,
   Activity,
+  BadgeCheck,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { isSmartRoutingSectionPath } from "@/lib/smart-routing/display";
@@ -112,6 +114,8 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const showMctbSection = hasMctb || options.showTryIt;
   const hasVm = featureActive(features, "visual_voicemail", false);
   const hasTranscription = featureActive(features, "ai_transcription", false);
+  const hasFax = featureActive(features, "fax", false);
+  const hasVerify = featureActive(features, "verify", false);
   const mctbFocused = isMctbFocusedCustomerNav();
 
   const items: NavItem[] = [
@@ -145,6 +149,25 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   if (!mctbFocused) {
     items.push(...buildLegacyProductNav(features));
   }
+
+  if (hasFax || options.showTryIt) {
+    items.push({
+      label: "Fax",
+      href: "/fax",
+      icon: Printer,
+      sectionLabel: "Products",
+      matchExact: true,
+    });
+  }
+
+  items.push({
+    label: "Verify",
+    href: "/verify",
+    icon: BadgeCheck,
+    sectionLabel: hasFax ? undefined : "Products",
+    badge: hasVerify ? undefined : "Credits",
+    matchExact: true,
+  });
 
   items.push({
     label: "Visual Voicemail",
@@ -228,6 +251,21 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/call-forwarding/hours")) return "Business hours";
   if (pathname.startsWith("/call-forwarding/setup")) return "Setup";
   if (pathname.startsWith("/call-forwarding")) return "Call Forwarding";
+  if (pathname.startsWith("/fax")) {
+    if (pathname === "/fax/send") return "Send Fax";
+    if (pathname === "/fax/inbox") return "Inbox";
+    if (pathname === "/fax/sent") return "Sent";
+    if (pathname === "/fax/numbers") return "Fax Numbers";
+    if (pathname === "/fax/settings") return "Fax Settings";
+    return "Fax";
+  }
+  if (pathname.startsWith("/verify")) {
+    if (pathname === "/verify/single") return "Single Verify";
+    if (pathname === "/verify/bulk") return "Bulk Verify";
+    if (pathname === "/verify/jobs") return "Verification Jobs";
+    if (pathname === "/verify/billing") return "Verify Billing";
+    return "Verify";
+  }
   if (pathname.startsWith("/contact")) return "Help";
   return "";
 }

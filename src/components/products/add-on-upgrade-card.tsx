@@ -39,6 +39,16 @@ const FEATURE_COPY: Record<
       "Turn voicemails into readable text and get a quick AI summary of what the caller needs.",
     upgradeParam: "ai_transcription",
   },
+  fax: {
+    title: "Fax",
+    description: "Send and receive faxes online with searchable AI document intelligence.",
+    upgradeParam: "fax",
+  },
+  verify: {
+    title: "Verify",
+    description: "Verify phone numbers and clean CSV lists with carrier and line-type lookup.",
+    upgradeParam: "verify",
+  },
 };
 
 export function AddOnUpgradeCard({

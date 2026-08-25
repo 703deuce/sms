@@ -878,6 +878,24 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return reconcileTwilioTollFreeInventory(Number(payload.limit || 100));
     }
+    case "fax_intelligence_process": {
+      const { processFaxIntelligence } = await import("@/lib/fax/intelligence/processor");
+      const transmissionId = String(payload.transmissionId || "");
+      if (!transmissionId) throw new Error("transmissionId required");
+      return processFaxIntelligence(transmissionId);
+    }
+    case "fax_send_scheduled": {
+      const { sendScheduledFax } = await import("@/lib/fax/fax-scheduled");
+      const transmissionId = String(payload.transmissionId || "");
+      if (!transmissionId) throw new Error("transmissionId required");
+      return sendScheduledFax(transmissionId);
+    }
+    case "verify_bulk_process": {
+      const { processBulkVerifyJob } = await import("@/lib/verify/bulk-verify-service");
+      const jobId = String(payload.jobId || "");
+      if (!jobId) throw new Error("jobId required");
+      return processBulkVerifyJob(jobId);
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }

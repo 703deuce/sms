@@ -120,6 +120,8 @@ enum WorkspaceProductFeatureKey {
   VISUAL_VOICEMAIL
   CALLBACK_REQUESTS
   AI_TRANSCRIPTION
+  FAX
+  VERIFY
 }
 
 model User {
@@ -338,6 +340,7 @@ model Workspace {
   platformTranscriptionUsageRecords PlatformTranscriptionUsageRecord[]
   callbackRequests CallbackRequest[]
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
+  faxAccount FaxAccount?
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId])
@@ -4385,3 +4388,341 @@ model SmartRoutingAiRecommendation {
   @@index([workspaceId, createdAt])
   @@map("smart_routing_ai_recommendations")
 }
+
+// ─── Transovo Fax ───────────────────────────────────────────────────────────
+
+model FaxAccount {
+  id                      String    @id @default(cuid())
+  workspaceId             String    @unique
+  tier                    String    @default("starter")
+  status                  String    @default("active")
+  notifyEmail             String?
+  notifyOnInbound         Boolean   @default(true)
+  notifyOnFailedOutbound  Boolean   @default(true)
+  autoAnalyzeInbound      Boolean   @default(true)
+  autoClassify            Boolean   @default(true)
+  autoExtract             Boolean   @default(true)
+  autoDetectPriority      Boolean   @default(true)
+  autoDetectSpam          Boolean   @default(true)
+  pagesIncluded           Int       @default(200)
+  pagesUsedThisPeriod     Int       @default(0)
+  overagePages            Int       @default(0)
+  usagePeriodStart        DateTime?
+  usagePeriodEnd          DateTime?
+  stripeSubscriptionId    String?
+  numberStatus            String    @default("none")
+  metadataJson            Json      @default("{}")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  numbers                 FaxNumber[]
+  transmissions           FaxTransmission[]
+
+  @@map("fax_accounts")
+}
+
+model FaxNumber {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  faxAccountId        String
+  phoneNumberId       String?
+  e164                String
+  label               String?
+  telnyxNumberId      String?
+  telnyxConnectionId  String?
+  status              String    @default("pending")
+  provisionedAt       DateTime?
+  releasedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  account             FaxAccount @relation(fields: [faxAccountId], references: [id], onDelete: Cascade)
+  transmissions       FaxTransmission[]
+
+  @@index([workspaceId])
+  @@unique([e164])
+  @@map("fax_numbers")
+}
+
+model FaxTransmission {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  faxAccountId          String
+  faxNumberId           String?
+  direction             String
+  status                String    @default("queued")
+  fromE164              String?
+  toE164                String?
+  recipientName         String?
+  pageCount             Int?
+  telnyxFaxId           String?
+  failureReason         String?
+  failureCode           String?
+  documentStorageBucket String?
+  documentStoragePath   String?
+  documentMimeType      String?
+  documentFilename      String?
+  documentSizeBytes     Int?
+  scheduledFor          DateTime?
+  sentAt                DateTime?
+  deliveredAt           DateTime?
+  receivedAt            DateTime?
+  failedAt              DateTime?
+  parentTransmissionId  String?
+  folder                String    @default("inbox")
+  priority              String    @default("normal")
+  isSpam                Boolean   @default(false)
+  assignedToUserId      String?
+  tagsJson              Json      @default("[]")
+  metadataJson          Json      @default("{}")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  account               FaxAccount @relation(fields: [faxAccountId], references: [id], onDelete: Cascade)
+  faxNumber             FaxNumber? @relation(fields: [faxNumberId], references: [id], onDelete: SetNull)
+  intelligence          FaxIntelligence?
+  activityLog           FaxActivityLog[]
+  comments              FaxComment[]
+
+  @@index([workspaceId, createdAt])
+  @@index([telnyxFaxId])
+  @@index([workspaceId, status])
+  @@map("fax_transmissions")
+}
+
+model FaxWebhookEvent {
+  id                String    @id @default(cuid())
+  workspaceId       String?
+  telnyxEventId     String    @unique
+  eventType         String
+  telnyxFaxId       String?
+  faxTransmissionId String?
+  payloadJson       Json
+  processedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@map("fax_webhook_events")
+}
+
+model FaxIntelligence {
+  id                      String    @id @default(cuid())
+  workspaceId             String
+  faxTransmissionId       String    @unique
+  status                  String    @default("pending")
+  extractedText           String?
+  extractionMethod        String?
+  ocrConfidence           Float?
+  aiSummary               String?
+  documentType            String?
+  classificationConfidence Float?
+  structuredDataJson      Json?
+  correctedDataJson       Json?
+  priority                String?
+  priorityReason          String?
+  spamScore               Float?
+  spamReason              String?
+  searchText              String?
+  modelVersion            String?
+  processedAt             DateTime?
+  errorMessage            String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  transmission            FaxTransmission @relation(fields: [faxTransmissionId], references: [id], onDelete: Cascade)
+
+  @@map("fax_intelligence")
+}
+
+model FaxExtractionTemplate {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  documentCategory String?
+  fieldsJson       Json     @default("[]")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("fax_extraction_templates")
+}
+
+model FaxAutomationRule {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  enabled        Boolean  @default(true)
+  conditionsJson Json     @default("[]")
+  actionsJson    Json     @default("[]")
+  lastRunAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("fax_automation_rules")
+}
+
+model FaxContact {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  company     String?
+  faxE164     String
+  phoneE164   String?
+  email       String?
+  notes       String?
+  groupName   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@map("fax_contacts")
+}
+
+model FaxBlockedSender {
+  id          String   @id @default(cuid())
+  workspaceId String
+  faxE164     String
+  reason      String?
+  blockedAt   DateTime @default(now())
+
+  @@unique([workspaceId, faxE164])
+  @@map("fax_blocked_senders")
+}
+
+model FaxActivityLog {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  faxTransmissionId String
+  eventType         String
+  message           String?
+  metadataJson      Json     @default("{}")
+  actorUserId       String?
+  createdAt         DateTime @default(now())
+  transmission      FaxTransmission @relation(fields: [faxTransmissionId], references: [id], onDelete: Cascade)
+
+  @@index([faxTransmissionId, createdAt])
+  @@map("fax_activity_log")
+}
+
+model FaxComment {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  faxTransmissionId String
+  authorUserId      String
+  body              String
+  createdAt         DateTime @default(now())
+  transmission      FaxTransmission @relation(fields: [faxTransmissionId], references: [id], onDelete: Cascade)
+
+  @@map("fax_comments")
+}
+
+// ─── Transovo Verify ────────────────────────────────────────────────────────
+
+model VerifyCreditLedger {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  entryType       String
+  amount          Int
+  balanceAfter    Int
+  referenceType   String?
+  referenceId     String?
+  stripeSessionId String?
+  idempotencyKey  String?  @unique
+  description     String?
+  metadataJson    Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@map("verify_credit_ledger")
+}
+
+model VerifyCreditReservation {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  bulkJobId       String?
+  reservedCredits Int
+  consumedCredits Int      @default(0)
+  status          String   @default("active")
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("verify_credit_reservations")
+}
+
+model VerifyLookup {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  inputRaw            String
+  normalizedE164      String?
+  lineType            String?
+  carrier             String?
+  country             String?
+  ported              String?
+  lookupStatus        String   @default("pending")
+  provider            String   @default("telnyx")
+  providerResponseJson  Json?
+  creditsCharged      Int      @default(0)
+  cacheHit            Boolean  @default(false)
+  bulkJobId           String?
+  errorMessage        String?
+  createdAt           DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([normalizedE164])
+  @@map("verify_lookups")
+}
+
+model VerifyLookupCache {
+  id                  String   @id @default(cuid())
+  normalizedE164      String   @unique
+  lineType            String?
+  carrier             String?
+  country             String?
+  ported              String?
+  providerResponseJson Json?
+  provider            String   @default("telnyx")
+  expiresAt           DateTime
+  createdAt           DateTime @default(now())
+
+  @@map("verify_lookup_cache")
+}
+
+model VerifyBulkJob {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  status           String   @default("pending")
+  filename         String?
+  phoneColumn      String?
+  totalRows        Int      @default(0)
+  uniqueNumbers    Int      @default(0)
+  duplicateRows    Int      @default(0)
+  processedRows    Int      @default(0)
+  successfulLookups Int     @default(0)
+  failedLookups    Int      @default(0)
+  creditsReserved  Int      @default(0)
+  creditsConsumed  Int      @default(0)
+  reservationId    String?
+  errorMessage     String?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  rows             VerifyBulkJobRow[]
+
+  @@index([workspaceId, createdAt])
+  @@map("verify_bulk_jobs")
+}
+
+model VerifyBulkJobRow {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  bulkJobId      String
+  rowIndex       Int
+  inputRaw       String?
+  normalizedE164 String?
+  lookupId       String?
+  originalDataJson Json?
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+  job            VerifyBulkJob @relation(fields: [bulkJobId], references: [id], onDelete: Cascade)
+
+  @@index([bulkJobId, rowIndex])
+  @@map("verify_bulk_job_rows")
+}
+
