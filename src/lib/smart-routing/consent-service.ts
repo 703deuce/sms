@@ -1,6 +1,12 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import {
+  businessNumberForConsentStorage,
+  callerNumberForConsentStorage,
+  consentIdentityMetadata,
+  resolveConsentIdentity,
+} from "@/lib/mctb/consent-identity";
 import { createId } from "@/lib/supabase/id";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import {
@@ -13,6 +19,7 @@ export async function recordSmsConsent(input: {
   workspaceId: string;
   callerNumber: string;
   businessNumber: string;
+  transovoIngressE164?: string;
   callSessionId?: string;
   contactId?: string;
   affirmativeInput: string;
@@ -20,6 +27,7 @@ export async function recordSmsConsent(input: {
   promptVersion?: string;
   consentScope?: string;
   forwardedFrom?: string | null;
+  hasDiversionHeader?: boolean;
   metadata?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
@@ -31,11 +39,36 @@ export async function recordSmsConsent(input: {
     : null;
   const metadataForwarded =
     typeof input.metadata?.forwardedFrom === "string" ? input.metadata.forwardedFrom : null;
+  const customerBusinessE164 =
+    input.forwardedFrom ?? session?.forwardedFromNumber ?? metadataForwarded ?? null;
+  const transovoIngressE164 =
+    input.transovoIngressE164 ||
+    (typeof input.metadata?.transovoNumberE164 === "string"
+      ? input.metadata.transovoNumberE164
+      : input.businessNumber);
+  const path = typeof input.metadata?.path === "string" ? input.metadata.path : null;
+
+  const identity = resolveConsentIdentity({
+    signalingFrom: input.callerNumber,
+    transovoIngressE164,
+    customerBusinessE164,
+    path,
+    hasDiversionHeader: input.hasDiversionHeader,
+  });
+  const callerNumber = callerNumberForConsentStorage(identity);
+  const businessNumber = businessNumberForConsentStorage(identity);
+  const enrichedMetadata = {
+    ...(input.metadata ?? {}),
+    ...consentIdentityMetadata(identity),
+    forwardedFrom: identity.customerBusinessNumber,
+    transovoNumberE164: identity.transovoIngressNumber,
+  };
+
   const target = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: input.callerNumber,
-    businessE164: input.businessNumber,
+    callerE164: identity.consentingCallerNumber || input.callerNumber,
+    businessE164: transovoIngressE164,
     fallbackWorkspaceId: input.workspaceId,
-    forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber ?? metadataForwarded,
+    forwardedFrom: customerBusinessE164,
   });
   const workspaceId = target.workspaceId;
 
@@ -47,30 +80,28 @@ export async function recordSmsConsent(input: {
     const bySession = await prisma.smartRoutingSmsConsentEvent.findFirst({
       where: {
         workspaceId,
-        callerNumber: input.callerNumber,
         callSessionId: providerCallId,
       },
       orderBy: { consentedAt: "desc" },
     });
     if (bySession) {
-      return { consent: bySession, duplicate: true };
+      return { consent: bySession, duplicate: true, identity };
     }
 
     const recent = await prisma.smartRoutingSmsConsentEvent.findMany({
       where: {
         workspaceId,
-        callerNumber: input.callerNumber,
         consentedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       },
       orderBy: { consentedAt: "desc" },
-      take: 20,
+      take: 40,
     });
     const byMeta = recent.find((row: { metadataJson: unknown }) => {
       const meta = (row.metadataJson || {}) as Record<string, unknown>;
       return meta.providerCallId === providerCallId;
     });
     if (byMeta) {
-      return { consent: byMeta, duplicate: true };
+      return { consent: byMeta, duplicate: true, identity };
     }
   }
 
@@ -78,8 +109,8 @@ export async function recordSmsConsent(input: {
     data: {
       id: createId(),
       workspaceId,
-      callerNumber: input.callerNumber,
-      businessNumber: input.businessNumber,
+      callerNumber,
+      businessNumber,
       callSessionId: input.callSessionId ?? null,
       contactId: input.contactId ?? null,
       method: "IVR_DTMF",
@@ -87,7 +118,7 @@ export async function recordSmsConsent(input: {
       promptAssetId: input.promptAssetId ?? null,
       promptVersion: input.promptVersion ?? null,
       consentScope: input.consentScope ?? "CUSTOMER_CARE_SMS",
-      metadataJson: (input.metadata ?? {}) as object,
+      metadataJson: enrichedMetadata as object,
     },
   });
 
@@ -96,10 +127,10 @@ export async function recordSmsConsent(input: {
     type: "SMS_CONSENT_CAPTURED",
     sessionId: input.callSessionId,
     contactId: input.contactId,
-    payload: { caller: input.callerNumber, scope: consent.consentScope },
+    payload: { caller: callerNumber, scope: consent.consentScope },
   });
 
-  return { consent, duplicate: false };
+  return { consent, duplicate: false, identity };
 }
 
 export async function triggerMissedCallTextFromConsent(input: {
@@ -110,9 +141,14 @@ export async function triggerMissedCallTextFromConsent(input: {
   isTest?: boolean;
   forwardedFrom?: string | null;
   eventMetadata?: Record<string, unknown>;
+  consentIdentityVerified?: boolean;
 }) {
   if (input.isTest) {
     return { triggered: false, reason: "test_mode" };
+  }
+
+  if (input.consentIdentityVerified === false) {
+    return { ok: true, scheduled: false, eligible: false, reason: "IDENTITY_UNAVAILABLE" };
   }
 
   const prisma = getPrisma();
@@ -143,17 +179,25 @@ export async function triggerMissedCallTextFromConsent(input: {
   const transovoNumberE164 =
     typeof input.eventMetadata?.transovoNumberE164 === "string"
       ? input.eventMetadata.transovoNumberE164
-      : input.businessNumber;
+      : typeof input.eventMetadata?.transovoIngressNumber === "string"
+        ? input.eventMetadata.transovoIngressNumber
+        : input.businessNumber;
+
+  const customerBusinessE164 =
+    input.forwardedFrom ||
+    (typeof input.eventMetadata?.customerBusinessNumber === "string"
+      ? input.eventMetadata.customerBusinessNumber
+      : null);
 
   const phoneNumberId = await resolveInboundPhoneNumberId({
     workspaceId: target.workspaceId,
     transovoNumberE164,
-    businessE164: input.businessNumber,
+    businessE164: customerBusinessE164 || transovoNumberE164,
     isPlatformDemo: target.isPlatformDemo,
   });
 
   const businessE164 = normalizeBusinessE164ForStorage(
-    input.businessNumber,
+    customerBusinessE164 || transovoNumberE164,
     transovoNumberE164,
   );
 

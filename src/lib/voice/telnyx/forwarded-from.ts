@@ -44,3 +44,14 @@ export function parseTelnyxForwardedFrom(
 
   return undefined;
 }
+
+export function hasDiversionHeaderInPayload(
+  eventPayload: Record<string, unknown>,
+): boolean {
+  const headers = eventPayload.sip_headers;
+  if (!Array.isArray(headers)) return false;
+  return headers.some((raw) => {
+    if (!raw || typeof raw !== "object") return false;
+    return String((raw as { name?: string }).name || "").toLowerCase() === "diversion";
+  });
+}

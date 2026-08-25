@@ -312,22 +312,30 @@ export async function recordMctbSipPress1ConsentForPython(
   const consent = await recordSmsConsent({
     workspaceId: input.workspaceId,
     callerNumber: input.callerNumber,
-    businessNumber: input.businessNumber,
+    businessNumber: transovoNumberE164,
+    transovoIngressE164: transovoNumberE164,
     callSessionId: input.providerCallId,
     affirmativeInput: digit,
     consentScope: "CUSTOMER_CARE_SMS",
     promptAssetId: input.audioAssetId || undefined,
     forwardedFrom: input.forwardedFrom || null,
+    hasDiversionHeader: Boolean(input.forwardedFrom),
     metadata: observability,
   });
 
   const sms = await triggerMissedCallTextFromConsent({
     workspaceId: input.workspaceId,
-    callerNumber: input.callerNumber,
-    businessNumber: input.businessNumber,
+    callerNumber: consent.identity?.consentIdentityVerified
+      ? (consent.identity.consentingCallerNumber || input.callerNumber)
+      : input.callerNumber,
+    businessNumber: transovoNumberE164,
     callSessionId: input.providerCallId,
     forwardedFrom: input.forwardedFrom || null,
-    eventMetadata: observability,
+    consentIdentityVerified: consent.identity?.consentIdentityVerified ?? true,
+    eventMetadata: {
+      ...observability,
+      ...consent.identity,
+    },
   });
 
   return {
