@@ -70,6 +70,7 @@
     "test:mctb-sip-ingress-send-gate": "tsx scripts/test-mctb-sip-ingress-send-gate.ts",
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",
     "test:mctb-extraction": "node scripts/verify-mctb-extraction.mjs",
+    "prune:non-mctb": "node scripts/prune-non-mctb.mjs",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
     "test:transovo-voicemail": "tsx scripts/test-transovo-voicemail.ts",

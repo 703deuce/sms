@@ -44,7 +44,16 @@ Compared to safety tag `pre-mctb-extraction-2026-08-25`:
 | `npm run test:mctb-admin-setup` | **PASS** (with server-only preload) |
 | `npm run test:mctb-demo-call-detect` | **PASS** (test aligned to ingress semantics) |
 
-## Removed (non-MCTB only)
+## Removed (bulk prune 2026-08-25)
+
+- **631 unreachable files** deleted via `scripts/prune-non-mctb.mjs` (whole files only — no in-file trimming)
+- General Caller Amy webhook: `/api/telnyx/voice` (MCTB uses dedicated `mctb-*` routes)
+- Non-MCTB voice jobs removed from `job-handlers` (`voice_webhook_process`, `voice_post_call`, `voice_webhook_dlq_reprocess`)
+- Twilio voice webhooks (non-MCTB), generic `/api/voice/*` conversation APIs
+
+Protected from prune (always kept): `lib/mctb/`, `lib/agents/missed-call-text-back/`, `lib/solutions/missed-call-text-back/`, `lib/smart-routing/` runtime
+
+## Removed (earlier passes)
 
 - `voice-runtime/` — LiveKit AI receptionist worker
 - Non-MCTB `python-runtime-bridge/*` handlers
