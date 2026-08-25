@@ -4,6 +4,7 @@ import { ensureNumberVoicemailBox, ensureUserVoicemailBox, listVoicemailMessages
 import { normalizeVoicemailGreetingUrl } from "@/lib/phone/voicemail-greeting-playback";
 import { getPrisma } from "@/lib/db";
 import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
+import { resolveVoicemailRecordingFetchUrl } from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service";
 
 export async function GET(request: Request) {
   try {
@@ -242,7 +243,7 @@ export async function POST(request: Request) {
         workspaceId: auth.workspaceId,
         messageId: msg.id,
         humanCallId: msg.humanCallId,
-        recordingUrl: msg.recordingUrl,
+        recordingUrl: await resolveVoicemailRecordingFetchUrl(msg.recordingUrl),
         durationSeconds: msg.durationSeconds,
         upstreamProvider: "telnyx",
       });

@@ -7,6 +7,7 @@ import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-adv
 import { ensureNumberProvisioned } from "@/lib/telephony/provisioning/number-assignment";
 import { clearMctbSipIngressCache } from "@/lib/mctb/sip-ingress/resolver";
 import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
+import { ensureMctbVoicemailBoxProvisioned } from "@/lib/mctb/voicemail-provisioning";
 
 function mergeSettings(
   current: unknown,
@@ -123,6 +124,9 @@ export async function provisionMctbTelnyxSipIngress(input: {
   }).catch(() => undefined);
 
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);
+  await ensureMctbVoicemailBoxProvisioned(input.workspaceId, phone.e164).catch((err) => {
+    console.warn("[mctb-sip-ingress] voicemail box provisioning skipped", err);
+  });
   clearMctbSipIngressCache();
 
   const actions = [

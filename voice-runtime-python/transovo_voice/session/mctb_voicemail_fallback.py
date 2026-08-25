@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from transovo_voice.session.sip_consent_audio import play_consent_audio_url
 from transovo_voice.session.sip_status import read_sip_call_status
+from transovo_voice.session.sip_voicemail_recorder import record_sip_voicemail_audio
 
 if TYPE_CHECKING:
     from livekit.agents import JobContext
@@ -14,11 +14,10 @@ if TYPE_CHECKING:
     from transovo_voice.integrations.backend_client import TransovoBackend
     from transovo_voice.session.mctb_sip_e2e_trace import MctbSipE2eTrace
 
-VOICEMAIL_RECORD_HOLD_SECONDS = 45.0
-
 
 async def run_mctb_voicemail_fallback(
     ctx: "JobContext",
+    backend: "TransovoBackend",
     *,
     trace: "MctbSipE2eTrace",
     participant: "rtc.RemoteParticipant",
@@ -26,12 +25,44 @@ async def run_mctb_voicemail_fallback(
     session: dict[str, Any],
     sip_status: str | None,
 ) -> None:
-    play_url = str(session.get("voicemailPlayUrl") or "").strip()
-    say_text = str(session.get("voicemailSayText") or "").strip()
+    workspace_id = str(session.get("workspaceId") or "").strip()
+    transovo_number = str(trace.to_e164 or session.get("transovoNumberE164") or "").strip()
+    caller_e164 = str(trace.from_e164 or "").strip()
+    customer_business = session.get("forwardedFromE164") or trace.forwarded_from
+
+    begin = await backend.call(
+        "begin_mctb_sip_voicemail",
+        {
+            "workspaceId": workspace_id,
+            "transovoNumberE164": transovo_number,
+            "callerE164": caller_e164,
+            "providerCallId": trace.correlation_id,
+            "livekitRoomName": trace.room_name,
+            "customerBusinessE164": customer_business,
+        },
+    )
+
+    if not begin.get("ok"):
+        trace.log(
+            "mctb_voicemail_begin_failed",
+            error=begin.get("error"),
+            workspaceId=workspace_id,
+        )
+        trace.log_sip_call_final_state(
+            disconnect_reason="voicemail_begin_failed",
+            sip_status=read_sip_call_status(participant),
+            handlingMode=session.get("handlingMode"),
+        )
+        return
+
+    message_id = str(begin.get("messageId") or "")
+    play_url = str(begin.get("voicemailPlayUrl") or session.get("voicemailPlayUrl") or "").strip()
+    say_text = str(begin.get("voicemailSayText") or session.get("voicemailSayText") or "").strip()
 
     trace.log(
         "mctb_voicemail_fallback_started",
-        workspaceId=session.get("workspaceId"),
+        workspaceId=workspace_id,
+        messageId=message_id,
         mctbAutomationActive=session.get("mctbAutomationActive"),
         handlingMode=session.get("handlingMode"),
         hasPlayUrl=bool(play_url),
@@ -65,21 +96,51 @@ async def run_mctb_voicemail_fallback(
             note="no_play_url_available_for_voicemail_greeting",
         )
 
-    trace.log(
-        "mctb_voicemail_record_hold_started",
-        holdSeconds=VOICEMAIL_RECORD_HOLD_SECONDS,
-        note="terminal_path_while_mctb_automation_suppressed",
-        sipCallStatus=read_sip_call_status(participant),
+    record_result = await record_sip_voicemail_audio(
+        participant=participant,
+        answer_session=answer_session,
+        trace=trace,
     )
-    await asyncio.sleep(VOICEMAIL_RECORD_HOLD_SECONDS)
+
+    if not record_result.ok or not record_result.audio_base64:
+        trace.log(
+            "mctb_voicemail_record_failed",
+            error=record_result.error or "empty_recording",
+            framesCaptured=record_result.frames_captured,
+        )
+        trace.log_sip_call_final_state(
+            disconnect_reason="voicemail_record_failed",
+            sip_status=read_sip_call_status(participant),
+            handlingMode=session.get("handlingMode"),
+            messageId=message_id,
+        )
+        return
+
+    finalize = await backend.call(
+        "finalize_mctb_sip_voicemail",
+        {
+            "workspaceId": workspace_id,
+            "messageId": message_id,
+            "audioBase64": record_result.audio_base64,
+            "mimeType": record_result.mime_type,
+            "durationSeconds": round(record_result.duration_seconds, 2),
+            "sampleRate": record_result.sample_rate,
+        },
+    )
+
     trace.log(
-        "mctb_voicemail_record_hold_complete",
-        holdSeconds=VOICEMAIL_RECORD_HOLD_SECONDS,
-        sipCallStatus=read_sip_call_status(participant),
+        "mctb_voicemail_finalize_complete",
+        ok=finalize.get("ok"),
+        messageId=message_id,
+        durationSeconds=record_result.duration_seconds,
+        transcribeQueued=finalize.get("transcribeQueued"),
+        error=finalize.get("error"),
     )
 
     trace.log_sip_call_final_state(
         disconnect_reason="voicemail_fallback_complete",
         sip_status=read_sip_call_status(participant),
         handlingMode=session.get("handlingMode"),
+        messageId=message_id,
+        recordingPersisted=bool(finalize.get("ok")),
     )

@@ -1,79 +1,51 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { DEFAULT_MCTB_CONSENT_VOICE_ID } from "@/lib/mctb/consent-prompt/defaults";
-import { resolveVoicemailGreetingPlayback } from "@/lib/phone/voicemail-greeting-playback";
+import { ensureMctbVoicemailBoxProvisioned } from "@/lib/mctb/voicemail-provisioning";
 import { generatePromptAudio, publicPlaybackUrl } from "@/lib/smart-routing/media-service";
+import { DEFAULT_MCTB_CONSENT_VOICE_ID } from "@/lib/mctb/consent-prompt/defaults";
 
 export type MctbVoicemailFallbackPlayback = {
   playUrl: string | null;
   sayText: string | null;
+  boxId: string | null;
 };
 
+/**
+ * Resolve pre-provisioned voicemail greeting for MCTB SIP fallback.
+ * Generates audio only as a recovery fallback when provisioning was missed.
+ */
 export async function resolveMctbVoicemailFallbackPlayback(
   workspaceId: string,
   transovoNumberE164: string,
 ): Promise<MctbVoicemailFallbackPlayback> {
-  const prisma = getPrisma();
-  let normalized: string | null = null;
-  try {
-    normalized = normalizeE164(transovoNumberE164);
-  } catch {
-    normalized = transovoNumberE164.trim() || null;
-  }
-
-  const phone = normalized
-    ? await prisma.phoneNumber.findFirst({
-        where: {
-          workspaceId,
-          OR: [{ e164: transovoNumberE164 }, { e164: normalized }],
-        },
-        select: { id: true },
-      })
-    : null;
-
-  let box = phone
-    ? await prisma.voicemailBox.findFirst({
-        where: { workspaceId, phoneNumberId: phone.id, active: true },
-      })
-    : null;
-
-  if (!box && phone) {
-    const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
-    box = await ensureNumberVoicemailBox(workspaceId, phone.id);
-  }
-
-  if (!box) {
-    box = await prisma.voicemailBox.findFirst({
-      where: { workspaceId, active: true },
-      orderBy: { updatedAt: "desc" },
-    });
-  }
-
-  if (!box) {
+  const provisioned = await ensureMctbVoicemailBoxProvisioned(workspaceId, transovoNumberE164);
+  if (provisioned?.greetingPlayUrl) {
     return {
-      playUrl: null,
-      sayText: "Please leave a message after the tone.",
+      playUrl: provisioned.greetingPlayUrl,
+      sayText: null,
+      boxId: provisioned.boxId,
     };
   }
 
-  const playback = await resolveVoicemailGreetingPlayback(workspaceId, box);
-  if (playback.playUrl) {
-    return { playUrl: playback.playUrl, sayText: null };
+  if (provisioned) {
+    return {
+      playUrl: null,
+      sayText: provisioned.greetingSayText || "Please leave a message after the tone.",
+      boxId: provisioned.boxId,
+    };
   }
 
-  const sayText = playback.sayText?.trim() || "Please leave a message after the tone.";
+  const sayText = "Please leave a message after the tone.";
   const asset = await generatePromptAudio({
     workspaceId,
-    name: "MCTB Voicemail Greeting",
+    name: "MCTB Voicemail Greeting (recovery)",
     text: sayText,
     voiceId: DEFAULT_MCTB_CONSENT_VOICE_ID,
   });
   const playUrl = publicPlaybackUrl(asset.id);
   if (playUrl.startsWith("http")) {
-    return { playUrl, sayText };
+    return { playUrl, sayText, boxId: null };
   }
 
-  return { playUrl: null, sayText };
+  return { playUrl: null, sayText, boxId: null };
 }

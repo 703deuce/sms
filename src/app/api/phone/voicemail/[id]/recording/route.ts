@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
+import { resolveVoicemailRecordingFetchUrl } from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service";
 
 /** Authenticated voicemail recording playback proxy. */
 export async function GET(
@@ -20,15 +21,17 @@ export async function GET(
       return NextResponse.json({ error: "Recording not found" }, { status: 404 });
     }
 
+    const fetchUrl = await resolveVoicemailRecordingFetchUrl(msg.recordingUrl);
+
     const headers: Record<string, string> = {};
     const apiKey = getTelnyxApiKey();
-    if (apiKey && /telnyx\.com/i.test(msg.recordingUrl)) {
+    if (apiKey && /telnyx\.com/i.test(fetchUrl)) {
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
-    const upstream = await fetch(msg.recordingUrl, { headers });
+    const upstream = await fetch(fetchUrl, { headers });
     if (!upstream.ok || !upstream.body) {
-      return NextResponse.redirect(msg.recordingUrl);
+      return NextResponse.redirect(fetchUrl);
     }
 
     const contentType = upstream.headers.get("content-type") || "audio/mpeg";

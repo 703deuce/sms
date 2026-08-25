@@ -13,6 +13,8 @@ type VoiceRuntimeAction =
   | "resolve_mctb_direct_dial_prompt"
   | "resolve_mctb_direct_dial_transfer"
   | "record_mctb_sip_press_1_consent"
+  | "begin_mctb_sip_voicemail"
+  | "finalize_mctb_sip_voicemail"
   | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
   | "persist_intake_fields"
@@ -173,6 +175,22 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/mctb-sip-session"
         );
         result = await recordMctbSipPress1ConsentForPython(payload as never);
+        break;
+      }
+
+      case "begin_mctb_sip_voicemail": {
+        const { beginMctbSipVoicemailForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service"
+        );
+        result = await beginMctbSipVoicemailForPython(payload as never);
+        break;
+      }
+
+      case "finalize_mctb_sip_voicemail": {
+        const { finalizeMctbSipVoicemailForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service"
+        );
+        result = await finalizeMctbSipVoicemailForPython(payload as never);
         break;
       }
 

@@ -93,6 +93,18 @@ assert.match(
 
 assert.match(
   voicemailSrc,
+  /begin_mctb_sip_voicemail/,
+  "voicemail fallback must begin persisted voicemail row",
+);
+
+assert.match(
+  voicemailSrc,
+  /finalize_mctb_sip_voicemail/,
+  "voicemail fallback must finalize recording to storage",
+);
+
+assert.match(
+  voicemailSrc,
   /voicemail_fallback_complete/,
   "voicemail fallback must complete with explicit disconnect reason",
 );
