@@ -70,6 +70,7 @@ export function MctbDashboardView({
   const features: WorkspaceFeatureSnapshot = productFeatures ?? summary?.features ?? {
     mctb: "inactive",
     smart_routing: "inactive",
+    call_forwarding: "inactive",
     visual_voicemail: "inactive",
     callback_requests: "inactive",
     ai_transcription: "inactive",
