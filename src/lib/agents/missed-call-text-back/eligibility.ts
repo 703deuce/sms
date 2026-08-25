@@ -166,16 +166,15 @@ export async function evaluateMissedCallTextEligibility(input: {
   }
 
   if (!input.demoMode) {
-    const now = new Date();
-    if (config.quietHoursEnabled && config.quietHoursStart && config.quietHoursEnd) {
-      if (!inWindow(now, config.timezone, config.quietHoursStart, config.quietHoursEnd)) {
-        return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
-      }
+    const { loadMctbScheduleSettings, isMctbSchedulePaused, isWithinMctbSendWindow } =
+      await import("@/lib/mctb/schedule");
+    const scheduleSettings = await loadMctbScheduleSettings(input.workspaceId, config);
+    if (isMctbSchedulePaused(scheduleSettings, config)) {
+      return { eligible: false, reason: "MCTB_DISABLED", classification };
     }
-    if (config.businessHoursOnly && config.allowedStartTime && config.allowedEndTime) {
-      if (!inWindow(now, config.timezone, config.allowedStartTime, config.allowedEndTime)) {
-        return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
-      }
+    const now = new Date();
+    if (!isWithinMctbSendWindow(now, config, scheduleSettings)) {
+      return { eligible: false, reason: "OUTSIDE_SEND_WINDOW", classification };
     }
   }
 

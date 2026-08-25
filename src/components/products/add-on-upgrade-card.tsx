@@ -34,9 +34,9 @@ const FEATURE_COPY: Record<
     upgradeParam: "callback_requests",
   },
   ai_transcription: {
-    title: "AI Transcription",
+    title: "Transcription",
     description:
-      "Turn recorded calls and voicemails into searchable, readable transcripts. AI summaries included.",
+      "Turn voicemails into readable text and get a quick AI summary of what the caller needs.",
     upgradeParam: "ai_transcription",
   },
 };

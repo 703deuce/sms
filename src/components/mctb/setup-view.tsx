@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
+import { MctbVoicemailSetupSection } from "@/components/mctb/voicemail-setup-section";
 
 type PhoneOption = {
   id: string;
@@ -84,15 +85,16 @@ type SetupData = {
 const SECTIONS = [
   { id: "number", title: "1. Choose the number" },
   { id: "forwarding", title: "2. Carrier forwarding" },
-  { id: "triggers", title: "3. What counts as missed" },
-  { id: "message", title: "4. Text-back message" },
-  { id: "links", title: "5. Links & request form" },
-  { id: "consent", title: "6. Consent method" },
-  { id: "hours", title: "7. Business hours" },
-  { id: "cooldown", title: "8. Cooldown" },
-  { id: "replies", title: "9. Reply handling" },
-  { id: "exclusions", title: "10. Do-not-text list" },
-  { id: "test", title: "11. Test" },
+  { id: "triggers", title: "3. Trigger" },
+  { id: "voicemail", title: "4. Voicemail" },
+  { id: "message", title: "5. First Text" },
+  { id: "links", title: "6. Links & request form" },
+  { id: "consent", title: "7. Consent" },
+  { id: "hours", title: "8. Schedule" },
+  { id: "cooldown", title: "9. Recovery behavior" },
+  { id: "replies", title: "10. Reply handling" },
+  { id: "exclusions", title: "11. Do-not-text list" },
+  { id: "test", title: "12. Test" },
 ] as const;
 
 type ExclusionRow = {
@@ -346,11 +348,11 @@ export function MctbSetupView() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
-          Setup
+          Text Back Setup
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Configure how missed-call text back works for your business number — triggers, message,
-          consent, hours, and testing.
+          Central configuration for missed-call text back — triggers, consent, first message,
+          voicemail, recovery behavior, and testing.
         </p>
       </div>
 
@@ -555,7 +557,7 @@ export function MctbSetupView() {
           </Card>
 
           <Card id="triggers" className="scroll-mt-24 space-y-3 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">What counts as missed</h2>
+            <h2 className="text-[15px] font-semibold text-[#111827]">Trigger</h2>
             {(
               [
                 ["noAnswer", "No answer"],
@@ -577,8 +579,13 @@ export function MctbSetupView() {
             ))}
           </Card>
 
+          <Card id="voicemail" className="scroll-mt-24 space-y-4 p-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Voicemail</h2>
+            <MctbVoicemailSetupSection phoneNumberId={phoneNumberId} />
+          </Card>
+
           <Card id="message" className="scroll-mt-24 space-y-4 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Text-back message</h2>
+            <h2 className="text-[15px] font-semibold text-[#111827]">First Text</h2>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-[#374151]">First SMS</span>
               <textarea
@@ -751,7 +758,12 @@ export function MctbSetupView() {
           </Card>
 
           <Card id="hours" className="scroll-mt-24 space-y-4 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Business hours</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[15px] font-semibold text-[#111827]">Schedule</h2>
+              <Link href="/voice/schedule" className="text-[13px] font-semibold text-primary hover:underline">
+                Open Schedule page →
+              </Link>
+            </div>
             <label className="flex items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
@@ -793,7 +805,7 @@ export function MctbSetupView() {
           </Card>
 
           <Card id="cooldown" className="scroll-mt-24 space-y-3 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Cooldown</h2>
+            <h2 className="text-[15px] font-semibold text-[#111827]">Recovery behavior</h2>
             <p className="text-[13px] text-muted-foreground">
               Prevent multiple texts if the same person calls repeatedly.
             </p>

@@ -14,8 +14,16 @@ type MctbAnalytics = {
   uniqueCallers: number;
   repeatCallers: number;
   replies: number;
+  conversationsStarted: number;
   replyRate: number;
   deliveryRate: number;
+  consentRate: number;
+  linkClicks: number;
+  linkClickRate: number;
+  voicemailCount: number;
+  optOuts: number;
+  deliveryFailures: number;
+  suppressionByReason: Record<string, number>;
 };
 
 type SrAnalytics = {
@@ -48,6 +56,15 @@ export default function UnifiedAnalyticsPage() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/mctb/analytics?range=30d", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data) setHasMctb(true);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (hasMctb) {
       fetch(`/api/mctb/analytics?range=${range}`)
         .then((r) => r.json())
@@ -57,7 +74,7 @@ export default function UnifiedAnalyticsPage() {
   }, [range, hasMctb]);
 
   useEffect(() => {
-    if (!hasSr) return;
+    if (!hasSr || hasMctb) return;
     const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
     fetch("/api/smart-routing/setup", { cache: "no-store" })
       .then((r) => r.json())
@@ -73,13 +90,17 @@ export default function UnifiedAnalyticsPage() {
       .then((r) => r.json())
       .then((j) => setSr(j.data || null))
       .catch(() => setSr(null));
-  }, [range, hasSr]);
+  }, [range, hasSr, hasMctb]);
+
+  const topSuppressions = Object.entries(mctb?.suppressionByReason ?? {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
 
   return (
     <div>
       <PageHeader
         title="Analytics"
-        description="Unified performance across Missed Call Text Back and Smart Routing."
+        description="Missed call recovery performance — text-backs, consent, conversations, and delivery health."
         actions={
           <select
             className="rounded-lg border border-border px-3 py-2 text-sm"
@@ -98,21 +119,51 @@ export default function UnifiedAnalyticsPage() {
           <h2 className="mb-3 text-lg font-semibold">Missed Call Text Back</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Missed calls" value={formatNumber(mctb?.totalMissed ?? 0)} />
-            <StatCard label="Texts sent" value={formatNumber(mctb?.textsSent ?? 0)} />
-            <StatCard label="Delivery rate" value={`${mctb?.deliveryRate ?? 0}%`} />
+            <StatCard label="Text-backs triggered" value={formatNumber(mctb?.textsSent ?? 0)} />
+            <StatCard label="Consent / send rate" value={`${mctb?.consentRate ?? 0}%`} />
+            <StatCard label="Conversations started" value={formatNumber(mctb?.conversationsStarted ?? 0)} />
+            <StatCard label="Customer replies" value={formatNumber(mctb?.replies ?? 0)} />
             <StatCard label="Reply rate" value={`${mctb?.replyRate ?? 0}%`} />
+            <StatCard label="Delivery rate" value={`${mctb?.deliveryRate ?? 0}%`} />
+            <StatCard label="Voicemails" value={formatNumber(mctb?.voicemailCount ?? 0)} />
+            <StatCard label="Suppressed" value={formatNumber(mctb?.suppressed ?? 0)} />
+            <StatCard label="Delivery failures" value={formatNumber(mctb?.deliveryFailures ?? 0)} />
+            <StatCard label="Opt-outs" value={formatNumber(mctb?.optOuts ?? 0)} />
+            <StatCard label="Link clicks" value={formatNumber(mctb?.linkClicks ?? 0)} />
           </div>
+
+          {topSuppressions.length ? (
+            <Card className="mt-4 p-4">
+              <h3 className="text-sm font-semibold">Top suppression reasons</h3>
+              <ul className="mt-2 space-y-1 text-sm">
+                {topSuppressions.map(([reason, count]) => (
+                  <li key={reason}>
+                    {reason.replace(/_/g, " ")}: {count}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
           <p className="mt-3 text-sm text-muted-foreground">
             <Link href="/voice/missed-calls" className="font-semibold text-primary hover:underline">
               View missed call log →
             </Link>
+            {" · "}
+            <Link href="/inbox" className="font-semibold text-primary hover:underline">
+              Open conversations →
+            </Link>
           </p>
         </section>
-      ) : null}
+      ) : (
+        <p className="mb-8 text-sm text-muted-foreground">
+          Enable Missed Call Text Back to see recovery analytics here.
+        </p>
+      )}
 
-      {hasSr ? (
+      {hasSr && !hasMctb ? (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Smart Routing</h2>
+          <h2 className="mb-3 text-lg font-semibold text-muted-foreground">Smart Routing (legacy)</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Calls routed" value={formatNumber(sr?.callsRouted ?? 0)} />
             <StatCard label="Answered" value={formatNumber(sr?.answered ?? 0)} />
@@ -136,18 +187,7 @@ export default function UnifiedAnalyticsPage() {
               </ul>
             </Card>
           ) : null}
-          <p className="mt-3 text-sm text-muted-foreground">
-            <Link href="/smart-routing/activity" className="font-semibold text-primary hover:underline">
-              View routing activity →
-            </Link>
-          </p>
         </section>
-      ) : null}
-
-      {!hasMctb && !hasSr ? (
-        <p className="text-sm text-muted-foreground">
-          Enable Missed Call Text Back or Smart Routing to see analytics here.
-        </p>
       ) : null}
     </div>
   );

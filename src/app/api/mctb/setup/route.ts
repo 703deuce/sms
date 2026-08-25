@@ -26,6 +26,11 @@ import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import {
+  defaultWeeklySchedule,
+  readMctbScheduleFromCustomFields,
+  isMctbSchedulePaused,
+} from "@/lib/mctb/schedule";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -51,6 +56,12 @@ export type MctbSetupPayload = {
   allowedStartTime?: string | null;
   allowedEndTime?: string | null;
   timezone?: string;
+  scheduleMode?: "always_on" | "business_hours" | "after_hours" | "custom";
+  weeklySchedule?: {
+    timezone: string;
+    days: Array<{ day: number; enabled: boolean; startTime: string; endTime: string }>;
+  } | null;
+  pauseUntil?: string | null;
   cooldownMinutes?: number;
   replyNotifications?: boolean;
   directDialForwardE164?: string | null;
@@ -120,9 +131,17 @@ export async function GET() {
       ? (solution.config as Record<string, unknown>)
       : {};
 
+  const scheduleSettings = readMctbScheduleFromCustomFields(customCfg, runtime);
+
   return NextResponse.json({
     data: {
       runtime,
+      schedule: {
+        scheduleMode: scheduleSettings.scheduleMode,
+        weeklySchedule: scheduleSettings.weeklySchedule,
+        pauseUntil: scheduleSettings.pauseUntil,
+        paused: isMctbSchedulePaused(scheduleSettings, runtime),
+      },
       solution: solution
         ? {
             setupId: solution.setupId,
@@ -282,7 +301,14 @@ export async function POST(req: Request) {
     }
   }
 
-  if (body.consentMode || body.replyNotifications !== undefined || body.businessLineE164 !== undefined) {
+  if (
+    body.consentMode ||
+    body.replyNotifications !== undefined ||
+    body.businessLineE164 !== undefined ||
+    body.scheduleMode !== undefined ||
+    body.weeklySchedule !== undefined ||
+    body.pauseUntil !== undefined
+  ) {
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { customFieldsConfig: true },
@@ -318,10 +344,22 @@ export async function POST(req: Request) {
             ...(body.businessLineE164 !== undefined
               ? { businessLineE164: body.businessLineE164?.trim() || null }
               : {}),
+            ...(body.scheduleMode !== undefined ? { scheduleMode: body.scheduleMode } : {}),
+            ...(body.weeklySchedule !== undefined
+              ? { weeklySchedule: body.weeklySchedule }
+              : {}),
+            ...(body.pauseUntil !== undefined ? { pauseUntil: body.pauseUntil } : {}),
           },
         },
       },
     });
+
+    if (body.scheduleMode !== undefined) {
+      await prisma.missedCallTextConfig.update({
+        where: { workspaceId },
+        data: { businessHoursOnly: body.scheduleMode === "business_hours" },
+      });
+    }
 
     if (body.consentMode) {
       if (

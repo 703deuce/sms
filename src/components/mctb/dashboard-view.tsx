@@ -1,7 +1,7 @@
 "use client";
 
 import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
-import { ProductCrossSellBanner } from "@/components/products/product-cross-sell-banner";
+import { DashboardNeedsAttentionPanel } from "@/components/mctb/dashboard-needs-attention-panel";
 import { cn } from "@/lib/utils";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import {
@@ -67,14 +67,6 @@ export function MctbDashboardView({
   const [missed, setMissed] = useState<MissedSummary | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const features: WorkspaceFeatureSnapshot = productFeatures ?? summary?.features ?? {
-    mctb: "inactive",
-    smart_routing: "inactive",
-    call_forwarding: "inactive",
-    visual_voicemail: "inactive",
-    callback_requests: "inactive",
-    ai_transcription: "inactive",
-  };
 
   useEffect(() => {
     fetch("/api/mctb/setup", { cache: "no-store" })
@@ -123,18 +115,11 @@ export function MctbDashboardView({
           Good {range === "today" ? "day" : "morning"}, {userName.split(" ")[0] || "there"}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your inbound call platform — missed call recovery, routing, and activity at a glance.
+          Missed call recovery health — compliance, text-backs, and conversations at a glance.
         </p>
       </div>
 
-      <ProductCrossSellBanner
-        feature="smart_routing"
-        features={features}
-        title="Route callers before they become a missed call"
-        description="Add Smart Routing to your existing business number — professional menu and call routing without replacing your phones."
-        cta="Try Smart Routing"
-        href="/settings/billing"
-      />
+      <DashboardNeedsAttentionPanel />
 
       {needsCompliance ? (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -170,7 +155,7 @@ export function MctbDashboardView({
             className="inline-flex h-9 items-center gap-1 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white"
           >
             <SlidersHorizontal className="h-4 w-4" />
-            Open Setup
+            Open Text Back Setup
           </Link>
         </div>
       ) : null}
@@ -204,7 +189,9 @@ export function MctbDashboardView({
 
       {summary?.cards?.length ? (
         <div className="grid gap-4 md:grid-cols-2">
-          {summary.cards.map((card) => (
+          {summary.cards
+            .filter((card) => card.product === "mctb" || card.product === "visual_voicemail")
+            .map((card) => (
             <Link
               key={card.product}
               href={card.href}

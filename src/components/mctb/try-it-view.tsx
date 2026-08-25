@@ -222,7 +222,7 @@ export function MctbTryItView() {
       <p className="text-sm text-muted-foreground">
         Ready to configure your own number and forwarding?{" "}
         <Link href="/voice/setup" className="font-medium text-primary hover:underline">
-          Go to Setup
+          Go to Text Back Setup
         </Link>
         .
       </p>
