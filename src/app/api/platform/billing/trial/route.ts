@@ -9,6 +9,7 @@ import { parseCheckoutSelection, grantsForPlatformProduct } from "@/lib/products
 const FEATURE_ALIASES: Record<string, TransovoProductFeature[]> = {
   mctb: ["mctb"],
   smart_routing: ["smart_routing"],
+  call_forwarding: ["call_forwarding"],
   visual_voicemail: ["visual_voicemail"],
   callback_requests: ["callback_requests"],
   bundle_mctb_sr: ["mctb", "smart_routing"],

@@ -16,6 +16,12 @@ const FEATURE_COPY: Record<
     description: "Route inbound calls to your team with menus and schedules.",
     upgradeParam: "smart_routing",
   },
+  call_forwarding: {
+    title: "Call Forwarding",
+    description:
+      "One business number that rings your existing phone — voicemail, business hours, and SMS callbacks.",
+    upgradeParam: "call_forwarding",
+  },
   visual_voicemail: {
     title: "Visual Voicemail",
     description: "Transcribed voicemail inbox with assignment and callbacks.",
