@@ -367,7 +367,6 @@ async def _frame_heartbeat(
                 "frame_progress",
                 frameCount=count,
                 captureMode="roomio_tap",
-                firstFrameLagMs=int((tap.first_frame_at or 0) * 1000) if tap.first_frame_at else None,
             )
         last_count = count
 
@@ -671,9 +670,6 @@ async def record_sip_voicemail_message(
                 frameCount=state.frame_count,
                 pcmBytes=len(state.pcm),
                 durationSeconds=state.duration_seconds,
-                firstFrameLagMs=(
-                    int((tap.first_frame_at or 0) * 1000) if tap.first_frame_at else None
-                ),
                 captureMode=capture_mode,
             )
 
