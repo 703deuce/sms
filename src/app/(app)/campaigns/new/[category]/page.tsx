@@ -14,7 +14,7 @@ import { cn, estimateSmsSegments } from "@/lib/utils";
 import { ArrowLeft, Check, Send } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 const FOLLOW_UP_TRIGGERS = [
   "new lead",
@@ -37,7 +37,9 @@ export default function NewCategoryCampaignPage() {
   const [message, setMessage] = useState(
     category ? DEFAULT_MESSAGES[category.id] : DEFAULT_MESSAGES.custom,
   );
-  const [audience, setAudience] = useState("All subscribed contacts");
+  const [audience, setAudience] = useState("list");
+  const [listIds, setListIds] = useState<string[]>([]);
+  const [lists, setLists] = useState<Array<{ id: string; name: string; contactCount?: number }>>([]);
   const [trigger, setTrigger] = useState(FOLLOW_UP_TRIGGERS[0]);
   const [delayHours, setDelayHours] = useState("24");
   const [followUpCount, setFollowUpCount] = useState("2");
@@ -49,6 +51,18 @@ export default function NewCategoryCampaignPage() {
   const [done, setDone] = useState<string | null>(null);
 
   const segments = useMemo(() => estimateSmsSegments(message), [message]);
+
+  useEffect(() => {
+    fetch("/api/contacts/lists")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.length) {
+          setLists(json.data);
+          setListIds((current) => (current.length ? current : [json.data[0].id]));
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   if (!category) {
     return (
@@ -80,13 +94,17 @@ export default function NewCategoryCampaignPage() {
           type: category!.title,
           audience,
           message,
-          activate: activate && scheduleMode === "now",
+          activate: false,
           scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
+          listId: listIds[0],
           config: {
             trigger,
             delayHours: Number(delayHours) || 24,
             followUpCount: Number(followUpCount) || 2,
             stopOnReply,
+            listIds,
+            productSource: "mass_text",
+            massTexting: true,
           },
         }),
       });
@@ -180,13 +198,32 @@ export default function NewCategoryCampaignPage() {
           )}
 
           <div>
-            <Label htmlFor="audience">Audience</Label>
-            <Select id="audience" value={audience} onChange={(e) => setAudience(e.target.value)}>
-              <option>All subscribed contacts</option>
-              <option>A list (choose after save)</option>
-              <option>A segment (choose after save)</option>
-              <option>Manual enrollment / webhook</option>
-            </Select>
+            <Label htmlFor="audience">Audience lists</Label>
+            {lists.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-600">
+                No lists yet. <Link href="/contacts/imports" className="underline">Import contacts</Link> first.
+              </p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {lists.map((list) => (
+                  <label key={list.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={listIds.includes(list.id)}
+                      onChange={(e) => {
+                        setListIds((current) =>
+                          e.target.checked
+                            ? [...current, list.id]
+                            : current.filter((id) => id !== list.id),
+                        );
+                      }}
+                    />
+                    {list.name}
+                    {typeof list.contactCount === "number" ? ` (${list.contactCount})` : ""}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -209,7 +246,7 @@ export default function NewCategoryCampaignPage() {
               {(
                 [
                   ["draft", "Save as draft"],
-                  ["now", "Activate now"],
+                  ["now", "Review & send"],
                   ["later", "Schedule"],
                 ] as const
               ).map(([id, label]) => (

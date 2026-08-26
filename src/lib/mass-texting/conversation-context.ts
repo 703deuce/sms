@@ -103,6 +103,7 @@ export async function resolveInboundConversation(input: {
   const phone = await resolvePhoneForInbound(input.workspaceId, input.toE164);
 
   let campaignId: string | null = null;
+  let campaignProductSource: MassTextConversationProductSource | null = null;
   if (input.fromE164) {
     const recentRecipient = await prisma.campaignRecipient.findFirst({
       where: {
@@ -111,14 +112,23 @@ export async function resolveInboundConversation(input: {
         workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting", "completed"] },
       },
       orderBy: { enrolledAt: "desc" },
-      select: { campaignId: true },
+      select: { campaignId: true, campaign: { select: { configJson: true } } },
     });
     campaignId = recentRecipient?.campaignId ?? null;
+    const config =
+      recentRecipient?.campaign?.configJson &&
+      typeof recentRecipient.campaign.configJson === "object"
+        ? (recentRecipient.campaign.configJson as Record<string, unknown>)
+        : {};
+    if (config.productSource === "mass_text" || config.massTexting === true) {
+      campaignProductSource = "mass_text";
+    }
   }
 
   const productSource = inferInboundProductSource({
     phoneSettingsJson: phone?.settingsJson,
     campaignId,
+    campaignProductSource,
   });
 
   const { conversationId } = await ensureProductConversation({

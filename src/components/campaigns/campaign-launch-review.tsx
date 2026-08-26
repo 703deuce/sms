@@ -18,6 +18,11 @@ type LaunchReview = {
   phoneE164: string | null;
   scheduledAt: string | null;
   a2pUseCase: string;
+  availableSegments: number;
+  requiredSegments: number;
+  shortage: number;
+  canSend: boolean;
+  blockReason: string | null;
 };
 
 export function CampaignLaunchReview({
@@ -68,7 +73,7 @@ export function CampaignLaunchReview({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idempotencyKey: `launch:${campaignId}:${Date.now()}`,
+          idempotencyKey: `launch:${campaignId}`,
           confirmLargeSend: review.finalRecipientCount >= 1000 ? confirmed : true,
         }),
       });
@@ -125,9 +130,27 @@ export function CampaignLaunchReview({
             <dd className="font-semibold">{review.finalRecipientCount}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Estimated segments</dt>
+            <dt className="text-muted-foreground">Estimated credits</dt>
             <dd>{review.estimatedSegments}</dd>
           </div>
+          <div>
+            <dt className="text-muted-foreground">Available credits</dt>
+            <dd>{review.availableSegments}</dd>
+          </div>
+          {review.shortage > 0 ? (
+            <div className="sm:col-span-2 rounded-md border border-amber-300 bg-amber-100/70 p-3">
+              <p className="font-semibold text-amber-950">
+                Need {review.requiredSegments} credits · {review.availableSegments} available ·
+                short {review.shortage}
+              </p>
+              <p className="mt-1 text-[12px] text-amber-900/80">
+                Buy more credits or upgrade before launching. This is not a server error.
+              </p>
+              <a href="/sms/settings" className="mt-2 inline-block text-[13px] font-medium underline">
+                Buy More Credits / Upgrade
+              </a>
+            </div>
+          ) : null}
           <div>
             <dt className="text-muted-foreground">Sending number</dt>
             <dd>{review.phoneE164 || "Not assigned"}</dd>
@@ -158,7 +181,7 @@ export function CampaignLaunchReview({
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button type="button" onClick={() => void launch()} disabled={launching || !review}>
+        <Button type="button" onClick={() => void launch()} disabled={launching || !review || Boolean(review.shortage)}>
           {launching ? "Launching…" : "Confirm & launch"}
         </Button>
       </div>

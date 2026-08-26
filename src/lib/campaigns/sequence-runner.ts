@@ -157,6 +157,20 @@ export async function processSequenceWaits() {
       continue;
     }
     if (recipient.campaign.status === "SCHEDULED" && (!recipient.campaign.scheduledAt || recipient.campaign.scheduledAt <= now)) {
+      const { isMassTextingCampaign } = await import("@/lib/mass-texting/campaign-send");
+      const massText = await isMassTextingCampaign(
+        recipient.workspaceId,
+        recipient.campaignId,
+      );
+      if (massText) {
+        const audit = await prisma.campaignLaunchAudit.findFirst({
+          where: { workspaceId: recipient.workspaceId, campaignId: recipient.campaignId },
+          select: { id: true },
+        });
+        if (!audit) {
+          continue;
+        }
+      }
       await prisma.campaign.update({
         where: { id: recipient.campaignId },
         data: { status: "SENDING" },
@@ -328,19 +342,42 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
   const { resolveReviewLink } = await import("@/lib/messaging/review-link");
   const destinationUrl = await resolveReviewLink(recipient.workspaceId);
   const names = splitDisplayName(recipient.displayName);
+  let firstName = names.first_name;
+  let lastName = names.last_name;
+  let customFields: Record<string, unknown> | null = null;
+  if (recipient.contactId) {
+    const contact = await prisma.contact.findUnique({
+      where: { id: recipient.contactId },
+      select: { firstName: true, lastName: true, customFields: true },
+    });
+    if (contact?.firstName) firstName = contact.firstName;
+    if (contact?.lastName) lastName = contact.lastName;
+    if (contact?.customFields && typeof contact.customFields === "object") {
+      customFields = contact.customFields as Record<string, unknown>;
+    }
+  }
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: recipient.workspaceId },
+    select: { name: true },
+  });
 
   const template =
     (typeof step.config?.body === "string" && step.config.body) ||
     recipient.campaign.body ||
     `Hi {{name}}, thanks for choosing us! {{tracking_link}} Reply STOP to opt out.`;
 
+  const campaignConfig =
+    recipient.campaign.configJson && typeof recipient.campaign.configJson === "object"
+      ? (recipient.campaign.configJson as Record<string, unknown>)
+      : {};
+  const trackLinks =
+    template.includes("{{tracking_link}}") ||
+    template.includes("{{review_link}}") ||
+    campaignConfig.trackLinks === true;
+
   let paymentLinkUrl = "";
   if (template.includes("{{payment_link}}")) {
     const { resolvePaymentLinkForTemplate } = await import("@/lib/payments/create-link");
-    const campaignConfig =
-      recipient.campaign.configJson && typeof recipient.campaign.configJson === "object"
-        ? (recipient.campaign.configJson as Record<string, unknown>)
-        : {};
     const paymentAmount = Number(campaignConfig.paymentAmountCents || 0);
     paymentLinkUrl = await resolvePaymentLinkForTemplate(
       recipient.workspaceId,
@@ -354,16 +391,27 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
     );
   }
 
-  let body = mergeTemplate(template, {
-    ...names,
-    customer_name: recipient.displayName || names.name,
-    phone: recipient.phone || "",
-    email: recipient.email || "",
-    tracking_link: trackedUrl,
-    review_link: trackedUrl,
+  const { renderMassTextBody, massTextMergeVarsFromContact } = await import(
+    "@/lib/mass-texting/personalization"
+  );
+  const rendered = renderMassTextBody(
+    template,
+    massTextMergeVarsFromContact({
+      firstName,
+      lastName,
+      displayName: recipient.displayName,
+      phone: recipient.phone,
+      email: recipient.email,
+      businessName: workspace?.name,
+      customFields,
+    }),
+  );
+  let body = mergeTemplate(rendered.body, {
+    tracking_link: trackLinks ? trackedUrl : "",
+    review_link: trackLinks ? trackedUrl : "",
     payment_link: paymentLinkUrl,
   });
-  if (!body.includes(trackedUrl)) {
+  if (trackLinks && !body.includes(trackedUrl)) {
     body = `${body.trim()} ${trackedUrl}`.trim();
   }
 

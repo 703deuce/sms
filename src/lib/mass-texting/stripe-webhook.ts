@@ -84,13 +84,31 @@ export async function handleMassTextingStripeEvent(
     }
   }
 
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const md = (invoice.metadata || {}) as Record<string, string | undefined>;
+    if (md.product === "mass_texting" && md.workspaceId) {
+      await updateMassTextingLifecycle(md.workspaceId, "PAYMENT_REQUIRED");
+      return { handled: true };
+    }
+  }
+
   if (event.type === "invoice.paid") {
     const invoice = event.data.object as Stripe.Invoice;
     const subId = invoiceSubscriptionId(invoice);
     const md = (invoice.metadata || {}) as Record<string, string | undefined>;
     if (md.product === "mass_texting" && md.workspaceId && md.monthlyTier) {
       const account = await getOrCreateMassTextingBillingAccount(md.workspaceId);
-      await updateMassTextingLifecycle(md.workspaceId, account.lifecycleState, {
+      const nextState =
+        account.lifecycleState === "PAYMENT_REQUIRED" ||
+        account.lifecycleState === "TRIAL_EXPIRED" ||
+        account.lifecycleState === "TRIAL_LIMIT_REACHED" ||
+        account.lifecycleState === "CONVERSION_SELECTED"
+          ? "PRODUCTION_ACTIVE"
+          : account.lifecycleState === "CANCELED"
+            ? "PRODUCTION_ACTIVE"
+            : account.lifecycleState;
+      await updateMassTextingLifecycle(md.workspaceId, nextState, {
         monthlySegmentsUsed: 0,
         billingPeriodStart: invoice.period_start
           ? new Date(invoice.period_start * 1000)

@@ -25,7 +25,7 @@ export async function POST(request: Request, ctx: Ctx) {
     await requireMassTextingWorkspace(auth.workspaceId);
 
     const idempotencyKey =
-      body.idempotencyKey?.trim() || `launch:${auth.workspaceId}:${id}:${Date.now()}`;
+      body.idempotencyKey?.trim() || `launch:${auth.workspaceId}:${id}`;
 
     const result = await launchCampaignWithAudit({
       workspaceId: auth.workspaceId,

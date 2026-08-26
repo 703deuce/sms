@@ -11,6 +11,8 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
     const q = searchParams.get("q")?.trim();
     const phone = searchParams.get("phone")?.trim();
+    const take = Math.min(200, Math.max(1, Number(searchParams.get("take") || 50)));
+    const skip = Math.max(0, Number(searchParams.get("skip") || 0));
 
     const include = { tagMembers: { include: { tag: true } } };
 
@@ -38,7 +40,8 @@ export async function GET(request: Request) {
         },
         include,
         orderBy: { createdAt: "desc" },
-        take: 25,
+        take,
+        skip,
       });
       return NextResponse.json({ data });
     }
@@ -51,7 +54,8 @@ export async function GET(request: Request) {
           : {}),
       },
       orderBy: { createdAt: "desc" },
-      take: 500,
+      take,
+      skip,
     });
     return NextResponse.json({ data });
   } catch (err) {

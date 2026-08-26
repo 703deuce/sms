@@ -21,13 +21,15 @@ export function readPhoneProductRoles(settingsJson: unknown): PhoneProductRoles 
 export function inferInboundProductSource(input: {
   phoneSettingsJson?: unknown;
   campaignId?: string | null;
+  campaignProductSource?: MassTextConversationProductSource | null;
   explicit?: MassTextConversationProductSource | null;
 }): MassTextConversationProductSource {
   if (input.explicit) return input.explicit;
-  if (input.campaignId) return "mass_text";
   const roles = readPhoneProductRoles(input.phoneSettingsJson);
   if (roles.massText && !roles.mctb) return "mass_text";
   if (roles.mctb && !roles.massText) return "mctb";
+  if (input.campaignProductSource === "mass_text") return "mass_text";
+  if (input.campaignProductSource === "mctb") return "mctb";
   return "manual";
 }
 

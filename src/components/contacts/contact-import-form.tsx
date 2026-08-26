@@ -6,7 +6,7 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { MASS_TEXT_LIST_ATTESTATION_TEXT } from "@/lib/mass-texting/constants";
-import { FileSpreadsheet, Upload } from "lucide-react";
+import { parseCsv, guessCsvField } from "@/lib/contacts/parse-csv";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
@@ -22,58 +22,6 @@ const FIELD_OPTIONS = [
   "Consent source",
   "Tags",
 ];
-
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    const next = text[i + 1];
-
-    if (inQuotes) {
-      if (ch === '"' && next === '"') {
-        cell += '"';
-        i += 1;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        cell += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      row.push(cell.trim());
-      cell = "";
-    } else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && next === "\n") i += 1;
-      row.push(cell.trim());
-      if (row.some((c) => c.length > 0)) rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += ch;
-    }
-  }
-
-  row.push(cell.trim());
-  if (row.some((c) => c.length > 0)) rows.push(row);
-  return rows;
-}
-
-function guessField(header: string): string {
-  const h = header.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (h.includes("firstname") || h === "first") return "First name";
-  if (h.includes("lastname") || h === "last") return "Last name";
-  if (h.includes("phone") || h.includes("mobile") || h.includes("cell")) return "Phone";
-  if (h.includes("email")) return "Email";
-  if (h.includes("consentdate") || h.includes("optindate")) return "Consent date";
-  if (h.includes("consentsource") || h === "source") return "Consent source";
-  if (h.includes("tag")) return "Tags";
-  return "Skip column";
-}
 
 type ColumnMapping = {
   header: string;
@@ -95,7 +43,7 @@ export function ContactImportForm({
   const [parsedRows, setParsedRows] = useState<string[][]>([]);
   const [listName, setListName] = useState("");
   const [tagInput, setTagInput] = useState("");
-  const [consentConfirmed, setConsentConfirmed] = useState(true);
+  const [consentConfirmed, setConsentConfirmed] = useState(!marketingImport);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -117,7 +65,7 @@ export function ContactImportForm({
         headers.map((header, idx) => ({
           header,
           sample: dataRows[0]?.[idx] || "",
-          field: guessField(header),
+          field: guessCsvField(header),
         })),
       );
       setError(null);

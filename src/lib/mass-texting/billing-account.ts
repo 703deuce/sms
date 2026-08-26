@@ -87,9 +87,14 @@ export async function getMassTextingBillingSummary(
       break;
     case "PRODUCTION_ACTIVE":
       canSend =
-        monthlyRemaining + account.paygCreditsSegments > 0 ||
-        account.paygLineActive;
-      if (!canSend) blockReason = "Insufficient segments or inactive messaging line";
+        monthlyRemaining + account.paygCreditsSegments > 0 &&
+        (account.billingModel !== "payg" || account.paygLineActive);
+      if (!canSend) {
+        blockReason =
+          account.billingModel === "payg" && !account.paygLineActive
+            ? "PAYG Messaging Line inactive"
+            : "Insufficient segments";
+      }
       break;
     case "TRIAL_PENDING_A2P":
     case "PRODUCTION_A2P_PENDING":
@@ -97,8 +102,10 @@ export async function getMassTextingBillingSummary(
       break;
     case "TRIAL_EXPIRED":
     case "TRIAL_LIMIT_REACHED":
-    case "PAYMENT_REQUIRED":
       blockReason = "Trial ended — upgrade required";
+      break;
+    case "PAYMENT_REQUIRED":
+      blockReason = "Payment required — update billing to keep sending";
       break;
     case "CANCELED":
       blockReason = "Account canceled";

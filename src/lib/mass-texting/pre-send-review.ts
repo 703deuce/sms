@@ -2,7 +2,9 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
-import { estimateSmsSegments } from "@/lib/utils";
+import { MASS_TEXT_MMS_PRODUCTION_ENABLED } from "@/lib/mass-texting/pricing";
+import { creditsForRecipientBody, massTextMergeVarsFromContact } from "@/lib/mass-texting/personalization";
+import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
 
 export type PreSendReview = {
   campaignId: string;
@@ -21,6 +23,12 @@ export type PreSendReview = {
   phoneE164: string | null;
   scheduledAt: string | null;
   a2pUseCase: "MASS_TEXT_MARKETING";
+  availableSegments: number;
+  requiredSegments: number;
+  shortage: number;
+  canSend: boolean;
+  blockReason: string | null;
+  mmsBlocked: boolean;
 };
 
 export async function buildPreSendReview(
@@ -33,6 +41,11 @@ export async function buildPreSendReview(
   });
   if (!campaign) return null;
 
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { name: true },
+  });
+
   const config =
     campaign.configJson && typeof campaign.configJson === "object"
       ? (campaign.configJson as Record<string, unknown>)
@@ -44,28 +57,63 @@ export async function buildPreSendReview(
       : [];
 
   const listNames: string[] = [];
-  const recipients: Array<{ phone?: string; email?: string; contactId?: string; displayName?: string }> =
-    [];
+  const recipients: Array<{
+    phone?: string;
+    email?: string;
+    contactId?: string;
+    displayName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    customFields?: Record<string, unknown> | null;
+  }> = [];
 
   if (listIds.length) {
     const lists = await prisma.contactList.findMany({
       where: { workspaceId, id: { in: listIds } },
-      include: {
-        members: {
-          include: { contact: true },
-        },
-      },
     });
+    const members = await prisma.contactListMember.findMany({
+      where: { listId: { in: listIds } },
+    });
+    const contactIds = [
+      ...new Set(members.map((m: { contactId: string }) => m.contactId).filter(Boolean)),
+    ];
+    const contacts = contactIds.length
+      ? await prisma.contact.findMany({
+          where: { workspaceId, id: { in: contactIds } },
+        })
+      : [];
+    const contactById = new Map(contacts.map((c: { id: string }) => [c.id, c] as const));
+    const membersByList = new Map<string, Array<{ contactId: string }>>();
+    for (const member of members) {
+      const arr = membersByList.get(member.listId) || [];
+      arr.push(member);
+      membersByList.set(member.listId, arr);
+    }
     for (const list of lists) {
       listNames.push(list.name);
-      for (const member of list.members) {
-        const c = member.contact;
+      for (const member of membersByList.get(list.id) || []) {
+        const c = contactById.get(member.contactId) as
+          | {
+              id: string;
+              phone: string;
+              email?: string | null;
+              firstName?: string | null;
+              lastName?: string | null;
+              customFields?: unknown;
+            }
+          | undefined;
         if (!c?.phone) continue;
         recipients.push({
           phone: c.phone,
           email: c.email || undefined,
           contactId: c.id,
           displayName: [c.firstName, c.lastName].filter(Boolean).join(" ") || undefined,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          customFields:
+            c.customFields && typeof c.customFields === "object"
+              ? (c.customFields as Record<string, unknown>)
+              : null,
         });
       }
     }
@@ -74,12 +122,29 @@ export async function buildPreSendReview(
       where: { campaignId, workspaceId },
       select: { phone: true, email: true, contactId: true, displayName: true },
     });
+    const contactIds = enrolled.map((r: { contactId: string | null }) => r.contactId).filter(Boolean) as string[];
+    const contacts = contactIds.length
+      ? await prisma.contact.findMany({
+          where: { workspaceId, id: { in: contactIds } },
+          select: { id: true, firstName: true, lastName: true, customFields: true },
+        })
+      : [];
+    const byId = new Map(
+      contacts.map((c: { id: string }) => [c.id, c] as const),
+    );
     for (const r of enrolled) {
+      const contact = r.contactId ? byId.get(r.contactId) : null;
       recipients.push({
         phone: r.phone || undefined,
         email: r.email || undefined,
         contactId: r.contactId || undefined,
         displayName: r.displayName || undefined,
+        firstName: contact?.firstName,
+        lastName: contact?.lastName,
+        customFields:
+          contact?.customFields && typeof contact.customFields === "object"
+            ? (contact.customFields as Record<string, unknown>)
+            : null,
       });
     }
   }
@@ -92,14 +157,35 @@ export async function buildPreSendReview(
   const suppressedRemoved = rejected.filter((r) => r.reason === "suppressed").length;
 
   const body = campaign.body || "";
-  const segmentInfo = estimateSmsSegments(body);
-  const isMms = Boolean(config.mediaUrls && Array.isArray(config.mediaUrls) && config.mediaUrls.length);
-  const estimatedSegments = isMms
-    ? accepted.length
-    : accepted.length * Math.max(1, segmentInfo.segments);
+  const mediaUrls = Array.isArray(config.mediaUrls) ? (config.mediaUrls as unknown[]) : [];
+  const isMms = mediaUrls.length > 0;
+  const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
+
+  let estimatedSegments = 0;
+  const acceptedByPhone = new Map(accepted.map((r) => [r.phone, r]));
+  for (const recipient of recipients) {
+    if (!recipient.phone || !acceptedByPhone.has(recipient.phone)) continue;
+    const priced = creditsForRecipientBody({
+      template: body,
+      isMms,
+      vars: massTextMergeVarsFromContact({
+        firstName: recipient.firstName,
+        lastName: recipient.lastName,
+        displayName: recipient.displayName,
+        phone: recipient.phone,
+        email: recipient.email,
+        businessName: workspace?.name,
+        customFields: recipient.customFields,
+      }),
+    });
+    estimatedSegments += priced.credits;
+  }
 
   const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
   const sender = await resolveMassTextSendingNumber(workspaceId);
+  const availability = await getSegmentAvailability(workspaceId);
+  const canSend = availability.canSend && estimatedSegments <= availability.available && !mmsBlocked;
+  const shortage = Math.max(0, estimatedSegments - availability.available);
 
   return {
     campaignId,
@@ -118,5 +204,14 @@ export async function buildPreSendReview(
     phoneE164: sender?.phoneE164 ?? null,
     scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
     a2pUseCase: "MASS_TEXT_MARKETING",
+    availableSegments: availability.available,
+    requiredSegments: estimatedSegments,
+    shortage,
+    canSend,
+    blockReason: mmsBlocked
+      ? "MMS is not enabled in production yet"
+      : shortage > 0
+        ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+        : availability.blockReason,
   };
 }

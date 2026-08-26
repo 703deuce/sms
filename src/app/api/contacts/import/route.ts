@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "rows required" }, { status: 400 });
     }
 
-    if (body.marketingImport) {
+    if (body.marketingImport || (await import("@/lib/mass-texting/access").then((m) => m.isMassTextingWorkspace(auth.workspaceId)))) {
       if (!body.attestationId) {
         return NextResponse.json(
           { error: "List consent attestation is required for marketing imports." },
@@ -79,6 +79,10 @@ export async function POST(request: Request) {
             workspaceId_phone: { workspaceId: auth.workspaceId, phone },
           },
         });
+        if (existing && (existing.status === "UNSUBSCRIBED" || existing.status === "BLOCKED")) {
+          suppressedSkipped += 1;
+          continue;
+        }
         const contact = await prisma.contact.upsert({
           where: {
             workspaceId_phone: { workspaceId: auth.workspaceId, phone },

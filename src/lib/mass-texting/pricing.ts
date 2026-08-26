@@ -64,6 +64,19 @@ export const MASS_TEXT_TRIAL = {
   mmsEnabled: false,
 } as const;
 
+/** 1 SMS segment = 1 messaging credit. */
+export const MASS_TEXT_SMS_CREDITS_PER_SEGMENT = 1;
+
+/** 1 MMS = 3 messaging credits. */
+export const MASS_TEXT_MMS_CREDIT_MULTIPLIER = 3;
+
+/**
+ * MMS composer is hidden until provider payload + 3-credit accounting
+ * are production-complete. Keep the multiplier in code so accounting tests
+ * and a future enablement share one source of truth.
+ */
+export const MASS_TEXT_MMS_PRODUCTION_ENABLED = false;
+
 export const MASS_TEXT_A2P_REGISTRATION_FEE_CENTS = 2000;
 
 export const MASS_TEXT_PAYG_LINE = {
@@ -248,5 +261,24 @@ export function listMassTextPricingCards() {
     monthly: MASS_TEXT_MONTHLY_TIERS.map((tier) => MASS_TEXT_MONTHLY_PLANS[tier]),
     paygPacks: MASS_TEXT_PAYG_PACK_KEYS.map((key) => MASS_TEXT_PAYG_PACKS[key]),
     additionalNumber: MASS_TEXT_ADDITIONAL_NUMBER,
+    smsCreditsPerSegment: MASS_TEXT_SMS_CREDITS_PER_SEGMENT,
+    mmsCreditMultiplier: MASS_TEXT_MMS_CREDIT_MULTIPLIER,
+    mmsProductionEnabled: MASS_TEXT_MMS_PRODUCTION_ENABLED,
   };
+}
+
+export function creditsForSmsSegments(segments: number): number {
+  return Math.max(0, Math.ceil(segments)) * MASS_TEXT_SMS_CREDITS_PER_SEGMENT;
+}
+
+export function creditsForMmsMessage(): number {
+  return MASS_TEXT_MMS_CREDIT_MULTIPLIER;
+}
+
+export function creditsForRenderedMessage(input: {
+  isMms: boolean;
+  smsSegments: number;
+}): number {
+  if (input.isMms) return creditsForMmsMessage();
+  return creditsForSmsSegments(Math.max(1, input.smsSegments));
 }

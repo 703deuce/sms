@@ -59,8 +59,9 @@ export async function recordMassTextingBillingEvent(input: {
     });
     return true;
   } catch (err) {
-    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
-      return false;
+    if (err && typeof err === "object" && "code" in err) {
+      const code = String((err as { code: string }).code);
+      if (code === "P2002" || code === "23505") return false;
     }
     throw err;
   }

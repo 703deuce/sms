@@ -27,11 +27,23 @@ export async function activateMassTextingTrial(workspaceId: string): Promise<{
   if (!reg?.messagingEnabled || !reg.phoneAttached) {
     return { ok: false, reason: "messaging_not_ready" };
   }
-  if (reg.overallStatus !== "approved" && reg.overallStatus !== "certified") {
+  if (
+    reg.overallStatus !== "approved" &&
+    reg.overallStatus !== "certified" &&
+    reg.overallStatus !== "ready"
+  ) {
     return { ok: false, reason: "a2p_not_approved" };
   }
 
   const account = await getOrCreateMassTextingBillingAccount(workspaceId);
+  if (
+    account.lifecycleState === "PRODUCTION_ACTIVE" ||
+    account.lifecycleState === "PRODUCTION_A2P_PENDING" ||
+    account.lifecycleState === "CONVERSION_SELECTED" ||
+    account.lifecycleState === "CANCELED"
+  ) {
+    return { ok: false, reason: "not_in_trial" };
+  }
   if (account.lifecycleState === "TRIAL_ACTIVE" && account.trialStartedAt) {
     return { ok: true, trialEndsAt: account.trialEndsAt?.toISOString() };
   }

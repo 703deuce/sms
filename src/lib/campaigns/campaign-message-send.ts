@@ -257,7 +257,11 @@ export async function sendCampaignMessageById(messageId: string) {
       throw new JobFailedError(reason);
     }
     const availability = await getSegmentAvailability(message.workspaceId);
-    if (!availability.canSend) {
+    const { getActiveCampaignReservation } = await import(
+      "@/lib/mass-texting/credit-accounting"
+    );
+    const reservation = await getActiveCampaignReservation(message.campaignId);
+    if (!reservation && !availability.canSend) {
       const reason = availability.blockReason || "Insufficient Mass Texting segments";
       await prisma.campaignMessage.update({
         where: { id: messageId },
@@ -501,6 +505,22 @@ export async function sendCampaignMessageById(messageId: string) {
     }
 
     await finalizeSentMessage(messageId);
+    if (massTextCampaign) {
+      try {
+        const { settleCampaignReservation } = await import(
+          "@/lib/mass-texting/credit-accounting"
+        );
+        const open = await prisma.campaignMessage.count({
+          where: {
+            campaignId: message.campaignId,
+            status: { in: ["queued", "sending"] },
+          },
+        });
+        if (open === 0) await settleCampaignReservation(message.campaignId);
+      } catch {
+        // settlement is best-effort
+      }
+    }
     return { ok: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

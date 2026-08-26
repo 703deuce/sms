@@ -1007,6 +1007,8 @@ model ContactList {
   description String?
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members     ContactListMember[]
+
+  @@index([workspaceId])
 }
 
 model ContactListMember {
@@ -1080,6 +1082,8 @@ model Campaign {
   campaignMessages CampaignMessage[]
 
   @@index([workspaceId, category])
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledAt])
 }
 
 model Message {
@@ -1399,6 +1403,7 @@ model CampaignRecipient {
 
   @@index([campaignId, workflowStatus, nextActionAt])
   @@index([workspaceId, phone])
+  @@index([contactId])
   @@map("campaign_recipients")
 }
 
@@ -1431,6 +1436,8 @@ model CampaignMessage {
 
   @@index([status, scheduledFor])
   @@index([campaignId, status])
+  @@index([providerId])
+  @@index([workspaceId, createdAt])
   @@unique([recipientId, stepKey])
   @@map("campaign_messages")
 }
@@ -1543,6 +1550,7 @@ model Conversation {
   @@index([workspaceId, productSource, updatedAt])
   @@index([workspaceId, phoneNumberId, updatedAt])
   @@index([workspaceId, campaignId])
+  @@index([workspaceId, contactId, productSource])
 }
 
 model ConversationMessage {
@@ -1558,6 +1566,7 @@ model ConversationMessage {
   conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([providerMessageId])
+  @@index([conversationId, createdAt])
 }
 
 model Template {
@@ -1571,6 +1580,8 @@ model Template {
   shared      Boolean @default(true)
   tags        String[]
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 /// Packaged solution instance created by a wizard (one customer-facing "system").

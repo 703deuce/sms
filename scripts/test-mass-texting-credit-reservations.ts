@@ -107,6 +107,55 @@ async function main() {
     });
     assert.equal(r5.ok, false);
 
+    await updateMassTextingLifecycle(workspaceId, "PRODUCTION_ACTIVE", {
+      billingModel: "monthly",
+      monthlyPlanTier: "growth",
+      monthlySegmentsIncluded: 1000,
+      monthlySegmentsUsed: 0,
+      paygCreditsSegments: 0,
+    });
+
+    const [cA, cB] = await Promise.all([
+      reserveSegmentsForCampaign({
+        workspaceId,
+        campaignId: "camp_race_a",
+        segments: 800,
+        idempotencyKey: `race-a-${randomBytes(4).toString("hex")}`,
+      }),
+      reserveSegmentsForCampaign({
+        workspaceId,
+        campaignId: "camp_race_b",
+        segments: 700,
+        idempotencyKey: `race-b-${randomBytes(4).toString("hex")}`,
+      }),
+    ]);
+    const wins = [cA, cB].filter((r) => r.ok).length;
+    assert.equal(wins, 1, "only one concurrent campaign may reserve overlapping credits");
+
+    const sameKey = `same-${randomBytes(4).toString("hex")}`;
+    await updateMassTextingLifecycle(workspaceId, "PRODUCTION_ACTIVE", {
+      monthlySegmentsUsed: 0,
+      paygCreditsSegments: 0,
+      monthlySegmentsIncluded: 1000,
+    });
+    const [d1, d2] = await Promise.all([
+      reserveSegmentsForCampaign({
+        workspaceId,
+        campaignId: "camp_dup",
+        segments: 100,
+        idempotencyKey: sameKey,
+      }),
+      reserveSegmentsForCampaign({
+        workspaceId,
+        campaignId: "camp_dup",
+        segments: 100,
+        idempotencyKey: sameKey,
+      }),
+    ]);
+    assert.equal(d1.ok, true);
+    assert.equal(d2.ok, true);
+    if (d1.ok && d2.ok) assert.equal(d1.reservationId, d2.reservationId);
+
     console.log("test-mass-texting-credit-reservations: ok");
   } finally {
     await cleanup(workspaceId);

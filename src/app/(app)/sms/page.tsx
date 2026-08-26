@@ -20,7 +20,7 @@ export default async function MassTextingOverviewPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/campaigns/new/promotional">
+          <Link href="/campaigns/new/promotion">
             <Button className="h-9 rounded-[10px]">
               <Megaphone className="h-4 w-4" />
               New Campaign
@@ -118,7 +118,7 @@ export default async function MassTextingOverviewPage() {
             <p className="mt-1 text-[13px] text-muted-foreground">
               Create your first campaign to start sending.
             </p>
-            <Link href="/campaigns/new/promotional" className="mt-4 inline-block">
+            <Link href="/campaigns/new/promotion" className="mt-4 inline-block">
               <Button>Create your first campaign</Button>
             </Link>
           </div>

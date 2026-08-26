@@ -46,6 +46,7 @@ export async function POST(request: Request) {
       sendWindowEnd?: number;
       scheduledAt?: string;
       listId?: string;
+      listIds?: string[];
       segmentId?: string;
       senderPoolId?: string;
       recipients?: Array<{ phone?: string; email?: string; displayName?: string }>;
@@ -65,15 +66,24 @@ export async function POST(request: Request) {
 
     const recurrence = config.recurrence as { nextRunAt?: string } | undefined;
     let scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
-    let status: "DRAFT" | "SCHEDULED" | "SENDING" = body.activate
-      ? "SENDING"
-      : body.scheduledAt || recurrence?.nextRunAt
-        ? "SCHEDULED"
-        : "DRAFT";
+    const wantsActivate = body.activate === true;
+    let status: "DRAFT" | "SCHEDULED" | "SENDING" = "DRAFT";
+    if (body.scheduledAt || recurrence?.nextRunAt) {
+      status = "SCHEDULED";
+    }
     if (recurrence?.nextRunAt) {
       scheduledAt = new Date(recurrence.nextRunAt);
-      if (!body.activate) status = "SCHEDULED";
     }
+
+    const { isMassTextingWorkspace } = await import("@/lib/mass-texting/access");
+    const { massTextProductConfigPatch, campaignConfigIsMassText } = await import(
+      "@/lib/mass-texting/campaign-send"
+    );
+    const massTextWorkspace = await isMassTextingWorkspace(workspaceId);
+    const shouldTagMassText =
+      campaignConfigIsMassText(config) ||
+      (massTextWorkspace && categoryId !== "missed_call");
+    const configJson = shouldTagMassText ? massTextProductConfigPatch(config) : config;
 
     const sequenceJson = body.sequenceJson
       ? parseSequence(body.sequenceJson)
@@ -92,7 +102,7 @@ export async function POST(request: Request) {
         status,
         scheduledAt,
         sequenceJson: sequenceJson as Prisma.InputJsonValue,
-        configJson: config as Prisma.InputJsonValue,
+        configJson: configJson as Prisma.InputJsonValue,
         senderPoolId: body.senderPoolId || null,
         successMode: body.successMode || "click",
         dailySendLimit: body.dailySendLimit,
@@ -105,14 +115,24 @@ export async function POST(request: Request) {
     let enrolledCount = 0;
     let rejected: Array<{ reason: string }> = [];
 
+    const listIds = Array.isArray(body.listIds)
+      ? body.listIds
+      : body.listId
+        ? [body.listId]
+        : Array.isArray((config as { listIds?: string[] }).listIds)
+          ? (config as { listIds: string[] }).listIds
+          : [];
+
     if (body.segmentId) {
       const segEnroll = await enrollSegmentInCampaign(workspaceId, campaign.id, body.segmentId);
       enrolledCount = segEnroll.enrolled;
       rejected = segEnroll.rejected;
-    } else if (body.listId) {
-      const listEnroll = await enrollListInCampaign(workspaceId, campaign.id, body.listId);
-      enrolledCount = listEnroll.enrolled;
-      rejected = listEnroll.rejected;
+    } else if (listIds.length) {
+      for (const listId of listIds) {
+        const listEnroll = await enrollListInCampaign(workspaceId, campaign.id, listId);
+        enrolledCount += listEnroll.enrolled;
+        rejected = rejected.concat(listEnroll.rejected);
+      }
     } else {
       const bulk = await validateBulkRecipients(workspaceId, campaign.id, body.recipients || []);
       rejected = bulk.rejected;
@@ -129,8 +149,36 @@ export async function POST(request: Request) {
       }
     }
 
+    if (wantsActivate) {
+      const { isMassTextingCampaign } = await import("@/lib/mass-texting/campaign-send");
+      const massText = await isMassTextingCampaign(workspaceId, campaign.id);
+      if (massText) {
+        const { launchCampaignWithAudit } = await import("@/lib/mass-texting/campaign-launch");
+        const launched = await launchCampaignWithAudit({
+          workspaceId,
+          campaignId: campaign.id,
+          userId: auth.session.userId,
+          idempotencyKey: `launch:${workspaceId}:${campaign.id}`,
+          confirmLargeSend: true,
+        });
+        if (!launched.ok) {
+          return NextResponse.json(
+            { error: launched.error, available: launched.available, required: launched.required },
+            { status: 400 },
+          );
+        }
+      } else {
+        await getPrisma().campaign.update({
+          where: { id: campaign.id },
+          data: { status: "SENDING" },
+        });
+        const { processSequenceWaits } = await import("@/lib/campaigns/sequence-runner");
+        await processSequenceWaits();
+      }
+    }
+
     return NextResponse.json(
-      { data: { campaign, enrolledCount, rejected } },
+      { data: { campaign: await getPrisma().campaign.findUnique({ where: { id: campaign.id } }), enrolledCount, rejected } },
       { status: 201 },
     );
   } catch (err) {
@@ -163,6 +211,28 @@ export async function PATCH(request: Request) {
     if (body.action === "activate" || body.action === "resume") {
       if (campaign.status === "CANCELED") {
         return NextResponse.json({ error: "Cannot resume a canceled campaign" }, { status: 400 });
+      }
+      const { isMassTextingCampaign } = await import("@/lib/mass-texting/campaign-send");
+      const massText = await isMassTextingCampaign(workspaceId, campaign.id);
+      if (massText) {
+        const { launchCampaignWithAudit } = await import("@/lib/mass-texting/campaign-launch");
+        const launched = await launchCampaignWithAudit({
+          workspaceId,
+          campaignId: campaign.id,
+          userId: auth.session.userId,
+          idempotencyKey: `launch:${workspaceId}:${campaign.id}`,
+          confirmLargeSend: true,
+        });
+        if (!launched.ok) {
+          return NextResponse.json(
+            { error: launched.error, available: launched.available, required: launched.required },
+            { status: 400 },
+          );
+        }
+        const updated = await getPrisma().campaign.findFirst({
+          where: { id: campaign.id, workspaceId },
+        });
+        return NextResponse.json({ data: updated });
       }
       status = "SENDING";
     }

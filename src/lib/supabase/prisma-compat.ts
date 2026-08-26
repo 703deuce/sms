@@ -10,7 +10,11 @@ export class DbError extends Error {
   }
 }
 
-/** PostgREST PGRST002 — schema cache unavailable (often transient during deploy or Supabase blips). */
+function dbErrorFromPostgrest(error: { message?: string; code?: string }): DbError {
+  const raw = error.code ? String(error.code) : undefined;
+  const code = raw === "23505" ? "P2002" : raw;
+  return new DbError(error.message || "Database error", code);
+}
 function isTransientPostgrestError(error: { message?: string; code?: string } | null | undefined): boolean {
   if (!error) return false;
   const code = error.code ? String(error.code) : "";
@@ -812,7 +816,7 @@ async function resolveNestedWhere(model: string, where: Args | undefined): Promi
       let q: any = db.from(rel.table).select("id");
       q = applyWhereSync(q, value);
       const { data, error } = await q;
-      if (error) throw new DbError(error.message, error.code);
+      if (error) throw dbErrorFromPostgrest(error);
       const ids = (data ?? []).map((r: Row) => r.id as string);
       delete out[key];
       out[rel.fk] = { in: ids.length ? ids : ["__none__"] };
@@ -1085,7 +1089,7 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       const { data, error } = ids.length
         ? await db.from("ProductEntitlement").select("*").in("workspaceId", ids)
         : { data: [] as Row[], error: null };
-      if (error) throw new DbError(error.message, error.code);
+      if (error) throw dbErrorFromPostgrest(error);
       const by = new Map<string, Row[]>();
       for (const row of data ?? []) {
         const revived = reviveRow(row as Row);
@@ -1102,7 +1106,7 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       const { data, error } = ids.length
         ? await db.from("workspace_product_features").select("*").in("workspaceId", ids)
         : { data: [] as Row[], error: null };
-      if (error) throw new DbError(error.message, error.code);
+      if (error) throw dbErrorFromPostgrest(error);
       const by = new Map<string, Row[]>();
       for (const row of data ?? []) {
         const revived = reviveRow(row as Row);
@@ -1147,7 +1151,7 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       continue;
     }
     const { data, error } = await db.from(meta.table).select("*").in("id", ids);
-    if (error) throw new DbError(error.message, error.code);
+    if (error) throw dbErrorFromPostgrest(error);
     const map = new Map((data ?? []).map((r) => [r.id as string, reviveRow(r as Row)]));
     out = out.map((r) => ({ ...r, [rel]: map.get(r[fk] as string) ?? null }));
 
@@ -1263,7 +1267,7 @@ function modelApi(model: string): ModelApi {
         }
 
         const { data, error } = await q;
-        if (error) throw new DbError(error.message, error.code);
+        if (error) throw dbErrorFromPostgrest(error);
         const rows = ((data ?? []) as Row[]).map((r) => reviveRow(r));
         return applyInclude(rows, args.include, model);
       });
@@ -1294,7 +1298,7 @@ function modelApi(model: string): ModelApi {
             transientRetries++;
             continue;
           }
-          throw new DbError(error.message, error.code);
+          throw dbErrorFromPostgrest(error);
         }
       });
     },
@@ -1313,7 +1317,7 @@ function modelApi(model: string): ModelApi {
           continue;
         }
         if (skipDuplicates) return { count: 0 };
-        throw new DbError(error.message, error.code);
+        throw dbErrorFromPostgrest(error);
       }
     },
 
@@ -1347,7 +1351,7 @@ function modelApi(model: string): ModelApi {
             transientRetries++;
             continue;
           }
-          throw new DbError(error.message, error.code);
+          throw dbErrorFromPostgrest(error);
         }
       });
     },
@@ -1377,7 +1381,7 @@ function modelApi(model: string): ModelApi {
               delete one[col];
               continue;
             }
-            throw new DbError(error.message, error.code);
+            throw dbErrorFromPostgrest(error);
           }
         }
         return { count: rows.length };
@@ -1393,7 +1397,7 @@ function modelApi(model: string): ModelApi {
           delete patch[col];
           continue;
         }
-        throw new DbError(error.message, error.code);
+        throw dbErrorFromPostgrest(error);
       }
     },
 
@@ -1418,7 +1422,7 @@ function modelApi(model: string): ModelApi {
       let q: any = db.from(t).delete().select("*");
       q = applyWhereSync(q, resolved);
       const { data, error } = await q.maybeSingle();
-      if (error) throw new DbError(error.message, error.code);
+      if (error) throw dbErrorFromPostgrest(error);
       return reviveRow((data as Row) ?? {});
     },
 
@@ -1428,7 +1432,7 @@ function modelApi(model: string): ModelApi {
       let q: any = db.from(t).delete().select("id");
       q = applyWhereSync(q, resolved);
       const { data, error } = await q;
-      if (error) throw new DbError(error.message, error.code);
+      if (error) throw dbErrorFromPostgrest(error);
       return { count: data?.length ?? 0 };
     },
 
@@ -1438,7 +1442,7 @@ function modelApi(model: string): ModelApi {
       let q: any = db.from(t).select("*", { count: "exact", head: true });
       q = applyWhereSync(q, resolved);
       const { count, error } = await q;
-      if (error) throw new DbError(error.message, error.code);
+      if (error) throw dbErrorFromPostgrest(error);
       return count ?? 0;
     },
 

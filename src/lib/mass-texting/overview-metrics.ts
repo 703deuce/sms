@@ -85,7 +85,9 @@ export async function loadMassTextOverviewMetrics(
     replyRate: sent > 0 ? Math.round((replies / sent) * 1000) / 10 : 0,
     optOuts,
     creditsRemainingCents:
-      billing.monthlySegmentsRemaining * 100 + billing.paygCreditsSegments * 100,
+      (billing.lifecycleState === "TRIAL_ACTIVE"
+        ? billing.trialSegmentsRemaining
+        : billing.monthlySegmentsRemaining + billing.paygCreditsSegments) * 100,
     sendingNumber: sender?.phoneE164 ?? null,
     a2pStatus: mtRegistration?.overallStatus ?? "not_started",
     upcomingScheduled: upcoming.map((c: (typeof upcoming)[number]) => ({

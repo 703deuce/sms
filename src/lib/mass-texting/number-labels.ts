@@ -56,6 +56,25 @@ export async function assignMassTextingNumberRole(
     where: { id: phoneNumberId },
     data: { settingsJson: settings },
   });
+  const { reconcileMassTextMessagingRegistration } = await import(
+    "@/lib/mass-texting/messaging-registration"
+  );
+  const existing = await prisma.messagingProductRegistration.findUnique({
+    where: {
+      workspaceId_productUseCase: {
+        workspaceId,
+        productUseCase: "MASS_TEXT_MARKETING",
+      },
+    },
+  });
+  await reconcileMassTextMessagingRegistration({
+    workspaceId,
+    overallStatus: existing?.overallStatus || "not_started",
+    messagingEnabled: existing?.messagingEnabled || false,
+    phoneAttached: true,
+    phoneE164: phone.e164,
+    phoneNumberId: phone.id,
+  });
 }
 
 export async function assignMctbNumberRole(

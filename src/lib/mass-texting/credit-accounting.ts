@@ -1,9 +1,9 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
 import { getOrCreateMassTextingBillingAccount } from "@/lib/mass-texting/billing-account";
 import { MASS_TEXT_TRIAL } from "@/lib/mass-texting/pricing";
+import { estimateSmsSegments } from "@/lib/utils";
 
 export type SegmentAvailability = {
   available: number;
@@ -15,10 +15,15 @@ export type SegmentAvailability = {
   blockReason: string | null;
 };
 
-export async function getSegmentAvailability(
-  workspaceId: string,
-): Promise<SegmentAvailability> {
-  const account = await getOrCreateMassTextingBillingAccount(workspaceId);
+function availabilityFromAccount(account: {
+  lifecycleState: string;
+  monthlySegmentsIncluded: number;
+  monthlySegmentsUsed: number;
+  paygCreditsSegments: number;
+  paygLineActive: boolean;
+  trialSegmentsUsed: number;
+  billingModel: string | null;
+}): SegmentAvailability {
   const monthlyRemaining = Math.max(
     0,
     account.monthlySegmentsIncluded - account.monthlySegmentsUsed,
@@ -37,7 +42,7 @@ export async function getSegmentAvailability(
     canSend = available > 0;
     if (!canSend) blockReason = "Trial segment limit reached";
   } else if (account.lifecycleState === "PRODUCTION_ACTIVE") {
-    available = monthlyRemaining + account.paygCreditsSegments;
+    available = monthlyRemaining + Math.max(0, account.paygCreditsSegments);
     canSend = available > 0 && (account.billingModel !== "payg" || account.paygLineActive);
     if (!canSend) {
       blockReason =
@@ -52,11 +57,67 @@ export async function getSegmentAvailability(
   return {
     available,
     monthlyRemaining,
-    paygRemaining: account.paygCreditsSegments,
+    paygRemaining: Math.max(0, account.paygCreditsSegments),
     trialRemaining,
     lifecycleState: account.lifecycleState,
     canSend,
     blockReason,
+  };
+}
+
+export async function getSegmentAvailability(
+  workspaceId: string,
+): Promise<SegmentAvailability> {
+  const account = await getOrCreateMassTextingBillingAccount(workspaceId);
+  return availabilityFromAccount(account);
+}
+
+function nextCounters(
+  account: {
+    lifecycleState: string;
+    monthlySegmentsIncluded: number;
+    monthlySegmentsUsed: number;
+    paygCreditsSegments: number;
+    trialSegmentsUsed: number;
+  },
+  segments: number,
+):
+  | {
+      ok: true;
+      trialSegmentsUsed: number;
+      monthlySegmentsUsed: number;
+      paygCreditsSegments: number;
+    }
+  | { ok: false; available: number } {
+  const avail = availabilityFromAccount({
+    ...account,
+    paygLineActive: true,
+    billingModel: account.lifecycleState === "TRIAL_ACTIVE" ? "monthly" : "monthly",
+  });
+  if (segments > avail.available) {
+    return { ok: false, available: avail.available };
+  }
+
+  if (account.lifecycleState === "TRIAL_ACTIVE") {
+    return {
+      ok: true,
+      trialSegmentsUsed: account.trialSegmentsUsed + segments,
+      monthlySegmentsUsed: account.monthlySegmentsUsed,
+      paygCreditsSegments: account.paygCreditsSegments,
+    };
+  }
+
+  const monthlyRemaining = Math.max(
+    0,
+    account.monthlySegmentsIncluded - account.monthlySegmentsUsed,
+  );
+  const fromMonthly = Math.min(monthlyRemaining, segments);
+  const fromPayg = segments - fromMonthly;
+  return {
+    ok: true,
+    trialSegmentsUsed: account.trialSegmentsUsed,
+    monthlySegmentsUsed: account.monthlySegmentsUsed + fromMonthly,
+    paygCreditsSegments: account.paygCreditsSegments - fromPayg,
   };
 }
 
@@ -70,93 +131,128 @@ export async function reserveSegmentsForCampaign(input: {
   | { ok: false; error: string; available?: number }
 > {
   const prisma = getPrisma();
-  const availability = await getSegmentAvailability(input.workspaceId);
-  if (!availability.canSend) {
-    return { ok: false, error: availability.blockReason || "Cannot send", available: 0 };
+  if (!Number.isFinite(input.segments) || input.segments <= 0) {
+    return { ok: false, error: "Segment count must be positive", available: 0 };
   }
-  if (input.segments > availability.available) {
+
+  const existingUpfront = await prisma.massTextingCreditReservation.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+  });
+  if (existingUpfront) {
     return {
-      ok: false,
-      error: `Need ${input.segments} segments but only ${availability.available} available`,
-      available: availability.available,
+      ok: true,
+      reservationId: existingUpfront.id,
+      reserved: existingUpfront.reservedSegments,
     };
   }
 
-  const account = await getOrCreateMassTextingBillingAccount(input.workspaceId);
-
-  const existing = await prisma.massTextingCreditReservation.findUnique({
-    where: { idempotencyKey: input.idempotencyKey },
-  });
-  if (existing) {
-    return { ok: true, reservationId: existing.id, reserved: existing.reservedSegments };
-  }
-
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const fresh = await tx.massTextingBillingAccount.findUnique({
-      where: { id: account.id },
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const existing = await prisma.massTextingCreditReservation.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
     });
-    if (!fresh) throw new Error("billing_account_missing");
-
-    const monthlyRemaining = Math.max(
-      0,
-      fresh.monthlySegmentsIncluded - fresh.monthlySegmentsUsed,
-    );
-    const trialRemaining = Math.max(
-      0,
-      MASS_TEXT_TRIAL.includedSegments - fresh.trialSegmentsUsed,
-    );
-    let available = 0;
-    if (fresh.lifecycleState === "TRIAL_ACTIVE") available = trialRemaining;
-    else if (fresh.lifecycleState === "PRODUCTION_ACTIVE") {
-      available = monthlyRemaining + fresh.paygCreditsSegments;
+    if (existing) {
+      return { ok: true, reservationId: existing.id, reserved: existing.reservedSegments };
     }
-    if (input.segments > available) {
+    const availability = await getSegmentAvailability(input.workspaceId);
+    if (!availability.canSend) {
+      return { ok: false, error: availability.blockReason || "Cannot send", available: 0 };
+    }
+    if (input.segments > availability.available) {
       return {
-        ok: false as const,
-        error: `Need ${input.segments} segments but only ${available} available`,
-        available,
+        ok: false,
+        error: `Need ${input.segments} segments but only ${availability.available} available`,
+        available: availability.available,
       };
     }
 
-    let remaining = input.segments;
-    const patch: Record<string, number> = {};
-
-    if (fresh.lifecycleState === "TRIAL_ACTIVE") {
-      patch.trialSegmentsUsed = fresh.trialSegmentsUsed + remaining;
-      remaining = 0;
-    } else {
-      const fromMonthly = Math.min(monthlyRemaining, remaining);
-      if (fromMonthly > 0) {
-        patch.monthlySegmentsUsed = fresh.monthlySegmentsUsed + fromMonthly;
-        remaining -= fromMonthly;
-      }
-      if (remaining > 0) {
-        patch.paygCreditsSegments = fresh.paygCreditsSegments - remaining;
-      }
+    const account = await getOrCreateMassTextingBillingAccount(input.workspaceId);
+    const next = nextCounters(account, input.segments);
+    if (!next.ok) {
+      return {
+        ok: false,
+        error: `Need ${input.segments} segments but only ${next.available} available`,
+        available: next.available,
+      };
     }
 
-    await tx.massTextingBillingAccount.update({
-      where: { id: fresh.id },
-      data: patch,
-    });
-
-    const reservation = await tx.massTextingCreditReservation.create({
+    // PostgREST has no multi-statement transactions. CAS the counter row so two
+    // concurrent campaigns cannot both reserve the same remaining balance.
+    const cas = await prisma.massTextingBillingAccount.updateMany({
+      where: {
+        id: account.id,
+        lifecycleState: account.lifecycleState,
+        trialSegmentsUsed: account.trialSegmentsUsed,
+        monthlySegmentsUsed: account.monthlySegmentsUsed,
+        paygCreditsSegments: account.paygCreditsSegments,
+      },
       data: {
-        workspaceId: input.workspaceId,
-        billingAccountId: fresh.id,
-        campaignId: input.campaignId,
-        reservedSegments: input.segments,
-        idempotencyKey: input.idempotencyKey,
-        status: "ACTIVE",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        trialSegmentsUsed: next.trialSegmentsUsed,
+        monthlySegmentsUsed: next.monthlySegmentsUsed,
+        paygCreditsSegments: next.paygCreditsSegments,
       },
     });
+    if (cas.count !== 1) continue;
 
-    return { ok: true as const, reservationId: reservation.id, reserved: input.segments };
+    try {
+      const reservation = await prisma.massTextingCreditReservation.create({
+        data: {
+          workspaceId: input.workspaceId,
+          billingAccountId: account.id,
+          campaignId: input.campaignId,
+          reservedSegments: input.segments,
+          idempotencyKey: input.idempotencyKey,
+          status: "ACTIVE",
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      return { ok: true, reservationId: reservation.id, reserved: input.segments };
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
+        const raced = await prisma.massTextingCreditReservation.findUnique({
+          where: { idempotencyKey: input.idempotencyKey },
+        });
+        if (raced) {
+          await refundAccount(account.id, input.segments, account.lifecycleState);
+          return { ok: true, reservationId: raced.id, reserved: raced.reservedSegments };
+        }
+      }
+      await refundAccount(account.id, input.segments, account.lifecycleState);
+      throw err;
+    }
+  }
+
+  return { ok: false, error: "Could not reserve segments (concurrent campaigns)", available: 0 };
+}
+
+async function refundAccount(
+  accountId: string,
+  segments: number,
+  lifecycleState: string,
+) {
+  const prisma = getPrisma();
+  const fresh = await prisma.massTextingBillingAccount.findUnique({ where: { id: accountId } });
+  if (!fresh) return;
+  if (lifecycleState === "TRIAL_ACTIVE" || fresh.lifecycleState === "TRIAL_ACTIVE") {
+    await prisma.massTextingBillingAccount.updateMany({
+      where: { id: accountId },
+      data: {
+        trialSegmentsUsed: Math.max(0, fresh.trialSegmentsUsed - segments),
+      },
+    });
+    return;
+  }
+  const monthlyConsumed = Math.min(fresh.monthlySegmentsUsed, segments);
+  const paygRefund = segments - monthlyConsumed;
+  await prisma.massTextingBillingAccount.updateMany({
+    where: { id: accountId },
+    data: {
+      monthlySegmentsUsed: fresh.monthlySegmentsUsed - monthlyConsumed,
+      paygCreditsSegments: fresh.paygCreditsSegments + paygRefund,
+    },
   });
 }
 
-export async function releaseReservation(reservationId: string, reason: string) {
+export async function releaseReservation(reservationId: string, _reason: string) {
   const prisma = getPrisma();
   const reservation = await prisma.massTextingCreditReservation.findUnique({
     where: { id: reservationId },
@@ -164,39 +260,17 @@ export async function releaseReservation(reservationId: string, reason: string) 
   });
   if (!reservation || reservation.status !== "ACTIVE") return;
 
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const account = reservation.billingAccount;
-    if (account.lifecycleState === "TRIAL_ACTIVE") {
-      await tx.massTextingBillingAccount.update({
-        where: { id: account.id },
-        data: {
-          trialSegmentsUsed: Math.max(
-            0,
-            account.trialSegmentsUsed - reservation.reservedSegments,
-          ),
-        },
-      });
-    } else {
-      const monthlyUsed = account.monthlySegmentsUsed;
-      const monthlyIncluded = account.monthlySegmentsIncluded;
-      const monthlyConsumed = Math.min(
-        monthlyUsed,
-        Math.min(reservation.reservedSegments, monthlyUsed),
-      );
-      const paygRefund = reservation.reservedSegments - monthlyConsumed;
-      await tx.massTextingBillingAccount.update({
-        where: { id: account.id },
-        data: {
-          monthlySegmentsUsed: monthlyUsed - monthlyConsumed,
-          paygCreditsSegments: account.paygCreditsSegments + paygRefund,
-        },
-      });
-    }
-    await tx.massTextingCreditReservation.update({
-      where: { id: reservationId },
-      data: { status: "RELEASED" },
-    });
+  const claimed = await prisma.massTextingCreditReservation.updateMany({
+    where: { id: reservationId, status: "ACTIVE" },
+    data: { status: "RELEASED" },
   });
+  if (claimed.count !== 1) return;
+
+  await refundAccount(
+    reservation.billingAccountId,
+    reservation.reservedSegments,
+    reservation.billingAccount.lifecycleState,
+  );
 }
 
 export async function consumeReservation(reservationId: string) {
@@ -205,4 +279,56 @@ export async function consumeReservation(reservationId: string) {
     where: { id: reservationId, status: "ACTIVE" },
     data: { status: "CONSUMED" },
   });
+}
+
+export async function getActiveCampaignReservation(campaignId: string) {
+  const prisma = getPrisma();
+  return prisma.massTextingCreditReservation.findFirst({
+    where: { campaignId, status: "ACTIVE" },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/** Refund unused reserved segments once a campaign is terminal, then consume. */
+export async function settleCampaignReservation(campaignId: string) {
+  const prisma = getPrisma();
+  const reservation = await prisma.massTextingCreditReservation.findFirst({
+    where: { campaignId, status: "ACTIVE" },
+    include: { billingAccount: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!reservation) return { settled: false as const };
+
+  const messages = await prisma.campaignMessage.findMany({
+    where: { campaignId },
+    select: { status: true, body: true, channel: true },
+  });
+  const consumed = messages
+    .filter((m: { status: string }) =>
+      ["sent", "delivered", "clicked", "sending"].includes(m.status),
+    )
+    .reduce((sum: number, m: { body: string; channel: string }) => {
+      if (m.channel === "mms") return sum + 3;
+      return sum + Math.max(1, estimateSmsSegments(m.body || "").segments || 1);
+    }, 0);
+
+  const unused = Math.max(0, reservation.reservedSegments - consumed);
+  const nextStatus = consumed > 0 ? "CONSUMED" : "RELEASED";
+  const claimed = await prisma.massTextingCreditReservation.updateMany({
+    where: { id: reservation.id, status: "ACTIVE" },
+    data: {
+      status: nextStatus,
+      reservedSegments: consumed,
+    },
+  });
+  if (claimed.count !== 1) return { settled: false as const };
+
+  if (unused > 0) {
+    await refundAccount(
+      reservation.billingAccountId,
+      unused,
+      reservation.billingAccount.lifecycleState,
+    );
+  }
+  return { settled: true as const, consumed, unused };
 }

@@ -105,7 +105,7 @@ export const SMS_CREATE_ACTIONS: SmsCreateAction[] = [
   {
     label: "Create Campaign",
     description: "Broadcast to a list or segment",
-    href: "/campaigns/new/promotional",
+    href: "/campaigns/new/promotion",
   },
   {
     label: "Create Automation",
@@ -126,7 +126,7 @@ export const SMS_CREATE_ACTIONS: SmsCreateAction[] = [
 
 export const SMS_SEND_ACTIONS: SmsCreateAction[] = [
   { label: "Quick message", description: "Send to one contact", href: "/send/quick" },
-  { label: "Campaign", description: "Create a broadcast", href: "/campaigns/new/promotional" },
+  { label: "Campaign", description: "Create a broadcast", href: "/campaigns/new/promotion" },
   { label: "Write with AI", description: "Draft with AI assist", href: "/send/ai" },
   { label: "Test message", description: "Send a test to yourself", href: "/send/test" },
 ];

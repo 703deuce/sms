@@ -17,7 +17,16 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       return { ok: true };
     }
     case "campaign_send_batch": {
-      return processCampaignSendBatch();
+      const result = await processCampaignSendBatch();
+      try {
+        const { detectMassTextingIncidents } = await import(
+          "@/lib/mass-texting/incident-detection"
+        );
+        await detectMassTextingIncidents();
+      } catch {
+        // incident scan must not block sending
+      }
+      return result;
     }
     case "send_campaign_sms":
     case "send_campaign_email": {

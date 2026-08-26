@@ -10,7 +10,6 @@ import {
   Bell,
   Check,
   ChevronRight,
-  Image as ImageIcon,
   Info,
   Megaphone,
   MessageSquare,
@@ -37,7 +36,6 @@ const typeCards: Array<{
   tone: string;
 }> = [
   { id: "SMS", label: "SMS", description: "Send text messages", icon: MessageSquare, tone: "bg-violet-50 text-violet-600" },
-  { id: "MMS", label: "MMS", description: "Send image messages", icon: ImageIcon, tone: "bg-indigo-50 text-indigo-600" },
   { id: "Announcement", label: "Announcement", description: "Broadcast updates", icon: Megaphone, tone: "bg-violet-50 text-violet-600" },
   { id: "Promotion", label: "Promotion", description: "Offers and deals", icon: Tag, tone: "bg-orange-50 text-orange-600" },
   { id: "Reminder", label: "Reminder", description: "Appointment reminders", icon: Bell, tone: "bg-indigo-50 text-indigo-600" },

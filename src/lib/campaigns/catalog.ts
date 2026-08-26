@@ -198,6 +198,8 @@ export const CAMPAIGN_CATEGORIES: CampaignCategory[] = [
 ];
 
 export function getCampaignCategory(id: string | null | undefined): CampaignCategory | undefined {
+  if (!id) return undefined;
+  if (id === "promotional") return CAMPAIGN_CATEGORIES.find((c) => c.id === "promotion");
   return CAMPAIGN_CATEGORIES.find((c) => c.id === id);
 }
 

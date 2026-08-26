@@ -8,7 +8,7 @@ import {
   buildConversationWhere,
   parseInboxSearchParams,
 } from "../src/lib/mass-texting/inbox-filters";
-import { appProductSourceToPrisma } from "../src/lib/mass-texting/product-source";
+import { inferInboundProductSource, appProductSourceToPrisma } from "../src/lib/mass-texting/product-source";
 
 const params = new URLSearchParams("product=mass_text&unread=1&campaignId=camp_1");
 const filters = parseInboxSearchParams(params);
@@ -24,5 +24,14 @@ assert.equal(where.campaignId, "camp_1");
 
 const mctbWhere = buildConversationWhere("ws_1", { product: "mctb" });
 assert.equal(mctbWhere.productSource, "MCTB");
+
+assert.equal(
+  inferInboundProductSource({
+    phoneSettingsJson: { mctbRole: "customer_mctb", massTextRole: "none" },
+    campaignId: "x",
+    campaignProductSource: "mass_text",
+  }),
+  "mctb",
+);
 
 console.log("test-mass-texting-inbox-filters: ok");
