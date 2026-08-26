@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { isNumberPurchaseAllowed } from "@/lib/numbers/number-purchase-guard";
 
 export type NumberPurchaseSource = "standard" | "premium";
 
@@ -15,6 +16,15 @@ export async function assertCanPurchaseNumber(
   workspaceId: string,
   input?: { source?: NumberPurchaseSource },
 ): Promise<{ ok: true } | { ok: false; error: string; code: string }> {
+  if (!isNumberPurchaseAllowed()) {
+    return {
+      ok: false,
+      error:
+        "Number purchase is disabled in this environment. Set TRANSOVO_ALLOW_NUMBER_PURCHASE=1 only for intentional live purchases.",
+      code: "PURCHASE_DISABLED",
+    };
+  }
+
   const prisma = getPrisma();
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
