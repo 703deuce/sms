@@ -226,7 +226,15 @@ export async function loadConversations(
     },
   });
 
-  const campaignIds = [...new Set(rows.map((r) => r.campaignId).filter(Boolean))] as string[];
+  type ConversationQueryRow = (typeof rows)[number] & { campaignId?: string | null };
+
+  const campaignIds = [
+    ...new Set(
+      rows
+        .map((r: ConversationQueryRow) => r.campaignId)
+        .filter((id: string | null | undefined): id is string => Boolean(id)),
+    ),
+  ];
   const campaigns =
     campaignIds.length > 0
       ? await getPrisma().campaign.findMany({
@@ -234,9 +242,12 @@ export async function loadConversations(
           select: { id: true, name: true },
         })
       : [];
-  const campaignNames = new Map(campaigns.map((c) => [c.id, c.name]));
+  type CampaignNameRow = { id: string; name: string };
+  const campaignNames = new Map(
+    (campaigns as CampaignNameRow[]).map((c) => [c.id, c.name] as const),
+  );
 
-  return rows.map((row) =>
+  return rows.map((row: ConversationQueryRow) =>
     mapConversation({
       ...row,
       campaignName: row.campaignId ? campaignNames.get(row.campaignId) ?? null : null,
