@@ -9,12 +9,35 @@ import {
 } from "@/lib/mass-texting/trial-lifecycle";
 import { parseMassTextCheckoutKey } from "@/lib/mass-texting/pricing";
 import { getOrCreateMassTextingBillingAccount, updateMassTextingLifecycle } from "@/lib/mass-texting/billing-account";
+import { getStripe } from "@/lib/stripe/client";
 import { subscriptionBillingPeriod, invoiceSubscriptionId } from "@/lib/payments/stripe-type-helpers";
+import { massTextingMetadataFromInvoice } from "@/lib/mass-texting/stripe-metadata";
 
 export function isMassTextingCheckoutMetadata(
   metadata: Record<string, string | undefined>,
 ): boolean {
   return metadata.product === "mass_texting" && Boolean(metadata.massTextProductKey);
+}
+
+async function resolveMassTextingInvoiceMetadata(
+  invoice: Stripe.Invoice,
+): Promise<Record<string, string | undefined>> {
+  const fromInvoice = massTextingMetadataFromInvoice(invoice);
+  if (fromInvoice.product === "mass_texting") return fromInvoice;
+
+  const subId = invoiceSubscriptionId(invoice);
+  if (!subId) return fromInvoice;
+  const stripe = getStripe();
+  if (!stripe) return fromInvoice;
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subId);
+    return massTextingMetadataFromInvoice({
+      metadata: invoice.metadata as Record<string, string | undefined> | null,
+      subscription,
+    });
+  } catch {
+    return fromInvoice;
+  }
 }
 
 export async function handleMassTextingCheckoutCompleted(session: Stripe.Checkout.Session) {
@@ -86,7 +109,7 @@ export async function handleMassTextingStripeEvent(
 
   if (event.type === "invoice.payment_failed") {
     const invoice = event.data.object as Stripe.Invoice;
-    const md = (invoice.metadata || {}) as Record<string, string | undefined>;
+    const md = await resolveMassTextingInvoiceMetadata(invoice);
     if (md.product === "mass_texting" && md.workspaceId) {
       await updateMassTextingLifecycle(md.workspaceId, "PAYMENT_REQUIRED");
       return { handled: true };
@@ -95,8 +118,8 @@ export async function handleMassTextingStripeEvent(
 
   if (event.type === "invoice.paid") {
     const invoice = event.data.object as Stripe.Invoice;
+    const md = await resolveMassTextingInvoiceMetadata(invoice);
     const subId = invoiceSubscriptionId(invoice);
-    const md = (invoice.metadata || {}) as Record<string, string | undefined>;
     if (md.product === "mass_texting" && md.workspaceId && md.monthlyTier) {
       const account = await getOrCreateMassTextingBillingAccount(md.workspaceId);
       const nextState =

@@ -10,6 +10,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import {
+  certBrowserRequestHost,
+  isCertBrowserLoopbackHost,
+  isCertBrowserPublicProductionHost,
+} from "@/lib/auth/cert-browser-host";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { getUserProductAccess, grantProductEntitlement } from "@/lib/products/entitlements";
@@ -28,14 +33,11 @@ function tokensEqual(provided: string, expected: string) {
 }
 
 function requestHost(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const host = forwarded || request.headers.get("host")?.trim() || "";
-  return host.split(":")[0].toLowerCase();
+  return certBrowserRequestHost(request);
 }
 
 function isLoopbackHost(request: Request): boolean {
-  const host = requestHost(request);
-  return host === "127.0.0.1" || host === "localhost" || host === "0.0.0.0";
+  return isCertBrowserLoopbackHost(requestHost(request));
 }
 
 function safeNextPath(raw: string | null): string {
@@ -55,6 +57,9 @@ function isAuthorized(request: Request, token: string): "ok" | "missing" | "unau
 }
 
 export async function GET(request: Request) {
+  if (isCertBrowserPublicProductionHost(requestHost(request))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const url = new URL(request.url);
   const token = url.searchParams.get("token") || "";
   const auth = isAuthorized(request, token);

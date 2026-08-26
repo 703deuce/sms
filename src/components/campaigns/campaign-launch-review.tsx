@@ -73,7 +73,6 @@ export function CampaignLaunchReview({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idempotencyKey: `launch:${campaignId}`,
           confirmLargeSend: review.finalRecipientCount >= 1000 ? confirmed : true,
         }),
       });
@@ -151,6 +150,11 @@ export function CampaignLaunchReview({
               </a>
             </div>
           ) : null}
+          {review.blockReason && !review.canSend && review.shortage <= 0 ? (
+            <div className="sm:col-span-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-rose-800">
+              {review.blockReason}
+            </div>
+          ) : null}
           <div>
             <dt className="text-muted-foreground">Sending number</dt>
             <dd>{review.phoneE164 || "Not assigned"}</dd>
@@ -181,7 +185,11 @@ export function CampaignLaunchReview({
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button type="button" onClick={() => void launch()} disabled={launching || !review || Boolean(review.shortage)}>
+        <Button
+          type="button"
+          onClick={() => void launch()}
+          disabled={launching || !review || !review.canSend}
+        >
           {launching ? "Launching…" : "Confirm & launch"}
         </Button>
       </div>

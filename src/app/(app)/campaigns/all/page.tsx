@@ -1,6 +1,6 @@
 "use client";
 
-import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -25,6 +25,7 @@ type LiveCampaign = {
   replies?: number;
   scheduledAt?: string | null;
   createdAt?: string;
+  configJson?: unknown;
 };
 
 export default function AllCampaignsPage() {
@@ -93,7 +94,12 @@ export default function AllCampaignsPage() {
                     <TD>{c.sent ?? 0}</TD>
                     <TD>{c.replies ?? 0}</TD>
                     <TD>
-                      <CampaignActions campaignId={c.id} status={c.status} variant="row" />
+                      <CampaignActions
+                        campaignId={c.id}
+                        status={c.status}
+                        variant="row"
+                        isMassText={campaignLooksLikeMassText(c.configJson)}
+                      />
                     </TD>
                   </TR>
                 );

@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
+import { sendSmsBodiesForCreditEstimate } from "@/lib/campaigns/sequence-engine";
 import { MASS_TEXT_MMS_PRODUCTION_ENABLED } from "@/lib/mass-texting/pricing";
 import { creditsForRecipientBody, massTextMergeVarsFromContact } from "@/lib/mass-texting/personalization";
 import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
@@ -29,6 +30,7 @@ export type PreSendReview = {
   canSend: boolean;
   blockReason: string | null;
   mmsBlocked: boolean;
+  acceptedPhones: string[];
 };
 
 export async function buildPreSendReview(
@@ -163,6 +165,7 @@ export async function buildPreSendReview(
   const suppressedRemoved = rejected.filter((r) => r.reason === "suppressed").length;
 
   const body = campaign.body || "";
+  const smsBodies = sendSmsBodiesForCreditEstimate(campaign.sequenceJson, body);
   const mediaUrls = Array.isArray(config.mediaUrls) ? (config.mediaUrls as unknown[]) : [];
   const isMms = mediaUrls.length > 0;
   const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
@@ -171,20 +174,23 @@ export async function buildPreSendReview(
   const acceptedByPhone = new Map(accepted.map((r) => [r.phone, r]));
   for (const recipient of recipients) {
     if (!recipient.phone || !acceptedByPhone.has(recipient.phone)) continue;
-    const priced = creditsForRecipientBody({
-      template: body,
-      isMms,
-      vars: massTextMergeVarsFromContact({
-        firstName: recipient.firstName,
-        lastName: recipient.lastName,
-        displayName: recipient.displayName,
-        phone: recipient.phone,
-        email: recipient.email,
-        businessName: workspace?.name,
-        customFields: recipient.customFields,
-      }),
+    const vars = massTextMergeVarsFromContact({
+      firstName: recipient.firstName,
+      lastName: recipient.lastName,
+      displayName: recipient.displayName,
+      phone: recipient.phone,
+      email: recipient.email,
+      businessName: workspace?.name,
+      customFields: recipient.customFields,
     });
-    estimatedSegments += priced.credits;
+    for (const template of smsBodies) {
+      const priced = creditsForRecipientBody({
+        template,
+        isMms,
+        vars,
+      });
+      estimatedSegments += priced.credits;
+    }
   }
 
   const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
@@ -220,5 +226,8 @@ export async function buildPreSendReview(
         ? `Need ${estimatedSegments} credits but only ${availability.available} available`
         : availability.blockReason,
     mmsBlocked,
+    acceptedPhones: accepted
+      .map((r) => r.phone)
+      .filter((phone): phone is string => Boolean(phone)),
   };
 }

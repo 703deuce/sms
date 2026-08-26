@@ -30,6 +30,18 @@ export function waitDurationMs(config: Record<string, unknown> | undefined): num
   return Math.max(ms, 60_000); // minimum 1 minute
 }
 
+/** SMS bodies that will actually enqueue — used to reserve Mass Text credits. */
+export function sendSmsBodiesForCreditEstimate(
+  sequenceJson: unknown,
+  fallbackBody = "",
+): string[] {
+  const sequence = parseSequence(sequenceJson);
+  const bodies = sequence
+    .filter((s) => s.step_type === "send_sms")
+    .map((s) => String(s.config?.body || fallbackBody || ""));
+  return bodies.length ? bodies : [fallbackBody || ""];
+}
+
 export function parseSequence(raw: unknown): SequenceStep[] {
   if (!raw) return [];
   if (typeof raw === "string") {

@@ -10,13 +10,26 @@ type Props = {
   campaignId: string;
   status: string;
   variant?: "detail" | "row";
+  /** Mass Text drafts launch from pre-send review, not Activate. */
+  isMassText?: boolean;
 };
 
 function normalizeStatus(status: string) {
   return status.toUpperCase().replace("CANCELLED", "CANCELED");
 }
 
-export function CampaignActions({ campaignId, status, variant = "detail" }: Props) {
+export function campaignLooksLikeMassText(configJson: unknown): boolean {
+  if (!configJson || typeof configJson !== "object") return false;
+  const config = configJson as Record<string, unknown>;
+  return config.productSource === "mass_text" || config.massTexting === true;
+}
+
+export function CampaignActions({
+  campaignId,
+  status,
+  variant = "detail",
+  isMassText = false,
+}: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<Action | null>(null);
   const [error, setError] = useState("");
@@ -24,7 +37,10 @@ export function CampaignActions({ campaignId, status, variant = "detail" }: Prop
   const normalized = normalizeStatus(status);
   const actions: Array<{ action: Action; label: string; variant: "default" | "outline" | "danger" }> = [];
 
-  if (normalized === "DRAFT" || normalized === "SCHEDULED" || normalized === "PAUSED") {
+  const showActivate =
+    normalized === "DRAFT" || normalized === "SCHEDULED" || normalized === "PAUSED";
+  const hideMassTextActivate = isMassText && (normalized === "DRAFT" || normalized === "SCHEDULED");
+  if (showActivate && !hideMassTextActivate) {
     actions.push({
       action: normalized === "PAUSED" ? "resume" : "activate",
       label: normalized === "PAUSED" ? "Resume" : "Activate",

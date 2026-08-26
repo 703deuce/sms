@@ -125,15 +125,18 @@ async function resolveGrandfatherFeatureStatus(
   const prisma = getPrisma();
 
   if (feature === "mctb") {
+    const hasMassTexting = await prisma.workspaceProductFeature.findFirst({
+      where: { workspaceId, featureKey: "MASS_TEXTING" },
+      select: { status: true },
+    }).catch(() => null);
+    const massTextingOn = isActiveEntitlement(
+      prismaStatusToApp(String(hasMassTexting?.status || "INACTIVE")),
+    );
+    if (massTextingOn && !(await shouldKeepMctbWithMassTexting(workspaceId))) {
+      return "inactive";
+    }
     if (hasVoice) return "active";
-    const [eventCount, config] = await Promise.all([
-      prisma.missedCallEvent.count({ where: { workspaceId } }),
-      prisma.missedCallTextConfig.findUnique({
-        where: { workspaceId },
-        select: { enabled: true },
-      }),
-    ]);
-    if (eventCount > 0 || config?.enabled) return "active";
+    if (await workspaceHasMctbUsage(workspaceId)) return "active";
     return "inactive";
   }
 
@@ -166,6 +169,44 @@ async function resolveGrandfatherFeatureStatus(
 
 function isCompatRepoMissing(err: unknown): boolean {
   return err instanceof TypeError;
+}
+
+async function workspaceHasMctbUsage(workspaceId: string): Promise<boolean> {
+  const prisma = getPrisma();
+  try {
+    const [eventCount, config] = await Promise.all([
+      prisma.missedCallEvent.count({ where: { workspaceId } }),
+      prisma.missedCallTextConfig.findUnique({
+        where: { workspaceId },
+        select: { enabled: true },
+      }),
+    ]);
+    if (eventCount > 0 || config?.enabled) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+async function workspaceHasPurchasedMctb(workspaceId: string): Promise<boolean> {
+  const prisma = getPrisma();
+  try {
+    const sub = await prisma.platformProductSubscription.findFirst({
+      where: { workspaceId, productFamily: "mctb" },
+      select: { id: true, status: true },
+    });
+    if (!sub) return false;
+    const status = String(sub.status || "").toLowerCase();
+    return status === "active" || status === "trialing" || status === "past_due" || status === "trial";
+  } catch {
+    return false;
+  }
+}
+
+/** True when MCTB should stay visible even if Mass Texting is also active. */
+export async function shouldKeepMctbWithMassTexting(workspaceId: string): Promise<boolean> {
+  if (await workspaceHasMctbUsage(workspaceId)) return true;
+  return workspaceHasPurchasedMctb(workspaceId);
 }
 
 async function workspaceHasPlatformAdminMember(workspaceId: string): Promise<boolean> {
@@ -279,20 +320,26 @@ export async function ensureWorkspaceProductFeatures(
       });
     }
 
-    // Voice entitlement implies MCTB for backward compatibility.
+    // Voice entitlement implies MCTB for backward compatibility, but not for
+    // Mass Texting-only workspaces that never bought or used MCTB.
     if (hasVoice && !existing.has("MCTB")) {
-      await prisma.workspaceProductFeature.upsert({
-        where: {
-          workspaceId_featureKey: { workspaceId, featureKey: "MCTB" },
-        },
-        create: {
-          workspaceId,
-          featureKey: "MCTB",
-          status: "ACTIVE",
-          activatedAt: new Date(),
-        },
-        update: { status: "ACTIVE", activatedAt: new Date(), deactivatedAt: null },
-      });
+      const skipAutoMctb =
+        existing.has("MASS_TEXTING") &&
+        !(await shouldKeepMctbWithMassTexting(workspaceId));
+      if (!skipAutoMctb) {
+        await prisma.workspaceProductFeature.upsert({
+          where: {
+            workspaceId_featureKey: { workspaceId, featureKey: "MCTB" },
+          },
+          create: {
+            workspaceId,
+            featureKey: "MCTB",
+            status: "ACTIVE",
+            activatedAt: new Date(),
+          },
+          update: { status: "ACTIVE", activatedAt: new Date(), deactivatedAt: null },
+        });
+      }
     }
   } catch (err) {
     if (isSchemaUnavailable(err) || isCompatRepoMissing(err)) return;
@@ -337,6 +384,14 @@ export async function getWorkspaceProductFeatures(
                   ? "ai_transcription"
                   : null;
       if (mapped) snap[mapped] = prismaStatusToApp(row.status);
+    }
+    if (isActiveEntitlement(snap.mass_texting)) {
+      const keepMctb = await shouldKeepMctbWithMassTexting(workspaceId);
+      if (keepMctb) {
+        if (!isActiveEntitlement(snap.mctb)) snap.mctb = "active";
+      } else {
+        snap.mctb = "inactive";
+      }
     }
     if (isActiveEntitlement(snap.mctb)) {
       // MCTB bundles short voicemail capture + AI transcription (not metered like long calls).

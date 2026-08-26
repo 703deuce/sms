@@ -15,15 +15,21 @@ import {
 } from "../src/lib/mass-texting/personalization";
 import { parseCsv } from "../src/lib/contacts/parse-csv";
 import { inferInboundProductSource } from "../src/lib/mass-texting/product-source";
-import { getCampaignCategory } from "../src/lib/campaigns/catalog";
+import { getCampaignCategory, buildSequenceForCategory } from "../src/lib/campaigns/catalog";
 import { normalizeE164 } from "../src/lib/messaging/twilio-mappings";
 import { classifySmsProviderError } from "../src/lib/mass-texting/provider-errors";
-import { evaluateCondition } from "../src/lib/campaigns/sequence-engine";
+import { evaluateCondition, sendSmsBodiesForCreditEstimate } from "../src/lib/campaigns/sequence-engine";
 import {
   consumeMassTextRateLimit,
   resetMassTextRateLimitForTests,
 } from "../src/lib/mass-texting/rate-limit";
 import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "../src/lib/mass-texting/constants";
+import { canonicalLaunchIdempotencyKey } from "../src/lib/mass-texting/launch-key";
+import { massTextingMetadataFromInvoice } from "../src/lib/mass-texting/stripe-metadata";
+import {
+  isCertBrowserLoopbackHost,
+  isCertBrowserPublicProductionHost,
+} from "../src/lib/auth/cert-browser-host";
 
 const gsm160 = "a".repeat(160);
 assert.equal(estimateSmsSegments(gsm160).segments, 1);
@@ -123,6 +129,42 @@ const replyGate = {
 assert.equal(evaluateCondition(replyGate, { customer_replied: true }), "end");
 assert.equal(evaluateCondition(replyGate, { customer_replied: false }), "sms_2");
 assert.equal(MASS_TEXT_RECURRING_PRODUCTION_ENABLED, false);
+
+const followUpBodies = sendSmsBodiesForCreditEstimate(
+  buildSequenceForCategory("follow_up", "Hi there", { followUpCount: 3 }),
+  "Hi there",
+);
+assert.equal(followUpBodies.length, 3, "follow-up sequences must reserve every SMS step");
+assert.equal(sendSmsBodiesForCreditEstimate(null, "Solo").length, 1);
+
+assert.equal(
+  canonicalLaunchIdempotencyKey("ws1", "camp1", "launch:camp1"),
+  "launch:ws1:camp1",
+);
+assert.equal(
+  canonicalLaunchIdempotencyKey("ws1", "camp1", "launch:ws1:camp1"),
+  "launch:ws1:camp1",
+);
+
+const renewalMd = massTextingMetadataFromInvoice({
+  metadata: {},
+  subscription: {
+    id: "sub_1",
+    metadata: {
+      product: "mass_texting",
+      workspaceId: "ws_mt",
+      monthlyTier: "growth",
+    },
+  },
+});
+assert.equal(renewalMd.product, "mass_texting");
+assert.equal(renewalMd.workspaceId, "ws_mt");
+assert.equal(renewalMd.monthlyTier, "growth");
+
+assert.equal(isCertBrowserLoopbackHost("127.0.0.1"), true);
+assert.equal(isCertBrowserPublicProductionHost("transovo.ai"), true);
+assert.equal(isCertBrowserPublicProductionHost("app.transovo.ai"), true);
+assert.equal(isCertBrowserPublicProductionHost("localhost"), false);
 
 resetMassTextRateLimitForTests();
 for (let i = 0; i < 8; i += 1) {

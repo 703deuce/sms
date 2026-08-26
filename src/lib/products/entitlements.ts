@@ -361,15 +361,15 @@ export async function ensureProductWorkspace(
 }
 
 export function activeProductKeys(access: UserProductAccess): ProductKey[] {
-  const fromProducts = access.products
-    .filter((p) => isActiveEntitlement(p.status))
-    .map((p) => p.productKey);
-  if (fromProducts.length) return fromProducts;
-  const keys: ProductKey[] = [];
-  if (access.hasVoice) keys.push("voice");
-  if (access.hasNumbers) keys.push("numbers");
-  if (access.hasSms) keys.push("sms");
-  return keys;
+  const keys = new Set<ProductKey>(
+    access.products
+      .filter((p) => isActiveEntitlement(p.status))
+      .map((p) => p.productKey),
+  );
+  if (access.hasVoice) keys.add("voice");
+  if (access.hasNumbers) keys.add("numbers");
+  if (access.hasSms) keys.add("sms");
+  return Array.from(keys);
 }
 
 export function productAccessCookieValue(access: UserProductAccess): string {

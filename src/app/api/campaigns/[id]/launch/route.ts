@@ -33,14 +33,10 @@ export async function POST(request: Request, ctx: Ctx) {
       );
     }
 
-    const idempotencyKey =
-      body.idempotencyKey?.trim() || `launch:${auth.workspaceId}:${id}`;
-
     const result = await launchCampaignWithAudit({
       workspaceId: auth.workspaceId,
       campaignId: id,
       userId: auth.session.userId,
-      idempotencyKey,
       confirmLargeSend: body.confirmLargeSend === true,
     });
 

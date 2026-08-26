@@ -5,17 +5,125 @@ import { buildPreSendReview } from "@/lib/mass-texting/pre-send-review";
 import {
   reserveSegmentsForCampaign,
   releaseReservation,
+  getActiveCampaignReservation,
+  settleCampaignReservation,
 } from "@/lib/mass-texting/credit-accounting";
 import { emitMassTextOpsEvent } from "@/lib/mass-texting/ops-events";
+import { canonicalLaunchIdempotencyKey } from "@/lib/mass-texting/launch-key";
 
 export type CampaignLaunchResult =
   | { ok: true; campaignId: string; auditId: string; idempotentReplay?: boolean }
   | { ok: false; error: string; available?: number; required?: number };
 
-function stableLaunchKey(workspaceId: string, campaignId: string, provided?: string) {
-  const trimmed = provided?.trim();
-  if (trimmed) return trimmed;
-  return `launch:${workspaceId}:${campaignId}`;
+const LAUNCHED_STATUSES = new Set(["SENDING", "SCHEDULED", "COMPLETED"]);
+
+type ReservationHandle = {
+  ok: true;
+  reservationId: string;
+  reserved: number;
+  createdThisCall: boolean;
+};
+
+async function pruneStaleLaunchRecipients(input: {
+  workspaceId: string;
+  campaignId: string;
+  acceptedPhones: string[];
+}) {
+  const prisma = getPrisma();
+  const keep = new Set(input.acceptedPhones.filter(Boolean));
+  if (!keep.size) return;
+  const enrolled = await prisma.campaignRecipient.findMany({
+    where: { campaignId: input.campaignId, workspaceId: input.workspaceId },
+    select: { id: true, phone: true, workflowStatus: true },
+  });
+  for (const row of enrolled) {
+    if (row.phone && keep.has(row.phone)) continue;
+    if (!["pending", "scheduled", "in_progress", "waiting"].includes(row.workflowStatus)) {
+      continue;
+    }
+    await prisma.campaignRecipient.update({
+      where: { id: row.id },
+      data: {
+        workflowStatus: "stopped",
+        stopReason: "left_audience_before_launch",
+        completedAt: new Date(),
+        enrollmentKey: null,
+        nextActionAt: null,
+      },
+    });
+  }
+}
+
+async function ensureLaunchReservation(input: {
+  workspaceId: string;
+  campaignId: string;
+  segments: number;
+  idempotencyKey: string;
+}): Promise<ReservationHandle | { ok: false; error: string; available?: number }> {
+  const active = await getActiveCampaignReservation(input.campaignId);
+  if (active) {
+    return {
+      ok: true,
+      reservationId: active.id,
+      reserved: active.reservedSegments,
+      createdThisCall: false,
+    };
+  }
+  const reservation = await reserveSegmentsForCampaign({
+    workspaceId: input.workspaceId,
+    campaignId: input.campaignId,
+    segments: input.segments,
+    idempotencyKey: `reserve:${input.idempotencyKey}`,
+  });
+  if (!reservation.ok) {
+    return {
+      ok: false,
+      error: reservation.error,
+      available: reservation.available,
+    };
+  }
+  return {
+    ok: true,
+    reservationId: reservation.reservationId,
+    reserved: reservation.reserved,
+    createdThisCall: true,
+  };
+}
+
+async function applyLaunchStatus(input: {
+  workspaceId: string;
+  campaignId: string;
+  sendLater: boolean;
+  scheduledAt: Date | null;
+}): Promise<
+  { ok: true; nextStatus: "SENDING" | "SCHEDULED" } | { ok: false; error: string }
+> {
+  const prisma = getPrisma();
+  const nextStatus = input.sendLater ? "SCHEDULED" : "SENDING";
+  const updated = await prisma.campaign.updateMany({
+    where: {
+      id: input.campaignId,
+      workspaceId: input.workspaceId,
+      status: { in: ["DRAFT", "SCHEDULED", "PAUSED"] },
+    },
+    data: { status: nextStatus, scheduledAt: input.scheduledAt || undefined },
+  });
+  if (updated.count === 1) {
+    return { ok: true, nextStatus };
+  }
+
+  const latest = await prisma.campaign.findFirst({
+    where: { id: input.campaignId, workspaceId: input.workspaceId },
+    select: { status: true },
+  });
+  if (latest && LAUNCHED_STATUSES.has(latest.status)) {
+    return { ok: true, nextStatus: latest.status === "SCHEDULED" ? "SCHEDULED" : "SENDING" };
+  }
+  if (latest?.status === "CANCELED") {
+    await settleCampaignReservation(input.campaignId);
+    return { ok: false, error: "Campaign is canceled" };
+  }
+  return { ok: false, error: "Campaign could not be started (status changed)" };
 }
 
 export async function launchCampaignWithAudit(input: {
@@ -26,11 +134,17 @@ export async function launchCampaignWithAudit(input: {
   confirmLargeSend?: boolean;
 }): Promise<CampaignLaunchResult> {
   const prisma = getPrisma();
-  const idempotencyKey = stableLaunchKey(
+  const idempotencyKey = canonicalLaunchIdempotencyKey(
     input.workspaceId,
     input.campaignId,
     input.idempotencyKey,
   );
+
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: input.campaignId, workspaceId: input.workspaceId },
+  });
+  if (!campaign) return { ok: false, error: "Campaign not found" };
+  if (campaign.status === "CANCELED") return { ok: false, error: "Campaign is canceled" };
 
   const existingAudit = await prisma.campaignLaunchAudit.findUnique({
     where: {
@@ -40,7 +154,8 @@ export async function launchCampaignWithAudit(input: {
       },
     },
   });
-  if (existingAudit) {
+
+  if (existingAudit && LAUNCHED_STATUSES.has(campaign.status)) {
     return {
       ok: true,
       campaignId: input.campaignId,
@@ -49,15 +164,7 @@ export async function launchCampaignWithAudit(input: {
     };
   }
 
-  const alreadySending = await prisma.campaign.findFirst({
-    where: {
-      id: input.campaignId,
-      workspaceId: input.workspaceId,
-      status: "SENDING",
-    },
-    select: { id: true },
-  });
-  if (alreadySending) {
+  if (!existingAudit && LAUNCHED_STATUSES.has(campaign.status)) {
     const prior = await prisma.campaignLaunchAudit.findFirst({
       where: { workspaceId: input.workspaceId, campaignId: input.campaignId },
       orderBy: { confirmedAt: "desc" },
@@ -70,7 +177,9 @@ export async function launchCampaignWithAudit(input: {
         idempotentReplay: true,
       };
     }
-    return { ok: false, error: "Campaign is already sending" };
+    if (campaign.status === "SENDING" || campaign.status === "COMPLETED") {
+      return { ok: false, error: "Campaign is already sending" };
+    }
   }
 
   const review = await buildPreSendReview(input.workspaceId, input.campaignId);
@@ -92,15 +201,6 @@ export async function launchCampaignWithAudit(input: {
       available: review.availableSegments,
       required: review.requiredSegments,
     };
-  }
-
-  const campaign = await prisma.campaign.findFirst({
-    where: { id: input.campaignId, workspaceId: input.workspaceId },
-  });
-  if (!campaign) return { ok: false, error: "Campaign not found" };
-  if (campaign.status === "CANCELED") return { ok: false, error: "Campaign is canceled" };
-  if (campaign.status === "SENDING") {
-    return { ok: false, error: "Campaign is already sending" };
   }
 
   const { massTextProductConfigPatch } = await import("@/lib/mass-texting/campaign-send");
@@ -129,11 +229,11 @@ export async function launchCampaignWithAudit(input: {
   const { refreshMassTextingTrialState } = await import("@/lib/mass-texting/trial-lifecycle");
   await refreshMassTextingTrialState(input.workspaceId);
 
-  const reservation = await reserveSegmentsForCampaign({
+  const reservation = await ensureLaunchReservation({
     workspaceId: input.workspaceId,
     campaignId: input.campaignId,
     segments: review.estimatedSegments,
-    idempotencyKey: `reserve:${idempotencyKey}`,
+    idempotencyKey,
   });
   if (!reservation.ok) {
     return {
@@ -151,7 +251,9 @@ export async function launchCampaignWithAudit(input: {
         await enrollListInCampaign(input.workspaceId, input.campaignId, listId);
       }
     } catch (err) {
-      await releaseReservation(reservation.reservationId, "enroll_failed");
+      if (reservation.createdThisCall) {
+        await releaseReservation(reservation.reservationId, "enroll_failed");
+      }
       return {
         ok: false,
         error: err instanceof Error ? err.message : "Could not enroll audience",
@@ -159,73 +261,78 @@ export async function launchCampaignWithAudit(input: {
     }
   }
 
-  let audit;
-  try {
-    audit = await prisma.campaignLaunchAudit.create({
-      data: {
-        workspaceId: input.workspaceId,
-        campaignId: input.campaignId,
-        launchedByUserId: input.userId ?? null,
-        idempotencyKey,
-        rawContactCount: review.rawContactCount,
-        duplicateRemoved: review.duplicateRemoved,
-        invalidRemoved: review.invalidRemoved,
-        suppressedRemoved: review.suppressedRemoved,
-        finalRecipientCount: review.finalRecipientCount,
-        estimatedSegments: review.estimatedSegments,
-        estimatedCreditsCents: review.estimatedSegments,
-        phoneNumberId: review.phoneNumberId,
-        phoneE164: review.phoneE164,
-        scheduledAt: review.scheduledAt ? new Date(review.scheduledAt) : null,
-        metadata: {
-          listIds: review.listIds,
-          listNames: review.listNames,
-          a2pUseCase: review.a2pUseCase,
-          reservationId: reservation.reservationId,
-        },
-      },
-    });
-  } catch (err) {
-    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
-      const raced = await prisma.campaignLaunchAudit.findUnique({
-        where: {
-          workspaceId_idempotencyKey: {
-            workspaceId: input.workspaceId,
-            idempotencyKey,
+  await pruneStaleLaunchRecipients({
+    workspaceId: input.workspaceId,
+    campaignId: input.campaignId,
+    acceptedPhones: review.acceptedPhones,
+  });
+
+  let audit = existingAudit;
+  if (!audit) {
+    try {
+      audit = await prisma.campaignLaunchAudit.create({
+        data: {
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          launchedByUserId: input.userId ?? null,
+          idempotencyKey,
+          rawContactCount: review.rawContactCount,
+          duplicateRemoved: review.duplicateRemoved,
+          invalidRemoved: review.invalidRemoved,
+          suppressedRemoved: review.suppressedRemoved,
+          finalRecipientCount: review.finalRecipientCount,
+          estimatedSegments: review.estimatedSegments,
+          estimatedCreditsCents: review.estimatedSegments,
+          phoneNumberId: review.phoneNumberId,
+          phoneE164: review.phoneE164,
+          scheduledAt: review.scheduledAt ? new Date(review.scheduledAt) : null,
+          metadata: {
+            listIds: review.listIds,
+            listNames: review.listNames,
+            a2pUseCase: review.a2pUseCase,
+            reservationId: reservation.reservationId,
           },
         },
       });
-      if (raced) {
-        return {
-          ok: true,
-          campaignId: input.campaignId,
-          auditId: raced.id,
-          idempotentReplay: true,
-        };
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
+        const raced = await prisma.campaignLaunchAudit.findUnique({
+          where: {
+            workspaceId_idempotencyKey: {
+              workspaceId: input.workspaceId,
+              idempotencyKey,
+            },
+          },
+        });
+        if (raced) {
+          audit = raced;
+        }
+      }
+      if (!audit) {
+        if (reservation.createdThisCall) {
+          await releaseReservation(reservation.reservationId, "audit_create_failed");
+        }
+        throw err;
       }
     }
-    await releaseReservation(reservation.reservationId, "audit_create_failed");
-    throw err;
+  }
+  if (!audit) {
+    return { ok: false, error: "Launch audit missing" };
   }
 
   const scheduledAt = review.scheduledAt ? new Date(review.scheduledAt) : null;
   const sendLater = Boolean(scheduledAt && scheduledAt.getTime() > Date.now() + 15_000);
-  const nextStatus = sendLater ? "SCHEDULED" : "SENDING";
-
-  const updated = await prisma.campaign.updateMany({
-    where: {
-      id: input.campaignId,
-      workspaceId: input.workspaceId,
-      status: { in: ["DRAFT", "SCHEDULED", "PAUSED"] },
-    },
-    data: { status: nextStatus, scheduledAt: scheduledAt || undefined },
+  const statusResult = await applyLaunchStatus({
+    workspaceId: input.workspaceId,
+    campaignId: input.campaignId,
+    sendLater,
+    scheduledAt,
   });
-  if (updated.count !== 1) {
-    await releaseReservation(reservation.reservationId, "launch_status_race");
-    return { ok: false, error: "Campaign could not be started (status changed)" };
+  if (!statusResult.ok) {
+    return statusResult;
   }
 
-  if (!sendLater) {
+  if (statusResult.nextStatus === "SENDING") {
     try {
       const { processSequenceWaits } = await import("@/lib/campaigns/sequence-runner");
       await processSequenceWaits();
@@ -245,12 +352,18 @@ export async function launchCampaignWithAudit(input: {
         finalRecipientCount: review.finalRecipientCount,
         reservedSegments: reservation.reserved,
         reservationId: reservation.reservationId,
-        status: nextStatus,
+        status: statusResult.nextStatus,
+        resumed: Boolean(existingAudit),
       },
     });
   } catch {
     // observability is best-effort
   }
 
-  return { ok: true, campaignId: input.campaignId, auditId: audit.id };
+  return {
+    ok: true,
+    campaignId: input.campaignId,
+    auditId: audit.id,
+    idempotentReplay: Boolean(existingAudit),
+  };
 }

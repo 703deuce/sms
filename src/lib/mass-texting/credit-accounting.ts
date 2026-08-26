@@ -140,24 +140,26 @@ export async function reserveSegmentsForCampaign(input: {
     return { ok: false, error: "Segment count must be positive", available: 0 };
   }
 
-  const existingUpfront = await prisma.massTextingCreditReservation.findUnique({
-    where: { idempotencyKey: input.idempotencyKey },
-  });
-  if (existingUpfront) {
-    return {
-      ok: true,
-      reservationId: existingUpfront.id,
-      reserved: existingUpfront.reservedSegments,
-    };
-  }
+  let idempotencyKey = input.idempotencyKey;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const existing = await prisma.massTextingCreditReservation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { idempotencyKey },
     });
-    if (existing) {
-      return { ok: true, reservationId: existing.id, reserved: existing.reservedSegments };
+    if (existing?.status === "ACTIVE") {
+      return {
+        ok: true,
+        reservationId: existing.id,
+        reserved: existing.reservedSegments,
+      };
     }
+    if (existing) {
+      // RELEASED/CONSUMED rows keep the unique key; reserve on a suffix instead
+      // of treating a spent reservation as a successful replay.
+      idempotencyKey = `${input.idempotencyKey}:${attempt + 1}`;
+      continue;
+    }
+
     const availability = await getSegmentAvailability(input.workspaceId);
     if (!availability.canSend) {
       return { ok: false, error: availability.blockReason || "Cannot send", available: 0 };
@@ -205,7 +207,7 @@ export async function reserveSegmentsForCampaign(input: {
           billingAccountId: account.id,
           campaignId: input.campaignId,
           reservedSegments: input.segments,
-          idempotencyKey: input.idempotencyKey,
+          idempotencyKey,
           status: "ACTIVE",
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
@@ -214,12 +216,14 @@ export async function reserveSegmentsForCampaign(input: {
     } catch (err) {
       if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
         const raced = await prisma.massTextingCreditReservation.findUnique({
-          where: { idempotencyKey: input.idempotencyKey },
+          where: { idempotencyKey },
         });
-        if (raced) {
-          await refundAccount(account.id, input.segments, account.lifecycleState);
+        await refundAccount(account.id, input.segments, account.lifecycleState);
+        if (raced?.status === "ACTIVE") {
           return { ok: true, reservationId: raced.id, reserved: raced.reservedSegments };
         }
+        idempotencyKey = `${input.idempotencyKey}:${attempt + 1}`;
+        continue;
       }
       await refundAccount(account.id, input.segments, account.lifecycleState);
       throw err;

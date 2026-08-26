@@ -177,7 +177,6 @@ export async function POST(request: Request) {
           workspaceId,
           campaignId: campaign.id,
           userId: auth.session.userId,
-          idempotencyKey: `launch:${workspaceId}:${campaign.id}`,
           confirmLargeSend: true,
         });
         if (!launched.ok) {
@@ -239,7 +238,6 @@ export async function PATCH(request: Request) {
           workspaceId,
           campaignId: campaign.id,
           userId: auth.session.userId,
-          idempotencyKey: `launch:${workspaceId}:${campaign.id}`,
           confirmLargeSend: true,
         });
         if (!launched.ok) {
@@ -287,6 +285,13 @@ export async function PATCH(request: Request) {
           nextActionAt: null,
         },
       });
+      const { isMassTextingCampaign } = await import("@/lib/mass-texting/campaign-send");
+      if (await isMassTextingCampaign(workspaceId, campaign.id)) {
+        const { settleCampaignReservation } = await import(
+          "@/lib/mass-texting/credit-accounting"
+        );
+        await settleCampaignReservation(campaign.id);
+      }
     }
 
     return NextResponse.json({ data: updated });

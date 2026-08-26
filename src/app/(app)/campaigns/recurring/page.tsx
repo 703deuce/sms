@@ -11,6 +11,7 @@ import { formatNumber } from "@/lib/utils";
 import { loadRecurringCampaigns, requireWorkspaceContext } from "@/lib/workspace-data";
 import { Repeat } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 function formatDateTime(at: string | null) {
   if (!at) return "—";
@@ -39,6 +40,9 @@ export default async function CampaignRecurringPage() {
   );
   const massTexting = await isMassTextingWorkspace(workspaceId);
   const recurringEnabled = !massTexting || MASS_TEXT_RECURRING_PRODUCTION_ENABLED;
+  if (!recurringEnabled) {
+    redirect("/campaigns");
+  }
   const recurringCampaigns = await loadRecurringCampaigns(workspaceId);
   const activeCount = recurringCampaigns.filter((c) => c.status === "Active").length;
 

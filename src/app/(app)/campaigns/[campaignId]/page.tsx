@@ -1,4 +1,4 @@
-import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
 import { CampaignLaunchReview } from "@/components/campaigns/campaign-launch-review";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
@@ -175,7 +175,11 @@ export default async function CampaignDetailPage({
                 <Button variant="outline">Duplicate</Button>
               </Link>
             )}
-            <CampaignActions campaignId={campaignId} status={campaign.status} />
+            <CampaignActions
+              campaignId={campaignId}
+              status={campaign.status}
+              isMassText={campaignLooksLikeMassText(campaign.configJson)}
+            />
           </>
         }
       />

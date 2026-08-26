@@ -156,6 +156,34 @@ async function main() {
     assert.equal(d2.ok, true);
     if (d1.ok && d2.ok) assert.equal(d1.reservationId, d2.reservationId);
 
+    const staleKey = `stale-${randomBytes(4).toString("hex")}`;
+    await updateMassTextingLifecycle(workspaceId, "PRODUCTION_ACTIVE", {
+      monthlySegmentsUsed: 0,
+      paygCreditsSegments: 0,
+      monthlySegmentsIncluded: 1000,
+    });
+    const firstStale = await reserveSegmentsForCampaign({
+      workspaceId,
+      campaignId: "camp_stale",
+      segments: 50,
+      idempotencyKey: staleKey,
+    });
+    assert.equal(firstStale.ok, true);
+    if (!firstStale.ok) throw new Error("stale reserve failed");
+    await releaseReservation(firstStale.reservationId, "simulate_orphan_release");
+    const afterRelease = await getSegmentAvailability(workspaceId);
+    const replayStale = await reserveSegmentsForCampaign({
+      workspaceId,
+      campaignId: "camp_stale",
+      segments: 50,
+      idempotencyKey: staleKey,
+    });
+    assert.equal(replayStale.ok, true, "released idempotency key must reserve again");
+    if (!replayStale.ok) throw new Error("replay stale failed");
+    assert.notEqual(replayStale.reservationId, firstStale.reservationId);
+    const afterReplay = await getSegmentAvailability(workspaceId);
+    assert.equal(afterReplay.available, afterRelease.available - 50);
+
     console.log("test-mass-texting-credit-reservations: ok");
   } finally {
     await cleanup(workspaceId);
