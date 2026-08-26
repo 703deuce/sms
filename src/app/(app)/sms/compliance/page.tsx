@@ -1,27 +1,24 @@
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import {
-  ensureMessagingProductRegistration,
-  getMessagingProductRegistration,
-} from "@/lib/mass-texting/messaging-registration";
+import { isMassTextA2pApprovedStatus, resolveMassTextA2pStatus } from "@/lib/mass-texting/a2p-status";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
 import Link from "next/link";
 import { Shield } from "lucide-react";
 
 export default async function MassTextCompliancePage() {
   const { workspaceId } = await requireWorkspaceContext();
-  await ensureMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING");
-  const registration = await getMessagingProductRegistration(
-    workspaceId,
-    "MASS_TEXT_MARKETING",
-  );
-  const billing = await getMassTextingBillingSummary(workspaceId);
+  const [registrationStatus, billing] = await Promise.all([
+    resolveMassTextA2pStatus(workspaceId),
+    getMassTextingBillingSummary(workspaceId),
+  ]);
+  const registrationApproved = isMassTextA2pApprovedStatus(registrationStatus);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-[24px] font-bold tracking-tight">Mass Texting compliance</h1>
         <p className="mt-1 text-[14px] text-muted-foreground">
-          Promotional bulk SMS uses a separate marketing A2P registration from Missed Call Text Back.
+          Promotional bulk SMS uses your workspace A2P registration. When Missed Call Text Back is
+          messaging-ready, Mass Texting shares that approval on the same number.
         </p>
       </div>
 
@@ -29,12 +26,11 @@ export default async function MassTextCompliancePage() {
         <div className="flex items-start gap-3">
           <Shield className="mt-0.5 h-5 w-5 text-amber-700" />
           <div>
-            <h2 className="font-semibold text-amber-950">A2P separation</h2>
+            <h2 className="font-semibold text-amber-950">Shared workspace A2P</h2>
             <p className="mt-1 text-[13px] text-amber-900/90">
-              MCTB press-1 or existing-consent flows do <strong>not</strong> authorize Mass Texting
-              promotional campaigns. Each product maintains its own 10DLC use case (
-              <code className="text-[12px]">MASS_TEXT_MARKETING</code> vs{" "}
-              <code className="text-[12px]">MCTB_CUSTOMER_CARE</code>).
+              Mass Texting honors the same Telnyx 10DLC registration that powers Missed Call Text
+              Back when your workspace is already messaging-ready. Marketing sends still require list
+              consent attestation and pre-send review before launch.
             </p>
           </div>
         </div>
@@ -45,15 +41,15 @@ export default async function MassTextCompliancePage() {
         <dl className="mt-4 grid gap-3 text-[13px] sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Status</dt>
-            <dd className="font-medium">{registration?.overallStatus ?? "not_started"}</dd>
+            <dd className="font-medium">{registrationStatus}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Messaging enabled</dt>
-            <dd>{registration?.messagingEnabled ? "Yes" : "No"}</dd>
+            <dd>{registrationApproved ? "Yes" : "No"}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Number attached</dt>
-            <dd>{registration?.phoneAttached ? registration.phoneE164 || "Yes" : "No"}</dd>
+            <dt className="text-muted-foreground">Ready to send</dt>
+            <dd>{registrationApproved ? "Yes" : "Pending workspace A2P approval"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Billing lifecycle</dt>

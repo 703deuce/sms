@@ -26,6 +26,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { MediaPicker } from "@/components/messaging/media-picker";
+import { CsvAudienceImport } from "@/components/send/csv-audience-import";
 
 const steps = ["Campaign type", "Audience", "Message", "Schedule", "Review", "Send"] as const;
 
@@ -73,7 +74,7 @@ export function CampaignWizard() {
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
   const [pools, setPools] = useState<{ id: string; name: string }[]>([]);
   const [senderPoolId, setSenderPoolId] = useState("");
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [importedListName, setImportedListName] = useState("");
 
   useEffect(() => {
     fetch("/api/contacts/lists")
@@ -129,6 +130,10 @@ export function CampaignWizard() {
     }
     if (audience === "tags") return 0;
     if (audience === "individuals") return 0;
+    if (audience === "import") {
+      const list = lists.find((l) => l.id === listId);
+      return list?.contactCount ?? 0;
+    }
     return 0;
   }, [audience, listId, segmentId, lists, segments]);
 
@@ -147,6 +152,10 @@ export function CampaignWizard() {
       setSaveError("Select a contact list.");
       return;
     }
+    if (audience === "import" && !listId) {
+      setSaveError("Upload and import a CSV list first.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     try {
@@ -158,17 +167,17 @@ export function CampaignWizard() {
           type: isMms ? "MMS broadcast" : campaignType,
           category: "broadcast",
           audience:
-            audience === "list"
-              ? lists.find((l) => l.id === listId)?.name || "List"
+            audience === "list" || audience === "import"
+              ? lists.find((l) => l.id === listId)?.name || importedListName || "List"
               : audience,
           message: fullBody,
-          listId: audience === "list" ? listId : undefined,
+          listId: audience === "list" || audience === "import" ? listId : undefined,
           segmentId: audience === "segment" ? segmentId : undefined,
           scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
           config: {
             mediaUrls,
             campaignType,
-            listIds: audience === "list" && listId ? [listId] : undefined,
+            listIds: (audience === "list" || audience === "import") && listId ? [listId] : undefined,
           },
         }),
       });
@@ -350,7 +359,7 @@ export function CampaignWizard() {
                 <option value="segment">Dynamic segment</option>
                 <option value="tags">Selected tags</option>
                 <option value="individuals">Individual contacts</option>
-                <option value="import">Imported temporary audience</option>
+                <option value="import">Upload CSV list</option>
               </Select>
               {audience === "list" ? (
                 lists.length === 0 ? (
@@ -377,6 +386,23 @@ export function CampaignWizard() {
                     ))}
                   </Select>
                 )
+              ) : null}
+              {audience === "import" ? (
+                <CsvAudienceImport
+                  onImported={(importedListId, contactCount, name) => {
+                    setListId(importedListId);
+                    setImportedListName(name);
+                    setLists((prev) => {
+                      const existing = prev.find((l) => l.id === importedListId);
+                      if (existing) {
+                        return prev.map((l) =>
+                          l.id === importedListId ? { ...l, contactCount } : l,
+                        );
+                      }
+                      return [...prev, { id: importedListId, name, contactCount }];
+                    });
+                  }}
+                />
               ) : null}
               <div className="rounded-[12px] bg-muted px-3 py-2 text-[13px]">
                 Estimated recipients: <strong>{formatNumber(recipients)}</strong>
