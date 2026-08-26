@@ -20,7 +20,8 @@ import { cn, formatCurrency, formatNumber, formatPhone } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPrisma } from "@/lib/db";
+import { MassTextNumberAssignButton } from "@/components/mass-texting/mass-text-number-assign-button";
+import { labelPhoneNumberForProducts } from "@/lib/mass-texting/number-labels";
 
 const detailTabs = [
   { id: "overview", label: "Overview" },
@@ -55,6 +56,9 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
     where: { workspaceId },
   });
   const isRegistrationNumber = registration?.phoneE164 === number.number;
+  const productLabel = labelPhoneNumberForProducts(number);
+  const isMassTextNumber =
+    productLabel.primary === "mass_text" || productLabel.primary === "shared";
 
   function statusLabel(status?: string | null) {
     const s = (status || "not_started").toLowerCase();
@@ -184,14 +188,29 @@ export default async function NumberDetailPage({ params, searchParams }: PagePro
       )}
 
       {tab === "messaging" && (
-        <Card>
-          <CardTitle>Messaging configuration</CardTitle>
-          <NumberMessagingForm
-            numberId={numberId}
-            messagingService={number.messagingService}
-            initialSettings={number.settingsJson ?? null}
-          />
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardTitle>Messaging configuration</CardTitle>
+            <NumberMessagingForm
+              numberId={numberId}
+              messagingService={number.messagingService}
+              initialSettings={number.settingsJson ?? null}
+            />
+          </Card>
+          <Card>
+            <CardTitle>Mass Texting</CardTitle>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Assign this number as the Mass Texting promotional sender. MCTB and Mass Texting use
+              separate A2P registrations.
+            </p>
+            <div className="mt-4">
+              <MassTextNumberAssignButton
+                phoneNumberId={numberId}
+                isAssigned={isMassTextNumber}
+              />
+            </div>
+          </Card>
+        </div>
       )}
 
       {tab === "assignment" && (

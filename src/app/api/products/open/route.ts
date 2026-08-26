@@ -14,7 +14,11 @@ import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 function parseProduct(raw: string | null): ProductKey | null {
   const normalized = raw?.trim().toLowerCase();
   if (normalized === "voice" || normalized === "numbers") return normalized;
-  if (!isSmsStandaloneHidden() && normalized === "sms") return normalized;
+  if (normalized === "mass_texting" || normalized === "mass-texting") return "sms";
+  if (!isSmsStandaloneHidden() && normalized === "sms") return "sms";
+  if (isSmsStandaloneHidden() && (normalized === "sms" || normalized === "mass_texting")) {
+    return "sms";
+  }
   return null;
 }
 
@@ -30,6 +34,8 @@ export async function GET(request: Request) {
       loginUrl.searchParams.set("product", "numbers");
     } else if (product === "sms") {
       loginUrl.searchParams.set("product", "sms");
+    } else if (product === "mass_texting") {
+      loginUrl.searchParams.set("product", "mass_texting");
     } else {
       loginUrl.searchParams.set("next", "/dashboard");
     }
@@ -51,6 +57,8 @@ export async function GET(request: Request) {
     await grantProductEntitlement(workspace.workspaceId, "numbers", "active");
   } else if (product === "sms") {
     await grantProductEntitlement(workspace.workspaceId, "sms", "trial");
+    const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
+    await grantWorkspaceProductFeature(workspace.workspaceId, "mass_texting", "trial");
   }
 
   await updateLastActiveProduct(session.userId, product);

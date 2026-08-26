@@ -184,10 +184,29 @@ async function loadUserProductAccess(userId: string): Promise<UserProductAccess>
   const hasVoice = products.some(
     (p) => p.productKey === "voice" && isActiveEntitlement(p.status),
   );
-  const hasSms = products.some((p) => p.productKey === "sms" && isActiveEntitlement(p.status));
   const hasNumbers = products.some(
     (p) => p.productKey === "numbers" && isActiveEntitlement(p.status),
   );
+
+  let hasMassTexting = false;
+  try {
+    const { getWorkspaceProductFeatures } = await import(
+      "@/lib/products/feature-entitlements"
+    );
+    for (const m of refreshed) {
+      const features = await getWorkspaceProductFeatures(m.workspaceId);
+      if (isActiveEntitlement(features.mass_texting)) {
+        hasMassTexting = true;
+        break;
+      }
+    }
+  } catch {
+    // feature table may be unavailable in older envs
+  }
+
+  const hasSms =
+    products.some((p) => p.productKey === "sms" && isActiveEntitlement(p.status)) ||
+    hasMassTexting;
 
   const lastActive =
     user?.lastActiveProduct != null

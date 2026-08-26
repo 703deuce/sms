@@ -5,7 +5,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { FileSpreadsheet, Upload } from "lucide-react";
+import { MASS_TEXT_LIST_ATTESTATION_TEXT } from "@/lib/mass-texting/constants";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
@@ -80,7 +80,13 @@ type ColumnMapping = {
   field: string;
 };
 
-export function ContactImportForm({ lists }: { lists: ListOption[] }) {
+export function ContactImportForm({
+  lists,
+  marketingImport = false,
+}: {
+  lists: ListOption[];
+  marketingImport?: boolean;
+}) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [columns, setColumns] = useState<ColumnMapping[]>([]);
@@ -172,6 +178,25 @@ export function ContactImportForm({ lists }: { lists: ListOption[] }) {
     setResult(null);
 
     try {
+      let attestationId: string | undefined;
+      if (marketingImport) {
+        const attestRes = await fetch("/api/mass-texting/import-attestation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            listName: listName || undefined,
+            contactCount: rows.length,
+            attestationAccepted: consentConfirmed,
+            source: "csv_import",
+          }),
+        });
+        const attestJson = await attestRes.json().catch(() => null);
+        if (!attestRes.ok) {
+          throw new Error(attestJson?.error || "Attestation failed");
+        }
+        attestationId = attestJson?.data?.id;
+      }
+
       const res = await fetch("/api/contacts/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -179,6 +204,8 @@ export function ContactImportForm({ lists }: { lists: ListOption[] }) {
           rows,
           listName: listName || undefined,
           consentSource: consentSource || "import",
+          marketingImport,
+          attestationId,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -318,10 +345,14 @@ export function ContactImportForm({ lists }: { lists: ListOption[] }) {
               />
               <span>
                 <span className="block text-sm font-medium">
-                  I confirm all imported contacts have provided express consent to receive SMS
+                  {marketingImport
+                    ? "I confirm that the recipients in this list have provided the required consent to receive these messages"
+                    : "I confirm all imported contacts have provided express consent to receive SMS"}
                 </span>
                 <span id="consent-help" className="mt-1 block text-xs text-muted-foreground">
-                  Required for TCPA compliance. Consent source and date columns should be mapped when available.
+                  {marketingImport
+                    ? MASS_TEXT_LIST_ATTESTATION_TEXT
+                    : "Required for TCPA compliance. Consent source and date columns should be mapped when available."}
                 </span>
               </span>
             </label>

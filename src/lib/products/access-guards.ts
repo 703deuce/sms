@@ -32,6 +32,7 @@ export function productAccessDeniedRedirect(
     return null;
   }
   if (isSmsStandaloneHidden() && isSmsProductPath(pathname)) {
+    if (access.hasSms) return null;
     return access.hasVoice ? productHomePath("voice") : "/app";
   }
   if (isSmsProductPath(pathname) && !access.hasSms) {

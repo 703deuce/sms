@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { requireMassTextingWorkspace } from "@/lib/mass-texting/access";
 import { launchCampaignWithAudit } from "@/lib/mass-texting/campaign-launch";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -20,6 +21,8 @@ export async function POST(request: Request, ctx: Ctx) {
       select: { id: true },
     });
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+
+    await requireMassTextingWorkspace(auth.workspaceId);
 
     const idempotencyKey =
       body.idempotencyKey?.trim() || `launch:${auth.workspaceId}:${id}:${Date.now()}`;

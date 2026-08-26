@@ -225,14 +225,47 @@ export async function sendCampaignMessageById(messageId: string) {
   const claimed = await claimMessage(messageId);
   if (!claimed) return { skipped: true, status: "race" };
 
-  const entitlement = await checkCreditBalance(message.workspaceId);
-  if (!entitlement.ok) {
-    await prisma.campaignMessage.update({
-      where: { id: messageId },
-      data: { status: "failed", error: entitlement.error },
-    });
-    await failRecipient(message.recipientId, entitlement.error);
-    throw new JobFailedError(entitlement.error);
+  const { isMassTextingCampaign } = await import("@/lib/mass-texting/campaign-send");
+  const massTextCampaign = await isMassTextingCampaign(
+    message.workspaceId,
+    message.campaignId,
+  );
+
+  if (!massTextCampaign) {
+    const entitlement = await checkCreditBalance(message.workspaceId);
+    if (!entitlement.ok) {
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "failed", error: entitlement.error },
+      });
+      await failRecipient(message.recipientId, entitlement.error);
+      throw new JobFailedError(entitlement.error);
+    }
+  } else {
+    const { assertMassTextMarketingSendAllowed } = await import(
+      "@/lib/mass-texting/a2p-enforcement"
+    );
+    const { getSegmentAvailability } = await import("@/lib/mass-texting/credit-accounting");
+    const a2pGate = await assertMassTextMarketingSendAllowed(message.workspaceId);
+    if (!a2pGate.allowed) {
+      const reason = a2pGate.reason || "Mass Texting A2P not ready";
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "failed", error: reason },
+      });
+      await failRecipient(message.recipientId, reason);
+      throw new JobFailedError(reason);
+    }
+    const availability = await getSegmentAvailability(message.workspaceId);
+    if (!availability.canSend) {
+      const reason = availability.blockReason || "Insufficient Mass Texting segments";
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "failed", error: reason },
+      });
+      await failRecipient(message.recipientId, reason);
+      throw new JobFailedError(reason);
+    }
   }
 
   try {
@@ -375,6 +408,59 @@ export async function sendCampaignMessageById(messageId: string) {
       providerAccepted = true;
       providerSid = result.id;
     } else {
+      if (massTextCampaign) {
+        const { resolveMassTextSendingNumber } = await import(
+          "@/lib/mass-texting/messaging-registration"
+        );
+        const sender = await resolveMassTextSendingNumber(message.workspaceId);
+        if (!sender?.phoneE164) {
+          throw new Error("Mass Texting sending number not configured");
+        }
+        const result = await sendViaRegistration(
+          message.workspaceId,
+          message.to,
+          message.body,
+          undefined,
+          sender.phoneE164,
+        );
+        providerAccepted = true;
+        providerSid = result.sid;
+
+        try {
+          const contact = await prisma.contact.findUnique({
+            where: {
+              workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to },
+            },
+          });
+          if (contact) {
+            const { ensureProductConversation } = await import(
+              "@/lib/mass-texting/conversation-context"
+            );
+            await ensureProductConversation({
+              workspaceId: message.workspaceId,
+              contactId: contact.id,
+              productSource: "mass_text",
+              phoneNumberId: sender.phoneNumberId,
+              fromE164: sender.phoneE164,
+              campaignId: message.campaignId,
+            });
+          }
+        } catch {
+          // conversation tagging is best-effort
+        }
+
+        try {
+          const { emitMassTextOpsEvent } = await import("@/lib/mass-texting/ops-events");
+          await emitMassTextOpsEvent({
+            workspaceId: message.workspaceId,
+            eventType: "mass_text.campaign_message_sent",
+            campaignId: message.campaignId,
+            payload: { messageId, to: message.to, providerSid: result.sid },
+          });
+        } catch {
+          // observability is best-effort
+        }
+      } else {
       const reg = await getRegistrationByWorkspace(message.workspaceId);
       if (!isMessagingReady(reg)) {
         throw new Error("Messaging not ready for workspace");
@@ -393,6 +479,7 @@ export async function sendCampaignMessageById(messageId: string) {
       );
       providerAccepted = true;
       providerSid = result.sid;
+      }
     }
 
     await prisma.campaignMessage.updateMany({
@@ -405,7 +492,7 @@ export async function sendCampaignMessageById(messageId: string) {
       },
     });
 
-    if (message.channel === "sms") {
+    if (message.channel === "sms" && !massTextCampaign) {
       try {
         await deductCreditsForSend(message.workspaceId, 1, `Campaign SMS ${message.campaignId}`);
       } catch (creditErr) {

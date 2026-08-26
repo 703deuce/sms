@@ -57,6 +57,12 @@ export async function launchCampaignWithAudit(input: {
     return { ok: false, error: "Campaign is already sending" };
   }
 
+  const { massTextProductConfigPatch } = await import("@/lib/mass-texting/campaign-send");
+  await prisma.campaign.update({
+    where: { id: input.campaignId },
+    data: { configJson: massTextProductConfigPatch(campaign.configJson) },
+  });
+
   const { assertMassTextMarketingSendAllowed } = await import(
     "@/lib/mass-texting/a2p-enforcement"
   );

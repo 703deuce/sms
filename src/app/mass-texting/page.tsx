@@ -27,7 +27,7 @@ const FAQ = [
   },
   {
     q: "Can I send MMS?",
-    a: "Yes, when your sending number and carrier setup support MMS.",
+    a: "MMS support is planned. Mass Texting V1 billing and launch focus on SMS segments.",
   },
   {
     q: "Can I personalize messages?",
@@ -85,7 +85,7 @@ export default function MassTextingLandingPage() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
-            href="/signup?product=sms"
+            href="/signup?product=mass_texting"
             className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-800"
           >
             Start Free Trial

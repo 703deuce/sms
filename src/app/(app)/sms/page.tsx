@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/ui/status-chip";
 import { loadMassTextOverviewMetrics } from "@/lib/mass-texting/overview-metrics";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { formatCurrency, formatPhone } from "@/lib/utils";
+import { formatPhone } from "@/lib/utils";
 import { Megaphone, Upload, Users } from "lucide-react";
 
 export default async function MassTextingOverviewPage() {
@@ -50,8 +50,10 @@ export default async function MassTextingOverviewPage() {
           { label: "Reply rate", value: `${metrics.replyRate}%` },
           { label: "Opt-outs", value: metrics.optOuts.toLocaleString() },
           {
-            label: "Credits remaining",
-            value: formatCurrency(metrics.creditsRemainingCents / 100),
+            label: "Segments remaining",
+            value: metrics.creditsRemainingCents > 0
+              ? Math.round(metrics.creditsRemainingCents / 100).toLocaleString()
+              : "0",
           },
           {
             label: "Sending number",

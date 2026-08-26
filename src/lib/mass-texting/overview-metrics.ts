@@ -1,8 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { resolveMassTextSendingNumber } from "@/lib/mass-texting/messaging-registration";
+import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
+import { getMessagingProductRegistration } from "@/lib/mass-texting/messaging-registration";
 
 export type MassTextOverviewMetrics = {
   messagesSentMonth: number;
@@ -34,12 +34,8 @@ export async function loadMassTextOverviewMetrics(
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
 
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { creditBalanceCents: true },
-  });
-
-  const [campaignAgg, monthMessages, upcoming, recent, sender, registration] = await Promise.all([
+  const [campaignAgg, monthMessages, upcoming, recent, sender, mtRegistration, billing] =
+    await Promise.all([
     prisma.campaign.aggregate({
       where: { workspaceId },
       _sum: { sent: true, delivered: true, replies: true, optOuts: true },
@@ -72,7 +68,8 @@ export async function loadMassTextOverviewMetrics(
       },
     }),
     resolveMassTextSendingNumber(workspaceId),
-    getRegistrationByWorkspace(workspaceId),
+    getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING"),
+    getMassTextingBillingSummary(workspaceId),
   ]);
 
   const sent = campaignAgg._sum.sent ?? 0;
@@ -87,9 +84,10 @@ export async function loadMassTextOverviewMetrics(
     replies,
     replyRate: sent > 0 ? Math.round((replies / sent) * 1000) / 10 : 0,
     optOuts,
-    creditsRemainingCents: workspace?.creditBalanceCents ?? 0,
+    creditsRemainingCents:
+      billing.monthlySegmentsRemaining * 100 + billing.paygCreditsSegments * 100,
     sendingNumber: sender?.phoneE164 ?? null,
-    a2pStatus: registration?.overallStatus ?? "not_started",
+    a2pStatus: mtRegistration?.overallStatus ?? "not_started",
     upcomingScheduled: upcoming.map((c: (typeof upcoming)[number]) => ({
       id: c.id,
       name: c.name,

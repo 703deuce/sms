@@ -47,6 +47,7 @@ const publicExact = new Set([
   "/terms",
   "/acceptable-use",
   "/contact",
+  "/mass-texting",
   "/sms-marketing",
   "/maintenance",
   "/app",
@@ -139,12 +140,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Legacy /sms/* prefix → flat SMS routes (deep links, marketing CTAs).
-  if (pathname === "/sms" || pathname.startsWith("/sms/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname === "/sms" ? "/inbox" : pathname.slice(4) || "/inbox";
-    return NextResponse.redirect(url);
-  }
+  // Mass Texting product shell uses /sms/** — do not redirect to legacy flat routes.
 
   // Consolidate legacy outcomes dashboard under /dashboard.
   if (pathname === "/outcomes" || pathname.startsWith("/outcomes/")) {
@@ -198,7 +194,7 @@ export async function middleware(request: NextRequest) {
       return siteRedirect(request, next);
     }
     const product = request.nextUrl.searchParams.get("product")?.trim().toLowerCase();
-    if (product === "numbers" || product === "sms") {
+    if (product === "numbers" || product === "sms" || product === "mass_texting") {
       return siteRedirect(request, `/api/products/open?product=${product}`);
     }
     if (product === "mctb") {

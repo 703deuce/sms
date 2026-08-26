@@ -303,6 +303,11 @@ export function Sidebar({
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const isMassTextShell =
+    productFeatures?.mass_texting === "active" ||
+    productFeatures?.mass_texting === "trial" ||
+    pathname.startsWith("/sms");
+
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
     if (isLauncher) return [];
@@ -421,6 +426,7 @@ export function Sidebar({
         ) : null}
         {(currentProduct === "sms" ||
           (hasSms && isSmsShellRoute(pathname) && !(hasVoice && isVoiceShellRoute(pathname)))) &&
+        !isMassTextShell &&
         !collapsed ? (
           <SmsCreateMenu variant="sidebar" />
         ) : null}

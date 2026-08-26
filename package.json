@@ -66,6 +66,8 @@
     "test:transovo-platform": "tsx scripts/test-transovo-platform.ts",
     "test:platform-bundle-pricing": "tsx scripts/test-platform-bundle-pricing.ts",
     "test:platform-stripe-catalog": "tsx scripts/test-platform-stripe-catalog.ts",
+    "test:mass-texting": "tsx scripts/test-mass-texting-boundary.ts && tsx scripts/test-mass-texting-inbox-filters.ts && tsx scripts/test-mass-texting-pricing-billing.ts && tsx scripts/test-mass-texting-integration.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mass-texting-credit-reservations.ts",
+    "sync:mass-texting-stripe": "tsx scripts/sync-mass-texting-stripe-catalog.ts",
     "test:ai-transcription": "tsx scripts/test-ai-transcription.ts",
     "test:mctb-sip-ingress-send-gate": "tsx scripts/test-mctb-sip-ingress-send-gate.ts",
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",

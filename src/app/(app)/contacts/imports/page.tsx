@@ -12,7 +12,8 @@ import { loadAuditLogs, loadLists } from "@/lib/workspace-data";
 type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 type ContactListRow = Awaited<ReturnType<typeof loadLists>>[number];
 import Link from "next/link";
-import { contactTabs } from "@/lib/contact-tabs";
+import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
+import { isActiveEntitlement } from "@/lib/products/types";
 
 function formatDateTime(at: Date | string) {
   return new Date(at).toLocaleDateString(undefined, {
@@ -39,10 +40,13 @@ export default async function ContactImportsPage() {
     );
   }
 
-  const [lists, auditLogs]: [ContactListRow[], AuditLogRow[]] = await Promise.all([
+  const [lists, auditLogs, features]: [ContactListRow[], AuditLogRow[], Awaited<ReturnType<typeof getWorkspaceProductFeatures>>] =
+    await Promise.all([
     loadLists(workspaceId),
     loadAuditLogs(workspaceId),
+    getWorkspaceProductFeatures(workspaceId),
   ]);
+  const marketingImport = isActiveEntitlement(features.mass_texting);
   const importHistory = auditLogs.filter((log) => log.event === "contacts.import");
 
   return (
@@ -59,7 +63,10 @@ export default async function ContactImportsPage() {
 
       <Tabs items={contactTabs} />
 
-      <ContactImportForm lists={lists.map((l) => ({ id: l.id, name: l.name }))} />
+      <ContactImportForm
+        lists={lists.map((l) => ({ id: l.id, name: l.name }))}
+        marketingImport={marketingImport}
+      />
 
       <Card className="mt-6">
         <CardTitle>Import history</CardTitle>
