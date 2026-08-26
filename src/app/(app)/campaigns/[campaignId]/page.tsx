@@ -14,6 +14,8 @@ import {
 } from "@/lib/utils";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { loadAuditLogs, loadCampaignById } from "@/lib/workspace-data";
+import { isMassTextingWorkspace } from "@/lib/mass-texting/access";
+import { campaignHasLaunchAudit } from "@/lib/mass-texting/campaign-guards";
 
 type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 import {
@@ -136,6 +138,11 @@ export default async function CampaignDetailPage({
     notFound();
   }
 
+  const massTexting = await isMassTextingWorkspace(workspaceId);
+  const hasLaunchAudit = massTexting
+    ? await campaignHasLaunchAudit(workspaceId, campaignId)
+    : false;
+
   const auditLogs = await loadAuditLogs(workspaceId);
   const deliveryRate =
     campaign.sent > 0 ? (campaign.delivered / campaign.sent) * 100 : 0;
@@ -175,7 +182,12 @@ export default async function CampaignDetailPage({
                 <Button variant="outline">Duplicate</Button>
               </Link>
             )}
-            <CampaignActions campaignId={campaignId} status={campaign.status} />
+            <CampaignActions
+              campaignId={campaignId}
+              status={campaign.status}
+              massTexting={massTexting}
+              hasLaunchAudit={hasLaunchAudit}
+            />
           </>
         }
       />
@@ -194,7 +206,11 @@ export default async function CampaignDetailPage({
       </div>
 
       <div className="mb-6">
-        <CampaignLaunchReview campaignId={campaignId} status={campaign.status} />
+        <CampaignLaunchReview
+          campaignId={campaignId}
+          status={campaign.status}
+          massTexting={massTexting}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">

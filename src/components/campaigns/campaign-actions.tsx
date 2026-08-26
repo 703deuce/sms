@@ -10,13 +10,21 @@ type Props = {
   campaignId: string;
   status: string;
   variant?: "detail" | "row";
+  massTexting?: boolean;
+  hasLaunchAudit?: boolean;
 };
 
 function normalizeStatus(status: string) {
   return status.toUpperCase().replace("CANCELLED", "CANCELED");
 }
 
-export function CampaignActions({ campaignId, status, variant = "detail" }: Props) {
+export function CampaignActions({
+  campaignId,
+  status,
+  variant = "detail",
+  massTexting = false,
+  hasLaunchAudit = false,
+}: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<Action | null>(null);
   const [error, setError] = useState("");
@@ -25,11 +33,14 @@ export function CampaignActions({ campaignId, status, variant = "detail" }: Prop
   const actions: Array<{ action: Action; label: string; variant: "default" | "outline" | "danger" }> = [];
 
   if (normalized === "DRAFT" || normalized === "SCHEDULED" || normalized === "PAUSED") {
-    actions.push({
-      action: normalized === "PAUSED" ? "resume" : "activate",
-      label: normalized === "PAUSED" ? "Resume" : "Activate",
-      variant: "default",
-    });
+    const isActivate = normalized !== "PAUSED";
+    if (!(massTexting && isActivate && !hasLaunchAudit)) {
+      actions.push({
+        action: normalized === "PAUSED" ? "resume" : "activate",
+        label: normalized === "PAUSED" ? "Resume" : "Activate",
+        variant: "default",
+      });
+    }
   }
   if (normalized === "SENDING") {
     actions.push({ action: "pause", label: "Pause", variant: "outline" });

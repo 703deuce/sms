@@ -157,10 +157,20 @@ export async function processSequenceWaits() {
       continue;
     }
     if (recipient.campaign.status === "SCHEDULED" && (!recipient.campaign.scheduledAt || recipient.campaign.scheduledAt <= now)) {
-      await prisma.campaign.update({
-        where: { id: recipient.campaignId },
-        data: { status: "SENDING" },
-      });
+      const { canAutoActivateScheduledCampaign } = await import(
+        "@/lib/mass-texting/campaign-guards"
+      );
+      if (
+        await canAutoActivateScheduledCampaign(
+          recipient.campaign.workspaceId,
+          recipient.campaignId,
+        )
+      ) {
+        await prisma.campaign.update({
+          where: { id: recipient.campaignId },
+          data: { status: "SENDING" },
+        });
+      }
     }
 
     const claimed = await claimWaitingRecipient(recipient.id);

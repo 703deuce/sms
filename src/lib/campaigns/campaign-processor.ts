@@ -21,14 +21,25 @@ export async function enqueueDueCampaignMessages() {
   const now = new Date();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-  // Activate due scheduled campaigns
-  await prisma.campaign.updateMany({
+  // Activate due scheduled campaigns (Mass Texting requires prior launch audit)
+  const { canAutoActivateScheduledCampaign } = await import("@/lib/mass-texting/campaign-guards");
+  const dueScheduled = await prisma.campaign.findMany({
     where: {
       status: "SCHEDULED",
       OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
     },
-    data: { status: "SENDING" },
+    select: { id: true, workspaceId: true },
+    take: 200,
   });
+  for (const campaign of dueScheduled) {
+    if (!(await canAutoActivateScheduledCampaign(campaign.workspaceId, campaign.id))) {
+      continue;
+    }
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: "SCHEDULED" },
+      data: { status: "SENDING" },
+    });
+  }
 
   const due = await prisma.campaignMessage.findMany({
     where: {

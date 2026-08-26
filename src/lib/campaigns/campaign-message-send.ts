@@ -412,7 +412,7 @@ export async function sendCampaignMessageById(messageId: string) {
         const { resolveMassTextSendingNumber } = await import(
           "@/lib/mass-texting/messaging-registration"
         );
-        const { getCampaignMediaUrls } = await import("@/lib/mass-texting/campaign-send");
+        const { getCampaignMediaUrls } = await import("@/lib/mass-texting/campaign-media");
         const sender = await resolveMassTextSendingNumber(message.workspaceId);
         if (!sender?.phoneE164) {
           throw new Error("Mass Texting sending number not configured");
@@ -472,7 +472,7 @@ export async function sendCampaignMessageById(messageId: string) {
         const { resolvePoolSender } = await import("@/lib/numbers/sender-pool");
         fromOverride = await resolvePoolSender(message.workspaceId, message.campaign.senderPoolId);
       }
-      const { getCampaignMediaUrls } = await import("@/lib/mass-texting/campaign-send");
+      const { getCampaignMediaUrls } = await import("@/lib/mass-texting/campaign-media");
       const mediaUrls = getCampaignMediaUrls(message.campaign.configJson);
       const result = await sendViaRegistration(
         message.workspaceId,

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type LaunchReview = {
   campaignId: string;
@@ -24,11 +24,14 @@ type LaunchReview = {
 export function CampaignLaunchReview({
   campaignId,
   status,
+  massTexting = false,
 }: {
   campaignId: string;
   status: string;
+  massTexting?: boolean;
 }) {
   const router = useRouter();
+  const launchIdempotencyKey = useRef(`launch:${campaignId}:${crypto.randomUUID()}`);
   const normalized = status.toUpperCase();
   const canLaunch = normalized === "DRAFT" || normalized === "SCHEDULED" || normalized === "PAUSED";
   const [review, setReview] = useState<LaunchReview | null>(null);
@@ -69,7 +72,7 @@ export function CampaignLaunchReview({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idempotencyKey: `launch:${campaignId}:${Date.now()}`,
+          idempotencyKey: launchIdempotencyKey.current,
           confirmLargeSend: review.finalRecipientCount >= 1000 ? confirmed : true,
         }),
       });
@@ -83,7 +86,7 @@ export function CampaignLaunchReview({
     }
   }
 
-  if (!canLaunch) return null;
+  if (!massTexting || !canLaunch) return null;
 
   return (
     <section className="rounded-[14px] border border-amber-200 bg-amber-50/60 p-4">

@@ -65,6 +65,11 @@ export async function tickRecurringCampaigns() {
     const nextRun = new Date(recurrence.nextRunAt);
     if (nextRun > now) continue;
 
+    const { massTextingRequiresLaunchAudit } = await import("@/lib/mass-texting/campaign-guards");
+    if (await massTextingRequiresLaunchAudit(parent.workspaceId)) {
+      continue;
+    }
+
     const childName = `${parent.name} — ${now.toISOString().slice(0, 10)}`;
     const child = await prisma.campaign.create({
       data: {

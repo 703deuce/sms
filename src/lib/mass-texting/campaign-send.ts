@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { campaignTypeImpliesMms } from "@/lib/mass-texting/campaign-media";
 
 export function massTextProductConfigPatch(
   configJson: unknown,
@@ -43,6 +44,7 @@ export async function isMassTextingCampaign(
   const type = String(campaign.type || "").toLowerCase();
   const category = String(campaign.category || "").toLowerCase();
   return (
+    type.includes("mms") ||
     type.includes("promotional") ||
     type.includes("broadcast") ||
     category.includes("broadcast") ||
@@ -50,21 +52,9 @@ export async function isMassTextingCampaign(
   );
 }
 
-export function getCampaignMediaUrls(configJson: unknown): string[] {
-  const config =
-    configJson && typeof configJson === "object"
-      ? (configJson as Record<string, unknown>)
-      : {};
-  const urls = config.mediaUrls;
-  if (!Array.isArray(urls)) return [];
-  return urls.filter((u): u is string => typeof u === "string" && u.trim().length > 0);
-}
-
-export function isCampaignMms(configJson: unknown): boolean {
-  return getCampaignMediaUrls(configJson).length > 0;
-}
-
 export async function estimateMessageSegments(body: string): Promise<number> {
   const { estimateSmsSegments } = await import("@/lib/utils");
   return Math.max(1, estimateSmsSegments(body).segments);
 }
+
+export { getCampaignMediaUrls, isCampaignMms } from "@/lib/mass-texting/campaign-media";

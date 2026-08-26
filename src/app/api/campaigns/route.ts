@@ -63,6 +63,27 @@ export async function POST(request: Request) {
     const categoryId = (categoryMeta?.id || body.category || null) as CampaignCategoryId | null;
     const config = body.config || {};
 
+    const { validateCampaignMediaConfig } = await import("@/lib/mass-texting/campaign-media");
+    const mediaCheck = validateCampaignMediaConfig({
+      configJson: config,
+      campaignType: body.type || categoryMeta?.title,
+    });
+    if (!mediaCheck.ok) {
+      return NextResponse.json({ error: mediaCheck.error }, { status: 400 });
+    }
+
+    const { massTextingRequiresLaunchAudit } = await import("@/lib/mass-texting/campaign-guards");
+    const requiresLaunchAudit = await massTextingRequiresLaunchAudit(workspaceId);
+    if (requiresLaunchAudit && body.activate) {
+      return NextResponse.json(
+        {
+          error:
+            "Mass Texting campaigns must be launched through pre-send review (credits, A2P, and suppression checks).",
+        },
+        { status: 400 },
+      );
+    }
+
     const recurrence = config.recurrence as { nextRunAt?: string } | undefined;
     let scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
     let status: "DRAFT" | "SCHEDULED" | "SENDING" = body.activate
@@ -163,6 +184,11 @@ export async function PATCH(request: Request) {
     if (body.action === "activate" || body.action === "resume") {
       if (campaign.status === "CANCELED") {
         return NextResponse.json({ error: "Cannot resume a canceled campaign" }, { status: 400 });
+      }
+      const { canLegacyActivateCampaign } = await import("@/lib/mass-texting/campaign-guards");
+      const gate = await canLegacyActivateCampaign(workspaceId, campaign.id);
+      if (!gate.allowed) {
+        return NextResponse.json({ error: gate.reason || "Launch required" }, { status: 400 });
       }
       status = "SENDING";
     }

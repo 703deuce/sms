@@ -4,7 +4,10 @@ import { getPrisma } from "@/lib/db";
 import { validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { estimateSmsSegments } from "@/lib/utils";
 import { estimateMessagingCredits } from "@/lib/mass-texting/credit-units";
-import { getCampaignMediaUrls, isCampaignMms } from "@/lib/mass-texting/campaign-send";
+import {
+  getCampaignMediaUrls,
+  isCampaignMms,
+} from "@/lib/mass-texting/campaign-media";
 
 export type PreSendReview = {
   campaignId: string;

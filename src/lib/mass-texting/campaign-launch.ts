@@ -48,10 +48,24 @@ export async function launchCampaignWithAudit(input: {
     };
   }
 
+  if (review.mmsCount > 0 && review.mediaUrls.length === 0) {
+    return { ok: false, error: "MMS campaign is missing image attachments" };
+  }
+
   const campaign = await prisma.campaign.findFirst({
     where: { id: input.campaignId, workspaceId: input.workspaceId },
   });
   if (!campaign) return { ok: false, error: "Campaign not found" };
+
+  const { validateCampaignMediaConfig } = await import("@/lib/mass-texting/campaign-media");
+  const mediaCheck = validateCampaignMediaConfig({
+    configJson: campaign.configJson,
+    campaignType: campaign.type,
+  });
+  if (!mediaCheck.ok) {
+    return { ok: false, error: mediaCheck.error };
+  }
+
   if (campaign.status === "CANCELED") return { ok: false, error: "Campaign is canceled" };
   if (campaign.status === "SENDING") {
     return { ok: false, error: "Campaign is already sending" };
