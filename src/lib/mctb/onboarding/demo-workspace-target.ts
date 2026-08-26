@@ -27,6 +27,12 @@ async function resolvePlatformDemoTarget(input: {
       input.transovoE164,
       input.forwardedFrom,
     )) ||
+    (await (async () => {
+      const { resolveAdminProductionWorkspaceForPlatformDemoInbound } = await import(
+        "@/lib/mctb/platform-production-routing"
+      );
+      return resolveAdminProductionWorkspaceForPlatformDemoInbound();
+    })()) ||
     (await resolvePhoneOwnerWorkspace(input.transovoE164)) ||
     input.fallbackWorkspaceId;
 

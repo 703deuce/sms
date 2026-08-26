@@ -97,6 +97,35 @@ export async function resolveWorkspaceByForwardedBusinessLine(
   return null;
 }
 
+/**
+ * When the platform demo DID is hit without a Diversion/forwarded-from header (common on
+ * AT&T → Telnyx SIP), route to the sole admin production workspace that configured a
+ * business forward line. Avoids falling back to the platform-owner default (press_1).
+ */
+export async function resolveAdminProductionWorkspaceForPlatformDemoInbound(): Promise<
+  string | null
+> {
+  const prisma = getPrisma();
+  const workspaces = await prisma.workspace.findMany({
+    where: { NOT: { customFieldsConfig: null } },
+    select: { id: true, customFieldsConfig: true },
+    take: 2000,
+  });
+
+  const candidates: string[] = [];
+  for (const ws of workspaces) {
+    const state = parseMctbOnboardingState(ws.customFieldsConfig);
+    const line = readBusinessLineE164(state, ws.customFieldsConfig);
+    if (!line) continue;
+    const adminProduction = await isAdminProductionMctbActive(ws.id);
+    if (!adminProduction) continue;
+    candidates.push(ws.id);
+  }
+
+  if (candidates.length === 1) return candidates[0]!;
+  return null;
+}
+
 export async function resolveMctbPhoneNumberIdForWorkspace(input: {
   workspaceId: string;
   phoneNumberId?: string | null;
