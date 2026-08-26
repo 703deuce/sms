@@ -5,19 +5,24 @@ from __future__ import annotations
 import asyncio
 import shutil
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from livekit import rtc
+from livekit.agents.voice import io as agents_io
 
 from transovo_voice.session.sip_status import SIP_CALL_STATUS_HANGUP, read_sip_call_status
 
 if TYPE_CHECKING:
+    from livekit.agents import AgentSession
+
     from transovo_voice.integrations.backend_client import TransovoBackend
     from transovo_voice.session.mctb_sip_e2e_trace import MctbSipE2eTrace
 
 DEFAULT_SAMPLE_RATE = 24_000
 NUM_CHANNELS = 1
+FRAME_SIZE_MS = 50
 MAX_RECORD_SECONDS = 180.0
 MIN_RECORD_SECONDS = 0.5
 SILENCE_TAIL_SECONDS = 3.0
@@ -34,81 +39,89 @@ class VoicemailRecordingResult:
     error: str | None = None
 
 
-def _find_remote_audio_track(
-    participant: rtc.RemoteParticipant,
-) -> rtc.Track | None:
-    for publication in participant.track_publications.values():
-        if publication.kind != rtc.TrackKind.KIND_AUDIO:
-            continue
-        track = publication.track
-        if track is not None and track.kind == rtc.TrackKind.KIND_AUDIO:
-            return track
-    return None
+class VoicemailAudioTap(agents_io.AudioInput):
+    """Tee RoomIO participant audio frames for voicemail capture.
+
+    Mirrors livekit.agents.voice.recorder_io.RecorderAudioInput — the supported
+    way to record when AgentSession RoomIO already owns the SIP mic stream.
+    """
+
+    def __init__(self, source: agents_io.AudioInput) -> None:
+        super().__init__(label="MctbVoicemailTap", source=source)
+        self._audio_input = source
+        self._frames: list[rtc.AudioFrame] = []
+
+    def take_pcm(self) -> tuple[bytes, int, float]:
+        if not self._frames:
+            return b"", 0, 0.0
+
+        sample_rate = self._frames[0].sample_rate or DEFAULT_SAMPLE_RATE
+        channels = self._frames[0].num_channels or NUM_CHANNELS
+        pcm = b"".join(bytes(frame.data) for frame in self._frames)
+        duration_seconds = len(pcm) / (sample_rate * channels * 2)
+        return pcm, len(self._frames), duration_seconds
+
+    def on_attached(self) -> None:
+        self._audio_input.on_attached()
+
+    def on_detached(self) -> None:
+        self._audio_input.on_detached()
+
+    def __aiter__(self) -> AsyncIterator[rtc.AudioFrame]:
+        return self
+
+    async def __anext__(self) -> rtc.AudioFrame:
+        frame = await self._audio_input.__anext__()
+        self._frames.append(frame)
+        return frame
 
 
-def _subscribe_remote_audio_publications(participant: rtc.RemoteParticipant) -> int:
-    subscribed = 0
-    for publication in participant.track_publications.values():
-        if publication.kind != rtc.TrackKind.KIND_AUDIO:
-            continue
-        if isinstance(publication, rtc.RemoteTrackPublication):
-            publication.set_subscribed(True)
-            subscribed += 1
-    return subscribed
-
-
-async def _wait_for_remote_audio_track(
-    room: rtc.Room,
-    participant: rtc.RemoteParticipant,
-    *,
-    timeout_s: float = 8.0,
-) -> rtc.Track | None:
-    track = _find_remote_audio_track(participant)
-    if track is not None:
-        return track
-
-    subscribed_count = _subscribe_remote_audio_publications(participant)
-    track = _find_remote_audio_track(participant)
-    if track is not None:
-        return track
-
-    loop = asyncio.get_running_loop()
-    resolved: asyncio.Future[rtc.Track] = loop.create_future()
-
-    def _on_track_subscribed(
-        subscribed_track: rtc.Track,
-        _publication: rtc.RemoteTrackPublication,
-        remote_participant: rtc.RemoteParticipant,
-    ) -> None:
-        if remote_participant.sid != participant.sid:
-            return
-        if subscribed_track.kind != rtc.TrackKind.KIND_AUDIO:
-            return
-        if not resolved.done():
-            resolved.set_result(subscribed_track)
-
-    room.on("track_subscribed", _on_track_subscribed)
-    try:
-        return await asyncio.wait_for(resolved, timeout=timeout_s)
-    except asyncio.TimeoutError:
-        return _find_remote_audio_track(participant)
-    finally:
-        room.off("track_subscribed", _on_track_subscribed)
-
-
-def _pcm_duration_seconds(pcm: bytes) -> float:
+def _pcm_duration_seconds(pcm: bytes, *, sample_rate: int = DEFAULT_SAMPLE_RATE) -> float:
     if not pcm:
         return 0.0
-    return len(pcm) / (DEFAULT_SAMPLE_RATE * NUM_CHANNELS * 2)
+    return len(pcm) / (sample_rate * NUM_CHANNELS * 2)
 
 
-async def _collect_remote_audio_pcm(
-    track: rtc.Track,
+async def _wait_for_hangup(
+    participant: rtc.RemoteParticipant,
+    *,
+    stop_event: asyncio.Event,
+    max_seconds: float,
+) -> None:
+    hangup_seen_at: float | None = None
+    started = time.perf_counter()
+
+    while not stop_event.is_set():
+        if (time.perf_counter() - started) >= max_seconds:
+            stop_event.set()
+            return
+
+        status = read_sip_call_status(participant)
+        if status == SIP_CALL_STATUS_HANGUP:
+            if hangup_seen_at is None:
+                hangup_seen_at = time.perf_counter()
+            elif (time.perf_counter() - hangup_seen_at) >= SILENCE_TAIL_SECONDS:
+                stop_event.set()
+                return
+        else:
+            hangup_seen_at = None
+
+        await asyncio.sleep(HANGUP_POLL_SECONDS)
+
+
+async def _collect_remote_audio_pcm_fallback(
+    participant: rtc.RemoteParticipant,
     *,
     stop_event: asyncio.Event,
     max_seconds: float,
 ) -> tuple[bytes, int, float]:
-    stream = rtc.AudioStream(track, sample_rate=DEFAULT_SAMPLE_RATE, num_channels=NUM_CHANNELS)
+    stream = rtc.AudioStream.from_participant(
+        participant=participant,
+        track_source=rtc.TrackSource.SOURCE_MICROPHONE,
+        sample_rate=DEFAULT_SAMPLE_RATE,
+        num_channels=NUM_CHANNELS,
+        frame_size_ms=FRAME_SIZE_MS,
+    )
     chunks: list[bytes] = []
     frame_count = 0
     started = time.perf_counter()
@@ -171,7 +184,7 @@ async def record_sip_voicemail_message(
     backend: "TransovoBackend",
     *,
     trace: "MctbSipE2eTrace",
-    room: rtc.Room,
+    answer_session: "AgentSession",
     participant: rtc.RemoteParticipant,
     session: dict[str, Any],
     max_seconds: float = MAX_RECORD_SECONDS,
@@ -201,75 +214,133 @@ async def record_sip_voicemail_message(
     if not message_id:
         return VoicemailRecordingResult(ok=False, error="missing_message_id")
 
+    room_input = answer_session.input.audio
+    capture_mode = "roomio_tap" if room_input is not None else "participant_stream"
+    tap: VoicemailAudioTap | None = None
+    previous_input = room_input
+
     trace.log(
         "mctb_voicemail_record_started",
         messageId=message_id,
         workspaceId=workspace_id,
         maxSeconds=max_seconds,
-        publicationCount=len(participant.track_publications),
-    )
-
-    track = await _wait_for_remote_audio_track(room, participant)
-    if track is None:
-        publications = []
-        for publication in participant.track_publications.values():
-            publications.append(
-                {
-                    "sid": publication.sid,
-                    "kind": int(publication.kind),
-                    "subscribed": getattr(publication, "subscribed", None),
-                    "hasTrack": publication.track is not None,
-                },
-            )
-        trace.log(
-            "mctb_voicemail_record_no_audio_track",
-            messageId=message_id,
-            publications=publications,
-        )
-        return VoicemailRecordingResult(
-            ok=False,
-            message_id=message_id,
-            error="remote_audio_track_missing",
-        )
-
-    trace.log(
-        "mctb_voicemail_record_track_ready",
-        messageId=message_id,
-        trackSid=track.sid,
-        trackKind=int(track.kind),
+        captureMode=capture_mode,
+        inputAudioLabel=getattr(room_input, "label", None),
     )
 
     stop_event = asyncio.Event()
-    hangup_seen_at: float | None = None
-
-    async def _watch_hangup() -> None:
-        nonlocal hangup_seen_at
-        while not stop_event.is_set():
-            status = read_sip_call_status(participant)
-            if status == SIP_CALL_STATUS_HANGUP:
-                if hangup_seen_at is None:
-                    hangup_seen_at = time.perf_counter()
-                elif (time.perf_counter() - hangup_seen_at) >= SILENCE_TAIL_SECONDS:
-                    stop_event.set()
-                    return
-            else:
-                hangup_seen_at = None
-            await asyncio.sleep(HANGUP_POLL_SECONDS)
-
-    watcher = asyncio.create_task(_watch_hangup(), name="mctb_voicemail_hangup_watch")
-    try:
-        pcm, frame_count, duration_seconds = await _collect_remote_audio_pcm(
-            track,
+    if room_input is not None:
+        tap = VoicemailAudioTap(room_input)
+        answer_session.input.audio = tap
+        trace.log(
+            "mctb_voicemail_record_tap_installed",
+            messageId=message_id,
+            previousInputLabel=getattr(previous_input, "label", None),
+        )
+        await _wait_for_hangup(participant, stop_event=stop_event, max_seconds=max_seconds)
+    else:
+        trace.log(
+            "mctb_voicemail_record_fallback_started",
+            messageId=message_id,
+            note="roomio_audio_input_missing_using_from_participant",
+        )
+        hangup_task = asyncio.create_task(
+            _wait_for_hangup(participant, stop_event=stop_event, max_seconds=max_seconds),
+            name="mctb_voicemail_hangup_watch",
+        )
+        pcm, frame_count, duration_seconds = await _collect_remote_audio_pcm_fallback(
+            participant,
             stop_event=stop_event,
             max_seconds=max_seconds,
         )
-    finally:
-        stop_event.set()
-        watcher.cancel()
+        await hangup_task
+        trace.log(
+            "mctb_voicemail_record_fallback_complete",
+            messageId=message_id,
+            frameCount=frame_count,
+            durationSeconds=duration_seconds,
+            pcmBytes=len(pcm),
+        )
+        if duration_seconds < MIN_RECORD_SECONDS or not pcm:
+            trace.log(
+                "mctb_voicemail_record_too_short",
+                messageId=message_id,
+                frameCount=frame_count,
+                durationSeconds=duration_seconds,
+                pcmBytes=len(pcm),
+                captureMode=capture_mode,
+            )
+            return VoicemailRecordingResult(
+                ok=False,
+                message_id=message_id,
+                duration_seconds=float(duration_seconds),
+                pcm_bytes=len(pcm),
+                error="recording_too_short",
+            )
         try:
-            await watcher
-        except asyncio.CancelledError:
-            pass
+            encoded = await _encode_pcm_to_mp3(pcm, sample_rate=DEFAULT_SAMPLE_RATE)
+        except Exception as err:
+            trace.log(
+                "mctb_voicemail_record_encode_failed",
+                messageId=message_id,
+                error=str(err),
+            )
+            return VoicemailRecordingResult(
+                ok=False,
+                message_id=message_id,
+                duration_seconds=float(duration_seconds),
+                pcm_bytes=len(pcm),
+                error=str(err),
+            )
+        import base64
+
+        complete_payload = await backend.call(
+            "complete_mctb_sip_voicemail",
+            {
+                "workspaceId": workspace_id,
+                "messageId": message_id,
+                "audioBase64": base64.b64encode(encoded).decode("ascii"),
+                "mimeType": "audio/mpeg",
+                "durationSeconds": int(round(duration_seconds)),
+                "providerCallId": trace.correlation_id,
+            },
+        )
+        if not complete_payload.get("ok"):
+            return VoicemailRecordingResult(
+                ok=False,
+                message_id=message_id,
+                duration_seconds=float(duration_seconds),
+                pcm_bytes=len(pcm),
+                encoded_bytes=len(encoded),
+                error=str(complete_payload.get("error") or "complete_voicemail_failed"),
+            )
+        trace.log(
+            "mctb_voicemail_record_complete",
+            messageId=message_id,
+            durationSeconds=duration_seconds,
+            frameCount=frame_count,
+            encodedBytes=len(encoded),
+            captureMode=capture_mode,
+            transcriptStatus=complete_payload.get("transcriptStatus"),
+            playbackUrl=complete_payload.get("playbackUrl"),
+        )
+        return VoicemailRecordingResult(
+            ok=True,
+            message_id=message_id,
+            duration_seconds=float(duration_seconds),
+            pcm_bytes=len(pcm),
+            encoded_bytes=len(encoded),
+        )
+
+    answer_session.input.audio = previous_input
+    pcm, frame_count, duration_seconds = tap.take_pcm() if tap is not None else (b"", 0, 0.0)
+    trace.log(
+        "mctb_voicemail_record_tap_complete",
+        messageId=message_id,
+        frameCount=frame_count,
+        durationSeconds=duration_seconds,
+        pcmBytes=len(pcm),
+    )
 
     if duration_seconds < MIN_RECORD_SECONDS or not pcm:
         trace.log(
@@ -278,6 +349,7 @@ async def record_sip_voicemail_message(
             frameCount=frame_count,
             durationSeconds=duration_seconds,
             pcmBytes=len(pcm),
+            captureMode=capture_mode,
         )
         return VoicemailRecordingResult(
             ok=False,
@@ -333,6 +405,7 @@ async def record_sip_voicemail_message(
         durationSeconds=duration_seconds,
         frameCount=frame_count,
         encodedBytes=len(encoded),
+        captureMode=capture_mode,
         transcriptStatus=complete_payload.get("transcriptStatus"),
         playbackUrl=complete_payload.get("playbackUrl"),
     )
