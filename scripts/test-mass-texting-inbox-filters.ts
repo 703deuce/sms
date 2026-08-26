@@ -9,6 +9,7 @@ import {
   parseInboxSearchParams,
 } from "../src/lib/mass-texting/inbox-filters";
 import { inferInboundProductSource, appProductSourceToPrisma } from "../src/lib/mass-texting/product-source";
+import { productAccessDeniedRedirect } from "../src/lib/products/access-guards";
 
 const params = new URLSearchParams("product=mass_text&unread=1&campaignId=camp_1");
 const filters = parseInboxSearchParams(params);
@@ -32,6 +33,18 @@ assert.equal(
     campaignProductSource: "mass_text",
   }),
   "mctb",
+);
+
+assert.equal(
+  productAccessDeniedRedirect("/inbox", { hasVoice: false, hasSms: true, hasNumbers: false }, { authenticated: true }),
+  null,
+);
+assert.equal(
+  productAccessDeniedRedirect("/inbox", { hasVoice: true, hasSms: false, hasNumbers: false }, { authenticated: true }),
+  null,
+);
+assert.ok(
+  productAccessDeniedRedirect("/inbox", { hasVoice: false, hasSms: false, hasNumbers: false }, { authenticated: true }),
 );
 
 console.log("test-mass-texting-inbox-filters: ok");

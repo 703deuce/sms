@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
+import { campaignConfigIsMassText } from "@/lib/mass-texting/campaign-send";
 import { getMessagingProductRegistration, resolveMassTextSendingNumber } from "@/lib/mass-texting/messaging-registration";
 
 export type MassTextOverviewMetrics = {
@@ -11,6 +12,8 @@ export type MassTextOverviewMetrics = {
   replies: number;
   replyRate: number;
   optOuts: number;
+  creditsRemaining: number;
+  /** @deprecated use creditsRemaining — kept so older UI copies still compile. */
   creditsRemainingCents: number;
   sendingNumber: string | null;
   a2pStatus: string;
@@ -34,29 +37,9 @@ export async function loadMassTextOverviewMetrics(
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
 
-  const [campaignAgg, monthMessages, upcoming, recent, sender, mtRegistration, billing] =
-    await Promise.all([
-    prisma.campaign.aggregate({
-      where: { workspaceId },
-      _sum: { sent: true, delivered: true, replies: true, optOuts: true },
-    }),
-    prisma.campaignMessage.count({
-      where: {
-        workspaceId,
-        createdAt: { gte: monthStart },
-        status: { in: ["sent", "delivered", "clicked"] },
-      },
-    }),
-    prisma.campaign.findMany({
-      where: { workspaceId, status: "SCHEDULED", scheduledAt: { gte: new Date() } },
-      orderBy: { scheduledAt: "asc" },
-      take: 5,
-      select: { id: true, name: true, scheduledAt: true },
-    }),
+  const [allCampaigns, audits, sender, mtRegistration, billing] = await Promise.all([
     prisma.campaign.findMany({
       where: { workspaceId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
       select: {
         id: true,
         name: true,
@@ -64,18 +47,65 @@ export async function loadMassTextOverviewMetrics(
         sent: true,
         delivered: true,
         replies: true,
+        optOuts: true,
         scheduledAt: true,
+        createdAt: true,
+        configJson: true,
       },
+      orderBy: { createdAt: "desc" },
+      take: 2000,
+    }),
+    prisma.campaignLaunchAudit.findMany({
+      where: { workspaceId },
+      select: { campaignId: true },
     }),
     resolveMassTextSendingNumber(workspaceId),
     getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING"),
     getMassTextingBillingSummary(workspaceId),
   ]);
 
-  const sent = campaignAgg._sum.sent ?? 0;
-  const delivered = campaignAgg._sum.delivered ?? 0;
-  const replies = campaignAgg._sum.replies ?? 0;
-  const optOuts = campaignAgg._sum.optOuts ?? 0;
+  const launchedIds = new Set(audits.map((a: { campaignId: string }) => a.campaignId));
+  const massTextCampaigns = allCampaigns.filter(
+    (c: { id: string; configJson: unknown }) =>
+      launchedIds.has(c.id) || campaignConfigIsMassText(c.configJson),
+  );
+  const massTextIds = massTextCampaigns.map((c: { id: string }) => c.id);
+
+  const monthMessages = massTextIds.length
+    ? await prisma.campaignMessage.count({
+        where: {
+          workspaceId,
+          campaignId: { in: massTextIds },
+          createdAt: { gte: monthStart },
+          status: { in: ["sent", "delivered", "clicked"] },
+        },
+      })
+    : 0;
+
+  const sent = massTextCampaigns.reduce((sum: number, c: { sent: number }) => sum + (c.sent || 0), 0);
+  const delivered = massTextCampaigns.reduce(
+    (sum: number, c: { delivered: number }) => sum + (c.delivered || 0),
+    0,
+  );
+  const replies = massTextCampaigns.reduce(
+    (sum: number, c: { replies: number }) => sum + (c.replies || 0),
+    0,
+  );
+  const optOuts = massTextCampaigns.reduce(
+    (sum: number, c: { optOuts: number }) => sum + (c.optOuts || 0),
+    0,
+  );
+  const upcoming = massTextCampaigns
+    .filter(
+      (c: { status: string; scheduledAt: Date | null }) =>
+        c.status === "SCHEDULED" && c.scheduledAt && c.scheduledAt >= new Date(),
+    )
+    .slice(0, 5);
+  const recent = massTextCampaigns.slice(0, 5);
+  const creditsRemaining =
+    billing.lifecycleState === "TRIAL_ACTIVE"
+      ? billing.trialSegmentsRemaining
+      : billing.monthlySegmentsRemaining + billing.paygCreditsSegments;
 
   return {
     messagesSentMonth: monthMessages,
@@ -84,10 +114,8 @@ export async function loadMassTextOverviewMetrics(
     replies,
     replyRate: sent > 0 ? Math.round((replies / sent) * 1000) / 10 : 0,
     optOuts,
-    creditsRemainingCents:
-      (billing.lifecycleState === "TRIAL_ACTIVE"
-        ? billing.trialSegmentsRemaining
-        : billing.monthlySegmentsRemaining + billing.paygCreditsSegments) * 100,
+    creditsRemaining,
+    creditsRemainingCents: creditsRemaining,
     sendingNumber: sender?.phoneE164 ?? null,
     a2pStatus: mtRegistration?.overallStatus ?? "not_started",
     upcomingScheduled: upcoming.map((c: (typeof upcoming)[number]) => ({

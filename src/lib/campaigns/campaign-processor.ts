@@ -12,26 +12,48 @@ function inSendWindow(now: Date, startHour: number | null | undefined, endHour: 
   return hour >= startHour || hour < endHour;
 }
 
-export async function enqueueDueCampaignMessages() {
-  const { reclaimStuckSendingMessages } = await import("./campaign-message-send");
-  await reclaimStuckSendingMessages();
-
-  const waits = await processSequenceWaits();
+export async function enqueueDueCampaignMessages(workspaceId?: string) {
   const prisma = getPrisma();
+  let waits: Awaited<ReturnType<typeof processSequenceWaits>> = { advanced: 0 };
+  if (!workspaceId) {
+    const { reclaimStuckSendingMessages } = await import("./campaign-message-send");
+    await reclaimStuckSendingMessages();
+    waits = await processSequenceWaits();
+  }
+
   const now = new Date();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const workspaceFilter = workspaceId ? { workspaceId } : {};
 
-  // Activate due scheduled campaigns
-  await prisma.campaign.updateMany({
+  // Activate due scheduled campaigns. Mass Texting requires a launch audit
+  // (credits reserved + A2P) — never flip a draft-scheduled blast to SENDING.
+  const dueScheduled = await prisma.campaign.findMany({
     where: {
+      ...workspaceFilter,
       status: "SCHEDULED",
       OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
     },
-    data: { status: "SENDING" },
+    take: 80,
+    select: { id: true, workspaceId: true, configJson: true },
   });
+  const { campaignConfigIsMassText } = await import("@/lib/mass-texting/campaign-send");
+  for (const campaign of dueScheduled) {
+    if (campaignConfigIsMassText(campaign.configJson)) {
+      const audit = await prisma.campaignLaunchAudit.findFirst({
+        where: { workspaceId: campaign.workspaceId, campaignId: campaign.id },
+        select: { id: true },
+      });
+      if (!audit) continue;
+    }
+    await prisma.campaign.updateMany({
+      where: { id: campaign.id, status: "SCHEDULED" },
+      data: { status: "SENDING" },
+    });
+  }
 
   const due = await prisma.campaignMessage.findMany({
     where: {
+      ...workspaceFilter,
       status: "queued",
       scheduledFor: { lte: now },
       campaign: { status: "SENDING" },

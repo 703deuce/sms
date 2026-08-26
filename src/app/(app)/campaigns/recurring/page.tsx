@@ -33,6 +33,12 @@ function recurrenceNextRun(configJson: unknown): string | null {
 
 export default async function CampaignRecurringPage() {
   const { workspaceId } = await requireWorkspaceContext();
+  const { isMassTextingWorkspace } = await import("@/lib/mass-texting/access");
+  const { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } = await import(
+    "@/lib/mass-texting/constants"
+  );
+  const massTexting = await isMassTextingWorkspace(workspaceId);
+  const recurringEnabled = !massTexting || MASS_TEXT_RECURRING_PRODUCTION_ENABLED;
   const recurringCampaigns = await loadRecurringCampaigns(workspaceId);
   const activeCount = recurringCampaigns.filter((c) => c.status === "Active").length;
 
@@ -40,7 +46,11 @@ export default async function CampaignRecurringPage() {
     <div>
       <PageHeader
         title="Recurring campaigns"
-        description="Automated sends that repeat on a schedule. Each run uses current audience membership and compliance settings."
+        description={
+          recurringEnabled
+            ? "Automated sends that repeat on a schedule. Each run uses current audience membership and compliance settings."
+            : "Recurring Mass Texting campaigns are not enabled in V1. Use Send now or a one-time schedule instead."
+        }
         actions={
           <>
             <Link href="/campaigns">
@@ -80,7 +90,17 @@ export default async function CampaignRecurringPage() {
         </Card>
       </div>
 
-      <RecurringCampaignForm />
+      {recurringEnabled ? (
+        <RecurringCampaignForm />
+      ) : (
+        <Card className="mb-6">
+          <CardTitle>Not available for Mass Texting V1</CardTitle>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Recurring ticks would skip credit reservation and A2P launch. Create a one-time
+            campaign from Campaigns instead.
+          </p>
+        </Card>
+      )}
 
       {recurringCampaigns.length === 0 ? (
         <EmptyState

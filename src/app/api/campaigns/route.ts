@@ -10,16 +10,20 @@ import {
 import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign, enrollSegmentInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await requireWorkspaceFeature("campaigns");
     if ("error" in auth) return auth.error;
+    const url = new URL(request.url);
+    const take = Math.min(100, Math.max(1, Number(url.searchParams.get("take") || 50)));
+    const skip = Math.max(0, Number(url.searchParams.get("skip") || 0));
     const campaigns = await getPrisma().campaign.findMany({
       where: { workspaceId: auth.workspaceId },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take,
+      skip,
     });
-    return NextResponse.json({ data: campaigns });
+    return NextResponse.json({ data: campaigns, take, skip });
   } catch (err) {
     return jsonError(err, 500);
   }
@@ -83,6 +87,21 @@ export async function POST(request: Request) {
     const shouldTagMassText =
       campaignConfigIsMassText(config) ||
       (massTextWorkspace && categoryId !== "missed_call");
+    if (shouldTagMassText && recurrence?.nextRunAt) {
+      const { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } = await import(
+        "@/lib/mass-texting/constants"
+      );
+      if (!MASS_TEXT_RECURRING_PRODUCTION_ENABLED) {
+        return NextResponse.json(
+          { error: "Recurring campaigns are not enabled for Mass Texting V1." },
+          { status: 400 },
+        );
+      }
+    }
+    // Mass Texting launch owns SCHEDULED/SENDING so credits + A2P cannot be skipped.
+    if (shouldTagMassText && !wantsActivate) {
+      status = "DRAFT";
+    }
     const configJson = shouldTagMassText ? massTextProductConfigPatch(config) : config;
 
     const sequenceJson = body.sequenceJson

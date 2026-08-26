@@ -129,11 +129,17 @@ export async function buildPreSendReview(
           select: { id: true, firstName: true, lastName: true, customFields: true },
         })
       : [];
-    const byId = new Map(
-      contacts.map((c: { id: string }) => [c.id, c] as const),
+    type ContactRow = {
+      id: string;
+      firstName?: string | null;
+      lastName?: string | null;
+      customFields?: unknown;
+    };
+    const byId = new Map<string, ContactRow>(
+      (contacts as ContactRow[]).map((c) => [c.id, c]),
     );
     for (const r of enrolled) {
-      const contact = r.contactId ? byId.get(r.contactId) : null;
+      const contact = r.contactId ? byId.get(r.contactId) : undefined;
       recipients.push({
         phone: r.phone || undefined,
         email: r.email || undefined,

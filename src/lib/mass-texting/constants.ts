@@ -17,6 +17,16 @@ export const MASS_TEXT_LIST_ATTESTATION_VERSION = "mass_text_list_v1";
 export const MASS_TEXT_LIST_ATTESTATION_TEXT =
   "I confirm that the recipients in this list have provided the required consent to receive these messages.";
 
+/**
+ * Recurring campaign ticks skip Mass Texting in V1. Recurrence still exists for
+ * other campaign products; Mass Texting must not spawn SENDING children without
+ * credit reservation + A2P launch.
+ */
+export const MASS_TEXT_RECURRING_PRODUCTION_ENABLED = false;
+
+/** Campaign launches per workspace per rolling minute. */
+export const MASS_TEXT_LAUNCH_RATE_LIMIT_PER_MINUTE = 8;
+
 /** MCTB voice/SIP modules Mass Texting must never import. */
 export const MASS_TEXTING_PROHIBITED_IMPORT_PREFIXES = [
   "lib/mctb/sip-",

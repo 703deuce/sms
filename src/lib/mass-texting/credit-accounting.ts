@@ -11,6 +11,8 @@ export type SegmentAvailability = {
   paygRemaining: number;
   trialRemaining: number;
   lifecycleState: string;
+  /** True when the account is allowed to send regardless of remaining credits. */
+  accountSendEligible: boolean;
   canSend: boolean;
   blockReason: string | null;
 };
@@ -35,20 +37,22 @@ function availabilityFromAccount(account: {
 
   let available = 0;
   let canSend = false;
+  let accountSendEligible = false;
   let blockReason: string | null = null;
 
   if (account.lifecycleState === "TRIAL_ACTIVE") {
     available = trialRemaining;
+    accountSendEligible = true;
     canSend = available > 0;
     if (!canSend) blockReason = "Trial segment limit reached";
   } else if (account.lifecycleState === "PRODUCTION_ACTIVE") {
     available = monthlyRemaining + Math.max(0, account.paygCreditsSegments);
-    canSend = available > 0 && (account.billingModel !== "payg" || account.paygLineActive);
+    accountSendEligible = account.billingModel !== "payg" || account.paygLineActive;
+    canSend = available > 0 && accountSendEligible;
     if (!canSend) {
-      blockReason =
-        account.billingModel === "payg" && !account.paygLineActive
-          ? "PAYG Messaging Line inactive"
-          : "Insufficient segments";
+      blockReason = !accountSendEligible
+        ? "PAYG Messaging Line inactive"
+        : "Insufficient segments";
     }
   } else {
     blockReason = `Cannot send in state ${account.lifecycleState}`;
@@ -60,6 +64,7 @@ function availabilityFromAccount(account: {
     paygRemaining: Math.max(0, account.paygCreditsSegments),
     trialRemaining,
     lifecycleState: account.lifecycleState,
+    accountSendEligible,
     canSend,
     blockReason,
   };

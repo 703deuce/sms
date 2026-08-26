@@ -59,7 +59,7 @@ export async function resolveMassTextSendingNumber(workspaceId: string) {
       workspaceId,
       status: "Active",
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { e164: "asc" },
   });
 
   for (const number of numbers) {

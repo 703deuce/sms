@@ -24,6 +24,15 @@ export async function POST(request: Request, ctx: Ctx) {
 
     await requireMassTextingWorkspace(auth.workspaceId);
 
+    const { consumeMassTextRateLimit } = await import("@/lib/mass-texting/rate-limit");
+    const limited = consumeMassTextRateLimit(`launch:${auth.workspaceId}`);
+    if (!limited.ok) {
+      return NextResponse.json(
+        { error: "Too many campaign launches. Try again in a minute." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(limited.retryAfterMs / 1000)) } },
+      );
+    }
+
     const idempotencyKey =
       body.idempotencyKey?.trim() || `launch:${auth.workspaceId}:${id}`;
 

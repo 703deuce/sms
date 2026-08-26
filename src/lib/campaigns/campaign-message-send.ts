@@ -261,6 +261,15 @@ export async function sendCampaignMessageById(messageId: string) {
       "@/lib/mass-texting/credit-accounting"
     );
     const reservation = await getActiveCampaignReservation(message.campaignId);
+    if (!availability.accountSendEligible) {
+      const reason = availability.blockReason || "Mass Texting sending is not eligible";
+      await prisma.campaignMessage.update({
+        where: { id: messageId },
+        data: { status: "failed", error: reason },
+      });
+      await failRecipient(message.recipientId, reason);
+      throw new JobFailedError(reason);
+    }
     if (!reservation && !availability.canSend) {
       const reason = availability.blockReason || "Insufficient Mass Texting segments";
       await prisma.campaignMessage.update({
@@ -551,9 +560,11 @@ export async function sendCampaignMessageById(messageId: string) {
       throw new JobDeferredError(`send_ambiguous:${error}`, 5 * 60_000);
     }
 
+    const { classifySmsProviderError } = await import("@/lib/mass-texting/provider-errors");
     const prior = retryCountFromError(message.error);
     const next = prior + 1;
-    if (next < 3) {
+    const retryable = classifySmsProviderError(error) === "retryable";
+    if (retryable && next < 3) {
       await prisma.campaignMessage.update({
         where: { id: messageId },
         data: {

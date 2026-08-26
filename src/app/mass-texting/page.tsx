@@ -122,7 +122,7 @@ export default function MassTextingLandingPage() {
           {[
             {
               title: "Campaigns",
-              body: "SMS/MMS, personalization, scheduling, and reusable templates.",
+              body: "SMS personalization, scheduling, and reusable templates.",
             },
             {
               title: "Replies",

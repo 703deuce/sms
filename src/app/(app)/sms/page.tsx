@@ -50,10 +50,8 @@ export default async function MassTextingOverviewPage() {
           { label: "Reply rate", value: `${metrics.replyRate}%` },
           { label: "Opt-outs", value: metrics.optOuts.toLocaleString() },
           {
-            label: "Segments remaining",
-            value: metrics.creditsRemainingCents > 0
-              ? Math.round(metrics.creditsRemainingCents / 100).toLocaleString()
-              : "0",
+            label: "Credits remaining",
+            value: metrics.creditsRemaining.toLocaleString(),
           },
           {
             label: "Sending number",

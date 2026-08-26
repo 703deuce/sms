@@ -23,6 +23,11 @@ export function productAccessDeniedRedirect(
   if (isMctbAppPath(pathname)) {
     return null;
   }
+  const isSharedInbox = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  if (isSharedInbox) {
+    if (access.hasVoice || access.hasSms) return null;
+    return options?.authenticated ? "/app" : productOfferPath("sms");
+  }
   if (isVoiceProductPath(pathname) && !access.hasVoice) {
     return options?.authenticated
       ? "/api/products/open?product=voice"

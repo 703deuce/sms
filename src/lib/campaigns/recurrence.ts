@@ -45,11 +45,12 @@ function addInterval(date: Date, frequency: RecurrenceConfig["frequency"], inter
   return next;
 }
 
-export async function tickRecurringCampaigns() {
+export async function tickRecurringCampaigns(workspaceId?: string) {
   const prisma = getPrisma();
   const now = new Date();
   const campaigns = await prisma.campaign.findMany({
     where: {
+      ...(workspaceId ? { workspaceId } : {}),
       status: { in: ["SCHEDULED", "SENDING", "COMPLETED", "PAUSED"] },
     },
     take: 200,
@@ -61,6 +62,14 @@ export async function tickRecurringCampaigns() {
   for (const parent of campaigns) {
     const recurrence = parseRecurrence(parent.configJson);
     if (!recurrence) continue;
+
+    const { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } = await import(
+      "@/lib/mass-texting/constants"
+    );
+    if (!MASS_TEXT_RECURRING_PRODUCTION_ENABLED) {
+      const { campaignConfigIsMassText } = await import("@/lib/mass-texting/campaign-send");
+      if (campaignConfigIsMassText(parent.configJson)) continue;
+    }
 
     const nextRun = new Date(recurrence.nextRunAt);
     if (nextRun > now) continue;

@@ -26,6 +26,9 @@ function voiceProductNext(product: string | null): string | null {
   if (product === "numbers") return "/personal";
   if (product === "mctb") return "/onboarding/mctb";
   if (product === "voice") return "/dashboard";
+  if (product === "mass_texting" || product === "sms") {
+    return "/api/products/open?product=mass_texting";
+  }
   return null;
 }
 

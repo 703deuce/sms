@@ -92,7 +92,7 @@ export async function loadContacts(workspaceId: string, status?: string): Promis
         : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: 500,
+    take: 200,
     include: {
       tagMembers: { include: { tag: true } },
       listMembers: { include: { list: true } },

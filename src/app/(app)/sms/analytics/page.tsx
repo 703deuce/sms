@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { loadMassTextOverviewMetrics } from "@/lib/mass-texting/overview-metrics";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { formatCurrency } from "@/lib/utils";
 
 export default async function MassTextAnalyticsPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -79,8 +78,8 @@ export default async function MassTextAnalyticsPage() {
             <dd className="font-semibold">{paygCredits.toLocaleString()} segments</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Legacy wallet (if any)</dt>
-            <dd className="font-semibold">{formatCurrency(metrics.creditsRemainingCents / 100)}</dd>
+            <dt className="text-muted-foreground">Credits remaining</dt>
+            <dd className="font-semibold">{metrics.creditsRemaining.toLocaleString()}</dd>
           </div>
         </dl>
       </section>

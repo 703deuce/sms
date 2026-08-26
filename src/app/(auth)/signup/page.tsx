@@ -31,19 +31,25 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 function voiceProductNext(product: string | null): string | null {
   if (product === "voice" || product === "mctb") return voiceProductOpenPath();
   if (product === "numbers") return "/personal";
+  if (product === "mass_texting" || product === "sms") {
+    return "/api/products/open?product=mass_texting";
+  }
   return null;
 }
 
-function resolveProductIntent(product: string | null): "voice" | "numbers" | undefined {
+function resolveProductIntent(product: string | null): "voice" | "numbers" | "sms" | undefined {
   if (product === "voice" || product === "mctb") return "voice";
   if (product === "numbers") return "numbers";
+  if (product === "mass_texting" || product === "sms") return "sms";
   return undefined;
 }
 
 function SignupForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const productNext = voiceProductNext(params.get("product"));
+  const productParam = params.get("product");
+  const isMassTextSignup = productParam === "mass_texting" || productParam === "sms";
+  const productNext = voiceProductNext(productParam);
   const defaultNext = numbersPlatformOnly ? "/personal" : "/onboarding/mctb";
   const resolvedNext = params.get("next") || productNext || defaultNext;
   const displayNext = clientSafeNextPath(resolvedNext, defaultNext);
@@ -99,6 +105,8 @@ function SignupForm() {
         <p className="mt-1 text-sm text-muted-foreground">
           {reservationId
             ? "Sign in to finish checkout for your reserved number."
+            : isMassTextSignup
+              ? "Start your Mass Texting trial. No Missed Call Text Back setup required."
             : numbersPlatformOnly
               ? "Buy numbers, forward calls, route with Smart Routing, and manage voicemail."
               : "One account for Personal numbers or full business communications."}
@@ -116,7 +124,7 @@ function SignupForm() {
         </p>
       </div>
 
-      {!numbersPlatformOnly ? (
+      {!numbersPlatformOnly && !isMassTextSignup ? (
         <div className="mb-6 grid gap-3 sm:grid-cols-2">
           <button
             type="button"

@@ -194,6 +194,16 @@ export async function POST(request: Request) {
           ? "sms"
           : "voice",
     );
+    if (productIntent === "sms") {
+      const { grantWorkspaceProductFeature } = await import(
+        "@/lib/products/feature-entitlements"
+      );
+      await grantWorkspaceProductFeature(workspace.id, "mass_texting", "trial");
+      const { getOrCreateMassTextingBillingAccount } = await import(
+        "@/lib/mass-texting/billing-account"
+      );
+      await getOrCreateMassTextingBillingAccount(workspace.id);
+    }
     await updateProductIntent(user.id, productIntent);
 
     if (workspaceType === "BUSINESS" && productIntent === "voice") {

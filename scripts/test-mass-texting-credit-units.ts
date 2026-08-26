@@ -17,6 +17,13 @@ import { parseCsv } from "../src/lib/contacts/parse-csv";
 import { inferInboundProductSource } from "../src/lib/mass-texting/product-source";
 import { getCampaignCategory } from "../src/lib/campaigns/catalog";
 import { normalizeE164 } from "../src/lib/messaging/twilio-mappings";
+import { classifySmsProviderError } from "../src/lib/mass-texting/provider-errors";
+import { evaluateCondition } from "../src/lib/campaigns/sequence-engine";
+import {
+  consumeMassTextRateLimit,
+  resetMassTextRateLimitForTests,
+} from "../src/lib/mass-texting/rate-limit";
+import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "../src/lib/mass-texting/constants";
 
 const gsm160 = "a".repeat(160);
 assert.equal(estimateSmsSegments(gsm160).segments, 1);
@@ -98,5 +105,29 @@ assert.equal(
 
 assert.equal(getCampaignCategory("promotional")?.id, "promotion");
 assert.equal(getCampaignCategory("promotion")?.id, "promotion");
+
+assert.equal(classifySmsProviderError("HTTP 400 invalid to"), "terminal");
+assert.equal(classifySmsProviderError("status 401"), "terminal");
+assert.equal(classifySmsProviderError("403 forbidden"), "terminal");
+assert.equal(classifySmsProviderError("404 not found"), "terminal");
+assert.equal(classifySmsProviderError("422 unprocessable"), "terminal");
+assert.equal(classifySmsProviderError("HTTP 429 too many requests"), "retryable");
+assert.equal(classifySmsProviderError("500 provider unavailable"), "retryable");
+assert.equal(classifySmsProviderError("ETIMEDOUT"), "retryable");
+
+const replyGate = {
+  step_key: "gate_1",
+  step_type: "condition" as const,
+  config: { when: "customer_replied", then: "end", else: "sms_2" },
+};
+assert.equal(evaluateCondition(replyGate, { customer_replied: true }), "end");
+assert.equal(evaluateCondition(replyGate, { customer_replied: false }), "sms_2");
+assert.equal(MASS_TEXT_RECURRING_PRODUCTION_ENABLED, false);
+
+resetMassTextRateLimitForTests();
+for (let i = 0; i < 8; i += 1) {
+  assert.equal(consumeMassTextRateLimit("test-ws").ok, true);
+}
+assert.equal(consumeMassTextRateLimit("test-ws").ok, false);
 
 console.log("test-mass-texting-credit-units: ok");
