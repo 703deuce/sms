@@ -14,11 +14,8 @@ import { getPrisma } from "@/lib/db";
 import { updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { grantProductEntitlement } from "@/lib/products/entitlements";
-import {
-  getPlatformDemoPhoneRecord,
-  linkWorkspaceToPlatformDemoNumber,
-} from "@/lib/mctb/platform-demo-access";
 import { ensureMctbTenantProductionBinding } from "@/lib/mctb/tenant-production-binding";
+import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
 import { saveMctbOnboardingState, markStepComplete } from "@/lib/mctb/onboarding/state";
 import { MCTB_ONBOARDING_STEP_ORDER } from "@/lib/mctb/onboarding/types";
 import { releaseWorkspaceNumber } from "@/lib/numbers/release-service";
@@ -109,8 +106,11 @@ async function main() {
   });
   if (!workspace) throw new Error(`Workspace not found: ${WORKSPACE_ID}`);
 
-  const demo = await getPlatformDemoPhoneRecord();
-  if (!demo) throw new Error("Platform demo 571 not found");
+  const demo = await prisma.phoneNumber.findUnique({
+    where: { id: PLATFORM_DEMO_PHONE_ID },
+    select: { id: true, e164: true, workspaceId: true, settingsJson: true, providerNumberId: true },
+  });
+  if (!demo?.e164) throw new Error(`MCTB number not found: ${PLATFORM_DEMO_PHONE_ID}`);
 
   const cfg =
     workspace.customFieldsConfig && typeof workspace.customFieldsConfig === "object"
@@ -165,9 +165,51 @@ async function main() {
   });
   console.log("✓ Set workspace owner to primary user");
 
-  await linkWorkspaceToPlatformDemoNumber({
-    workspaceId: WORKSPACE_ID,
-    userEmail: user.email,
+  const priorOwnerWorkspaceId = demo.workspaceId;
+  const sourceReg = priorOwnerWorkspaceId
+    ? await prisma.messagingRegistration.findFirst({ where: { workspaceId: priorOwnerWorkspaceId } })
+    : null;
+  const priorSettings =
+    demo.settingsJson && typeof demo.settingsJson === "object"
+      ? (demo.settingsJson as Record<string, unknown>)
+      : {};
+  const nextPhoneSettings = {
+    ...priorSettings,
+    ...telnyxLocalA2pSettings({ role: "customer_production", a2pApproved: true }),
+    mctbSipIngress: true,
+    routingOwner: priorSettings.routingOwner || "mctb_sip",
+    callHandlingMode: priorSettings.callHandlingMode || "mctb",
+  };
+  delete nextPhoneSettings.platformDemo;
+  delete nextPhoneSettings.adminTestWorkspaceIds;
+  delete nextPhoneSettings.lastAdminLinkAt;
+  delete nextPhoneSettings.lastAdminLinkEmail;
+
+  await prisma.phoneNumber.update({
+    where: { id: PLATFORM_DEMO_PHONE_ID },
+    data: {
+      workspaceId: WORKSPACE_ID,
+      settingsJson: nextPhoneSettings,
+    },
+  });
+  console.log(`✓ Attached ${demo.e164} to workspace ${WORKSPACE_ID}`);
+
+  if (priorOwnerWorkspaceId && priorOwnerWorkspaceId !== WORKSPACE_ID && sourceReg?.phoneE164 === demo.e164) {
+    await prisma.messagingRegistration.updateMany({
+      where: { workspaceId: priorOwnerWorkspaceId },
+      data: {
+        phoneE164: null,
+        phoneSid: null,
+        phoneNumberId: null,
+        phoneAttached: false,
+        numberStatus: "action_required",
+      },
+    });
+  }
+
+  await prisma.voicemailBox.updateMany({
+    where: { phoneNumberId: PLATFORM_DEMO_PHONE_ID, workspaceId: { not: WORKSPACE_ID } },
+    data: { active: false },
   });
 
   await ensureMctbTenantProductionBinding({
@@ -323,9 +365,19 @@ async function main() {
       optInDescription:
         "Callers consent during the inbound call (Press 1) or through an existing business relationship before receiving a missed-call text.",
       certifiedAt: new Date(),
-      phoneAttached: false,
-      phoneE164: null,
-      phoneSid: null,
+      phoneAttached: true,
+      phoneE164: demo.e164,
+      phoneSid: sourceReg?.phoneSid || demo.providerNumberId || null,
+      phoneNumberId: sourceReg?.phoneNumberId || demo.providerNumberId || null,
+      messagingProfileId: sourceReg?.messagingProfileId || null,
+      messagingServiceSid: sourceReg?.messagingServiceSid || null,
+      brandSid: sourceReg?.brandSid || null,
+      brandId: sourceReg?.brandId || null,
+      campaignId: sourceReg?.campaignId || null,
+      a2pCampaignSid: sourceReg?.a2pCampaignSid || null,
+      brandStatusRaw: sourceReg?.brandStatusRaw || "VERIFIED",
+      campaignStatusRaw: sourceReg?.campaignStatusRaw || "ACTIVE",
+      registrationApprovedAt: sourceReg?.registrationApprovedAt || new Date(),
       numberStatus: "ready",
     },
     update: {
@@ -357,14 +409,24 @@ async function main() {
       optInDescription:
         "Callers consent during the inbound call (Press 1) or through an existing business relationship before receiving a missed-call text.",
       certifiedAt: new Date(),
-      phoneAttached: false,
-      phoneE164: null,
-      phoneSid: null,
+      phoneAttached: true,
+      phoneE164: demo.e164,
+      phoneSid: sourceReg?.phoneSid || demo.providerNumberId || null,
+      phoneNumberId: sourceReg?.phoneNumberId || demo.providerNumberId || null,
+      messagingProfileId: sourceReg?.messagingProfileId || null,
+      messagingServiceSid: sourceReg?.messagingServiceSid || null,
+      brandSid: sourceReg?.brandSid || null,
+      brandId: sourceReg?.brandId || null,
+      campaignId: sourceReg?.campaignId || null,
+      a2pCampaignSid: sourceReg?.a2pCampaignSid || null,
+      brandStatusRaw: sourceReg?.brandStatusRaw || "VERIFIED",
+      campaignStatusRaw: sourceReg?.campaignStatusRaw || "ACTIVE",
+      registrationApprovedAt: sourceReg?.registrationApprovedAt || new Date(),
       numberStatus: "ready",
       lastError: null,
     },
   });
-  console.log("✓ Messaging registration filled (no stray owned SMS DID attached)");
+  console.log("✓ Messaging registration attached to owned MCTB DID");
 
   if (callerE164) {
     await prisma.user.update({
