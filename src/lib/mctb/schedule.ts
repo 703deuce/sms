@@ -16,11 +16,34 @@ export type MctbWeeklySchedule = {
   days: MctbWeeklyDay[];
 };
 
+export type MctbPauseKind = "manual" | "timed" | null;
+
 export type MctbScheduleSettings = {
   scheduleMode: MctbScheduleMode;
   weeklySchedule: MctbWeeklySchedule | null;
   pauseUntil: string | null;
+  /** Sticky manual pause — survives accidental enabled=true writes until explicit resume. */
+  manuallyPaused: boolean;
 };
+
+export function isPauseUntilActive(
+  pauseUntil: string | null | undefined,
+  now = new Date(),
+): boolean {
+  if (!pauseUntil?.trim()) return false;
+  const until = new Date(pauseUntil);
+  return !Number.isNaN(until.getTime()) && until > now;
+}
+
+export function resolveMctbPauseKind(
+  settings: Pick<MctbScheduleSettings, "pauseUntil" | "manuallyPaused">,
+  config: Pick<MissedCallTextConfigRecord, "enabled">,
+  now = new Date(),
+): MctbPauseKind {
+  if (settings.manuallyPaused || !config.enabled) return "manual";
+  if (isPauseUntilActive(settings.pauseUntil, now)) return "timed";
+  return null;
+}
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -140,8 +163,48 @@ export function readMctbScheduleFromCustomFields(
     typeof mctb.pauseUntil === "string" && mctb.pauseUntil.trim()
       ? mctb.pauseUntil.trim()
       : null;
+  const manuallyPaused = mctb.manuallyPaused === true || (!config.enabled && !pauseUntil);
 
-  return { scheduleMode, weeklySchedule, pauseUntil };
+  return { scheduleMode, weeklySchedule, pauseUntil, manuallyPaused };
+}
+
+/** Drop expired timed pauses and align manual pause flags with runtime config. */
+export function normalizeMctbPauseState(
+  settings: MctbScheduleSettings,
+  config: Pick<MissedCallTextConfigRecord, "enabled">,
+  now = new Date(),
+): {
+  settings: MctbScheduleSettings;
+  config: Pick<MissedCallTextConfigRecord, "enabled">;
+  changed: boolean;
+} {
+  let nextSettings = { ...settings };
+  let nextConfig = { ...config };
+  let changed = false;
+
+  if (nextSettings.pauseUntil && !isPauseUntilActive(nextSettings.pauseUntil, now)) {
+    nextSettings = { ...nextSettings, pauseUntil: null };
+    changed = true;
+  }
+
+  if (nextSettings.manuallyPaused) {
+    if (nextConfig.enabled) {
+      nextConfig = { enabled: false };
+      changed = true;
+    }
+    if (nextSettings.pauseUntil) {
+      nextSettings = { ...nextSettings, pauseUntil: null };
+      changed = true;
+    }
+  } else if (!nextConfig.enabled) {
+    nextSettings = { ...nextSettings, manuallyPaused: true };
+    if (nextSettings.pauseUntil) {
+      nextSettings = { ...nextSettings, pauseUntil: null };
+    }
+    changed = true;
+  }
+
+  return { settings: nextSettings, config: nextConfig, changed };
 }
 
 export async function loadMctbScheduleSettings(
@@ -162,10 +225,8 @@ export function isMctbSchedulePaused(
   config: Pick<MissedCallTextConfigRecord, "enabled">,
   now = new Date(),
 ): boolean {
-  if (!config.enabled) return true;
-  if (!settings.pauseUntil) return false;
-  const until = new Date(settings.pauseUntil);
-  return !Number.isNaN(until.getTime()) && until > now;
+  if (settings.manuallyPaused || !config.enabled) return true;
+  return isPauseUntilActive(settings.pauseUntil, now);
 }
 
 /** Whether missed-call text-back automation may run (consent + SMS). Inbound call handling stays on. */
@@ -198,6 +259,47 @@ export function isWithinMctbSendWindow(
     return !inWindow;
   }
   return true;
+}
+
+export function buildMctbPauseMutation(input: {
+  enabled?: boolean;
+  pauseUntil?: string | null;
+  now?: Date;
+}): {
+  enabled: boolean;
+  pauseUntil: string | null;
+  manuallyPaused: boolean;
+} | null {
+  const now = input.now ?? new Date();
+
+  if (input.enabled === false) {
+    return { enabled: false, pauseUntil: null, manuallyPaused: true };
+  }
+
+  if (input.enabled === true) {
+    return { enabled: true, pauseUntil: null, manuallyPaused: false };
+  }
+
+  if (input.pauseUntil !== undefined) {
+    if (input.pauseUntil === null) {
+      return null;
+    }
+    if (!isPauseUntilActive(input.pauseUntil, now)) {
+      return { enabled: true, pauseUntil: null, manuallyPaused: false };
+    }
+    return { enabled: true, pauseUntil: input.pauseUntil, manuallyPaused: false };
+  }
+
+  return null;
+}
+
+export function isMctbSetupPausing(body: {
+  enabled?: boolean;
+  pauseUntil?: string | null;
+}): boolean {
+  if (body.enabled === false) return true;
+  if (body.pauseUntil) return true;
+  return false;
 }
 
 export function addPauseUntil(

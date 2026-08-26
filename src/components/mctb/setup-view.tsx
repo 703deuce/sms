@@ -79,6 +79,11 @@ type SetupData = {
   };
   productionForwardTargetE164?: string | null;
   businessLineE164?: string | null;
+  schedule?: {
+    paused: boolean;
+    pauseKind?: "manual" | "timed" | null;
+    pauseUntil?: string | null;
+  };
   solution: { setupId: string | null; status: string } | null;
 };
 
@@ -147,7 +152,6 @@ export function MctbSetupView() {
     verified: boolean;
     checks: Record<string, boolean>;
   } | null>(null);
-  const [enabled, setEnabled] = useState(true);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [businessLineE164, setBusinessLineE164] = useState("");
   const [exclusions, setExclusions] = useState<ExclusionRow[]>([]);
@@ -201,7 +205,6 @@ export function MctbSetupView() {
       setTimezone(r.timezone);
       setCooldownMinutes(r.cooldownMinutes);
       setReplyNotifications(r.conversationEnabled);
-      setEnabled(r.enabled);
       setDefaultLinkUrl(r.defaultLinkUrl || "");
       setRequestFormEnabled(Boolean(r.requestFormEnabled));
       setLeadCaptureEnabled(Boolean(r.leadCaptureEnabled));
@@ -299,7 +302,6 @@ export function MctbSetupView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           phoneNumberId,
-          enabled,
           messageTemplate,
           messageTemplateBusinessHours: messageTemplateBusinessHours.trim() || null,
           messageTemplateAfterHours: messageTemplateAfterHours.trim() || null,
@@ -355,6 +357,22 @@ export function MctbSetupView() {
           voicemail, recovery behavior, and testing.
         </p>
       </div>
+
+      ) : null}
+
+      {data?.schedule?.paused ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-[13px] text-violet-950">
+          <p className="font-semibold">Missed Call Text Back is paused</p>
+          <p className="mt-1">
+            {data.schedule.pauseKind === "timed" && data.schedule.pauseUntil
+              ? `Timed pause until ${new Date(data.schedule.pauseUntil).toLocaleString()}.`
+              : "Paused until you resume from the Schedule page."}{" "}
+            <Link href="/voice/schedule" className="font-semibold text-violet-900 underline">
+              Open Schedule →
+            </Link>
+          </p>
+        </div>
+      ) : null}
 
       {!data?.compliance.messagingReady ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-950">
@@ -994,19 +1012,14 @@ export function MctbSetupView() {
 
           <div className="flex flex-wrap items-center gap-2 pb-8">
             <Button disabled={saving} onClick={() => save(true)}>
-              {saving ? "Saving…" : enabled ? "Save & activate" : "Save & activate"}
+              {saving ? "Saving…" : "Save & activate"}
             </Button>
             <Button variant="outline" disabled={saving} onClick={() => save(false)}>
               Save draft
             </Button>
-            <label className="ml-2 flex items-center gap-2 text-[13px]">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-              />
-              Enabled
-            </label>
+            <Link href="/voice/schedule" className="text-[13px] text-primary hover:underline">
+              Pause or schedule text-backs →
+            </Link>
           </div>
         </div>
       </div>

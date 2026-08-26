@@ -30,6 +30,10 @@ import {
   defaultWeeklySchedule,
   readMctbScheduleFromCustomFields,
   isMctbSchedulePaused,
+  normalizeMctbPauseState,
+  buildMctbPauseMutation,
+  isMctbSetupPausing,
+  resolveMctbPauseKind,
 } from "@/lib/mctb/schedule";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
@@ -132,15 +136,47 @@ export async function GET() {
       : {};
 
   const scheduleSettings = readMctbScheduleFromCustomFields(customCfg, runtime);
+  const normalizedPause = normalizeMctbPauseState(scheduleSettings, runtime);
+  if (normalizedPause.changed) {
+    const mctb =
+      customCfg.mctb && typeof customCfg.mctb === "object"
+        ? (customCfg.mctb as Record<string, unknown>)
+        : {};
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        customFieldsConfig: {
+          ...customCfg,
+          mctb: {
+            ...mctb,
+            pauseUntil: normalizedPause.settings.pauseUntil,
+            manuallyPaused: normalizedPause.settings.manuallyPaused,
+          },
+        },
+      },
+    });
+    if (normalizedPause.config.enabled !== runtime.enabled) {
+      await updateMissedCallTextConfig({
+        workspaceId,
+        patch: { enabled: normalizedPause.config.enabled },
+        source: "mctb_schedule_normalize",
+      });
+      runtime.enabled = normalizedPause.config.enabled;
+    }
+  }
+  const effectiveSchedule = normalizedPause.settings;
+  const pauseKind = resolveMctbPauseKind(effectiveSchedule, runtime);
 
   return NextResponse.json({
     data: {
       runtime,
       schedule: {
-        scheduleMode: scheduleSettings.scheduleMode,
-        weeklySchedule: scheduleSettings.weeklySchedule,
-        pauseUntil: scheduleSettings.pauseUntil,
-        paused: isMctbSchedulePaused(scheduleSettings, runtime),
+        scheduleMode: effectiveSchedule.scheduleMode,
+        weeklySchedule: effectiveSchedule.weeklySchedule,
+        pauseUntil: effectiveSchedule.pauseUntil,
+        manuallyPaused: effectiveSchedule.manuallyPaused,
+        pauseKind,
+        paused: isMctbSchedulePaused(effectiveSchedule, runtime),
       },
       solution: solution
         ? {
@@ -191,10 +227,22 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as MctbSetupPayload;
   const prisma = getPrisma();
 
+  const pauseMutation = buildMctbPauseMutation({
+    enabled: body.enabled,
+    pauseUntil: body.pauseUntil,
+  });
+  const pausing = isMctbSetupPausing(body);
+  const enabledPatch =
+    pauseMutation !== null
+      ? pauseMutation.enabled
+      : body.enabled !== undefined
+        ? body.enabled
+        : undefined;
+
   const runtimeResult = await updateMissedCallTextConfig({
     workspaceId,
     patch: {
-      enabled: body.enabled,
+      ...(enabledPatch !== undefined ? { enabled: enabledPatch } : {}),
       delay_seconds: body.delaySeconds,
       initial_message: body.messageTemplate,
       message_template_business_hours: body.messageTemplateBusinessHours,
@@ -262,13 +310,13 @@ export async function POST(req: Request) {
     initialDelaySeconds: body.delaySeconds ?? baseConfig.initialDelaySeconds ?? 0,
     consentMode: body.consentMode,
     replyNotifications: body.replyNotifications,
-    activate: body.activate ?? true,
+    activate: body.activate ?? !pausing,
   };
 
   const saved = await saveMissedCallTextBack(workspaceId, {
     ...solutionConfig,
     setupId: existing?.setupId || undefined,
-    activate: body.activate ?? true,
+    activate: body.activate ?? !pausing,
   });
 
   let sipProvision: { ok: boolean; actions?: string[]; error?: string } | null = null;
@@ -307,7 +355,9 @@ export async function POST(req: Request) {
     body.businessLineE164 !== undefined ||
     body.scheduleMode !== undefined ||
     body.weeklySchedule !== undefined ||
-    body.pauseUntil !== undefined
+    body.pauseUntil !== undefined ||
+    body.enabled !== undefined ||
+    pauseMutation !== null
   ) {
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -360,7 +410,14 @@ export async function POST(req: Request) {
             ...(body.weeklySchedule !== undefined
               ? { weeklySchedule: body.weeklySchedule }
               : {}),
-            ...(body.pauseUntil !== undefined ? { pauseUntil: body.pauseUntil } : {}),
+            ...(pauseMutation
+              ? {
+                  pauseUntil: pauseMutation.pauseUntil,
+                  manuallyPaused: pauseMutation.manuallyPaused,
+                }
+              : body.pauseUntil !== undefined
+                ? { pauseUntil: body.pauseUntil }
+                : {}),
           },
         },
       },

@@ -17,6 +17,8 @@ type SchedulePayload = {
   scheduleMode: MctbScheduleMode;
   weeklySchedule: MctbWeeklySchedule | null;
   pauseUntil: string | null;
+  manuallyPaused?: boolean;
+  pauseKind?: "manual" | "timed" | null;
   paused: boolean;
 };
 
@@ -24,7 +26,7 @@ export function MctbScheduleView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [enabled, setEnabled] = useState(true);
+  const [pauseKind, setPauseKind] = useState<"manual" | "timed" | null>(null);
   const [scheduleMode, setScheduleMode] = useState<MctbScheduleMode>("always_on");
   const [weeklySchedule, setWeeklySchedule] = useState<MctbWeeklySchedule>(
     defaultWeeklySchedule(),
@@ -42,7 +44,7 @@ export function MctbScheduleView() {
       if (!res.ok || !json.data?.runtime) return;
       const r = json.data.runtime;
       const sch = json.data.schedule as SchedulePayload | undefined;
-      setEnabled(r.enabled);
+      setPauseKind(sch?.pauseKind ?? (sch?.paused ? "manual" : null));
       setTimezone(r.timezone || "America/New_York");
       setAllowedStartTime(r.allowedStartTime || "09:00");
       setAllowedEndTime(r.allowedEndTime || "17:00");
@@ -65,8 +67,10 @@ export function MctbScheduleView() {
   }, [load]);
 
   const statusLabel = useMemo(() => {
-    if (!enabled) return "Missed Call Text Back is PAUSED";
-    if (pauseUntil && new Date(pauseUntil) > new Date()) {
+    if (pauseKind === "manual") {
+      return "Missed Call Text Back is PAUSED until you resume";
+    }
+    if (pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date()) {
       return `Paused until ${new Date(pauseUntil).toLocaleString(undefined, {
         timeZone: timezone,
         dateStyle: "medium",
@@ -74,7 +78,7 @@ export function MctbScheduleView() {
       })}`;
     }
     return "Missed Call Text Back is ACTIVE";
-  }, [enabled, pauseUntil, timezone]);
+  }, [pauseKind, pauseUntil, timezone]);
 
   async function save() {
     setSaving(true);
@@ -99,7 +103,6 @@ export function MctbScheduleView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          enabled,
           businessHoursOnly: scheduleMode === "business_hours",
           allowedStartTime:
             scheduleMode === "business_hours" || scheduleMode === "after_hours"
@@ -139,6 +142,7 @@ export function MctbScheduleView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Pause failed");
       setPauseUntil(until);
+      setPauseKind("timed");
       setMessage(`Paused until ${new Date(until).toLocaleString()}.`);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Pause failed");
@@ -158,8 +162,8 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Pause failed");
-      setEnabled(false);
       setPauseUntil(null);
+      setPauseKind("manual");
       setMessage("Missed Call Text Back paused until you resume.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Pause failed");
@@ -179,8 +183,8 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Resume failed");
-      setEnabled(true);
       setPauseUntil(null);
+      setPauseKind(null);
       setMessage("Missed Call Text Back is active.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Resume failed");
@@ -201,7 +205,8 @@ export function MctbScheduleView() {
   ];
 
   const isPaused =
-    !enabled || Boolean(pauseUntil && new Date(pauseUntil) > new Date());
+    pauseKind === "manual" ||
+    Boolean(pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date());
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
