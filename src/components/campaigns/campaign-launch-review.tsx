@@ -15,6 +15,7 @@ type LaunchReview = {
   finalRecipientCount: number;
   estimatedSegments: number;
   mmsCount: number;
+  mediaUrls?: string[];
   phoneE164: string | null;
   scheduledAt: string | null;
   a2pUseCase: string;
@@ -137,6 +138,14 @@ export function CampaignLaunchReview({
               <dt className="text-muted-foreground">Picture messages (MMS)</dt>
               <dd className="font-medium">
                 {review.mmsCount} · 3 credits each
+              </dd>
+            </div>
+          ) : null}
+          {review.mediaUrls && review.mediaUrls.length > 0 ? (
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">Attached media</dt>
+              <dd>
+                {review.mediaUrls.length} image{review.mediaUrls.length === 1 ? "" : "s"}
               </dd>
             </div>
           ) : null}

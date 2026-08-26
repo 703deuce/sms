@@ -6,7 +6,7 @@ import { parseSequence } from "@/lib/campaigns/sequence-engine";
 import { MASS_TEXT_MMS_PRODUCTION_ENABLED } from "@/lib/mass-texting/pricing";
 import { creditsForRecipientBody, massTextMergeVarsFromContact } from "@/lib/mass-texting/personalization";
 import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
-import { mediaUrlsForSequenceStep } from "@/lib/mass-texting/mms";
+import { mediaUrlsForSequenceStep, mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
 
 export type PreSendReview = {
   campaignId: string;
@@ -21,6 +21,7 @@ export type PreSendReview = {
   estimatedSegments: number;
   mmsCount: number;
   messagePreview: string;
+  mediaUrls: string[];
   phoneNumberId: string | null;
   phoneE164: string | null;
   scheduledAt: string | null;
@@ -222,6 +223,7 @@ export async function buildPreSendReview(
     estimatedSegments,
     mmsCount: accepted.length * mmsStepCount,
     messagePreview: body.slice(0, 280),
+    mediaUrls: mediaUrlsFromCampaignConfig(config),
     phoneNumberId: sender?.phoneNumberId ?? null,
     phoneE164: sender?.phoneE164 ?? null,
     scheduledAt: campaign.scheduledAt?.toISOString() ?? null,

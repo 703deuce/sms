@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
 
 export function massTextProductConfigPatch(
   configJson: unknown,
@@ -39,6 +40,14 @@ export async function isMassTextingCampaign(
   });
   if (!campaign) return false;
   return campaignConfigIsMassText(campaign.configJson);
+}
+
+export function getCampaignMediaUrls(configJson: unknown): string[] {
+  return mediaUrlsFromCampaignConfig(configJson);
+}
+
+export function isCampaignMms(configJson: unknown): boolean {
+  return getCampaignMediaUrls(configJson).length > 0;
 }
 
 export async function estimateMessageSegments(body: string): Promise<number> {

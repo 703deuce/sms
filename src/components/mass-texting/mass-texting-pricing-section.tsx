@@ -45,7 +45,7 @@ export function MassTextingPricingSection() {
                   <span className="text-base font-normal text-slate-500">/mo</span>
                 </p>
                 <p className="mt-2 text-sm text-slate-600">
-                  {plan.includedSegments.toLocaleString()} SMS segments
+                  {plan.includedSegments.toLocaleString()} messaging credits (SMS segments or MMS)
                 </p>
                 <p className="mt-1 text-sm text-slate-600">1 local number included</p>
                 {!plan.includesA2pRegistration ? (
@@ -91,7 +91,7 @@ export function MassTextingPricingSection() {
         <div className="mt-8 rounded-2xl border border-teal-200 bg-teal-50 p-5">
           <h3 className="font-semibold text-teal-900">14-Day Free Trial</h3>
           <p className="mt-1 text-sm text-teal-800">
-            {pricing.trial.includedSegments} SMS segments · No credit card required. Your trial begins when
+            {pricing.trial.includedSegments} messaging credits · MMS uses 3 credits each · No credit card required. Your trial begins when
             your business messaging is approved and activated.
           </p>
         </div>
