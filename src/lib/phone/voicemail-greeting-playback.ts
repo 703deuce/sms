@@ -1,4 +1,5 @@
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
+import { resolvePlatformVoicemailGreetingPlayUrl } from "@/lib/phone/voicemail-greeting-defaults";
 
 /** Carrier-facing HTTPS URL for ElevenLabs / uploaded greeting audio. */
 export function absolutizePublicMediaUrl(url: string | null | undefined): string | null {
@@ -30,6 +31,12 @@ export async function resolveVoicemailGreetingPlayback(
     const absolute = absolutizePublicMediaUrl(raw);
     if (absolute) return { playUrl: absolute, sayText: null };
   }
+
+  const defaultPlayUrl = resolvePlatformVoicemailGreetingPlayUrl();
+  if (defaultPlayUrl.startsWith("http")) {
+    return { playUrl: defaultPlayUrl, sayText: null };
+  }
+
   const text = box.greetingText?.trim();
   return { playUrl: null, sayText: text || null };
 }

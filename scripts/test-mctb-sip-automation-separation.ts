@@ -143,8 +143,8 @@ assert.match(
 
 assert.match(
   voicemailFallbackSrc,
-  /Never generate TTS on the inbound hot path/,
-  "voicemail greeting resolver must not generate TTS on inbound calls",
+  /resolveVoicemailGreetingPlayback/,
+  "voicemail greeting resolver must delegate to shared playback helper with platform default",
 );
 
 assert.match(

@@ -3,7 +3,6 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveVoicemailGreetingPlayback } from "@/lib/phone/voicemail-greeting-playback";
-import { publicPlaybackUrl } from "@/lib/smart-routing/media-service";
 
 export type MctbVoicemailFallbackPlayback = {
   playUrl: string | null;
@@ -51,27 +50,13 @@ export async function resolveMctbVoicemailFallbackPlayback(
   }
 
   if (!box) {
-    return {
-      playUrl: null,
-      sayText: "Please leave a message after the tone.",
-    };
+    const playback = await resolveVoicemailGreetingPlayback(workspaceId, {
+      greetingUrl: null,
+      greetingText: null,
+    });
+    return { playUrl: playback.playUrl, sayText: playback.sayText };
   }
 
   const playback = await resolveVoicemailGreetingPlayback(workspaceId, box);
-  if (playback.playUrl) {
-    return { playUrl: playback.playUrl, sayText: null };
-  }
-
-  const sayText = playback.sayText?.trim() || "Please leave a message after the tone.";
-
-  // Never generate TTS on the inbound hot path — that adds multi-second dead air.
-  const defaultAssetId = process.env.MCTB_DEFAULT_VOICEMAIL_GREETING_AUDIO_ASSET_ID?.trim();
-  if (defaultAssetId) {
-    const playUrl = publicPlaybackUrl(defaultAssetId);
-    if (playUrl.startsWith("http")) {
-      return { playUrl, sayText: null };
-    }
-  }
-
-  return { playUrl: null, sayText };
+  return { playUrl: playback.playUrl, sayText: playback.sayText };
 }
