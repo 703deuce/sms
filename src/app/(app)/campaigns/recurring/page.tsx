@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { getCampaignTabs } from "@/lib/campaign-tabs";
 import { formatNumber } from "@/lib/utils";
 import { loadRecurringCampaigns, requireWorkspaceContext } from "@/lib/workspace-data";
 import { Repeat } from "lucide-react";
@@ -35,6 +35,7 @@ export default async function CampaignRecurringPage() {
   const { workspaceId } = await requireWorkspaceContext();
   const recurringCampaigns = await loadRecurringCampaigns(workspaceId);
   const activeCount = recurringCampaigns.filter((c) => c.status === "Active").length;
+  const tabs = await getCampaignTabs(workspaceId);
 
   return (
     <div>
@@ -46,14 +47,14 @@ export default async function CampaignRecurringPage() {
             <Link href="/campaigns">
               <Button variant="outline">All campaigns</Button>
             </Link>
-            <Link href="/send">
+            <Link href="/campaigns">
               <Button>Create recurring</Button>
             </Link>
           </>
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
@@ -88,7 +89,7 @@ export default async function CampaignRecurringPage() {
           title="No recurring campaigns"
           description="Recurring and reminder campaigns will appear here when you create appointment reminders or scheduled sequences."
           actionLabel="Create campaign"
-          actionHref="/send"
+          actionHref="/campaigns"
         />
       ) : (
         <Card>

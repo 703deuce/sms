@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       cloneCalendly?: boolean;
       provisionNumber?: boolean;
       areaCode?: string;
+      grantMassTexting?: boolean;
     };
 
     const stamp = Date.now().toString(36);
@@ -131,6 +132,10 @@ export async function POST(request: Request) {
 
     let calendlyCloned = false;
     let calendlySourceWorkspaceId: string | null = null;
+    if (body.grantMassTexting && workspaceId) {
+      const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
+      await grantWorkspaceProductFeature(workspaceId, "mass_texting", "trial");
+    }
     if (cloneCalendly && workspaceId) {
       const source = await prisma.integrationConnection.findFirst({
         where: { provider: "calendly", status: "connected", accessToken: { not: null } },

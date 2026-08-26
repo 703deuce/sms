@@ -11,7 +11,7 @@ import { loadCampaigns } from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
 import { FileEdit } from "lucide-react";
 import Link from "next/link";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { getCampaignTabs } from "@/lib/campaign-tabs";
 
 function formatScheduled(at: string | null) {
   if (!at) return "—";
@@ -37,6 +37,7 @@ export default async function CampaignDraftsPage() {
   }
 
   const drafts: Campaign[] = await loadCampaigns(workspaceId, "DRAFT");
+  const tabs = await getCampaignTabs(workspaceId);
 
   return (
     <div>
@@ -44,13 +45,13 @@ export default async function CampaignDraftsPage() {
         title="Draft campaigns"
         description="Campaigns saved but not yet scheduled or sent. Finish audience, message, and compliance before launch."
         actions={
-          <Link href="/send">
+          <Link href="/campaigns">
             <Button>New campaign</Button>
           </Link>
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       {drafts.length === 0 ? (
         <EmptyState

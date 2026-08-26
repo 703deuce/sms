@@ -1,7 +1,6 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { campaignTypeImpliesMms } from "@/lib/mass-texting/campaign-media";
 
 export function massTextProductConfigPatch(
   configJson: unknown,

@@ -11,7 +11,7 @@ import { getCampaignCategory } from "@/lib/campaigns/catalog";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { useCampaignTabs } from "@/hooks/use-campaign-tabs";
 
 type LiveCampaign = {
   id: string;
@@ -31,8 +31,13 @@ export default function AllCampaignsPage() {
   const [campaigns, setCampaigns] = useState<LiveCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [massTexting, setMassTexting] = useState(false);
+  const tabs = useCampaignTabs();
 
   useEffect(() => {
+    fetch("/api/mass-texting/billing")
+      .then((r) => setMassTexting(r.ok))
+      .catch(() => setMassTexting(false));
     fetch("/api/campaigns")
       .then(async (r) => {
         if (!r.ok) throw new Error("Failed to load campaigns");
@@ -53,7 +58,7 @@ export default function AllCampaignsPage() {
               New campaign</Link>
         }
       />
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       <Card className="overflow-hidden p-0">
         {loading && <p className="p-6 text-sm text-slate-500">Loading…</p>}
@@ -93,7 +98,12 @@ export default function AllCampaignsPage() {
                     <TD>{c.sent ?? 0}</TD>
                     <TD>{c.replies ?? 0}</TD>
                     <TD>
-                      <CampaignActions campaignId={c.id} status={c.status} variant="row" />
+                      <CampaignActions
+                        campaignId={c.id}
+                        status={c.status}
+                        variant="row"
+                        massTexting={massTexting}
+                      />
                     </TD>
                   </TR>
                 );

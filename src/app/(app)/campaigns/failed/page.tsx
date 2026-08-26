@@ -11,7 +11,7 @@ import { loadCampaigns } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { getCampaignTabs } from "@/lib/campaign-tabs";
 
 function formatScheduled(at: string | null) {
   if (!at) return "—";
@@ -41,6 +41,7 @@ export default async function CampaignFailedPage() {
   const totalDelivered = failed.reduce((sum, c) => sum + c.delivered, 0);
   const totalUndelivered = totalSent - totalDelivered;
   const failureRate = totalSent > 0 ? ((totalSent - totalDelivered) / totalSent) * 100 : 0;
+  const tabs = await getCampaignTabs(workspaceId);
 
   return (
     <div>
@@ -54,7 +55,7 @@ export default async function CampaignFailedPage() {
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       {failed.length === 0 ? (
         <EmptyState

@@ -64,7 +64,8 @@ export async function buildPreSendReview(
     });
     for (const list of lists) {
       listNames.push(list.name);
-      for (const member of list.members) {
+      const members = Array.isArray(list.members) ? list.members : [];
+      for (const member of members) {
         const c = member.contact;
         if (!c?.phone) continue;
         recipients.push({

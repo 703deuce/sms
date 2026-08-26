@@ -11,7 +11,7 @@ import { loadCampaigns } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { getCampaignTabs } from "@/lib/campaign-tabs";
 
 function formatScheduled(at: string | null) {
   if (!at) return "—";
@@ -41,6 +41,7 @@ export default async function CampaignCompletedPage() {
   const totalDelivered = completed.reduce((sum, c) => sum + c.delivered, 0);
   const totalReplies = completed.reduce((sum, c) => sum + c.replies, 0);
   const deliveryRate = totalSent > 0 ? (totalDelivered / totalSent) * 100 : 0;
+  const tabs = await getCampaignTabs(workspaceId);
 
   return (
     <div>
@@ -54,7 +55,7 @@ export default async function CampaignCompletedPage() {
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       {completed.length === 0 ? (
         <EmptyState
@@ -62,7 +63,7 @@ export default async function CampaignCompletedPage() {
           title="No completed campaigns"
           description="Once a campaign finishes sending, it will appear here with delivery and engagement stats."
           actionLabel="Send campaign"
-          actionHref="/send"
+          actionHref="/campaigns/new/promotional"
         />
       ) : (
         <>
