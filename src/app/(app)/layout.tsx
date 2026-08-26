@@ -4,6 +4,7 @@ import { ServiceWorkerRegister } from "@/components/push/service-worker-register
 import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
 import { getUserProductAccess } from "@/lib/products/entitlements";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
+import { isActiveEntitlement } from "@/lib/products/types";
 import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
 import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
@@ -77,7 +78,9 @@ export default async function AppLayout({
       primaryVoiceAgentId={primaryVoiceAgentId}
       realtorMode={false}
       hasVoice={productAccess.hasVoice}
-      hasSms={productAccess.hasSms}
+      hasSms={
+        productAccess.hasSms || isActiveEntitlement(productFeatures.mass_texting)
+      }
       hasNumbers={productAccess.hasNumbers}
       showTryIt={showTryIt}
       productFeatures={productFeatures}

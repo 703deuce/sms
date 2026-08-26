@@ -113,6 +113,12 @@ export type Conversation = {
   tags: string[];
   updatedAt: string;
   unread: boolean;
+  productSource?: "mctb" | "mass_text" | "manual" | "automation" | null;
+  productSourceLabel?: string;
+  phoneNumberId?: string | null;
+  fromE164?: string | null;
+  campaignId?: string | null;
+  campaignName?: string | null;
   repeatCaller?: { missedToday: number; total: number };
   messages: Array<{
     id: string;

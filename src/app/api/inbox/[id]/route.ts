@@ -17,6 +17,15 @@ async function loadFull(workspaceId: string, id: string) {
   });
 }
 
+async function loadCampaignName(workspaceId: string, campaignId: string | null | undefined) {
+  if (!campaignId) return null;
+  const row = await getPrisma().campaign.findFirst({
+    where: { id: campaignId, workspaceId },
+    select: { name: true },
+  });
+  return row?.name ?? null;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -39,7 +48,11 @@ export async function GET(
     }
 
     return NextResponse.json({
-      data: mapConversation({ ...row, repeatCaller }),
+      data: mapConversation({
+        ...row,
+        campaignName: await loadCampaignName(auth.workspaceId, row.campaignId),
+        repeatCaller,
+      }),
     });
   } catch (err) {
     return jsonError(err, 500);
@@ -73,11 +86,12 @@ export async function PATCH(
 
     if (body.action === "reply" && body.body?.trim()) {
       const to = existing.contact.phone;
+      const replyFrom = body.from || existing.fromE164 || undefined;
       await sendQuickSms({
         workspaceId: auth.workspaceId,
         to,
         body: body.body.trim(),
-        from: body.from,
+        from: replyFrom,
         mediaUrls: body.mediaUrls?.filter(Boolean),
       });
       await getPrisma().conversationMessage.create({
@@ -86,6 +100,7 @@ export async function PATCH(
           direction: "out",
           body: body.body.trim(),
           userName: auth.session.name,
+          fromE164: replyFrom ?? null,
         },
       });
       await getPrisma().conversation.update({
@@ -156,7 +171,14 @@ export async function PATCH(
     }
 
     const row = await loadFull(auth.workspaceId, id);
-    return NextResponse.json({ data: row ? mapConversation(row) : null });
+    return NextResponse.json({
+      data: row
+        ? mapConversation({
+            ...row,
+            campaignName: await loadCampaignName(auth.workspaceId, row.campaignId),
+          })
+        : null,
+    });
   } catch (err) {
     return jsonError(err, 400);
   }

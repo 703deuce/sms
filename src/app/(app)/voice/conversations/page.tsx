@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** SMS recovery threads live in Inbox — voice call rollup was misleading here. */
+/** MCTB recovery threads live in shared Inbox — preserve product filter. */
 export default function VoiceConversationsPage() {
-  redirect("/inbox");
+  redirect("/inbox?product=mctb");
 }

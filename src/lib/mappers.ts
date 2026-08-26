@@ -9,6 +9,10 @@ import type {
   User,
   Workspace,
 } from "@/lib/types";
+import {
+  prismaProductSourceToApp,
+  productSourceLabel,
+} from "@/lib/mass-texting/product-source";
 
 function titleCaseStatus(value: string): StatusChip {
   const map: Record<string, StatusChip> = {
@@ -194,6 +198,11 @@ export function mapConversation(c: {
   tags: string[];
   unread: boolean;
   updatedAt: Date | string;
+  productSource?: string | null;
+  phoneNumberId?: string | null;
+  fromE164?: string | null;
+  campaignId?: string | null;
+  campaignName?: string | null;
   contact?: {
     id: string;
     phone: string;
@@ -216,6 +225,7 @@ export function mapConversation(c: {
     "repeatCaller" in c && c.repeatCaller
       ? (c.repeatCaller as { missedToday: number; total: number })
       : undefined;
+  const productSource = prismaProductSourceToApp(c.productSource);
   return {
     id: c.id,
     contactId: c.contactId,
@@ -227,6 +237,12 @@ export function mapConversation(c: {
     tags: c.tags || [],
     updatedAt: new Date(c.updatedAt).toISOString(),
     unread: c.unread,
+    productSource,
+    productSourceLabel: productSource ? productSourceLabel(productSource) : undefined,
+    phoneNumberId: c.phoneNumberId ?? null,
+    fromE164: c.fromE164 ?? null,
+    campaignId: c.campaignId ?? null,
+    campaignName: c.campaignName ?? null,
     repeatCaller,
     messages: (c.messages || [])
       .slice()

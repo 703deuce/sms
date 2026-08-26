@@ -442,6 +442,12 @@ export function InboxView({
                     </span>
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                    {c.productSourceLabel ? (
+                      <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] font-medium text-foreground">
+                        {c.productSourceLabel}
+                      </span>
+                    ) : null}
+                    {c.campaignName ? `Campaign: ${c.campaignName} · ` : ""}
                     {c.lastMessage}
                   </span>
                   <span className="mt-1.5 flex items-center justify-between gap-2">

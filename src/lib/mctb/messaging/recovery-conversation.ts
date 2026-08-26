@@ -2,6 +2,10 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  ensureProductConversation,
+  resolvePhoneForInbound,
+} from "@/lib/mass-texting/conversation-context";
 
 /** Ensure outbound MCTB recovery SMS appears in the workspace inbox thread. */
 export async function ensureMctbRecoveryConversation(input: {
@@ -10,6 +14,7 @@ export async function ensureMctbRecoveryConversation(input: {
   fromE164: string;
   body: string;
   providerMessageId?: string | null;
+  missedCallEventId?: string | null;
 }): Promise<{ conversationId: string | null }> {
   const prisma = getPrisma();
   let to = input.toE164;
@@ -35,43 +40,34 @@ export async function ensureMctbRecoveryConversation(input: {
       data: {
         workspaceId: input.workspaceId,
         phone: to,
-        source: "mctb_recovery",
+        consentSource: "mctb_recovery",
       },
     });
   }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: {
-      workspaceId: input.workspaceId,
-      contactId: contact.id,
-      status: { not: "CLOSED" },
-    },
-    orderBy: { updatedAt: "desc" },
+  const fromPhone = await resolvePhoneForInbound(input.workspaceId, input.fromE164);
+  const { conversationId } = await ensureProductConversation({
+    workspaceId: input.workspaceId,
+    contactId: contact.id,
+    productSource: "mctb",
+    phoneNumberId: fromPhone?.id ?? null,
+    fromE164: input.fromE164,
+    missedCallEventId: input.missedCallEventId ?? null,
   });
-
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        workspaceId: input.workspaceId,
-        contactId: contact.id,
-        status: "OPEN",
-        unread: false,
-      },
-    });
-  }
 
   await prisma.conversationMessage.create({
     data: {
-      conversationId: conversation.id,
+      conversationId,
       direction: "outbound",
       body: input.body,
       providerMessageId: input.providerMessageId || undefined,
+      fromE164: input.fromE164,
     },
   });
   await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: { updatedAt: new Date() },
+    where: { id: conversationId },
+    data: { unread: false, updatedAt: new Date() },
   });
 
-  return { conversationId: conversation.id };
+  return { conversationId };
 }

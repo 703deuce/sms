@@ -209,9 +209,14 @@ export async function loadCampaignById(workspaceId: string, id: string) {
   return c ? mapCampaign(c) : null;
 }
 
-export async function loadConversations(workspaceId: string): Promise<Conversation[]> {
+export async function loadConversations(
+  workspaceId: string,
+  filters?: import("@/lib/mass-texting/inbox-filters").InboxListFilters,
+): Promise<Conversation[]> {
+  const { buildConversationWhere } = await import("@/lib/mass-texting/inbox-filters");
+  const where = buildConversationWhere(workspaceId, filters ?? { product: "all" });
   const rows = await getPrisma().conversation.findMany({
-    where: { workspaceId },
+    where,
     orderBy: { updatedAt: "desc" },
     take: 100,
     include: {
@@ -220,7 +225,23 @@ export async function loadConversations(workspaceId: string): Promise<Conversati
       messages: { orderBy: { createdAt: "asc" }, take: 100 },
     },
   });
-  return rows.map(mapConversation);
+
+  const campaignIds = [...new Set(rows.map((r) => r.campaignId).filter(Boolean))] as string[];
+  const campaigns =
+    campaignIds.length > 0
+      ? await getPrisma().campaign.findMany({
+          where: { workspaceId, id: { in: campaignIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const campaignNames = new Map(campaigns.map((c) => [c.id, c.name]));
+
+  return rows.map((row) =>
+    mapConversation({
+      ...row,
+      campaignName: row.campaignId ? campaignNames.get(row.campaignId) ?? null : null,
+    }),
+  );
 }
 
 export async function loadTemplates(workspaceId: string): Promise<Template[]> {

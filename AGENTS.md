@@ -23,9 +23,27 @@ Before creating replacements, **audit** existing routes, pages, components, APIs
 
 ### Product entitlements (target)
 
-Independent flags (fit existing billing architecture): `mctb`, `smart_routing`, `visual_voicemail`, `callback_requests`. One workspace/account can own any combination. Use Stripe for Transovo billing; env/config for price IDs.
+Independent flags (fit existing billing architecture): `mctb`, `mass_texting`, `smart_routing`, `visual_voicemail`, `callback_requests`. One workspace/account can own any combination. Use Stripe for Transovo billing; env/config for price IDs.
 
-**Current gap:** `ProductEntitlement` is coarse (`voice | numbers | sms`). MCTB uses `mctb/entitlement.ts`; Smart Routing is a workspace capability only — not yet a purchasable entitlement.
+**Mass Texting** uses `MASS_TEXTING` workspace feature entitlement — standalone from MCTB. Shared Inbox/Contacts may be reachable when either product is active.
+
+### Mass Texting ↔ MCTB architecture boundary
+
+Mass Texting is a **standalone SMS marketing product**. It must remain isolated from the MCTB live voice path.
+
+**Mass Texting may share:** auth, workspace, billing, contacts, numbers, A2P infrastructure, SMS transport, provider adapters, inbound SMS, STOP/HELP, suppression store, inbox/conversations, usage/credits, observability.
+
+**Mass Texting must NOT import from, modify, depend on, or call:**
+
+- `lib/mctb/sip-*`
+- LiveKit runtime / MCTB voice webhooks
+- call forwarding, voicemail runtime, DTMF/press-1, missed-call classifier, MCTB call teardown
+
+All Mass Texting code lives under `src/lib/mass-texting/` and shared layers (`lib/sms/`, `lib/messaging/`, `lib/campaigns/`, `lib/contacts/`). Regression: `npx tsx scripts/test-mass-texting-boundary.ts`.
+
+A2P registrations are **per product use case** (`MCTB_CUSTOMER_CARE` vs `MASS_TEXT_MARKETING`) via `MessagingProductRegistration`. Do not send Mass Text traffic through an MCTB-only campaign registration.
+
+**Current gap:** legacy `ProductEntitlement` (`voice | numbers | sms`) still gates the SMS shell; `mass_texting` feature entitlement is the target commercial flag.
 
 ### Canonical nav (focused sidebar)
 

@@ -20,14 +20,32 @@ export async function POST(request: Request) {
       rows?: ImportRow[];
       listName?: string;
       consentSource?: string;
+      marketingImport?: boolean;
+      attestationId?: string;
     };
     if (!body.rows?.length) {
       return NextResponse.json({ error: "rows required" }, { status: 400 });
     }
 
+    if (body.marketingImport) {
+      if (!body.attestationId) {
+        return NextResponse.json(
+          { error: "List consent attestation is required for marketing imports." },
+          { status: 400 },
+        );
+      }
+      const attestation = await getPrisma().listImportAttestation.findFirst({
+        where: { id: body.attestationId, workspaceId: auth.workspaceId },
+      });
+      if (!attestation) {
+        return NextResponse.json({ error: "Invalid import attestation." }, { status: 400 });
+      }
+    }
+
     const prisma = getPrisma();
     let created = 0;
     let updated = 0;
+    let suppressedSkipped = 0;
     const errors: Array<{ row: number; error: string }> = [];
 
     let listId: string | null = null;
@@ -48,6 +66,14 @@ export async function POST(request: Request) {
       try {
         if (!row.phone) throw new Error("phone required");
         const phone = normalizeE164(row.phone);
+        const suppressed = await prisma.suppression.findFirst({
+          where: { workspaceId: auth.workspaceId, phone },
+        });
+        if (suppressed) {
+          suppressedSkipped += 1;
+          continue;
+        }
+
         const existing = await prisma.contact.findUnique({
           where: {
             workspaceId_phone: { workspaceId: auth.workspaceId, phone },
@@ -113,12 +139,12 @@ export async function POST(request: Request) {
         workspaceId: auth.workspaceId,
         userId: auth.session.userId,
         event: "contacts.import",
-        detail: `created=${created} updated=${updated} errors=${errors.length}`,
+        detail: `created=${created} updated=${updated} suppressedSkipped=${suppressedSkipped} errors=${errors.length}`,
       },
     });
 
     return NextResponse.json({
-      data: { created, updated, errors, listId },
+      data: { created, updated, suppressedSkipped, errors, listId },
     });
   } catch (err) {
     return jsonError(err, 400);

@@ -1,5 +1,7 @@
 import { InboxView } from "@/components/inbox/inbox-view";
+import { InboxProductFilters } from "@/components/inbox/inbox-product-filters";
 import { Button } from "@/components/ui/button";
+import { parseInboxSearchParams } from "@/lib/mass-texting/inbox-filters";
 import {
   loadContacts,
   loadConversations,
@@ -8,14 +10,28 @@ import {
 } from "@/lib/workspace-data";
 import { Archive, MessageSquareText } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { workspaceId, session } = await requireWorkspaceContext();
+  const params = await searchParams;
+  const urlSearch = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") urlSearch.set(key, value);
+  }
+  const filters = parseInboxSearchParams(urlSearch);
+
   const [conversations, contacts, teamMembers] = await Promise.all([
-    loadConversations(workspaceId),
+    loadConversations(workspaceId, filters),
     loadContacts(workspaceId),
     loadTeamMembers(workspaceId),
   ]);
+
+  const initialFilter = filters.unread ? "Unread" : "All conversations";
 
   return (
     <div>
@@ -36,7 +52,11 @@ export default async function InboxPage() {
           </Link>
         </div>
       </div>
+      <Suspense fallback={null}>
+        <InboxProductFilters />
+      </Suspense>
       <InboxView
+        initialFilter={initialFilter}
         conversations={conversations}
         contacts={contacts}
         teamMembers={teamMembers}

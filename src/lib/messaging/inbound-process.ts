@@ -97,6 +97,7 @@ async function welcomeMmsMedia(workspaceId: string): Promise<string[] | undefine
 async function recordInboundReceipt(input: {
   workspaceId: string;
   from: string;
+  to?: string;
   body: string;
   providerMessageId?: string;
 }) {
@@ -116,24 +117,37 @@ async function recordInboundReceipt(input: {
     });
   }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { workspaceId: input.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
-  });
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        workspaceId: input.workspaceId,
-        contactId: contact.id,
-        status: "OPEN",
-        unread: true,
-      },
+  let conversationId: string;
+  if (input.to) {
+    const { resolveInboundConversation } = await import("@/lib/mass-texting/conversation-context");
+    const resolved = await resolveInboundConversation({
+      workspaceId: input.workspaceId,
+      contactId: contact.id,
+      toE164: input.to,
+      fromE164: input.from,
     });
+    conversationId = resolved.conversationId;
+  } else {
+    let conversation = await prisma.conversation.findFirst({
+      where: { workspaceId: input.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
+    });
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          workspaceId: input.workspaceId,
+          contactId: contact.id,
+          status: "OPEN",
+          unread: true,
+        },
+      });
+    }
+    conversationId = conversation.id;
   }
 
   try {
     await prisma.conversationMessage.create({
       data: {
-        conversationId: conversation.id,
+        conversationId,
         direction: "inbound",
         body: input.body || "(empty)",
         providerMessageId: input.providerMessageId,
@@ -277,6 +291,7 @@ export async function processInboundMessage(input: {
     await recordInboundReceipt({
       workspaceId: input.workspaceId,
       from,
+      to: input.to,
       body,
       providerMessageId: input.providerMessageId,
     });
@@ -300,6 +315,7 @@ export async function processInboundMessage(input: {
     await recordInboundReceipt({
       workspaceId: input.workspaceId,
       from,
+      to: input.to,
       body,
       providerMessageId: input.providerMessageId,
     });
@@ -313,6 +329,7 @@ export async function processInboundMessage(input: {
     await recordInboundReceipt({
       workspaceId: input.workspaceId,
       from,
+      to: input.to,
       body,
       providerMessageId: input.providerMessageId,
     });
@@ -341,6 +358,7 @@ export async function processInboundMessage(input: {
         await recordInboundReceipt({
           workspaceId: input.workspaceId,
           from,
+          to: input.to,
           body,
           providerMessageId: input.providerMessageId,
         });
@@ -383,6 +401,7 @@ export async function processInboundMessage(input: {
     await recordInboundReceipt({
       workspaceId: input.workspaceId,
       from,
+      to: input.to,
       body,
       providerMessageId: input.providerMessageId,
     });
@@ -397,6 +416,7 @@ export async function processInboundMessage(input: {
     await recordInboundReceipt({
       workspaceId: input.workspaceId,
       from,
+      to: input.to,
       body,
       providerMessageId: input.providerMessageId,
     });
@@ -446,24 +466,17 @@ export async function processInboundMessage(input: {
     /* non-fatal */
   }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { workspaceId: input.workspaceId, contactId: contact.id, status: { not: "CLOSED" } },
+  const { resolveInboundConversation } = await import("@/lib/mass-texting/conversation-context");
+  const inboundCtx = await resolveInboundConversation({
+    workspaceId: input.workspaceId,
+    contactId: contact.id,
+    toE164: input.to,
+    fromE164: from,
   });
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        workspaceId: input.workspaceId,
-        contactId: contact.id,
-        status: "OPEN",
-        unread: true,
-      },
-    });
-  } else {
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { unread: true, updatedAt: new Date() },
-    });
-  }
+  const conversation = await prisma.conversation.update({
+    where: { id: inboundCtx.conversationId },
+    data: { unread: true, updatedAt: new Date() },
+  });
 
   try {
     const displayBody = formatInboundMessageBody(body, input.mediaUrls);

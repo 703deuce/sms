@@ -71,7 +71,7 @@ export function productOfferPath(product: ProductKey): string {
     case "voice":
       return "/signup?product=voice";
     case "sms":
-      return "/sms-marketing";
+      return "/mass-texting";
     case "numbers":
       return "/personal/numbers/premium";
     default:

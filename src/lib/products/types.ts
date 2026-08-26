@@ -34,9 +34,9 @@ export function isActiveEntitlement(status: ProductAccessStatus): boolean {
 export function productLabel(product: ProductKey): string {
   switch (product) {
     case "voice":
-      return "AI Receptionist";
+      return "Missed Call Text Back";
     case "sms":
-      return "SMS";
+      return "Mass Texting";
     case "numbers":
       return "Numbers";
     default:
@@ -49,7 +49,7 @@ export function productHomePath(product: ProductKey): string {
     case "voice":
       return "/dashboard";
     case "sms":
-      return "/inbox";
+      return "/sms";
     case "numbers":
       return "/personal";
     default:
