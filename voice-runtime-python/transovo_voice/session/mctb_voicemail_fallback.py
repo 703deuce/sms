@@ -102,7 +102,7 @@ async def run_mctb_voicemail_terminal(
     record_result = await record_sip_voicemail_message(
         backend,
         trace=trace,
-        room=ctx.room,
+        answer_session=answer_session,
         participant=participant,
         session=session,
     )
