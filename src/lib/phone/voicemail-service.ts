@@ -464,12 +464,22 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
 
   if (!box?.transcriptionEnabled) return updated;
 
+  let transcriptionRecordingUrl = input.recordingUrl;
+  const { parseVoicemailStorageRecordingUrl } = await import(
+    "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-storage"
+  );
+  const storageRef = parseVoicemailStorageRecordingUrl(input.recordingUrl);
+  if (storageRef) {
+    const { createSignedRecordingUrl } = await import("@/lib/smart-routing/call-recording-storage");
+    transcriptionRecordingUrl = await createSignedRecordingUrl(storageRef.bucket, storageRef.path, 600);
+  }
+
   const { enqueueTranscriptionJob } = await import("@/lib/transcription/service");
   await enqueueTranscriptionJob({
     workspaceId: input.workspaceId,
     sourceType: "voicemail_message",
     sourceId: msg.id,
-    recordingUrl: input.recordingUrl,
+    recordingUrl: transcriptionRecordingUrl,
     provider: input.upstreamProvider ?? "telnyx",
     durationSeconds: input.durationSeconds ?? updated.durationSeconds,
     diarize: false,

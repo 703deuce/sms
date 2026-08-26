@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from transovo_voice.session.sip_consent_audio import play_consent_audio_url
@@ -14,10 +13,9 @@ if TYPE_CHECKING:
     from transovo_voice.integrations.backend_client import TransovoBackend
     from transovo_voice.session.mctb_sip_e2e_trace import MctbSipE2eTrace
 
-VOICEMAIL_RECORD_HOLD_SECONDS = 45.0
-
 
 async def run_mctb_voicemail_terminal(
+    backend: "TransovoBackend",
     ctx: "JobContext",
     *,
     trace: "MctbSipE2eTrace",
@@ -73,18 +71,28 @@ async def run_mctb_voicemail_terminal(
             note="no_play_url_available_for_voicemail_greeting",
         )
 
+    from transovo_voice.session.mctb_voicemail_record import record_sip_voicemail_message
+
     trace.log(
         "mctb_voicemail_record_hold_started",
         terminalReason=terminal_reason,
-        holdSeconds=VOICEMAIL_RECORD_HOLD_SECONDS,
         note=hold_note,
         sipCallStatus=read_sip_call_status(participant),
     )
-    await asyncio.sleep(VOICEMAIL_RECORD_HOLD_SECONDS)
+    record_result = await record_sip_voicemail_message(
+        backend,
+        trace=trace,
+        participant=participant,
+        session=session,
+    )
     trace.log(
         "mctb_voicemail_record_hold_complete",
         terminalReason=terminal_reason,
-        holdSeconds=VOICEMAIL_RECORD_HOLD_SECONDS,
+        recordOk=record_result.ok,
+        messageId=record_result.message_id,
+        durationSeconds=record_result.duration_seconds,
+        encodedBytes=record_result.encoded_bytes,
+        error=record_result.error,
         sipCallStatus=read_sip_call_status(participant),
     )
 
@@ -93,10 +101,13 @@ async def run_mctb_voicemail_terminal(
         sip_status=read_sip_call_status(participant),
         handlingMode=session.get("handlingMode"),
         terminalReason=terminal_reason,
+        voicemailMessageId=record_result.message_id,
+        voicemailRecorded=record_result.ok,
     )
 
 
 async def run_mctb_voicemail_fallback(
+    backend: "TransovoBackend",
     ctx: "JobContext",
     *,
     trace: "MctbSipE2eTrace",
@@ -114,6 +125,7 @@ async def run_mctb_voicemail_fallback(
         hasSayText=bool(str(session.get("voicemailSayText") or "").strip()),
     )
     await run_mctb_voicemail_terminal(
+        backend,
         ctx,
         trace=trace,
         participant=participant,
