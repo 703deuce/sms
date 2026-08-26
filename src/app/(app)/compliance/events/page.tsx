@@ -7,6 +7,7 @@ import { titleCaseStatus } from "@/lib/mappers";
 import type { StatusChip as StatusChipType } from "@/lib/types";
 import { loadRegistrationEvents, requireWorkspaceContext } from "@/lib/workspace-data";
 import { ClipboardList } from "lucide-react";
+import { ComplianceRefreshButton } from "@/components/compliance/compliance-refresh-button";
 
 type RegistrationEventRow = Awaited<ReturnType<typeof loadRegistrationEvents>>[number];
 
@@ -39,6 +40,7 @@ export default async function ComplianceEventsPage() {
       <PageHeader
         title="Compliance events"
         description="Timeline of registration changes, verifications, and compliance-related account activity."
+        actions={<ComplianceRefreshButton />}
       />
 
       <Tabs items={complianceTabs} />

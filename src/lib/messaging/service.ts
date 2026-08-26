@@ -653,13 +653,28 @@ export const messagingOnboarding = {
   },
 
   async refreshStatus(workspaceId: string) {
+    const before = await getRegistrationByWorkspace(workspaceId);
     await enqueueMessagingRegistrationAdvance(workspaceId);
     try {
       const reg = await advanceMessagingRegistration(workspaceId);
+      await appendRegistrationEvent({
+        workspaceId,
+        registrationId: reg.id,
+        eventType: "status_refreshed",
+        message: `Brand ${reg.brandStatusRaw || reg.brandStatus || "—"} · Campaign ${reg.campaignStatusRaw || reg.campaignStatus || "—"}`,
+      });
       return toPublicRegistration(reg);
     } catch {
       const reg = await getRegistrationByWorkspace(workspaceId);
       if (!reg) throw new Error("Registration not found");
+      if (before?.id) {
+        await appendRegistrationEvent({
+          workspaceId,
+          registrationId: before.id,
+          eventType: "status_refresh_deferred",
+          message: reg.lastError || "Advance deferred — job will retry",
+        });
+      }
       return toPublicRegistration(reg);
     }
   },

@@ -11,6 +11,7 @@ import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ComplianceRefreshButton } from "@/components/compliance/compliance-refresh-button";
 
 const complianceTabs = [
   { label: "Overview", href: "/compliance" },
@@ -111,6 +112,15 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
   }
 
   async function submitForReview() {
+    if (!registration?.useCase?.trim()) {
+      setError("Save your campaign use case on the Campaign tab before submitting for review.");
+      return;
+    }
+    if ((registration?.sampleMessages?.length || 0) < 1) {
+      setError("Add at least one sample message on the Campaign tab before submitting for review.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
@@ -129,6 +139,13 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
     }
   }
 
+  const identityLabel =
+    registration?.messagingProvider === "telnyx"
+      ? registration?.brandStatusRaw || registration?.brandStatus || "Pending"
+      : registration?.trustStatus === "approved"
+        ? "Verified"
+        : "Pending";
+
   const submittedAt = registration?.registrationSubmittedAt
     ? new Date(registration.registrationSubmittedAt).toLocaleDateString("en-US", {
         month: "short",
@@ -143,8 +160,9 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
         title="Brand registration"
         description="10DLC brand identity submitted to The Campaign Registry for carrier vetting."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusChip status={brandStatus} />
+            <ComplianceRefreshButton />
             <Button type="submit" form="brand-registration-form" disabled={saving}>
               {saving ? "Saving…" : "Save brand"}
             </Button>
@@ -263,8 +281,14 @@ export function BrandRegistrationPanel({ registration, brandStatus }: Props) {
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Identity status</dt>
-              <dd>{registration?.trustStatus === "approved" ? "Verified" : "Pending"}</dd>
+              <dd>{identityLabel}</dd>
             </div>
+            {registration?.messagingProvider === "telnyx" ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Carrier status</dt>
+                <dd>{registration?.campaignStatusRaw || registration?.campaignStatus || "—"}</dd>
+              </div>
+            ) : null}
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Brand ID</dt>
               <dd className="font-mono text-xs">

@@ -339,6 +339,12 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
     }
 
     reg = (await getRegistrationByWorkspace(workspaceId))!;
+    if (ready && reg.phoneE164) {
+      await getPrisma().phoneNumber.updateMany({
+        where: { workspaceId, e164: reg.phoneE164, status: { not: "Released" } },
+        data: { a2pStatus: "APPROVED" },
+      });
+    }
     await log(reg, "advance_complete", ready ? "telnyx messaging ready" : "waiting for phone/campaign");
     return reg;
   } catch (err) {
