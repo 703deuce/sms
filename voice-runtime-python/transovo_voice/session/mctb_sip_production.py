@@ -118,7 +118,13 @@ async def run_mctb_sip_production_session(
     answer_task: asyncio.Task[None] | None = None
     status_tracer = None
 
+    session_task: asyncio.Task[dict[str, Any]] | None = None
     try:
+        session_task = asyncio.create_task(
+            _resolve_session(backend, trace=trace, participant=participant),
+            name="mctb_session_resolve",
+        )
+
         frozen = await run_frozen_sip_answer_sequence(
             ctx,
             trace=trace,
@@ -126,13 +132,20 @@ async def run_mctb_sip_production_session(
             room_already_connected=room_already_connected,
         )
         if frozen is None:
+            if session_task is not None and not session_task.done():
+                session_task.cancel()
+                try:
+                    await session_task
+                except asyncio.CancelledError:
+                    pass
             return
         answer_session, answer_task, status_tracer, sip_status = frozen
 
         participant_count = len(ctx.room.remote_participants) + 1
         trace.log_room_ready(created_new=False, participant_count=participant_count)
 
-        session = await _resolve_session(backend, trace=trace, participant=participant)
+        session = await session_task
+        session_task = None
         if not session.get("ok"):
             trace.log("mctb_session_resolve_failed", error=session.get("error"))
             trace.log_sip_call_final_state(
@@ -147,6 +160,7 @@ async def run_mctb_sip_production_session(
             from transovo_voice.session.mctb_voicemail_fallback import run_mctb_voicemail_fallback
 
             await run_mctb_voicemail_fallback(
+                backend,
                 ctx,
                 trace=trace,
                 participant=participant,
@@ -188,22 +202,19 @@ async def run_mctb_sip_production_session(
 
         press_1_completed = False
         if consent_mode == "existing_consent":
-            capture = await _capture_existing_consent_event(
-                backend,
-                trace=trace,
-                participant=participant,
-                session=session,
-            )
-            trace.log(
-                "mctb_existing_consent_captured",
-                captureOk=capture.get("ok"),
-                missedCallEventId=capture.get("missedCallEventId"),
-                eligible=capture.get("eligible"),
-                deduped=capture.get("deduped"),
+            capture_task = asyncio.create_task(
+                _capture_existing_consent_event(
+                    backend,
+                    trace=trace,
+                    participant=participant,
+                    session=session,
+                ),
+                name="mctb_existing_consent_capture",
             )
             from transovo_voice.session.mctb_voicemail_fallback import run_mctb_voicemail_terminal
 
             await run_mctb_voicemail_terminal(
+                backend,
                 ctx,
                 trace=trace,
                 participant=participant,
@@ -213,6 +224,18 @@ async def run_mctb_sip_production_session(
                 terminal_reason="existing_consent",
                 hold_note="terminal_path_after_existing_consent_capture",
                 disconnect_reason="existing_consent_voicemail_complete",
+            )
+            try:
+                capture = await capture_task
+            except Exception as err:
+                trace.log("mctb_existing_consent_capture_failed", error=str(err))
+                capture = {"ok": False, "error": str(err)}
+            trace.log(
+                "mctb_existing_consent_captured",
+                captureOk=capture.get("ok"),
+                missedCallEventId=capture.get("missedCallEventId"),
+                eligible=capture.get("eligible"),
+                deduped=capture.get("deduped"),
             )
             log_event(
                 "mctb_sip_production_complete",
@@ -395,6 +418,14 @@ async def run_mctb_sip_production_session(
             },
         )
     finally:
+        if session_task is not None and not session_task.done():
+            session_task.cancel()
+            try:
+                await session_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
         if status_tracer is not None:
             status_tracer.stop()
         if answer_session is not None:

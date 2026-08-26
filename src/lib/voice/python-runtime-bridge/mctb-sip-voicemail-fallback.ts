@@ -2,9 +2,8 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { DEFAULT_MCTB_CONSENT_VOICE_ID } from "@/lib/mctb/consent-prompt/defaults";
 import { resolveVoicemailGreetingPlayback } from "@/lib/phone/voicemail-greeting-playback";
-import { generatePromptAudio, publicPlaybackUrl } from "@/lib/smart-routing/media-service";
+import { publicPlaybackUrl } from "@/lib/smart-routing/media-service";
 
 export type MctbVoicemailFallbackPlayback = {
   playUrl: string | null;
@@ -64,15 +63,14 @@ export async function resolveMctbVoicemailFallbackPlayback(
   }
 
   const sayText = playback.sayText?.trim() || "Please leave a message after the tone.";
-  const asset = await generatePromptAudio({
-    workspaceId,
-    name: "MCTB Voicemail Greeting",
-    text: sayText,
-    voiceId: DEFAULT_MCTB_CONSENT_VOICE_ID,
-  });
-  const playUrl = publicPlaybackUrl(asset.id);
-  if (playUrl.startsWith("http")) {
-    return { playUrl, sayText };
+
+  // Never generate TTS on the inbound hot path — that adds multi-second dead air.
+  const defaultAssetId = process.env.MCTB_DEFAULT_VOICEMAIL_GREETING_AUDIO_ASSET_ID?.trim();
+  if (defaultAssetId) {
+    const playUrl = publicPlaybackUrl(defaultAssetId);
+    if (playUrl.startsWith("http")) {
+      return { playUrl, sayText: null };
+    }
   }
 
   return { playUrl: null, sayText };

@@ -26,6 +26,10 @@ const productionSrc = readFileSync(
   resolve("voice-runtime-python/transovo_voice/session/mctb_sip_production.py"),
   "utf8",
 );
+const voicemailFallbackSrc = readFileSync(
+  resolve("src/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback.ts"),
+  "utf8",
+);
 const voicemailSrc = readFileSync(
   resolve("voice-runtime-python/transovo_voice/session/mctb_voicemail_fallback.py"),
   "utf8",
@@ -117,6 +121,30 @@ assert.match(
   voicemailSrc,
   /mctb_voicemail_fallback_started/,
   "voicemail fallback must log terminal path start",
+);
+
+assert.match(
+  productionSrc,
+  /session_task = asyncio.create_task/,
+  "production flow must resolve session in parallel with answer sequence",
+);
+
+assert.match(
+  productionSrc,
+  /capture_task = asyncio.create_task/,
+  "existing_consent must capture SMS in parallel with voicemail playback",
+);
+
+assert.match(
+  voicemailSrc,
+  /record_sip_voicemail_message/,
+  "voicemail terminal must record caller audio instead of sleeping",
+);
+
+assert.match(
+  voicemailFallbackSrc,
+  /Never generate TTS on the inbound hot path/,
+  "voicemail greeting resolver must not generate TTS on inbound calls",
 );
 
 assert.match(
