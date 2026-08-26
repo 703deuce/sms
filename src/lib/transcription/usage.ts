@@ -27,6 +27,11 @@ export async function recordTranscriptionUsage(input: {
     input.transcriptionMinutes ??
     audioSecondsToTranscriptionMinutes(input.audioDurationSeconds);
 
+  const audioDurationSeconds =
+    typeof input.audioDurationSeconds === "number"
+      ? Math.max(0, Math.round(input.audioDurationSeconds))
+      : null;
+
   const sub = await prisma.platformProductSubscription.findFirst({
     where: {
       workspaceId: input.workspaceId,
@@ -43,7 +48,7 @@ export async function recordTranscriptionUsage(input: {
       sourceType: input.sourceType,
       sourceId: input.sourceId,
       provider: input.provider ?? null,
-      audioDurationSeconds: input.audioDurationSeconds ?? null,
+      audioDurationSeconds,
       transcriptionMinutes: minutes,
       transcriptionProvider: "deepgram",
       transcriptionModel: "nova-3",
