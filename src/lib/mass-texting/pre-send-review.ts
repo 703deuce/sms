@@ -219,5 +219,6 @@ export async function buildPreSendReview(
       : shortage > 0
         ? `Need ${estimatedSegments} credits but only ${availability.available} available`
         : availability.blockReason,
+    mmsBlocked,
   };
 }
