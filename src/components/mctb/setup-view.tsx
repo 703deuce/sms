@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
+import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { MctbVoicemailSetupSection } from "@/components/mctb/voicemail-setup-section";
 
 type PhoneOption = {
@@ -124,6 +125,7 @@ export function MctbSetupView() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [savedWhilePaused, setSavedWhilePaused] = useState(false);
   const [switchingNumber, setSwitchingNumber] = useState(false);
 
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
@@ -283,6 +285,7 @@ export function MctbSetupView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not switch number");
       setSaved(true);
+      setSavedWhilePaused(Boolean(json.data?.schedule?.paused));
       await load();
     } catch (err) {
       setPhoneNumberId(previousId);
@@ -296,6 +299,7 @@ export function MctbSetupView() {
     setSaving(true);
     setError(null);
     setSaved(false);
+    setSavedWhilePaused(false);
     try {
       const res = await fetch("/api/mctb/setup", {
         method: "POST",
@@ -329,7 +333,9 @@ export function MctbSetupView() {
       if (json.data?.sipProvision && !json.data.sipProvision.ok) {
         throw new Error(json.data.sipProvision.error || "Voice/SIP provisioning failed");
       }
+      const stillPaused = Boolean(json.data?.schedule?.paused);
       setSaved(true);
+      setSavedWhilePaused(stillPaused);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -358,20 +364,12 @@ export function MctbSetupView() {
         </p>
       </div>
 
-      ) : null}
-
       {data?.schedule?.paused ? (
-        <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-[13px] text-violet-950">
-          <p className="font-semibold">Missed Call Text Back is paused</p>
-          <p className="mt-1">
-            {data.schedule.pauseKind === "timed" && data.schedule.pauseUntil
-              ? `Timed pause until ${new Date(data.schedule.pauseUntil).toLocaleString()}.`
-              : "Paused until you resume from the Schedule page."}{" "}
-            <Link href="/voice/schedule" className="font-semibold text-violet-900 underline">
-              Open Schedule →
-            </Link>
-          </p>
-        </div>
+        <MctbPausedNotice
+          pauseKind={data.schedule.pauseKind}
+          pauseUntil={data.schedule.pauseUntil}
+          variant="banner"
+        />
       ) : null}
 
       {!data?.compliance.messagingReady ? (
@@ -391,7 +389,9 @@ export function MctbSetupView() {
           <p className="font-semibold">Messaging ready</p>
           <p className="mt-1">
             At least one assigned number has approved SMS messaging (A2P or toll-free verification).
-            You can save, activate, and run production tests.
+            {data?.schedule?.paused
+              ? " You can save setup changes while paused; text-backs resume when you turn them back on from Schedule."
+              : " You can save, activate, and run production tests."}
           </p>
         </div>
       )}
@@ -1006,16 +1006,26 @@ export function MctbSetupView() {
           </Card>
 
           {error ? <p className="text-[13px] font-medium text-rose-600">{error}</p> : null}
-          {saved ? (
+          {savedWhilePaused ? (
+            <MctbPausedNotice
+              pauseKind={data?.schedule?.pauseKind}
+              pauseUntil={data?.schedule?.pauseUntil}
+              variant="saved"
+            />
+          ) : saved ? (
             <p className="text-[13px] font-medium text-violet-700">Setup saved.</p>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2 pb-8">
             <Button disabled={saving} onClick={() => save(true)}>
-              {saving ? "Saving…" : "Save & activate"}
+              {saving
+                ? "Saving…"
+                : data?.schedule?.paused
+                  ? "Save changes"
+                  : "Save & activate"}
             </Button>
             <Button variant="outline" disabled={saving} onClick={() => save(false)}>
-              Save draft
+              {data?.schedule?.paused ? "Save changes (draft)" : "Save draft"}
             </Button>
             <Link href="/voice/schedule" className="text-[13px] text-primary hover:underline">
               Pause or schedule text-backs →

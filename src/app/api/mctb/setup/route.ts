@@ -463,10 +463,27 @@ export async function POST(req: Request) {
     businessLineE164: body.businessLineE164,
   });
 
+  const wsAfter = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { customFieldsConfig: true },
+  });
+  const scheduleAfter = readMctbScheduleFromCustomFields(
+    wsAfter?.customFieldsConfig,
+    runtimeResult.config,
+  );
+  const normalizedAfter = normalizeMctbPauseState(scheduleAfter, runtimeResult.config);
+  const pauseKind = resolveMctbPauseKind(normalizedAfter.settings, runtimeResult.config);
+
   return NextResponse.json({
     ok: true,
     data: {
       runtime: runtimeResult.config,
+      schedule: {
+        paused: isMctbSchedulePaused(normalizedAfter.settings, runtimeResult.config),
+        pauseKind,
+        pauseUntil: normalizedAfter.settings.pauseUntil,
+        manuallyPaused: normalizedAfter.settings.manuallyPaused,
+      },
       solution: saved,
       sipProvision,
       tenantBinding,

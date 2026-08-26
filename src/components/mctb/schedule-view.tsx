@@ -1,6 +1,7 @@
 "use client";
 
 import { MctbWeeklyScheduleEditor } from "@/components/mctb/weekly-schedule-editor";
+import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
@@ -26,6 +27,7 @@ export function MctbScheduleView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [savedWhilePaused, setSavedWhilePaused] = useState(false);
   const [pauseKind, setPauseKind] = useState<"manual" | "timed" | null>(null);
   const [scheduleMode, setScheduleMode] = useState<MctbScheduleMode>("always_on");
   const [weeklySchedule, setWeeklySchedule] = useState<MctbWeeklySchedule>(
@@ -83,6 +85,10 @@ export function MctbScheduleView() {
   async function save() {
     setSaving(true);
     setMessage("");
+    setSavedWhilePaused(false);
+    const wasPaused =
+      pauseKind === "manual" ||
+      Boolean(pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date());
     try {
       let weekly: MctbWeeklySchedule | null =
         scheduleMode === "custom" ? weeklySchedule : null;
@@ -120,7 +126,11 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
-      setMessage("Schedule saved.");
+      if (wasPaused || json.data?.schedule?.paused) {
+        setSavedWhilePaused(true);
+      } else {
+        setMessage("Schedule saved.");
+      }
       await load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
@@ -243,6 +253,14 @@ export function MctbScheduleView() {
         </div>
       </Card>
 
+      {isPaused ? (
+        <MctbPausedNotice
+          pauseKind={pauseKind}
+          pauseUntil={pauseUntil}
+          variant="banner"
+        />
+      ) : null}
+
       <Card className="space-y-4 p-5">
         <h2 className="text-sm font-semibold">When to send text-backs</h2>
         <div className="flex flex-wrap gap-2">
@@ -327,9 +345,18 @@ export function MctbScheduleView() {
         ) : null}
       </Card>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save schedule"}</Button>
-        {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save schedule"}</Button>
+          {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
+        </div>
+        {savedWhilePaused ? (
+          <MctbPausedNotice
+            pauseKind={pauseKind}
+            pauseUntil={pauseUntil}
+            variant="saved"
+          />
+        ) : null}
       </div>
 
       <p className="text-sm text-muted-foreground">
