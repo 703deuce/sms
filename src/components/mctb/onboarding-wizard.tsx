@@ -183,23 +183,24 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     return () => clearInterval(timer);
   }, [step, load]);
 
-  useEffect(() => {
-    if (step !== "trial_number") return;
-    if (data?.trialNumber.provisioned || saving) return;
-    void (async () => {
-      setSaving(true);
-      try {
-        await fetch("/api/mctb/onboarding", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "provision_trial_number" }),
-        });
-        await load();
-      } finally {
-        setSaving(false);
-      }
-    })();
-  }, [step, data?.trialNumber.provisioned, saving, load]);
+  const provisionTrialNumber = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/mctb/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "provision_trial_number" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not assign production number");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not assign production number");
+    } finally {
+      setSaving(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     if (step !== "connect" && step !== "live_test") return;
@@ -389,14 +390,18 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             Now that you&apos;ve tried the demo, we assign your own Telnyx number for real
             missed-call recovery. You&apos;ll forward your business line to this number next.
           </p>
-          {saving || !data?.trialNumber.provisioned ? (
+          {saving ? (
             <div className="flex items-center gap-3 rounded-lg border p-4 text-sm text-muted-foreground">
-              {!data?.trialNumber.provisioned ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Assigning your toll-free number…
-                </>
-              ) : null}
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Assigning your production number…
+            </div>
+          ) : !data?.trialNumber.provisioned ? (
+            <div className="space-y-3 rounded-lg border p-4">
+              <p className="text-sm text-muted-foreground">
+                Assign a Telnyx number only when you are ready to use your own production line.
+                If you already have a number in MCTB setup, that saved number is used instead.
+              </p>
+              <Button onClick={() => void provisionTrialNumber()}>Assign my production number</Button>
             </div>
           ) : (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">

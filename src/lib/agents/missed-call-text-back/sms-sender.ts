@@ -1,55 +1,69 @@
 import { getPrisma } from "@/lib/db";
-import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { isMessagingSendAuthorized } from "@/lib/messaging/status";
+import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import type { MissedCallTextConfigRecord } from "./types";
 
 export type MctbSmsSender = {
   phoneNumberId: string;
   e164: string;
-  source: "sms_phone_number_id" | "messaging_registration" | "phone_number_id";
+  source: "sms_phone_number_id" | "phone_number_id";
 };
 
 /**
- * Resolve the SMS-capable sender for John MCTB.
- * Voice may ring on a toll-free (866); texts must go out from the A2P-registered local DID (571).
+ * Resolve a phone number saved in MCTB setup for this workspace.
+ * Includes workspace-owned DIDs and platform-demo lines assigned to the workspace.
+ */
+export async function resolveConfiguredMctbPhoneForWorkspace(
+  workspaceId: string,
+  phoneNumberId: string | null | undefined,
+): Promise<{ phoneNumberId: string; e164: string } | null> {
+  if (!phoneNumberId) return null;
+
+  const prisma = getPrisma();
+  const owned = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId, workspaceId },
+    select: { id: true, e164: true },
+  });
+  if (owned?.e164) {
+    return { phoneNumberId: owned.id, e164: owned.e164 };
+  }
+
+  const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
+  if (!authorized) return null;
+
+  const linked = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId },
+    select: { id: true, e164: true },
+  });
+  if (linked?.e164) {
+    return { phoneNumberId: linked.id, e164: linked.e164 };
+  }
+
+  return null;
+}
+
+/**
+ * Resolve the SMS sender for MCTB using only numbers saved in setup config.
+ * Never falls back to messagingRegistration or other workspace inventory.
  */
 export async function resolveMctbSmsSender(input: {
   workspaceId: string;
   config: Pick<MissedCallTextConfigRecord, "phoneNumberId" | "smsPhoneNumberId">;
 }): Promise<MctbSmsSender | null> {
-  const prisma = getPrisma();
-
-  const tryPhoneId = async (
-    phoneNumberId: string | null | undefined,
-    source: MctbSmsSender["source"],
-  ): Promise<MctbSmsSender | null> => {
-    if (!phoneNumberId) return null;
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { id: phoneNumberId, workspaceId: input.workspaceId },
-      select: { id: true, e164: true },
-    });
-    if (!pn?.e164) return null;
-    return { phoneNumberId: pn.id, e164: pn.e164, source };
-  };
-
-  const explicit = await tryPhoneId(input.config.smsPhoneNumberId, "sms_phone_number_id");
-  if (explicit) return explicit;
-
-  const reg = await getRegistrationByWorkspace(input.workspaceId);
-  if (reg?.phoneE164 && isMessagingSendAuthorized(reg)) {
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { workspaceId: input.workspaceId, e164: reg.phoneE164 },
-      select: { id: true, e164: true },
-    });
-    if (pn) {
-      return { phoneNumberId: pn.id, e164: pn.e164, source: "messaging_registration" };
-    }
-    return {
-      phoneNumberId: input.config.smsPhoneNumberId || input.config.phoneNumberId || "messaging_reg",
-      e164: reg.phoneE164,
-      source: "messaging_registration",
-    };
+  const fromSms = await resolveConfiguredMctbPhoneForWorkspace(
+    input.workspaceId,
+    input.config.smsPhoneNumberId,
+  );
+  if (fromSms) {
+    return { ...fromSms, source: "sms_phone_number_id" };
   }
 
-  return tryPhoneId(input.config.phoneNumberId, "phone_number_id");
+  const fromVoice = await resolveConfiguredMctbPhoneForWorkspace(
+    input.workspaceId,
+    input.config.phoneNumberId,
+  );
+  if (fromVoice) {
+    return { ...fromVoice, source: "phone_number_id" };
+  }
+
+  return null;
 }

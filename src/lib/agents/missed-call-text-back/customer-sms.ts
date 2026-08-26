@@ -84,7 +84,10 @@ export async function handleJohnCustomerSmsReply(input: {
     workspaceId: input.workspaceId,
     config,
   });
-  const fromE164 = sender?.e164 || input.toE164;
+  if (!sender?.e164) {
+    return { handled: false, reason: "no_configured_sms_sender" };
+  }
+  const fromE164 = sender.e164;
 
   await sendQuickSms({
     workspaceId: input.workspaceId,

@@ -332,15 +332,6 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      if (body.step === "trial_number") {
-        const provision = await provisionTrialMctbNumber(auth.workspaceId);
-        if (!provision.ok) {
-          return NextResponse.json(
-            { error: provision.error || "Could not assign production number", state },
-            { status: 400 },
-          );
-        }
-      }
       state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: body.step });
     }
 

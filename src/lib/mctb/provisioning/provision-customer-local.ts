@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { resolveConfiguredMctbPhoneForWorkspace } from "@/lib/agents/missed-call-text-back/sms-sender";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { telnyxProvider } from "@/lib/messaging/telnyx/provider";
 import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
@@ -36,6 +38,35 @@ export async function provisionMctbCustomerTelnyxLocalNumber(
 }> {
   const areaCode = input?.areaCode?.trim() || MCTB_DEFAULT_LOCAL_AREA_CODE;
   const prisma = getPrisma();
+
+  const runtime = await loadMissedCallTextConfig(workspaceId);
+  const configuredPhoneId = runtime.smsPhoneNumberId || runtime.phoneNumberId;
+  if (configuredPhoneId) {
+    const configured = await resolveConfiguredMctbPhoneForWorkspace(
+      workspaceId,
+      configuredPhoneId,
+    );
+    if (configured) {
+      const wired = await provisionMctbTelnyxSipIngress({
+        workspaceId,
+        phoneNumberId: configured.phoneNumberId,
+        messageTemplate: input?.messageTemplate,
+      });
+      if (!wired.ok) {
+        return { ok: false, error: wired.error, provisionActions: wired.actions };
+      }
+      const info: MctbTrialNumberInfo = {
+        e164: configured.e164,
+        phoneNumberId: configured.phoneNumberId,
+        provider: "telnyx",
+        numberType: "local",
+        voiceStatus: "ready",
+        messagingVerificationStatus: "not_started",
+        provisionedAt: new Date().toISOString(),
+      };
+      return { ok: true, trialNumber: info, provisionActions: wired.actions };
+    }
+  }
 
   const existing = await prisma.phoneNumber.findFirst({
     where: {
