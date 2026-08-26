@@ -157,6 +157,7 @@ const baseSettings: MctbScheduleSettings = {
   scheduleMode: "always_on",
   weeklySchedule: null,
   pauseUntil: null,
+  manuallyPaused: false,
 };
 
 const now = new Date("2026-08-25T12:00:00.000Z");

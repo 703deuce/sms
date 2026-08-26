@@ -1,6 +1,7 @@
 "use client";
 
 import { MctbWeeklyScheduleEditor } from "@/components/mctb/weekly-schedule-editor";
+import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
@@ -17,6 +18,8 @@ type SchedulePayload = {
   scheduleMode: MctbScheduleMode;
   weeklySchedule: MctbWeeklySchedule | null;
   pauseUntil: string | null;
+  manuallyPaused?: boolean;
+  pauseKind?: "manual" | "timed" | null;
   paused: boolean;
 };
 
@@ -24,7 +27,8 @@ export function MctbScheduleView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [enabled, setEnabled] = useState(true);
+  const [savedWhilePaused, setSavedWhilePaused] = useState(false);
+  const [pauseKind, setPauseKind] = useState<"manual" | "timed" | null>(null);
   const [scheduleMode, setScheduleMode] = useState<MctbScheduleMode>("always_on");
   const [weeklySchedule, setWeeklySchedule] = useState<MctbWeeklySchedule>(
     defaultWeeklySchedule(),
@@ -42,7 +46,7 @@ export function MctbScheduleView() {
       if (!res.ok || !json.data?.runtime) return;
       const r = json.data.runtime;
       const sch = json.data.schedule as SchedulePayload | undefined;
-      setEnabled(r.enabled);
+      setPauseKind(sch?.pauseKind ?? (sch?.paused ? "manual" : null));
       setTimezone(r.timezone || "America/New_York");
       setAllowedStartTime(r.allowedStartTime || "09:00");
       setAllowedEndTime(r.allowedEndTime || "17:00");
@@ -65,8 +69,10 @@ export function MctbScheduleView() {
   }, [load]);
 
   const statusLabel = useMemo(() => {
-    if (!enabled) return "Missed Call Text Back is PAUSED";
-    if (pauseUntil && new Date(pauseUntil) > new Date()) {
+    if (pauseKind === "manual") {
+      return "Missed Call Text Back is PAUSED until you resume";
+    }
+    if (pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date()) {
       return `Paused until ${new Date(pauseUntil).toLocaleString(undefined, {
         timeZone: timezone,
         dateStyle: "medium",
@@ -74,11 +80,15 @@ export function MctbScheduleView() {
       })}`;
     }
     return "Missed Call Text Back is ACTIVE";
-  }, [enabled, pauseUntil, timezone]);
+  }, [pauseKind, pauseUntil, timezone]);
 
   async function save() {
     setSaving(true);
     setMessage("");
+    setSavedWhilePaused(false);
+    const wasPaused =
+      pauseKind === "manual" ||
+      Boolean(pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date());
     try {
       let weekly: MctbWeeklySchedule | null =
         scheduleMode === "custom" ? weeklySchedule : null;
@@ -99,7 +109,6 @@ export function MctbScheduleView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          enabled,
           businessHoursOnly: scheduleMode === "business_hours",
           allowedStartTime:
             scheduleMode === "business_hours" || scheduleMode === "after_hours"
@@ -117,7 +126,11 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
-      setMessage("Schedule saved.");
+      if (wasPaused || json.data?.schedule?.paused) {
+        setSavedWhilePaused(true);
+      } else {
+        setMessage("Schedule saved.");
+      }
       await load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
@@ -139,6 +152,7 @@ export function MctbScheduleView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Pause failed");
       setPauseUntil(until);
+      setPauseKind("timed");
       setMessage(`Paused until ${new Date(until).toLocaleString()}.`);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Pause failed");
@@ -158,8 +172,8 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Pause failed");
-      setEnabled(false);
       setPauseUntil(null);
+      setPauseKind("manual");
       setMessage("Missed Call Text Back paused until you resume.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Pause failed");
@@ -179,8 +193,8 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Resume failed");
-      setEnabled(true);
       setPauseUntil(null);
+      setPauseKind(null);
       setMessage("Missed Call Text Back is active.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Resume failed");
@@ -201,7 +215,8 @@ export function MctbScheduleView() {
   ];
 
   const isPaused =
-    !enabled || Boolean(pauseUntil && new Date(pauseUntil) > new Date());
+    pauseKind === "manual" ||
+    Boolean(pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date());
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
@@ -237,6 +252,14 @@ export function MctbScheduleView() {
           )}
         </div>
       </Card>
+
+      {isPaused ? (
+        <MctbPausedNotice
+          pauseKind={pauseKind}
+          pauseUntil={pauseUntil}
+          variant="banner"
+        />
+      ) : null}
 
       <Card className="space-y-4 p-5">
         <h2 className="text-sm font-semibold">When to send text-backs</h2>
@@ -322,9 +345,18 @@ export function MctbScheduleView() {
         ) : null}
       </Card>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save schedule"}</Button>
-        {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save schedule"}</Button>
+          {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
+        </div>
+        {savedWhilePaused ? (
+          <MctbPausedNotice
+            pauseKind={pauseKind}
+            pauseUntil={pauseUntil}
+            variant="saved"
+          />
+        ) : null}
       </div>
 
       <p className="text-sm text-muted-foreground">
