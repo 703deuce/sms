@@ -7,7 +7,7 @@ import { useState } from "react";
 
 type Props = {
   label?: string;
-  variant?: "default" | "outline";
+  variant?: "primary" | "outline";
   className?: string;
 };
 
