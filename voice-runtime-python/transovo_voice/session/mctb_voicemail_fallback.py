@@ -71,6 +71,26 @@ async def run_mctb_voicemail_terminal(
             note="no_play_url_available_for_voicemail_greeting",
         )
 
+    from transovo_voice.session.sip_raw_audio import play_diagnostic_tone
+
+    beep_result = await play_diagnostic_tone(
+        ctx.room,
+        answer_session,
+        trace=trace,
+        sip_participant=participant,
+        sip_call_status=read_sip_call_status(participant),
+        duration_s=0.75,
+        frequency_hz=880,
+    )
+    trace.log(
+        "mctb_voicemail_beep_played",
+        terminalReason=terminal_reason,
+        beepOk=beep_result.ok,
+        framesWritten=beep_result.frames_written,
+        durationMs=beep_result.playback_duration_ms,
+        error=beep_result.error,
+    )
+
     from transovo_voice.session.mctb_voicemail_record import record_sip_voicemail_message
 
     trace.log(
@@ -82,6 +102,7 @@ async def run_mctb_voicemail_terminal(
     record_result = await record_sip_voicemail_message(
         backend,
         trace=trace,
+        room=ctx.room,
         participant=participant,
         session=session,
     )
