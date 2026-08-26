@@ -11,7 +11,6 @@ import { getCurrentProduct } from "@/lib/products/context";
 import { isVoiceShellRoute } from "@/lib/products/voice-routes";
 import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
 import { getVoicePageTitle } from "@/lib/products/voice-nav";
-import { getMassTextPageTitle } from "@/lib/products/mass-text-nav";
 import { getSmsPageTitle } from "@/lib/products/sms-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
@@ -78,13 +77,11 @@ export function AppShell({
     ? ""
     : isLauncher
       ? "Your Transovo Products"
-      : currentProduct === "numbers"
+        : currentProduct === "numbers"
         ? getNumbersPageTitle(pathname)
-        : currentProduct === "voice"
-          ? getVoicePageTitle(pathname)
-          : currentProduct === "sms"
-            ? getMassTextPageTitle(pathname) || getSmsPageTitle(pathname)
-            : getPageTitle(pathname);
+        : currentProduct === "voice" || currentProduct === "sms"
+          ? getVoicePageTitle(pathname) || getSmsPageTitle(pathname)
+          : getPageTitle(pathname);
 
   return (
     <div className="product-theme min-h-screen bg-background">

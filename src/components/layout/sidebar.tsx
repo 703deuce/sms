@@ -9,8 +9,6 @@ import {
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
-import { buildMassTextNav } from "@/lib/products/mass-text-nav";
-import { buildSmsNav } from "@/lib/products/sms-nav";
 import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isVoiceShellRoute } from "@/lib/products/voice-routes";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
@@ -316,34 +314,13 @@ export function Sidebar({
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
     }
-    const voiceOwnsShell = hasVoice && isVoiceShellRoute(pathname);
-    if (
-      currentProduct === "sms" ||
-      (hasSms && isSmsShellRoute(pathname) && !voiceOwnsShell)
-    ) {
-      const useMassTextNav =
-        productFeatures?.mass_texting === "active" ||
-        productFeatures?.mass_texting === "trial" ||
-        pathname.startsWith("/sms");
-      return useMassTextNav
-        ? buildMassTextNav({ inboxBadge })
-        : buildSmsNav({ inboxBadge });
-    }
-    if (currentProduct === "voice" || hasVoice) {
-      return buildVoiceNav({
-        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
-        showTryIt,
-        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
-        productFeatures,
-        showBillingNav: true,
-      });
-    }
     return buildVoiceNav({
       primaryVoiceAgentId: primaryVoiceAgentId ?? null,
       showTryIt,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       productFeatures,
       showBillingNav: true,
+      inboxBadge,
     });
   }, [
     primaryVoiceAgentId,
@@ -354,8 +331,6 @@ export function Sidebar({
     currentProduct,
     isLauncher,
     inboxBadge,
-    hasVoice,
-    hasSms,
   ]);
 
   useEffect(() => {

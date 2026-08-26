@@ -28,6 +28,7 @@ import {
 import { isActiveEntitlement } from "@/lib/products/types";
 import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 import { isMctbFocusedCustomerNav } from "@/lib/products/mctb-focused-nav";
+import { buildMassTextNav } from "@/lib/products/mass-text-nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
@@ -35,6 +36,7 @@ export type VoiceNavOptions = {
   smartRoutingFlowId?: string | null;
   productFeatures?: WorkspaceFeatureSnapshot | null;
   showBillingNav?: boolean;
+  inboxBadge?: number;
 };
 
 function featureActive(
@@ -143,6 +145,10 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     }
   }
 
+  if (featureActive(features, "mass_texting", false)) {
+    items.push(...buildMassTextNav({ inboxBadge: options.inboxBadge ?? 0 }));
+  }
+
   if (!mctbFocused) {
     items.push(...buildLegacyProductNav(features));
   }
@@ -191,6 +197,16 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
 }
 
 export function getVoicePageTitle(pathname: string): string {
+  if (pathname === "/sms" || pathname.startsWith("/sms/")) {
+    if (pathname.startsWith("/sms/analytics")) return "Analytics";
+    if (pathname.startsWith("/sms/compliance")) return "Compliance";
+    if (pathname.startsWith("/sms/settings")) return "Settings";
+    if (pathname.startsWith("/sms/campaigns")) return "Campaigns";
+    return "Mass Texting";
+  }
+  if (pathname.startsWith("/campaigns")) return "Campaigns";
+  if (pathname.startsWith("/templates")) return "Templates";
+  if (pathname.startsWith("/contacts/lists")) return "Lists";
   if (pathname === "/dashboard" || pathname === "/outcomes") return "";
   if (pathname.startsWith("/voice/try-it")) return "Try It";
   if (pathname.startsWith("/inbox")) return "Conversations";
@@ -252,6 +268,14 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     if (options.showTryIt) {
       items.push({ label: "Try It", href: "/voice/try-it" });
     }
+  }
+
+  if (featureActive(features, "mass_texting", false)) {
+    items.push(
+      { label: "Mass Text", href: "/sms" },
+      { label: "Campaigns", href: "/campaigns" },
+      { label: "Lists", href: "/contacts/lists" },
+    );
   }
 
   if (!mctbFocused && featureActive(features, "smart_routing", false)) {

@@ -57,6 +57,23 @@ assert.ok(!srOnly.some((i) => i.label === "Missed Calls"));
 assert.ok(srOnly.some((i) => i.href === "/smart-routing" && i.label === "Overview"));
 assert.ok(srOnly.some((i) => i.label === "Analytics" && i.href === "/smart-routing/analytics"));
 
+const massTextUnified = buildVoiceNav({
+  productFeatures: {
+    mctb: "active",
+    mass_texting: "active",
+    smart_routing: "inactive",
+    call_forwarding: "inactive",
+    visual_voicemail: "inactive",
+    callback_requests: "inactive",
+    ai_transcription: "inactive",
+  },
+});
+const mtLabels = massTextUnified.map((i) => i.label);
+assert.ok(mtLabels.includes("Overview"), "Mass Texting overview on MCTB menu");
+assert.ok(mtLabels.includes("Campaigns"), "Mass Texting campaigns on MCTB menu");
+assert.ok(mtLabels.includes("Missed Calls"), "MCTB items remain on unified menu");
+assert.ok(massTextUnified.some((i) => i.sectionLabel === "Mass Texting"));
+
 assert.ok(listPlatformPurchasableProducts().length >= 8);
 
 const tmpl = resolveMctbMessageTemplate({
