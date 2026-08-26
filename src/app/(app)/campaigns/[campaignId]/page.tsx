@@ -193,6 +193,10 @@ export default async function CampaignDetailPage({
         ) : null}
       </div>
 
+      <div className="mb-6">
+        <CampaignLaunchReview campaignId={campaignId} status={campaign.status} />
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
           <Card>
