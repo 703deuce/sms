@@ -115,11 +115,26 @@ enum ProductAccessStatus {
 /// Transovo product features (MCTB, Smart Routing, add-ons) — workspace-scoped.
 enum WorkspaceProductFeatureKey {
   MCTB
+  MASS_TEXTING
   SMART_ROUTING
   CALL_FORWARDING
   VISUAL_VOICEMAIL
   CALLBACK_REQUESTS
   AI_TRANSCRIPTION
+}
+
+/// Shared inbox product discriminator (MCTB vs Mass Texting vs manual).
+enum ConversationProductSource {
+  MCTB
+  MASS_TEXT
+  MANUAL
+  AUTOMATION
+}
+
+/// Separate A2P/messaging registration profiles per product use case.
+enum MessagingProductUseCase {
+  MCTB_CUSTOMER_CARE
+  MASS_TEXT_MARKETING
 }
 
 model User {
@@ -199,6 +214,9 @@ model Workspace {
   complianceCampaign ComplianceCampaign?
   messagingRegistration MessagingRegistration?
   messagingRegistrationEvents MessagingRegistrationEvent[]
+  messagingProductRegistrations MessagingProductRegistration[]
+  listImportAttestations ListImportAttestation[]
+  campaignLaunchAudits CampaignLaunchAudit[]
   campaignRecipients CampaignRecipient[]
   campaignMessages CampaignMessage[]
   suppressions Suppression[]
@@ -1175,6 +1193,91 @@ model MessagingRegistrationEvent {
   @@map("messaging_registration_events")
 }
 
+/// Per-product A2P/messaging profile (MCTB customer care vs Mass Text marketing).
+model MessagingProductRegistration {
+  id                        String                  @id @default(cuid())
+  workspaceId               String
+  productUseCase            MessagingProductUseCase
+  overallStatus             MessagingStepStatus     @default(not_started)
+  messagingEnabled          Boolean                 @default(false)
+  paused                    Boolean                 @default(false)
+  messagingProvider         String?
+  messagingProfileId        String?
+  phoneNumberId             String?
+  brandId                   String?
+  campaignId                String?
+  brandStatusRaw            String?
+  campaignStatusRaw         String?
+  phoneE164                 String?
+  phoneAttached             Boolean                 @default(false)
+  useCaseDescription        String?
+  sampleMessages            String[]                @default([])
+  optInDescription          String?
+  helpMessage               String?
+  stopMessage               String?
+  campaignDisplayName       String?
+  registrationSubmittedAt   DateTime?
+  registrationApprovedAt    DateTime?
+  trialStartedAt            DateTime?
+  trialEndsAt               DateTime?
+  registrationFailureReason String?
+  certifiedAt               DateTime?
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+
+  workspace                 Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, productUseCase])
+  @@index([workspaceId, overallStatus])
+  @@map("messaging_product_registrations")
+}
+
+/// Customer attestation for imported marketing lists (not legal consent — records representation).
+model ListImportAttestation {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  userId             String?
+  listId             String?
+  listName           String?
+  contactCount       Int      @default(0)
+  attestationVersion String   @default("mass_text_list_v1")
+  attestationText    String
+  source             String   @default("csv_import")
+  createdAt          DateTime @default(now())
+
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("list_import_attestations")
+}
+
+/// Pre-send confirmation + idempotency for campaign launches.
+model CampaignLaunchAudit {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  campaignId          String
+  launchedByUserId    String?
+  idempotencyKey      String
+  rawContactCount     Int      @default(0)
+  duplicateRemoved    Int      @default(0)
+  invalidRemoved      Int      @default(0)
+  suppressedRemoved   Int      @default(0)
+  finalRecipientCount Int      @default(0)
+  estimatedSegments   Int      @default(0)
+  estimatedCreditsCents Int    @default(0)
+  phoneNumberId       String?
+  phoneE164           String?
+  scheduledAt         DateTime?
+  confirmedAt         DateTime @default(now())
+  metadata            Json?
+
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([campaignId, confirmedAt])
+  @@map("campaign_launch_audits")
+}
+
 model CampaignRecipient {
   id             String                  @id @default(cuid())
   workspaceId    String
@@ -1322,19 +1425,28 @@ model IntegrationWebhookEvent {
 }
 
 model Conversation {
-  id          String             @id @default(cuid())
-  workspaceId String
-  contactId   String
-  assigneeId  String?
-  status      ConversationStatus @default(OPEN)
-  tags        String[]
-  unread      Boolean            @default(true)
-  updatedAt   DateTime           @updatedAt
-  createdAt   DateTime           @default(now())
-  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact     Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  assignee    User?              @relation("Assignee", fields: [assigneeId], references: [id])
-  messages    ConversationMessage[]
+  id                 String                     @id @default(cuid())
+  workspaceId        String
+  contactId          String
+  assigneeId         String?
+  status             ConversationStatus         @default(OPEN)
+  tags               String[]
+  unread             Boolean                    @default(true)
+  productSource      ConversationProductSource?
+  phoneNumberId      String?
+  fromE164           String?
+  campaignId         String?
+  missedCallEventId  String?
+  updatedAt          DateTime                   @updatedAt
+  createdAt          DateTime                   @default(now())
+  workspace          Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact            Contact                    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignee           User?                      @relation("Assignee", fields: [assigneeId], references: [id])
+  messages           ConversationMessage[]
+
+  @@index([workspaceId, productSource, updatedAt])
+  @@index([workspaceId, phoneNumberId, updatedAt])
+  @@index([workspaceId, campaignId])
 }
 
 model ConversationMessage {
@@ -1344,6 +1456,8 @@ model ConversationMessage {
   body              String
   userName          String?
   providerMessageId String?  @unique
+  fromE164          String?
+  campaignMessageId String?
   createdAt         DateTime @default(now())
   conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

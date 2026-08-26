@@ -11,6 +11,7 @@ import {
 /** Transovo sellable product features (workspace-scoped). */
 export type TransovoProductFeature =
   | "mctb"
+  | "mass_texting"
   | "smart_routing"
   | "call_forwarding"
   | "visual_voicemail"
@@ -19,6 +20,7 @@ export type TransovoProductFeature =
 
 const FEATURE_KEYS: TransovoProductFeature[] = [
   "mctb",
+  "mass_texting",
   "smart_routing",
   "call_forwarding",
   "visual_voicemail",
@@ -28,9 +30,16 @@ const FEATURE_KEYS: TransovoProductFeature[] = [
 
 const PRISMA_FEATURE_MAP: Record<
   TransovoProductFeature,
-  "MCTB" | "SMART_ROUTING" | "CALL_FORWARDING" | "VISUAL_VOICEMAIL" | "CALLBACK_REQUESTS" | "AI_TRANSCRIPTION"
+  | "MCTB"
+  | "MASS_TEXTING"
+  | "SMART_ROUTING"
+  | "CALL_FORWARDING"
+  | "VISUAL_VOICEMAIL"
+  | "CALLBACK_REQUESTS"
+  | "AI_TRANSCRIPTION"
 > = {
   mctb: "MCTB",
+  mass_texting: "MASS_TEXTING",
   smart_routing: "SMART_ROUTING",
   call_forwarding: "CALL_FORWARDING",
   visual_voicemail: "VISUAL_VOICEMAIL",
@@ -48,6 +57,7 @@ export type FeatureEntitlementOptions = {
 function allActiveSnapshot(): WorkspaceFeatureSnapshot {
   return {
     mctb: "active",
+    mass_texting: "active",
     smart_routing: "active",
     call_forwarding: "active",
     visual_voicemail: "active",
@@ -59,6 +69,7 @@ function allActiveSnapshot(): WorkspaceFeatureSnapshot {
 function defaultSnapshot(): WorkspaceFeatureSnapshot {
   return {
     mctb: "inactive",
+    mass_texting: "inactive",
     smart_routing: "inactive",
     call_forwarding: "inactive",
     visual_voicemail: "inactive",
@@ -95,6 +106,7 @@ export function defaultFeaturesForWorkspaceType(
   }
   return [
     { feature: "mctb", status: "inactive" },
+    { feature: "mass_texting", status: "inactive" },
     { feature: "smart_routing", status: "inactive" },
     { feature: "call_forwarding", status: "inactive" },
     { feature: "visual_voicemail", status: "inactive" },
@@ -311,6 +323,8 @@ export async function getWorkspaceProductFeatures(
       const mapped =
         row.featureKey === "MCTB"
           ? "mctb"
+          : row.featureKey === "MASS_TEXTING"
+            ? "mass_texting"
           : row.featureKey === "SMART_ROUTING"
             ? "smart_routing"
             : row.featureKey === "CALL_FORWARDING"

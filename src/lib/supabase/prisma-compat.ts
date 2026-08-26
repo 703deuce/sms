@@ -70,6 +70,9 @@ const MODEL_TO_TABLE: Record<string, string> = {
   message: "Message",
   messagingRegistration: "messaging_registrations",
   messagingRegistrationEvent: "messaging_registration_events",
+  messagingProductRegistration: "messaging_product_registrations",
+  listImportAttestation: "list_import_attestations",
+  campaignLaunchAudit: "campaign_launch_audits",
   campaignRecipient: "campaign_recipients",
   campaignMessage: "campaign_messages",
   suppression: "review_request_suppression",
@@ -371,6 +374,15 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
     contact: { table: "Contact", fk: "contactId" },
     assignee: { table: "User", fk: "assigneeId" },
+  },
+  messagingProductRegistration: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  listImportAttestation: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  campaignLaunchAudit: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
   },
   qrCode: { workspace: { table: "Workspace", fk: "workspaceId" } },
   clickToTextLink: { workspace: { table: "Workspace", fk: "workspaceId" } },
