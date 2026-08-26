@@ -6,11 +6,10 @@ import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/sa
 import { grantProductEntitlement } from "@/lib/products/entitlements";
 import {
   getPlatformDemoPhoneRecord,
-  linkWorkspaceToPlatformDemoNumber,
   readAdminTestWorkspaceIds,
 } from "@/lib/mctb/platform-demo-access";
+import { ensureMctbTenantProductionBinding } from "@/lib/mctb/tenant-production-binding";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { saveMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 
 export type AdminMctbBootstrapResult = {
@@ -90,13 +89,15 @@ export async function bootstrapAdminMctbTestAccount(input: {
   const businessLineE164 = businessLineFromEnv();
   const limits = await prisma.workspaceLimits.findUnique({ where: { workspaceId: input.workspaceId } });
 
-  const link = await linkWorkspaceToPlatformDemoNumber({
+  const link = await ensureMctbTenantProductionBinding({
     workspaceId: input.workspaceId,
     userEmail: input.userEmail || user.email,
+    phoneNumberId: pn.phoneNumberId,
+    businessLineE164,
   });
 
   await saveMissedCallTextBack(input.workspaceId, {
-    phoneNumberId: link.phoneNumberId,
+    phoneNumberId: pn.phoneNumberId,
     initialDelayMinutes: 0,
     initialDelaySeconds: 0,
     firstMessage: "Sorry we missed your call! Reply here and we'll get back to you shortly.",
@@ -110,8 +111,8 @@ export async function bootstrapAdminMctbTestAccount(input: {
     patch: {
       enabled: true,
       delay_seconds: 0,
-      phone_number_id: link.phoneNumberId,
-      sms_phone_number_id: link.phoneNumberId,
+      phone_number_id: pn.phoneNumberId,
+      sms_phone_number_id: pn.phoneNumberId,
     },
     source: "admin_test_bootstrap",
   });
@@ -127,14 +128,6 @@ export async function bootstrapAdminMctbTestAccount(input: {
   const mctb = asRecord(cfg.mctb);
   const nowIso = new Date().toISOString();
 
-  if (businessLineE164) {
-    await saveMctbOnboardingState(input.workspaceId, {
-      businessNumberE164: businessLineE164,
-      forwardingConnectedAt: nowIso,
-      forwardingTestStartedAt: nowIso,
-    });
-  }
-
   const productionForwardTargetE164 = await getProductionMctbForwardTargetE164(
     input.workspaceId,
   );
@@ -142,7 +135,7 @@ export async function bootstrapAdminMctbTestAccount(input: {
   await prisma.workspace.update({
     where: { id: input.workspaceId },
     data: {
-      activeFromNumberId: link.phoneNumberId,
+      activeFromNumberId: pn.phoneNumberId,
       customFieldsConfig: {
         ...cfg,
         mctb: {
@@ -192,7 +185,13 @@ export async function bootstrapAdminMctbTestAccount(input: {
   const refreshedPn = await getPlatformDemoPhoneRecord();
 
   return {
-    link,
+    link: {
+      phoneNumberId: pn.phoneNumberId,
+      e164: pn.e164,
+      ownerWorkspaceId: pn.ownerWorkspaceId,
+      linkedWorkspaceId: input.workspaceId,
+      alreadyLinked: link.platformDemoLinked,
+    },
     runtime: {
       phoneNumberId: runtime?.phoneNumberId,
       enabled: runtime?.enabled,

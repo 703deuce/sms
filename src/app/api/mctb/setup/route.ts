@@ -322,6 +322,18 @@ export async function POST(req: Request) {
         ? (customCfg.mctb as Record<string, unknown>)
         : {};
 
+    if (body.consentMode) {
+      if (
+        body.consentMode === "existing_consent" &&
+        body.existingConsentAttested !== true
+      ) {
+        return NextResponse.json(
+          { error: "Existing consent attestation is required" },
+          { status: 400 },
+        );
+      }
+    }
+
     if (body.businessLineE164?.trim()) {
       const { saveMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
       await saveMctbOnboardingState(workspaceId, {
@@ -362,15 +374,6 @@ export async function POST(req: Request) {
     }
 
     if (body.consentMode) {
-      if (
-        body.consentMode === "existing_consent" &&
-        body.existingConsentAttested !== true
-      ) {
-        return NextResponse.json(
-          { error: "Existing consent attestation is required" },
-          { status: 400 },
-        );
-      }
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
       await syncMctbConsentRouting(workspaceId, session.userId).catch(() => undefined);
 
@@ -393,12 +396,23 @@ export async function POST(req: Request) {
     }
   }
 
+  const { ensureMctbTenantProductionBinding } = await import(
+    "@/lib/mctb/tenant-production-binding"
+  );
+  const tenantBinding = await ensureMctbTenantProductionBinding({
+    workspaceId,
+    userEmail: session.email,
+    phoneNumberId: body.phoneNumberId ?? runtimeResult.config.phoneNumberId,
+    businessLineE164: body.businessLineE164,
+  });
+
   return NextResponse.json({
     ok: true,
     data: {
       runtime: runtimeResult.config,
       solution: saved,
       sipProvision,
+      tenantBinding,
     },
   });
 }

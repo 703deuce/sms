@@ -85,6 +85,16 @@ assert.match(
   "session resolver must load voicemail for existing_consent and paused automation",
 );
 
+const targetSrc = readFileSync(
+  resolve("src/lib/mctb/onboarding/demo-workspace-target.ts"),
+  "utf8",
+);
+assert.match(
+  targetSrc,
+  /resolveLinkedPlatformDemoTenantWorkspace/,
+  "platform demo routing must use linked tenant workspaces",
+);
+
 assert.match(
   productionSrc,
   /run_mctb_voicemail_terminal/,

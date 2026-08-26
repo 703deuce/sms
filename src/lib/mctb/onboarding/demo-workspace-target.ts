@@ -28,10 +28,10 @@ async function resolvePlatformDemoTarget(input: {
       input.forwardedFrom,
     )) ||
     (await (async () => {
-      const { resolveAdminProductionWorkspaceForPlatformDemoInbound } = await import(
-        "@/lib/mctb/platform-production-routing"
+      const { resolveLinkedPlatformDemoTenantWorkspace } = await import(
+        "@/lib/mctb/tenant-production-binding"
       );
-      return resolveAdminProductionWorkspaceForPlatformDemoInbound();
+      return resolveLinkedPlatformDemoTenantWorkspace(input.transovoE164);
     })()) ||
     (await resolvePhoneOwnerWorkspace(input.transovoE164)) ||
     input.fallbackWorkspaceId;
