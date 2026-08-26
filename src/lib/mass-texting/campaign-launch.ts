@@ -2,6 +2,8 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { buildPreSendReview } from "@/lib/mass-texting/pre-send-review";
+import { reserveSegmentsForCampaign, releaseReservation } from "@/lib/mass-texting/credit-accounting";
+import { emitMassTextOpsEvent } from "@/lib/mass-texting/ops-events";
 
 export type CampaignLaunchResult =
   | { ok: true; campaignId: string; auditId: string; idempotentReplay?: boolean }
@@ -55,6 +57,27 @@ export async function launchCampaignWithAudit(input: {
     return { ok: false, error: "Campaign is already sending" };
   }
 
+  const { assertMassTextMarketingSendAllowed } = await import(
+    "@/lib/mass-texting/a2p-enforcement"
+  );
+  const a2pGate = await assertMassTextMarketingSendAllowed(input.workspaceId);
+  if (!a2pGate.allowed) {
+    return { ok: false, error: a2pGate.reason || "Mass Texting A2P not ready" };
+  }
+
+  const { refreshMassTextingTrialState } = await import("@/lib/mass-texting/trial-lifecycle");
+  await refreshMassTextingTrialState(input.workspaceId);
+
+  const reservation = await reserveSegmentsForCampaign({
+    workspaceId: input.workspaceId,
+    campaignId: input.campaignId,
+    segments: review.estimatedSegments,
+    idempotencyKey: `reserve:${input.idempotencyKey}`,
+  });
+  if (!reservation.ok) {
+    return { ok: false, error: reservation.error };
+  }
+
   const audit = await prisma.campaignLaunchAudit.create({
     data: {
       workspaceId: input.workspaceId,
@@ -67,6 +90,7 @@ export async function launchCampaignWithAudit(input: {
       suppressedRemoved: review.suppressedRemoved,
       finalRecipientCount: review.finalRecipientCount,
       estimatedSegments: review.estimatedSegments,
+      estimatedCreditsCents: review.estimatedSegments,
       phoneNumberId: review.phoneNumberId,
       phoneE164: review.phoneE164,
       scheduledAt: review.scheduledAt ? new Date(review.scheduledAt) : null,
@@ -87,6 +111,7 @@ export async function launchCampaignWithAudit(input: {
     data: { status: "SENDING" },
   });
   if (updated.count !== 1) {
+    await releaseReservation(reservation.reservationId, "launch_status_race");
     return { ok: false, error: "Campaign could not be started (status changed)" };
   }
 
@@ -98,15 +123,16 @@ export async function launchCampaignWithAudit(input: {
   }
 
   try {
-    const { emitPlatformEvent } = await import("@/lib/platform/events");
-    await emitPlatformEvent({
+    await emitMassTextOpsEvent({
       workspaceId: input.workspaceId,
-      type: "MASS_TEXT_CAMPAIGN_LAUNCHED",
+      eventType: "mass_text.campaign_launched",
       campaignId: input.campaignId,
       idempotencyKey: input.idempotencyKey,
       payload: {
         auditId: audit.id,
         finalRecipientCount: review.finalRecipientCount,
+        reservedSegments: reservation.reserved,
+        reservationId: reservation.reservationId,
       },
     });
   } catch {

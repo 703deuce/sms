@@ -73,6 +73,9 @@ const MODEL_TO_TABLE: Record<string, string> = {
   messagingProductRegistration: "messaging_product_registrations",
   listImportAttestation: "list_import_attestations",
   campaignLaunchAudit: "campaign_launch_audits",
+  massTextingBillingAccount: "mass_texting_billing_accounts",
+  massTextingCreditReservation: "mass_texting_credit_reservations",
+  massTextingBillingEvent: "mass_texting_billing_events",
   campaignRecipient: "campaign_recipients",
   campaignMessage: "campaign_messages",
   suppression: "review_request_suppression",
@@ -382,6 +385,16 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   campaignLaunchAudit: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  massTextingBillingAccount: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  massTextingCreditReservation: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    billingAccount: { table: "mass_texting_billing_accounts", fk: "billingAccountId" },
+  },
+  massTextingBillingEvent: {
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   qrCode: { workspace: { table: "Workspace", fk: "workspaceId" } },

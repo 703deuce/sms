@@ -137,6 +137,32 @@ enum MessagingProductUseCase {
   MASS_TEXT_MARKETING
 }
 
+/// Mass Texting billing lifecycle (trial → paid production).
+enum MassTextingLifecycleState {
+  TRIAL_PENDING_A2P
+  TRIAL_ACTIVE
+  TRIAL_LIMIT_REACHED
+  TRIAL_EXPIRED
+  CONVERSION_SELECTED
+  PAYMENT_REQUIRED
+  PRODUCTION_A2P_PENDING
+  PRODUCTION_ACTIVE
+  CANCELED
+}
+
+enum MassTextA2pFeeStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  WAIVED
+}
+
+enum MassTextCreditReservationStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+}
+
 model User {
   id                  String       @id @default(cuid())
   email               String       @unique
@@ -217,6 +243,9 @@ model Workspace {
   messagingProductRegistrations MessagingProductRegistration[]
   listImportAttestations ListImportAttestation[]
   campaignLaunchAudits CampaignLaunchAudit[]
+  massTextingBillingAccount MassTextingBillingAccount?
+  massTextingCreditReservations MassTextingCreditReservation[]
+  massTextingBillingEvents MassTextingBillingEvent[]
   campaignRecipients CampaignRecipient[]
   campaignMessages CampaignMessage[]
   suppressions Suppression[]
@@ -1276,6 +1305,73 @@ model CampaignLaunchAudit {
   @@unique([workspaceId, idempotencyKey])
   @@index([campaignId, confirmedAt])
   @@map("campaign_launch_audits")
+}
+
+/// Mass Texting billing account — trial, monthly allowance, PAYG credits, lifecycle.
+model MassTextingBillingAccount {
+  id                      String                    @id @default(cuid())
+  workspaceId             String                    @unique
+  lifecycleState          MassTextingLifecycleState @default(TRIAL_PENDING_A2P)
+  billingModel            String?
+  monthlyPlanTier         String?
+  monthlySegmentsIncluded Int                       @default(0)
+  monthlySegmentsUsed     Int                       @default(0)
+  paygCreditsSegments     Int                       @default(0)
+  paygLineActive          Boolean                   @default(false)
+  a2pFeeStatus            MassTextA2pFeeStatus      @default(PENDING)
+  trialSegmentsUsed       Int                       @default(0)
+  trialStartedAt          DateTime?
+  trialEndsAt             DateTime?
+  billingPeriodStart      DateTime?
+  billingPeriodEnd        DateTime?
+  stripeSubscriptionId    String?
+  additionalNumbers       Int                       @default(0)
+  pricingVersion          Int                       @default(1)
+  metadataJson            Json?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  workspace               Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reservations            MassTextingCreditReservation[]
+
+  @@index([lifecycleState])
+  @@map("mass_texting_billing_accounts")
+}
+
+/// Atomic segment reservations before campaign launch.
+model MassTextingCreditReservation {
+  id               String                         @id @default(cuid())
+  workspaceId      String
+  billingAccountId String
+  campaignId       String
+  reservedSegments Int
+  status           MassTextCreditReservationStatus @default(ACTIVE)
+  idempotencyKey   String                         @unique
+  expiresAt        DateTime?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+
+  workspace        Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  billingAccount   MassTextingBillingAccount      @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, campaignId])
+  @@index([billingAccountId, status])
+  @@map("mass_texting_credit_reservations")
+}
+
+/// Idempotent Mass Texting Stripe/billing webhook events.
+model MassTextingBillingEvent {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  stripeEventId   String   @unique
+  eventType       String
+  payload         Json?
+  processedAt     DateTime @default(now())
+
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, processedAt])
+  @@map("mass_texting_billing_events")
 }
 
 model CampaignRecipient {

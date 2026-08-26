@@ -10,6 +10,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { numberTabs } from "@/lib/number-tabs";
+import { labelPhoneNumberForProducts } from "@/lib/mass-texting/number-labels";
 import { requireWorkspaceContext, loadPhoneNumbers } from "@/lib/workspace-data";
 import { cn, formatCurrency, formatPhone } from "@/lib/utils";
 import {
@@ -143,6 +144,7 @@ export default async function NumbersPage() {
                 <TH>Number</TH>
                 <TH>Friendly name</TH>
                 <TH>Type</TH>
+                <TH>Product</TH>
                 <TH>A2P status</TH>
                 <TH>Messaging service</TH>
                 <TH>Assigned</TH>
@@ -152,7 +154,9 @@ export default async function NumbersPage() {
               </TR>
             </THead>
             <TBody>
-              {phoneNumbers.map((pn, index) => (
+              {phoneNumbers.map((pn, index) => {
+                const productLabel = labelPhoneNumberForProducts(pn);
+                return (
                 <TR key={pn.id}>
                   <TD>
                     <Link
@@ -189,6 +193,19 @@ export default async function NumbersPage() {
                     </div>
                   </TD>
                   <TD className="text-[13px] text-muted-foreground">{pn.type}</TD>
+                  <TD>
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        productLabel.primary === "mctb" && "bg-blue-100 text-blue-800",
+                        productLabel.primary === "mass_text" && "bg-teal-100 text-teal-800",
+                        productLabel.primary === "shared" && "bg-violet-100 text-violet-800",
+                        productLabel.primary === "unassigned" && "bg-slate-100 text-slate-600",
+                      )}
+                    >
+                      {productLabel.shortLabel}
+                    </span>
+                  </TD>
                   <TD>
                     <div className="space-y-1">
                       <StatusChip status={pn.a2pStatus} />
@@ -249,7 +266,8 @@ export default async function NumbersPage() {
                     </button>
                   </TD>
                 </TR>
-              ))}
+              );
+              })}
             </TBody>
           </Table>
         )}

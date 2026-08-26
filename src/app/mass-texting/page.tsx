@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MassTextingPricingSection } from "@/components/mass-texting/mass-texting-pricing-section";
 import { BRAND_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
 
@@ -50,7 +51,23 @@ const FAQ = [
   },
   {
     q: "How does the free trial work?",
-    a: "Start with a Telnyx Platform Free Trial campaign, sending number, and finite trial window once messaging is active.",
+    a: "14 days and 100 SMS segments, no credit card. Your trial begins when your business messaging is approved and activated — not at signup.",
+  },
+  {
+    q: "Is there an A2P registration fee?",
+    a: "$20 one time on Starter, Growth, and smaller PAYG packs. Included on Pro and larger plans/packs (2,500+ segments).",
+  },
+  {
+    q: "Why does PAYG have a monthly Messaging Line fee?",
+    a: "Your dedicated number and carrier registration stay active even in months when you do not buy message packs.",
+  },
+  {
+    q: "Do you charge per message or segment?",
+    a: "SMS usage is based on billable message segments. Long messages may use multiple segments.",
+  },
+  {
+    q: "Do unused monthly messages roll over?",
+    a: "No — monthly included segments reset each billing cycle.",
   },
 ];
 
@@ -128,14 +145,7 @@ export default function MassTextingLandingPage() {
         </div>
       </section>
 
-      <section className="border-t border-slate-200 bg-white py-16">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <h2 className="text-2xl font-bold">No integrations required</h2>
-          <p className="mt-3 text-slate-600">
-            Bring your list. We handle the texting. Monthly plans and pay-as-you-go credits supported.
-          </p>
-        </div>
-      </section>
+      <MassTextingPricingSection />
 
       <section className="mx-auto max-w-3xl px-6 py-16">
         <h2 className="text-2xl font-bold">FAQ</h2>

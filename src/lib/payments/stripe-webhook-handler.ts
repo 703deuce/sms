@@ -54,6 +54,13 @@ function checkoutTransactionType(session: Stripe.Checkout.Session) {
 
 async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   const tx = checkoutTransactionType(session);
+  const metadata = (session.metadata || {}) as Record<string, string | undefined>;
+  const { isMassTextingCheckoutMetadata, handleMassTextingCheckoutCompleted } = await import(
+    "@/lib/mass-texting/stripe-webhook"
+  );
+  if (isMassTextingCheckoutMetadata(metadata)) {
+    return handleMassTextingCheckoutCompleted(session);
+  }
   const platformProductKey = session.metadata?.platformProductKey;
   const platformWorkspaceId = session.metadata?.workspaceId;
   if (platformProductKey && platformWorkspaceId) {
@@ -168,6 +175,12 @@ async function routeInvoiceFailed(invoice: Stripe.Invoice) {
 }
 
 async function processStripeEvent(event: Stripe.Event) {
+  const { handleMassTextingStripeEvent } = await import("@/lib/mass-texting/stripe-webhook");
+  const massTextResult = await handleMassTextingStripeEvent(event);
+  if (massTextResult.handled) {
+    return { subsystem: "mass_texting" as const };
+  }
+
   const obj = event.data.object as unknown as Record<string, unknown>;
 
   switch (event.type) {

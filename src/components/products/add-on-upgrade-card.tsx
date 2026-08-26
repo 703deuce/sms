@@ -11,6 +11,11 @@ const FEATURE_COPY: Record<
     description: "Recover missed calls with automated text-back.",
     upgradeParam: "mctb",
   },
+  mass_texting: {
+    title: "Mass Texting",
+    description: "Upload contacts, send campaigns, and manage replies in one inbox.",
+    upgradeParam: "mass_texting",
+  },
   smart_routing: {
     title: "Smart Routing",
     description: "Route inbound calls to your team with menus and schedules.",
