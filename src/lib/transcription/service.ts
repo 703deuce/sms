@@ -16,16 +16,22 @@ export async function enqueueTranscriptionJob(input: {
   provider?: string;
   durationSeconds?: number | null;
   diarize?: boolean;
+  /** Voicemail clips are short — skip paid add-on gates when true. */
+  bypassEntitlement?: boolean;
 }): Promise<{ queued: boolean; reason?: string }> {
-  const gate = await canTranscribeRecording({
-    workspaceId: input.workspaceId,
-    estimatedMinutes: input.durationSeconds
-      ? Math.max(1, Math.ceil(input.durationSeconds / 60))
-      : 1,
-  });
-  if (!gate.allowed) {
-    await markTranscriptionSkipped(input.sourceType, input.sourceId, gate.reason || "skipped");
-    return { queued: false, reason: gate.reason };
+  const skipEntitlement =
+    input.bypassEntitlement === true || input.sourceType === "voicemail_message";
+  if (!skipEntitlement) {
+    const gate = await canTranscribeRecording({
+      workspaceId: input.workspaceId,
+      estimatedMinutes: input.durationSeconds
+        ? Math.max(1, Math.ceil(input.durationSeconds / 60))
+        : 1,
+    });
+    if (!gate.allowed) {
+      await markTranscriptionSkipped(input.sourceType, input.sourceId, gate.reason || "skipped");
+      return { queued: false, reason: gate.reason };
+    }
   }
 
   const idempotencyKey = `ai-transcription:${input.sourceType}:${input.sourceId}`;
@@ -100,6 +106,7 @@ export async function executeTranscriptionJob(input: {
   provider?: string | null;
   durationSeconds?: number | null;
   diarize?: boolean;
+  bypassEntitlement?: boolean;
 }): Promise<{ ok: boolean; reason?: string }> {
   const prisma = getPrisma();
   const idempotencyKey = `ai-transcription:${input.sourceType}:${input.sourceId}`;
@@ -129,15 +136,19 @@ export async function executeTranscriptionJob(input: {
     }
   }
 
-  const gate = await canTranscribeRecording({
-    workspaceId: input.workspaceId,
-    estimatedMinutes: input.durationSeconds
-      ? Math.max(1, Math.ceil(input.durationSeconds / 60))
-      : 1,
-  });
-  if (!gate.allowed) {
-    await markTranscriptionSkipped(input.sourceType, input.sourceId, gate.reason || "skipped");
-    return { ok: false, reason: gate.reason };
+  const skipEntitlement =
+    input.bypassEntitlement === true || input.sourceType === "voicemail_message";
+  if (!skipEntitlement) {
+    const gate = await canTranscribeRecording({
+      workspaceId: input.workspaceId,
+      estimatedMinutes: input.durationSeconds
+        ? Math.max(1, Math.ceil(input.durationSeconds / 60))
+        : 1,
+    });
+    if (!gate.allowed) {
+      await markTranscriptionSkipped(input.sourceType, input.sourceId, gate.reason || "skipped");
+      return { ok: false, reason: gate.reason };
+    }
   }
 
   try {

@@ -82,19 +82,17 @@ export async function attachTwilioVoicemailRecording(input: {
     },
   });
 
-  const box = await prisma.voicemailBox.findFirst({ where: { id: msg.boxId } });
-  if (box?.transcriptionEnabled) {
-    const { enqueueTranscriptionJob } = await import("@/lib/transcription/service");
-    await enqueueTranscriptionJob({
-      workspaceId: input.workspaceId,
-      sourceType: "voicemail_message",
-      sourceId: updated.id,
-      recordingUrl: input.recordingUrl,
-      provider: "twilio",
-      durationSeconds: input.durationSeconds ?? null,
-      diarize: false,
-    }).catch((err) => console.warn("[twilio-voicemail] transcription enqueue failed", err));
-  }
+  const { enqueueTranscriptionJob } = await import("@/lib/transcription/service");
+  await enqueueTranscriptionJob({
+    workspaceId: input.workspaceId,
+    sourceType: "voicemail_message",
+    sourceId: updated.id,
+    recordingUrl: input.recordingUrl,
+    provider: "twilio",
+    durationSeconds: input.durationSeconds ?? null,
+    diarize: false,
+    bypassEntitlement: true,
+  }).catch((err) => console.warn("[twilio-voicemail] transcription enqueue failed", err));
 
   return updated;
 }

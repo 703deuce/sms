@@ -69,6 +69,11 @@ export async function startMctbSipVoicemailForPython(input: StartMctbSipVoicemai
         active: true,
       },
     });
+  } else if (!box.transcriptionEnabled) {
+    box = await prisma.voicemailBox.update({
+      where: { id: box.id },
+      data: { transcriptionEnabled: true },
+    });
   }
 
   const message = await prisma.voicemailMessage.create({
@@ -78,7 +83,7 @@ export async function startMctbSipVoicemailForPython(input: StartMctbSipVoicemai
       fromE164: callerE164,
       toE164: phone?.e164 || transovoNumberE164,
       isRead: false,
-      transcriptStatus: box.transcriptionEnabled ? "pending" : "disabled",
+      transcriptStatus: "pending",
     },
   });
 
@@ -104,7 +109,7 @@ export async function startMctbSipVoicemailForPython(input: StartMctbSipVoicemai
     ok: true,
     messageId: message.id,
     boxId: box.id,
-    transcriptionEnabled: Boolean(box.transcriptionEnabled),
+    transcriptionEnabled: true,
     providerCallId: input.providerCallId,
     livekitRoomName: input.livekitRoomName || null,
     forwardedFromE164: input.forwardedFromE164 || null,
@@ -161,6 +166,7 @@ export async function completeMctbSipVoicemailForPython(input: CompleteMctbSipVo
     recordingUrl,
     durationSeconds,
     upstreamProvider: "telnyx",
+    alwaysTranscribe: true,
   });
 
   const appUrl = getAppBaseUrl().replace(/\/$/, "");

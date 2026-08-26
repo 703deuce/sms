@@ -324,6 +324,11 @@ export async function getWorkspaceProductFeatures(
                   : null;
       if (mapped) snap[mapped] = prismaStatusToApp(row.status);
     }
+    if (isActiveEntitlement(snap.mctb)) {
+      // MCTB bundles short voicemail capture + AI transcription (not metered like long calls).
+      snap.visual_voicemail = "active";
+      snap.ai_transcription = "active";
+    }
     return snap;
   } catch (err) {
     if (isSchemaUnavailable(err) || isCompatRepoMissing(err)) {
@@ -340,6 +345,12 @@ export async function hasWorkspaceProductFeature(
 ): Promise<boolean> {
   if (await workspaceHasAdminFullEntitlements(workspaceId, options)) return true;
   const snap = await getWorkspaceProductFeatures(workspaceId, options);
+  if (
+    (feature === "visual_voicemail" || feature === "ai_transcription") &&
+    isActiveEntitlement(snap.mctb)
+  ) {
+    return true;
+  }
   return isActiveEntitlement(snap[feature]);
 }
 

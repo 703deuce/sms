@@ -398,6 +398,8 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
   recordingUrl: string;
   durationSeconds?: number | null;
   upstreamProvider?: "telnyx" | "twilio";
+  /** Voicemail clips are short — always transcribe unless explicitly opted out. */
+  alwaysTranscribe?: boolean;
 }) {
   const prisma = getPrisma();
   const msg = input.messageId
@@ -462,7 +464,8 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
     }
   }
 
-  if (!box?.transcriptionEnabled) return updated;
+  const shouldTranscribe = input.alwaysTranscribe !== false;
+  if (!shouldTranscribe) return updated;
 
   let transcriptionRecordingUrl = input.recordingUrl;
   const { parseVoicemailStorageRecordingUrl } = await import(
@@ -483,6 +486,7 @@ ${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></
     provider: input.upstreamProvider ?? "telnyx",
     durationSeconds: input.durationSeconds ?? updated.durationSeconds,
     diarize: false,
+    bypassEntitlement: input.alwaysTranscribe !== false,
   }).catch((err) => {
     console.warn("[voicemail] transcription enqueue failed", err);
   });

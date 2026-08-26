@@ -133,6 +133,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     });
     items.push(
       { label: "Missed Calls", href: "/voice/missed-calls", icon: PhoneMissed },
+      { label: "Voicemail", href: "/voice/voicemail", icon: Voicemail },
       { label: "Consent Log", href: "/voice/consent-log", icon: ClipboardCheck },
       { label: "Text Back Setup", href: "/voice/setup", icon: SlidersHorizontal },
       { label: "Schedule", href: "/voice/schedule", icon: Clock },
