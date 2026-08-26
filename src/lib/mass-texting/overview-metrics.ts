@@ -71,22 +71,47 @@ export async function loadMassTextOverviewMetrics(
   );
   const massTextIds = massTextCampaigns.map((c: { id: string }) => c.id);
 
+  const sentStatuses = ["sent", "delivered", "clicked"];
+  const deliveredStatuses = ["delivered", "clicked"];
   const monthMessages = massTextIds.length
     ? await prisma.campaignMessage.count({
         where: {
           workspaceId,
           campaignId: { in: massTextIds },
           createdAt: { gte: monthStart },
-          status: { in: ["sent", "delivered", "clicked"] },
+          status: { in: sentStatuses },
+        },
+      })
+    : 0;
+  const messageSent = massTextIds.length
+    ? await prisma.campaignMessage.count({
+        where: {
+          workspaceId,
+          campaignId: { in: massTextIds },
+          status: { in: sentStatuses },
+        },
+      })
+    : 0;
+  const messageDelivered = massTextIds.length
+    ? await prisma.campaignMessage.count({
+        where: {
+          workspaceId,
+          campaignId: { in: massTextIds },
+          status: { in: deliveredStatuses },
         },
       })
     : 0;
 
-  const sent = massTextCampaigns.reduce((sum: number, c: { sent: number }) => sum + (c.sent || 0), 0);
-  const delivered = massTextCampaigns.reduce(
+  const campaignSent = massTextCampaigns.reduce(
+    (sum: number, c: { sent: number }) => sum + (c.sent || 0),
+    0,
+  );
+  const campaignDelivered = massTextCampaigns.reduce(
     (sum: number, c: { delivered: number }) => sum + (c.delivered || 0),
     0,
   );
+  const sent = messageSent > 0 ? messageSent : campaignSent;
+  const delivered = messageSent > 0 ? messageDelivered : campaignDelivered;
   const replies = massTextCampaigns.reduce(
     (sum: number, c: { replies: number }) => sum + (c.replies || 0),
     0,
@@ -123,14 +148,24 @@ export async function loadMassTextOverviewMetrics(
       name: c.name,
       scheduledAt: c.scheduledAt?.toISOString() ?? "",
     })),
-    recentCampaigns: recent.map((c: (typeof recent)[number]) => ({
-      id: c.id,
-      name: c.name,
-      status: c.status,
-      sent: c.sent,
-      delivered: c.delivered,
-      replies: c.replies,
-      scheduledAt: c.scheduledAt?.toISOString() ?? null,
-    })),
+    recentCampaigns: await Promise.all(
+      recent.map(async (c: (typeof recent)[number]) => {
+        const rowSent = await prisma.campaignMessage.count({
+          where: { campaignId: c.id, status: { in: sentStatuses } },
+        });
+        const rowDelivered = await prisma.campaignMessage.count({
+          where: { campaignId: c.id, status: { in: deliveredStatuses } },
+        });
+        return {
+          id: c.id,
+          name: c.name,
+          status: c.status,
+          sent: rowSent > 0 ? rowSent : c.sent,
+          delivered: rowSent > 0 ? rowDelivered : c.delivered,
+          replies: c.replies,
+          scheduledAt: c.scheduledAt?.toISOString() ?? null,
+        };
+      }),
+    ),
   };
 }
