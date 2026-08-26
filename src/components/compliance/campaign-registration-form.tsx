@@ -7,7 +7,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs } from "@/components/ui/tabs";
 import type { MessagingRegistration } from "@/lib/domain";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ComplianceRefreshButton } from "@/components/compliance/compliance-refresh-button";
 
 const complianceTabs = [
   { label: "Overview", href: "/compliance" },
@@ -26,6 +28,7 @@ type Props = {
 };
 
 export function CampaignRegistrationForm({ registration, campaignStatus }: Props) {
+  const router = useRouter();
   const samples = registration?.sampleMessages || [];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -76,6 +79,7 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to save campaign");
       setSaved(true);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save campaign");
     } finally {
@@ -95,6 +99,7 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to submit campaign");
       setSaved(true);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit campaign");
     } finally {
@@ -108,8 +113,9 @@ export function CampaignRegistrationForm({ registration, campaignStatus }: Props
         title="Campaign registration"
         description="Register your A2P 10DLC campaign use case, sample messages, and opt-in workflow with carriers."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusChip status={campaignStatus} />
+            <ComplianceRefreshButton />
             <Button type="submit" form="campaign-registration-form" disabled={saving}>
               {saving ? "Saving…" : "Save campaign"}
             </Button>

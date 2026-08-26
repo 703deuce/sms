@@ -7,41 +7,50 @@ export function deriveRequiredActions(
   numbers: PhoneNumber[],
 ): string[] {
   const actions: string[] = [];
+  const activeNumbers = numbers.filter((n) => n.status === "Active");
+  const brandApproved = (reg?.brandStatus || "").toLowerCase() === "approved";
+  const campaignApproved = (reg?.campaignStatus || "").toLowerCase() === "approved";
+  const registrationReady =
+    (reg?.overallStatus || "").toLowerCase() === "ready" &&
+    Boolean(reg?.phoneAttached && reg?.phoneE164);
+
   if (!reg?.legalBusinessName) actions.push("Complete business profile with legal entity details");
   if (!reg?.websiteUrl) actions.push("Add website URL to brand registration");
   const samples = reg?.sampleMessages || [];
-  if (samples.length < 2) actions.push("Provide 2 additional sample messages");
+  if (!brandApproved && samples.length < 2) {
+    actions.push("Provide 2 additional sample messages");
+  }
   if (!reg?.optInDescription) actions.push("Confirm opt-in disclosure on website form");
-  if (numbers.length === 0 && !reg?.phoneE164) actions.push("Purchase or assign a phone number");
+  if (activeNumbers.length === 0 && !reg?.phoneE164) actions.push("Purchase or assign a phone number");
 
-  const tollFree = numbers.filter((n) => String(n.type || "").toLowerCase().includes("toll"));
-  const local = numbers.filter((n) => !String(n.type || "").toLowerCase().includes("toll"));
+  const tollFree = activeNumbers.filter((n) => String(n.type || "").toLowerCase().includes("toll"));
+  const local = activeNumbers.filter((n) => !String(n.type || "").toLowerCase().includes("toll"));
 
   if (tollFree.length > 0) {
     const pendingTfv = tollFree.some((n) => !isPhoneMessagingApproved(n));
     if (pendingTfv) actions.push("Complete toll-free verification for trial numbers");
   }
 
-  if (local.length > 0) {
+  if (local.length > 0 && !registrationReady) {
     const pendingA2p = local.some((n) => !isPhoneMessagingApproved(n));
     if (pendingA2p) actions.push("Complete A2P registration for local numbers");
   }
 
-  if ((reg?.brandStatus || "").toLowerCase() !== "approved" && local.length > 0) {
+  if (!brandApproved && local.length > 0) {
     actions.push("Complete brand registration review");
   }
-  if ((reg?.campaignStatus || "").toLowerCase() !== "approved" && local.length > 0) {
+  if (!campaignApproved && local.length > 0) {
     actions.push("Submit campaign registration for carrier review");
   }
   return actions;
 }
 
 export function phoneNumbersSummary(numbers: PhoneNumber[]): string {
-  if (numbers.length === 0) return "No numbers";
-  const active = numbers.filter((n) => n.status === "Active").length;
-  const pending = numbers.filter((n) => !isPhoneMessagingApproved(n)).length;
-  if (pending > 0) return `${active} active · ${pending} pending`;
-  return `${active} active`;
+  const activeNumbers = numbers.filter((n) => n.status === "Active");
+  if (activeNumbers.length === 0) return "No numbers";
+  const pending = activeNumbers.filter((n) => !isPhoneMessagingApproved(n)).length;
+  if (pending > 0) return `${activeNumbers.length} active · ${pending} pending`;
+  return `${activeNumbers.length} active`;
 }
 
 export function tollFreeSummary(numbers: PhoneNumber[]): string {

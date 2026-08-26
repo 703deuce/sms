@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { ComplianceRefreshButton } from "@/components/compliance/compliance-refresh-button";
 
 const complianceTabs = [
   { label: "Overview", href: "/compliance" },
@@ -153,11 +154,12 @@ export default async function ComplianceOverviewPage() {
     <div className="space-y-5">
       <SectionHeader
         title="Messaging Compliance"
-        description="Toll-free verification for missed-call text back SMS."
+        description="A2P 10DLC brand and campaign registration for local numbers, plus toll-free verification when applicable."
         icon={ShieldCheck}
         iconTone="bg-violet-50 text-violet-600"
         actions={
           <>
+            <ComplianceRefreshButton />
             <Link href="/compliance/check">
               <Button variant="outline" className="rounded-[10px]">
                 Run readiness check
