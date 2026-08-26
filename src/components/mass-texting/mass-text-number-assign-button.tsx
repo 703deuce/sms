@@ -38,7 +38,7 @@ export function MassTextNumberAssignButton({
       <Button
         type="button"
         size="sm"
-        variant={assigned ? "outline" : "default"}
+        variant={assigned ? "outline" : "primary"}
         disabled={loading || assigned}
         onClick={assign}
       >

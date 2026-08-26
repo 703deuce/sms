@@ -12,6 +12,7 @@ import { loadAuditLogs, loadLists } from "@/lib/workspace-data";
 type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 type ContactListRow = Awaited<ReturnType<typeof loadLists>>[number];
 import Link from "next/link";
+import { contactTabs } from "@/lib/contact-tabs";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { isActiveEntitlement } from "@/lib/products/types";
 

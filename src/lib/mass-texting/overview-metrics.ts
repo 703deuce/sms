@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
-import { getMessagingProductRegistration } from "@/lib/mass-texting/messaging-registration";
+import { getMessagingProductRegistration, resolveMassTextSendingNumber } from "@/lib/mass-texting/messaging-registration";
 
 export type MassTextOverviewMetrics = {
   messagesSentMonth: number;

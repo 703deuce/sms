@@ -22,6 +22,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MassTextNumberAssignButton } from "@/components/mass-texting/mass-text-number-assign-button";
 import { labelPhoneNumberForProducts } from "@/lib/mass-texting/number-labels";
+import { getPrisma } from "@/lib/db";
 
 const detailTabs = [
   { id: "overview", label: "Overview" },
