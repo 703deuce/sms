@@ -55,10 +55,13 @@ export default async function AppLayout({
     customCfg.mctb && typeof customCfg.mctb === "object"
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
-  const showTryIt = shouldShowTryItNav(billingPlan, {
-    isPlatformAdmin: session.isAdmin,
-    adminTestAccount: mctbCfg.adminTestAccount === true || mctbCfg.unlimitedMctbTesting === true,
-  });
+  const hasMctb = isActiveEntitlement(productFeatures.mctb);
+  const showTryIt =
+    hasMctb &&
+    shouldShowTryItNav(billingPlan, {
+      isPlatformAdmin: session.isAdmin,
+      adminTestAccount: mctbCfg.adminTestAccount === true || mctbCfg.unlimitedMctbTesting === true,
+    });
 
   return (
     <>
