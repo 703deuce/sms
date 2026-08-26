@@ -1,6 +1,7 @@
 import {
   BarChart3,
   FileText,
+  Image,
   Inbox,
   LayoutDashboard,
   Megaphone,
@@ -41,6 +42,11 @@ export function buildMassTextNav(options: MassTextNavOptions = {}): NavItem[] {
       label: "Templates",
       href: "/templates",
       icon: FileText,
+    },
+    {
+      label: "Media",
+      href: "/messaging/media",
+      icon: Image,
     },
     {
       label: "Analytics",
@@ -88,6 +94,7 @@ export function getMassTextPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/campaigns")) return "Campaigns";
   if (pathname.startsWith("/templates")) return "Templates";
+  if (pathname.startsWith("/messaging/media")) return "Media";
   if (pathname.startsWith("/contacts/lists")) return "Lists";
   return "";
 }

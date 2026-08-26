@@ -61,7 +61,7 @@ export const MASS_TEXT_TRIAL = {
   durationDays: 14,
   includedSegments: 100,
   requiresCard: false,
-  mmsEnabled: false,
+  mmsEnabled: true,
 } as const;
 
 /** 1 SMS segment = 1 messaging credit. */
@@ -71,11 +71,11 @@ export const MASS_TEXT_SMS_CREDITS_PER_SEGMENT = 1;
 export const MASS_TEXT_MMS_CREDIT_MULTIPLIER = 3;
 
 /**
- * MMS composer is hidden until provider payload + 3-credit accounting
- * are production-complete. Keep the multiplier in code so accounting tests
- * and a future enablement share one source of truth.
+ * MMS (pictures) is on for Mass Texting. Set MASS_TEXT_MMS_PRODUCTION_ENABLED=0
+ * to hide composer attach + block launches with media.
  */
-export const MASS_TEXT_MMS_PRODUCTION_ENABLED = false;
+export const MASS_TEXT_MMS_PRODUCTION_ENABLED =
+  process.env.MASS_TEXT_MMS_PRODUCTION_ENABLED !== "0";
 
 export const MASS_TEXT_A2P_REGISTRATION_FEE_CENTS = 2000;
 

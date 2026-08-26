@@ -2,10 +2,11 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
-import { sendSmsBodiesForCreditEstimate } from "@/lib/campaigns/sequence-engine";
+import { parseSequence } from "@/lib/campaigns/sequence-engine";
 import { MASS_TEXT_MMS_PRODUCTION_ENABLED } from "@/lib/mass-texting/pricing";
 import { creditsForRecipientBody, massTextMergeVarsFromContact } from "@/lib/mass-texting/personalization";
 import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
+import { mediaUrlsForSequenceStep } from "@/lib/mass-texting/mms";
 
 export type PreSendReview = {
   campaignId: string;
@@ -165,9 +166,16 @@ export async function buildPreSendReview(
   const suppressedRemoved = rejected.filter((r) => r.reason === "suppressed").length;
 
   const body = campaign.body || "";
-  const smsBodies = sendSmsBodiesForCreditEstimate(campaign.sequenceJson, body);
-  const mediaUrls = Array.isArray(config.mediaUrls) ? (config.mediaUrls as unknown[]) : [];
-  const isMms = mediaUrls.length > 0;
+  const sequence = parseSequence(campaign.sequenceJson);
+  const smsSteps = sequence.filter((s) => s.step_type === "send_sms");
+  const stepsToPrice = smsSteps.length
+    ? smsSteps
+    : [{ step_key: "sms_1", step_type: "send_sms" as const, config: { body } }];
+  const sequenceForMedia = smsSteps.length ? sequence : undefined;
+  const mmsStepCount = stepsToPrice.filter(
+    (step) => mediaUrlsForSequenceStep(step, config, sequenceForMedia).length > 0,
+  ).length;
+  const isMms = mmsStepCount > 0;
   const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
 
   let estimatedSegments = 0;
@@ -183,10 +191,12 @@ export async function buildPreSendReview(
       businessName: workspace?.name,
       customFields: recipient.customFields,
     });
-    for (const template of smsBodies) {
+    for (const step of stepsToPrice) {
+      const template = String(step.config?.body || body);
+      const stepMedia = mediaUrlsForSequenceStep(step, config, sequenceForMedia);
       const priced = creditsForRecipientBody({
         template,
-        isMms,
+        isMms: stepMedia.length > 0,
         vars,
       });
       estimatedSegments += priced.credits;
@@ -210,7 +220,7 @@ export async function buildPreSendReview(
     suppressedRemoved,
     finalRecipientCount: accepted.length,
     estimatedSegments,
-    mmsCount: isMms ? accepted.length : 0,
+    mmsCount: accepted.length * mmsStepCount,
     messagePreview: body.slice(0, 280),
     phoneNumberId: sender?.phoneNumberId ?? null,
     phoneE164: sender?.phoneE164 ?? null,

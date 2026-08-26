@@ -206,6 +206,7 @@ export function getVoicePageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/campaigns")) return "Campaigns";
   if (pathname.startsWith("/templates")) return "Templates";
+  if (pathname.startsWith("/messaging/media")) return "Media";
   if (pathname.startsWith("/contacts/lists")) return "Lists";
   if (pathname === "/dashboard" || pathname === "/outcomes") return "";
   if (pathname.startsWith("/voice/try-it")) return "Try It";

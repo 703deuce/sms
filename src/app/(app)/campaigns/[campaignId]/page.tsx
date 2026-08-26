@@ -12,10 +12,10 @@ import {
   formatPercent,
   estimateSmsSegments,
 } from "@/lib/utils";
+import { mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
+import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { loadAuditLogs, loadCampaignById } from "@/lib/workspace-data";
-
-type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 import {
   ArrowLeft,
   Clock,
@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
+type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 
 function formatDateTime(at: string | null) {
   if (!at) return "—";
@@ -147,6 +149,7 @@ export default async function CampaignDetailPage({
     campaign.delivered > 0 ? (campaign.optOuts / campaign.delivered) * 100 : 0;
   const segments = estimateSmsSegments(campaign.body);
   const timeline = buildTimeline(campaign);
+  const attachedMedia = mediaUrlsFromCampaignConfig(campaign.configJson);
   const activity = auditLogs.filter(
     (log: AuditLogRow) =>
       log.detail?.toLowerCase().includes(campaign.name.toLowerCase()) ||
@@ -243,8 +246,24 @@ export default async function CampaignDetailPage({
               <div className="rounded-2xl rounded-bl-sm bg-primary/10 px-4 py-3 text-sm leading-relaxed">
                 {campaign.body || "No message body yet."}
               </div>
+              {attachedMedia.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {attachedMedia.map((url) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={url}
+                      src={url}
+                      alt=""
+                      className="h-20 w-20 rounded-md border border-border object-cover"
+                    />
+                  ))}
+                </div>
+              ) : null}
               <p className="mt-2 text-xs text-muted-foreground">
                 Preview includes compliance footer. Merge tags render at send time.
+                {attachedMedia.length
+                  ? ` Pictures send as MMS (${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits each).`
+                  : ""}
               </p>
             </div>
           </Card>

@@ -1,6 +1,7 @@
 "use client";
 
 import { CATEGORY_ICONS } from "@/components/campaigns/category-icons";
+import { AttachedMediaThumbs, MediaPicker } from "@/components/messaging/media-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
@@ -10,8 +11,9 @@ import {
   getCampaignCategory,
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
+import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
 import { cn, estimateSmsSegments } from "@/lib/utils";
-import { ArrowLeft, Check, Send } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Send } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -49,6 +51,8 @@ export default function NewCategoryCampaignPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [showMedia, setShowMedia] = useState(false);
 
   const segments = useMemo(() => estimateSmsSegments(message), [message]);
 
@@ -105,6 +109,7 @@ export default function NewCategoryCampaignPage() {
             listIds,
             productSource: "mass_text",
             massTexting: true,
+            mediaUrls,
           },
         }),
       });
@@ -227,16 +232,34 @@ export default function NewCategoryCampaignPage() {
           </div>
 
           <div>
-            <Label htmlFor="message">Message</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="message">Message</Label>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+                onClick={() => setShowMedia(true)}
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                Add pictures
+                {mediaUrls.length ? ` (${mediaUrls.length})` : ""}
+              </button>
+            </div>
             <Textarea
               id="message"
               rows={6}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />
+            <AttachedMediaThumbs
+              urls={mediaUrls}
+              onRemove={(url) => setMediaUrls((prev) => prev.filter((u) => u !== url))}
+            />
             <p className="mt-1 text-xs text-slate-500">
-              {segments.characters} characters · {segments.segments} SMS segment
-              {segments.segments === 1 ? "" : "s"} · merge fields like {"{{first_name}}"} supported
+              {mediaUrls.length
+                ? `Pictures send as MMS · ${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits per recipient for this message (follow-ups stay SMS unless they have their own pictures)`
+                : `${segments.characters} characters · ${segments.segments} SMS segment${
+                    segments.segments === 1 ? "" : "s"
+                  } · merge fields like {{first_name}} supported`}
             </p>
           </div>
 
@@ -295,13 +318,35 @@ export default function NewCategoryCampaignPage() {
           <h3 className="font-semibold text-slate-900">Preview</h3>
           <div className="mt-4 rounded-2xl bg-slate-900 p-4 text-sm text-white">
             <p className="whitespace-pre-wrap">{message}</p>
+            {mediaUrls.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {mediaUrls.map((url) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={url}
+                    src={url}
+                    alt=""
+                    className="h-16 w-16 rounded-md object-cover"
+                  />
+                ))}
+              </div>
+            ) : null}
           </div>
           <p className="mt-4 text-xs text-slate-500">
             Required compliance language is enforced on live sends (STOP/HELP). Always include clear
             identification of your business.
+            {mediaUrls.length
+              ? ` Picture messages use ${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits each.`
+              : ""}
           </p>
         </Card>
       </div>
+      <MediaPicker
+        open={showMedia}
+        onClose={() => setShowMedia(false)}
+        initialSelected={mediaUrls}
+        onConfirm={setMediaUrls}
+      />
     </div>
   );
 }

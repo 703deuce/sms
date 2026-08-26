@@ -27,7 +27,7 @@ const FAQ = [
   },
   {
     q: "Can I send MMS?",
-    a: "MMS support is planned. Mass Texting V1 billing and launch focus on SMS segments.",
+    a: "Yes. Attach JPG, PNG, GIF, or WebP pictures (up to 3, 1.5 MB each). Picture messages use 3 credits each; follow-up texts without pictures stay SMS.",
   },
   {
     q: "Can I personalize messages?",
@@ -63,7 +63,7 @@ const FAQ = [
   },
   {
     q: "Do you charge per message or segment?",
-    a: "SMS usage is based on billable message segments. Long messages may use multiple segments.",
+    a: "SMS usage is based on billable message segments. Long messages may use multiple segments. Picture (MMS) messages use 3 credits each.",
   },
   {
     q: "Do unused monthly messages roll over?",

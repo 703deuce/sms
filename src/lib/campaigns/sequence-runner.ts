@@ -12,6 +12,7 @@ import {
   type ConditionFacts,
   type SequenceStep,
 } from "./sequence-engine";
+import { campaignChannelForMedia, mediaUrlsForSequenceStep } from "@/lib/mass-texting/mms";
 
 const BATCH_LIMIT = 80;
 const ACTIVE: RecipientWorkflowStatus[] = ["pending", "scheduled", "in_progress", "waiting"];
@@ -325,7 +326,13 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
     include: { campaign: true },
   });
 
-  const channel = step.step_type === "send_email" ? "email" : "sms";
+  const sequence = parseSequence(recipient.campaign.sequenceJson);
+  const channel =
+    step.step_type === "send_email"
+      ? "email"
+      : campaignChannelForMedia(
+          mediaUrlsForSequenceStep(step, recipient.campaign.configJson, sequence),
+        );
   const to = channel === "email" ? recipient.email : recipient.phone;
   if (!to) {
     await casRecipient(recipientId, {

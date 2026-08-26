@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { normalizeMediaUrls } from "@/lib/mass-texting/mms";
 
 export async function GET() {
   try {
@@ -31,11 +32,18 @@ export async function POST(request: Request) {
     if (!body.name?.trim() || !body.storageUrl?.trim()) {
       return NextResponse.json({ error: "name and storageUrl required" }, { status: 400 });
     }
+    const [storageUrl] = normalizeMediaUrls([body.storageUrl]);
+    if (!storageUrl) {
+      return NextResponse.json(
+        { error: "storageUrl must be a public http(s) image URL" },
+        { status: 400 },
+      );
+    }
     const row = await getPrisma().mediaAsset.create({
       data: {
         workspaceId: auth.workspaceId,
         name: body.name.trim(),
-        storageUrl: body.storageUrl.trim(),
+        storageUrl,
         assetType: body.assetType || "image",
         mimeType: body.mimeType,
         sizeBytes: body.sizeBytes || 0,

@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { MediaPicker } from "@/components/messaging/media-picker";
+import { MediaPicker, AttachedMediaThumbs } from "@/components/messaging/media-picker";
 import { TemplatePicker } from "@/components/inbox/template-picker";
 import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
 
@@ -682,23 +682,10 @@ export function InboxView({
                 </button>
               </div>
               {mediaUrls.length > 0 ? (
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {mediaUrls.map((url) => (
-                    <span
-                      key={url}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground"
-                    >
-                      Media attached
-                      <button
-                        type="button"
-                        className="text-rose-600 hover:underline"
-                        onClick={() => setMediaUrls((prev) => prev.filter((u) => u !== url))}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                <AttachedMediaThumbs
+                  urls={mediaUrls}
+                  onRemove={(url) => setMediaUrls((prev) => prev.filter((u) => u !== url))}
+                />
               ) : null}
               <textarea
                 className="min-h-[88px] w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 text-[13px] outline-none focus:border-primary"

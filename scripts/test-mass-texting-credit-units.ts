@@ -18,7 +18,16 @@ import { inferInboundProductSource } from "../src/lib/mass-texting/product-sourc
 import { getCampaignCategory, buildSequenceForCategory } from "../src/lib/campaigns/catalog";
 import { normalizeE164 } from "../src/lib/messaging/twilio-mappings";
 import { classifySmsProviderError } from "../src/lib/mass-texting/provider-errors";
-import { evaluateCondition, sendSmsBodiesForCreditEstimate } from "../src/lib/campaigns/sequence-engine";
+import {
+  attachMediaToFirstSmsStep,
+  evaluateCondition,
+  sendSmsBodiesForCreditEstimate,
+} from "../src/lib/campaigns/sequence-engine";
+import {
+  campaignChannelForMedia,
+  mediaUrlsForSequenceStep,
+  normalizeMediaUrls,
+} from "../src/lib/mass-texting/mms";
 import {
   consumeMassTextRateLimit,
   resetMassTextRateLimitForTests,
@@ -136,6 +145,32 @@ const followUpBodies = sendSmsBodiesForCreditEstimate(
 );
 assert.equal(followUpBodies.length, 3, "follow-up sequences must reserve every SMS step");
 assert.equal(sendSmsBodiesForCreditEstimate(null, "Solo").length, 1);
+
+assert.deepEqual(normalizeMediaUrls(["https://cdn.example.com/a.jpg", "not-a-url", "https://cdn.example.com/a.jpg"]), [
+  "https://cdn.example.com/a.jpg",
+]);
+assert.equal(campaignChannelForMedia(["https://cdn.example.com/a.jpg"]), "mms");
+assert.equal(campaignChannelForMedia([]), "sms");
+const followUpWithPics = attachMediaToFirstSmsStep(
+  buildSequenceForCategory("follow_up", "Hi there", { followUpCount: 3 }),
+  ["https://cdn.example.com/a.jpg"],
+);
+const smsStepsWithPics = followUpWithPics.filter((s) => s.step_type === "send_sms");
+assert.equal(smsStepsWithPics.length, 3);
+assert.deepEqual(smsStepsWithPics[0].config?.mediaUrls, ["https://cdn.example.com/a.jpg"]);
+assert.equal(smsStepsWithPics[1].config?.mediaUrls, undefined);
+assert.equal(
+  mediaUrlsForSequenceStep(smsStepsWithPics[0], { mediaUrls: ["https://cdn.example.com/a.jpg"] }, followUpWithPics)
+    .length,
+  1,
+);
+assert.equal(
+  mediaUrlsForSequenceStep(smsStepsWithPics[1], { mediaUrls: ["https://cdn.example.com/a.jpg"] }, followUpWithPics)
+    .length,
+  0,
+);
+assert.equal(campaignChannelForMedia(mediaUrlsForSequenceStep(smsStepsWithPics[0], {}, followUpWithPics)), "mms");
+assert.equal(campaignChannelForMedia(mediaUrlsForSequenceStep(smsStepsWithPics[1], {}, followUpWithPics)), "sms");
 
 assert.equal(
   canonicalLaunchIdempotencyKey("ws1", "camp1", "launch:camp1"),

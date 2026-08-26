@@ -8,7 +8,7 @@ import {
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
 import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign, enrollSegmentInCampaign } from "@/lib/campaigns/enroll-campaign";
-import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
+import { defaultSmsEmailSequence, parseSequence, attachMediaToFirstSmsStep } from "@/lib/campaigns/sequence-engine";
 
 export async function GET(request: Request) {
   try {
@@ -83,6 +83,14 @@ export async function POST(request: Request) {
     const { massTextProductConfigPatch, campaignConfigIsMassText } = await import(
       "@/lib/mass-texting/campaign-send"
     );
+    const { normalizeMediaUrls } = await import("@/lib/mass-texting/mms");
+    const mediaUrls = normalizeMediaUrls(
+      (config as { mediaUrls?: unknown }).mediaUrls ?? (body.config as { mediaUrls?: unknown } | undefined)?.mediaUrls,
+    );
+    if (mediaUrls.length) {
+      (config as { mediaUrls: string[] }).mediaUrls = mediaUrls;
+    }
+
     const massTextWorkspace = await isMassTextingWorkspace(workspaceId);
     const shouldTagMassText =
       campaignConfigIsMassText(config) ||
@@ -104,11 +112,22 @@ export async function POST(request: Request) {
     }
     const configJson = shouldTagMassText ? massTextProductConfigPatch(config) : config;
 
-    const sequenceJson = body.sequenceJson
+    if (mediaUrls.length && shouldTagMassText) {
+      const { MASS_TEXT_MMS_PRODUCTION_ENABLED } = await import("@/lib/mass-texting/pricing");
+      if (!MASS_TEXT_MMS_PRODUCTION_ENABLED) {
+        return NextResponse.json(
+          { error: "MMS is not enabled for Mass Texting." },
+          { status: 400 },
+        );
+      }
+    }
+
+    const builtSequence = body.sequenceJson
       ? parseSequence(body.sequenceJson)
       : categoryId
         ? buildSequenceForCategory(categoryId, message, config)
         : defaultSmsEmailSequence();
+    const sequenceJson = attachMediaToFirstSmsStep(builtSequence, mediaUrls);
 
     const campaign = await getPrisma().campaign.create({
       data: {

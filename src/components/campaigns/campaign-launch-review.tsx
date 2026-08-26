@@ -132,6 +132,14 @@ export function CampaignLaunchReview({
             <dt className="text-muted-foreground">Estimated credits</dt>
             <dd>{review.estimatedSegments}</dd>
           </div>
+          {review.mmsCount > 0 ? (
+            <div>
+              <dt className="text-muted-foreground">Picture messages (MMS)</dt>
+              <dd className="font-medium">
+                {review.mmsCount} · 3 credits each
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt className="text-muted-foreground">Available credits</dt>
             <dd>{review.availableSegments}</dd>

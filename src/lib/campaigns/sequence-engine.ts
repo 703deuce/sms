@@ -42,6 +42,22 @@ export function sendSmsBodiesForCreditEstimate(
   return bodies.length ? bodies : [fallbackBody || ""];
 }
 
+export function attachMediaToFirstSmsStep(
+  sequence: SequenceStep[],
+  mediaUrls: string[],
+): SequenceStep[] {
+  if (!mediaUrls.length) return sequence;
+  let attached = false;
+  return sequence.map((step) => {
+    if (attached || step.step_type !== "send_sms") return step;
+    attached = true;
+    return {
+      ...step,
+      config: { ...(step.config || {}), mediaUrls },
+    };
+  });
+}
+
 export function parseSequence(raw: unknown): SequenceStep[] {
   if (!raw) return [];
   if (typeof raw === "string") {

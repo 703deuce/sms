@@ -8,6 +8,8 @@ import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { isMessagingReady } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { tryAdvanceRecipientAfterSend } from "./sequence-runner";
+import { parseSequence } from "./sequence-engine";
+import { isPhoneCampaignChannel, mediaUrlsForSequenceStep } from "@/lib/mass-texting/mms";
 
 const ACTIVE_RECIPIENT = ["pending", "scheduled", "in_progress", "waiting"] as const;
 
@@ -141,6 +143,18 @@ function escapeHtml(value: string) {
 function retryCountFromError(error: string | null | undefined) {
   const match = (error || "").match(/retry:(\d+):/);
   return match ? Number(match[1]) : 0;
+}
+
+function mediaUrlsForQueuedMessage(message: {
+  channel: string;
+  stepKey: string | null;
+  campaign: { configJson: unknown; sequenceJson: unknown };
+}): string[] | undefined {
+  if (message.channel !== "mms") return undefined;
+  const sequence = parseSequence(message.campaign.sequenceJson);
+  const step = sequence.find((s) => s.step_key === message.stepKey) || null;
+  const urls = mediaUrlsForSequenceStep(step, message.campaign.configJson, sequence);
+  return urls.length ? urls : undefined;
 }
 
 export async function sendCampaignMessageById(messageId: string) {
@@ -293,7 +307,7 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new JobDeferredError(reason, 60 * 60_000);
   }
 
-  if (message.channel === "sms" && message.to) {
+  if (isPhoneCampaignChannel(message.channel) && message.to) {
     const contact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
     });
@@ -379,7 +393,7 @@ export async function sendCampaignMessageById(messageId: string) {
     });
     return { skipped: true, status: "recipient_terminal" };
   }
-  if (message.channel === "sms" && message.to) {
+  if (isPhoneCampaignChannel(message.channel) && message.to) {
     const lateSuppressed = await prisma.suppression.findFirst({
       where: { workspaceId: message.workspaceId, phone: message.to },
     });
@@ -433,7 +447,7 @@ export async function sendCampaignMessageById(messageId: string) {
           message.workspaceId,
           message.to,
           message.body,
-          undefined,
+          mediaUrlsForQueuedMessage(message),
           sender.phoneE164,
         );
         providerAccepted = true;
@@ -487,7 +501,7 @@ export async function sendCampaignMessageById(messageId: string) {
         message.workspaceId,
         message.to,
         message.body,
-        undefined,
+        mediaUrlsForQueuedMessage(message),
         fromOverride,
       );
       providerAccepted = true;
@@ -505,9 +519,14 @@ export async function sendCampaignMessageById(messageId: string) {
       },
     });
 
-    if (message.channel === "sms" && !massTextCampaign) {
+    if (isPhoneCampaignChannel(message.channel) && !massTextCampaign) {
       try {
-        await deductCreditsForSend(message.workspaceId, 1, `Campaign SMS ${message.campaignId}`);
+        const { MASS_TEXT_MMS_CREDIT_MULTIPLIER } = await import("@/lib/mass-texting/pricing");
+        await deductCreditsForSend(
+          message.workspaceId,
+          message.channel === "mms" ? MASS_TEXT_MMS_CREDIT_MULTIPLIER : 1,
+          `Campaign ${message.channel.toUpperCase()} ${message.campaignId}`,
+        );
       } catch (creditErr) {
         console.warn("[sendCampaignMessageById] credit deduction failed", messageId, creditErr);
       }

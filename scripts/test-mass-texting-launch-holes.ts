@@ -23,6 +23,7 @@ import {
 import { launchCampaignWithAudit } from "../src/lib/mass-texting/campaign-launch";
 import { normalizeE164 } from "../src/lib/messaging/twilio-mappings";
 import { buildSequenceForCategory } from "../src/lib/campaigns/catalog";
+import { attachMediaToFirstSmsStep } from "../src/lib/campaigns/sequence-engine";
 import { buildPreSendReview } from "../src/lib/mass-texting/pre-send-review";
 
 function suffix() {
@@ -241,6 +242,35 @@ async function main() {
     assert.equal(afterCancel.available, beforeLaunch.available, "cancel must release unused credits");
     const leftover = await getActiveCampaignReservation(campaign.id);
     assert.equal(leftover, null);
+
+    const pic = "https://example.com/promo.jpg";
+    const mmsSequence = attachMediaToFirstSmsStep(
+      buildSequenceForCategory("broadcast", "Check this out", {}),
+      [pic],
+    );
+    const mmsCampaign = await prisma.campaign.create({
+      data: {
+        workspaceId,
+        name: "MMS blast",
+        type: "Announcement",
+        category: "broadcast",
+        audience: "List",
+        body: "Check this out",
+        status: "DRAFT",
+        sequenceJson: mmsSequence,
+        configJson: {
+          productSource: "mass_text",
+          massTexting: true,
+          listIds: [list.id],
+          mediaUrls: [pic],
+        },
+      },
+    });
+    const mmsReview = await buildPreSendReview(workspaceId, mmsCampaign.id);
+    assert.ok(mmsReview);
+    assert.equal(mmsReview!.estimatedSegments, 3, "one-step MMS blast bills 3 credits per recipient");
+    assert.equal(mmsReview!.mmsCount, 1);
+    assert.equal(mmsReview!.mmsBlocked, false);
 
     console.log("test-mass-texting-launch-holes: ok");
   } finally {

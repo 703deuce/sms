@@ -10,7 +10,8 @@ import { cn, estimateSmsSegments, formatCurrency, formatNumber, formatPhone } fr
 import { Check, Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MediaPicker } from "@/components/messaging/media-picker";
+import { MediaPicker, AttachedMediaThumbs } from "@/components/messaging/media-picker";
+import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
 
 type ApiContact = {
   id: string;
@@ -101,7 +102,8 @@ export default function QuickSendPage() {
 
   const { characters, segments } = estimateSmsSegments(message);
   const recipientCount = selectedIds.length;
-  const estimatedCost = recipientCount * segments * 0.015;
+  const creditsEach = mediaUrls.length ? MASS_TEXT_MMS_CREDIT_MULTIPLIER : segments;
+  const estimatedCost = recipientCount * creditsEach * 0.015;
   const selectedNumber = phoneNumbers.find((n) => n.id === numberId);
 
   function toggleContact(id: string) {
@@ -328,23 +330,10 @@ export default function QuickSendPage() {
                   ))}
                 </div>
                 {mediaUrls.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {mediaUrls.map((url) => (
-                      <span
-                        key={url}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
-                      >
-                        MMS media
-                        <button
-                          type="button"
-                          className="text-rose-600"
-                          onClick={() => setMediaUrls((prev) => prev.filter((u) => u !== url))}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                  <AttachedMediaThumbs
+                    urls={mediaUrls}
+                    onRemove={(url) => setMediaUrls((prev) => prev.filter((u) => u !== url))}
+                  />
                 ) : null}
               </div>
             </div>
@@ -362,8 +351,10 @@ export default function QuickSendPage() {
                 <dd className="font-medium">{characters}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">SMS segments</dt>
-                <dd className="font-medium">{segments}</dd>
+                <dt className="text-muted-foreground">
+                  {mediaUrls.length ? "Credits each (MMS)" : "SMS segments"}
+                </dt>
+                <dd className="font-medium">{creditsEach}</dd>
               </div>
               <div className="flex justify-between border-t border-border pt-3">
                 <dt className="text-muted-foreground">Estimated cost</dt>
