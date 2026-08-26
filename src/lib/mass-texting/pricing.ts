@@ -61,7 +61,7 @@ export const MASS_TEXT_TRIAL = {
   durationDays: 14,
   includedSegments: 100,
   requiresCard: false,
-  mmsEnabled: false,
+  mmsEnabled: true,
 } as const;
 
 export const MASS_TEXT_A2P_REGISTRATION_FEE_CENTS = 2000;

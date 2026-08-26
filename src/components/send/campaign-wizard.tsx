@@ -14,6 +14,7 @@ import {
   Info,
   Megaphone,
   MessageSquare,
+  Paperclip,
   Send,
   Settings2,
   Sparkles,
@@ -22,7 +23,9 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { MediaPicker } from "@/components/messaging/media-picker";
 
 const steps = ["Campaign type", "Audience", "Message", "Schedule", "Review", "Send"] as const;
 
@@ -49,6 +52,7 @@ const typeCards: Array<{
 const FOOTER = "\n\nReply STOP to opt out. Msg & data rates may apply.";
 
 export function CampaignWizard() {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [campaignType, setCampaignType] = useState("SMS");
   const [name, setName] = useState("New campaign");
@@ -57,9 +61,13 @@ export function CampaignWizard() {
   const [segmentId, setSegmentId] = useState("");
   const [numberId, setNumberId] = useState("");
   const [body, setBody] = useState("Hi {{first_name}}, ");
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [showMedia, setShowMedia] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "later">("now");
   const [scheduledAt, setScheduledAt] = useState("");
   const [sent, setSent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [lists, setLists] = useState<WizardList[]>([]);
   const [segments, setSegments] = useState<WizardSegment[]>([]);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
@@ -126,7 +134,54 @@ export function CampaignWizard() {
 
   const fullBody = body.includes("STOP") ? body : `${body.trim()}${FOOTER}`;
   const { characters, segments: smsSegments } = estimateSmsSegments(fullBody);
-  const estimatedCost = recipients * smsSegments * 0.015;
+  const isMms = mediaUrls.length > 0 || campaignType === "MMS";
+  const creditsPerRecipient = isMms ? 3 : smsSegments;
+  const estimatedCost = recipients * creditsPerRecipient * 0.015;
+
+  async function saveCampaign() {
+    if (campaignType === "MMS" && mediaUrls.length === 0) {
+      setSaveError("Attach at least one image for an MMS campaign.");
+      return;
+    }
+    if (audience === "list" && !listId) {
+      setSaveError("Select a contact list.");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim() || "New campaign",
+          type: isMms ? "MMS broadcast" : campaignType,
+          category: "broadcast",
+          audience:
+            audience === "list"
+              ? lists.find((l) => l.id === listId)?.name || "List"
+              : audience,
+          message: fullBody,
+          listId: audience === "list" ? listId : undefined,
+          segmentId: audience === "segment" ? segmentId : undefined,
+          scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
+          config: {
+            mediaUrls,
+            campaignType,
+            listIds: audience === "list" && listId ? [listId] : undefined,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not save campaign");
+      setSent(true);
+      router.push(`/campaigns/${json.data.campaign.id}`);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not save campaign");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function next() {
     setStep((s) => Math.min(s + 1, steps.length - 1));
@@ -143,8 +198,8 @@ export function CampaignWizard() {
           {scheduleMode === "later" ? "Campaign scheduled" : "Campaign queued"}
         </h2>
         <p className="mt-2 text-[13px] text-muted-foreground">
-          {formatNumber(recipients)} recipients · {smsSegments} segment
-          {smsSegments === 1 ? "" : "s"} each · est. {formatCurrency(estimatedCost)}
+          {formatNumber(recipients)} recipients · {isMms ? "MMS" : `${smsSegments} segment${smsSegments === 1 ? "" : "s"}`} each
+          {isMms ? " (3 credits/recipient)" : ""} · est. {formatCurrency(estimatedCost)}
         </p>
         <div className="mt-6 flex justify-center gap-2">
           <Button variant="outline" onClick={() => { setSent(false); setStep(0); }}>
@@ -400,9 +455,37 @@ export function CampaignWizard() {
                   ))}
                 </div>
               </div>
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Image attachment (MMS)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-[10px]"
+                    onClick={() => setShowMedia(true)}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    {mediaUrls.length ? `Edit (${mediaUrls.length})` : "Attach image"}
+                  </Button>
+                </div>
+                {mediaUrls.length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-[12px] text-muted-foreground">
+                    {mediaUrls.map((url) => (
+                      <li key={url} className="truncate">
+                        {url}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    Add a picture from your media library. MMS uses 3 messaging credits per recipient.
+                  </p>
+                )}
+              </div>
               <div className="grid gap-2 rounded-[12px] border border-border bg-muted/40 p-3 text-[13px] sm:grid-cols-3">
                 <div>Characters: <strong>{characters}</strong></div>
-                <div>SMS segments: <strong>{smsSegments}</strong></div>
+                <div>{isMms ? "MMS credits" : "SMS segments"}: <strong>{creditsPerRecipient}</strong></div>
                 <div>Est. cost: <strong>{formatCurrency(estimatedCost)}</strong></div>
               </div>
             </div>
@@ -463,43 +546,59 @@ export function CampaignWizard() {
                 <div>
                   <dt className="text-muted-foreground">Segments / cost</dt>
                   <dd className="font-semibold">
-                    {smsSegments} · {formatCurrency(estimatedCost)}
+                    {isMms ? `MMS · ${creditsPerRecipient} credits/recipient` : `${smsSegments} segments`} · {formatCurrency(estimatedCost)}
                   </dd>
                 </div>
+                {mediaUrls.length > 0 ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">Attached media</dt>
+                    <dd className="font-semibold">{mediaUrls.length} file{mediaUrls.length === 1 ? "" : "s"}</dd>
+                  </div>
+                ) : null}
               </dl>
               <div className="rounded-[12px] border border-border bg-muted/30 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Message preview
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-[13px]">{fullBody}</p>
+                {mediaUrls.length > 0 ? (
+                  <p className="mt-2 text-[12px] text-muted-foreground">
+                    + {mediaUrls.length} image attachment{mediaUrls.length === 1 ? "" : "s"} (MMS)
+                  </p>
+                ) : null}
               </div>
             </div>
           )}
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-            <Button variant="ghost" onClick={back} disabled={step === 0}>
+            <Button variant="ghost" onClick={back} disabled={step === 0 || saving}>
               Back
             </Button>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="rounded-[10px]">Save draft</Button>
-              <Button variant="outline" className="rounded-[10px]">
-                <Send className="h-3.5 w-3.5 text-primary" />
-                Send test
-              </Button>
               {step < 5 ? (
                 <Button className="rounded-[10px]" onClick={next}>
                   Continue
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <Button className="rounded-[10px]" onClick={() => setSent(true)}>
-                  {scheduleMode === "later" ? "Schedule campaign" : "Send now"}
+                <Button className="rounded-[10px]" onClick={() => void saveCampaign()} disabled={saving}>
+                  {saving ? "Saving…" : scheduleMode === "later" ? "Save & schedule" : "Save campaign"}
                 </Button>
               )}
             </div>
           </div>
+          {saveError ? <p className="mt-2 text-[13px] text-rose-600">{saveError}</p> : null}
         </div>
       </div>
+      <MediaPicker
+        open={showMedia}
+        onClose={() => setShowMedia(false)}
+        onConfirm={(urls) => {
+          setMediaUrls(urls);
+          setShowMedia(false);
+        }}
+        initialSelected={mediaUrls}
+      />
     </div>
   );
 }

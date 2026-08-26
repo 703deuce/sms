@@ -13,6 +13,10 @@ import {
   listMassTextPricingCards,
   formatUsdFromCents,
 } from "../src/lib/mass-texting/pricing";
+import {
+  estimateMessagingCredits,
+  MASS_TEXT_MMS_CREDITS_PER_MESSAGE,
+} from "../src/lib/mass-texting/credit-units";
 
 assert.equal(MASS_TEXT_MONTHLY_PLANS.starter.monthlyPriceCents, 2499);
 assert.equal(MASS_TEXT_MONTHLY_PLANS.growth.monthlyPriceCents, 3499);
@@ -26,7 +30,18 @@ assert.equal(MASS_TEXT_PAYG_PACKS.pack_2500.priceCents, 6499);
 
 assert.equal(MASS_TEXT_TRIAL.durationDays, 14);
 assert.equal(MASS_TEXT_TRIAL.includedSegments, 100);
+assert.equal(MASS_TEXT_TRIAL.mmsEnabled, true);
 assert.equal(MASS_TEXT_A2P_REGISTRATION_FEE_CENTS, 2000);
+
+assert.equal(MASS_TEXT_MMS_CREDITS_PER_MESSAGE, 3);
+assert.equal(
+  estimateMessagingCredits({ recipientCount: 100, smsSegmentsPerRecipient: 1, isMms: true }),
+  300,
+);
+assert.equal(
+  estimateMessagingCredits({ recipientCount: 10, smsSegmentsPerRecipient: 2, isMms: false }),
+  20,
+);
 
 assert.equal(
   massTextA2pFeeRequired({ billingModel: "monthly", monthlyTier: "starter", a2pFeeStatus: "PENDING" }),

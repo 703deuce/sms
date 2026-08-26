@@ -11,10 +11,11 @@ import {
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
 import { cn, estimateSmsSegments } from "@/lib/utils";
-import { ArrowLeft, Check, Send } from "lucide-react";
+import { ArrowLeft, Check, Paperclip, Send } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { MediaPicker } from "@/components/messaging/media-picker";
 
 const FOLLOW_UP_TRIGGERS = [
   "new lead",
@@ -47,8 +48,12 @@ export default function NewCategoryCampaignPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [showMedia, setShowMedia] = useState(false);
 
   const segments = useMemo(() => estimateSmsSegments(message), [message]);
+  const isMms = mediaUrls.length > 0;
+  const creditsPerMessage = isMms ? 3 : segments.segments;
 
   if (!category) {
     return (
@@ -87,6 +92,7 @@ export default function NewCategoryCampaignPage() {
             delayHours: Number(delayHours) || 24,
             followUpCount: Number(followUpCount) || 2,
             stopOnReply,
+            mediaUrls,
           },
         }),
       });
@@ -198,9 +204,27 @@ export default function NewCategoryCampaignPage() {
               onChange={(e) => setMessage(e.target.value)}
             />
             <p className="mt-1 text-xs text-slate-500">
-              {segments.characters} characters · {segments.segments} SMS segment
-              {segments.segments === 1 ? "" : "s"} · merge fields like {"{{first_name}}"} supported
+              {segments.characters} characters ·{" "}
+              {isMms
+                ? `MMS · ${creditsPerMessage} credits per recipient`
+                : `${segments.segments} SMS segment${segments.segments === 1 ? "" : "s"}`}{" "}
+              · merge fields like {"{{first_name}}"} supported
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowMedia(true)}>
+                <Paperclip className="h-3.5 w-3.5" />
+                {mediaUrls.length ? `Images (${mediaUrls.length})` : "Attach image (MMS)"}
+              </Button>
+              {mediaUrls.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-xs text-slate-500 underline"
+                  onClick={() => setMediaUrls([])}
+                >
+                  Remove images
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div>
@@ -258,6 +282,11 @@ export default function NewCategoryCampaignPage() {
           <h3 className="font-semibold text-slate-900">Preview</h3>
           <div className="mt-4 rounded-2xl bg-slate-900 p-4 text-sm text-white">
             <p className="whitespace-pre-wrap">{message}</p>
+            {mediaUrls.length > 0 ? (
+              <p className="mt-3 text-xs text-slate-300">
+                + {mediaUrls.length} image{mediaUrls.length === 1 ? "" : "s"} (MMS)
+              </p>
+            ) : null}
           </div>
           <p className="mt-4 text-xs text-slate-500">
             Required compliance language is enforced on live sends (STOP/HELP). Always include clear
@@ -265,6 +294,15 @@ export default function NewCategoryCampaignPage() {
           </p>
         </Card>
       </div>
+      <MediaPicker
+        open={showMedia}
+        onClose={() => setShowMedia(false)}
+        onConfirm={(urls) => {
+          setMediaUrls(urls);
+          setShowMedia(false);
+        }}
+        initialSelected={mediaUrls}
+      />
     </div>
   );
 }

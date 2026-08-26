@@ -50,6 +50,20 @@ export async function isMassTextingCampaign(
   );
 }
 
+export function getCampaignMediaUrls(configJson: unknown): string[] {
+  const config =
+    configJson && typeof configJson === "object"
+      ? (configJson as Record<string, unknown>)
+      : {};
+  const urls = config.mediaUrls;
+  if (!Array.isArray(urls)) return [];
+  return urls.filter((u): u is string => typeof u === "string" && u.trim().length > 0);
+}
+
+export function isCampaignMms(configJson: unknown): boolean {
+  return getCampaignMediaUrls(configJson).length > 0;
+}
+
 export async function estimateMessageSegments(body: string): Promise<number> {
   const { estimateSmsSegments } = await import("@/lib/utils");
   return Math.max(1, estimateSmsSegments(body).segments);

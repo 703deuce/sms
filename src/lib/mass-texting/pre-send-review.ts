@@ -3,6 +3,8 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { estimateSmsSegments } from "@/lib/utils";
+import { estimateMessagingCredits } from "@/lib/mass-texting/credit-units";
+import { getCampaignMediaUrls, isCampaignMms } from "@/lib/mass-texting/campaign-send";
 
 export type PreSendReview = {
   campaignId: string;
@@ -17,6 +19,7 @@ export type PreSendReview = {
   estimatedSegments: number;
   mmsCount: number;
   messagePreview: string;
+  mediaUrls: string[];
   phoneNumberId: string | null;
   phoneE164: string | null;
   scheduledAt: string | null;
@@ -93,10 +96,12 @@ export async function buildPreSendReview(
 
   const body = campaign.body || "";
   const segmentInfo = estimateSmsSegments(body);
-  const isMms = Boolean(config.mediaUrls && Array.isArray(config.mediaUrls) && config.mediaUrls.length);
-  const estimatedSegments = isMms
-    ? accepted.length
-    : accepted.length * Math.max(1, segmentInfo.segments);
+  const isMms = isCampaignMms(config);
+  const estimatedSegments = estimateMessagingCredits({
+    recipientCount: accepted.length,
+    smsSegmentsPerRecipient: Math.max(1, segmentInfo.segments),
+    isMms,
+  });
 
   const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
   const sender = await resolveMassTextSendingNumber(workspaceId);
@@ -114,6 +119,7 @@ export async function buildPreSendReview(
     estimatedSegments,
     mmsCount: isMms ? accepted.length : 0,
     messagePreview: body.slice(0, 280),
+    mediaUrls: getCampaignMediaUrls(config),
     phoneNumberId: sender?.phoneNumberId ?? null,
     phoneE164: sender?.phoneE164 ?? null,
     scheduledAt: campaign.scheduledAt?.toISOString() ?? null,

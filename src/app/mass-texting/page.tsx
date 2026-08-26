@@ -27,7 +27,7 @@ const FAQ = [
   },
   {
     q: "Can I send MMS?",
-    a: "MMS support is planned. Mass Texting V1 billing and launch focus on SMS segments.",
+    a: "Yes. Attach images from your media library when creating a campaign. MMS uses 3 messaging credits per recipient.",
   },
   {
     q: "Can I personalize messages?",
