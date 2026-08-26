@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { CampaignWizard } from "@/components/send/campaign-wizard";
 
-/** Send entrypoint → campaign library (14 core types). */
+/** Upload CSV, pick audience, compose, and send — Mass Texting quick launch flow. */
 export default function SendPage() {
-  redirect("/campaigns");
+  return <CampaignWizard />;
 }

@@ -2,8 +2,9 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
+import { resolveMassTextA2pStatus } from "@/lib/mass-texting/a2p-status";
 import { campaignConfigIsMassText } from "@/lib/mass-texting/campaign-send";
-import { getMessagingProductRegistration, resolveMassTextSendingNumber } from "@/lib/mass-texting/messaging-registration";
+import { resolveMassTextSendingNumber } from "@/lib/mass-texting/messaging-registration";
 
 export type MassTextOverviewMetrics = {
   messagesSentMonth: number;
@@ -37,7 +38,7 @@ export async function loadMassTextOverviewMetrics(
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
 
-  const [allCampaigns, audits, sender, mtRegistration, billing] = await Promise.all([
+  const [allCampaigns, audits, sender, a2pStatus, billing] = await Promise.all([
     prisma.campaign.findMany({
       where: { workspaceId },
       select: {
@@ -60,7 +61,7 @@ export async function loadMassTextOverviewMetrics(
       select: { campaignId: true },
     }),
     resolveMassTextSendingNumber(workspaceId),
-    getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING"),
+    resolveMassTextA2pStatus(workspaceId),
     getMassTextingBillingSummary(workspaceId),
   ]);
 
@@ -142,7 +143,7 @@ export async function loadMassTextOverviewMetrics(
     creditsRemaining,
     creditsRemainingCents: creditsRemaining,
     sendingNumber: sender?.phoneE164 ?? null,
-    a2pStatus: mtRegistration?.overallStatus ?? "not_started",
+    a2pStatus,
     upcomingScheduled: upcoming.map((c: (typeof upcoming)[number]) => ({
       id: c.id,
       name: c.name,

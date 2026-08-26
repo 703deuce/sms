@@ -205,6 +205,11 @@ export function getVoicePageTitle(pathname: string): string {
     return "Mass Texting";
   }
   if (pathname.startsWith("/campaigns")) return "Campaigns";
+  if (pathname === "/send" || pathname.startsWith("/send/")) {
+    if (pathname.startsWith("/send/quick")) return "Quick text";
+    if (pathname.startsWith("/send/test")) return "Send test";
+    return "Send message";
+  }
   if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/messaging/media")) return "Media";
   if (pathname.startsWith("/contacts/lists")) return "Lists";

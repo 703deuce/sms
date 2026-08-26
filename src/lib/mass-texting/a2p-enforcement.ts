@@ -1,6 +1,10 @@
 import "server-only";
 
 import {
+  isMassTextA2pApprovedStatus,
+  syncMassTextA2pFromWorkspaceRegistration,
+} from "@/lib/mass-texting/a2p-status";
+import {
   ensureMessagingProductRegistration,
   getMessagingProductRegistration,
 } from "@/lib/mass-texting/messaging-registration";
@@ -19,7 +23,9 @@ export async function assertMassTextMarketingSendAllowed(
   workspaceId: string,
 ): Promise<MassTextA2pSendGate> {
   await ensureMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING");
-  const reg = await getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING");
+  const reg =
+    (await syncMassTextA2pFromWorkspaceRegistration(workspaceId)) ??
+    (await getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING"));
 
   if (!reg) {
     return {
@@ -39,10 +45,7 @@ export async function assertMassTextMarketingSendAllowed(
     };
   }
 
-  const approved =
-    reg.overallStatus === "approved" ||
-    reg.overallStatus === "certified" ||
-    reg.overallStatus === "ready";
+  const approved = isMassTextA2pApprovedStatus(reg.overallStatus);
 
   if (!approved || !reg.messagingEnabled || !reg.phoneAttached) {
     return {

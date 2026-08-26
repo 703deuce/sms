@@ -5,6 +5,7 @@ import {
   Inbox,
   LayoutDashboard,
   Megaphone,
+  Send,
   Settings,
   ShieldCheck,
   Users,
@@ -32,6 +33,11 @@ export function buildMassTextNav(options: MassTextNavOptions = {}): NavItem[] {
       label: "Campaigns",
       href: "/campaigns",
       icon: Megaphone,
+    },
+    {
+      label: "Send",
+      href: "/send",
+      icon: Send,
     },
     {
       label: "Lists",
@@ -93,6 +99,11 @@ export function getMassTextPageTitle(pathname: string): string {
     return "Mass Texting";
   }
   if (pathname.startsWith("/campaigns")) return "Campaigns";
+  if (pathname === "/send" || pathname.startsWith("/send/")) {
+    if (pathname.startsWith("/send/quick")) return "Quick text";
+    if (pathname.startsWith("/send/test")) return "Send test";
+    return "Send message";
+  }
   if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/messaging/media")) return "Media";
   if (pathname.startsWith("/contacts/lists")) return "Lists";

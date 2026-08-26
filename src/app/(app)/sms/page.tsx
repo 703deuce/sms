@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/ui/status-chip";
+import { isMassTextA2pApprovedStatus } from "@/lib/mass-texting/a2p-status";
 import { loadMassTextOverviewMetrics } from "@/lib/mass-texting/overview-metrics";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
@@ -9,6 +10,11 @@ import { Megaphone, Upload, Users } from "lucide-react";
 export default async function MassTextingOverviewPage() {
   const { workspaceId } = await requireWorkspaceContext();
   const metrics = await loadMassTextOverviewMetrics(workspaceId);
+  const a2pChip = isMassTextA2pApprovedStatus(metrics.a2pStatus)
+    ? "Approved"
+    : metrics.a2pStatus === "in_review" || metrics.a2pStatus === "submitted"
+      ? "In review"
+      : "Pending";
 
   return (
     <div className="space-y-6">
@@ -20,10 +26,16 @@ export default async function MassTextingOverviewPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/campaigns/new/promotion">
+          <Link href="/send">
             <Button className="h-9 rounded-[10px]">
               <Megaphone className="h-4 w-4" />
-              New Campaign
+              Send message
+            </Button>
+          </Link>
+          <Link href="/campaigns/new/promotion">
+            <Button variant="outline" className="h-9 rounded-[10px]">
+              <Megaphone className="h-4 w-4" />
+              New campaign
             </Button>
           </Link>
           <Link href="/contacts/imports">
@@ -72,10 +84,11 @@ export default async function MassTextingOverviewPage() {
         <section className="rounded-[14px] border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[15px] font-semibold">A2P status</h2>
-            <StatusChip status={metrics.a2pStatus === "approved" ? "Approved" : "Pending"} />
+            <StatusChip status={a2pChip} />
           </div>
           <p className="text-[13px] text-muted-foreground">
-            Mass Text marketing uses a separate A2P registration from Missed Call Text Back.
+            Uses your workspace messaging registration — the same A2P approval that powers Missed
+            Call Text Back when you share a number.
           </p>
           <Link href="/sms/compliance" className="mt-3 inline-block text-[13px] font-medium text-primary">
             View compliance setup

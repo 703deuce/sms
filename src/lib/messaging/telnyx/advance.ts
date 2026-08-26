@@ -346,6 +346,12 @@ export async function advanceTelnyxRegistration(workspaceId: string) {
       });
     }
     await log(reg, "advance_complete", ready ? "telnyx messaging ready" : "waiting for phone/campaign");
+    if (ready) {
+      const { syncMassTextA2pFromWorkspaceRegistration } = await import(
+        "@/lib/mass-texting/a2p-status"
+      );
+      await syncMassTextA2pFromWorkspaceRegistration(workspaceId);
+    }
     return reg;
   } catch (err) {
     if (err instanceof JobDeferredError) {
