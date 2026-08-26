@@ -56,9 +56,15 @@ export default async function CampaignRecurringPage() {
             <Link href="/campaigns">
               <Button variant="outline">All campaigns</Button>
             </Link>
-            <Link href="/send">
-              <Button>Create recurring</Button>
-            </Link>
+            {recurringEnabled ? (
+              <Link href="/send">
+                <Button>Create recurring</Button>
+              </Link>
+            ) : (
+              <Link href="/campaigns/new/promotion">
+                <Button>Create campaign</Button>
+              </Link>
+            )}
           </>
         }
       />
@@ -107,8 +113,8 @@ export default async function CampaignRecurringPage() {
           icon={<Repeat className="h-8 w-8" />}
           title="No recurring campaigns"
           description="Recurring and reminder campaigns will appear here when you create appointment reminders or scheduled sequences."
-          actionLabel="Create campaign"
-          actionHref="/send"
+          actionLabel={recurringEnabled ? "Create campaign" : "Create one-time campaign"}
+          actionHref={recurringEnabled ? "/send" : "/campaigns/new/promotion"}
         />
       ) : (
         <Card>
