@@ -46,11 +46,14 @@ def log_boot_versions() -> None:
         import livekit.agents as lk_agents
         import livekit.plugins.openai as lk_openai
 
+        from transovo_voice.build_identity import get_voice_build_identity
+
         log_event(
             "python_voice_dependencies_ready",
             extra={
                 "livekit_agents": getattr(lk_agents, "__version__", "unknown"),
                 "livekit_openai": getattr(lk_openai, "__version__", "unknown"),
+                **get_voice_build_identity(),
             },
         )
     except Exception as err:

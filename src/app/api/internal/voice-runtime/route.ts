@@ -15,6 +15,7 @@ type VoiceRuntimeAction =
   | "record_mctb_sip_press_1_consent"
   | "start_mctb_sip_voicemail"
   | "complete_mctb_sip_voicemail"
+  | "persist_mctb_voicemail_lifecycle"
   | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
   | "persist_intake_fields"
@@ -191,6 +192,14 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-record"
         );
         result = await completeMctbSipVoicemailForPython(payload as never);
+        break;
+      }
+
+      case "persist_mctb_voicemail_lifecycle": {
+        const { appendMctbVoicemailLifecycleEvent } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-lifecycle"
+        );
+        result = await appendMctbVoicemailLifecycleEvent(payload as never);
         break;
       }
 

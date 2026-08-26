@@ -84,12 +84,15 @@ async def entrypoint(ctx: JobContext) -> None:
 
 def main() -> None:
     active_backend = apply_media_backend_env()
+    from transovo_voice.build_identity import get_voice_build_identity
+
     log_event(
         "python_voice_boot_started",
         extra={
             "agentName": AGENT_NAME,
             "apiVersion": VOICE_RUNTIME_API_VERSION,
             "mediaBackend": active_backend,
+            **get_voice_build_identity(),
         },
     )
     log_boot_versions()
