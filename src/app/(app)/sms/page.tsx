@@ -26,7 +26,7 @@ export default async function MassTextingOverviewPage() {
               New Campaign
             </Button>
           </Link>
-          <Link href="/contacts">
+          <Link href="/contacts/imports">
             <Button variant="outline" className="h-9 rounded-[10px]">
               <Upload className="h-4 w-4" />
               Import Contacts

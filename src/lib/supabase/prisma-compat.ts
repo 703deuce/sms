@@ -601,6 +601,8 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
       fk: "authorizedCallerId",
     },
   },
+  contactList: { members: { table: "ContactListMember", fk: "listId" } },
+  contactListMember: { contact: { table: "Contact", fk: "contactId" } },
 };
 
 /** model → `_count` relation name → child table + FK for aggregate counts. */
@@ -1143,7 +1145,32 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
 
     if (!meta) continue;
 
-    // Many-to-one: load related by FK
+    const fkOnParent = out.some((r) => r[meta.fk] != null && r[meta.fk] !== undefined);
+    if (!fkOnParent) {
+      const ids = out.map((r) => r.id as string).filter(Boolean);
+      const { data, error } = ids.length
+        ? await db.from(meta.table).select("*").in(meta.fk, ids)
+        : { data: [] as Row[], error: null };
+      if (error) throw new DbError(error.message, error.code);
+      let childRows = (data ?? []).map((r) => reviveRow(r as Row));
+      if (isObject(cfg) && isObject(cfg.include)) {
+        const childModel = Object.entries(MODEL_TO_TABLE).find(([, t]) => t === meta.table)?.[0];
+        if (childModel) {
+          childRows = await applyInclude(childRows, cfg.include, childModel);
+        }
+      }
+      const by = new Map<string, Row[]>();
+      for (const child of childRows) {
+        const parentId = child[meta.fk] as string;
+        const list = by.get(parentId) ?? [];
+        list.push(child);
+        by.set(parentId, list);
+      }
+      out = out.map((r) => ({ ...r, [rel]: by.get(r.id as string) ?? [] }));
+      continue;
+    }
+
+    // Many-to-one: load related by FK on parent row
     const fk = meta.fk;
     const ids = [...new Set(out.map((r) => r[fk]).filter(Boolean))] as string[];
     if (!ids.length) {

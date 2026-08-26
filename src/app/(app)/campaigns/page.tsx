@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, LayoutList, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { useCampaignTabs } from "@/hooks/use-campaign-tabs";
 
 type LiveCampaign = {
   id: string;
@@ -24,6 +24,7 @@ type LiveCampaign = {
 
 export default function CampaignsPage() {
   const [recent, setRecent] = useState<LiveCampaign[]>([]);
+  const tabs = useCampaignTabs();
 
   useEffect(() => {
     fetch("/api/campaigns")
@@ -45,7 +46,7 @@ export default function CampaignsPage() {
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       <div className="mb-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6">
         <h2 className="text-lg font-semibold text-slate-900">What do you want to do?</h2>

@@ -9,7 +9,7 @@ import type { Campaign } from "@/lib/types";
 import { loadCampaigns } from "@/lib/workspace-data";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { getCampaignTabs } from "@/lib/campaign-tabs";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -88,6 +88,7 @@ export default async function CampaignCalendarPage() {
   const weekDays = Array.from({ length: 7 }, (_, i) => weekStart + i).filter(
     (d) => d <= daysInMonth,
   );
+  const tabs = await getCampaignTabs(workspaceId);
 
   return (
     <div>
@@ -101,7 +102,7 @@ export default async function CampaignCalendarPage() {
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">

@@ -11,7 +11,7 @@ import { loadCampaigns } from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
 import { CalendarClock } from "lucide-react";
 import Link from "next/link";
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { getCampaignTabs } from "@/lib/campaign-tabs";
 
 function formatScheduled(at: string | null) {
   if (!at) return "—";
@@ -41,6 +41,7 @@ export default async function CampaignScheduledPage() {
     const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
     return aTime - bTime;
   });
+  const tabs = await getCampaignTabs(workspaceId);
 
   return (
     <div>
@@ -52,14 +53,14 @@ export default async function CampaignScheduledPage() {
             <Link href="/campaigns/calendar">
               <Button variant="outline">Calendar view</Button>
             </Link>
-            <Link href="/send">
+            <Link href="/campaigns/new/promotional">
               <Button>Schedule campaign</Button>
             </Link>
           </>
         }
       />
 
-      <Tabs items={campaignTabs} />
+      <Tabs items={tabs} />
 
       {scheduled.length === 0 ? (
         <EmptyState
@@ -67,7 +68,7 @@ export default async function CampaignScheduledPage() {
           title="Nothing scheduled"
           description="Schedule a campaign to see it here. Sends respect account quiet hours and A2P limits."
           actionLabel="Schedule campaign"
-          actionHref="/send"
+          actionHref="/campaigns/new/promotional"
         />
       ) : (
         <Card>
