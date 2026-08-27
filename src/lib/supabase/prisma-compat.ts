@@ -1432,17 +1432,28 @@ function modelApi(model: string): ModelApi {
 
     async upsert({ where, create, update }: Args) {
       const flatWhere = flattenCompoundWhere(where) ?? where;
-      const existing = await api.findUnique({ where: flatWhere });
-      if (existing) return api.update({ where: flatWhere, data: update });
-      const createData = { ...create };
-      if (flatWhere && isObject(flatWhere)) {
-        for (const [k, v] of Object.entries(flatWhere)) {
-          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-            createData[k] = v;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const existing = await api.findUnique({ where: flatWhere });
+        if (existing) return api.update({ where: flatWhere, data: update });
+        const createData = { ...create };
+        if (flatWhere && isObject(flatWhere)) {
+          for (const [k, v] of Object.entries(flatWhere)) {
+            if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+              createData[k] = v;
+            }
           }
         }
+        try {
+          return await api.create({ data: createData });
+        } catch (err) {
+          const code = (err as { code?: string })?.code;
+          if (code === "P2002" && attempt < 3) continue;
+          throw err;
+        }
       }
-      return api.create({ data: createData });
+      const existing = await api.findUnique({ where: flatWhere });
+      if (existing) return api.update({ where: flatWhere, data: update });
+      throw new Error("upsert failed after retries");
     },
 
     async delete({ where }: Args) {
