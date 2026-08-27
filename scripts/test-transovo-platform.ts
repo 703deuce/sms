@@ -85,8 +85,9 @@ const mctbIdx = mtLabels.indexOf("Missed Calls");
 assert.ok(overviewIdx >= 0, "SMS overview on unified menu");
 assert.ok(mctbIdx > overviewIdx, "MCTB section appears after SMS platform");
 assert.ok(mtLabels.includes("Campaigns"), "SMS campaigns on unified menu");
-assert.ok(mtLabels.includes("Automations"), "SMS automations on unified menu");
-assert.ok(mtLabels.includes("Inbox"), "SMS inbox on unified menu");
+assert.ok(mtLabels.includes("Flows"), "SMS automation flows on unified menu");
+assert.ok(mtLabels.includes("Flow builder"), "SMS automation builder on unified menu");
+assert.ok(mtLabels.includes("Keywords"), "Grow keywords on unified menu");
 assert.ok(massTextUnified.some((i) => i.sectionLabel === "SMS"));
 assert.ok(massTextUnified.some((i) => i.sectionLabel === "Missed Call Text Back"));
 assert.ok(

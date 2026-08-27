@@ -5,30 +5,33 @@
 import assert from "node:assert/strict";
 import { buildSmsPlatformNav } from "../src/lib/products/sms-platform-nav";
 import { buildVoiceNav } from "../src/lib/products/voice-nav";
+import { growTabs } from "../src/lib/grow-tabs";
 
 const smsNav = buildSmsPlatformNav({ hasMassTexting: true, inboxBadge: 2 });
 const smsLabels = smsNav.map((i) => i.label);
+const smsHrefs = smsNav.map((i) => i.href);
+
 assert.ok(smsNav[0]?.sectionLabel === "SMS");
 assert.ok(smsLabels.includes("Overview"));
 assert.ok(smsLabels.includes("Inbox"));
 assert.ok(smsLabels.includes("Campaigns"));
-assert.ok(smsLabels.includes("Send"));
-assert.ok(smsLabels.includes("Contacts"));
-assert.ok(smsLabels.includes("Lists"));
-assert.ok(smsLabels.includes("Imports"));
-assert.ok(smsLabels.includes("Templates"));
-assert.ok(smsLabels.includes("Surveys"));
+assert.equal(smsNav.find((i) => i.label === "Send")?.href, "/send");
+assert.ok(smsHrefs.includes("/send/quick"));
+assert.ok(smsHrefs.includes("/send/ai"));
+assert.ok(smsLabels.includes("Message templates"));
+assert.ok(smsHrefs.includes("/reports/links"));
+assert.ok(smsHrefs.includes("/messaging/payments"));
+assert.ok(smsLabels.includes("Flows"));
+assert.ok(smsHrefs.includes("/automations/templates"));
+assert.ok(smsHrefs.includes("/automations/new"));
+assert.ok(smsHrefs.includes("/automations/logs"));
+for (const tab of growTabs) {
+  assert.ok(smsHrefs.includes(tab.href), `Grow tab missing: ${tab.href}`);
+}
+assert.ok(smsHrefs.includes("/reports/campaigns"));
+assert.ok(smsHrefs.includes("/reports/integrations"));
 assert.ok(smsLabels.includes("Integrations"));
 assert.ok(smsLabels.includes("Billing"));
-assert.ok(smsLabels.includes("Media"));
-assert.ok(smsLabels.includes("Automations"));
-assert.ok(smsLabels.includes("Grow"));
-assert.ok(smsLabels.includes("Reports"));
-assert.ok(smsLabels.includes("Numbers"));
-assert.ok(smsLabels.includes("Compliance"));
-assert.ok(smsLabels.includes("Analytics"));
-assert.ok(smsLabels.includes("Settings"));
-assert.ok(smsLabels.includes("Help"));
 
 const unified = buildVoiceNav({
   hasSms: true,
