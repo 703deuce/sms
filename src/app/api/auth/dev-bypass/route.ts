@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     "@/lib/workspace/preferred-business-workspace"
   );
   const preferredId = await resolvePreferredBusinessWorkspaceId(user.id, membership.workspaceId);
-  const preferred = memberships.find((m) => m.workspaceId === preferredId);
+  const preferred = memberships.find((m: (typeof memberships)[number]) => m.workspaceId === preferredId);
   if (preferred) membership = preferred;
 
   const access = await getUserProductAccess(user.id);

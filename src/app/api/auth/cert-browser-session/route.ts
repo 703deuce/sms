@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       "@/lib/workspace/preferred-business-workspace"
     );
     const preferredId = await resolvePreferredBusinessWorkspaceId(user.id, membership.workspaceId);
-    const match = memberships.find((m) => m.workspaceId === preferredId);
+    const match = memberships.find((m: (typeof memberships)[number]) => m.workspaceId === preferredId);
     if (match) membership = match;
     await grantProductEntitlement(membership.workspaceId, "sms", "trial");
     const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
