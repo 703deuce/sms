@@ -9,17 +9,7 @@ import { loadCampaigns, requireWorkspaceContext } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import Link from "next/link";
 
-const reportTabs = [
-  { label: "Overview", href: "/reports" },
-  { label: "Campaigns", href: "/reports/campaigns" },
-  { label: "Messages", href: "/reports/messages" },
-  { label: "Contacts", href: "/reports/contacts" },
-  { label: "Inbox", href: "/reports/inbox" },
-  { label: "Automations", href: "/reports/automations" },
-  { label: "Links", href: "/reports/links" },
-  { label: "Usage", href: "/reports/usage" },
-  { label: "Audit log", href: "/reports/audit-log" },
-];
+import { analyticsTabs } from "@/lib/analytics-tabs";
 
 export default async function ReportsCampaignsPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -42,7 +32,7 @@ export default async function ReportsCampaignsPage() {
         }
       />
 
-      <Tabs items={reportTabs} />
+      <Tabs items={analyticsTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total sent" value={formatNumber(totalSent)} />

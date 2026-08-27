@@ -26,7 +26,7 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
   return [
     {
       label: "Inbox",
-      href: "/inbox",
+      href: "/conversations",
       icon: Inbox,
       badge: inboxBadge > 0 ? inboxBadge : undefined,
       sectionLabel: "Main",
@@ -59,7 +59,7 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
 
 export function getSmsPageTitle(pathname: string): string {
   if (pathname === "/dashboard") return "";
-  if (pathname.startsWith("/inbox")) return "Inbox";
+  if (pathname.startsWith("/conversations")) return "Inbox";
   if (pathname.startsWith("/send")) return "Send Message";
   if (pathname.startsWith("/campaigns")) return "Campaigns";
   if (pathname.startsWith("/contacts")) return "Contacts";

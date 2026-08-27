@@ -171,7 +171,7 @@ export default function QuickSendPage() {
             <Button variant="outline" onClick={() => setSent(false)}>
               Send another
             </Button>
-            <Link href="/inbox">
+            <Link href="/conversations">
               <Button>View inbox</Button>
             </Link>
           </div>

@@ -10,7 +10,7 @@ import { formatNumber } from "@/lib/utils";
 import { QrCode, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { growTabs } from "@/lib/grow-tabs";
+import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
 
 type QrRow = {
   id: string;
@@ -58,7 +58,7 @@ export default function QrCodesPage() {
         title="QR codes"
         description="Generate QR codes that open signup forms, click-to-text actions, review links, booking links, or promotions."
       />
-      <Tabs items={growTabs} />
+      <Tabs items={leadCaptureTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         <StatCard label="QR codes" value={formatNumber(rows.length)} />

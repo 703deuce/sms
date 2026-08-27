@@ -517,7 +517,7 @@ export async function processInboundMessage(input: {
       await sendPushToWorkspaceAgents(input.workspaceId, {
         title: "New inbox message",
         body: preview || "New reply from " + from,
-        url: `/inbox?conversation=${conversation.id}`,
+        url: `/conversations?conversation=${conversation.id}`,
         tag: `inbox-${conversation.id}`,
       });
     } catch {
@@ -531,7 +531,7 @@ export async function processInboundMessage(input: {
         type: "newReply",
         title: `New reply from ${contactName}`,
         body: preview || undefined,
-        href: `/inbox?conversation=${conversation.id}`,
+        href: `/conversations?conversation=${conversation.id}`,
       });
     } catch {
       // in-app notifications are best-effort

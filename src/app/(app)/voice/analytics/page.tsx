@@ -150,7 +150,7 @@ export default function UnifiedAnalyticsPage() {
               View missed call log →
             </Link>
             {" · "}
-            <Link href="/inbox" className="font-semibold text-primary hover:underline">
+            <Link href="/conversations" className="font-semibold text-primary hover:underline">
               Open conversations →
             </Link>
           </p>

@@ -550,7 +550,7 @@ export function OperationalDashboardView({
             <p className="mt-1 text-[11px] text-[#9ca3af]">messages used</p>
           </div>
           <Link
-            href="/inbox"
+            href="/conversations"
             className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[13px] font-semibold text-[#374151] hover:bg-[#f9fafb]"
           >
             View SMS activity

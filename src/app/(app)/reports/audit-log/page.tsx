@@ -6,17 +6,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { loadAuditLogs, requireWorkspaceContext } from "@/lib/workspace-data";
 
-const reportTabs = [
-  { label: "Overview", href: "/reports" },
-  { label: "Campaigns", href: "/reports/campaigns" },
-  { label: "Messages", href: "/reports/messages" },
-  { label: "Contacts", href: "/reports/contacts" },
-  { label: "Inbox", href: "/reports/inbox" },
-  { label: "Automations", href: "/reports/automations" },
-  { label: "Links", href: "/reports/links" },
-  { label: "Usage", href: "/reports/usage" },
-  { label: "Audit log", href: "/reports/audit-log" },
-];
+import { analyticsTabs } from "@/lib/analytics-tabs";
 
 export default async function ReportsAuditLogPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -30,7 +20,7 @@ export default async function ReportsAuditLogPage() {
         actions={<Button variant="outline">Export log</Button>}
       />
 
-      <Tabs items={reportTabs} />
+      <Tabs items={analyticsTabs} />
 
       <Card>
         <CardTitle>Recent activity</CardTitle>

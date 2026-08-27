@@ -177,7 +177,7 @@ export function MctbDashboardView({
           label="Replies today"
           value={missed?.repliedToday ?? 0}
           icon={MessageSquare}
-          href="/inbox"
+          href="/conversations"
         />
         <StatCard
           label="Link clicks (30d)"

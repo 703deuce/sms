@@ -849,7 +849,7 @@ export function MctbSetupView() {
               />
               Route replies to Conversations and notify your team
             </label>
-            <Link href="/inbox" className="text-[13px] font-semibold text-primary hover:underline">
+            <Link href="/conversations" className="text-[13px] font-semibold text-primary hover:underline">
               Open Conversations →
             </Link>
           </Card>
@@ -987,7 +987,7 @@ export function MctbSetupView() {
               <Link href="/voice/consent-log">
                 <Button variant="outline">View consent log</Button>
               </Link>
-              <Link href="/inbox">
+              <Link href="/conversations">
                 <Button variant="outline">View conversations</Button>
               </Link>
             </div>

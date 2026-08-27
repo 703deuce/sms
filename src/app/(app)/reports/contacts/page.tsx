@@ -13,17 +13,7 @@ import {
 } from "@/lib/workspace-data";
 import { formatNumber, formatPercent } from "@/lib/utils";
 
-const reportTabs = [
-  { label: "Overview", href: "/reports" },
-  { label: "Campaigns", href: "/reports/campaigns" },
-  { label: "Messages", href: "/reports/messages" },
-  { label: "Contacts", href: "/reports/contacts" },
-  { label: "Inbox", href: "/reports/inbox" },
-  { label: "Automations", href: "/reports/automations" },
-  { label: "Links", href: "/reports/links" },
-  { label: "Usage", href: "/reports/usage" },
-  { label: "Audit log", href: "/reports/audit-log" },
-];
+import { analyticsTabs } from "@/lib/analytics-tabs";
 
 export default async function ReportsContactsPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -45,7 +35,7 @@ export default async function ReportsContactsPage() {
         description="Subscriber counts, list growth, and consent status across your audience."
       />
 
-      <Tabs items={reportTabs} />
+      <Tabs items={analyticsTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total contacts" value={formatNumber(metrics.contactGrowth)} />

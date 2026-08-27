@@ -383,7 +383,7 @@ export function JohnAgentDetail() {
                   </table>
                 </div>
                 <div className="border-t border-slate-100 px-5 py-3 text-center">
-                  <Link href="/inbox" className="text-xs font-semibold text-violet-600 hover:underline">
+                  <Link href="/conversations" className="text-xs font-semibold text-violet-600 hover:underline">
                     View All Recent Conversations
                   </Link>
                 </div>

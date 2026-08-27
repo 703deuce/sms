@@ -3,17 +3,12 @@ import {
   BarChart3,
   ClipboardCheck,
   Clock,
-  CreditCard,
   GitBranch,
-  Hash,
   LayoutDashboard,
-  Inbox,
+  MessageSquare,
   PhoneForwarded,
   PhoneMissed,
-  Puzzle,
   Settings,
-  ShieldCheck,
-  ShoppingCart,
   SlidersHorizontal,
   Sparkles,
   Users,
@@ -98,35 +93,24 @@ function buildLegacyProductNav(
   return items;
 }
 
-function buildMctbNav(options: VoiceNavOptions, skipInbox: boolean): NavItem[] {
-  const items: NavItem[] = [];
-
-  if (!skipInbox) {
-    items.push({
-      label: "Inbox",
-      href: "/inbox",
-      icon: Inbox,
-      sectionLabel: "Missed Call Text Back",
-    });
-  } else {
-    items.push({
+function buildMctbNav(options: VoiceNavOptions): NavItem[] {
+  const items: NavItem[] = [
+    {
       label: "Missed Calls",
       href: "/voice/missed-calls",
       icon: PhoneMissed,
       sectionLabel: "Missed Call Text Back",
-    });
-  }
-
-  if (!skipInbox) {
-    items.push({ label: "Missed Calls", href: "/voice/missed-calls", icon: PhoneMissed });
-  }
-
-  items.push(
+    },
     { label: "Visual Voicemail", href: "/voice/voicemail", icon: Voicemail },
     { label: "Consent Log", href: "/voice/consent-log", icon: ClipboardCheck },
     { label: "Text Back Setup", href: "/voice/setup", icon: SlidersHorizontal },
     { label: "Schedule", href: "/voice/schedule", icon: Clock },
-  );
+    {
+      label: "Business Profile",
+      href: "/settings/business",
+      icon: Settings,
+    },
+  ];
   if (options.showTryIt) {
     items.push({ label: "Try It", href: "/voice/try-it", icon: Sparkles });
   }
@@ -134,7 +118,7 @@ function buildMctbNav(options: VoiceNavOptions, skipInbox: boolean): NavItem[] {
 }
 
 /**
- * Unified Transovo customer sidebar — SMS platform first, MCTB automation at the bottom.
+ * Unified Transovo customer sidebar — full SMS platform with MCTB as a module.
  */
 export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
@@ -157,9 +141,20 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   if (showSmsPlatform) {
     items.push(
       ...buildSmsPlatformNav({
-        inboxBadge: options.inboxBadge,
-        hasMassTexting,
+        conversationsBadge: options.inboxBadge,
       }),
+    );
+  } else if (!showMctbSection) {
+    items.push(
+      {
+        label: "Numbers",
+        href: "/voice/numbers",
+        icon: Users,
+        sectionLabel: "Manage",
+        matchExact: true,
+      },
+      { label: "Messaging Compliance", href: "/compliance", icon: ClipboardCheck },
+      { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     );
   }
 
@@ -167,44 +162,9 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     items.push(...buildLegacyProductNav(features));
   }
 
-  if (!showSmsPlatform) {
-    items.push(
-      {
-        label: "Numbers",
-        href: "/voice/numbers",
-        icon: Hash,
-        sectionLabel: "Manage",
-        matchExact: true,
-      },
-      { label: "Buy Numbers", href: "/voice/numbers/buy", icon: ShoppingCart },
-      { label: "Messaging Compliance", href: "/compliance", icon: ShieldCheck },
-      { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
-    );
-  } else {
-    items.push({
-      label: "Buy Numbers",
-      href: "/voice/numbers/buy",
-      icon: ShoppingCart,
-      sectionLabel: "Workspace",
-    });
-  }
-
   if (showMctbSection) {
-    items.push(...buildMctbNav(options, showSmsPlatform));
+    items.push(...buildMctbNav(options));
   }
-
-  const account: NavItem[] = [
-    {
-      label: "Business profile",
-      href: "/settings/business",
-      icon: Settings,
-      sectionLabel: showSmsPlatform ? undefined : "Account",
-    },
-  ];
-  if (options.showBillingNav && !showSmsPlatform) {
-    account.push({ label: "Billing", href: "/settings/billing", icon: CreditCard });
-  }
-  items.push(...account);
 
   return items;
 }
@@ -215,7 +175,8 @@ export function getVoicePageTitle(pathname: string): string {
 
   if (pathname === "/dashboard" || pathname === "/outcomes") return "Dashboard";
   if (pathname.startsWith("/voice/try-it")) return "Try It";
-  if (pathname.startsWith("/inbox")) return "Inbox";
+  if (pathname.startsWith("/conversations")) return "Conversations";
+  if (pathname.startsWith("/inbox")) return "Conversations";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/consent-log")) return "Consent Log";
   if (pathname.startsWith("/voice/setup")) return "Text Back Setup";
@@ -224,7 +185,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
   if (pathname.startsWith("/voice/needs-attention")) return "Needs Attention";
   if (pathname === "/voice/analytics") return "Analytics";
-  if (pathname.startsWith("/voice/reports")) return "Overall Reports";
+  if (pathname.startsWith("/voice/reports")) return "Analytics";
   if (pathname === "/smart-routing/analytics") return "Analytics";
   if (isSmartRoutingSectionPath(pathname)) {
     if (pathname === "/smart-routing/ai") return "AI Routing Assistant";
@@ -241,11 +202,13 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/voicemail") || pathname.startsWith("/personal/voicemail")) {
     return "Visual Voicemail";
   }
-  if (pathname === "/voice/numbers/buy") return "Buy Numbers";
-  if (pathname.startsWith("/voice/numbers")) return "Numbers";
-  if (pathname.startsWith("/compliance")) return "Messaging Compliance";
+  if (pathname === "/voice/numbers/buy" || pathname === "/numbers/buy") return "Buy Numbers";
+  if (pathname.startsWith("/voice/numbers") || pathname.startsWith("/numbers")) return "Numbers";
+  if (pathname.startsWith("/compliance")) return "Compliance";
   if (pathname.startsWith("/integrations")) return "Integrations";
+  if (pathname.startsWith("/settings/business")) return "Business Profile";
   if (pathname.startsWith("/settings/billing")) return "Billing";
+  if (pathname.startsWith("/settings/workspaces")) return "Workspace";
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/call-forwarding/outbound")) return "Outbound calling";
   if (pathname.startsWith("/call-forwarding/hours")) return "Business hours";
@@ -267,10 +230,11 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
 
   if (showSmsPlatform) {
     items.push(
-      { label: "Inbox", href: "/inbox" },
+      { label: "Conversations", href: "/conversations" },
       { label: "Campaigns", href: "/campaigns" },
       { label: "Send", href: "/send" },
       { label: "Contacts", href: "/contacts" },
+      { label: "Analytics", href: "/analytics" },
     );
   }
 
@@ -278,19 +242,16 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
     items.push({ label: "Routing", href: "/smart-routing" });
   }
 
-  if (!showSmsPlatform) {
+  if (!showSmsPlatform && !showMctbSection) {
     items.push({ label: "Analytics", href: "/voice/analytics" });
   }
 
   if (showMctbSection) {
     items.push(
-      { label: "MCTB", href: "/inbox" },
       { label: "Missed", href: "/voice/missed-calls" },
       { label: "Visual Voicemail", href: "/voice/voicemail" },
       { label: "Setup", href: "/voice/setup" },
     );
-  } else {
-    items.push({ label: "Visual Voicemail", href: "/voice/voicemail" });
   }
 
   return items;

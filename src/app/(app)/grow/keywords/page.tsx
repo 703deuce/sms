@@ -11,7 +11,7 @@ import { formatNumber } from "@/lib/utils";
 import { Hash, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { growTabs } from "@/lib/grow-tabs";
+import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
 
 type KeywordRow = {
   id: string;
@@ -94,7 +94,7 @@ export default function KeywordsPage() {
         title="Keywords"
         description="Contacts text a keyword (JOIN, QUOTE, BOOK…) to opt in, join a list, store consent, and optionally start a welcome workflow."
       />
-      <Tabs items={growTabs} />
+      <Tabs items={leadCaptureTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Active keywords" value={formatNumber(rows.length)} />

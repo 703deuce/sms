@@ -46,7 +46,7 @@ export const BUSINESS_ONLY_PATH_PREFIXES = [
   "/systems",
   "/agents",
   "/voice",
-  "/inbox",
+  "/conversations",
   "/send",
   "/campaigns",
   "/templates",

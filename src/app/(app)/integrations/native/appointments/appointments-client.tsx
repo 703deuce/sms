@@ -90,7 +90,7 @@ function reminderMessage(appt: Appt) {
 }
 
 function draftHref(contactId: string, message: string) {
-  return `/inbox?contactId=${encodeURIComponent(contactId)}&draft=${encodeURIComponent(message)}`;
+  return `/conversations?contactId=${encodeURIComponent(contactId)}&draft=${encodeURIComponent(message)}`;
 }
 
 const trackingKeys = [
@@ -393,7 +393,7 @@ export function AppointmentsClient() {
 
               <div className="mt-4 flex flex-wrap gap-3 text-sm">
                 {a.contactId ? (
-                  <Link href={`/inbox?contactId=${a.contactId}`} className="underline">
+                  <Link href={`/conversations?contactId=${a.contactId}`} className="underline">
                     SMS history
                   </Link>
                 ) : null}

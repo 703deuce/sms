@@ -14,7 +14,7 @@ const PRODUCT_CHIPS: Array<
   { label: "Unread", unread: true },
 ];
 
-export function InboxProductFilters() {
+export function InboxProductFilters({ basePath = "/conversations" }: { basePath?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -66,7 +66,7 @@ export function InboxProductFilters() {
         );
       })}
       <Link
-        href="/inbox"
+        href={basePath}
         className="rounded-full border border-border px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
       >
         Clear filters

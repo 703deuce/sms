@@ -81,7 +81,7 @@ export function CallbackRequestsClient() {
                       </button>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/inbox`} className="text-[#6366f1] font-semibold text-xs">
+                      <Link href={`/conversations`} className="text-[#6366f1] font-semibold text-xs">
                         Text
                       </Link>
                       {r.status === "new" ? (

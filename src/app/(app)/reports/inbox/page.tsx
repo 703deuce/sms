@@ -13,17 +13,7 @@ import {
 import { formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import Link from "next/link";
 
-const reportTabs = [
-  { label: "Overview", href: "/reports" },
-  { label: "Campaigns", href: "/reports/campaigns" },
-  { label: "Messages", href: "/reports/messages" },
-  { label: "Contacts", href: "/reports/contacts" },
-  { label: "Inbox", href: "/reports/inbox" },
-  { label: "Automations", href: "/reports/automations" },
-  { label: "Links", href: "/reports/links" },
-  { label: "Usage", href: "/reports/usage" },
-  { label: "Audit log", href: "/reports/audit-log" },
-];
+import { analyticsTabs } from "@/lib/analytics-tabs";
 
 export default async function ReportsInboxPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -43,13 +33,13 @@ export default async function ReportsInboxPage() {
         title="Inbox reports"
         description="Team response metrics, conversation volume, and assignment workload."
         actions={
-          <Link href="/inbox" className="text-sm font-medium text-primary hover:underline">
+          <Link href="/conversations" className="text-sm font-medium text-primary hover:underline">
             Open inbox
           </Link>
         }
       />
 
-      <Tabs items={reportTabs} />
+      <Tabs items={analyticsTabs} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Reply rate" value={formatPercent(metrics.replyRate)} />

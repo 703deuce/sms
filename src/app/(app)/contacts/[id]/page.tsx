@@ -229,7 +229,7 @@ export default async function ContactDetailPage({
                   <p className="text-sm font-medium">Open inbox thread</p>
                   <StatusChip status={conversation.status} />
                 </div>
-                <Link href="/inbox" className="mt-2 inline-block">
+                <Link href="/conversations" className="mt-2 inline-block">
                   <Button variant="outline" size="sm">
                     Open in inbox
                   </Button>

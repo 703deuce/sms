@@ -77,7 +77,7 @@ export function LeadInboxClient() {
                   Open contact
                 </Link>
               ) : null}
-              <Link href="/inbox" className="underline">
+              <Link href="/conversations" className="underline">
                 Messenger
               </Link>
             </div>

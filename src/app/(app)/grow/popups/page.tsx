@@ -9,7 +9,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { Copy, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { growTabs } from "@/lib/grow-tabs";
+import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
 
 type WidgetRow = {
   id: string;
@@ -102,7 +102,7 @@ export default function GrowPopupsPage() {
         title="Popups & widgets"
         description="Embedded forms, popups, slide-ins, exit-intent, and floating text-us buttons for your website."
       />
-      <Tabs items={growTabs} />
+      <Tabs items={leadCaptureTabs} />
       <Card className="mb-6 grid gap-3 p-5 sm:grid-cols-5">
         <div>
           <Label>Name</Label>

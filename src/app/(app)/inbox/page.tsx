@@ -1,68 +1,16 @@
-import { InboxView } from "@/components/inbox/inbox-view";
-import { InboxProductFilters } from "@/components/inbox/inbox-product-filters";
-import { Button } from "@/components/ui/button";
-import { parseInboxSearchParams } from "@/lib/mass-texting/inbox-filters";
-import {
-  loadContacts,
-  loadConversations,
-  loadTeamMembers,
-  requireWorkspaceContext,
-} from "@/lib/workspace-data";
-import { Archive, MessageSquareText } from "lucide-react";
-import Link from "next/link";
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-export default async function InboxPage({
+/** Legacy inbox URL — unified under Conversations. */
+export default async function InboxRedirectPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { workspaceId, session } = await requireWorkspaceContext();
   const params = await searchParams;
-  const urlSearch = new URLSearchParams();
+  const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") urlSearch.set(key, value);
+    if (typeof value === "string") qs.set(key, value);
   }
-  const filters = parseInboxSearchParams(urlSearch);
-
-  const [conversations, contacts, teamMembers] = await Promise.all([
-    loadConversations(workspaceId, filters),
-    loadContacts(workspaceId),
-    loadTeamMembers(workspaceId),
-  ]);
-
-  const initialFilter = filters.unread ? "Unread" : "All conversations";
-
-  return (
-    <div>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-[24px] font-bold tracking-tight">Inbox</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/inbox/saved-replies">
-            <Button variant="outline" className="h-9 rounded-[10px] text-[13px]">
-              <MessageSquareText className="h-4 w-4" />
-              Saved replies
-            </Button>
-          </Link>
-          <Link href="/inbox/archived">
-            <Button variant="outline" className="h-9 rounded-[10px] text-[13px]">
-              <Archive className="h-4 w-4" />
-              Archived
-            </Button>
-          </Link>
-        </div>
-      </div>
-      <Suspense fallback={null}>
-        <InboxProductFilters />
-      </Suspense>
-      <InboxView
-        initialFilter={initialFilter}
-        conversations={conversations}
-        contacts={contacts}
-        teamMembers={teamMembers}
-        currentUserName={session.name}
-        currentUserId={session.userId}
-      />
-    </div>
-  );
+  const suffix = qs.toString();
+  redirect(suffix ? `/conversations?${suffix}` : "/conversations");
 }

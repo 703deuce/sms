@@ -47,7 +47,7 @@ export function OrdersClient() {
 
   async function safeAction(o: Order, action: string) {
     if (action === "sendSms") {
-      window.location.href = o.contactId ? `/inbox?contact=${o.contactId}` : "/inbox";
+      window.location.href = o.contactId ? `/conversations?contact=${o.contactId}` : "/conversations";
       return;
     }
     if (action === "call") {
