@@ -48,7 +48,16 @@ function isActiveStatus(status: string | null | undefined): boolean {
 
 function isTollFreeCandidate(n: SmsNumberCandidate): boolean {
   const e164 = candidateE164(n);
-  if (classifyProductionNumber({ ...n, e164 }) === "TWILIO_TOLL_FREE") return true;
+  if (
+    classifyProductionNumber({
+      e164,
+      provider: n.provider,
+      type: n.type,
+      settingsJson: n.settingsJson,
+    }) === "TWILIO_TOLL_FREE"
+  ) {
+    return true;
+  }
   const national = e164.replace(/^\+1/, "");
   return /^8(?:00|33|44|55|66|77|88)\d{7}$/.test(national) || /toll/i.test(String(n.type || ""));
 }
@@ -59,8 +68,13 @@ export function scoreSmsSendingNumber(n: SmsNumberCandidate): number {
   if (!e164) return -1;
   if (!isActiveStatus(n.status)) return 0;
 
-  const approved = isPhoneMessagingApproved({ ...n, e164 }) || isApprovedMessagingStatus(n.a2pStatus);
-  const tollFree = isTollFreeCandidate({ ...n, e164 });
+  const approved =
+    isPhoneMessagingApproved({
+      settingsJson: n.settingsJson,
+      a2pStatus: n.a2pStatus,
+      type: n.type,
+    }) || isApprovedMessagingStatus(n.a2pStatus);
+  const tollFree = isTollFreeCandidate(n);
   const hp = isHpCertifiedSmsNumber(e164);
   const telnyx = String(n.provider || "").toLowerCase() === "telnyx";
 
