@@ -138,5 +138,5 @@ export async function listConnectedProviders(workspaceId: string): Promise<strin
     where: { workspaceId, status: "connected" },
     select: { provider: true },
   });
-  return rows.map((r) => r.provider);
+  return rows.map((r: { provider: string }) => r.provider);
 }

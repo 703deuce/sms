@@ -206,7 +206,7 @@ async function publishPipedriveWebhookEvent(input: {
     externalObjectId: externalId,
     payload,
   });
-  if (!base.skipped) published += 1;
+  if ("ok" in base) published += 1;
 
   if (objectType === "deal" && meta.action === "updated" && contactId) {
     const prevStage =
@@ -344,7 +344,7 @@ export async function processCrmWebhookAutomation(input: {
       externalObjectId: externalId,
       payload: { module, operation, source: "crm_webhook" },
     });
-    return { published: result.skipped ? 0 : 1, syncEnqueued: true };
+    return { published: "ok" in result ? 1 : 0, syncEnqueued: true };
   }
 
   return { published: 0, syncEnqueued: true };
