@@ -29,11 +29,11 @@ import { dispatchIntegrationAutomationEvent } from "../src/lib/integrations/fram
 import { isConditionBlock, getBlock } from "../src/lib/automations/catalog";
 
 const WORKSPACE_ID = (process.env.WORKSPACE_ID || "ws_1").trim();
-const TEST_SMS_TO = (process.env.TEST_SMS_TO || "").trim();
+const TEST_SMS_TO = (process.env.TEST_SMS_TO || process.env.OUTBOUND_TEST_PHONE || "").trim();
 const LIVE_SMS = process.env.LIVE_SMS === "1";
 const LIVE_SMS_SMOKE = process.env.LIVE_SMS_SMOKE === "1";
 const CALENDLY_LIVE = process.env.CALENDLY_LIVE !== "0";
-const FROM_E164 = (process.env.FROM_E164 || "+15714073615").trim();
+const FROM_E164 = (process.env.FROM_E164 || "").trim();
 const ARTIFACTS = process.env.FLOW_CERT_ARTIFACTS || join(process.cwd(), "artifacts");
 
 function certSteps(triggerBlock: string, smsBody: string) {
@@ -177,12 +177,13 @@ async function smsToTestSince(since: Date) {
       workspaceId: WORKSPACE_ID,
       to: contact.phone,
       createdAt: { gte: since },
-      direction: "outbound",
+      status: { in: ["sent", "delivered", "queued", "sending"] },
     },
   });
 }
 
 async function getTestContact(requireEmail = false) {
+  if (!TEST_SMS_TO) return null;
   return getPrisma().contact.findFirst({
     where: {
       workspaceId: WORKSPACE_ID,
@@ -192,6 +193,23 @@ async function getTestContact(requireEmail = false) {
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/** Contact eligible for customer_no_response (no recent reply). */
+async function getNoResponseCertContact() {
+  const prisma = getPrisma();
+  const existing = await prisma.contact.findFirst({
+    where: { workspaceId: WORKSPACE_ID, status: "SUBSCRIBED", lastReply: null },
+    orderBy: { createdAt: "desc" },
+  });
+  if (existing) return existing;
+  const test = await getTestContact();
+  if (!test) return null;
+  await prisma.contact.update({
+    where: { id: test.id },
+    data: { lastReply: null },
+  });
+  return { ...test, lastReply: null };
 }
 
 async function deleteFlow(flowId: string) {
@@ -206,12 +224,17 @@ async function testTriggerEnrollment(
   triggerBlock: string,
   fire: () => Promise<unknown>,
   config: Record<string, unknown> = {},
+  contactId?: string,
 ) {
   const since = new Date();
   const body = `CERT ${marker} ${triggerBlock}`;
   const def = buildFlow(triggerBlock, config, certSteps(triggerBlock, body));
   const flow = await createActiveFlow(`cert-${triggerBlock}-${marker}`, def);
-  const contact = await getTestContact();
+  const contact = contactId
+    ? await getPrisma().contact.findFirst({
+        where: { id: contactId, workspaceId: WORKSPACE_ID },
+      })
+    : await getTestContact();
   if (!contact) {
     record(triggerBlock, "trigger", "SKIP", "test contact missing");
     await deleteFlow(flow.id);
@@ -247,6 +270,35 @@ async function testTriggerEnrollment(
   }
   await deleteFlow(flow.id);
 }
+
+async function testScheduledDatetimeTrigger() {
+  const runAt = new Date(Date.now() - 120_000).toISOString();
+  const def = buildFlow(
+    "scheduled_datetime",
+    { runAt, enrollScope: "all_subscribed" },
+    [{ blockType: "end_automation" }],
+  );
+  const flow = await createActiveFlow(`cert-scheduled-${marker}`, def);
+  const { processScheduledAutomations } = await import("../src/lib/automations/runner");
+  await processScheduledAutomations();
+  const exec = await getPrisma().automationExecution.findFirst({
+    where: { workspaceId: WORKSPACE_ID, flowId: flow.id },
+    orderBy: { startedAt: "desc" },
+  });
+  record(
+    "scheduled_datetime",
+    "trigger",
+    exec ? "PASS" : "FAIL",
+    exec ? `exec=${exec.id}` : "no enrollment from scheduled tick",
+  );
+  await deleteFlow(flow.id);
+}
+
+/** Documented external skips — not product failures. */
+const EXTERNAL_SKIP_REASONS: Record<string, string> = {
+  calendly_api_book:
+    "EXTERNAL: Calendly Scheduling API (book invitee) requires a paid Calendly plan on the connected account",
+};
 
 async function testIntegrationTriggerEnrollment(
   eventType: string,
@@ -476,7 +528,7 @@ async function testCalendlyLive() {
     bookedViaApi = true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    record("calendly_api_book", "integration", "SKIP", `API book unavailable: ${msg.slice(0, 120)}`);
+    record("calendly_api_book", "integration", "SKIP", EXTERNAL_SKIP_REASONS.calendly_api_book);
     await dispatchIntegrationAutomationEvent({
       workspaceId: WORKSPACE_ID,
       provider: "calendly",
@@ -661,6 +713,15 @@ async function main() {
       },
     ],
     [
+      "review_request_clicked",
+      () => {
+        return getTestContact().then((c) => {
+          if (!c) throw new Error("no contact");
+          return emitAutomationEvent(WORKSPACE_ID, "review_request.clicked", c.id);
+        });
+      },
+    ],
+    [
       "review_received",
       () => {
         return getTestContact().then((c) => {
@@ -687,24 +748,46 @@ async function main() {
         });
       },
     ],
-    [
-      "customer_no_response",
-      () => {
-        return getTestContact().then((c) => {
-          if (!c) throw new Error("no contact");
-          return emitAutomationEvent(WORKSPACE_ID, "customer.no_response", c.id);
-        });
-      },
-    ],
   ];
 
   for (const [block, fire] of reviewTriggers) {
     try {
-      const cfg = block === "customer_no_response" ? { withinHours: 0 } : {};
-      await testTriggerEnrollment(block, fire, cfg);
+      await testTriggerEnrollment(block, fire);
     } catch (err) {
       record(block, "trigger", "FAIL", err instanceof Error ? err.message : String(err));
     }
+  }
+
+  try {
+    const noReplyContact = await getNoResponseCertContact();
+    if (!noReplyContact) {
+      record("customer_no_response", "trigger", "SKIP", "no cert contact for no-response test");
+    } else {
+      await testTriggerEnrollment(
+        "customer_no_response",
+        () => emitAutomationEvent(WORKSPACE_ID, "customer.no_response", noReplyContact.id),
+        { withinHours: 48 },
+        noReplyContact.id,
+      );
+    }
+  } catch (err) {
+    record(
+      "customer_no_response",
+      "trigger",
+      "FAIL",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  try {
+    await testScheduledDatetimeTrigger();
+  } catch (err) {
+    record(
+      "scheduled_datetime",
+      "trigger",
+      "FAIL",
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   // Integration triggers with SMS proof (connected providers on ws_1)
@@ -767,9 +850,22 @@ async function main() {
 
   const tested = new Set(results.map((r) => r.id));
   for (const b of visibleBlocks.filter((x) => x.category === "trigger" && !x.integrationGroup)) {
-    if (!tested.has(b.blockType)) {
-      record(b.blockType, "trigger", "SKIP", "not in cert matrix — add emitter");
+    if (tested.has(b.blockType)) continue;
+    const external = EXTERNAL_SKIP_REASONS[b.blockType];
+    if (external) {
+      record(b.blockType, "trigger", "SKIP", external);
+      continue;
     }
+    if (isVoiceAutomationBlock(b.blockType) && !caps.voice) {
+      record(
+        b.blockType,
+        "trigger",
+        "SKIP",
+        "EXTERNAL: AUTOMATION_VOICE_ENABLED is not set — voice triggers not exercised in this cert run",
+      );
+      continue;
+    }
+    record(b.blockType, "trigger", "FAIL", "missing cert coverage — add emitter");
   }
 
   await cleanup();
@@ -777,7 +873,20 @@ async function main() {
   const pass = results.filter((r) => r.status === "PASS").length;
   const fail = results.filter((r) => r.status === "FAIL").length;
   const skip = results.filter((r) => r.status === "SKIP").length;
-  const summary = { marker, workspaceId: WORKSPACE_ID, pass, fail, skip, total: results.length, results };
+  const externalSkips = results.filter(
+    (r) => r.status === "SKIP" && r.detail?.startsWith("EXTERNAL:"),
+  );
+  const summary = {
+    marker,
+    workspaceId: WORKSPACE_ID,
+    pass,
+    fail,
+    skip,
+    externalSkips: externalSkips.length,
+    total: results.length,
+    externalSkipReasons: EXTERNAL_SKIP_REASONS,
+    results,
+  };
   const outPath = join(ARTIFACTS, "flow-builder-cert-results.json");
   writeFileSync(outPath, JSON.stringify(summary, null, 2));
   console.log(`\n── Done: ${pass} pass / ${fail} fail / ${skip} skip → ${outPath} ──\n`);

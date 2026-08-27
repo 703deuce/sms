@@ -229,7 +229,11 @@ export async function enrollForTrigger(
     if (cfg.requirePhone === true && filters?.phoneExists === false) continue;
     if (cfg.requireEmail === true && filters?.emailExists === false) continue;
     if (triggerBlockType === "customer_no_response") {
-      const withinHours = Number(cfg.withinHours || 48);
+      const withinHours = Number(
+        cfg.withinHours !== undefined && cfg.withinHours !== null && cfg.withinHours !== ""
+          ? cfg.withinHours
+          : 48,
+      );
       const contact = await prisma.contact.findFirst({
         where: { id: contactId, workspaceId },
         select: { lastReply: true },
