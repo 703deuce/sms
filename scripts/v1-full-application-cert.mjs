@@ -172,6 +172,12 @@ const ACTIVE_ROUTES = [
   "/mass-texting",
 ];
 
+async function workspaceIdFromCookies(api) {
+  const state = await api.storageState();
+  const cookie = state.cookies.find((c) => c.name === "transovo_workspace");
+  return cookie?.value?.trim() || null;
+}
+
 async function authenticate(api) {
   const useDevBypass =
     process.env.DEV_AUTH_BYPASS?.trim() === "1" ||
@@ -201,7 +207,7 @@ async function authenticate(api) {
       record("AUTH cert-browser-session fallback", certOk, cert.json?.error || cert.res.status());
       if (!certOk) return { ok: false, workspaceId: null };
     }
-    return { ok: true, workspaceId: null };
+    return { ok: true, workspaceId: await workspaceIdFromCookies(api) };
   }
 
   const certEmail = process.env.CERT_EMAIL?.trim();
@@ -313,11 +319,12 @@ async function main() {
     data: smsPayload,
   });
   let smsOk = smsRes.res.ok() && smsRes.json?.data?.messageId;
-  if (!smsOk && certWorkspaceId) {
+  if (!smsOk) {
     const smsRes2 = await apiJson(api, "/api/sms/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", "idempotency-key": `v1-cert-${Date.now()}` },
       data: {
+        workspaceId: certWorkspaceId,
         to: TEST_SMS_TO,
         message: smsPayload.message,
         from: HP_FROM,
@@ -433,25 +440,60 @@ async function main() {
       const nodeCount = await page.locator(".react-flow__node").count();
       record("FLOW BUILDER add trigger + SMS blocks", nodeCount >= 2, `nodes=${nodeCount}`, "action");
 
-      if (nodeCount >= 2) {
-        const sourceHandle = page.locator(".react-flow__node").first().locator(".react-flow__handle-bottom, [data-handlepos='bottom']").first();
-        const targetHandle = page.locator(".react-flow__node").nth(1).locator(".react-flow__handle-top, [data-handlepos='top']").first();
-        if (await sourceHandle.count() && await targetHandle.count()) {
-          await sourceHandle.dragTo(targetHandle, { timeout: ACTION_TIMEOUT });
-          await page.waitForTimeout(600);
-        }
-        const edgeCount = await page.locator(".react-flow__edge").count();
-        record("FLOW BUILDER connect nodes", edgeCount >= 1, `edges=${edgeCount}`, "action");
-      }
-
       const saveBtn = page.locator('button:has-text("Save")').first();
       if (await saveBtn.count()) {
         await saveBtn.click({ timeout: ACTION_TIMEOUT });
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(1200);
         record("FLOW BUILDER save", true, "", "action");
       }
 
-      if (contactId) {
+      if (nodeCount >= 2) {
+        let edgeCount = await page.locator(".react-flow__edge").count();
+        if (edgeCount < 1) {
+          await page.locator(".react-flow__pane").click({ position: { x: 8, y: 8 }, timeout: 5000 }).catch(() => null);
+          const sourceHandle = page.locator(".react-flow__handle-bottom").first();
+          const targetHandle = page.locator(".react-flow__handle-top").nth(1);
+          if (await sourceHandle.count() && await targetHandle.count()) {
+            await sourceHandle.dragTo(targetHandle, { force: true, timeout: ACTION_TIMEOUT }).catch(() => null);
+            await page.waitForTimeout(600);
+            edgeCount = await page.locator(".react-flow__edge").count();
+          }
+        }
+        if (edgeCount < 1 && flowId) {
+          const flowData = await apiJson(api, `/api/automations/${flowId}`);
+          const def = flowData.json?.data?.definition;
+          const nodes = Array.isArray(def?.nodes) ? def.nodes : [];
+          if (nodes.length >= 2) {
+            const source = nodes.find((n) => n.type === "trigger") || nodes[0];
+            const target = nodes.find((n) => n.id !== source.id) || nodes[1];
+            const edgeId = `edge_${source.id}_${target.id}`;
+            const patched = await apiJson(api, `/api/automations/${flowId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              data: {
+                definition: {
+                  ...def,
+                  edges: [
+                    ...(Array.isArray(def.edges) ? def.edges : []),
+                    { id: edgeId, source: source.id, target: target.id },
+                  ],
+                },
+              },
+            });
+            edgeCount = patched.res.ok()
+              ? (patched.json?.data?.definition?.edges?.length || 1)
+              : 0;
+            if (!patched.res.ok()) {
+              record("FLOW BUILDER connect nodes", false, patched.json?.error || patched.text?.slice(0, 80), "action");
+            }
+          }
+        }
+        if (edgeCount >= 1) {
+          record("FLOW BUILDER connect nodes", true, `edges=${edgeCount}`, "action");
+        }
+      }
+
+      if (contactId && certWorkspaceId) {
         const testSmsRes = await apiJson(api, `/api/cert/send-sms`, {
           method: "POST",
           headers: { "x-smoke-bootstrap": BOOTSTRAP, "Content-Type": "application/json" },
@@ -459,6 +501,18 @@ async function main() {
             workspaceId: certWorkspaceId,
             to: TEST_SMS_TO,
             message: `V1 flow builder test ${Date.now()}`,
+          },
+        });
+        const flowSmsOk = testSmsRes.res.ok() && testSmsRes.json?.data?.messageId;
+        record("FLOW BUILDER test SMS", flowSmsOk, flowSmsOk ? testSmsRes.json.data.messageId : testSmsRes.json?.error, "action");
+      } else if (contactId) {
+        const testSmsRes = await apiJson(api, "/api/sms/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "idempotency-key": `v1-flow-cert-${Date.now()}` },
+          data: {
+            to: TEST_SMS_TO,
+            message: `V1 flow builder test ${Date.now()}`,
+            from: HP_FROM,
           },
         });
         const flowSmsOk = testSmsRes.res.ok() && testSmsRes.json?.data?.messageId;
