@@ -13,8 +13,8 @@ import {
 import { cn, estimateSmsSegments } from "@/lib/utils";
 import { ArrowLeft, Check, Send } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 const FOLLOW_UP_TRIGGERS = [
   "new lead",
@@ -27,9 +27,15 @@ const FOLLOW_UP_TRIGGERS = [
   "event attended",
 ];
 
+type AudienceMode = "all_subscribed" | "list" | "segment" | "manual";
+
+type ListOption = { id: string; name: string };
+type SegmentOption = { id: string; name: string };
+
 export default function NewCategoryCampaignPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const categoryId = String(params.category || "") as CampaignCategoryId;
   const category = getCampaignCategory(categoryId);
 
@@ -37,7 +43,12 @@ export default function NewCategoryCampaignPage() {
   const [message, setMessage] = useState(
     category ? DEFAULT_MESSAGES[category.id] : DEFAULT_MESSAGES.custom,
   );
-  const [audience, setAudience] = useState("All subscribed contacts");
+  const [audienceMode, setAudienceMode] = useState<AudienceMode>("manual");
+  const [listId, setListId] = useState("");
+  const [segmentId, setSegmentId] = useState("");
+  const [manualPhone, setManualPhone] = useState("");
+  const [lists, setLists] = useState<ListOption[]>([]);
+  const [segments, setSegments] = useState<SegmentOption[]>([]);
   const [trigger, setTrigger] = useState(FOLLOW_UP_TRIGGERS[0]);
   const [delayHours, setDelayHours] = useState("24");
   const [followUpCount, setFollowUpCount] = useState("2");
@@ -48,7 +59,42 @@ export default function NewCategoryCampaignPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  const segments = useMemo(() => estimateSmsSegments(message), [message]);
+  useEffect(() => {
+    const to = searchParams.get("to");
+    if (to) {
+      setManualPhone(to);
+      setAudienceMode("manual");
+    }
+    fetch("/api/contacts/lists")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) setLists(json.data.map((l: ListOption) => ({ id: l.id, name: l.name })));
+      })
+      .catch(() => undefined);
+    fetch("/api/contacts/segments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) {
+          setSegments(json.data.map((s: SegmentOption) => ({ id: s.id, name: s.name })));
+        }
+      })
+      .catch(() => undefined);
+  }, [searchParams]);
+
+  const segmentsEstimate = useMemo(() => estimateSmsSegments(message), [message]);
+
+  const audienceLabel = useMemo(() => {
+    if (audienceMode === "all_subscribed") return "All subscribed contacts";
+    if (audienceMode === "list") {
+      const list = lists.find((l) => l.id === listId);
+      return list ? `List: ${list.name}` : "List";
+    }
+    if (audienceMode === "segment") {
+      const seg = segments.find((s) => s.id === segmentId);
+      return seg ? `Segment: ${seg.name}` : "Segment";
+    }
+    return manualPhone.trim() ? `Manual: ${manualPhone.trim()}` : "Manual recipients";
+  }, [audienceMode, listId, segmentId, manualPhone, lists, segments]);
 
   if (!category) {
     return (
@@ -67,32 +113,66 @@ export default function NewCategoryCampaignPage() {
     category.id,
   );
 
+  function buildPayload(activate: boolean) {
+    const payload: Record<string, unknown> = {
+      name,
+      category: category!.id,
+      type: category!.title,
+      audience: audienceLabel,
+      message,
+      audienceMode,
+      activate: activate && scheduleMode === "now",
+      scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
+      config: {
+        trigger,
+        delayHours: Number(delayHours) || 24,
+        followUpCount: Number(followUpCount) || 2,
+        stopOnReply,
+      },
+    };
+
+    if (audienceMode === "list" && listId) payload.listId = listId;
+    if (audienceMode === "segment" && segmentId) payload.segmentId = segmentId;
+    if (audienceMode === "manual" && manualPhone.trim()) {
+      payload.recipients = manualPhone
+        .split(/[,;\n]/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((phone) => ({ phone }));
+    }
+
+    return payload;
+  }
+
   async function save(activate: boolean) {
+    if (audienceMode === "list" && !listId) {
+      setError("Select a contact list");
+      return;
+    }
+    if (audienceMode === "segment" && !segmentId) {
+      setError("Select a segment");
+      return;
+    }
+    if (audienceMode === "manual" && !manualPhone.trim()) {
+      setError("Enter at least one phone number");
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          category: category!.id,
-          type: category!.title,
-          audience,
-          message,
-          activate: activate && scheduleMode === "now",
-          scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
-          config: {
-            trigger,
-            delayHours: Number(delayHours) || 24,
-            followUpCount: Number(followUpCount) || 2,
-            stopOnReply,
-          },
-        }),
+        body: JSON.stringify(buildPayload(activate)),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create campaign");
       setDone(json.data.campaign.id);
+      const enrolled = json.data.enrolledCount ?? 0;
+      if (activate && enrolled === 0) {
+        setError("Campaign created but no recipients were enrolled. Check audience settings.");
+      }
       router.push(`/campaigns/${json.data.campaign.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create");
@@ -180,14 +260,61 @@ export default function NewCategoryCampaignPage() {
           )}
 
           <div>
-            <Label htmlFor="audience">Audience</Label>
-            <Select id="audience" value={audience} onChange={(e) => setAudience(e.target.value)}>
-              <option>All subscribed contacts</option>
-              <option>A list (choose after save)</option>
-              <option>A segment (choose after save)</option>
-              <option>Manual enrollment / webhook</option>
+            <Label htmlFor="audience-mode">Audience</Label>
+            <Select
+              id="audience-mode"
+              value={audienceMode}
+              onChange={(e) => setAudienceMode(e.target.value as AudienceMode)}
+            >
+              <option value="manual">Specific phone number(s)</option>
+              <option value="all_subscribed">All subscribed contacts</option>
+              <option value="list">A contact list</option>
+              <option value="segment">A segment</option>
             </Select>
           </div>
+
+          {audienceMode === "manual" && (
+            <div>
+              <Label htmlFor="manual-phone">Phone number</Label>
+              <Input
+                id="manual-phone"
+                placeholder="(571) 477-6175"
+                value={manualPhone}
+                onChange={(e) => setManualPhone(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Contact must be opted in. Add comma-separated numbers for multiple recipients.
+              </p>
+            </div>
+          )}
+
+          {audienceMode === "list" && (
+            <div>
+              <Label htmlFor="list-id">Contact list</Label>
+              <Select id="list-id" value={listId} onChange={(e) => setListId(e.target.value)}>
+                <option value="">Select a list…</option>
+                {lists.map((list) => (
+                  <option key={list.id} value={list.id}>
+                    {list.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {audienceMode === "segment" && (
+            <div>
+              <Label htmlFor="segment-id">Segment</Label>
+              <Select id="segment-id" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
+                <option value="">Select a segment…</option>
+                {segments.map((seg) => (
+                  <option key={seg.id} value={seg.id}>
+                    {seg.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="message">Message</Label>
@@ -198,8 +325,8 @@ export default function NewCategoryCampaignPage() {
               onChange={(e) => setMessage(e.target.value)}
             />
             <p className="mt-1 text-xs text-slate-500">
-              {segments.characters} characters · {segments.segments} SMS segment
-              {segments.segments === 1 ? "" : "s"} · merge fields like {"{{first_name}}"} supported
+              {segmentsEstimate.characters} characters · {segmentsEstimate.segments} SMS segment
+              {segmentsEstimate.segments === 1 ? "" : "s"} · merge fields like {"{{first_name}}"} supported
             </p>
           </div>
 
@@ -209,7 +336,7 @@ export default function NewCategoryCampaignPage() {
               {(
                 [
                   ["draft", "Save as draft"],
-                  ["now", "Activate now"],
+                  ["now", "Send now"],
                   ["later", "Schedule"],
                 ] as const
               ).map(([id, label]) => (
@@ -248,7 +375,13 @@ export default function NewCategoryCampaignPage() {
           <div className="flex flex-wrap gap-2 pt-2">
             <Button disabled={saving} onClick={() => save(scheduleMode !== "draft")}>
               <Send className="h-4 w-4" />
-              {saving ? "Saving…" : scheduleMode === "draft" ? "Save draft" : "Create campaign"}
+              {saving
+                ? "Saving…"
+                : scheduleMode === "draft"
+                  ? "Save draft"
+                  : scheduleMode === "later"
+                    ? "Schedule campaign"
+                    : "Send campaign"}
             </Button>
             <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">Cancel</Link>
           </div>
@@ -259,6 +392,7 @@ export default function NewCategoryCampaignPage() {
           <div className="mt-4 rounded-2xl bg-slate-900 p-4 text-sm text-white">
             <p className="whitespace-pre-wrap">{message}</p>
           </div>
+          <p className="mt-3 text-xs text-slate-500">Audience: {audienceLabel}</p>
           <p className="mt-4 text-xs text-slate-500">
             Required compliance language is enforced on live sends (STOP/HELP). Always include clear
             identification of your business.

@@ -5,20 +5,40 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { Sparkles } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function AiCampaignComposerPage() {
+  const router = useRouter();
   const [goal, setGoal] = useState("book more appointments");
   const [audience, setAudience] = useState("past customers who haven't booked in 90 days");
   const [tone, setTone] = useState("friendly");
   const [offer, setOffer] = useState("");
   const [destinationUrl, setDestinationUrl] = useState("https://example.com/book");
+  const [testPhone, setTestPhone] = useState("");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const messageBody =
+    result && typeof result.body === "string"
+      ? result.body
+      : result && typeof result.message === "string"
+        ? result.message
+        : "";
+  const campaignName =
+    result && typeof result.subject === "string"
+      ? result.subject
+      : result && typeof result.name === "string"
+        ? result.name
+        : "AI campaign";
 
   async function compose() {
     setLoading(true);
+    setActionError(null);
     try {
       const res = await fetch("/api/ai/campaign-compose", {
         method: "POST",
@@ -42,11 +62,57 @@ export default function AiCampaignComposerPage() {
     }
   }
 
+  async function createAndSendCampaign() {
+    if (!messageBody.trim()) {
+      setActionError("Generate a campaign message first");
+      return;
+    }
+    if (!testPhone.trim()) {
+      setActionError("Enter a phone number to send the campaign to");
+      return;
+    }
+
+    setSending(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: campaignName,
+          category: "promotion",
+          type: "Promotion",
+          audience: `Manual: ${testPhone.trim()}`,
+          message: messageBody,
+          audienceMode: "manual",
+          recipients: [{ phone: testPhone.trim() }],
+          activate: true,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to create campaign");
+      router.push(`/campaigns/${json.data.campaign.id}`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to send campaign");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const sendPageHref = messageBody
+    ? `/send?body=${encodeURIComponent(messageBody)}${testPhone ? `&to=${encodeURIComponent(testPhone)}` : ""}`
+    : "/send";
+
   return (
     <div>
       <PageHeader
         title="AI Campaign Composer"
         description="Generate campaign copy, variations, compliance footer, and send-time suggestions."
+        actions={
+          <Link href="/send">
+            <Button variant="outline">Quick send</Button>
+          </Link>
+        }
       />
       <AiOfflineBanner />
       <Card className="mb-6 grid gap-4 p-5 sm:grid-cols-2">
@@ -71,6 +137,14 @@ export default function AiCampaignComposerPage() {
           <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} />
         </div>
         <div className="sm:col-span-2">
+          <Label>Send test to phone (optional)</Label>
+          <Input
+            placeholder="(571) 477-6175"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+          />
+        </div>
+        <div className="sm:col-span-2">
           <Button onClick={compose} disabled={loading}>
             <Sparkles className="h-4 w-4" />
             {loading ? "Composing…" : "Generate campaign"}
@@ -93,13 +167,13 @@ export default function AiCampaignComposerPage() {
                   </p>
                 </div>
               ) : null}
-              {typeof result.body === "string" || typeof result.message === "string" ? (
+              {messageBody ? (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Message
                   </p>
                   <p className="mt-1 whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm">
-                    {String(result.body || result.message)}
+                    {messageBody}
                   </p>
                 </div>
               ) : null}
@@ -135,7 +209,7 @@ export default function AiCampaignComposerPage() {
                   <p className="mt-1 text-sm">{String(result.sendTimeSuggestion || result.sendWindow)}</p>
                 </div>
               ) : null}
-              {!result.body && !result.message && !result.variations && !result.abVersions ? (
+              {!messageBody && !result.variations && !result.abVersions ? (
                 <div className="space-y-2 text-sm">
                   {Object.entries(result).map(([key, value]) => (
                     <div key={key}>
@@ -149,10 +223,23 @@ export default function AiCampaignComposerPage() {
                   ))}
                 </div>
               ) : null}
+
+              {messageBody ? (
+                <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+                  <Link href={sendPageHref}>
+                    <Button variant="outline">Open in Send</Button>
+                  </Link>
+                  <Button onClick={createAndSendCampaign} disabled={sending}>
+                    <Send className="h-4 w-4" />
+                    {sending ? "Sending…" : "Create & send campaign"}
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
         </Card>
       )}
+      {actionError ? <p className="mt-4 text-sm text-rose-600">{actionError}</p> : null}
     </div>
   );
 }

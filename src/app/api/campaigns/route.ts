@@ -7,7 +7,7 @@ import {
   getCampaignCategory,
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
-import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign, enrollSegmentInCampaign } from "@/lib/campaigns/enroll-campaign";
+import { enrollContactInCampaign, validateBulkRecipients, enrollListInCampaign, enrollSegmentInCampaign, enrollAllSubscribedInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { defaultSmsEmailSequence, parseSequence } from "@/lib/campaigns/sequence-engine";
 
 export async function GET() {
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       senderPoolId?: string;
       recipients?: Array<{ phone?: string; email?: string; displayName?: string }>;
       activate?: boolean;
+      audienceMode?: "all_subscribed" | "list" | "segment" | "manual";
     };
 
     const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
@@ -113,6 +114,10 @@ export async function POST(request: Request) {
       const listEnroll = await enrollListInCampaign(workspaceId, campaign.id, body.listId);
       enrolledCount = listEnroll.enrolled;
       rejected = listEnroll.rejected;
+    } else if (body.audienceMode === "all_subscribed") {
+      const allEnroll = await enrollAllSubscribedInCampaign(workspaceId, campaign.id);
+      enrolledCount = allEnroll.enrolled;
+      rejected = allEnroll.rejected;
     } else {
       const bulk = await validateBulkRecipients(workspaceId, campaign.id, body.recipients || []);
       rejected = bulk.rejected;
@@ -127,6 +132,11 @@ export async function POST(request: Request) {
         });
         enrolledCount += 1;
       }
+    }
+
+    if (status === "SENDING" && enrolledCount > 0) {
+      const { processSequenceWaits } = await import("@/lib/campaigns/sequence-runner");
+      await processSequenceWaits();
     }
 
     return NextResponse.json(

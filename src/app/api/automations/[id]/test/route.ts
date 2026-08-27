@@ -33,7 +33,7 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as {
       contactId?: string;
       callId?: string;
-      mode?: "validate" | "enroll" | "verify_call";
+      mode?: "validate" | "enroll" | "verify_call" | "run_live";
     };
 
     const prisma = getPrisma();
@@ -152,6 +152,73 @@ export async function POST(
         label: "Test enrollment created",
         status: executionId ? "pass" : "fail",
         detail: executionId || result.reason || "enroll failed",
+      });
+    }
+
+    // Live run: enroll contact and advance automation (sends real SMS when flow has send_sms).
+    if (body.mode === "run_live" && body.contactId) {
+      if (flow.status !== "ACTIVE") {
+        return NextResponse.json(
+          { error: "Publish and activate the automation before running live" },
+          { status: 400 },
+        );
+      }
+
+      const result = await enrollInAutomation({
+        workspaceId: auth.workspaceId,
+        flowId: id,
+        contactId: body.contactId,
+        testMode: false,
+        enrollmentSuffix: `ui-test-${Date.now()}`,
+      });
+
+      executionId = result.execution?.id || null;
+      if (!executionId) {
+        return NextResponse.json(
+          { error: result.reason || "Failed to enroll contact in automation" },
+          { status: 400 },
+        );
+      }
+
+      const { advanceAutomationExecution } = await import("@/lib/automations/runner");
+      let iterations = 0;
+      let lastAdvance: Awaited<ReturnType<typeof advanceAutomationExecution>> | null = null;
+      while (iterations < 12) {
+        lastAdvance = await advanceAutomationExecution(executionId);
+        iterations += 1;
+        if (lastAdvance.done || lastAdvance.failed || lastAdvance.waiting || lastAdvance.skipped) {
+          break;
+        }
+      }
+
+      checks.push({
+        id: "live_enroll",
+        label: "Live enrollment created",
+        status: "pass",
+        detail: executionId,
+      });
+      checks.push({
+        id: "live_advance",
+        label: "Automation advanced",
+        status: lastAdvance?.failed ? "fail" : lastAdvance?.done ? "pass" : "not_verified",
+        detail: lastAdvance ? JSON.stringify(lastAdvance) : "No advance result",
+      });
+
+      return NextResponse.json({
+        data: {
+          overall: lastAdvance?.failed ? "fail" : lastAdvance?.done ? "pass" : "incomplete",
+          summary: {
+            passed: checks.filter((c) => c.status === "pass").length,
+            failed: checks.filter((c) => c.status === "fail").length,
+            unverified: checks.filter((c) => c.status === "not_verified").length,
+            total: checks.length,
+          },
+          checks,
+          diagnostics,
+          executionId,
+          issues,
+          note: "Live run executed via UI test. Check execution history and the recipient phone for SMS delivery.",
+        },
       });
     }
 

@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
 
-/** Send entrypoint → campaign library (14 core types). */
+import { SendMessagePage } from "@/components/send/send-message-page";
+
 export default function SendPage() {
-  redirect("/campaigns");
+  return <SendMessagePage />;
 }
