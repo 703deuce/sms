@@ -2,22 +2,28 @@ import "server-only";
 
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
-import { MCTB_TWILIO_VOICE_INGRESS_E164 } from "@/lib/mctb/onboarding/constants";
-import {
-  ensureMctb571SipFqdnLateMediaSettings,
-  auditMctb571SipFqdnConnection,
-} from "@/lib/mctb/sip-diagnostic/fqdn-audit";
-import { MCTB_571_SIP_FQDN_CONNECTION_ID } from "@/lib/mctb/sip-diagnostic/constants";
+import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { fetchTelnyxPhoneNumberByE164 } from "@/lib/mctb/consent-prompt/telnyx-call-control-route";
-
-export const MCTB_DIRECT_TELNYX_TEST_FQDN_APP_NAME = "MCTB Direct Telnyx Test (FQDN 3PCC)";
+import {
+  auditMctb571SipFqdnConnection,
+  ensureMctb571SipFqdnLateMediaSettings,
+} from "@/lib/mctb/sip-diagnostic/fqdn-audit";
+import {
+  MCTB_571_SIP_FQDN_CONNECTION_ID,
+  MCTB_FQDN_DIRECT_TEST_E164,
+} from "@/lib/mctb/sip-diagnostic/constants";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
-export function mctbDirectTelnyxTestWebhookUrl(): string {
-  return getTelnyxWebhookUrls().mctbDirectTelnyxTest;
+function isTollFreeE164(e164: string): boolean {
+  const digits = e164.replace(/\D/g, "");
+  return digits.length === 11 && digits.startsWith("18");
+}
+
+export function mctbFqdnDirectEventOnlyWebhookUrl(): string {
+  return getTelnyxWebhookUrls().mctbEventOnly;
 }
 
 export async function fetchFqdnConnectionRaw(
@@ -29,9 +35,37 @@ export async function fetchFqdnConnectionRaw(
   return asRecord(res.data);
 }
 
-export async function assignE164ToConnection(
+export async function listTelnyxTollFreeCandidates(): Promise<
+  Array<{ e164: string; connectionId: string; connectionName: string; providerNumberId: string }>
+> {
+  const res = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>("/phone_numbers", {
+    query: { "page[size]": 50 },
+  });
+  const exclude571 = MCTB_PLATFORM_DEMO_E164.replace(/\D/g, "").slice(-10);
+  return (res.data || [])
+    .map((row) => ({
+      e164: String(row.phone_number || ""),
+      connectionId: String(row.connection_id || ""),
+      connectionName: String(row.connection_name || ""),
+      providerNumberId: String(row.id || ""),
+    }))
+    .filter((row) => row.e164 && isTollFreeE164(row.e164))
+    .filter((row) => !row.e164.replace(/\D/g, "").endsWith(exclude571));
+}
+
+export async function resolveFqdnDirectTestE164(): Promise<string> {
+  const candidates = await listTelnyxTollFreeCandidates();
+  const onFqdn = candidates.find((c) => c.connectionId === MCTB_571_SIP_FQDN_CONNECTION_ID);
+  if (onFqdn) return onFqdn.e164;
+  const preferred = candidates.find((c) => c.e164 === MCTB_FQDN_DIRECT_TEST_E164);
+  if (preferred) return preferred.e164;
+  if (candidates[0]?.e164) return candidates[0].e164;
+  throw new Error("No Telnyx toll-free available (excluding platform 571)");
+}
+
+export async function assignE164ToFqdnConnection(
   e164: string,
-  connectionId: string,
+  connectionId: string = MCTB_571_SIP_FQDN_CONNECTION_ID,
 ): Promise<{ providerNumberId: string; liveConnectionId: string }> {
   const pn = await fetchTelnyxPhoneNumberByE164(e164);
   if (!pn?.id) throw new Error(`Telnyx number ${e164} not found`);
@@ -54,16 +88,13 @@ export async function assignE164ToConnection(
   return { providerNumberId, liveConnectionId };
 }
 
-/**
- * Point FQDN SIP connection (3PCC + PRACK) at direct-test webhook.
- * Does not remove LiveKit FQDN destination — 3PCC holds the call before SIP bridge.
- */
-export async function patchFqdnDirectTestWebhook(input?: {
+/** Point FQDN 3PCC webhook at existing mctb-event-only handler (same SIP settings, no LiveKit). */
+export async function patchFqdnEventOnlyWebhook(input?: {
   connectionId?: string;
   webhookUrl?: string;
 }): Promise<{ previousWebhookUrl: string | null; webhookUrl: string }> {
   const connectionId = input?.connectionId || MCTB_571_SIP_FQDN_CONNECTION_ID;
-  const webhookUrl = (input?.webhookUrl || mctbDirectTelnyxTestWebhookUrl()).replace(/\/$/, "");
+  const webhookUrl = (input?.webhookUrl || mctbFqdnDirectEventOnlyWebhookUrl()).replace(/\/$/, "");
   const before = await fetchFqdnConnectionRaw(connectionId);
   const previousWebhookUrl = before?.webhook_event_url
     ? String(before.webhook_event_url)
@@ -100,41 +131,54 @@ export async function restoreFqdnWebhook(input: {
   });
 }
 
-export async function verifyDirectTelnyxTestRoute(e164: string = MCTB_TWILIO_VOICE_INGRESS_E164): Promise<{
+export async function verifyFqdnDirectMctbRoute(): Promise<{
   ok: boolean;
-  e164: string;
-  connectionId: string | null;
+  testE164: string;
+  fqdnConnectionId: string;
   webhookUrl: string;
+  liveWebhookUrl: string | null;
   lateMediaReady: boolean;
+  numbersOnFqdn: string[];
   detail: string;
 }> {
-  const webhookUrl = mctbDirectTelnyxTestWebhookUrl();
-  const pn = await fetchTelnyxPhoneNumberByE164(e164);
-  const connectionId = pn?.connection_id ? String(pn.connection_id) : null;
+  const testE164 = await resolveFqdnDirectTestE164();
+  const webhookUrl = mctbFqdnDirectEventOnlyWebhookUrl();
   const fqdn = await auditMctb571SipFqdnConnection();
   const fqdnRaw = await fetchFqdnConnectionRaw();
   const liveWebhook = fqdnRaw?.webhook_event_url
     ? String(fqdnRaw.webhook_event_url).replace(/\/$/, "")
-    : null;
+    : fqdnRaw?.webhook_url
+      ? String(fqdnRaw.webhook_url).replace(/\/$/, "")
+      : null;
+
+  const candidates = await listTelnyxTollFreeCandidates();
+  const numbersOnFqdn = candidates
+    .filter((c) => c.connectionId === MCTB_571_SIP_FQDN_CONNECTION_ID)
+    .map((c) => c.e164);
+
+  const pn = await fetchTelnyxPhoneNumberByE164(testE164);
+  const onFqdn = String(pn?.connection_id || "") === MCTB_571_SIP_FQDN_CONNECTION_ID;
 
   const ok =
-    connectionId === MCTB_571_SIP_FQDN_CONNECTION_ID &&
+    onFqdn &&
     liveWebhook === webhookUrl.replace(/\/$/, "") &&
     fqdn.lateMediaReady;
 
   return {
     ok,
-    e164,
-    connectionId,
+    testE164,
+    fqdnConnectionId: MCTB_571_SIP_FQDN_CONNECTION_ID,
     webhookUrl,
+    liveWebhookUrl: liveWebhook,
     lateMediaReady: fqdn.lateMediaReady,
+    numbersOnFqdn,
     detail: ok
-      ? `${e164} on FQDN ${MCTB_571_SIP_FQDN_CONNECTION_ID} with direct-test webhook`
-      : `connection=${connectionId || "(none)"} webhook=${liveWebhook || "(none)"} lateMedia=${fqdn.lateMediaReady}`,
+      ? `${testE164} on FQDN → mctb-event-only (same SIP settings as LiveKit path, LiveKit bypassed)`
+      : `e164=${testE164} onFqdn=${onFqdn} webhook=${liveWebhook || "(none)"} lateMedia=${fqdn.lateMediaReady}`,
   };
 }
 
-export async function prepareFqdnForDirectTelnyxTest(): Promise<{
+export async function prepareFqdnForDirectMctb(): Promise<{
   lateMediaPatched: boolean;
   audit: Awaited<ReturnType<typeof auditMctb571SipFqdnConnection>>;
 }> {

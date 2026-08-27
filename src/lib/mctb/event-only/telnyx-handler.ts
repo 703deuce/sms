@@ -1,4 +1,8 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
+import {
+  MCTB_571_SIP_FQDN_CONNECTION_ID,
+  MCTB_FQDN_DIRECT_TEST_E164,
+} from "@/lib/mctb/sip-diagnostic/constants";
 import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
 import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
@@ -17,8 +21,26 @@ function isMctb571Target(to: string): boolean {
 }
 
 /**
+ * FQDN SIP direct path — same Telnyx connection + signaling as LiveKit ingress,
+ * but 3PCC webhook terminates in existing MCTB event-only handler (no LiveKit room).
+ */
+export function isFqdnDirectMctbTarget(payload: TelnyxPayload): boolean {
+  const connectionId = String(payload.connection_id || "");
+  const to = String(payload.to || "");
+  if (connectionId !== MCTB_571_SIP_FQDN_CONNECTION_ID) return false;
+  if (isMctb571Target(to)) return false;
+  return to === MCTB_FQDN_DIRECT_TEST_E164;
+}
+
+function isMctbEventOnlyTarget(payload: TelnyxPayload): boolean {
+  const to = String(payload.to || "");
+  if (isMctb571Target(to)) return true;
+  return isFqdnDirectMctbTarget(payload);
+}
+
+/**
  * Telnyx EVENT_ONLY handler — capture inbound metadata, queue Existing Consent SMS.
- * Never issues answer/speak/play/gather/transfer commands.
+ * FQDN direct path answers via Call Control so forwarded calls stay up (3PCC hold).
  */
 export async function handleMctbEventOnlyTelnyxWebhook(input: {
   eventType: string;
@@ -27,9 +49,9 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
   const { eventType, eventPayload, fallbackWorkspaceId } = input;
   const callControlId = String(eventPayload.call_control_id || "");
-  const to = String(eventPayload.to || "");
+  const fqdnDirect = isFqdnDirectMctbTarget(eventPayload);
 
-  if (!callControlId || !isMctb571Target(to) || !isInbound(eventPayload)) {
+  if (!callControlId || !isMctbEventOnlyTarget(eventPayload) || !isInbound(eventPayload)) {
     return { handled: false };
   }
 
@@ -39,10 +61,30 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
         callControlId,
         from: eventPayload.from,
         to: eventPayload.to,
+        connectionId: eventPayload.connection_id ?? null,
+        fqdnDirect,
+        livekitBypass: fqdnDirect,
       });
 
+      if (fqdnDirect) {
+        try {
+          const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
+          await answerCall(callControlId);
+          logMctbEventOnly("fqdn_direct_answer_sent", {
+            callControlId,
+            livekitRoomCreated: false,
+          });
+        } catch (err) {
+          logMctbEventOnly("fqdn_direct_answer_failed", {
+            callControlId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        }
+      }
+
       const normalized = normalizeTelnyxMctbInboundEvent(eventPayload, {
-        voiceCaptureStatus: "EVENT_CAPTURED",
+        voiceCaptureStatus: fqdnDirect ? "EVENT_CAPTURED" : "EVENT_CAPTURED",
       });
       if (!normalized) return { handled: true, action: "invalid_payload" };
 
@@ -52,7 +94,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 
       return {
         handled: true,
-        action: "event_only_capture",
+        action: fqdnDirect ? "fqdn_direct_capture" : "event_only_capture",
         callEventId: result.callEventId,
       };
     }
@@ -61,6 +103,8 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
         callControlId,
         hangupCause: eventPayload.hangup_cause ?? null,
         sipHangupCause: eventPayload.sip_hangup_cause ?? null,
+        fqdnDirect,
+        livekitRoomCreated: false,
       });
 
       const prior = processedCalls.get(callControlId);
@@ -88,7 +132,10 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       };
     }
     default:
-      logMctbEventOnly(`telnyx_${eventType.replace(/\./g, "_")}`, { callControlId });
+      logMctbEventOnly(`telnyx_${eventType.replace(/\./g, "_")}`, {
+        callControlId,
+        fqdnDirect,
+      });
       return { handled: true, action: "ignored" };
   }
 }

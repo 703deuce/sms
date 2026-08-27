@@ -1,4 +1,5 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
+import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
 
 function normalizeDid(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -32,6 +33,8 @@ function envAllowlist(): Set<string> {
   }
   const platform = normalizeDid(MCTB_PLATFORM_DEMO_E164);
   if (platform) values.add(platform);
+  const fqdnDirect = normalizeDid(MCTB_FQDN_DIRECT_TEST_E164);
+  if (fqdnDirect) values.add(fqdnDirect);
   return values;
 }
 

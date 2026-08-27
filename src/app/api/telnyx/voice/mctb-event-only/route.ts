@@ -15,8 +15,8 @@ const FALLBACK_WORKSPACE_ID =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
 
 /**
- * Telnyx EVENT_ONLY MCTB: capture inbound forwarded call metadata, queue Existing Consent SMS.
- * Never answers or establishes voice media.
+ * Telnyx EVENT_ONLY MCTB: existing handler for 571 + FQDN direct SIP (no LiveKit).
+ * FQDN path answers via Call Control so forwarded calls stay connected.
  */
 export async function POST(request: Request) {
   const verified = await readTelnyxWebhook(request);

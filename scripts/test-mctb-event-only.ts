@@ -13,12 +13,17 @@ import {
   MCTB_RECOVERY_DELAY_MIN_SECONDS,
 } from "../src/lib/mctb/event-only/types";
 import { normalizeTelnyxMctbInboundEvent } from "../src/lib/mctb/event-only/normalize";
+import { parseTelnyxForwardedFrom } from "../src/lib/voice/telnyx/forwarded-from";
+import { MCTB_PLATFORM_DEMO_E164 } from "../src/lib/mctb/onboarding/constants";
+import {
+  MCTB_571_SIP_FQDN_CONNECTION_ID,
+  MCTB_FQDN_DIRECT_TEST_E164,
+} from "../src/lib/mctb/sip-diagnostic/constants";
 import {
   handleMctbEventOnlyTelnyxWebhook,
   resetMctbEventOnlyTelnyxStateForTests,
+  isFqdnDirectMctbTarget,
 } from "../src/lib/mctb/event-only/telnyx-handler";
-import { parseTelnyxForwardedFrom } from "../src/lib/voice/telnyx/forwarded-from";
-import { MCTB_PLATFORM_DEMO_E164 } from "../src/lib/mctb/onboarding/constants";
 
 const CALL_ID = "mock_v3:mctb-event-only-test";
 const WORKSPACE = "cmt2zyg4l43373s0f146b442h";
@@ -63,12 +68,34 @@ function testNormalizeAttPayload() {
   assert.equal(normalized?.forwardedFromE164, TEST_BUSINESS);
 }
 
+function testFqdnDirectTargetGate() {
+  const fqdnPayload = {
+    connection_id: MCTB_571_SIP_FQDN_CONNECTION_ID,
+    to: MCTB_FQDN_DIRECT_TEST_E164,
+    call_control_id: "mock-fqdn",
+    direction: "incoming",
+  };
+  assert.equal(isFqdnDirectMctbTarget(fqdnPayload), true);
+  assert.equal(
+    isFqdnDirectMctbTarget({ ...fqdnPayload, to: MCTB_PLATFORM_DEMO_E164 }),
+    false,
+  );
+  assert.equal(
+    isFqdnDirectMctbTarget({ ...fqdnPayload, connection_id: "other" }),
+    false,
+  );
+}
+
 function testSetupRollbackScripts() {
-  const setup = join(process.cwd(), "scripts/mctb-setup-571-event-only.ts");
-  const rollback = join(process.cwd(), "scripts/mctb-rollback-571-event-only.ts");
-  assert.ok(existsSync(setup));
-  assert.ok(existsSync(rollback));
-  const rollbackSource = readFileSync(rollback, "utf8");
+  const setup571 = join(process.cwd(), "scripts/mctb-setup-571-event-only.ts");
+  const rollback571 = join(process.cwd(), "scripts/mctb-rollback-571-event-only.ts");
+  const setupFqdn = join(process.cwd(), "scripts/mctb-setup-fqdn-direct-mctb.ts");
+  const rollbackFqdn = join(process.cwd(), "scripts/mctb-rollback-fqdn-direct-mctb.ts");
+  assert.ok(existsSync(setup571));
+  assert.ok(existsSync(rollback571));
+  assert.ok(existsSync(setupFqdn));
+  assert.ok(existsSync(rollbackFqdn));
+  const rollbackSource = readFileSync(rollback571, "utf8");
   assert.match(rollbackSource, /assign571ToConnection/);
   assert.match(rollbackSource, /\.mctb-571-event-only-backup\.json/);
 }
@@ -103,6 +130,7 @@ async function testTelnyxHandlerNoAnswer() {
 async function main() {
   testDelayBounds();
   testNormalizeAttPayload();
+  testFqdnDirectTargetGate();
   testSetupRollbackScripts();
   await testTelnyxHandlerNoAnswer();
   console.log("test-mctb-event-only: ok");
