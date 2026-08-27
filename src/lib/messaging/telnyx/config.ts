@@ -62,6 +62,8 @@ export function getTelnyxWebhookUrls() {
     mctbVoiceBridge: `${base}/api/telnyx/voice/mctb-voice-bridge`,
     /** MCTB Twilio voice ingress (second hop) */
     mctbTwilioVoiceIngress: `${base}/api/twilio/voice/mctb-ingress`,
+    /** MCTB direct Telnyx isolation test — FQDN 3PCC bypass LiveKit (test flag only) */
+    mctbDirectTelnyxTest: `${base}/api/telnyx/voice/mctb-direct-telnyx-test`,
   };
 }
 
