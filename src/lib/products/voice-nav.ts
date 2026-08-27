@@ -208,15 +208,12 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     );
   } else {
-    items.push(
-      {
-        label: "Buy Numbers",
-        href: "/voice/numbers/buy",
-        icon: ShoppingCart,
-        sectionLabel: "Workspace",
-      },
-      { label: "Integrations", href: "/integrations", icon: Puzzle },
-    );
+    items.push({
+      label: "Buy Numbers",
+      href: "/voice/numbers/buy",
+      icon: ShoppingCart,
+      sectionLabel: "Workspace",
+    });
   }
 
   items.push(...buildAddonNav(features, { includeVoicemail: !showMctbSection }));
@@ -240,7 +237,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       sectionLabel: showSmsPlatform ? undefined : "Account",
     },
   ];
-  if (options.showBillingNav) {
+  if (options.showBillingNav && !showSmsPlatform) {
     account.push({ label: "Billing", href: "/settings/billing", icon: CreditCard });
   }
   items.push(...account);

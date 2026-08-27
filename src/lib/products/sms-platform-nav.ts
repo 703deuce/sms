@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CreditCard,
   FileText,
   Hash,
   HelpCircle,
@@ -7,12 +8,15 @@ import {
   Inbox,
   LayoutDashboard,
   Megaphone,
+  Puzzle,
   Send,
   Settings,
   ShieldCheck,
   Sprout,
+  Upload,
   Users,
   Workflow,
+  ClipboardList,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 
@@ -54,6 +58,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
     { label: "Send", href: "/send", icon: Send },
     { label: "Contacts", href: "/contacts", icon: Users },
     { label: "Lists", href: "/contacts/lists", icon: Users },
+    { label: "Imports", href: "/contacts/imports", icon: Upload },
     { label: "Templates", href: "/templates", icon: FileText },
     { label: "Media", href: "/messaging/media", icon: Image },
     {
@@ -63,6 +68,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       sectionLabel: "Automate & Grow",
     },
     { label: "Grow", href: "/grow/keywords", icon: Sprout },
+    { label: "Surveys", href: "/surveys", icon: ClipboardList },
     { label: "Reports", href: "/reports", icon: BarChart3 },
     {
       label: "Numbers",
@@ -74,6 +80,11 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       label: "Compliance",
       href: hasMassTexting ? "/sms/compliance" : "/compliance",
       icon: ShieldCheck,
+    },
+    {
+      label: "Integrations",
+      href: "/integrations",
+      icon: Puzzle,
     },
   );
 
@@ -92,6 +103,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       icon: Settings,
       sectionLabel: "Account",
     },
+    { label: "Billing", href: "/settings/billing", icon: CreditCard },
     { label: "Help", href: "/getting-started", icon: HelpCircle },
   );
 
@@ -115,11 +127,16 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/messaging/media")) return "Media";
   if (pathname.startsWith("/contacts/lists")) return "Lists";
+  if (pathname.startsWith("/contacts/imports")) return "Imports";
   if (pathname.startsWith("/contacts")) return "Contacts";
   if (pathname.startsWith("/automations")) return "Automations";
   if (pathname.startsWith("/grow")) return "Grow";
+  if (pathname.startsWith("/surveys")) return "Surveys";
   if (pathname.startsWith("/reports")) return "Reports";
   if (pathname.startsWith("/numbers")) return "Numbers";
+  if (pathname.startsWith("/integrations")) return "Integrations";
+  if (pathname.startsWith("/compliance")) return "Compliance";
+  if (pathname.startsWith("/settings/billing")) return "Billing";
   if (pathname.startsWith("/getting-started")) return "Help";
   return "";
 }

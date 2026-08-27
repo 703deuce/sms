@@ -43,7 +43,9 @@ assert.ok(labels.includes("Voicemail"));
 const mctbStart = labels.indexOf("Conversations");
 assert.ok(mctbStart >= 0 && labels.indexOf("Voicemail") > mctbStart);
 assert.ok(labels.includes("Buy Numbers"));
-assert.ok(labels.includes("Reports"));
+assert.ok(labels.includes("Integrations"));
+assert.ok(labels.includes("Imports"));
+assert.ok(labels.includes("Surveys"));
 assert.ok(!nav.some((i) => i.href === "/voice/analytics" && i.sectionLabel === "Manage"));
 assert.equal(nav.find((i) => i.label === "Callback Requests")?.href, "/voice/callback-requests");
 
