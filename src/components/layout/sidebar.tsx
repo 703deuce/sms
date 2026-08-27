@@ -11,10 +11,8 @@ import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isVoiceShellRoute } from "@/lib/products/voice-routes";
-import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { productLogoHome, productContextLabel } from "@/lib/products/context";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
-import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
@@ -301,13 +299,6 @@ export function Sidebar({
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const showSmsCreateMenu =
-    (hasSms ||
-      productFeatures?.mass_texting === "active" ||
-      productFeatures?.mass_texting === "trial") &&
-    isSmsShellRoute(pathname) &&
-    !collapsed;
-
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
     if (isLauncher) return [];
@@ -402,9 +393,6 @@ export function Sidebar({
           >
             + Add Line
           </Link>
-        ) : null}
-        {showSmsCreateMenu ? (
-          <SmsCreateMenu variant="sidebar" />
         ) : null}
       </div>
 

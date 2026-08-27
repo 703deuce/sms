@@ -4,11 +4,10 @@ import {
   ClipboardCheck,
   Clock,
   CreditCard,
-  FileText,
   GitBranch,
   Hash,
   LayoutDashboard,
-  MessageSquare,
+  Inbox,
   PhoneForwarded,
   PhoneMissed,
   Puzzle,
@@ -63,18 +62,6 @@ const SR_NAV_ICONS: Record<string, NavItem["icon"]> = {
   "/smart-routing/setup": SlidersHorizontal,
 };
 
-function buildCallbackAddon(
-  features: WorkspaceFeatureSnapshot | null | undefined,
-): NavItem | null {
-  const hasCallback = featureActive(features, "callback_requests", false);
-  return {
-    label: "Callback Requests",
-    href: "/voice/callback-requests",
-    icon: PhoneForwarded,
-    badge: hasCallback ? undefined : "Add-on",
-  };
-}
-
 function buildLegacyProductNav(
   features: WorkspaceFeatureSnapshot | null | undefined,
 ): NavItem[] {
@@ -111,52 +98,38 @@ function buildLegacyProductNav(
   return items;
 }
 
-function buildMctbNav(options: VoiceNavOptions): NavItem[] {
-  const items: NavItem[] = [
-    {
-      label: "Conversations",
-      href: "/inbox?product=mctb",
-      icon: MessageSquare,
-      sectionLabel: "Missed Call Text Back",
-    },
-    { label: "Missed Calls", href: "/voice/missed-calls", icon: PhoneMissed },
-    { label: "Voicemail", href: "/voice/voicemail", icon: Voicemail },
-    { label: "Consent Log", href: "/voice/consent-log", icon: ClipboardCheck },
-    { label: "Text Back Setup", href: "/voice/setup", icon: SlidersHorizontal },
-    { label: "Schedule", href: "/voice/schedule", icon: Clock },
-  ];
-  if (options.showTryIt) {
-    items.push({ label: "Try It", href: "/voice/try-it", icon: Sparkles });
-  }
-  return items;
-}
-
-function buildAddonNav(
-  features: WorkspaceFeatureSnapshot | null | undefined,
-  options: { includeVoicemail: boolean },
-): NavItem[] {
-  const hasTranscription = featureActive(features, "ai_transcription", false);
-  const hasVm = featureActive(features, "visual_voicemail", false);
+function buildMctbNav(options: VoiceNavOptions, skipInbox: boolean): NavItem[] {
   const items: NavItem[] = [];
 
-  if (options.includeVoicemail) {
+  if (!skipInbox) {
     items.push({
-      label: "Visual Voicemail",
-      href: "/voice/voicemail",
-      icon: Voicemail,
-      sectionLabel: "Add-ons",
-      badge: hasVm ? undefined : "Add-on",
+      label: "Inbox",
+      href: "/inbox",
+      icon: Inbox,
+      sectionLabel: "Missed Call Text Back",
+    });
+  } else {
+    items.push({
+      label: "Missed Calls",
+      href: "/voice/missed-calls",
+      icon: PhoneMissed,
+      sectionLabel: "Missed Call Text Back",
     });
   }
 
-  items.push({
-    label: "Transcription",
-    href: "/voice/transcription",
-    icon: FileText,
-    sectionLabel: items.length === 0 ? "Add-ons" : undefined,
-    badge: hasTranscription ? undefined : "Add-on",
-  });
+  if (!skipInbox) {
+    items.push({ label: "Missed Calls", href: "/voice/missed-calls", icon: PhoneMissed });
+  }
 
+  items.push(
+    { label: "Visual Voicemail", href: "/voice/voicemail", icon: Voicemail },
+    { label: "Consent Log", href: "/voice/consent-log", icon: ClipboardCheck },
+    { label: "Text Back Setup", href: "/voice/setup", icon: SlidersHorizontal },
+    { label: "Schedule", href: "/voice/schedule", icon: Clock },
+  );
+  if (options.showTryIt) {
+    items.push({ label: "Try It", href: "/voice/try-it", icon: Sparkles });
+  }
   return items;
 }
 
@@ -216,17 +189,8 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
     });
   }
 
-  items.push(...buildAddonNav(features, { includeVoicemail: !showMctbSection }));
-  const callbackAddon = buildCallbackAddon(features);
-  if (callbackAddon) {
-    callbackAddon.sectionLabel = items.some((i) => i.sectionLabel === "Add-ons")
-      ? undefined
-      : "Add-ons";
-    items.push(callbackAddon);
-  }
-
   if (showMctbSection) {
-    items.push(...buildMctbNav(options));
+    items.push(...buildMctbNav(options, showSmsPlatform));
   }
 
   const account: NavItem[] = [
@@ -302,7 +266,6 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const items = [{ label: "Dashboard", href: "/dashboard" }];
 
   if (showSmsPlatform) {
-    if (hasMassTexting) items.push({ label: "SMS", href: "/sms" });
     items.push(
       { label: "Inbox", href: "/inbox" },
       { label: "Campaigns", href: "/campaigns" },
@@ -321,15 +284,14 @@ export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
 
   if (showMctbSection) {
     items.push(
-      { label: "MCTB", href: "/inbox?product=mctb" },
+      { label: "MCTB", href: "/inbox" },
       { label: "Missed", href: "/voice/missed-calls" },
-      { label: "Voicemail", href: "/voice/voicemail" },
+      { label: "Visual Voicemail", href: "/voice/voicemail" },
       { label: "Setup", href: "/voice/setup" },
     );
   } else {
-    items.push({ label: "Voicemail", href: "/voice/voicemail" });
+    items.push({ label: "Visual Voicemail", href: "/voice/voicemail" });
   }
 
-  items.push({ label: "Transcription", href: "/voice/transcription" });
   return items;
 }

@@ -35,19 +35,20 @@ const nav = buildVoiceNav({
 });
 const labels = nav.map((i) => i.label);
 assert.ok(labels.includes("Missed Calls"));
-assert.ok(labels.includes("Conversations"));
 assert.ok(labels.includes("Inbox"));
 assert.ok(labels.includes("Campaigns"));
-assert.equal(nav.find((i) => i.label === "Conversations")?.href, "/inbox?product=mctb");
-assert.ok(labels.includes("Voicemail"));
-const mctbStart = labels.indexOf("Conversations");
-assert.ok(mctbStart >= 0 && labels.indexOf("Voicemail") > mctbStart);
+assert.equal(nav.find((i) => i.label === "Inbox")?.href, "/inbox");
+assert.ok(labels.includes("Visual Voicemail"));
+const mctbStart = labels.indexOf("Missed Calls");
+assert.ok(mctbStart >= 0 && labels.indexOf("Visual Voicemail") > mctbStart);
 assert.ok(labels.includes("Buy Numbers"));
 assert.ok(labels.includes("Integrations"));
 assert.ok(labels.includes("Imports"));
-assert.ok(labels.includes("Surveys"));
+assert.ok(!labels.includes("Surveys"));
+assert.ok(!labels.includes("Callback Requests"));
+assert.ok(!labels.includes("Transcription"));
 assert.ok(!nav.some((i) => i.href === "/voice/analytics" && i.sectionLabel === "Manage"));
-assert.equal(nav.find((i) => i.label === "Callback Requests")?.href, "/voice/callback-requests");
+assert.equal(nav.find((i) => i.label === "Compliance")?.href, "/compliance");
 
 const prevFocused = process.env.TRANSOVO_MCTB_FOCUSED_NAV;
 process.env.TRANSOVO_MCTB_FOCUSED_NAV = "false";
@@ -80,28 +81,29 @@ const massTextUnified = buildVoiceNav({
   hasSms: true,
 });
 const mtLabels = massTextUnified.map((i) => i.label);
-const overviewIdx = mtLabels.indexOf("Overview");
+const dashboardIdx = mtLabels.indexOf("Dashboard");
 const mctbIdx = mtLabels.indexOf("Missed Calls");
-assert.ok(overviewIdx >= 0, "SMS overview on unified menu");
-assert.ok(mctbIdx > overviewIdx, "MCTB section appears after SMS platform");
+assert.ok(dashboardIdx >= 0, "Dashboard on unified menu");
+assert.ok(mctbIdx > dashboardIdx, "MCTB section appears after dashboard");
 assert.ok(mtLabels.includes("Campaigns"), "SMS campaigns on unified menu");
 assert.ok(mtLabels.includes("Flows"), "SMS automation flows on unified menu");
 assert.ok(mtLabels.includes("Flow builder"), "SMS automation builder on unified menu");
-assert.ok(mtLabels.includes("Keywords"), "Grow keywords on unified menu");
+assert.ok(mtLabels.includes("Keywords"), "Lead capture keywords on unified menu");
 assert.ok(massTextUnified.some((i) => i.sectionLabel === "SMS"));
 assert.ok(massTextUnified.some((i) => i.sectionLabel === "Missed Call Text Back"));
 assert.ok(
   !massTextUnified.some(
     (i) => i.label === "Visual Voicemail" && i.sectionLabel === "Add-ons",
   ),
-  "Voicemail lives under MCTB, not add-ons, when MCTB is active",
+  "Visual voicemail lives under MCTB, not add-ons, when MCTB is active",
 );
 assert.ok(
-  massTextUnified.some((i) => i.label === "Voicemail"),
-  "Voicemail nested under MCTB",
+  massTextUnified.some((i) => i.label === "Visual Voicemail"),
+  "Visual Voicemail nested under MCTB",
 );
-const mctbStartUnified = mtLabels.indexOf("Conversations");
-assert.ok(mctbStartUnified >= 0 && mtLabels.indexOf("Voicemail") > mctbStartUnified);
+const mctbStartUnified = mtLabels.indexOf("Missed Calls");
+assert.ok(mctbStartUnified >= 0 && mtLabels.indexOf("Visual Voicemail") > mctbStartUnified);
+assert.equal(mtLabels.filter((l) => l === "Inbox").length, 1);
 
 assert.ok(listPlatformPurchasableProducts().length >= 8);
 

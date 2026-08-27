@@ -4,10 +4,8 @@ import {
   CreditCard,
   FileText,
   Hash,
-  HelpCircle,
   Image,
   Inbox,
-  LayoutDashboard,
   Link2,
   Megaphone,
   Puzzle,
@@ -18,70 +16,50 @@ import {
   Sprout,
   Upload,
   Users,
-  Wallet,
   Workflow,
   Wrench,
-  Zap,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { growTabs } from "@/lib/grow-tabs";
 
 export type SmsPlatformNavOptions = {
   inboxBadge?: number;
-  /** Mass Texting entitlement — shows overview + SMS-specific compliance/settings. */
+  /** Mass Texting entitlement — shows SMS-specific analytics/settings. */
   hasMassTexting?: boolean;
 };
 
-const reportLinks: Array<{ label: string; href: string }> = [
-  { label: "Reports overview", href: "/reports" },
-  { label: "Campaign reports", href: "/reports/campaigns" },
-  { label: "Message reports", href: "/reports/messages" },
-  { label: "Inbox reports", href: "/reports/inbox" },
-  { label: "Link tracking", href: "/reports/links" },
-  { label: "Contact reports", href: "/reports/contacts" },
-  { label: "Automation reports", href: "/reports/automations" },
-  { label: "Usage", href: "/reports/usage" },
-  { label: "Integration reports", href: "/reports/integrations" },
-];
+/** Grow surfaces shown in the sidebar (subset of on-page grow tabs). */
+const growNavTabs = growTabs.filter(
+  (tab) =>
+    tab.href !== "/grow/click-to-text" &&
+    tab.href !== "/grow/pages" &&
+    tab.href !== "/grow/contact-cards",
+);
+
+const LEAD_CAPTURE_SECTION = "Lead capture";
 
 /**
- * Primary SMS platform sidebar — mirrors legacy Platform Messaging / Automations /
- * Growth / Reports surfaces as flat items (Contacts & Campaign sub-routes stay on-page tabs).
+ * Primary SMS platform sidebar — campaigns, inbox, automations, lead capture, and reports.
  */
 export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavItem[] {
   const inboxBadge = options.inboxBadge ?? 0;
   const hasMassTexting = options.hasMassTexting ?? false;
 
-  const items: NavItem[] = [];
-
-  if (hasMassTexting) {
-    items.push({
-      label: "Overview",
-      href: "/sms",
-      icon: LayoutDashboard,
+  const items: NavItem[] = [
+    {
+      label: "Inbox",
+      href: "/inbox",
+      icon: Inbox,
+      badge: inboxBadge > 0 ? inboxBadge : undefined,
       sectionLabel: "SMS",
-    });
-  }
-
-  items.push({
-    label: "Inbox",
-    href: "/inbox",
-    icon: Inbox,
-    badge: inboxBadge > 0 ? inboxBadge : undefined,
-    sectionLabel: hasMassTexting ? undefined : "SMS",
-  });
-
-  items.push(
+    },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Send", href: "/send", icon: Send },
-    { label: "Quick text", href: "/send/quick", icon: Zap },
     { label: "AI composer", href: "/send/ai", icon: Sparkles },
     { label: "Message templates", href: "/templates", icon: FileText },
     { label: "Media library", href: "/messaging/media", icon: Image },
     { label: "Link tracking", href: "/reports/links", icon: Link2 },
-    { label: "Text-to-pay", href: "/messaging/payments", icon: Wallet },
     { label: "Contacts", href: "/contacts", icon: Users, sectionLabel: "Contacts" },
-    { label: "Lists", href: "/contacts/lists", icon: Users },
     { label: "Imports", href: "/contacts/imports", icon: Upload },
     {
       label: "Flows",
@@ -93,34 +71,24 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
     { label: "Flow builder", href: "/automations/new", icon: Wrench },
     { label: "Run history", href: "/automations/logs", icon: ClipboardList },
     {
-      label: growTabs[0].label,
-      href: growTabs[0].href,
+      label: growNavTabs[0]?.label ?? "Keywords",
+      href: growNavTabs[0]?.href ?? "/grow/keywords",
       icon: Sprout,
-      sectionLabel: "Grow",
+      sectionLabel: LEAD_CAPTURE_SECTION,
     },
-  );
+  ];
 
-  for (const tab of growTabs.slice(1)) {
+  for (const tab of growNavTabs.slice(1)) {
     items.push({ label: tab.label, href: tab.href, icon: Sprout });
   }
 
-  items.push({
-    label: "Surveys",
-    href: "/surveys",
-    icon: ClipboardList,
-    sectionLabel: "Engagement",
-  });
-
-  for (const [index, report] of reportLinks.entries()) {
-    items.push({
-      label: report.label,
-      href: report.href,
-      icon: BarChart3,
-      sectionLabel: index === 0 ? "Reports" : undefined,
-    });
-  }
-
   items.push(
+    {
+      label: "Reports",
+      href: "/reports",
+      icon: BarChart3,
+      sectionLabel: "Reports",
+    },
     {
       label: "Numbers",
       href: "/numbers",
@@ -129,7 +97,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
     },
     {
       label: "Compliance",
-      href: hasMassTexting ? "/sms/compliance" : "/compliance",
+      href: "/compliance",
       icon: ShieldCheck,
     },
     {
@@ -155,7 +123,6 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       sectionLabel: "Account",
     },
     { label: "Billing", href: "/settings/billing", icon: CreditCard },
-    { label: "Help", href: "/getting-started", icon: HelpCircle },
   );
 
   return items;
@@ -188,13 +155,10 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/automations")) return "Automations";
   if (pathname.startsWith("/grow")) {
     const tab = growTabs.find((t) => pathname === t.href || pathname.startsWith(`${t.href}/`));
-    return tab?.label ?? "Grow";
+    return tab?.label ?? LEAD_CAPTURE_SECTION;
   }
   if (pathname.startsWith("/surveys")) return "Surveys";
-  if (pathname.startsWith("/reports")) {
-    const report = reportLinks.find((r) => pathname === r.href || pathname.startsWith(`${r.href}/`));
-    return report?.label ?? "Reports";
-  }
+  if (pathname.startsWith("/reports")) return "Reports";
   if (pathname.startsWith("/numbers")) return "Numbers";
   if (pathname.startsWith("/integrations")) return "Integrations";
   if (pathname.startsWith("/compliance")) return "Compliance";
