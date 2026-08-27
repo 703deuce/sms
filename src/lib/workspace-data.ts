@@ -616,10 +616,14 @@ export async function loadDashboardMetrics(workspaceId: string): Promise<Dashboa
   );
   const preferred = pickPreferredSmsSendingNumber(numbers);
   const campaignOk = isApprovedMessagingStatus(registration?.campaignStatus);
-  const numberOk =
-    Boolean(preferred) &&
-    (isHpCertifiedSmsNumber(preferred.e164 || (preferred as { number?: string }).number) ||
-      isPhoneMessagingApproved(preferred));
+  const numberOk = preferred
+    ? isHpCertifiedSmsNumber(preferred.e164 || (preferred as { number?: string }).number) ||
+      isPhoneMessagingApproved({
+        settingsJson: preferred.settingsJson,
+        a2pStatus: preferred.a2pStatus,
+        type: preferred.type,
+      })
+    : false;
   const a2p =
     (campaignOk && (registration?.phoneAttached || numberOk)) || numberOk
       ? "Approved"
