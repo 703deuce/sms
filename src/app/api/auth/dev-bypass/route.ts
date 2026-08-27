@@ -17,6 +17,7 @@ import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { getUserProductAccess } from "@/lib/products/entitlements";
 import { getPrisma } from "@/lib/db";
+import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 
 async function findBypassUser(emailHint: string) {
   const prisma = getPrisma();
@@ -72,7 +73,10 @@ export async function GET(request: Request) {
     isAdmin: Boolean(user.isPlatformAdmin),
   };
 
-  const res = NextResponse.redirect(new URL(safeDevBypassNextPath(url.searchParams.get("next")), url.origin), 302);
+  const res = NextResponse.redirect(
+    publicRedirectUrl(safeDevBypassNextPath(url.searchParams.get("next")), request),
+    302,
+  );
   res.cookies.set(SESSION_COOKIE, encodeSession(session), {
     httpOnly: true,
     sameSite: "lax",

@@ -23,6 +23,7 @@ import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { getUserProductAccess, grantProductEntitlement } from "@/lib/products/entitlements";
 import { getPrisma } from "@/lib/db";
+import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 
 const BOOTSTRAP_VALUE = "transovo-smoke-bootstrap-b56f-aug2026";
 const DEFAULT_EMAIL = "mt-cert-browser@transovo.test";
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
       isAdmin: Boolean(user.isPlatformAdmin),
     };
     const res = NextResponse.redirect(
-      new URL(safeNextPath(url.searchParams.get("next")), url.origin),
+      publicRedirectUrl(safeNextPath(url.searchParams.get("next")), request),
       302,
     );
     res.cookies.set(SESSION_COOKIE, encodeSession(session), {
@@ -180,7 +181,7 @@ export async function GET(request: Request) {
     isAdmin: Boolean(user.isPlatformAdmin),
   };
 
-  const res = NextResponse.redirect(new URL(safeNextPath(url.searchParams.get("next")), url.origin), 302);
+  const res = NextResponse.redirect(publicRedirectUrl(safeNextPath(url.searchParams.get("next")), request), 302);
   res.cookies.set(SESSION_COOKIE, encodeSession(session), {
     httpOnly: true,
     sameSite: "lax",

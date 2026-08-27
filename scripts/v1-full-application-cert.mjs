@@ -58,7 +58,12 @@ function withDeadline(ms, fn) {
 }
 
 async function apiJson(ctx, path, opts = {}) {
-  const res = await ctx.fetch(`${BASE}${path}`, { ...opts, timeout: Number(process.env.SMS_CERT_API_TIMEOUT_MS || 120000) });
+  const { maxRedirects, ...fetchOpts } = opts;
+  const res = await ctx.fetch(`${BASE}${path}`, {
+    ...fetchOpts,
+    maxRedirects: maxRedirects ?? 20,
+    timeout: Number(process.env.SMS_CERT_API_TIMEOUT_MS || 120000),
+  });
   const text = await res.text();
   let json = {};
   try { json = JSON.parse(text); } catch { /* */ }
@@ -178,6 +183,7 @@ async function authenticate(api) {
     const bypass = await apiJson(
       api,
       `/api/auth/dev-bypass?next=/dashboard&email=${encodeURIComponent(email)}`,
+      { maxRedirects: 0 },
     );
     const ok =
       bypass.res.ok() ||
