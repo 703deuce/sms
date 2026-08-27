@@ -1,5 +1,5 @@
 /**
- * Assign +18553103375 to Transovo LiveKit Inbound FQDN (3PCC + PRACK) for direct-path test.
+ * Assign Telnyx TFN (+18663464256) on FQDN SIP for direct-path test.
  * Patches FQDN webhook to /api/telnyx/voice/mctb-direct-telnyx-test — does NOT remove LiveKit destination.
  *
  * Prerequisite: deploy transovo-web with mctb-direct-telnyx-test route and set MCTB_DIRECT_TELNYX_TEST=1.
@@ -10,7 +10,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { MCTB_PLATFORM_DEMO_E164, MCTB_TWILIO_VOICE_INGRESS_E164 } from "@/lib/mctb/onboarding/constants";
+import { MCTB_PLATFORM_DEMO_E164, MCTB_TELNYX_FQDN_TEST_E164 } from "@/lib/mctb/onboarding/constants";
 import { fetchTelnyxPhoneNumberByE164 } from "@/lib/mctb/consent-prompt/telnyx-call-control-route";
 import {
   assignE164ToConnection,
@@ -24,7 +24,7 @@ import { MCTB_571_SIP_FQDN_CONNECTION_ID, MCTB_571_SIP_FQDN_CONNECTION_NAME } fr
 
 const BACKUP_PATH = join(process.cwd(), ".mctb-direct-telnyx-test-800-backup.json");
 const apply = process.argv.includes("--apply");
-const TEST_E164 = MCTB_TWILIO_VOICE_INGRESS_E164;
+const TEST_E164 = process.env.MCTB_DIRECT_TELNYX_TEST_E164S?.split(",")[0]?.trim() || MCTB_TELNYX_FQDN_TEST_E164;
 
 type Backup = {
   testE164: string;
