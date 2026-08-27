@@ -10,6 +10,12 @@ Unplug LiveKit from the existing MCTB path. Same Telnyx FQDN SIP connection and 
 
 Only LiveKit is removed. No new MCTB implementation.
 
+## Root cause (2026-08-27)
+
+PSTN inbound on the **LiveKit FQDN** (`3022029259041408870`) always bridges to LiveKit SIP destinations — it does **not** become programmable Call Control even with a webhook URL. Your call showed `sip-trunking` CDR to LiveKit, duration 0, hangup `ORIGINATOR_CANCEL` — nothing answered because LiveKit was bypassed.
+
+**Fix:** `+18663464256` is moved to a **separate FQDN** (`MCTB FQDN Direct Inbound`) with identical PRACK/3PCC/ringback but **no LiveKit SIP destinations**. That forces Call Control webhooks → `mctb-event-only` → answer + speak.
+
 ## Telnyx setup (once)
 
 ```bash
@@ -28,7 +34,8 @@ This patches the FQDN connection webhook to `mctb-event-only` and ensures the to
 
 | Telnyx resource | Value |
 |-----------------|-------|
-| FQDN connection | `3022029259041408870` (Transovo LiveKit Inbound) |
+| Direct FQDN connection | `MCTB FQDN Direct Inbound` (created by setup script) |
+| LiveKit FQDN (571 only) | `3022029259041408870` — **unchanged**, 866 moved off it |
 | Webhook | `/api/telnyx/voice/mctb-event-only` |
 
 No environment variables required.

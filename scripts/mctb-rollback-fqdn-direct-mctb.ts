@@ -1,5 +1,5 @@
 /**
- * Rollback FQDN direct MCTB test — restore toll-free assignment + FQDN webhook from backup.
+ * Rollback FQDN direct MCTB test — restore toll-free + LiveKit FQDN webhook.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -14,9 +14,8 @@ const apply = process.argv.includes("--apply");
 type Backup = {
   testE164: string;
   previousConnectionId: string;
-  previousConnectionName: string;
-  fqdnConnectionId: string;
-  previousFqdnWebhookUrl: string | null;
+  livekitFqdnConnectionId: string;
+  previousLivekitFqdnWebhookUrl: string | null;
   savedAt: string;
 };
 
@@ -30,21 +29,21 @@ async function main() {
 
   const backup = JSON.parse(readFileSync(BACKUP_PATH, "utf8")) as Backup;
   console.log("Backup from:", backup.savedAt);
-  console.log(`Test E164:             ${backup.testE164}`);
-  console.log(`Previous connection:   ${backup.previousConnectionId}`);
-  console.log(`Previous FQDN webhook: ${backup.previousFqdnWebhookUrl || "(none)"}`);
+  console.log(`Test E164:                    ${backup.testE164}`);
+  console.log(`Previous number connection:   ${backup.previousConnectionId}`);
+  console.log(`Previous LiveKit FQDN webhook: ${backup.previousLivekitFqdnWebhookUrl || "(none)"}`);
 
   if (!apply) {
     console.log("\nDry run — re-run with --apply to rollback.");
     return;
   }
 
-  if (backup.previousFqdnWebhookUrl) {
+  if (backup.previousLivekitFqdnWebhookUrl) {
     await restoreFqdnWebhook({
-      connectionId: backup.fqdnConnectionId,
-      webhookUrl: backup.previousFqdnWebhookUrl,
+      connectionId: backup.livekitFqdnConnectionId,
+      webhookUrl: backup.previousLivekitFqdnWebhookUrl,
     });
-    console.log("✓ FQDN webhook restored");
+    console.log("✓ LiveKit FQDN webhook restored");
   }
 
   if (backup.previousConnectionId) {

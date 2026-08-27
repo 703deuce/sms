@@ -5,6 +5,9 @@ export const MCTB_571_SIP_FQDN_CONNECTION_ID = "3022029259041408870";
 
 export const MCTB_571_SIP_FQDN_CONNECTION_NAME = "Transovo LiveKit Inbound";
 
+/** Isolated FQDN for direct MCTB test — same PRACK/3PCC, no LiveKit SIP destinations. */
+export const MCTB_FQDN_DIRECT_CONNECTION_NAME = "MCTB FQDN Direct Inbound";
+
 /** Telnyx toll-free on FQDN for direct-SIP MCTB test — not platform 571. */
 export const MCTB_FQDN_DIRECT_TEST_E164 = "+18663464256";
 

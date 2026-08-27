@@ -16,7 +16,6 @@ import { normalizeTelnyxMctbInboundEvent } from "../src/lib/mctb/event-only/norm
 import { parseTelnyxForwardedFrom } from "../src/lib/voice/telnyx/forwarded-from";
 import { MCTB_PLATFORM_DEMO_E164 } from "../src/lib/mctb/onboarding/constants";
 import {
-  MCTB_571_SIP_FQDN_CONNECTION_ID,
   MCTB_FQDN_DIRECT_TEST_E164,
 } from "../src/lib/mctb/sip-diagnostic/constants";
 import {
@@ -70,7 +69,6 @@ function testNormalizeAttPayload() {
 
 function testFqdnDirectTargetGate() {
   const fqdnPayload = {
-    connection_id: MCTB_571_SIP_FQDN_CONNECTION_ID,
     to: MCTB_FQDN_DIRECT_TEST_E164,
     call_control_id: "mock-fqdn",
     direction: "incoming",
@@ -80,10 +78,7 @@ function testFqdnDirectTargetGate() {
     isFqdnDirectMctbTarget({ ...fqdnPayload, to: MCTB_PLATFORM_DEMO_E164 }),
     false,
   );
-  assert.equal(
-    isFqdnDirectMctbTarget({ ...fqdnPayload, connection_id: "other" }),
-    false,
-  );
+  assert.equal(isFqdnDirectMctbTarget({ ...fqdnPayload, to: "+18663464256" }), true);
 }
 
 function testSetupRollbackScripts() {
