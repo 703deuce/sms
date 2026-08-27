@@ -26,39 +26,27 @@ export async function getSession(): Promise<Session | null> {
 }
 
 export async function getActiveWorkspaceType(): Promise<WorkspaceTypeCookie> {
-  const jar = await cookies();
-  const fromCookie = jar.get(WORKSPACE_TYPE_COOKIE)?.value;
-  if (fromCookie === "PERSONAL" || fromCookie === "BUSINESS") return fromCookie;
-
-  const workspaceId = await getActiveWorkspaceId();
-  if (!workspaceId) return "BUSINESS";
-
-  try {
-    const row = await getPrisma().workspace.findUnique({
-      where: { id: workspaceId },
-      select: { type: true },
-    });
-    return row?.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
-  } catch {
-    return "BUSINESS";
-  }
+  // V1 is business-only — Personal / family numbers are no longer a customer mode.
+  return "BUSINESS";
 }
 
 export async function getActiveWorkspaceId() {
   const jar = await cookies();
   const fromCookie = jar.get(WORKSPACE_COOKIE)?.value;
-  if (fromCookie) return fromCookie;
-
   const session = await getSession();
-  if (!session) return "";
+  if (!session) return fromCookie || "";
 
   try {
+    const { resolvePreferredBusinessWorkspaceId } = await import(
+      "@/lib/workspace/preferred-business-workspace"
+    );
+    return await resolvePreferredBusinessWorkspaceId(session.userId, fromCookie);
+  } catch {
+    if (fromCookie) return fromCookie;
     const membership = await getPrisma().membership.findFirst({
       where: { userId: session.userId },
     });
     return membership?.workspaceId || "";
-  } catch {
-    return "";
   }
 }
 

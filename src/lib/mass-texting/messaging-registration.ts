@@ -44,8 +44,15 @@ export async function ensureMessagingProductRegistration(
 
 /** Mass Text sends must not reuse MCTB-only A2P campaign registration. */
 export async function resolveMassTextSendingNumber(workspaceId: string) {
+  const { pickPreferredSmsSendingNumber, isApprovedMessagingStatus } = await import(
+    "@/lib/messaging/preferred-sending-number"
+  );
+  const { isPhoneMessagingApproved } = await import(
+    "@/lib/messaging/compliance/messaging-compliance"
+  );
+
   const reg = await getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING");
-  if (reg?.phoneE164 && reg.messagingEnabled) {
+  if (reg?.phoneE164 && (reg.messagingEnabled || isApprovedMessagingStatus(reg.overallStatus))) {
     return {
       phoneE164: reg.phoneE164,
       phoneNumberId: reg.phoneNumberId,
@@ -62,23 +69,45 @@ export async function resolveMassTextSendingNumber(workspaceId: string) {
     orderBy: { e164: "asc" },
   });
 
-  for (const number of numbers) {
+  const tagged = numbers.filter((number: (typeof numbers)[number]) => {
     const settings =
       number.settingsJson && typeof number.settingsJson === "object"
         ? (number.settingsJson as Record<string, unknown>)
         : {};
     const massTextRole = String(settings.massTextRole || settings.mass_text_role || "").toLowerCase();
-    const mctbRole = String(settings.mctbRole || "").toLowerCase();
-    if (massTextRole && massTextRole !== "none" && !mctbRole) {
+    return massTextRole && massTextRole !== "none";
+  });
+  if (tagged.length) {
+    const preferredTagged = pickPreferredSmsSendingNumber(tagged);
+    if (preferredTagged) {
       return {
-        phoneE164: number.e164,
-        phoneNumberId: number.id,
+        phoneE164: preferredTagged.e164,
+        phoneNumberId: preferredTagged.id,
         registration: reg,
       };
     }
   }
 
-  return null;
+  const approvedLocal = numbers.filter(
+    (number: (typeof numbers)[number]) =>
+      isPhoneMessagingApproved(number) && !/toll/i.test(String(number.type || "")),
+  );
+  const preferred = pickPreferredSmsSendingNumber(approvedLocal.length ? approvedLocal : numbers);
+  if (preferred && isPhoneMessagingApproved(preferred)) {
+    return {
+      phoneE164: preferred.e164,
+      phoneNumberId: preferred.id,
+      registration: reg,
+    };
+  }
+
+  return preferred
+    ? {
+        phoneE164: preferred.e164,
+        phoneNumberId: preferred.id,
+        registration: reg,
+      }
+    : null;
 }
 
 export async function onMassTextMessagingReady(workspaceId: string) {

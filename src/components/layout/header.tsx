@@ -5,8 +5,6 @@ import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
 import { productContextLabel } from "@/lib/products/context";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
-import { WorkspaceSwitcher } from "@/components/workspace/workspace-switcher";
-import { WorkspaceModeToggle } from "@/components/workspace/workspace-mode-toggle";
 import { formatPhone } from "@/lib/utils";
 import {
   Bell,
@@ -41,7 +39,7 @@ export function Header({
   userName,
   workspaceId,
   workspaceName,
-  workspaceType = "BUSINESS",
+  workspaceType: _workspaceType = "BUSINESS",
   workspaces = [],
   currentProduct = null,
   isLauncher = false,
@@ -211,14 +209,6 @@ export function Header({
         >
           <Menu className="h-5 w-5" />
         </button>
-
-        {!isLauncher && currentProduct !== "numbers" && currentProduct !== "voice" ? (
-          <WorkspaceModeToggle
-            workspaceId={workspaceId}
-            workspaceType={workspaceType}
-            workspaces={workspaces}
-          />
-        ) : null}
 
         {currentProduct && !isLauncher ? (
           <span className="hidden shrink-0 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">

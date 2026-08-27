@@ -586,7 +586,7 @@ export async function loadDashboardMetrics(workspaceId: string): Promise<Dashboa
   const prisma = getPrisma();
   const [registration, numbers, campaigns, contacts, usage] = await Promise.all([
     prisma.messagingRegistration.findUnique({ where: { workspaceId } }),
-    prisma.phoneNumber.findMany({ where: { workspaceId, status: "Active" }, take: 1 }),
+    prisma.phoneNumber.findMany({ where: { workspaceId, status: "Active" } }),
     prisma.campaign.findMany({ where: { workspaceId }, take: 200 }),
     prisma.contact.count({
       where: {
@@ -608,13 +608,25 @@ export async function loadDashboardMetrics(workspaceId: string): Promise<Dashboa
   const optOuts = (campaigns as Array<{ optOuts?: number }>).reduce((s: number, c) => s + (c.optOuts || 0), 0);
   const costCents = (campaigns as Array<{ costCents?: number }>).reduce((s: number, c) => s + (c.costCents || 0), 0);
 
-  const campaignOk = (registration?.campaignStatus || "").toLowerCase() === "approved";
-  const brandOk = (registration?.brandStatus || "").toLowerCase() === "approved";
-  const a2p = campaignOk ? "Approved" : brandOk || registration ? "Pending" : "Pending";
+  const { pickPreferredSmsSendingNumber, isApprovedMessagingStatus } = await import(
+    "@/lib/messaging/preferred-sending-number"
+  );
+  const { isPhoneMessagingApproved } = await import(
+    "@/lib/messaging/compliance/messaging-compliance"
+  );
+  const preferred = pickPreferredSmsSendingNumber(numbers);
+  const campaignOk = isApprovedMessagingStatus(registration?.campaignStatus);
+  const numberOk = Boolean(preferred && isPhoneMessagingApproved(preferred));
+  const a2p =
+    (campaignOk && (registration?.phoneAttached || numberOk)) || numberOk
+      ? "Approved"
+      : registration
+        ? "Pending"
+        : "Pending";
 
   return {
     a2pStatus: a2p as DashboardMetrics["a2pStatus"],
-    activeNumber: numbers[0]?.e164 || "No number",
+    activeNumber: preferred?.e164 || registration?.phoneE164 || "No number",
     creditsRemaining: Math.max(0, 10000 - Math.round((usage?.costCents || costCents) / 2)),
     messagesSentPeriod: usage?.outbound || sent,
     deliveryRate: sent > 0 ? Math.round((delivered / sent) * 1000) / 10 : 0,
@@ -656,7 +668,7 @@ export async function loadComplianceOverview(workspaceId: string) {
 }
 
 export async function loadShellData(userId: string, workspaceId: string) {
-  const [workspaces, phoneNumbers, metrics, workspace, unreadNotifications] = await Promise.all([
+  const [workspaces, phoneNumbersRaw, metrics, workspace, unreadNotifications] = await Promise.all([
     loadWorkspacesForUser(userId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadDashboardMetrics(workspaceId),
@@ -665,12 +677,21 @@ export async function loadShellData(userId: string, workspaceId: string) {
       .inAppNotification.count({ where: { workspaceId, userId, readAt: null } })
       .catch(() => 0),
   ]);
+  const { sortPhoneNumbersForSms, pickPreferredSmsSendingNumber, scoreSmsSendingNumber } = await import(
+    "@/lib/messaging/preferred-sending-number"
+  );
+  const phoneNumbers = sortPhoneNumbersForSms(phoneNumbersRaw);
+  const storedFromId =
+    (workspace as { activeFromNumberId?: string | null } | null)?.activeFromNumberId ?? null;
+  const stored = storedFromId ? phoneNumbers.find((n) => n.id === storedFromId) : null;
+  const preferred = pickPreferredSmsSendingNumber(phoneNumbers);
+  const storedIsCompetitive =
+    stored && preferred ? scoreSmsSendingNumber(stored) >= scoreSmsSendingNumber(preferred) : Boolean(stored);
   return {
     workspaces,
     phoneNumbers,
     metrics,
-    activeFromNumberId:
-      (workspace as { activeFromNumberId?: string | null } | null)?.activeFromNumberId ?? null,
+    activeFromNumberId: storedIsCompetitive ? storedFromId : preferred?.id ?? storedFromId,
     unreadNotifications,
   };
 }

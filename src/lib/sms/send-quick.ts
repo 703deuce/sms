@@ -40,6 +40,13 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
 
   const to = normalizeE164(input.to);
   const prisma = getPrisma();
+  const { pickPreferredSmsSendingNumber } = await import(
+    "@/lib/messaging/preferred-sending-number"
+  );
+  const ownedNumbers = await prisma.phoneNumber.findMany({
+    where: { workspaceId: input.workspaceId, status: "Active" },
+  });
+  const preferredFrom = pickPreferredSmsSendingNumber(ownedNumbers)?.e164;
 
   if (input.idempotencyKey) {
     const prior = await prisma.message.findFirst({
@@ -184,7 +191,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         workspaceId: input.workspaceId,
         campaignId: input.campaignId,
         to,
-        from: poolFrom || activeReg?.phoneE164 || input.from || "messaging_service",
+        from: poolFrom || preferredFrom || activeReg?.phoneE164 || input.from || "messaging_service",
         body: finalBody,
         status: "sending",
         providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
@@ -232,7 +239,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       to,
       finalBody,
       input.mediaUrls,
-      poolFrom || input.from,
+      poolFrom || preferredFrom || input.from,
     );
     providerAccepted = true;
     providerSid = result.sid;

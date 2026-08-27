@@ -72,12 +72,20 @@ export function MassTextingDashboardView({ metrics }: Props) {
         <section className="rounded-[14px] border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[15px] font-semibold">A2P status</h2>
-            <StatusChip status={metrics.a2pStatus === "approved" ? "Approved" : "Pending"} />
+            <StatusChip
+              status={
+                ["approved", "ready", "certified"].includes(String(metrics.a2pStatus).toLowerCase())
+                  ? "Approved"
+                  : "Pending"
+              }
+            />
           </div>
           <p className="text-[13px] text-muted-foreground">
-            Mass Text marketing uses a separate A2P registration from Missed Call Text Back.
+            Sending uses your HP-certified 10DLC number
+            {metrics.sendingNumber ? ` (${formatPhone(metrics.sendingNumber)})` : ""}. Unverified
+            toll-free numbers are not used for SMS.
           </p>
-          <Link href="/sms/compliance" className="mt-3 inline-block text-[13px] font-medium text-primary">
+          <Link href="/compliance" className="mt-3 inline-block text-[13px] font-medium text-primary">
             View compliance setup
           </Link>
         </section>

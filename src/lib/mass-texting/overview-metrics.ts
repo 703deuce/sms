@@ -132,6 +132,31 @@ export async function loadMassTextOverviewMetrics(
       ? billing.trialSegmentsRemaining
       : billing.monthlySegmentsRemaining + billing.paygCreditsSegments;
 
+  const { isApprovedMessagingStatus, isHpCertifiedSmsNumber, workspaceMessagingStatusLabel } =
+    await import("@/lib/messaging/preferred-sending-number");
+  const workspaceReg = await prisma.messagingRegistration.findUnique({
+    where: { workspaceId },
+    select: {
+      overallStatus: true,
+      brandStatus: true,
+      campaignStatus: true,
+      phoneAttached: true,
+      phoneE164: true,
+    },
+  });
+  const sendingApproved =
+    Boolean(sender?.phoneE164) &&
+    (isHpCertifiedSmsNumber(sender?.phoneE164) ||
+      isApprovedMessagingStatus(mtRegistration?.overallStatus) ||
+      isApprovedMessagingStatus(workspaceReg?.campaignStatus) ||
+      isApprovedMessagingStatus(workspaceReg?.overallStatus));
+  const workspaceReady = Boolean(
+    workspaceReg?.phoneAttached &&
+      workspaceReg.phoneE164 &&
+      isApprovedMessagingStatus(workspaceReg.campaignStatus) &&
+      isApprovedMessagingStatus(workspaceReg.brandStatus),
+  );
+
   return {
     messagesSentMonth: monthMessages,
     delivered,
@@ -141,8 +166,12 @@ export async function loadMassTextOverviewMetrics(
     optOuts,
     creditsRemaining,
     creditsRemainingCents: creditsRemaining,
-    sendingNumber: sender?.phoneE164 ?? null,
-    a2pStatus: mtRegistration?.overallStatus ?? "not_started",
+    sendingNumber: sender?.phoneE164 ?? workspaceReg?.phoneE164 ?? null,
+    a2pStatus: workspaceMessagingStatusLabel({
+      productRegistrationStatus: mtRegistration?.overallStatus,
+      sendingNumberApproved: sendingApproved,
+      workspaceRegistrationReady: workspaceReady,
+    }),
     upcomingScheduled: upcoming.map((c: (typeof upcoming)[number]) => ({
       id: c.id,
       name: c.name,

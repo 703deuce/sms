@@ -37,7 +37,7 @@ export function canUseFeature(
 }
 
 export function workspaceHomePath(workspaceType: WorkspaceType): string {
-  return workspaceType === "PERSONAL" ? "/personal" : "/outcomes";
+  return workspaceType === "PERSONAL" ? "/dashboard" : "/dashboard";
 }
 
 /** Business-only URL prefixes — personal workspaces cannot access these pages. */
