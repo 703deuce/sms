@@ -259,7 +259,7 @@ async function main() {
     await shot(page, "mt_compliance");
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${BASE}/sms`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
     await shot(page, "mt_overview_mobile");
     await page.goto(`${BASE}/campaigns/new/promotion`, { waitUntil: "networkidle" });
