@@ -13,6 +13,17 @@ const BASE = (process.env.BASE_URL || "http://localhost:3000").replace(/\/$/, ""
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
 const EMAIL = process.env.SMOKE_EMAIL || `sms-cert-${randomBytes(4).toString("hex")}@transovo.test`;
 const PASSWORD = process.env.SMOKE_PASSWORD || `SmsCert_${randomBytes(4).toString("hex")}!`;
+const NAV_TIMEOUT_MS = Number(process.env.SMS_CERT_BROWSER_NAV_TIMEOUT_MS || 30000);
+const CERT_DEADLINE_MS = Number(process.env.SMS_CERT_BROWSER_DEADLINE_MS || 300000);
+
+function withDeadline(label, ms, fn) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    fn()
+      .then((v) => { clearTimeout(timer); resolve(v); })
+      .catch((e) => { clearTimeout(timer); reject(e); });
+  });
+}
 
 function storeCookies(jar, res) {
   const raw = res.headers.getSetCookie?.() || [];
@@ -83,8 +94,14 @@ async function fillIf(page, selectors, value) {
   return false;
 }
 
+function artifactsDir() {
+  return process.env.SMS_CERT_ARTIFACTS_DIR || join(process.cwd(), "artifacts");
+}
+
 async function main() {
-  mkdirSync("/opt/cursor/artifacts", { recursive: true });
+  await withDeadline("browser certification", CERT_DEADLINE_MS, async () => {
+  const artifacts = artifactsDir();
+  mkdirSync(artifacts, { recursive: true });
 
   const apiContext = await request.newContext({ baseURL: BASE });
   const signupRes = await apiContext.post("/api/auth/smoke-signup", {
@@ -125,7 +142,7 @@ async function main() {
     let ok = true;
     let note = "";
     try {
-      const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+      const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
       await page.waitForTimeout(500);
       const body = await page.locator("body").innerText().catch(() => "");
       const status = resp?.status() || 0;
@@ -179,16 +196,26 @@ async function main() {
 
   // Interaction: Add contact
   try {
-    await page.goto(`${BASE}/contacts`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Add contact/i }).click({ timeout: 10000 });
-    await page.waitForTimeout(400);
-    const phone = `+1555${String(Date.now()).slice(-7)}`;
-    await fillIf(page, ['input[name="phone"]', 'input[placeholder*="Phone" i]'], phone);
-    await fillIf(page, ['input[name="firstName"]', 'input[placeholder*="First" i]'], "Cert");
-    const save = page.locator('form button[type="submit"], button:has-text("Save"), button:has-text("Create")').first();
-    await save.click({ timeout: 5000 });
-    await page.waitForTimeout(1000);
-    recordGate("CONTACTS add contact", true);
+    await page.goto(`${BASE}/contacts`, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+    await page.waitForTimeout(800);
+    const addBtn = page
+      .locator('button:has-text("Add contact"), [role="button"]:has-text("Add contact")')
+      .first();
+    if (await addBtn.count()) {
+      await addBtn.click({ timeout: 15000 });
+      await page.waitForTimeout(400);
+      const phone = `+1555${String(Date.now()).slice(-7)}`;
+      await fillIf(page, ['input[name="phone"]', 'input#phone', 'input[placeholder*="Phone" i]'], phone);
+      await fillIf(page, ['input[name="firstName"]', 'input#firstName'], "Cert");
+      const save = page.locator(
+        'form button[type="submit"]:has-text("Add contact"), button:has-text("Add contact")',
+      ).last();
+      await save.click({ timeout: 10000 });
+      await page.waitForTimeout(1000);
+      recordGate("CONTACTS add contact", true);
+    } else {
+      recordGate("CONTACTS add contact", false, "Add contact control not found on page");
+    }
   } catch (err) {
     recordGate("CONTACTS add contact", false, err instanceof Error ? err.message : String(err));
   }
@@ -225,9 +252,15 @@ async function main() {
 
   // Interaction: Import page controls
   try {
-    await page.goto(`${BASE}/contacts/imports`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/contacts/imports`, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+    await page.waitForTimeout(1200);
     const upload = page.locator('input[type="file"]');
-    recordGate("CSV IMPORT page has upload control", (await upload.count()) > 0);
+    const chooseFile = page.locator('button:has-text("Choose file"), :text("Choose file")');
+    recordGate(
+      "CSV IMPORT page has upload control",
+      (await upload.count()) > 0 || (await chooseFile.count()) > 0,
+      `file=${await upload.count()} choose=${await chooseFile.count()}`,
+    );
   } catch (err) {
     recordGate("CSV IMPORT page has upload control", false, err instanceof Error ? err.message : String(err));
   }
@@ -272,12 +305,14 @@ async function main() {
     },
   };
 
-  writeFileSync(join("/opt/cursor/artifacts", "sms-product-browser-certification.json"), JSON.stringify(report, null, 2));
+  const reportPath = join(artifacts, "sms-product-browser-certification.json");
+  writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log(`\n=== Browser Summary: ${report.summary.pass} PASS, ${report.summary.fail} FAIL ===`);
-  console.log("Wrote /opt/cursor/artifacts/sms-product-browser-certification.json");
+  console.log(`Wrote ${reportPath}`);
 
   await browser.close();
   if (report.summary.fail > 0) process.exit(1);
+  });
 }
 
 main().catch((err) => {

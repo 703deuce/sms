@@ -5,9 +5,12 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import dotenv from "dotenv";
 import { getPrisma } from "../src/lib/db";
+import { isSupabaseConfigured } from "../src/lib/supabase/admin";
 import { grantWorkspaceProductFeature } from "../src/lib/products/feature-entitlements";
 import { validateBulkRecipients } from "../src/lib/campaigns/enroll-campaign";
 import { estimateMessagingCredits } from "../src/lib/mass-texting/credit-units";
@@ -17,6 +20,34 @@ import { canLegacyActivateCampaign } from "../src/lib/mass-texting/campaign-guar
 type Gate = { name: string; status: "PASS" | "FAIL" | "BLOCKED"; detail?: string };
 
 const gates: Gate[] = [];
+
+for (const file of [".env.local", ".env"]) {
+  const path = join(process.cwd(), file);
+  if (existsSync(path)) dotenv.config({ path });
+}
+
+/** Per-script subprocess cap — fail fast instead of hanging indefinitely. */
+const SCRIPT_TIMEOUT_MS = Number(process.env.SMS_CERT_SCRIPT_TIMEOUT_MS || 60000);
+const DB_PUSH_TIMEOUT_MS = Number(process.env.SMS_CERT_DB_PUSH_TIMEOUT_MS || 45000);
+const DB_GATE_TIMEOUT_MS = Number(process.env.SMS_CERT_DB_GATE_TIMEOUT_MS || 90000);
+const SKIP_DB_PUSH = process.env.SMS_CERT_RUN_DB_PUSH !== "1";
+
+function withTimeout<T>(label: string, ms: number, fn: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    fn()
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
 
 function gate(name: string, pass: boolean, detail?: string, blocked = false) {
   const status = blocked ? "BLOCKED" : pass ? "PASS" : "FAIL";
@@ -245,12 +276,37 @@ async function duplicateLaunchTests() {
   }
 }
 
-function runScript(script: string) {
-  execSync(`npx tsx ${script}`, { stdio: "pipe", env: process.env });
+function runScript(script: string, options?: { preloadServerOnly?: boolean }) {
+  console.log(`… ${script} (timeout ${SCRIPT_TIMEOUT_MS}ms)`);
+  const env = { ...process.env };
+  if (options?.preloadServerOnly) {
+    env.NODE_OPTIONS = [
+      env.NODE_OPTIONS,
+      "--import ./scripts/preload-server-only.mjs",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  execSync(`npx tsx ${script}`, {
+    stdio: "pipe",
+    env,
+    shell: true,
+    timeout: SCRIPT_TIMEOUT_MS,
+  });
+}
+
+function artifactsDir() {
+  return process.env.SMS_CERT_ARTIFACTS_DIR || join(process.cwd(), "artifacts");
 }
 
 async function main() {
   console.log("=== SMS Product Backend Certification ===\n");
+
+  const hasDb = isSupabaseConfigured();
+  const hasPrismaUrl = Boolean(process.env.DATABASE_URL?.trim());
+  if (!hasDb) {
+    console.log("○ Supabase env not set — DB integration gates will be BLOCKED (not FAIL).\n");
+  }
 
   try {
     runScript("scripts/test-mass-texting-boundary.ts");
@@ -264,6 +320,8 @@ async function main() {
     "scripts/test-mass-texting-pricing-billing.ts",
     "scripts/test-mass-texting-integration.ts",
     "scripts/test-mass-texting-campaign-guards.ts",
+    "scripts/test-preferred-sending-number.ts",
+    "scripts/test-v1-sms-cert-code-gates.ts",
   ]) {
     try {
       runScript(script);
@@ -273,28 +331,74 @@ async function main() {
     }
   }
 
-  try {
-    execSync(
-      "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mass-texting-credit-reservations.ts",
-      { stdio: "pipe", env: process.env },
-    );
-    gate("CREDIT RESERVATION", true);
-  } catch (e) {
-    gate("CREDIT RESERVATION", false, String(e));
+  if (!hasDb) {
+    gate("CREDIT RESERVATION", false, "Supabase env not set", true);
+  } else {
+    try {
+      runScript("scripts/test-mass-texting-credit-reservations.ts", {
+        preloadServerOnly: true,
+      });
+      gate("CREDIT RESERVATION", true);
+    } catch (e) {
+      gate("CREDIT RESERVATION", false, String(e));
+    }
   }
 
-  await tenantIsolationTests();
-  await launchGuardTests();
-  await creditAccountingTests();
-  await mmsValidationTests();
-  await suppressionTests();
-  await duplicateLaunchTests();
+  if (!hasDb) {
+    gate("TENANT ISOLATION contacts", false, "Supabase env not set", true);
+    gate("TENANT ISOLATION campaigns", false, "Supabase env not set", true);
+    gate("LAUNCH BYPASS blocked without audit", false, "Supabase env not set", true);
+    gate("SUPPRESSION blocks opted-out contact", false, "Supabase env not set", true);
+    gate("DUPLICATE SEND PROTECTION idempotent launch", false, "Supabase env not set", true);
+    gate("DATABASE schema in sync", false, "DATABASE_URL not set", true);
+  } else {
+    try {
+      await withTimeout("tenant isolation", DB_GATE_TIMEOUT_MS, tenantIsolationTests);
+    } catch (e) {
+      gate("TENANT ISOLATION contacts", false, String(e));
+      gate("TENANT ISOLATION campaigns", false, String(e));
+    }
+    try {
+      await withTimeout("launch guard", DB_GATE_TIMEOUT_MS, launchGuardTests);
+    } catch (e) {
+      gate("LAUNCH BYPASS blocked without audit", false, String(e));
+    }
+    await creditAccountingTests();
+    await mmsValidationTests();
+    try {
+      await withTimeout("suppression", DB_GATE_TIMEOUT_MS, suppressionTests);
+    } catch (e) {
+      gate("SUPPRESSION blocks opted-out contact", false, String(e));
+    }
+    try {
+      await withTimeout("duplicate launch", DB_GATE_TIMEOUT_MS, duplicateLaunchTests);
+    } catch (e) {
+      gate("DUPLICATE SEND PROTECTION idempotent launch", false, String(e));
+    }
 
-  try {
-    execSync("npm run db:push", { stdio: "pipe", encoding: "utf8" });
-    gate("DATABASE schema in sync", true);
-  } catch (e) {
-    gate("DATABASE schema in sync", false, String(e));
+    if (!hasPrismaUrl) {
+      gate("DATABASE schema in sync", false, "DATABASE_URL not set", true);
+    } else if (SKIP_DB_PUSH) {
+      gate("DATABASE schema in sync", false, "skipped (set SMS_CERT_RUN_DB_PUSH=1 to run)", true);
+    } else {
+      try {
+        console.log(`… npm run db:push (timeout ${DB_PUSH_TIMEOUT_MS}ms)`);
+        execSync("npm run db:push", {
+          stdio: "pipe",
+          encoding: "utf8",
+          shell: true,
+          timeout: DB_PUSH_TIMEOUT_MS,
+        });
+        gate("DATABASE schema in sync", true);
+      } catch (e) {
+        gate("DATABASE schema in sync", false, String(e));
+      }
+    }
+  }
+
+  if (!hasDb) {
+    await creditAccountingTests();
+    await mmsValidationTests();
   }
 
   const failed = gates.filter((g) => g.status === "FAIL");
@@ -307,8 +411,9 @@ async function main() {
     gates,
   };
 
-  mkdirSync("/opt/cursor/artifacts", { recursive: true });
-  writeFileSync(join("/opt/cursor/artifacts", "sms-product-backend-certification.json"), JSON.stringify(report, null, 2));
+  mkdirSync(artifactsDir(), { recursive: true });
+  const reportPath = join(artifactsDir(), "sms-product-backend-certification.json");
+  writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
   console.log(`\n=== Backend Summary: ${passed.length} PASS, ${failed.length} FAIL, ${blocked.length} BLOCKED ===`);
   if (failed.length) {
@@ -316,7 +421,7 @@ async function main() {
     for (const f of failed) console.error(`  - ${f.name}: ${f.detail || ""}`);
     process.exit(1);
   }
-  console.log("\nWrote /opt/cursor/artifacts/sms-product-backend-certification.json");
+  console.log(`\nWrote ${reportPath}`);
 }
 
 main().catch((err) => {

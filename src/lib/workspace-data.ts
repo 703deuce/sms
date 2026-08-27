@@ -608,7 +608,7 @@ export async function loadDashboardMetrics(workspaceId: string): Promise<Dashboa
   const optOuts = (campaigns as Array<{ optOuts?: number }>).reduce((s: number, c) => s + (c.optOuts || 0), 0);
   const costCents = (campaigns as Array<{ costCents?: number }>).reduce((s: number, c) => s + (c.costCents || 0), 0);
 
-  const { pickPreferredSmsSendingNumber, isApprovedMessagingStatus } = await import(
+  const { pickPreferredSmsSendingNumber, isApprovedMessagingStatus, isHpCertifiedSmsNumber } = await import(
     "@/lib/messaging/preferred-sending-number"
   );
   const { isPhoneMessagingApproved } = await import(
@@ -616,7 +616,10 @@ export async function loadDashboardMetrics(workspaceId: string): Promise<Dashboa
   );
   const preferred = pickPreferredSmsSendingNumber(numbers);
   const campaignOk = isApprovedMessagingStatus(registration?.campaignStatus);
-  const numberOk = Boolean(preferred && isPhoneMessagingApproved(preferred));
+  const numberOk =
+    Boolean(preferred) &&
+    (isHpCertifiedSmsNumber(preferred.e164 || (preferred as { number?: string }).number) ||
+      isPhoneMessagingApproved(preferred));
   const a2p =
     (campaignOk && (registration?.phoneAttached || numberOk)) || numberOk
       ? "Approved"

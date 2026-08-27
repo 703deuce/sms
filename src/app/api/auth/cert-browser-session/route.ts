@@ -15,6 +15,10 @@ import {
   isCertBrowserLoopbackHost,
   isCertBrowserPublicProductionHost,
 } from "@/lib/auth/cert-browser-host";
+import {
+  devAuthBypassEmailHint,
+  isDevAuthBypassEnabled,
+} from "@/lib/auth/dev-auth-bypass";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { getUserProductAccess, grantProductEntitlement } from "@/lib/products/entitlements";
@@ -57,9 +61,68 @@ function isAuthorized(request: Request, token: string): "ok" | "missing" | "unau
 }
 
 export async function GET(request: Request) {
-  if (isCertBrowserPublicProductionHost(requestHost(request))) {
+  const host = certBrowserRequestHost(request);
+  const devBypass = isDevAuthBypassEnabled();
+  if (isCertBrowserPublicProductionHost(host) && !devBypass) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (isCertBrowserPublicProductionHost(host) && devBypass) {
+    // Production cert: owner Google account via DEV_AUTH_BYPASS_EMAIL (no password).
+    const url = new URL(request.url);
+    const emailHint = (url.searchParams.get("email") || devAuthBypassEmailHint()).trim();
+    const prisma = getPrisma();
+    const normalized = emailHint.toLowerCase();
+    const user = normalized.includes("@")
+      ? await prisma.user.findUnique({ where: { email: normalized } })
+      : await prisma.user.findFirst({
+          where: { email: { startsWith: normalized } },
+          orderBy: { createdAt: "asc" },
+        });
+    if (!user) {
+      return NextResponse.json({ error: `Cert user not found: ${emailHint}` }, { status: 404 });
+    }
+    const memberships = await prisma.membership.findMany({
+      where: { userId: user.id },
+      include: { workspace: { select: { id: true, name: true, type: true } } },
+    });
+    if (!memberships.length) {
+      return NextResponse.json({ error: "User has no workspace" }, { status: 404 });
+    }
+    let membership = memberships[0];
+    const { resolvePreferredBusinessWorkspaceId } = await import(
+      "@/lib/workspace/preferred-business-workspace"
+    );
+    const preferredId = await resolvePreferredBusinessWorkspaceId(user.id, membership.workspaceId);
+    const match = memberships.find((m) => m.workspaceId === preferredId);
+    if (match) membership = match;
+    await grantProductEntitlement(membership.workspaceId, "sms", "trial");
+    const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
+    await grantWorkspaceProductFeature(membership.workspaceId, "mass_texting", "trial");
+    const access = await getUserProductAccess(user.id);
+    const session = {
+      userId: user.id,
+      email: user.email,
+      name: user.name || user.email,
+      isAdmin: Boolean(user.isPlatformAdmin),
+    };
+    const res = NextResponse.redirect(
+      new URL(safeNextPath(url.searchParams.get("next")), url.origin),
+      302,
+    );
+    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+    });
+    applyWorkspaceCookies(
+      res,
+      membership.workspaceId,
+      membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+    );
+    applyProductAccessCookie(res, access);
+    return res;
+  }
+
   const url = new URL(request.url);
   const token = url.searchParams.get("token") || "";
   const auth = isAuthorized(request, token);

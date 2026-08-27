@@ -16,6 +16,19 @@ import {
   isSmsMarketingHiddenAtLaunch,
 } from "@/lib/workspace/platform-launch";
 
+function isDevAuthBypassEnabled() {
+  const raw = process.env.DEV_AUTH_BYPASS?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function devBypassRedirect(request: NextRequest, nextPath: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/api/auth/dev-bypass";
+  url.search = "";
+  url.searchParams.set("next", nextPath);
+  return NextResponse.redirect(url);
+}
+
 function isInternalRequestHost(request: NextRequest): boolean {
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || request.headers.get("host")?.trim() || "";
@@ -177,6 +190,16 @@ export async function middleware(request: NextRequest) {
     pathname === "/api/voice/telnyx-official-baseline";
 
   if (!session && !isPublic && !(smokeBootstrap && smokeOpsPath)) {
+    if (isDevAuthBypassEnabled() && pathname !== "/api/auth/dev-bypass") {
+      const nextPath = `${pathname}${request.nextUrl.search || ""}`;
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Unauthorized — visit /api/auth/dev-bypass first (DEV_AUTH_BYPASS=1)" },
+          { status: 401 },
+        );
+      }
+      return devBypassRedirect(request, nextPath);
+    }
     // API routes without a session should 401 JSON, not HTML login redirect.
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -188,6 +211,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // Logged-in users skip auth pages; honor `next` (unified login — no product=voice shortcut).
+  if (!session && isDevAuthBypassEnabled() && authPages.has(pathname)) {
+    const next = request.nextUrl.searchParams.get("next");
+    return devBypassRedirect(request, next && next.startsWith("/") ? next : "/dashboard");
+  }
+
   if (session && authPages.has(pathname)) {
     const next = request.nextUrl.searchParams.get("next");
     if (next && next.startsWith("/") && !next.startsWith("//")) {

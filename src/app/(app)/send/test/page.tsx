@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import type { DashboardMetrics, PhoneNumber } from "@/lib/types";
 import { estimateSmsSegments, formatPhone } from "@/lib/utils";
+import { pickPreferredSmsSendingNumber } from "@/lib/messaging/preferred-sending-number";
 import { CheckCircle2, MessageSquare, ShieldCheck, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -42,7 +43,7 @@ export default function SendTestPage() {
       .catch(() => undefined);
   }, []);
 
-  const sendingNumber = phoneNumbers[0];
+  const sendingNumber = pickPreferredSmsSendingNumber(phoneNumbers) || phoneNumbers[0];
   const { characters, segments } = estimateSmsSegments(message);
 
   function sendOtp() {

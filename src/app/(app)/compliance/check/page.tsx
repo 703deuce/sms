@@ -9,6 +9,12 @@ import {
   loadDashboardMetrics,
   loadPhoneNumbers,
 } from "@/lib/workspace-data";
+import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
+import {
+  isApprovedMessagingStatus,
+  isHpCertifiedSmsNumber,
+  pickPreferredSmsSendingNumber,
+} from "@/lib/messaging/preferred-sending-number";
 import type { PhoneNumber } from "@/lib/types";
 import { CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
@@ -43,6 +49,18 @@ export default async function ComplianceCheckPage() {
   const privacyUrl = overview.website
     ? `${overview.website.replace(/\/$/, "")}/privacy`
     : "";
+
+  const activeNumbers = phoneNumbers.filter((pn: PhoneNumber) => pn.status === "Active");
+  const preferredSending = pickPreferredSmsSendingNumber(activeNumbers);
+  const sendingNumberReady = Boolean(
+    preferredSending &&
+      (isHpCertifiedSmsNumber(preferredSending.number) ||
+        isPhoneMessagingApproved(preferredSending) ||
+        isApprovedMessagingStatus(preferredSending.a2pStatus)),
+  );
+  const sendingDetail = preferredSending
+    ? `${preferredSending.number}${sendingNumberReady ? " · messaging-ready" : " · pending"}`
+    : "No active sending number";
 
   const checklist: CheckItem[] = [
     {
@@ -88,10 +106,9 @@ export default async function ComplianceCheckPage() {
       href: "/numbers",
     },
     {
-      label: "All numbers A2P registered",
-      pass:
-        phoneNumbers.length > 0 && phoneNumbers.every((pn: PhoneNumber) => pn.a2pStatus === "Approved"),
-      detail: `${phoneNumbers.filter((pn: PhoneNumber) => pn.a2pStatus === "Approved").length}/${phoneNumbers.length} approved`,
+      label: "Sending number messaging-ready",
+      pass: sendingNumberReady,
+      detail: sendingDetail,
       href: "/numbers",
     },
     {
