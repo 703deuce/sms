@@ -10,7 +10,7 @@ export function productContextLabel(product: ProductKey): string {
     case "voice":
       return "Missed Call Text Back";
     case "sms":
-      return "Mass Texting";
+      return "SMS";
     case "numbers":
       return "Numbers";
     default:
