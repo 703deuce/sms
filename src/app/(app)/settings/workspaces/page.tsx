@@ -13,7 +13,9 @@ import { settingsTabs } from "@/lib/settings-tabs";
 export default async function SettingsWorkspacesPage() {
   const { session } = await requireWorkspaceContext();
   const activeWorkspaceId = await getActiveWorkspaceId();
-  const workspaces = await loadWorkspacesForUser(session.userId);
+  const workspaces = (await loadWorkspacesForUser(session.userId)).filter(
+    (ws) => ws.type !== "PERSONAL",
+  );
 
   return (
     <div>

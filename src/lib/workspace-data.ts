@@ -680,7 +680,9 @@ export async function loadShellData(userId: string, workspaceId: string) {
   const { sortPhoneNumbersForSms, pickPreferredSmsSendingNumber, scoreSmsSendingNumber } = await import(
     "@/lib/messaging/preferred-sending-number"
   );
-  const phoneNumbers = sortPhoneNumbersForSms(phoneNumbersRaw);
+  const phoneNumbers = sortPhoneNumbersForSms(
+    phoneNumbersRaw.filter((n) => String(n.status || "Active").toLowerCase() === "active"),
+  );
   const storedFromId =
     (workspace as { activeFromNumberId?: string | null } | null)?.activeFromNumberId ?? null;
   const stored = storedFromId ? phoneNumbers.find((n) => n.id === storedFromId) : null;

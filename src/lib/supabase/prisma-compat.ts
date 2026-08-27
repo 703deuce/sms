@@ -1145,7 +1145,9 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
 
     if (!meta) continue;
 
-    const fkOnParent = out.some((r) => r[meta.fk] != null && r[meta.fk] !== undefined);
+    const fkOnParent = out.some(
+      (r) => Object.prototype.hasOwnProperty.call(r, meta.fk) || r[meta.fk] !== undefined,
+    );
     if (!fkOnParent) {
       const ids = out.map((r) => r.id as string).filter(Boolean);
       const { data, error } = ids.length
