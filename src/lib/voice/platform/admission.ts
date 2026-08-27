@@ -5,6 +5,7 @@
 
 import { getPrisma } from "@/lib/db";
 import { isWorkspaceCreditEnforced } from "@/lib/settings/billing";
+import { isAdminUnlimitedWorkspace } from "@/lib/billing/admin-unlimited-workspace";
 
 export type AiAdmissionResult =
   | { ok: true; agent: Awaited<ReturnType<typeof loadAgent>> }

@@ -138,12 +138,20 @@ async function main() {
     where: { id: workspaceId },
     data: {
       activeFromNumberId: link.phoneNumberId,
+      creditBalanceCents: 1_000_000_00,
       customFieldsConfig: {
         ...cfg,
         mctb: {
           ...mctb,
           adminTestAccount: true,
           unlimitedMctbTesting: true,
+        },
+        billing: {
+          ...(cfg.billing && typeof cfg.billing === "object"
+            ? (cfg.billing as Record<string, unknown>)
+            : {}),
+          adminUnlimited: true,
+          unlimitedCredits: true,
         },
       },
     },
@@ -164,6 +172,7 @@ async function main() {
         trialSmsSegmentsUsed: 0,
         trialSmsSegmentLimit: null,
         adminUnlimitedMctb: true,
+        adminUnlimitedCredits: true,
       },
     },
     update: {
@@ -173,6 +182,7 @@ async function main() {
         trialSmsSegmentsUsed: 0,
         trialSmsSegmentLimit: null,
         adminUnlimitedMctb: true,
+        adminUnlimitedCredits: true,
       },
     },
   });
