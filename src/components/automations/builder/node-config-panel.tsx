@@ -981,6 +981,23 @@ export function NodeConfigPanel({
           </div>
         )}
 
+        {block === "customer_no_response" && (
+          <div>
+            <Label>No reply within (hours)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={Number(cfg.withinHours || 48)}
+              onChange={(e) =>
+                onUpdate({ config: { ...cfg, withinHours: Number(e.target.value) } })
+              }
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Fires when a wait step ends and the contact still has not replied.
+            </p>
+          </div>
+        )}
+
         {block === "scheduled_datetime" && (
           <>
             <div>
@@ -1220,14 +1237,24 @@ export function NodeConfigPanel({
         )}
 
         {block === "send_internal_notification" && (
-          <div>
-            <Label>Message</Label>
-            <Textarea
-              rows={3}
-              value={String(cfg.message || "")}
-              onChange={(e) => onUpdate({ config: { ...cfg, message: e.target.value } })}
-            />
-          </div>
+          <>
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={String(cfg.title || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, title: e.target.value } })}
+                placeholder="New automation alert"
+              />
+            </div>
+            <div>
+              <Label>Message</Label>
+              <Textarea
+                rows={3}
+                value={String(cfg.message || "")}
+                onChange={(e) => onUpdate({ config: { ...cfg, message: e.target.value } })}
+              />
+            </div>
+          </>
         )}
 
         {block === "end_automation" && (

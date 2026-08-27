@@ -471,14 +471,21 @@ function BuilderCanvas({
             {builder.publishing ? "Publishing…" : "Publish / Activate"}
           </Button>
         </div>
-        <div className="flex gap-2 md:hidden w-full">
-          <Button variant="outline" size="sm" className="flex-1" onClick={() => router.push(`/automations/${flowId}`)}>
+        <div className="flex gap-2 md:hidden w-full flex-wrap">
+          <Button variant="outline" size="sm" className="flex-1 min-w-[80px]" onClick={() => router.push(`/automations/${flowId}`)}>
             Exit
           </Button>
-          <Button variant="outline" size="sm" className="flex-1" onClick={saveDraft} disabled={builder.saving}>
+          <Button variant="outline" size="sm" className="flex-1 min-w-[80px]" onClick={saveDraft} disabled={builder.saving}>
             Save
           </Button>
-          <Button size="sm" className="flex-1" onClick={publish} disabled={builder.publishing}>
+          <Button variant="outline" size="sm" className="flex-1 min-w-[80px]" onClick={() => {
+            const id = testContactId || contacts[0]?.id;
+            if (id) runTest(id).catch((e) => alert(e.message));
+            else alert("Add a subscribed contact to run live.");
+          }}>
+            Run live
+          </Button>
+          <Button size="sm" className="flex-1 min-w-[80px]" onClick={publish} disabled={builder.publishing}>
             Publish
           </Button>
         </div>

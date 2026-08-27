@@ -40,6 +40,15 @@ export async function markFactsForContact(
   patch: Record<string, unknown>,
 ) {
   const prisma = getPrisma();
+  if (patch.customer_replied) {
+    try {
+      const { stopExecutionsOnReply } = await import("./stop-on-reply");
+      await stopExecutionsOnReply(workspaceId, contactId);
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   const active = await prisma.automationExecution.findMany({
     where: {
       workspaceId,

@@ -2,6 +2,7 @@ import type { AutomationCanvasNode, AutomationDefinition } from "./types";
 import { findTriggerNode, getOutgoingEdges, hasCycle } from "./types";
 import { isConditionBlock } from "./catalog";
 import { getAutomationCapabilities } from "./capabilities";
+import { isVoiceAutomationBlock } from "./block-scope";
 
 export type ValidationIssue = {
   nodeId?: string;
@@ -80,6 +81,14 @@ export function validateAutomationForPublish(
   for (const node of def.nodes) {
     const block = node.data.blockType;
     const cfg = node.data.config || {};
+
+    if (isVoiceAutomationBlock(block) && !caps.voice) {
+      issues.push({
+        nodeId: node.id,
+        message: "Voice call blocks are not available in the SMS automation builder",
+        severity: "error",
+      });
+    }
 
     if (block === "send_sms" || block === "send_review_request") {
       const body = String(cfg.body || "").trim();

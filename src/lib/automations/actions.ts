@@ -291,6 +291,10 @@ export async function runNodeAction(
       await mergeExecutionMetadata(ctx.executionId, {
         message_delivered: true,
         review_request_sent: block === "send_review_request",
+        lastSmsSentAt: new Date().toISOString(),
+        ...(cfg.stopOnReply !== false
+          ? { stopOnReplyActive: true, customer_replied: false }
+          : {}),
       });
       if (block === "send_review_request") {
         const { emitAutomationEvent } = await import("./events");
@@ -389,11 +393,19 @@ export async function runNodeAction(
       contact,
       String(cfg.title || "Follow-up task"),
     );
+    const dueDays = Number(cfg.dueInDays ?? 1);
+    const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+    await notifyWorkspace(ctx.workspaceId, {
+      type: "automationTask",
+      title,
+      body: `Follow up with ${contact.firstName || contact.phone} · due in ${dueDays} day${dueDays === 1 ? "" : "s"}`,
+      href: `/contacts/${contact.id}`,
+    });
     await prisma.auditLog.create({
       data: {
         workspaceId: ctx.workspaceId,
         event: "automation.task",
-        detail: `contact=${ctx.contactId} title=${title} dueInDays=${cfg.dueInDays ?? 1}`,
+        detail: `contact=${ctx.contactId} title=${title} dueInDays=${dueDays}`,
       },
     });
     return { nextNodeId: getNextNodeId(def, node.id) };
@@ -401,6 +413,13 @@ export async function runNodeAction(
 
   if (block === "send_internal_notification") {
     const msg = await mergeMessageVars(ctx.workspaceId, contact, String(cfg.message || ""));
+    const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+    await notifyWorkspace(ctx.workspaceId, {
+      type: "automation",
+      title: String(cfg.title || "Automation notification"),
+      body: msg,
+      href: `/automations/${ctx.flowId}`,
+    });
     await prisma.auditLog.create({
       data: {
         workspaceId: ctx.workspaceId,

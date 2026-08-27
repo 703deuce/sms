@@ -1,12 +1,15 @@
 /**
  * Account capabilities for automation block availability.
  */
+import { isVoiceAutomationBlock, isVoiceAutomationEnabled } from "./block-scope";
+
 export type AutomationCapabilities = {
   sms: boolean;
   email: boolean;
   webhooks: boolean;
   automations: boolean;
   scheduledTriggers: boolean;
+  voice: boolean;
 };
 
 export function getAutomationCapabilities(): AutomationCapabilities {
@@ -21,10 +24,12 @@ export function getAutomationCapabilities(): AutomationCapabilities {
     webhooks: true,
     automations: true,
     scheduledTriggers: true,
+    voice: isVoiceAutomationEnabled(),
   };
 }
 
 export function isBlockEnabledForAccount(blockType: string, caps: AutomationCapabilities): boolean {
+  if (isVoiceAutomationBlock(blockType) && !caps.voice) return false;
   if (blockType === "send_email") return caps.email;
   if (blockType === "send_sms" || blockType === "send_review_request") return caps.sms;
   if (blockType === "scheduled_datetime") return caps.scheduledTriggers;

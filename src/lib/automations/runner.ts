@@ -267,6 +267,12 @@ export async function processAutomationWaits() {
   let advanced = 0;
   for (const ex of due) {
     if (ex.flow.status !== "ACTIVE") continue;
+    try {
+      const { emitNoResponseAfterWait } = await import("./stop-on-reply");
+      await emitNoResponseAfterWait(ex.workspaceId, ex.contactId, ex.id);
+    } catch {
+      /* non-fatal */
+    }
     await prisma.automationExecution.update({
       where: { id: ex.id },
       data: { status: "RUNNING", nextActionAt: null },
@@ -298,7 +304,9 @@ export async function processScheduledAutomations() {
     if (!runAt) continue;
     const target = new Date(runAt);
     const now = Date.now();
-    if (target.getTime() > now || target.getTime() < now - 120_000) continue;
+    const MAX_LATE_MS = 24 * 60 * 60_000;
+    if (target.getTime() > now) continue;
+    if (target.getTime() < now - MAX_LATE_MS) continue;
 
     const key = `scheduled:${flow.id}:${runAt}`;
     const fired = await prisma.auditLog.findFirst({

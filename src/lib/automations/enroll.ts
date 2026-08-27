@@ -228,6 +228,18 @@ export async function enrollForTrigger(
     }
     if (cfg.requirePhone === true && filters?.phoneExists === false) continue;
     if (cfg.requireEmail === true && filters?.emailExists === false) continue;
+    if (triggerBlockType === "customer_no_response") {
+      const withinHours = Number(cfg.withinHours || 48);
+      const contact = await prisma.contact.findFirst({
+        where: { id: contactId, workspaceId },
+        select: { lastReply: true },
+      });
+      if (contact?.lastReply) {
+        const hoursSinceReply =
+          (Date.now() - new Date(contact.lastReply).getTime()) / 3_600_000;
+        if (hoursSinceReply < withinHours) continue;
+      }
+    }
     if (
       (triggerBlockType === "integration_appointment_starting_soon" ||
         triggerBlockType === "integration_task_due") &&
