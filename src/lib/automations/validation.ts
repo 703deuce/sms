@@ -132,6 +132,35 @@ export function validateAutomationForPublish(
       }
     }
 
+    if (block === "integration_action") {
+      const prov = String(cfg.provider || "").trim();
+      if (!prov) {
+        issues.push({
+          nodeId: node.id,
+          message: "Select a connected app for the CRM / app action",
+          severity: "error",
+        });
+      }
+      if (!String(cfg.actionId || "").trim()) {
+        issues.push({
+          nodeId: node.id,
+          message: "Select an action for the CRM / app step",
+          severity: "error",
+        });
+      }
+    }
+
+    if (block.startsWith("integration_") && block !== "integration_action") {
+      const prov = String(cfg.provider || "").trim();
+      if (prov) {
+        issues.push({
+          nodeId: node.id,
+          message: `Requires ${prov} connected in Integrations — webhooks register on Activate`,
+          severity: "warning",
+        });
+      }
+    }
+
     if (block === "enroll_in_automation" || block === "remove_from_automation") {
       if (!String(cfg.flowId || "").trim()) {
         issues.push({ nodeId: node.id, message: "Select an automation flow", severity: "error" });

@@ -38,6 +38,23 @@ type IntegrationMetadata = {
 
 const METADATA_PROVIDERS = ["salesforce", "zoho", "pipedrive", "calendly"];
 
+const ALL_INTEGRATION_PROVIDERS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Any connected app" },
+  { value: "salesforce", label: "Salesforce" },
+  { value: "zoho", label: "Zoho CRM" },
+  { value: "pipedrive", label: "Pipedrive" },
+  { value: "calendly", label: "Calendly" },
+  { value: "mailchimp", label: "Mailchimp" },
+  { value: "typeform", label: "Typeform" },
+  { value: "activecampaign", label: "ActiveCampaign" },
+  { value: "woocommerce", label: "WooCommerce" },
+  { value: "jotform", label: "Jotform" },
+  { value: "close", label: "Close" },
+  { value: "freshdesk", label: "Freshdesk" },
+  { value: "klaviyo", label: "Klaviyo" },
+  { value: "highlevel", label: "HighLevel" },
+];
+
 export function NodeConfigPanel({
   flowId,
   node,
@@ -71,6 +88,7 @@ export function NodeConfigPanel({
   const [actionTestResult, setActionTestResult] = useState<
     { ok: boolean; message: string } | null
   >(null);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
 
   const provider = String(cfg.provider || "");
   const isIntegrationBlock = block === "integration_action" || block.startsWith("integration_");
@@ -105,6 +123,15 @@ export function NodeConfigPanel({
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => setContacts(j?.data || []))
       .catch(() => undefined);
+    fetch("/api/integrations/connections")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const list = (j?.data?.connections || []) as Array<{ provider: string; status: string }>;
+        setConnectedProviders(
+          list.filter((c) => c.status === "connected").map((c) => c.provider),
+        );
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -136,6 +163,19 @@ export function NodeConfigPanel({
   // stale response from a previous provider is never shown.
   const activeMetadata =
     metadata && metadata.provider === provider ? metadata : null;
+
+  const providerOptions = useMemo(() => {
+    if (!connectedProviders.length) return ALL_INTEGRATION_PROVIDERS;
+    return ALL_INTEGRATION_PROVIDERS.filter(
+      (p) => !p.value || connectedProviders.includes(p.value),
+    );
+  }, [connectedProviders]);
+
+  const providerDisconnected =
+    isIntegrationBlock &&
+    Boolean(provider) &&
+    connectedProviders.length > 0 &&
+    !connectedProviders.includes(provider);
 
   const actionOptions = useMemo(
     () => integrationActionsForProvider(provider),
@@ -487,21 +527,30 @@ export function NodeConfigPanel({
                 value={String(cfg.provider || "")}
                 onChange={(e) => onUpdate({ config: { ...cfg, provider: e.target.value } })}
               >
-                <option value="">Any connected app</option>
-                <option value="salesforce">Salesforce</option>
-                <option value="zoho">Zoho CRM</option>
-                <option value="pipedrive">Pipedrive</option>
-                <option value="calendly">Calendly</option>
-                <option value="mailchimp">Mailchimp</option>
-                <option value="typeform">Typeform</option>
-                <option value="activecampaign">ActiveCampaign</option>
-                <option value="woocommerce">WooCommerce</option>
-                <option value="jotform">Jotform</option>
-                <option value="close">Close</option>
-                <option value="freshdesk">Freshdesk</option>
-                <option value="klaviyo">Klaviyo</option>
-                <option value="highlevel">HighLevel</option>
+                {providerOptions.map((p) => (
+                  <option key={p.value || "any"} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
               </Select>
+              {providerDisconnected && (
+                <p className="mt-1 text-xs text-amber-700">
+                  {provider} is not connected.{" "}
+                  <a href="/integrations" className="underline">
+                    Connect in Integrations
+                  </a>{" "}
+                  for this trigger to fire.
+                </p>
+              )}
+              {!connectedProviders.length && isIntegrationBlock && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Connect apps in{" "}
+                  <a href="/integrations" className="underline">
+                    Integrations
+                  </a>{" "}
+                  — webhooks register automatically when you activate a flow.
+                </p>
+              )}
             </div>
             {metaLoading && (
               <p className="text-xs text-muted-foreground">Loading {provider} metadata…</p>
@@ -732,18 +781,23 @@ export function NodeConfigPanel({
                 }
               >
                 <option value="">Select provider</option>
-                <option value="salesforce">Salesforce</option>
-                <option value="zoho">Zoho CRM</option>
-                <option value="pipedrive">Pipedrive</option>
-                <option value="calendly">Calendly</option>
-                <option value="activecampaign">ActiveCampaign</option>
-                <option value="mailchimp">Mailchimp</option>
-                <option value="highlevel">HighLevel</option>
-                <option value="close">Close</option>
-                <option value="freshdesk">Freshdesk</option>
-                <option value="klaviyo">Klaviyo</option>
-                <option value="woocommerce">WooCommerce</option>
+                {providerOptions
+                  .filter((p) => p.value)
+                  .map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
               </Select>
+              {providerDisconnected && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Connect {provider} in{" "}
+                  <a href="/integrations" className="underline">
+                    Integrations
+                  </a>{" "}
+                  before this action can run.
+                </p>
+              )}
             </div>
             <div>
               <Label>Action</Label>

@@ -204,41 +204,18 @@ export async function completeExternalOAuth(input: {
 
   let webhookSubscriptionIds: string[] = [];
   let webhookSetupNote: string | null = null;
-  if (provider === "calendly" && adapter.registerWebhooks) {
+  if (adapter.registerWebhooks) {
     try {
-      const { externalWebhookUrl } = await import("./app-url");
-      const callbackUrl = externalWebhookUrl(
-        provider,
-        typeof meta.webhookToken === "string" ? meta.webhookToken : null,
-      );
-      // Drop prior subscriptions so we always capture a fresh signing_key
-      // (Calendly only returns it on POST create).
-      const priorIds = Array.isArray(prevConfig.webhookSubscriptionIds)
-        ? (prevConfig.webhookSubscriptionIds as string[])
-        : [];
-      if (adapter.removeWebhooks && priorIds.length) {
-        await adapter.removeWebhooks(ctx, priorIds).catch(() => undefined);
-      }
-      const registered = await adapter.registerWebhooks(ctx, callbackUrl);
-      webhookSubscriptionIds = registered.ids || [];
+      const { ensureProviderWebhooksRegistered } = await import("./register-webhooks");
+      const registered = await ensureProviderWebhooksRegistered(workspaceId, provider);
+      webhookSubscriptionIds = registered.subscriptionIds;
       meta.webhookSubscriptionIds = webhookSubscriptionIds;
-      meta.webhookCallbackUrl = callbackUrl;
-      if (registered.scope) meta.webhookSubscriptionScope = registered.scope;
-      if (registered.signingKey) {
-        meta.signingKey = registered.signingKey;
-        meta.signingKeySource = "calendly_subscription_create";
-        meta.signingKeyCapturedAt = new Date().toISOString();
-      } else {
-        // OAuth apps: developer-portal key via Coolify env (not returned on create).
-        meta.signingKey = null;
-        meta.signingKeySource = "oauth_app_env";
-        meta.signingKeyCapturedAt = new Date().toISOString();
-      }
-      meta.webhookSetupError = null;
+      meta.webhookCallbackUrl = registered.callbackUrl;
+      meta.webhookSetupError = registered.error || null;
+      if (registered.error) webhookSetupNote = registered.error;
     } catch (err) {
       webhookSetupNote = err instanceof Error ? err.message : String(err);
       meta.webhookSetupError = webhookSetupNote;
-      // Free Calendly plans cannot create webhook subscriptions — reconcile still works.
     }
   }
 

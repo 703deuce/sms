@@ -4,7 +4,6 @@
 
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { getPrisma } from "@/lib/db";
-import { enqueueCrmSync } from "../sync-engine";
 import { writeCrmAudit } from "../logging";
 import { redactSensitive } from "../redact";
 import type { CrmProviderId } from "../types";
@@ -234,14 +233,15 @@ export async function processCrmWebhookJob(payload: {
           row.payloadJson,
         );
       }
-    } else {
-      await enqueueCrmSync({
-        workspaceId: payload.workspaceId,
-        provider: payload.provider,
-        kind: "webhook",
-        triggeredBy: "webhook",
-      });
     }
+
+    const { processCrmWebhookAutomation } = await import("./webhook-automation");
+    await processCrmWebhookAutomation({
+      workspaceId: payload.workspaceId,
+      provider: payload.provider,
+      eventType: row.eventType || "unknown",
+      payload: row.payloadJson,
+    });
 
     await prisma.crmWebhookEvent.update({
       where: { id: row.id },

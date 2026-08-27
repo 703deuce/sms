@@ -12,6 +12,7 @@ import {
   activateFlowTriggers,
   inboundCallRequiresNumber,
 } from "@/lib/automations/trigger-deployments";
+import { ensureIntegrationSubscriptionsForFlow } from "@/lib/automations/integration-subscriptions";
 
 export async function POST(
   request: Request,
@@ -98,6 +99,22 @@ export async function POST(
       );
     }
 
+    const integrationSubscriptions = await ensureIntegrationSubscriptionsForFlow(
+      auth.workspaceId,
+      definition,
+    );
+    const blockingIntegration = integrationSubscriptions.find((s) => !s.ok);
+    if (blockingIntegration) {
+      return NextResponse.json(
+        {
+          error: "Integration not ready",
+          integrationSubscriptions,
+          message: blockingIntegration.message,
+        },
+        { status: 400 },
+      );
+    }
+
     const newVersion = flow.version + 1;
     const row = await getPrisma().automationFlow.update({
       where: { id },
@@ -132,6 +149,7 @@ export async function POST(
       version: newVersion,
       triggerDeployments: triggerResult.deployments,
       telnyxPublished: triggerResult.telnyxPublished,
+      integrationSubscriptions,
     });
   } catch (err) {
     return jsonError(err, 400);

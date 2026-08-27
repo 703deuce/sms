@@ -41,6 +41,7 @@ export {
 } from "./automation-bridge";
 export * from "./contact-links";
 export * from "./product-persist";
+export * from "./register-webhooks";
 export * from "./ai-policy";
 export * from "./action-log";
 export * from "./consent-gate";
