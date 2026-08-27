@@ -213,7 +213,7 @@ export function getVoicePageTitle(pathname: string): string {
   const smsTitle = getSmsPlatformPageTitle(pathname);
   if (smsTitle) return smsTitle;
 
-  if (pathname === "/dashboard" || pathname === "/outcomes") return "";
+  if (pathname === "/dashboard" || pathname === "/outcomes") return "Dashboard";
   if (pathname.startsWith("/voice/try-it")) return "Try It";
   if (pathname.startsWith("/inbox")) return "Inbox";
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";

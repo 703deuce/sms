@@ -156,7 +156,7 @@ async function main() {
   const bodyText = await page.locator("body").innerText();
   recordGate(
     "MASS TEXTING entitlement grant",
-    bodyText.includes("Mass Texting") && !page.url().includes("/login"),
+    bodyText.includes("Dashboard") && !page.url().includes("/login"),
     page.url(),
   );
 
@@ -169,7 +169,7 @@ async function main() {
 
   // Mobile viewport
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobileRoutes = ["/sms", "/campaigns", "/contacts", "/inbox?product=mass_text", "/templates"];
+  const mobileRoutes = ["/dashboard", "/campaigns", "/contacts", "/inbox?product=mass_text", "/templates"];
   let mobilePass = 0;
   for (const path of mobileRoutes) {
     if (await visitRoute(path)) mobilePass++;

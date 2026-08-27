@@ -50,7 +50,7 @@ function cardValue(text, label) {
 }
 
 async function smokeLogin(page) {
-  const loginUrl = `${BASE}/__cert_login?token=${encodeURIComponent(BOOTSTRAP)}&email=${encodeURIComponent(EMAIL)}&next=/sms`;
+  const loginUrl = `${BASE}/__cert_login?token=${encodeURIComponent(BOOTSTRAP)}&email=${encodeURIComponent(EMAIL)}&next=/dashboard`;
   const open = await page.goto(loginUrl, { waitUntil: "networkidle" });
   log("cert-login", { status: open?.status(), url: page.url() });
   if (page.url().includes("/login")) {
@@ -63,7 +63,7 @@ async function smokeLogin(page) {
     });
     const body = await res.json().catch(() => ({}));
     log("smoke-login-fallback", { status: res.status(), workspaceId: body.workspaceId });
-    await page.goto(`${BASE}/api/products/open?product=mass_texting&next=/sms`, {
+    await page.goto(`${BASE}/api/products/open?product=mass_texting&next=/dashboard`, {
       waitUntil: "networkidle",
     });
   }
@@ -90,12 +90,12 @@ async function main() {
 
   try {
     await smokeLogin(page);
-    if (!page.url().includes("/sms")) {
-      fail("overview-url", `expected /sms, got ${page.url()}`);
+    if (!page.url().includes("/dashboard")) {
+      fail("overview-url", `expected /dashboard, got ${page.url()}`);
     }
     await page.waitForTimeout(800);
     const overview = await assertContains(page, "overview", [
-      "Mass Texting",
+      "Dashboard",
       "Sent this month",
       "Credits remaining",
       "A2P status",

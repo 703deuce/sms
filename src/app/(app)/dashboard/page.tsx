@@ -1,23 +1,13 @@
-import { MctbDashboardView } from "@/components/mctb/dashboard-view";
-import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-types";
+import { MassTextingDashboardView } from "@/components/mass-texting/dashboard-view";
 import { getPrisma } from "@/lib/db";
+import { loadMassTextOverviewMetrics } from "@/lib/mass-texting/overview-metrics";
 import { isOnboardingComplete, loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { redirect } from "next/navigation";
 
-function parseRange(raw: string | undefined): DashboardDateRange {
-  if (raw === "today" || raw === "30d" || raw === "7d") return raw;
-  return "7d";
-}
-
-/** Missed Call Text Back — operational dashboard. */
-export default async function MctbDashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ range?: string }>;
-}) {
-  const { session, workspaceId } = await requireWorkspaceContext();
+/** Platform dashboard — campaign metrics, scheduling, and recent activity. */
+export default async function DashboardPage() {
+  const { workspaceId } = await requireWorkspaceContext();
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
@@ -29,16 +19,7 @@ export default async function MctbDashboardPage({
       redirect("/onboarding/mctb");
     }
   }
-  const params = await searchParams;
-  const range = parseRange(params.range);
-  const productFeatures = await getWorkspaceProductFeatures(workspaceId, {
-    isPlatformAdmin: session.isAdmin,
-  });
-  return (
-    <MctbDashboardView
-      userName={session.name}
-      range={range}
-      productFeatures={productFeatures}
-    />
-  );
+
+  const metrics = await loadMassTextOverviewMetrics(workspaceId);
+  return <MassTextingDashboardView metrics={metrics} />;
 }

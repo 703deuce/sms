@@ -49,7 +49,7 @@ export function productHomePath(product: ProductKey): string {
     case "voice":
       return "/dashboard";
     case "sms":
-      return "/sms";
+      return "/dashboard";
     case "numbers":
       return "/personal";
     default:

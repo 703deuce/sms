@@ -5,7 +5,7 @@
  * CERT_BROWSER_LOGIN_TOKEN is set. On localhost it also accepts the existing
  * smoke-bootstrap token as `?token=`.
  *
- * GET /api/auth/cert-browser-session?token=...&email=mt-cert-browser@transovo.test&next=/sms
+ * GET /api/auth/cert-browser-session?token=...&email=mt-cert-browser@transovo.test&next=/dashboard
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -41,9 +41,9 @@ function isLoopbackHost(request: Request): boolean {
 }
 
 function safeNextPath(raw: string | null): string {
-  const next = (raw || "/sms").trim();
+  const next = (raw || "/dashboard").trim();
   if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) {
-    return "/sms";
+    return "/dashboard";
   }
   return next;
 }

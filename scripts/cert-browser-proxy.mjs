@@ -58,8 +58,8 @@ async function certLogin(url, res) {
   );
   cookies.push(...(openRes.headers.getSetCookie?.() || []));
 
-  const next = url.searchParams.get("next") || "/sms";
-  const location = next.startsWith("/") && !next.startsWith("//") ? next : "/sms";
+  const next = url.searchParams.get("next") || "/dashboard";
+  const location = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
   res.writeHead(302, {
     Location: location,
     "Set-Cookie": cookies,
