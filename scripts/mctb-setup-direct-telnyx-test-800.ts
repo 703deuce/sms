@@ -2,7 +2,7 @@
  * Assign Telnyx TFN (+18663464256) on FQDN SIP for direct-path test.
  * Patches FQDN webhook to /api/telnyx/voice/mctb-direct-telnyx-test — does NOT remove LiveKit destination.
  *
- * Prerequisite: deploy transovo-web with mctb-direct-telnyx-test route and set MCTB_DIRECT_TELNYX_TEST=1.
+ * Prerequisite: deploy transovo-web with mctb-direct-telnyx-test route.
  *
  * Usage:
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-setup-direct-telnyx-test-800.ts
@@ -24,7 +24,7 @@ import { MCTB_571_SIP_FQDN_CONNECTION_ID, MCTB_571_SIP_FQDN_CONNECTION_NAME } fr
 
 const BACKUP_PATH = join(process.cwd(), ".mctb-direct-telnyx-test-800-backup.json");
 const apply = process.argv.includes("--apply");
-const TEST_E164 = process.env.MCTB_DIRECT_TELNYX_TEST_E164S?.split(",")[0]?.trim() || MCTB_TELNYX_FQDN_TEST_E164;
+const TEST_E164 = MCTB_TELNYX_FQDN_TEST_E164;
 
 type Backup = {
   testE164: string;
@@ -49,7 +49,7 @@ async function main() {
   console.log(`Test number:     ${TEST_E164}`);
   console.log(`FQDN connection: ${MCTB_571_SIP_FQDN_CONNECTION_NAME} (${MCTB_571_SIP_FQDN_CONNECTION_ID})`);
   console.log(`Webhook target:  ${mctbDirectTelnyxTestWebhookUrl()}`);
-  console.log(`Server flag:     MCTB_DIRECT_TELNYX_TEST=1 (required on transovo-web)\n`);
+  console.log(`No env vars required — gated by test DID only.\n`);
 
   const pn571 = await fetchTelnyxPhoneNumberByE164(MCTB_PLATFORM_DEMO_E164);
   const platform571ConnectionId = pn571?.connection_id ? String(pn571.connection_id) : null;
@@ -126,7 +126,7 @@ async function main() {
     console.log(`Would save backup → ${BACKUP_PATH}`);
     console.log(`Would assign ${TEST_E164} → FQDN ${MCTB_571_SIP_FQDN_CONNECTION_ID}`);
     console.log(`Would PATCH FQDN webhook → ${backup.targetWebhookUrl}`);
-    console.log("\nRe-run with --apply after deploying transovo-web with MCTB_DIRECT_TELNYX_TEST=1.");
+    console.log("\nRe-run with --apply after deploying transovo-web.");
     return;
   }
 

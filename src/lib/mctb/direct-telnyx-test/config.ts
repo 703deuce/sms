@@ -8,45 +8,25 @@ function normalizeDid(value: string | null | undefined): string | null {
   return value.startsWith("+") ? value : null;
 }
 
-/** Test-only gate — production defaults remain LiveKit / existing paths. */
-export function isMctbDirectTelnyxTestEnabled(): boolean {
-  const raw = process.env.MCTB_DIRECT_TELNYX_TEST?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
-}
+/** Hold before stability checkpoint (ms). */
+export const MCTB_DIRECT_TELNYX_TEST_HOLD_MS = 15_000;
 
-/** Hold duration before optional hangup (ms). Default 15s. */
-export function mctbDirectTelnyxTestHoldMs(): number {
-  const raw = Number(process.env.MCTB_DIRECT_TELNYX_TEST_HOLD_MS || "15000");
-  if (!Number.isFinite(raw) || raw < 1000) return 15_000;
-  return Math.min(raw, 120_000);
-}
+/** Isolation test — log normalized event only, no customer SMS. */
+export const MCTB_DIRECT_TELNYX_TEST_EMIT_SMS = false;
 
-/** When false (default), emit normalized events only — no customer SMS. */
-export function mctbDirectTelnyxTestEmitSms(): boolean {
-  const raw = process.env.MCTB_DIRECT_TELNYX_TEST_EMIT_SMS?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
-}
-
-/** Designated PSTN test destination(s). Default: Telnyx TFN on FQDN SIP connection. */
-export function mctbDirectTelnyxTestE164s(): Set<string> {
-  const raw = process.env.MCTB_DIRECT_TELNYX_TEST_E164S?.trim();
-  const values = new Set<string>();
-  if (raw) {
-    for (const part of raw.split(",")) {
-      const normalized = normalizeDid(part.trim());
-      if (normalized) values.add(normalized);
-    }
-  }
-  const defaultTfn = normalizeDid(MCTB_TELNYX_FQDN_TEST_E164);
-  if (defaultTfn) values.add(defaultTfn);
-  return values;
-}
-
+/** Only this Telnyx TFN on FQDN SIP is handled by the direct path. */
 export function isMctbDirectTelnyxTestTarget(toE164: string | null | undefined): boolean {
-  if (!isMctbDirectTelnyxTestEnabled()) return false;
   const normalized = normalizeDid(toE164);
   if (!normalized) return false;
-  return mctbDirectTelnyxTestE164s().has(normalized);
+  return normalized === normalizeDid(MCTB_TELNYX_FQDN_TEST_E164);
+}
+
+export function mctbDirectTelnyxTestHoldMs(): number {
+  return MCTB_DIRECT_TELNYX_TEST_HOLD_MS;
+}
+
+export function mctbDirectTelnyxTestEmitSms(): boolean {
+  return MCTB_DIRECT_TELNYX_TEST_EMIT_SMS;
 }
 
 export const MCTB_DIRECT_TELNYX_TEST_LOG_SOURCE = "mctb-direct-telnyx-test";

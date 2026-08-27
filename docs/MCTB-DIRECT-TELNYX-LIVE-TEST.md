@@ -2,21 +2,14 @@
 
 Manual test for the **non-destructive isolation experiment**: forwarded call survives on FQDN 3PCC **without LiveKit**.
 
-No code edits required after deployment — only env vars and Telnyx setup script.
+No code edits required after deployment — Telnyx setup script only.
 
 ---
 
 ## Prerequisites
 
 1. **Deploy** `transovo-web` with the `mctb-direct-telnyx-test` route.
-2. **Set env on transovo-web** (Coolify):
-   ```
-   MCTB_DIRECT_TELNYX_TEST=1
-   MCTB_DIRECT_TELNYX_TEST_E164S=+18553103375
-   MCTB_DIRECT_TELNYX_TEST_EMIT_SMS=0
-   MCTB_DIRECT_TELNYX_TEST_HOLD_MS=15000
-   ```
-3. **Run Telnyx cutover** (once):
+2. **Run Telnyx cutover** (once):
    ```bash
    NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
      npx tsx scripts/mctb-setup-direct-telnyx-test-800.ts --apply
@@ -29,28 +22,21 @@ No code edits required after deployment — only env vars and Telnyx setup scrip
 
 | Role | Number |
 |------|--------|
-| **Transovo test ingress (forward TO)** | `+1-855-310-3375` (`+18553103375`) |
+| **Transovo test ingress (forward TO)** | `+1-866-346-4256` (`+18663464256`) — Telnyx FQDN |
 | **Your business line (forward FROM)** | Your normal mobile — configure conditional forward on device/carrier |
 | **Do NOT use** | `+15714073615` (571 platform demo) |
 
 ---
 
-## 2. Feature flags / env vars
+## 2. No environment variables
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `MCTB_DIRECT_TELNYX_TEST` | `1` | Enable direct handler |
-| `MCTB_DIRECT_TELNYX_TEST_E164S` | `+18553103375` | Only this DID is handled |
-| `MCTB_DIRECT_TELNYX_TEST_EMIT_SMS` | `0` | No customer SMS (default) |
-| `MCTB_DIRECT_TELNYX_TEST_HOLD_MS` | `15000` | Stability checkpoint at 15s |
+The test is gated by **called number only** (`+18663464256`). No env flags required.
 
 ---
 
 ## 3. Start server / runtime
 
-Production: ensure **transovo-web** is deployed with the env above.
-
-Local (not recommended for real PSTN): same env + public `APP_URL` reachable by Telnyx webhooks.
+Production: deploy **transovo-web** (master). No special env vars.
 
 **Do not** need transovo-voice / LiveKit worker for this test.
 
@@ -91,8 +77,7 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
 
 On **your phone** (AT&T / carrier):
 
-1. Enable **conditional forward on no answer** (or busy) to `+1-855-310-3375`.
-2. Use carrier dial codes if needed (e.g. `*61*18553103375#` on AT&T — verify with your carrier).
+1. Enable **conditional forward on no answer** to `+1-866-346-4256`.
 
 ---
 
@@ -114,7 +99,7 @@ All must be true:
 
 | Check | Log / evidence |
 |-------|----------------|
-| Forward reached Transovo | `call_initiated` with `to: +18553103375` |
+| Forward reached Transovo | `call_initiated` with `to: +18663464256` |
 | Forward metadata present | `forwardedFrom` or Diversion header |
 | Call not dropped immediately | `call_answered` within ~5s of initiated |
 | Our app answered | `answer_command_sent` |
@@ -134,7 +119,7 @@ All must be true:
 | `answer_command_failed` | Call Control API issue |
 | `holdDurationMs` &lt; 5000 | Carrier dropped forward leg |
 | LiveKit worker logs for same call | LiveKit not bypassed — check 3PCC webhook |
-| 403 from webhook | `MCTB_DIRECT_TELNYX_TEST` not set |
+| 403 from webhook | Route not deployed yet |
 
 ---
 
@@ -159,7 +144,7 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
   npx tsx scripts/mctb-rollback-direct-telnyx-test-800.ts --apply
 ```
 
-Unset `MCTB_DIRECT_TELNYX_TEST` on transovo-web.
+Unset not needed — rollback Telnyx webhook only if done testing.
 
 ---
 

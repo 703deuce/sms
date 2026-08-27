@@ -59,7 +59,7 @@ async function main() {
     console.log(`✓ ${backup.testE164} restored to ${backup.previousConnectionId}`);
   }
 
-  console.log("\n✓ Rollback complete. Unset MCTB_DIRECT_TELNYX_TEST on transovo-web when finished.");
+  console.log("\n✓ Rollback complete.");
 }
 
 main().catch((err) => {

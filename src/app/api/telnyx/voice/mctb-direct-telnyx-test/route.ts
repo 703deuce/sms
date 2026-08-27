@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isMctbDirectTelnyxTestEnabled } from "@/lib/mctb/direct-telnyx-test/config";
+import { MCTB_TELNYX_FQDN_TEST_E164 } from "@/lib/mctb/onboarding/constants";
 import { handleMctbDirectTelnyxTestEvent } from "@/lib/mctb/direct-telnyx-test/handler";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
 
@@ -14,16 +14,9 @@ type TelnyxPayload = {
 
 /**
  * Isolated Telnyx direct-path test — FQDN 3PCC + PRACK, no LiveKit.
- * Active only when MCTB_DIRECT_TELNYX_TEST=1 and called DID is in MCTB_DIRECT_TELNYX_TEST_E164S.
+ * Only handles inbound to MCTB_TELNYX_FQDN_TEST_E164 (+18663464256).
  */
 export async function POST(request: Request) {
-  if (!isMctbDirectTelnyxTestEnabled()) {
-    return NextResponse.json(
-      { ok: false, error: "MCTB_DIRECT_TELNYX_TEST is not enabled" },
-      { status: 403 },
-    );
-  }
-
   const verified = await readTelnyxWebhook(request);
   if (!verified.ok) return verified.response;
 
@@ -61,7 +54,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "mctb-direct-telnyx-test",
-    enabled: isMctbDirectTelnyxTestEnabled(),
+    testNumber: MCTB_TELNYX_FQDN_TEST_E164,
     flow:
       "FQDN 3PCC ingress → call.initiated → answer → call.answered → speak → hold ≥15s → call.hangup → normalized event (no LiveKit)",
   });

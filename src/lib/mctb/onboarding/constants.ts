@@ -22,12 +22,8 @@ export const MCTB_PLATFORM_DEMO_LABEL = "Transovo Demo Line (A2P-approved)";
 /** Twilio hidden voice ingress for MCTB bridge (second hop). */
 export const MCTB_TWILIO_VOICE_INGRESS_E164 = "+18553103375";
 
-/**
- * Telnyx toll-free on FQDN SIP (Transovo LiveKit Inbound) — use for direct Telnyx test.
- * Override via MCTB_DIRECT_TELNYX_TEST_E164S. The Twilio 855 above is NOT on Telnyx.
- */
-export const MCTB_TELNYX_FQDN_TEST_E164 =
-  process.env.MCTB_TELNYX_FQDN_TEST_E164?.trim() || "+18663464256";
+/** Telnyx toll-free on FQDN SIP (Transovo LiveKit Inbound) — direct Telnyx isolation test DID. */
+export const MCTB_TELNYX_FQDN_TEST_E164 = "+18663464256";
 
 /** Cert / test business line (AT&T forward source). Set MCTB_TEST_BUSINESS_E164 in env. */
 export function getMctbTestBusinessE164(): string {
