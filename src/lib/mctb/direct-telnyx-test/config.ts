@@ -1,4 +1,4 @@
-import { MCTB_TWILIO_VOICE_INGRESS_E164 } from "@/lib/mctb/onboarding/constants";
+import { MCTB_TELNYX_FQDN_TEST_E164 } from "@/lib/mctb/onboarding/constants";
 
 function normalizeDid(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -27,7 +27,7 @@ export function mctbDirectTelnyxTestEmitSms(): boolean {
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
-/** Designated PSTN test destination(s). Default: platform 855 TFN ingress. */
+/** Designated PSTN test destination(s). Default: Telnyx TFN on FQDN SIP connection. */
 export function mctbDirectTelnyxTestE164s(): Set<string> {
   const raw = process.env.MCTB_DIRECT_TELNYX_TEST_E164S?.trim();
   const values = new Set<string>();
@@ -37,7 +37,7 @@ export function mctbDirectTelnyxTestE164s(): Set<string> {
       if (normalized) values.add(normalized);
     }
   }
-  const defaultTfn = normalizeDid(MCTB_TWILIO_VOICE_INGRESS_E164);
+  const defaultTfn = normalizeDid(MCTB_TELNYX_FQDN_TEST_E164);
   if (defaultTfn) values.add(defaultTfn);
   return values;
 }
