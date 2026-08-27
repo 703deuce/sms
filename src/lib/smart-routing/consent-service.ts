@@ -1,18 +1,25 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { createId } from "@/lib/supabase/id";
+import {
+  businessNumberForConsentStorage,
+  callerNumberForConsentStorage,
+  consentIdentityMetadata,
+  resolveConsentIdentity,
+} from "@/lib/mctb/consent-identity";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import {
   normalizeBusinessE164ForStorage,
   resolveInboundPhoneNumberId,
 } from "@/lib/mctb/resolve-inbound-phone-number";
+import { createId } from "@/lib/supabase/id";
 import { emitSmartRoutingEvent } from "./events";
 
 export async function recordSmsConsent(input: {
   workspaceId: string;
   callerNumber: string;
   businessNumber: string;
+  transovoIngressE164?: string;
   callSessionId?: string;
   contactId?: string;
   affirmativeInput: string;
@@ -20,6 +27,7 @@ export async function recordSmsConsent(input: {
   promptVersion?: string;
   consentScope?: string;
   forwardedFrom?: string | null;
+  hasDiversionHeader?: boolean;
   metadata?: Record<string, unknown>;
 }) {
   const prisma = getPrisma();
@@ -31,11 +39,36 @@ export async function recordSmsConsent(input: {
     : null;
   const metadataForwarded =
     typeof input.metadata?.forwardedFrom === "string" ? input.metadata.forwardedFrom : null;
+  const customerBusinessE164 =
+    input.forwardedFrom ?? session?.forwardedFromNumber ?? metadataForwarded ?? null;
+  const transovoIngressE164 =
+    input.transovoIngressE164 ||
+    (typeof input.metadata?.transovoNumberE164 === "string"
+      ? input.metadata.transovoNumberE164
+      : input.businessNumber);
+  const path = typeof input.metadata?.path === "string" ? input.metadata.path : null;
+
+  const identity = resolveConsentIdentity({
+    signalingFrom: input.callerNumber,
+    transovoIngressE164,
+    customerBusinessE164,
+    path,
+    hasDiversionHeader: input.hasDiversionHeader,
+  });
+  const callerNumber = callerNumberForConsentStorage(identity);
+  const businessNumber = businessNumberForConsentStorage(identity);
+  const enrichedMetadata = {
+    ...(input.metadata ?? {}),
+    ...consentIdentityMetadata(identity),
+    forwardedFrom: identity.customerBusinessNumber,
+    transovoNumberE164: identity.transovoIngressNumber,
+  };
+
   const target = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: input.callerNumber,
-    businessE164: input.businessNumber,
+    callerE164: identity.consentingCallerNumber || input.callerNumber,
+    businessE164: businessNumber,
     fallbackWorkspaceId: input.workspaceId,
-    forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber ?? metadataForwarded,
+    forwardedFrom: customerBusinessE164,
   });
   const workspaceId = target.workspaceId;
 
@@ -47,30 +80,28 @@ export async function recordSmsConsent(input: {
     const bySession = await prisma.smartRoutingSmsConsentEvent.findFirst({
       where: {
         workspaceId,
-        callerNumber: input.callerNumber,
         callSessionId: providerCallId,
       },
       orderBy: { consentedAt: "desc" },
     });
     if (bySession) {
-      return { consent: bySession, duplicate: true };
+      return { consent: bySession, duplicate: true, identity };
     }
 
     const recent = await prisma.smartRoutingSmsConsentEvent.findMany({
       where: {
         workspaceId,
-        callerNumber: input.callerNumber,
         consentedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       },
       orderBy: { consentedAt: "desc" },
-      take: 20,
+      take: 40,
     });
     const byMeta = recent.find((row: { metadataJson: unknown }) => {
       const meta = (row.metadataJson || {}) as Record<string, unknown>;
       return meta.providerCallId === providerCallId;
     });
     if (byMeta) {
-      return { consent: byMeta, duplicate: true };
+      return { consent: byMeta, duplicate: true, identity };
     }
   }
 
@@ -78,8 +109,8 @@ export async function recordSmsConsent(input: {
     data: {
       id: createId(),
       workspaceId,
-      callerNumber: input.callerNumber,
-      businessNumber: input.businessNumber,
+      callerNumber,
+      businessNumber,
       callSessionId: input.callSessionId ?? null,
       contactId: input.contactId ?? null,
       method: "IVR_DTMF",
@@ -87,7 +118,7 @@ export async function recordSmsConsent(input: {
       promptAssetId: input.promptAssetId ?? null,
       promptVersion: input.promptVersion ?? null,
       consentScope: input.consentScope ?? "CUSTOMER_CARE_SMS",
-      metadataJson: (input.metadata ?? {}) as object,
+      metadataJson: enrichedMetadata as object,
     },
   });
 
@@ -96,10 +127,14 @@ export async function recordSmsConsent(input: {
     type: "SMS_CONSENT_CAPTURED",
     sessionId: input.callSessionId,
     contactId: input.contactId,
-    payload: { caller: input.callerNumber, scope: consent.consentScope },
+    payload: {
+      caller: identity.consentingCallerNumber,
+      scope: consent.consentScope,
+      consentIdentityVerified: identity.consentIdentityVerified,
+    },
   });
 
-  return { consent, duplicate: false };
+  return { consent, duplicate: false, identity };
 }
 
 export async function triggerMissedCallTextFromConsent(input: {
@@ -109,10 +144,23 @@ export async function triggerMissedCallTextFromConsent(input: {
   callSessionId: string;
   isTest?: boolean;
   forwardedFrom?: string | null;
+  consentIdentityVerified?: boolean;
   eventMetadata?: Record<string, unknown>;
 }) {
   if (input.isTest) {
     return { triggered: false, reason: "test_mode" };
+  }
+
+  const metadataVerified = input.eventMetadata?.consentIdentityVerified;
+  const identityVerified =
+    typeof input.consentIdentityVerified === "boolean"
+      ? input.consentIdentityVerified
+      : metadataVerified !== false;
+  if (!identityVerified) {
+    return {
+      triggered: false,
+      reason: "consent_identity_unverified",
+    };
   }
 
   const prisma = getPrisma();
@@ -141,9 +189,11 @@ export async function triggerMissedCallTextFromConsent(input: {
   );
 
   const transovoNumberE164 =
-    typeof input.eventMetadata?.transovoNumberE164 === "string"
-      ? input.eventMetadata.transovoNumberE164
-      : input.businessNumber;
+    typeof input.eventMetadata?.transovoIngressNumber === "string"
+      ? input.eventMetadata.transovoIngressNumber
+      : typeof input.eventMetadata?.transovoNumberE164 === "string"
+        ? input.eventMetadata.transovoNumberE164
+        : input.businessNumber;
 
   const phoneNumberId = await resolveInboundPhoneNumberId({
     workspaceId: target.workspaceId,
@@ -157,9 +207,14 @@ export async function triggerMissedCallTextFromConsent(input: {
     transovoNumberE164,
   );
 
+  const callerE164 =
+    typeof input.eventMetadata?.consentingCallerNumber === "string"
+      ? input.eventMetadata.consentingCallerNumber
+      : input.callerNumber;
+
   const result = await processMissedInboundCall({
     workspaceId: target.workspaceId,
-    callerE164: input.callerNumber,
+    callerE164,
     businessE164,
     phoneNumberId,
     providerCallId: input.callSessionId,

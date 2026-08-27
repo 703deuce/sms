@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { isWorkspaceCreditEnforced } from "@/lib/settings/billing";
+import { isAdminUnlimitedWorkspace } from "@/lib/billing/admin-unlimited-workspace";
 
 export type EntitlementResult = { ok: true } | { ok: false; error: string };
 
@@ -20,6 +21,9 @@ export async function checkCreditBalance(workspaceId: string): Promise<Entitleme
   if (!workspaceId) return { ok: false, error: "workspaceId required" };
   if (outboundPaused()) {
     return { ok: false, error: "Outbound messaging is paused for this environment" };
+  }
+  if (await isAdminUnlimitedWorkspace(workspaceId)) {
+    return { ok: true };
   }
 
   let workspace: {

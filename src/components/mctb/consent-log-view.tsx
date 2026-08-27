@@ -10,6 +10,12 @@ type ConsentLogEvent = {
   id: string;
   callerNumber: string;
   businessNumber: string;
+  consentingCallerNumber: string | null;
+  customerBusinessNumber: string | null;
+  transovoIngressNumber: string;
+  callerIdentityStatus: string;
+  consentIdentityVerified: boolean;
+  consentMethod: string;
   consentedAt: string;
   affirmativeInput: string;
   method: string;
@@ -67,6 +73,17 @@ function scopeLabel(scope: string) {
   return scope.replace(/_/g, " ").toLowerCase();
 }
 
+function callerDisplay(row: ConsentLogEvent) {
+  if (row.consentIdentityVerified && row.consentingCallerNumber) {
+    return fmtPhone(row.consentingCallerNumber);
+  }
+  return "Unavailable — identity not verified";
+}
+
+function optionalPhone(e164: string | null) {
+  return e164 ? fmtPhone(e164) : "—";
+}
+
 export function MctbConsentLogView() {
   const [events, setEvents] = useState<ConsentLogEvent[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -122,9 +139,10 @@ export function MctbConsentLogView() {
       <Card className="mb-6 border-indigo-100 bg-indigo-50/40 p-4 text-sm text-indigo-950">
         <p className="font-medium">What this log proves</p>
         <p className="mt-1 text-indigo-900/80">
-          Each row is an immutable consent event: who called, which business line they reached, the
-          digit they pressed, when consent was recorded, and whether a follow-up text was sent
-          afterward.
+          Each row separates the consenting caller, the customer business number called, and the
+          Transovo number that received the forwarded leg. If the original caller cannot be proven
+          from signaling, the consenter is marked unavailable rather than recording a business line
+          as the caller.
         </p>
       </Card>
 
@@ -184,10 +202,11 @@ export function MctbConsentLogView() {
           <Table>
             <THead>
               <TR>
-                <TH>Caller</TH>
-                <TH>Business line</TH>
-                <TH>Consent recorded</TH>
-                <TH>Pressed</TH>
+                <TH>Caller / Consenting Number</TH>
+                <TH>Customer Business Number</TH>
+                <TH>Transovo Number</TH>
+                <TH>Consent Method</TH>
+                <TH>Timestamp</TH>
                 <TH>Follow-up text</TH>
                 <TH />
               </TR>
@@ -198,14 +217,19 @@ export function MctbConsentLogView() {
                 return (
                   <Fragment key={row.id}>
                     <TR className="hover:bg-muted/40">
-                      <TD className="font-medium">{fmtPhone(row.callerNumber)}</TD>
-                      <TD>{fmtPhone(row.businessNumber)}</TD>
-                      <TD className="text-muted-foreground">{fmtTime(row.consentedAt)}</TD>
-                      <TD>
-                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[12px] font-semibold text-emerald-900">
-                          {row.affirmativeInput || "1"}
+                      <TD className="font-medium">
+                        <span className={row.consentIdentityVerified ? "" : "text-amber-800"}>
+                          {callerDisplay(row)}
                         </span>
                       </TD>
+                      <TD>{optionalPhone(row.customerBusinessNumber)}</TD>
+                      <TD>{fmtPhone(row.transovoIngressNumber || row.businessNumber)}</TD>
+                      <TD>
+                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[12px] font-semibold text-emerald-900">
+                          {row.consentMethod || "Press 1"}
+                        </span>
+                      </TD>
+                      <TD className="text-muted-foreground">{fmtTime(row.consentedAt)}</TD>
                       <TD className="text-muted-foreground">
                         {row.smsSentAt ? (
                           <span className="text-emerald-700">Sent {fmtTime(row.smsSentAt)}</span>
@@ -227,9 +251,13 @@ export function MctbConsentLogView() {
                     </TR>
                     {expanded ? (
                       <TR>
-                        <TD colSpan={6} className="bg-muted/20">
+                        <TD colSpan={7} className="bg-muted/20">
                           <div className="grid gap-3 py-2 text-sm sm:grid-cols-2">
                             <div>
+                              <p>
+                                <span className="font-semibold">Identity status:</span>{" "}
+                                {row.consentIdentityVerified ? "Verified" : "Unavailable"}
+                              </p>
                               <p>
                                 <span className="font-semibold">Method:</span> {methodLabel(row.method)}
                               </p>

@@ -17,6 +17,7 @@ import {
 } from "@/lib/voice/telnyx/forwarded-from";
 import { getActiveMediaBackend } from "@/lib/voice/media-backend";
 import { mediaBackendMetadataStamp } from "@/lib/voice/media-backend/pinning";
+import { businessNumberForConsentStorage } from "@/lib/mctb/consent-identity";
 
 const FALLBACK_WORKSPACE_ID =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
@@ -317,6 +318,7 @@ export async function recordMctbSipPress1ConsentForPython(
     workspaceId: input.workspaceId,
     callerNumber: input.callerNumber,
     businessNumber: input.businessNumber,
+    transovoIngressE164: transovoNumberE164,
     callSessionId: input.providerCallId,
     affirmativeInput: digit,
     consentScope: "CUSTOMER_CARE_SMS",
@@ -327,17 +329,24 @@ export async function recordMctbSipPress1ConsentForPython(
 
   const sms = await triggerMissedCallTextFromConsent({
     workspaceId: input.workspaceId,
-    callerNumber: input.callerNumber,
-    businessNumber: input.businessNumber,
+    callerNumber: consent.identity?.consentingCallerNumber || input.callerNumber,
+    businessNumber: consent.identity
+      ? businessNumberForConsentStorage(consent.identity)
+      : input.businessNumber,
     callSessionId: input.providerCallId,
     forwardedFrom: input.forwardedFrom || null,
-    eventMetadata: observability,
+    consentIdentityVerified: consent.identity?.consentIdentityVerified ?? true,
+    eventMetadata: {
+      ...observability,
+      ...(consent.identity ? { consentingCallerNumber: consent.identity.consentingCallerNumber } : {}),
+    },
   });
 
   return {
     ok: true,
     consentRecorded: true,
     duplicateConsent: consent.duplicate,
+    consentIdentityVerified: consent.identity?.consentIdentityVerified ?? true,
     sms,
   };
 }

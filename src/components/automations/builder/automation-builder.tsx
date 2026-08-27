@@ -334,14 +334,26 @@ function BuilderCanvas({
   }
 
   async function runTest(contactId: string) {
+    if (builder.dirty) {
+      await saveDraft();
+    }
     const res = await fetch(`/api/automations/${flowId}/test`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contactId }),
+      body: JSON.stringify({ contactId, mode: "run_live" }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Test failed");
-    alert("Test run started. Check execution history on the automation detail page.");
+    const overall = json.data?.overall;
+    const executionId = json.data?.executionId;
+    if (overall === "pass") {
+      alert(`Live run completed. Execution ${executionId || ""} — check the recipient phone for SMS.`);
+    } else if (overall === "fail") {
+      alert(`Live run failed. ${json.data?.checks?.find((c: { status: string }) => c.status === "fail")?.detail || "See execution history."}`);
+    } else {
+      alert(`Live run started (execution ${executionId || "pending"}). Check execution history and the recipient phone.`);
+    }
+    router.refresh();
   }
 
   async function testSms(body: string, contactId: string, nodeId?: string, fromNumber?: string) {
@@ -362,11 +374,18 @@ function BuilderCanvas({
     return json.data;
   }
 
-  const [contacts, setContacts] = useState<Array<{ id: string; phone: string }>>([]);
+  const [contacts, setContacts] = useState<
+    Array<{ id: string; phone: string; firstName?: string | null; lastName?: string | null }>
+  >([]);
+  const [testContactId, setTestContactId] = useState("");
   useEffect(() => {
     fetch("/api/contacts?status=subscribed")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setContacts(j?.data || []))
+      .then((j) => {
+        const rows = j?.data || [];
+        setContacts(rows);
+        if (rows[0]?.id) setTestContactId(rows[0].id);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -414,12 +433,28 @@ function BuilderCanvas({
         <div className="flex flex-wrap gap-2 max-md:hidden">
           <Button variant="outline" size="sm" onClick={duplicateFlow}>Duplicate</Button>
           <Button variant="outline" size="sm" onClick={deleteFlow} className="text-rose-600">Delete</Button>
+          <select
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs max-w-[180px]"
+            value={testContactId}
+            onChange={(e) => setTestContactId(e.target.value)}
+            aria-label="Test contact"
+          >
+            {contacts.length === 0 ? (
+              <option value="">No subscribed contacts</option>
+            ) : (
+              contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone}
+                </option>
+              ))
+            )}
+          </select>
           <Button variant="outline" size="sm" onClick={() => {
-            const id = contacts[0]?.id;
+            const id = testContactId || contacts[0]?.id;
             if (id) runTest(id).catch((e) => alert(e.message));
-            else alert("Add a subscribed contact to run a test.");
+            else alert("Add a subscribed contact to run live.");
           }}>
-            Run test
+            Run live
           </Button>
           <Button variant="outline" size="sm" onClick={() => router.push(`/automations/${flowId}`)}>
             Exit

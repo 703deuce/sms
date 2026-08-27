@@ -9,7 +9,8 @@ import {
   resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
-import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
+import { parseTelnyxForwardedFrom, normalizeForwardedFromE164, hasDiversionHeaderInPayload } from "@/lib/voice/telnyx/forwarded-from";
+import { businessNumberForConsentStorage } from "@/lib/mctb/consent-identity";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
@@ -110,6 +111,7 @@ export async function POST(request: Request) {
       normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
       parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
       "";
+    const hasDiversionHeader = hasDiversionHeaderInPayload(fields as Record<string, unknown>);
 
     if (event === "gather" && digits === "1" && from) {
       console.log(
@@ -120,6 +122,7 @@ export async function POST(request: Request) {
           to,
           callSid,
           forwardedFrom: forwardedFrom || null,
+          hasDiversionHeader,
         }),
       );
 
@@ -129,23 +132,38 @@ export async function POST(request: Request) {
           "@/lib/smart-routing/consent-service"
         );
 
-        await recordSmsConsent({
+        const consentMetadata = {
+          path: "texml_mctb_consent",
+          callSid,
+          forwardedFrom,
+          transovoNumberE164: to,
+        };
+
+        const consent = await recordSmsConsent({
           workspaceId: target.workspaceId,
           callerNumber: from,
           businessNumber: to,
+          transovoIngressE164: to,
           affirmativeInput: "1",
           consentScope: "CUSTOMER_CARE_SMS",
           forwardedFrom: forwardedFrom || null,
-          metadata: { path: "texml_mctb_consent", callSid, forwardedFrom },
+          hasDiversionHeader,
+          callSessionId: callSid || undefined,
+          metadata: consentMetadata,
         });
 
-        if (target.demoMode || forwardedFrom) {
+        if (
+          consent.identity?.consentIdentityVerified &&
+          (target.demoMode || forwardedFrom)
+        ) {
           const sms = await triggerMissedCallTextFromConsent({
             workspaceId: target.workspaceId,
-            callerNumber: from,
-            businessNumber: to,
+            callerNumber: consent.identity.consentingCallerNumber || from,
+            businessNumber: businessNumberForConsentStorage(consent.identity),
             callSessionId: callSid || `texml:${Date.now()}`,
             forwardedFrom: forwardedFrom || null,
+            consentIdentityVerified: true,
+            eventMetadata: consentMetadata,
           });
           console.log(
             JSON.stringify({
@@ -154,6 +172,18 @@ export async function POST(request: Request) {
               workspaceId: target.workspaceId,
               demoMode: target.demoMode,
               result: sms,
+            }),
+          );
+        } else if (!consent.identity?.consentIdentityVerified) {
+          console.log(
+            JSON.stringify({
+              source: "mctb-consent-texml",
+              event: "sms_skipped",
+              workspaceId: target.workspaceId,
+              reason: "consent_identity_unverified",
+              identityReason: consent.identity?.identityReason ?? null,
+              from,
+              to,
             }),
           );
         } else {

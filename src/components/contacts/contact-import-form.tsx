@@ -8,6 +8,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { MASS_TEXT_LIST_ATTESTATION_TEXT } from "@/lib/mass-texting/constants";
 import { parseCsv, guessCsvField } from "@/lib/contacts/parse-csv";
 import { FileSpreadsheet, Upload } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
@@ -42,12 +43,15 @@ export function ContactImportForm({
   const [columns, setColumns] = useState<ColumnMapping[]>([]);
   const [rowCount, setRowCount] = useState(0);
   const [parsedRows, setParsedRows] = useState<string[][]>([]);
+  const [listMode, setListMode] = useState<"none" | "existing" | "new">("none");
+  const [selectedListId, setSelectedListId] = useState("");
   const [listName, setListName] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [consentConfirmed, setConsentConfirmed] = useState(!marketingImport);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [importedPhones, setImportedPhones] = useState<string[]>([]);
 
   const handleFile = useCallback((file: File) => {
     const reader = new FileReader();
@@ -152,7 +156,8 @@ export function ContactImportForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rows,
-          listName: listName || undefined,
+          listId: listMode === "existing" && selectedListId ? selectedListId : undefined,
+          listName: listMode === "new" && listName ? listName : undefined,
           consentSource: consentSource || "import",
           marketingImport,
           attestationId,
@@ -163,6 +168,8 @@ export function ContactImportForm({
         throw new Error(json?.error || "Import failed");
       }
       const { created, updated, errors } = json.data || {};
+      const phones = rows.map((r) => r.phone).filter(Boolean);
+      setImportedPhones(phones);
       setResult(
         `Import complete: ${created ?? 0} created, ${updated ?? 0} updated${
           errors?.length ? `, ${errors.length} errors` : ""
@@ -261,18 +268,43 @@ export function ContactImportForm({
           <CardTitle>Step 3 — Import settings</CardTitle>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="import-list">Add to list</Label>
+              <Label htmlFor="import-list-mode">Add to list</Label>
               <Select
-                id="import-list"
-                value={listName}
-                onChange={(e) => setListName(e.target.value)}
+                id="import-list-mode"
+                value={listMode}
+                onChange={(e) => setListMode(e.target.value as "none" | "existing" | "new")}
               >
-                <option value="">No list</option>
-                {lists.map((list) => (
-                  <option key={list.id} value={list.name}>{list.name}</option>
-                ))}
+                <option value="none">No list</option>
+                <option value="existing">Existing list</option>
+                <option value="new">Create new list</option>
               </Select>
             </div>
+            {listMode === "existing" ? (
+              <div>
+                <Label htmlFor="import-list">List</Label>
+                <Select
+                  id="import-list"
+                  value={selectedListId}
+                  onChange={(e) => setSelectedListId(e.target.value)}
+                >
+                  <option value="">Select a list…</option>
+                  {lists.map((list) => (
+                    <option key={list.id} value={list.id}>{list.name}</option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
+            {listMode === "new" ? (
+              <div>
+                <Label htmlFor="import-new-list">New list name</Label>
+                <Input
+                  id="import-new-list"
+                  placeholder="July opt-ins"
+                  value={listName}
+                  onChange={(e) => setListName(e.target.value)}
+                />
+              </div>
+            ) : null}
             <div>
               <Label htmlFor="import-tags">Apply tags</Label>
               <Input
@@ -309,7 +341,23 @@ export function ContactImportForm({
           </div>
 
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
-          {result ? <p className="mt-4 text-sm text-violet-700">{result}</p> : null}
+          {result ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-violet-700">{result}</p>
+              {importedPhones.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/send?to=${encodeURIComponent(importedPhones[0])}`}>
+                    <Button variant="outline" size="sm">Send message to imported contact</Button>
+                  </Link>
+                  <Link
+                    href={`/campaigns/new/broadcast?to=${encodeURIComponent(importedPhones[0])}`}
+                  >
+                    <Button variant="outline" size="sm">Create campaign</Button>
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-6 flex gap-2">
             <Button onClick={handleImport} disabled={loading || !parsedRows.length}>

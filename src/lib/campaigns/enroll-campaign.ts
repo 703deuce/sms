@@ -311,3 +311,49 @@ export async function enrollListInCampaign(
   }
   return { enrolled: enrolled.length, rejected };
 }
+
+export async function enrollAllSubscribedInCampaign(
+  workspaceId: string,
+  campaignId: string,
+) {
+  const prisma = getPrisma();
+  const contacts = await prisma.contact.findMany({
+    where: { workspaceId, status: "SUBSCRIBED" },
+    select: {
+      id: true,
+      phone: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+    },
+  });
+
+  const recipients: BulkRecipient[] = contacts
+    .filter((c: { phone: string | null }) => c.phone)
+    .map((c: { id: string; phone: string; firstName: string | null; lastName: string | null; email: string | null }) => ({
+      phone: c.phone,
+      contactId: c.id,
+      displayName: `${c.firstName || ""} ${c.lastName || ""}`.trim(),
+      email: c.email || undefined,
+    }));
+
+  const { accepted, rejected } = await validateBulkRecipients(
+    workspaceId,
+    campaignId,
+    recipients,
+  );
+  const enrolled = [];
+  for (const r of accepted) {
+    enrolled.push(
+      await enrollContactInCampaign({
+        workspaceId,
+        campaignId,
+        phone: r.phone,
+        email: r.email,
+        displayName: r.displayName,
+        contactId: r.contactId,
+      }),
+    );
+  }
+  return { enrolled: enrolled.length, rejected };
+}

@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       rows?: ImportRow[];
       listName?: string;
+      listId?: string;
       consentSource?: string;
       marketingImport?: boolean;
       attestationId?: string;
@@ -50,7 +51,15 @@ export async function POST(request: Request) {
 
     let listId: string | null = null;
     const listName = body.listName?.trim();
-    if (listName) {
+    if (body.listId) {
+      const existingList = await prisma.contactList.findFirst({
+        where: { id: body.listId, workspaceId: auth.workspaceId },
+      });
+      if (!existingList) {
+        return NextResponse.json({ error: "List not found" }, { status: 404 });
+      }
+      listId = existingList.id;
+    } else if (listName) {
       const list = await prisma.contactList.create({
         data: {
           workspaceId: auth.workspaceId,

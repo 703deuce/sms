@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { getStripe, isStripeConfigured } from "@/lib/stripe/client";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
+import { isAdminUnlimitedWorkspace } from "@/lib/billing/admin-unlimited-workspace";
 
 /** Cents charged to the workspace credit balance per outbound SMS segment. */
 export function smsCostCents(): number {
@@ -27,6 +28,7 @@ export function isCreditTrackingEnabled(): boolean {
  */
 export async function isWorkspaceCreditEnforced(workspaceId: string): Promise<boolean> {
   if (!workspaceId || !isCreditTrackingEnabled()) return false;
+  if (await isAdminUnlimitedWorkspace(workspaceId)) return false;
 
   const prisma = getPrisma();
   const workspace = await prisma.workspace.findUnique({

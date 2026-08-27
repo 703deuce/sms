@@ -15,8 +15,8 @@ import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
 import { cn, estimateSmsSegments } from "@/lib/utils";
 import { ArrowLeft, Check, ImagePlus, Send } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 const FOLLOW_UP_TRIGGERS = [
   "new lead",
@@ -29,9 +29,15 @@ const FOLLOW_UP_TRIGGERS = [
   "event attended",
 ];
 
+type AudienceMode = "all_subscribed" | "list" | "segment" | "manual";
+
+type ListOption = { id: string; name: string; contactCount?: number };
+type SegmentOption = { id: string; name: string };
+
 export default function NewCategoryCampaignPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const categoryId = String(params.category || "") as CampaignCategoryId;
   const category = getCampaignCategory(categoryId);
 
@@ -39,9 +45,13 @@ export default function NewCategoryCampaignPage() {
   const [message, setMessage] = useState(
     category ? DEFAULT_MESSAGES[category.id] : DEFAULT_MESSAGES.custom,
   );
-  const [audience, setAudience] = useState("list");
+  const [audienceMode, setAudienceMode] = useState<AudienceMode>("manual");
+  const [listId, setListId] = useState("");
   const [listIds, setListIds] = useState<string[]>([]);
-  const [lists, setLists] = useState<Array<{ id: string; name: string; contactCount?: number }>>([]);
+  const [segmentId, setSegmentId] = useState("");
+  const [manualPhone, setManualPhone] = useState("");
+  const [lists, setLists] = useState<ListOption[]>([]);
+  const [segments, setSegments] = useState<SegmentOption[]>([]);
   const [trigger, setTrigger] = useState(FOLLOW_UP_TRIGGERS[0]);
   const [delayHours, setDelayHours] = useState("24");
   const [followUpCount, setFollowUpCount] = useState("2");
@@ -54,19 +64,49 @@ export default function NewCategoryCampaignPage() {
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [showMedia, setShowMedia] = useState(false);
 
-  const segments = useMemo(() => estimateSmsSegments(message), [message]);
-
   useEffect(() => {
+    const to = searchParams.get("to");
+    if (to) {
+      setManualPhone(to);
+      setAudienceMode("manual");
+    }
     fetch("/api/contacts/lists")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (json?.data?.length) {
           setLists(json.data);
-          setListIds((current) => (current.length ? current : [json.data[0].id]));
+          setListId(json.data[0].id);
+          setListIds([json.data[0].id]);
         }
       })
       .catch(() => undefined);
-  }, []);
+    fetch("/api/contacts/segments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) {
+          setSegments(json.data.map((s: SegmentOption) => ({ id: s.id, name: s.name })));
+        }
+      })
+      .catch(() => undefined);
+  }, [searchParams]);
+
+  const segmentsEstimate = useMemo(() => estimateSmsSegments(message), [message]);
+
+  const audienceLabel = useMemo(() => {
+    if (audienceMode === "all_subscribed") return "All subscribed contacts";
+    if (audienceMode === "list") {
+      const selected = lists.filter((l) => listIds.includes(l.id));
+      if (selected.length === 1) return `List: ${selected[0].name}`;
+      if (selected.length > 1) return `${selected.length} lists`;
+      const one = lists.find((l) => l.id === listId);
+      return one ? `List: ${one.name}` : "List";
+    }
+    if (audienceMode === "segment") {
+      const seg = segments.find((s) => s.id === segmentId);
+      return seg ? `Segment: ${seg.name}` : "Segment";
+    }
+    return manualPhone.trim() ? `Manual: ${manualPhone.trim()}` : "Manual recipients";
+  }, [audienceMode, listId, listIds, segmentId, manualPhone, lists, segments]);
 
   if (!category) {
     return (
@@ -85,37 +125,72 @@ export default function NewCategoryCampaignPage() {
     category.id,
   );
 
+  function buildPayload(activate: boolean) {
+    const selectedListIds = audienceMode === "list" ? (listIds.length ? listIds : listId ? [listId] : []) : [];
+    const payload: Record<string, unknown> = {
+      name,
+      category: category!.id,
+      type: category!.title,
+      audience: audienceLabel,
+      message,
+      audienceMode,
+      activate: activate && scheduleMode === "now",
+      scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
+      listId: selectedListIds[0],
+      listIds: selectedListIds,
+      config: {
+        trigger,
+        delayHours: Number(delayHours) || 24,
+        followUpCount: Number(followUpCount) || 2,
+        stopOnReply,
+        listIds: selectedListIds,
+        productSource: "mass_text",
+        massTexting: true,
+        mediaUrls,
+      },
+    };
+
+    if (audienceMode === "segment" && segmentId) payload.segmentId = segmentId;
+    if (audienceMode === "manual" && manualPhone.trim()) {
+      payload.recipients = manualPhone
+        .split(/[,;\n]/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((phone) => ({ phone }));
+    }
+
+    return payload;
+  }
+
   async function save(activate: boolean) {
+    if (audienceMode === "list" && !listId && listIds.length === 0) {
+      setError("Select at least one contact list");
+      return;
+    }
+    if (audienceMode === "segment" && !segmentId) {
+      setError("Select a segment");
+      return;
+    }
+    if (audienceMode === "manual" && !manualPhone.trim()) {
+      setError("Enter at least one phone number");
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          category: category!.id,
-          type: category!.title,
-          audience,
-          message,
-          activate: false,
-          scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
-          listId: listIds[0],
-          config: {
-            trigger,
-            delayHours: Number(delayHours) || 24,
-            followUpCount: Number(followUpCount) || 2,
-            stopOnReply,
-            listIds,
-            productSource: "mass_text",
-            massTexting: true,
-            mediaUrls,
-          },
-        }),
+        body: JSON.stringify(buildPayload(activate)),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create campaign");
       setDone(json.data.campaign.id);
+      const enrolled = json.data.enrolledCount ?? 0;
+      if (activate && enrolled === 0) {
+        setError("Campaign created but no recipients were enrolled. Check audience settings.");
+      }
       router.push(`/campaigns/${json.data.campaign.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create");
@@ -203,33 +278,76 @@ export default function NewCategoryCampaignPage() {
           )}
 
           <div>
-            <Label htmlFor="audience">Audience lists</Label>
-            {lists.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-600">
-                No lists yet. <Link href="/contacts/imports" className="underline">Import contacts</Link> first.
-              </p>
-            ) : (
-              <div className="mt-2 space-y-2">
-                {lists.map((list) => (
-                  <label key={list.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={listIds.includes(list.id)}
-                      onChange={(e) => {
-                        setListIds((current) =>
-                          e.target.checked
-                            ? [...current, list.id]
-                            : current.filter((id) => id !== list.id),
-                        );
-                      }}
-                    />
-                    {list.name}
-                    {typeof list.contactCount === "number" ? ` (${list.contactCount})` : ""}
-                  </label>
-                ))}
-              </div>
-            )}
+            <Label htmlFor="audience-mode">Audience</Label>
+            <Select
+              id="audience-mode"
+              value={audienceMode}
+              onChange={(e) => setAudienceMode(e.target.value as AudienceMode)}
+            >
+              <option value="manual">Specific phone number(s)</option>
+              <option value="all_subscribed">All subscribed contacts</option>
+              <option value="list">Contact list(s)</option>
+              <option value="segment">A segment</option>
+            </Select>
           </div>
+
+          {audienceMode === "manual" && (
+            <div>
+              <Label htmlFor="manual-phone">Phone number</Label>
+              <Input
+                id="manual-phone"
+                placeholder="(571) 477-6175"
+                value={manualPhone}
+                onChange={(e) => setManualPhone(e.target.value)}
+              />
+            </div>
+          )}
+
+          {audienceMode === "list" && (
+            <div>
+              <Label>Contact lists</Label>
+              {lists.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-600">
+                  No lists yet. <Link href="/contacts/imports" className="underline">Import contacts</Link> first.
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {lists.map((list) => (
+                    <label key={list.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={listIds.includes(list.id)}
+                        onChange={(e) => {
+                          setListIds((current) =>
+                            e.target.checked
+                              ? [...current, list.id]
+                              : current.filter((id) => id !== list.id),
+                          );
+                          if (e.target.checked) setListId(list.id);
+                        }}
+                      />
+                      {list.name}
+                      {typeof list.contactCount === "number" ? ` (${list.contactCount})` : ""}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {audienceMode === "segment" && (
+            <div>
+              <Label htmlFor="segment-id">Segment</Label>
+              <Select id="segment-id" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}>
+                <option value="">Select a segment…</option>
+                {segments.map((seg) => (
+                  <option key={seg.id} value={seg.id}>
+                    {seg.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between">
@@ -256,9 +374,9 @@ export default function NewCategoryCampaignPage() {
             />
             <p className="mt-1 text-xs text-slate-500">
               {mediaUrls.length
-                ? `Pictures send as MMS · ${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits per recipient for this message (follow-ups stay SMS unless they have their own pictures)`
-                : `${segments.characters} characters · ${segments.segments} SMS segment${
-                    segments.segments === 1 ? "" : "s"
+                ? `Pictures send as MMS · ${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits per recipient`
+                : `${segmentsEstimate.characters} characters · ${segmentsEstimate.segments} SMS segment${
+                    segmentsEstimate.segments === 1 ? "" : "s"
                   } · merge fields like {{first_name}} supported`}
             </p>
           </div>
@@ -308,7 +426,13 @@ export default function NewCategoryCampaignPage() {
           <div className="flex flex-wrap gap-2 pt-2">
             <Button disabled={saving} onClick={() => save(scheduleMode !== "draft")}>
               <Send className="h-4 w-4" />
-              {saving ? "Saving…" : scheduleMode === "draft" ? "Save draft" : "Create campaign"}
+              {saving
+                ? "Saving…"
+                : scheduleMode === "draft"
+                  ? "Save draft"
+                  : scheduleMode === "later"
+                    ? "Schedule campaign"
+                    : "Send campaign"}
             </Button>
             <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">Cancel</Link>
           </div>
@@ -322,23 +446,12 @@ export default function NewCategoryCampaignPage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 {mediaUrls.map((url) => (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={url}
-                    src={url}
-                    alt=""
-                    className="h-16 w-16 rounded-md object-cover"
-                  />
+                  <img key={url} src={url} alt="" className="h-16 w-16 rounded-md object-cover" />
                 ))}
               </div>
             ) : null}
           </div>
-          <p className="mt-4 text-xs text-slate-500">
-            Required compliance language is enforced on live sends (STOP/HELP). Always include clear
-            identification of your business.
-            {mediaUrls.length
-              ? ` Picture messages use ${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits each.`
-              : ""}
-          </p>
+          <p className="mt-3 text-xs text-slate-500">Audience: {audienceLabel}</p>
         </Card>
       </div>
       <MediaPicker
