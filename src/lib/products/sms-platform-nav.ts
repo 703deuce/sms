@@ -21,7 +21,12 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
   const badge = options.conversationsBadge ?? 0;
 
   return [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    {
+      label: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      sectionLabel: "Main",
+    },
     {
       label: "Conversations",
       href: "/conversations",

@@ -16,10 +16,13 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronLeft, LogOut, MessageSquare } from "lucide-react";
+import { ChevronDown, ChevronLeft, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
+export const SIDEBAR_WIDTH_PX = 220;
+export const SIDEBAR_COLLAPSED_WIDTH_PX = 56;
 
 const PLAN_BALANCE_LIMIT = 100;
 
@@ -347,44 +350,65 @@ export function Sidebar({
     <aside
       className={cn(
         "flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
-        collapsed ? "w-[72px]" : "w-[260px]",
+        collapsed ? "w-[56px]" : "w-[220px]",
       )}
     >
-      <div className="shrink-0 px-3.5 pb-2.5 pt-3.5">
-        <Link
-          href={
-            realtorMode
-              ? "/realtor/dashboard"
-              : isLauncher
-                ? "/app"
-                : currentProduct
-                  ? productLogoHome(currentProduct)
-                  : "/app"
-          }
-          className="flex items-start gap-2.5"
-          onClick={onClose}
-        >
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#6366f1] text-white shadow-[0_8px_18px_rgba(99,102,241,0.35)]">
-            <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
-          </span>
-          {!collapsed ? (
-            <span>
-              <span className="block text-[14px] font-bold tracking-[0.04em] text-[#111827]">
-                {realtorMode ? "TRANSOVO" : "Transovo"}
-                {!realtorMode && currentProduct ? (
-                  <span className="ml-1.5 text-[11px] font-semibold text-sidebar-muted">
-                    / {productContextLabel(currentProduct)}
+      <div className="shrink-0 px-2 pb-2 pt-3">
+        <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "justify-between")}>
+          <Link
+            href={
+              realtorMode
+                ? "/realtor/dashboard"
+                : isLauncher
+                  ? "/app"
+                  : currentProduct
+                    ? productLogoHome(currentProduct)
+                    : "/app"
+            }
+            className={cn("flex min-w-0 items-start gap-2", collapsed && "justify-center")}
+            onClick={onClose}
+            title={collapsed ? "Transovo" : undefined}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#6366f1] text-white shadow-[0_8px_18px_rgba(99,102,241,0.35)]">
+              <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
+            </span>
+            {!collapsed ? (
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-bold tracking-[0.02em] text-[#111827]">
+                  {realtorMode ? "TRANSOVO" : "Transovo"}
+                  {!realtorMode && currentProduct ? (
+                    <span className="ml-1 text-[10px] font-semibold text-sidebar-muted">
+                      / {productContextLabel(currentProduct)}
+                    </span>
+                  ) : null}
+                </span>
+                {!realtorMode && !currentProduct && !isLauncher ? (
+                  <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
+                    Missed Call Text Back
                   </span>
                 ) : null}
               </span>
-              {!realtorMode && !currentProduct && !isLauncher ? (
-                <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                  Missed Call Text Back
-                </span>
-              ) : null}
-            </span>
+            ) : null}
+          </Link>
+          {onToggleCollapse ? (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className={cn(
+                "shrink-0 rounded-md p-1.5 text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
+                collapsed && "mt-1",
+              )}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </button>
           ) : null}
-        </Link>
+        </div>
         {currentProduct === "numbers" && !collapsed ? (
           <Link
             href="/personal/numbers/premium"
@@ -461,12 +485,12 @@ export function Sidebar({
 
           return (
             <div key={expandKey}>
-              {item.sectionLabel ? (
-                <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
+              {item.sectionLabel && !collapsed ? (
+                <p className="px-2 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
                   {item.sectionLabel}
                 </p>
               ) : null}
-              {item.areaLabel ? (
+              {item.areaLabel && !collapsed ? (
                 <p
                   className={cn(
                     "px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted",
@@ -493,22 +517,31 @@ export function Sidebar({
                 ) : null}
                 <Link
                   href={item.href}
+                  title={collapsed ? item.label : undefined}
                   onClick={() => {
-                    if (item.children?.length) setExpanded(expandKey);
+                    if (item.children?.length && !collapsed) setExpanded(expandKey);
                     onClose?.();
                   }}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 py-[7px] pl-3 pr-1 text-[13px] font-medium"
+                  className={cn(
+                    "flex min-w-0 flex-1 items-center gap-2 py-1.5 text-[12px] font-medium",
+                    collapsed ? "justify-center px-0" : "pl-2.5 pr-1",
+                  )}
                 >
-                  <Icon
-                    className={cn(
-                      "h-4 w-4 shrink-0",
-                      active
-                        ? currentProduct === "numbers" || item.label === "Calls" || realtorMode
-                          ? "text-white"
-                          : "text-primary"
-                        : "text-sidebar-muted group-hover:text-sidebar-foreground",
-                    )}
-                  />
+                  <span className="relative shrink-0">
+                    <Icon
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        active
+                          ? currentProduct === "numbers" || item.label === "Calls" || realtorMode
+                            ? "text-white"
+                            : "text-primary"
+                          : "text-sidebar-muted group-hover:text-sidebar-foreground",
+                      )}
+                    />
+                    {collapsed && item.badge != null ? (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger ring-2 ring-sidebar" />
+                    ) : null}
+                  </span>
                   {!collapsed ? <span className="truncate">{item.label}</span> : null}
                   {!collapsed && item.badge != null ? (
                     <span
@@ -523,7 +556,7 @@ export function Sidebar({
                     </span>
                   ) : null}
                 </Link>
-                {item.children ? (
+                {item.children && !collapsed ? (
                   <button
                     type="button"
                     className={cn(
@@ -552,7 +585,7 @@ export function Sidebar({
                 ) : null}
               </div>
 
-              {item.children && isOpen ? (
+              {item.children && isOpen && !collapsed ? (
                 <div className="mb-0.5 ml-3.5 mt-0.5 space-y-1 border-l border-[#e6e8ef] pl-2.5">
                   {item.children.map((child) => {
                     if (isNavGroup(child)) {
@@ -702,7 +735,7 @@ export function Sidebar({
               type="button"
               onClick={onToggleCollapse}
               className={cn(
-                "mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[12px] font-medium text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
+                "mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-medium text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground lg:hidden",
                 collapsed && "justify-center px-0",
               )}
             >
@@ -720,7 +753,7 @@ export function Sidebar({
       <div
         className={cn(
           "hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex",
-          collapsed ? "lg:w-[72px]" : "lg:w-[260px]",
+          collapsed ? "lg:w-[56px]" : "lg:w-[220px]",
         )}
       >
         {content}

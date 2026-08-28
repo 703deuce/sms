@@ -18,7 +18,18 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { usePathname } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+
+const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
+
+function readSidebarCollapsedPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function AppShell({
   children,
@@ -64,6 +75,18 @@ export function AppShell({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    setSidebarCollapsed(readSidebarCollapsedPreference());
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarCollapsed]);
   const resolvedProduct = getCurrentProduct(pathname);
   const currentProduct: CurrentProduct =
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
@@ -109,7 +132,7 @@ export function AppShell({
           productFeatures={productFeatures}
         />
       </Suspense>
-      <div className={sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-[260px]"}>
+      <div className={sidebarCollapsed ? "lg:pl-[56px]" : "lg:pl-[220px]"}>
         {realtorMode ? (
           <RealtorHeader
             userName={userName}

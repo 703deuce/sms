@@ -128,15 +128,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
   const showSmsPlatform = hasMassTexting || options.hasSms === true;
   const mctbFocused = isMctbFocusedCustomerNav();
 
-  const items: NavItem[] = [
-    {
-      label: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      sectionLabel: "Dashboard",
-      matchExact: true,
-    },
-  ];
+  const items: NavItem[] = [];
 
   if (showSmsPlatform) {
     items.push(
@@ -144,7 +136,15 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
         conversationsBadge: options.inboxBadge,
       }),
     );
-  } else if (!showMctbSection) {
+  } else {
+    items.push({
+      label: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      sectionLabel: "Dashboard",
+      matchExact: true,
+    });
+    if (!showMctbSection) {
     items.push(
       {
         label: "Numbers",
@@ -156,6 +156,7 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       { label: "Messaging Compliance", href: "/compliance", icon: ClipboardCheck },
       { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     );
+    }
   }
 
   if (!mctbFocused) {
