@@ -157,6 +157,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     smsPhoneNumberId: phone.id,
     delaySeconds: input.delaySeconds ?? 0,
     messageTemplate: input.messageTemplate,
+    skipGenericVoiceProvision: true,
   }).catch(() => undefined);
 
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);

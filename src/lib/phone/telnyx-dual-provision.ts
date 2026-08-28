@@ -471,6 +471,14 @@ export async function enableVoiceOnWorkspaceNumber(input: {
   const before = await fetchTelnyxNumber(row.providerNumberId);
   if (!before) throw new Error("Could not load number from Telnyx");
 
+  const { isMctbCallControlVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
+  if (isMctbCallControlVoiceIngress(row.settingsJson)) {
+    return verifyAndPersistNumber({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
+    });
+  }
+
   if (!before.capabilities.voice && before.capabilities.sms === false) {
     await persistProvisioning(row.id, {
       state: "capability_unsupported",
@@ -672,7 +680,8 @@ export async function repairNumberConfiguration(input: {
     (await fetchMessagingAssignment(row.providerNumberId));
 
   let connectionId: string | null = null;
-  if (before.capabilities.voice !== false) {
+  const { isMctbCallControlVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
+  if (before.capabilities.voice !== false && !isMctbCallControlVoiceIngress(row.settingsJson)) {
     try {
       const { workspaceNumberUsesTexmlDirect } = await import(
         "@/lib/voice/telnyx/texml-direct-route"

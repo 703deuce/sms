@@ -43,6 +43,8 @@ export async function activateJohnOnPhoneNumber(input: {
   smsPhoneNumberId?: string | null;
   delaySeconds?: number;
   messageTemplate?: string;
+  /** When MCTB already assigned Event Only Call Control, do not steal back to Transovo Voice. */
+  skipGenericVoiceProvision?: boolean;
 }) {
   const delaySeconds = input.delaySeconds ?? 0;
   const message =
@@ -72,18 +74,21 @@ export async function activateJohnOnPhoneNumber(input: {
 
   const phoneRow = await getPrisma().phoneNumber.findFirst({
     where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
-    select: { provider: true, twilioSid: true },
+    select: { provider: true, twilioSid: true, settingsJson: true },
   });
   if (phoneRow?.provider === "twilio" && phoneRow.twilioSid) {
     const { twilioNumberProvider } = await import(
       "@/lib/numbers/providers/twilio-number-provider"
     );
     await twilioNumberProvider.configureVoiceWebhook(phoneRow.twilioSid, input.workspaceId);
-  } else {
-    await enableVoiceOnWorkspaceNumber({
-      workspaceId: input.workspaceId,
-      phoneNumberId: input.phoneNumberId,
-    });
+  } else if (!input.skipGenericVoiceProvision) {
+    const { isMctbCallControlVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
+    if (!isMctbCallControlVoiceIngress(phoneRow?.settingsJson)) {
+      await enableVoiceOnWorkspaceNumber({
+        workspaceId: input.workspaceId,
+        phoneNumberId: input.phoneNumberId,
+      });
+    }
   }
 
   return { ok: true, config: configResult.config };

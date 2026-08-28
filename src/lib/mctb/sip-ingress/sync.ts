@@ -22,6 +22,18 @@ export function isPhoneMctbSipIngress(settingsJson: unknown): boolean {
   return role === "platform_demo" || role === "customer_mctb" || role === "mctb_sip";
 }
 
+/** MCTB owns inbound voice on the Event Only Call Control app — not Transovo Voice / LiveKit. */
+export function isMctbCallControlVoiceIngress(settingsJson: unknown): boolean {
+  if (!isPhoneMctbSipIngress(settingsJson)) return false;
+  const settings = readPhoneMctbSettings(settingsJson);
+  if (settings.routingOwner === "mctb_call_control") return true;
+  const telephony = settings.telephony;
+  if (telephony && typeof telephony === "object" && !Array.isArray(telephony)) {
+    return (telephony as Record<string, unknown>).routingMode === "call_control_event_only";
+  }
+  return false;
+}
+
 function envAllowlist(): Set<string> {
   const raw = process.env.MCTB_SIP_INGRESS_E164S?.trim();
   const values = new Set<string>();
