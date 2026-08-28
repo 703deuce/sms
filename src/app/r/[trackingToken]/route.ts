@@ -56,6 +56,36 @@ export async function GET(_request: Request, ctx: Ctx) {
         userAgent: _request.headers.get("user-agent"),
       }).catch(() => undefined);
 
+      if (campaignMessage.recipient?.contactId) {
+        try {
+          const { emitAutomationEvent } = await import("@/lib/automations/events");
+          await emitAutomationEvent(
+            campaignMessage.campaign.workspaceId,
+            "link.clicked",
+            campaignMessage.recipient.contactId,
+            {
+              trackingToken,
+              messageId: campaignMessage.id,
+              destinationUrl:
+                campaignMessage.destinationUrl ||
+                campaignMessage.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||
+                undefined,
+            },
+          );
+          const { resumeEventWaitsOnLinkClick } = await import(
+            "@/lib/automations/parity/event-waits"
+          );
+          await resumeEventWaitsOnLinkClick({
+            workspaceId: campaignMessage.campaign.workspaceId,
+            contactId: campaignMessage.recipient.contactId,
+            trackingToken,
+            messageId: campaignMessage.id,
+          });
+        } catch {
+          /* non-fatal */
+        }
+      }
+
       if ((campaignMessage.campaign.successMode || "click") === "click") {
         await prisma.campaignRecipient.updateMany({
           where: {
@@ -128,6 +158,36 @@ export async function GET(_request: Request, ctx: Ctx) {
         undefined,
       userAgent: _request.headers.get("user-agent"),
     }).catch(() => undefined);
+    if (oneOff.workspaceId && oneOff.to) {
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: oneOff.workspaceId, phone: oneOff.to },
+        select: { id: true },
+      });
+      if (contact) {
+        try {
+          const { emitAutomationEvent } = await import("@/lib/automations/events");
+          await emitAutomationEvent(oneOff.workspaceId, "link.clicked", contact.id, {
+            trackingToken,
+            messageId: oneOff.id,
+            destinationUrl:
+              oneOff.destinationUrl ||
+              oneOff.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||
+              undefined,
+          });
+          const { resumeEventWaitsOnLinkClick } = await import(
+            "@/lib/automations/parity/event-waits"
+          );
+          await resumeEventWaitsOnLinkClick({
+            workspaceId: oneOff.workspaceId,
+            contactId: contact.id,
+            trackingToken,
+            messageId: oneOff.id,
+          });
+        } catch {
+          /* non-fatal */
+        }
+      }
+    }
     const destination =
       oneOff.destinationUrl ||
       oneOff.body.match(/https?:\/\/\S+/)?.[0]?.replace(/[)>.,]+$/, "") ||

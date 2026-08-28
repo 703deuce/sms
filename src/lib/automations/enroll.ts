@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { findTriggerNode, parseAutomationDefinition } from "./types";
+import { isParityTrigger, triggerConfigMatches } from "./parity/trigger-matching";
 
 export async function enrollInAutomation({
   workspaceId,
@@ -140,6 +141,23 @@ export async function enrollForTrigger(
     emailExists?: boolean;
     phoneNumberId?: string;
     callId?: string;
+    listId?: string;
+    field?: string;
+    previousValue?: string;
+    newValue?: string;
+    body?: string;
+    fromE164?: string;
+    toE164?: string;
+    conversationId?: string;
+    assigneeId?: string;
+    previousAssigneeId?: string;
+    fromStatus?: string;
+    toStatus?: string;
+    trackingToken?: string;
+    messageId?: string;
+    destinationUrl?: string;
+    popupId?: string;
+    sourceType?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -155,6 +173,10 @@ export async function enrollForTrigger(
     if (!trigger || trigger.data.blockType !== triggerBlockType) continue;
 
     const cfg = (trigger.data.config || {}) as Record<string, unknown>;
+
+    if (isParityTrigger(triggerBlockType)) {
+      if (!triggerConfigMatches(triggerBlockType, cfg, filters || {})) continue;
+    }
 
     if (
       (triggerBlockType === "tag_added" || triggerBlockType === "integration_tag_added") &&
@@ -263,11 +285,22 @@ export async function enrollForTrigger(
     if (
       (triggerBlockType === "inbound_call" ||
         triggerBlockType === "call_missed" ||
-        triggerBlockType === "call_completed") &&
+        triggerBlockType === "call_completed" ||
+        triggerBlockType === "message_received") &&
       filters?.phoneNumberId
     ) {
       const required = String(cfg.phoneNumberId || "").trim();
-      if (required && required !== filters.phoneNumberId) continue;
+      const ids = Array.isArray(cfg.receivingNumberIds)
+        ? (cfg.receivingNumberIds as string[])
+        : [];
+      if (triggerBlockType === "message_received") {
+        const mode = String(cfg.receivingNumberMode || "any");
+        if (mode === "specific" && ids.length && !ids.includes(filters.phoneNumberId)) {
+          continue;
+        }
+      } else if (required && required !== filters.phoneNumberId) {
+        continue;
+      }
     }
 
     // Prefer TriggerDeployment path for inbound_call (avoids double enroll).
@@ -282,10 +315,16 @@ export async function enrollForTrigger(
         contactId,
         enrollmentSuffix: filters?.callId
           ? `call:${filters.callId}`
-          : undefined,
-        variables: filters?.callId
-          ? { callId: filters.callId, phoneNumberId: filters.phoneNumberId }
-          : undefined,
+          : filters?.messageId
+            ? `msg:${filters.messageId}`
+            : filters?.trackingToken
+              ? `link:${filters.trackingToken}`
+              : undefined,
+        variables: {
+          ...(filters?.callId ? { callId: filters.callId, phoneNumberId: filters.phoneNumberId } : {}),
+          ...(filters?.conversationId ? { conversationId: filters.conversationId } : {}),
+          ...(filters?.body ? { triggerMessageBody: filters.body } : {}),
+        },
       }),
     );
   }

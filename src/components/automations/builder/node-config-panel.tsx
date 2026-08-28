@@ -10,6 +10,7 @@ import {
   isConditionBlock,
 } from "@/lib/automations/catalog";
 import type { AutomationCanvasNode } from "@/lib/automations/types";
+import { ParityNodeConfig } from "./parity-node-config";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -273,6 +274,7 @@ export function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <ParityNodeConfig node={node} onUpdate={onUpdate} />
         {(block === "send_sms" || block === "send_review_request") && (
           <>
             <div>

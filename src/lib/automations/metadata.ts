@@ -67,6 +67,10 @@ export async function markFactsForContact(
       if (meta.waitingForCallResult === true) {
         continue;
       }
+      // Event waits resume via dedicated matcher (resumeEventWaitsOnInboundMessage).
+      if (meta.eventWaitActive === true) {
+        continue;
+      }
       await prisma.automationExecution.update({
         where: { id: ex.id },
         data: { status: "RUNNING", nextActionAt: null },

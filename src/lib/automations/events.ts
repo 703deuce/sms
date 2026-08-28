@@ -14,6 +14,18 @@ const EVENT_TO_TRIGGER: Record<string, string> = {
   "customer.no_response": "customer_no_response",
   "customer.tag_added": "tag_added",
   "form.submitted": "form_submitted",
+  "popup.submitted": "popup_submitted",
+  "message.received": "message_received",
+  "customer.field_changed": "customer_field_changed",
+  "link.clicked": "general_link_clicked",
+  "list.member_added": "customer_added_to_list",
+  "list.member_removed": "customer_removed_from_list",
+  "inbox.status_changed": "inbox_conversation_status_changed",
+  "inbox.tagged": "inbox_conversation_tagged",
+  "inbox.untagged": "inbox_conversation_untagged",
+  "inbox.assigned": "inbox_conversation_assigned",
+  "inbox.unassigned": "inbox_conversation_unassigned",
+  "contact.birthday": "contact_birthday",
   "call.created": "inbound_call",
   "call.ringing": "inbound_call",
   "call.answered": "call_answered",
@@ -51,6 +63,91 @@ export async function emitAutomationEvent(
   if (triggerType === "form_submitted" && payload?.formSlug) {
     return enrollForTrigger(workspaceId, triggerType, contactId, {
       formSlug: String(payload.formSlug),
+      sourceType: typeof payload.sourceType === "string" ? payload.sourceType : undefined,
+    });
+  }
+
+  if (triggerType === "popup_submitted") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      popupId: typeof payload?.popupId === "string" ? payload.popupId : undefined,
+      sourceType: "popup",
+      formSlug: typeof payload?.formSlug === "string" ? payload.formSlug : undefined,
+    });
+  }
+
+  if (triggerType === "message_received") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      body: typeof payload?.body === "string" ? payload.body : undefined,
+      fromE164: typeof payload?.from === "string" ? payload.from : undefined,
+      toE164: typeof payload?.to === "string" ? payload.to : undefined,
+      phoneNumberId:
+        typeof payload?.phoneNumberId === "string" ? payload.phoneNumberId : undefined,
+      messageId: typeof payload?.messageId === "string" ? payload.messageId : undefined,
+    });
+  }
+
+  if (triggerType === "customer_field_changed") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      field: typeof payload?.field === "string" ? payload.field : undefined,
+      previousValue:
+        payload?.previousValue != null ? String(payload.previousValue) : undefined,
+      newValue: payload?.newValue != null ? String(payload.newValue) : undefined,
+    });
+  }
+
+  if (triggerType === "general_link_clicked") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      trackingToken:
+        typeof payload?.trackingToken === "string" ? payload.trackingToken : undefined,
+      messageId: typeof payload?.messageId === "string" ? payload.messageId : undefined,
+      destinationUrl:
+        typeof payload?.destinationUrl === "string" ? payload.destinationUrl : undefined,
+    });
+  }
+
+  if (triggerType === "customer_added_to_list" || triggerType === "customer_removed_from_list") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      listId: typeof payload?.listId === "string" ? payload.listId : undefined,
+    });
+  }
+
+  if (triggerType === "inbox_conversation_status_changed") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      conversationId:
+        typeof payload?.conversationId === "string" ? payload.conversationId : undefined,
+      fromStatus: typeof payload?.fromStatus === "string" ? payload.fromStatus : undefined,
+      toStatus: typeof payload?.toStatus === "string" ? payload.toStatus : undefined,
+    });
+  }
+
+  if (triggerType === "inbox_conversation_tagged" || triggerType === "inbox_conversation_untagged") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      conversationId:
+        typeof payload?.conversationId === "string" ? payload.conversationId : undefined,
+      tag: typeof payload?.tag === "string" ? payload.tag : undefined,
+    });
+  }
+
+  if (triggerType === "inbox_conversation_assigned") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      conversationId:
+        typeof payload?.conversationId === "string" ? payload.conversationId : undefined,
+      assigneeId: typeof payload?.assigneeId === "string" ? payload.assigneeId : undefined,
+      previousAssigneeId:
+        typeof payload?.previousAssigneeId === "string"
+          ? payload.previousAssigneeId
+          : undefined,
+    });
+  }
+
+  if (triggerType === "inbox_conversation_unassigned") {
+    return enrollForTrigger(workspaceId, triggerType, contactId, {
+      conversationId:
+        typeof payload?.conversationId === "string" ? payload.conversationId : undefined,
+      previousAssigneeId:
+        typeof payload?.previousAssigneeId === "string"
+          ? payload.previousAssigneeId
+          : undefined,
     });
   }
 

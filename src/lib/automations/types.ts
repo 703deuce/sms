@@ -1,6 +1,4 @@
-/**
- * Automation builder graph types and parsing.
- */
+import { parityNodeSummary } from "./block-registry";
 
 export type AutomationNodeCategory = "trigger" | "action" | "logic" | "end";
 
@@ -81,7 +79,7 @@ export function getOutgoingEdges(def: AutomationDefinition, nodeId: string, hand
 export function getNextNodeId(
   def: AutomationDefinition,
   nodeId: string,
-  branch?: "yes" | "no" | "default",
+  branch?: string,
 ): string | null {
   const handle = branch ?? "default";
   const edge = def.edges.find(
@@ -93,6 +91,9 @@ export function getNextNodeId(
 export function nodeSummary(node: AutomationCanvasNode): string {
   const cfg = node.data.config || {};
   const block = node.data.blockType;
+
+  const parity = parityNodeSummary(block, cfg, node.data.label);
+  if (parity) return parity;
 
   if (block === "wait_until_datetime") {
     const at = String(cfg.runAt || cfg.timeOfDay || "");

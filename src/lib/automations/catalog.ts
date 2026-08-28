@@ -2,6 +2,7 @@
  * Automation block catalog for sidebar and node creation.
  */
 import { getAutomationCapabilities, isBlockEnabledForAccount } from "./capabilities";
+import { PARITY_AUTOMATION_BLOCKS } from "./catalog-parity-blocks";
 
 export type BlockDefinition = {
   blockType: string;
@@ -570,6 +571,9 @@ export const AUTOMATION_BLOCKS: BlockDefinition[] = [
     icon: "branch",
     defaultConfig: { field: "customer_replied", operator: "equals", value: "true" },
   }),
+
+  // —— SlickText parity blocks (additive — do not remove legacy blocks) ——
+  ...PARITY_AUTOMATION_BLOCKS,
 ];
 
 export const MERGE_VARIABLES = [

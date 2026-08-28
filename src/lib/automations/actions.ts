@@ -8,6 +8,25 @@ import { mergeExecutionMetadata, type ExecutionFacts } from "./metadata";
 import { isConditionBlock } from "./catalog";
 import type { AutomationCanvasNode, AutomationDefinition } from "./types";
 import { getNextNodeId, waitDurationMs, waitUntilMs } from "./types";
+import {
+  evaluateParityCondition,
+  isParityConditionBlock,
+  runAddContactToList,
+  runAssignInboxConversation,
+  runCreateInboxConversationNote,
+  runDeleteContact,
+  runEventWaitNode,
+  runMarkInboxConversationRead,
+  runRemoveContactFromList,
+  runSetContactOptInStatus,
+  runSetInboxConversationStatus,
+  runSplitTraffic,
+  runTagInboxConversation,
+  runUnassignInboxConversation,
+  runUntagInboxConversation,
+} from "./parity";
+import { readEventWaitState } from "./parity/event-waits";
+import { outcomeResult } from "./parity/resolve-outcome";
 
 export async function mergeMessageVars(
   workspaceId: string,
@@ -249,12 +268,122 @@ export async function runNodeAction(
     };
   }
 
+  if (isParityConditionBlock(block)) {
+    const exec = await prisma.automationExecution.findUnique({
+      where: { id: ctx.executionId },
+      select: { metadata: true },
+    });
+    const meta = (exec?.metadata || {}) as Record<string, unknown>;
+    const outcome = await evaluateParityCondition(node, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+      facts: ctx.facts,
+      metadata: meta,
+    });
+    return outcomeResult(def, node.id, outcome);
+  }
+
   if (isConditionBlock(block)) {
     const result = evaluateConditionNode(node, ctx.facts, contact, ctx.tagNames);
     return {
       nextNodeId: getNextNodeId(def, node.id, result ? "yes" : "no"),
       output: { branch: result ? "yes" : "no" },
     };
+  }
+
+  if (block === "add_contact_to_list") {
+    return runAddContactToList(node, def, ctx.contactId, ctx.workspaceId);
+  }
+
+  if (block === "remove_contact_from_list") {
+    return runRemoveContactFromList(node, def, ctx.contactId, ctx.workspaceId);
+  }
+
+  if (block === "assign_inbox_conversation") {
+    return runAssignInboxConversation(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+    });
+  }
+
+  if (block === "unassign_inbox_conversation") {
+    return runUnassignInboxConversation(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+    });
+  }
+
+  if (block === "tag_inbox_conversation") {
+    return runTagInboxConversation(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+    });
+  }
+
+  if (block === "untag_inbox_conversation") {
+    return runUntagInboxConversation(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+    });
+  }
+
+  if (block === "set_inbox_conversation_status") {
+    return runSetInboxConversationStatus(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+    });
+  }
+
+  if (block === "mark_inbox_conversation_read") {
+    return runMarkInboxConversationRead(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+    });
+  }
+
+  if (block === "create_inbox_conversation_note") {
+    return runCreateInboxConversationNote(node, def, {
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+      executionId: ctx.executionId,
+      mergeBody: (body) => mergeMessageVars(ctx.workspaceId, contact, body),
+    });
+  }
+
+  if (block === "set_contact_opt_in_status") {
+    return runSetContactOptInStatus(node, def, ctx.contactId, ctx.workspaceId);
+  }
+
+  if (block === "split_traffic") {
+    return runSplitTraffic(node, def, ctx.executionId);
+  }
+
+  if (block === "delete_contact") {
+    return runDeleteContact(node, def, ctx.contactId, ctx.workspaceId, ctx.testMode);
+  }
+
+  if (
+    block === "wait_for_reply" ||
+    block === "wait_for_link_click" ||
+    block === "wait_for_workflow_message_click" ||
+    block === "wait_for_customer_field_change"
+  ) {
+    const pending = await readEventWaitState(ctx.executionId, node.id);
+    if (pending?.eventWaitConsumed && pending.eventWaitOutcome) {
+      return outcomeResult(def, node.id, pending.eventWaitOutcome);
+    }
+    return runEventWaitNode(node, def, {
+      executionId: ctx.executionId,
+      workspaceId: ctx.workspaceId,
+      contactId: ctx.contactId,
+    });
   }
 
   if (block === "send_sms" || block === "send_review_request") {
@@ -1109,7 +1238,12 @@ export async function runNodeAction(
   }
 
   if (block === "end_automation" || node.type === "end") {
-    return { done: true };
+    const reason = String(cfg.ejectReason || cfg.reason || "completed").trim();
+    await mergeExecutionMetadata(ctx.executionId, {
+      ejectReason: reason,
+      endLabel: reason,
+    });
+    return { done: true, output: { ejectReason: reason } };
   }
 
   return { nextNodeId: getNextNodeId(def, node.id) };

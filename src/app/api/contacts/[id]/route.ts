@@ -106,6 +106,40 @@ export async function PATCH(
       // CRM push is optional
     }
 
+    try {
+      const { emitAutomationEvent } = await import("@/lib/automations/events");
+      const { resumeEventWaitsOnFieldChange } = await import(
+        "@/lib/automations/parity/event-waits"
+      );
+      const updated = await getPrisma().contact.findUnique({ where: { id } });
+      const fields: Array<{ field: string; prev: unknown; next: unknown }> = [
+        { field: "firstName", prev: existing.firstName, next: body.firstName },
+        { field: "lastName", prev: existing.lastName, next: body.lastName },
+        { field: "email", prev: existing.email, next: body.email },
+        { field: "company", prev: existing.company, next: body.company },
+        { field: "status", prev: existing.status, next: body.status },
+      ];
+      for (const f of fields) {
+        if (f.next === undefined) continue;
+        if (String(f.prev ?? "") === String(f.next ?? "")) continue;
+        await emitAutomationEvent(auth.workspaceId, "customer.field_changed", id, {
+          field: f.field,
+          previousValue: f.prev != null ? String(f.prev) : "",
+          newValue: f.next != null ? String(f.next) : "",
+        });
+      }
+      if (updated) {
+        await resumeEventWaitsOnFieldChange({
+          workspaceId: auth.workspaceId,
+          contactId: id,
+          field: "company",
+          contact: updated as unknown as Record<string, unknown>,
+        });
+      }
+    } catch {
+      /* non-fatal */
+    }
+
     const data = await loadContactById(auth.workspaceId, id);
     return NextResponse.json({ data });
   } catch (err) {

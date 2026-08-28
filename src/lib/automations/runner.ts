@@ -5,6 +5,7 @@ import { runNodeAction } from "./actions";
 import { factsFromMetadata } from "./metadata";
 import { isConditionBlock } from "./catalog";
 import { findNode, parseAutomationDefinition } from "./types";
+import { handleEventWaitTimeout, isEventWaitBlock } from "./parity/event-waits";
 
 const TERMINAL = ["COMPLETED", "FAILED", "CANCELLED"] as const;
 
@@ -196,7 +197,9 @@ export async function advanceAutomationExecution(executionId: string) {
 
     if (result.waiting && result.waitMs) {
       const waitStatus =
-        node.data.blockType === "wait_for_call_result" ? "waiting" : "completed";
+        node.data.blockType === "wait_for_call_result" || isEventWaitBlock(node.data.blockType)
+          ? "waiting"
+          : "completed";
       await recordStep(executionId, node.id, waitStatus, {
         output: { waitMs: result.waitMs, ...(result.output as object) },
       });
@@ -244,6 +247,7 @@ export async function advanceAutomationExecution(executionId: string) {
         nextNode.data.blockType === "wait" ||
         nextNode.data.blockType === "wait_until_datetime" ||
         nextNode.data.blockType === "wait_for_call_result" ||
+        isEventWaitBlock(nextNode.data.blockType) ||
         nextNode.data.blockType === "end_automation" ||
         nextNode.type === "trigger")
     ) {
@@ -267,12 +271,22 @@ export async function processAutomationWaits() {
   let advanced = 0;
   for (const ex of due) {
     if (ex.flow.status !== "ACTIVE") continue;
-    try {
-      const { emitNoResponseAfterWait } = await import("./stop-on-reply");
-      await emitNoResponseAfterWait(ex.workspaceId, ex.contactId, ex.id);
-    } catch {
-      /* non-fatal */
+
+    const meta = (ex.metadata || {}) as Record<string, unknown>;
+    if (meta.eventWaitActive === true && ex.currentNodeId) {
+      const timeoutOutcome = await handleEventWaitTimeout(ex.id, ex.currentNodeId);
+      if (!timeoutOutcome) {
+        continue;
+      }
+    } else {
+      try {
+        const { emitNoResponseAfterWait } = await import("./stop-on-reply");
+        await emitNoResponseAfterWait(ex.workspaceId, ex.contactId, ex.id);
+      } catch {
+        /* non-fatal */
+      }
     }
+
     await prisma.automationExecution.update({
       where: { id: ex.id },
       data: { status: "RUNNING", nextActionAt: null },

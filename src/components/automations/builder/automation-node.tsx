@@ -2,7 +2,9 @@
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
+import { getBlockOutcomes, isTerminalBlock } from "@/lib/automations/block-registry";
 import { nodeSummary } from "@/lib/automations/types";
+import { DynamicOutcomeHandles } from "./dynamic-outcome-handles";
 import {
   Clock,
   GitBranch,
@@ -64,14 +66,15 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
   const isCondition =
     d.blockType === "condition" || d.blockType.startsWith("condition_");
   const isCallOutcome = d.blockType === "wait_for_call_result";
-  const isEnd = d.blockType === "end_automation";
+  const isEnd = isTerminalBlock(d.blockType) || d.blockType === "end_automation";
+  const multiOutcome = getBlockOutcomes(d.blockType, d.config).length > 1;
   const includeBooking = d.config?.includeBookingBranches === true;
 
   const color = isTrigger
     ? "border-primary bg-primary/5"
-    : isCondition || isCallOutcome
+    : isCondition || isCallOutcome || multiOutcome
       ? "border-violet-300 bg-violet-50"
-      : d.blockType === "wait"
+      : d.blockType === "wait" || d.blockType.startsWith("wait_for_")
         ? "border-amber-300 bg-amber-50"
         : isEnd
           ? "border-border bg-muted/40"
@@ -103,7 +106,7 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      {isCondition ? (
+      {isCondition && !multiOutcome ? (
         <>
           <Handle
             type="source"
@@ -126,6 +129,12 @@ export function AutomationFlowNode({ id, data, selected }: NodeProps) {
             No
           </span>
         </>
+      ) : isCondition || (multiOutcome && !isCallOutcome) ? (
+        <DynamicOutcomeHandles
+          blockType={d.blockType}
+          config={d.config}
+          isCondition={isCondition}
+        />
       ) : isCallOutcome ? (
         <>
           <Handle

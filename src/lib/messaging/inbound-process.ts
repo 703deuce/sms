@@ -465,6 +465,34 @@ export async function processInboundMessage(input: {
   } catch {
     /* non-fatal */
   }
+  try {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        OR: [{ e164: input.to }, { e164: input.to.replace(/\D/g, "") }],
+      },
+      select: { id: true },
+    });
+    const { emitAutomationEvent } = await import("@/lib/automations/events");
+    await emitAutomationEvent(input.workspaceId, "message.received", contact.id, {
+      body: body || "",
+      from,
+      to: input.to,
+      phoneNumberId: phone?.id,
+      messageId: input.providerMessageId || undefined,
+    });
+    const { resumeEventWaitsOnInboundMessage } = await import(
+      "@/lib/automations/parity/event-waits"
+    );
+    await resumeEventWaitsOnInboundMessage({
+      workspaceId: input.workspaceId,
+      contactId: contact.id,
+      body: body || "",
+      messageId: input.providerMessageId || null,
+    });
+  } catch {
+    /* non-fatal */
+  }
 
   const { resolveInboundConversation } = await import("@/lib/mass-texting/conversation-context");
   const inboundCtx = await resolveInboundConversation({
