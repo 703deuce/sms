@@ -17,7 +17,7 @@ import {
 } from "@/lib/voice/telnyx/forwarded-from";
 import { getActiveMediaBackend } from "@/lib/voice/media-backend";
 import { mediaBackendMetadataStamp } from "@/lib/voice/media-backend/pinning";
-import { businessNumberForConsentStorage } from "@/lib/mctb/consent-identity";
+import { businessNumberForConsentStorage, consentIdentityMetadata } from "@/lib/mctb/consent-identity";
 
 const FALLBACK_WORKSPACE_ID =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
@@ -324,6 +324,7 @@ export async function recordMctbSipPress1ConsentForPython(
     consentScope: "CUSTOMER_CARE_SMS",
     promptAssetId: input.audioAssetId || undefined,
     forwardedFrom: input.forwardedFrom || null,
+    hasDiversionHeader: Boolean(input.forwardedFrom),
     metadata: observability,
   });
 
@@ -338,7 +339,7 @@ export async function recordMctbSipPress1ConsentForPython(
     consentIdentityVerified: consent.identity?.consentIdentityVerified ?? true,
     eventMetadata: {
       ...observability,
-      ...(consent.identity ? { consentingCallerNumber: consent.identity.consentingCallerNumber } : {}),
+      ...(consent.identity ? consentIdentityMetadata(consent.identity) : {}),
     },
   });
 

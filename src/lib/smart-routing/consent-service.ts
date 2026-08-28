@@ -197,17 +197,23 @@ export async function triggerMissedCallTextFromConsent(input: {
         ? input.eventMetadata.transovoNumberE164
         : input.businessNumber;
 
+  const customerBusinessE164 =
+    input.forwardedFrom ||
+    (typeof input.eventMetadata?.customerBusinessNumber === "string"
+      ? input.eventMetadata.customerBusinessNumber
+      : null);
+
   const phoneNumberId =
     input.phoneNumberId ??
     (await resolveInboundPhoneNumberId({
       workspaceId: target.workspaceId,
       transovoNumberE164,
-      businessE164: input.businessNumber,
+      businessE164: customerBusinessE164 || input.businessNumber,
       isPlatformDemo: target.isPlatformDemo,
     }));
 
   const businessE164 = normalizeBusinessE164ForStorage(
-    input.businessNumber,
+    customerBusinessE164 || transovoNumberE164,
     transovoNumberE164,
   );
 

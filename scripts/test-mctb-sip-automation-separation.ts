@@ -136,15 +136,15 @@ assert.match(
 );
 
 assert.match(
-  voicemailSrc,
-  /record_sip_voicemail_message/,
-  "voicemail terminal must record caller audio instead of sleeping",
-);
-
-assert.match(
   voicemailFallbackSrc,
   /resolveVoicemailGreetingPlayback/,
   "voicemail greeting resolver must delegate to shared playback helper with platform default",
+);
+
+assert.match(
+  voicemailSrc,
+  /record_sip_voicemail_message/,
+  "voicemail fallback must record caller audio via persisted voicemail flow",
 );
 
 assert.match(

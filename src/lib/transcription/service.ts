@@ -5,6 +5,7 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { transcribeAudioUrlWithDeepgram } from "./deepgram-prerecorded";
 import { canTranscribeRecording } from "./entitlement";
 import { recordTranscriptionUsage } from "./usage";
+import { resolveVoicemailRecordingFetchUrl } from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service";
 
 export type TranscriptionSourceType = "voicemail_message" | "smart_routing_recording";
 
@@ -152,7 +153,8 @@ export async function executeTranscriptionJob(input: {
   }
 
   try {
-    const result = await transcribeAudioUrlWithDeepgram(input.recordingUrl, {
+    const fetchUrl = await resolveVoicemailRecordingFetchUrl(input.recordingUrl);
+    const result = await transcribeAudioUrlWithDeepgram(fetchUrl, {
       diarize: input.diarize,
     });
     const transcript = result.text?.trim() || null;
