@@ -262,6 +262,12 @@ export async function handleFqdnDirectGatherEnded(input: {
   });
 
   if (consent.identity?.consentIdentityVerified && (ctx.demoMode || ctx.forwardedFrom)) {
+    const { resolveMctbConfiguredTriggerPhoneNumberId } = await import(
+      "@/lib/mctb/resolve-inbound-phone-number"
+    );
+    const smsTriggerPhoneNumberId = await resolveMctbConfiguredTriggerPhoneNumberId(
+      ctx.workspaceId,
+    );
     const smsResult = await triggerMissedCallTextFromConsent({
       workspaceId: ctx.workspaceId,
       callerNumber: consent.identity.consentingCallerNumber || ctx.callerE164,
@@ -269,11 +275,13 @@ export async function handleFqdnDirectGatherEnded(input: {
       callSessionId: callControlId,
       forwardedFrom: ctx.forwardedFrom,
       consentIdentityVerified: true,
+      phoneNumberId: smsTriggerPhoneNumberId,
       eventMetadata: consentMetadata,
     });
     logMctbEventOnly("fqdn_direct_press1_sms_triggered", {
       callControlId,
       workspaceId: ctx.workspaceId,
+      smsTriggerPhoneNumberId,
       result: smsResult,
       livekitRoomCreated: false,
     });

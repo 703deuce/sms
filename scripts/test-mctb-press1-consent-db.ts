@@ -8,7 +8,9 @@ import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import {
   normalizeBusinessE164ForStorage,
   resolveInboundPhoneNumberId,
+  resolveMctbConfiguredTriggerPhoneNumberId,
 } from "@/lib/mctb/resolve-inbound-phone-number";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { recordSmsConsent } from "@/lib/smart-routing/consent-service";
 
 const WORKSPACE_ID =
@@ -42,6 +44,15 @@ async function main() {
     normalizeBusinessE164ForStorage("15714073615", MCTB_PLATFORM_DEMO_E164),
     MCTB_PLATFORM_DEMO_E164,
   );
+
+  const mctbConfig = await loadMissedCallTextConfig(WORKSPACE_ID);
+  const triggerPhoneNumberId = await resolveMctbConfiguredTriggerPhoneNumberId(WORKSPACE_ID);
+  assert.equal(
+    triggerPhoneNumberId,
+    mctbConfig.smsPhoneNumberId || mctbConfig.phoneNumberId,
+    "configured MCTB SMS trigger must match setup sender line",
+  );
+  assert.ok(triggerPhoneNumberId, "workspace must have MCTB sender configured");
 
   const observability = {
     path: "livekit_sip_mctb",

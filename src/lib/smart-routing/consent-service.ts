@@ -145,6 +145,8 @@ export async function triggerMissedCallTextFromConsent(input: {
   isTest?: boolean;
   forwardedFrom?: string | null;
   consentIdentityVerified?: boolean;
+  /** When set, use workspace MCTB sender instead of resolving from ingress DID. */
+  phoneNumberId?: string | null;
   eventMetadata?: Record<string, unknown>;
 }) {
   if (input.isTest) {
@@ -195,12 +197,14 @@ export async function triggerMissedCallTextFromConsent(input: {
         ? input.eventMetadata.transovoNumberE164
         : input.businessNumber;
 
-  const phoneNumberId = await resolveInboundPhoneNumberId({
-    workspaceId: target.workspaceId,
-    transovoNumberE164,
-    businessE164: input.businessNumber,
-    isPlatformDemo: target.isPlatformDemo,
-  });
+  const phoneNumberId =
+    input.phoneNumberId ??
+    (await resolveInboundPhoneNumberId({
+      workspaceId: target.workspaceId,
+      transovoNumberE164,
+      businessE164: input.businessNumber,
+      isPlatformDemo: target.isPlatformDemo,
+    }));
 
   const businessE164 = normalizeBusinessE164ForStorage(
     input.businessNumber,
