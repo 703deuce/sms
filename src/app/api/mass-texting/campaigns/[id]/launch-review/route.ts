@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { requireMassTextingWorkspace } from "@/lib/mass-texting/access";
 import { buildPreSendReview } from "@/lib/mass-texting/pre-send-review";
 import { getBroadcastCampaign } from "@/lib/mass-texting/broadcast/service";
+import { refreshMassTextingSendState } from "@/lib/mass-texting/send-readiness";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,6 +16,8 @@ export async function POST(_request: Request, ctx: Ctx) {
 
     const campaign = await getBroadcastCampaign(auth.workspaceId, id);
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+
+    await refreshMassTextingSendState(auth.workspaceId);
 
     const review = await buildPreSendReview(auth.workspaceId, id);
     if (!review) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });

@@ -32,6 +32,11 @@ export async function isAdminUnlimitedWorkspace(workspaceId: string): Promise<bo
   if (isAdminMctbTestWorkspace(mctbFlags)) return true;
 
   const prisma = getPrisma();
+  const adminMember = await prisma.membership.findFirst({
+    where: { workspaceId, user: { isPlatformAdmin: true } },
+    select: { id: true },
+  });
+  if (adminMember) return true;
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: { customFieldsConfig: true },

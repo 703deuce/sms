@@ -161,3 +161,98 @@ export async function reconcileMassTextMessagingRegistration(input: {
 
   return updated;
 }
+
+export type MassTextTelnyxSyncResult = {
+  ok: boolean;
+  providerReady: boolean;
+  phoneE164: string | null;
+  reason?: string;
+  brandStatusRaw?: string;
+  campaignStatusRaw?: string;
+};
+
+/**
+ * Sync MASS_TEXT_MARKETING registration + workspace phone from live Telnyx state.
+ * Telnyx brand/campaign/number assignment is the source of truth — never guess approved locally.
+ */
+export async function syncMassTextRegistrationFromTelnyx(
+  workspaceId: string,
+): Promise<MassTextTelnyxSyncResult> {
+  const sender = await resolveMassTextSendingNumber(workspaceId);
+  if (!sender?.phoneE164) {
+    return { ok: false, providerReady: false, phoneE164: null, reason: "no_sending_number" };
+  }
+
+  const { getMessagingProviderName } = await import("@/lib/messaging/provider-config");
+  if (getMessagingProviderName() !== "telnyx") {
+    return {
+      ok: false,
+      providerReady: false,
+      phoneE164: sender.phoneE164,
+      reason: "telnyx_not_configured",
+    };
+  }
+
+  try {
+    const { fetchTelnyxLocalNumberProviderSnapshot, reconcileTelnyxLocalNumberToWorkspace } =
+      await import("@/lib/messaging/telnyx/reconcile-local-number");
+    const snapshot = await fetchTelnyxLocalNumberProviderSnapshot(sender.phoneE164);
+    if (!snapshot) {
+      return {
+        ok: false,
+        providerReady: false,
+        phoneE164: sender.phoneE164,
+        reason: "telnyx_number_not_found",
+      };
+    }
+
+    await reconcileTelnyxLocalNumberToWorkspace({
+      workspaceId,
+      phoneE164: sender.phoneE164,
+    }).catch((err) => {
+      console.warn("[mass-text] workspace Telnyx reconcile failed", err);
+    });
+
+    const overallStatus = snapshot.providerReady ? "ready" : "in_review";
+    await reconcileMassTextMessagingRegistration({
+      workspaceId,
+      overallStatus,
+      messagingEnabled: snapshot.providerReady,
+      phoneAttached: Boolean(snapshot.messagingProfileId),
+      phoneE164: snapshot.phoneE164,
+      phoneNumberId: sender.phoneNumberId,
+      brandId: snapshot.brandId,
+      campaignId: snapshot.campaignId,
+    });
+
+    const prisma = getPrisma();
+    await prisma.phoneNumber
+      .updateMany({
+        where: { workspaceId, e164: snapshot.phoneE164 },
+        data: {
+          a2pStatus: snapshot.providerReady ? "APPROVED" : "PENDING",
+          providerNumberId: snapshot.providerNumberId,
+          messagingService: snapshot.messagingProfileId,
+        },
+      })
+      .catch(() => undefined);
+
+    return {
+      ok: true,
+      providerReady: snapshot.providerReady,
+      phoneE164: snapshot.phoneE164,
+      brandStatusRaw: snapshot.brandStatusRaw,
+      campaignStatusRaw: snapshot.campaignStatusRaw,
+      reason: snapshot.providerReady
+        ? undefined
+        : `Telnyx pending: brand=${snapshot.brandStatusRaw} campaign=${snapshot.campaignStatusRaw}`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      providerReady: false,
+      phoneE164: sender.phoneE164,
+      reason: err instanceof Error ? err.message : "telnyx_sync_failed",
+    };
+  }
+}

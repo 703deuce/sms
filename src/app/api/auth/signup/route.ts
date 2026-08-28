@@ -199,10 +199,10 @@ export async function POST(request: Request) {
         "@/lib/products/feature-entitlements"
       );
       await grantWorkspaceProductFeature(workspace.id, "mass_texting", "trial");
-      const { getOrCreateMassTextingBillingAccount } = await import(
-        "@/lib/mass-texting/billing-account"
+      const { ensureMassTextingWorkspaceBootstrap } = await import(
+        "@/lib/mass-texting/send-readiness"
       );
-      await getOrCreateMassTextingBillingAccount(workspace.id);
+      await ensureMassTextingWorkspaceBootstrap(workspace.id);
     }
     await updateProductIntent(user.id, productIntent);
 

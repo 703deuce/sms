@@ -1,9 +1,13 @@
 import "server-only";
 
+import { isAdminUnlimitedWorkspace } from "@/lib/billing/admin-unlimited-workspace";
 import { getPrisma } from "@/lib/db";
 import { getOrCreateMassTextingBillingAccount } from "@/lib/mass-texting/billing-account";
 import { MASS_TEXT_TRIAL } from "@/lib/mass-texting/pricing";
 import { estimateSmsSegments } from "@/lib/utils";
+
+/** Segment balance returned for admin / certification workspaces. */
+export const ADMIN_UNLIMITED_SEGMENT_BALANCE = 999_999_999;
 
 export type SegmentAvailability = {
   available: number;
@@ -55,7 +59,11 @@ function availabilityFromAccount(account: {
         : "Insufficient segments";
     }
   } else {
-    blockReason = `Cannot send in state ${account.lifecycleState}`;
+    blockReason =
+      account.lifecycleState === "TRIAL_PENDING_A2P" ||
+      account.lifecycleState === "PRODUCTION_A2P_PENDING"
+        ? "Mass Texting A2P approval pending — promotional broadcasts require a separate MASS_TEXT_MARKETING registration from one-to-one SMS"
+        : `Cannot send in state ${account.lifecycleState}`;
   }
 
   return {
@@ -70,9 +78,25 @@ function availabilityFromAccount(account: {
   };
 }
 
+function adminUnlimitedAvailability(): SegmentAvailability {
+  return {
+    available: ADMIN_UNLIMITED_SEGMENT_BALANCE,
+    monthlyRemaining: ADMIN_UNLIMITED_SEGMENT_BALANCE,
+    paygRemaining: ADMIN_UNLIMITED_SEGMENT_BALANCE,
+    trialRemaining: ADMIN_UNLIMITED_SEGMENT_BALANCE,
+    lifecycleState: "TRIAL_ACTIVE",
+    accountSendEligible: true,
+    canSend: true,
+    blockReason: null,
+  };
+}
+
 export async function getSegmentAvailability(
   workspaceId: string,
 ): Promise<SegmentAvailability> {
+  if (await isAdminUnlimitedWorkspace(workspaceId)) {
+    return adminUnlimitedAvailability();
+  }
   const account = await getOrCreateMassTextingBillingAccount(workspaceId);
   return availabilityFromAccount(account);
 }
@@ -158,6 +182,38 @@ export async function reserveSegmentsForCampaign(input: {
       // of treating a spent reservation as a successful replay.
       idempotencyKey = `${input.idempotencyKey}:${attempt + 1}`;
       continue;
+    }
+
+    if (await isAdminUnlimitedWorkspace(input.workspaceId)) {
+      const account = await getOrCreateMassTextingBillingAccount(input.workspaceId);
+      try {
+        const reservation = await prisma.massTextingCreditReservation.create({
+          data: {
+            workspaceId: input.workspaceId,
+            billingAccountId: account.id,
+            campaignId: input.campaignId,
+            reservedSegments: input.segments,
+            idempotencyKey,
+            status: "ACTIVE",
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
+        });
+        return { ok: true, reservationId: reservation.id, reserved: input.segments };
+      } catch (err) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
+          const raced = await prisma.massTextingCreditReservation.findUnique({
+            where: { idempotencyKey },
+          });
+          if (raced?.status === "ACTIVE") {
+            return {
+              ok: true,
+              reservationId: raced.id,
+              reserved: raced.reservedSegments,
+            };
+          }
+        }
+        throw err;
+      }
     }
 
     const availability = await getSegmentAvailability(input.workspaceId);

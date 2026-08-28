@@ -43,13 +43,20 @@ export function AiComposeModal({ open, onClose, onUseMessage }: AiComposeModalPr
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not generate");
-      const body = typeof json.data?.body === "string" ? json.data.body : "";
-      const alt =
-        typeof json.data?.alternatives === "object" && Array.isArray(json.data.alternatives)
-          ? json.data.alternatives.filter((x: unknown) => typeof x === "string")
+      const data = json.data && typeof json.data === "object" ? json.data : {};
+      const body =
+        typeof data.body === "string"
+          ? data.body
+          : typeof data.message === "string"
+            ? data.message
+            : "";
+      const alt = Array.isArray(data.alternatives)
+        ? data.alternatives
+        : Array.isArray(data.variations)
+          ? data.variations
           : [];
-      const messages = [body, ...alt].filter(Boolean);
-      if (messages.length === 0) throw new Error("No messages returned");
+      const messages = [body, ...alt.filter((x: unknown) => typeof x === "string")].filter(Boolean);
+      if (messages.length === 0) throw new Error(json.error || "No messages returned");
       setOptions(messages.slice(0, 3));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not generate");

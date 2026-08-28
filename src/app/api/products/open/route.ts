@@ -59,6 +59,10 @@ export async function GET(request: Request) {
     await grantProductEntitlement(workspace.workspaceId, "sms", "trial");
     const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
     await grantWorkspaceProductFeature(workspace.workspaceId, "mass_texting", "trial");
+    const { ensureMassTextingWorkspaceBootstrap } = await import(
+      "@/lib/mass-texting/send-readiness"
+    );
+    await ensureMassTextingWorkspaceBootstrap(workspace.workspaceId);
   }
 
   await updateLastActiveProduct(session.userId, product);

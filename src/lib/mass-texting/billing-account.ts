@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isAdminUnlimitedWorkspace } from "@/lib/billing/admin-unlimited-workspace";
 import { getPrisma } from "@/lib/db";
 import { MASS_TEXT_PRICING_VERSION } from "@/lib/mass-texting/pricing";
 
@@ -66,16 +67,36 @@ export type MassTextingBillingSummary = {
 export async function getMassTextingBillingSummary(
   workspaceId: string,
 ): Promise<MassTextingBillingSummary> {
-  const { MASS_TEXT_TRIAL } = await import("@/lib/mass-texting/pricing");
+  const { MASS_TEXT_TRIAL: trialConfig } = await import("@/lib/mass-texting/pricing");
   const account = await getOrCreateMassTextingBillingAccount(workspaceId);
+  const adminUnlimited = await isAdminUnlimitedWorkspace(workspaceId);
   const monthlyRemaining = Math.max(
     0,
     account.monthlySegmentsIncluded - account.monthlySegmentsUsed,
   );
   const trialRemaining = Math.max(
     0,
-    MASS_TEXT_TRIAL.includedSegments - account.trialSegmentsUsed,
+    trialConfig.includedSegments - account.trialSegmentsUsed,
   );
+
+  if (adminUnlimited) {
+    return {
+      lifecycleState: account.lifecycleState === "TRIAL_PENDING_A2P" ? "TRIAL_ACTIVE" : account.lifecycleState,
+      billingModel: account.billingModel,
+      monthlyPlanTier: account.monthlyPlanTier,
+      monthlySegmentsIncluded: account.monthlySegmentsIncluded,
+      monthlySegmentsRemaining: monthlyRemaining,
+      monthlySegmentsUsed: account.monthlySegmentsUsed,
+      paygCreditsSegments: account.paygCreditsSegments,
+      paygLineActive: account.paygLineActive,
+      a2pFeeStatus: account.a2pFeeStatus,
+      trialSegmentsUsed: account.trialSegmentsUsed,
+      trialSegmentsRemaining: trialConfig.includedSegments,
+      trialEndsAt: account.trialEndsAt?.toISOString() ?? null,
+      canSend: true,
+      blockReason: null,
+    };
+  }
 
   let canSend = false;
   let blockReason: string | null = null;

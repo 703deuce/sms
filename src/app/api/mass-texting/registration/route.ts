@@ -5,13 +5,14 @@ import {
   getMessagingProductRegistration,
 } from "@/lib/mass-texting/messaging-registration";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
+import { refreshMassTextingSendState } from "@/lib/mass-texting/send-readiness";
 
 export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    await ensureMessagingProductRegistration(auth.workspaceId, "MASS_TEXT_MARKETING");
+    await refreshMassTextingSendState(auth.workspaceId);
     const registration = await getMessagingProductRegistration(
       auth.workspaceId,
       "MASS_TEXT_MARKETING",
