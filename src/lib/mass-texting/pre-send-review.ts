@@ -134,7 +134,13 @@ export async function buildPreSendReview(
     const duplicateRemoved = preview.duplicateRemoved + preview.excludedCount;
     const invalidRemoved = preview.invalidRemoved;
     const suppressedRemoved = preview.suppressedRemoved;
-    const { accepted, rejected } = await validateBulkRecipients(workspaceId, campaignId, recipients);
+    // Enrolled rows are already on this campaign — don't treat as "already_enrolled" rejects.
+    const validationCampaignId = enrolled.length > 0 ? null : campaignId;
+    const { accepted, rejected } = await validateBulkRecipients(
+      workspaceId,
+      validationCampaignId,
+      recipients,
+    );
     void rejected;
     const body = campaign.body || "";
     const sequence = parseSequence(campaign.sequenceJson);
@@ -194,7 +200,8 @@ export async function buildPreSendReview(
       duplicateRemoved,
       invalidRemoved,
       suppressedRemoved,
-      finalRecipientCount: preview.eligibleCount || accepted.length,
+      finalRecipientCount:
+        enrolled.length > 0 ? accepted.length : preview.eligibleCount || accepted.length,
       estimatedSegments,
       mmsCount: accepted.length * mmsStepCount,
       messagePreview: body.slice(0, 280),
@@ -327,7 +334,12 @@ export async function buildPreSendReview(
   }
 
   const rawContactCount = recipients.length;
-  const { accepted, rejected } = await validateBulkRecipients(workspaceId, campaignId, recipients);
+  const validationCampaignId = listIds.length === 0 && recipients.length > 0 ? null : campaignId;
+  const { accepted, rejected } = await validateBulkRecipients(
+    workspaceId,
+    validationCampaignId,
+    recipients,
+  );
 
   const duplicateRemoved = rejected.filter((r) => r.reason === "duplicate_in_batch").length;
   const invalidRemoved = rejected.filter((r) => r.reason === "invalid_phone" || r.reason === "missing_address").length;

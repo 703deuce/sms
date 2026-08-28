@@ -13,14 +13,23 @@ const BROADCAST_PLAYBOOK_NAMES: Partial<Record<CampaignCategoryId, string>> = {
 export function seedBroadcastComposeFromPlaybook(
   playbookId: string | null,
   draft: { name: string; message: string },
-): { name: string; message: string } {
-  if (!playbookId) return draft;
+  opts?: { force?: boolean },
+): { name: string; message: string; categoryId: CampaignCategoryId | null } {
+  if (!playbookId) {
+    return { name: draft.name, message: draft.message, categoryId: null };
+  }
   const category = getCampaignCategory(playbookId);
-  if (!category || category.engine !== "broadcast") return draft;
+  if (!category || category.engine !== "broadcast") {
+    return { name: draft.name, message: draft.message, categoryId: null };
+  }
 
   const id = category.id as CampaignCategoryId;
+  const defaultName = BROADCAST_PLAYBOOK_NAMES[id] || category.title;
+  const defaultMessage = DEFAULT_MESSAGES[id] || draft.message;
+  const force = opts?.force === true;
   return {
-    name: draft.name.trim() || BROADCAST_PLAYBOOK_NAMES[id] || category.title,
-    message: draft.message.trim() || DEFAULT_MESSAGES[id] || draft.message,
+    name: force || !draft.name.trim() ? defaultName : draft.name,
+    message: force || !draft.message.trim() ? defaultMessage : draft.message,
+    categoryId: id,
   };
 }

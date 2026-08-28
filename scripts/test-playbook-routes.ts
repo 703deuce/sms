@@ -50,9 +50,19 @@ assert.equal(
 const promo = seedBroadcastComposeFromPlaybook("promotion", { name: "", message: "" });
 assert.equal(promo.name, "New promotion");
 assert.ok(promo.message.includes("{{first_name}}"));
+assert.equal(promo.categoryId, "promotion");
 
 const broadcast = seedBroadcastComposeFromPlaybook("broadcast", { name: "", message: "" });
 assert.equal(broadcast.name, "New announcement");
+assert.equal(broadcast.categoryId, "broadcast");
+
+const forced = seedBroadcastComposeFromPlaybook(
+  "promotion",
+  { name: "Old name", message: "Old message" },
+  { force: true },
+);
+assert.equal(forced.name, "New promotion");
+assert.ok(forced.message.includes("{{first_name}}"));
 
 assert.equal(buildAutomationDefinitionFromCampaignPlaybook("welcome"), null);
 

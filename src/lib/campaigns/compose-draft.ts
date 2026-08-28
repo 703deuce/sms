@@ -10,6 +10,8 @@ export type AudienceSelection = {
 export type CampaignComposeDraft = {
   name: string;
   description?: string;
+  /** Set when opened from /playbooks (broadcast engine). */
+  playbookCategoryId?: string;
   audience: AudienceSelection[];
   excludeAudience: AudienceSelection[];
   message: string;

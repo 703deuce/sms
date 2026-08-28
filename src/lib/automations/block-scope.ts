@@ -1,8 +1,5 @@
-/** Voice / AI-call blocks — hidden unless AUTOMATION_VOICE_ENABLED=1 */
-export const VOICE_AUTOMATION_BLOCKS = new Set([
-  "inbound_call",
-  "call_completed",
-  "call_missed",
+/** AI voice agent blocks — hidden unless AUTOMATION_VOICE_ENABLED=1 */
+export const VOICE_AI_AUTOMATION_BLOCKS = new Set([
   "call_qualified",
   "call_voicemail_detected",
   "call_appointment_booked",
@@ -13,8 +10,25 @@ export const VOICE_AUTOMATION_BLOCKS = new Set([
   "wait_for_call_result",
 ]);
 
+/** Inbound telephony triggers — available in the SMS automation builder */
+export const TELEPHONY_TRIGGER_BLOCKS = new Set([
+  "inbound_call",
+  "call_completed",
+  "call_missed",
+]);
+
+/** @deprecated use isVoiceAutomationBlock — kept for grep compatibility */
+export const VOICE_AUTOMATION_BLOCKS = new Set([
+  ...TELEPHONY_TRIGGER_BLOCKS,
+  ...VOICE_AI_AUTOMATION_BLOCKS,
+]);
+
 export function isVoiceAutomationBlock(blockType: string): boolean {
-  return VOICE_AUTOMATION_BLOCKS.has(blockType);
+  return VOICE_AI_AUTOMATION_BLOCKS.has(blockType);
+}
+
+export function isTelephonyTriggerBlock(blockType: string): boolean {
+  return TELEPHONY_TRIGGER_BLOCKS.has(blockType);
 }
 
 export function isVoiceAutomationEnabled(): boolean {

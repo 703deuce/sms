@@ -46,6 +46,8 @@ export type BroadcastCampaignInput = {
   name: string;
   message: string;
   audience: BroadcastAudienceDefinition;
+  /** Playbook category when created from /playbooks (broadcast | promotion). */
+  category?: string | null;
   numberId?: string;
   scheduleMode: BroadcastScheduleMode;
   scheduledAt?: string | null;

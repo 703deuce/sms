@@ -144,8 +144,6 @@ export default function NewCategoryCampaignPage() {
         followUpCount: Number(followUpCount) || 2,
         stopOnReply,
         listIds: selectedListIds,
-        productSource: "mass_text",
-        massTexting: true,
         mediaUrls,
       },
     };

@@ -70,6 +70,10 @@ export function CampaignComposeView() {
     if (d.scheduleMode === "later" && d.scheduledDate && d.scheduledTime) {
       scheduledAt = new Date(`${d.scheduledDate}T${d.scheduledTime}`).toISOString();
     }
+    const category =
+      d.playbookCategoryId && ["broadcast", "promotion"].includes(d.playbookCategoryId)
+        ? d.playbookCategoryId
+        : undefined;
     return {
       name: d.name.trim(),
       message: body,
@@ -82,22 +86,32 @@ export function CampaignComposeView() {
       mediaUrls: d.mediaUrls,
       trackLinks: d.trackedLinks.some((l) => l.tracked),
       trackedLinks: d.trackedLinks,
+      category,
     };
   }
 
   useEffect(() => {
-    const loaded = loadComposeDraft();
     const playbook = searchParams.get("playbook");
-    const seeded = seedBroadcastComposeFromPlaybook(playbook, {
-      name: loaded.name,
-      message: loaded.message,
-    });
-    loaded.name = seeded.name;
-    loaded.message = seeded.message;
-    setDraft(loaded);
-
     const duplicateId = searchParams.get("duplicate");
     const editId = searchParams.get("edit");
+    const fromPlaybook = Boolean(playbook && !duplicateId && !editId);
+
+    let loaded = loadComposeDraft();
+    if (fromPlaybook) {
+      loaded = { ...defaultComposeDraft(), timezone: loaded.timezone };
+    }
+    const seeded = seedBroadcastComposeFromPlaybook(
+      playbook,
+      { name: loaded.name, message: loaded.message },
+      { force: fromPlaybook },
+    );
+    loaded.name = seeded.name;
+    loaded.message = seeded.message;
+    if (seeded.categoryId) {
+      loaded.playbookCategoryId = seeded.categoryId;
+    }
+    setDraft(loaded);
+
     const loadId = duplicateId || editId;
     if (loadId) {
       fetch(`/api/mass-texting/campaigns/${loadId}`)

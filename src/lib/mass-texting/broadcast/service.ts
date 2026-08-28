@@ -136,7 +136,7 @@ export async function createBroadcastCampaign(
       workspaceId,
       name: input.name.trim(),
       type: mediaUrls.length ? "MMS broadcast" : "SMS broadcast",
-      category: null,
+      category: input.category ?? null,
       audience: audienceSummaryLabel(input.audience),
       body: message,
       status: "DRAFT",
