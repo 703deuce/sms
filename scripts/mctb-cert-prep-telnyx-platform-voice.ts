@@ -35,7 +35,7 @@ import {
   resolvePlatformDemoOwnerWorkspaceId,
   syncPlatformDemoConsentRuntime,
 } from "@/lib/mctb/onboarding/platform-demo";
-import { verify571MctbConsentTexmlRoute } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
+import { verify571MctbConsentTexmlRoute, route571ToMctbConsentTexml } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { MCTB_CONSENT_FLOW_NAME } from "@/lib/mctb/consent-prompt/types";
 import { normalizeMctbConsentMode, MCTB_CONSENT_MODE_LABELS } from "@/lib/mctb/consent-mode";
@@ -195,7 +195,7 @@ async function verifyTexmlRouting(providerNumberId: string | null) {
     return live.ok;
   }
 
-  await preparePlatformDemoNumberForSmartRouting();
+  await route571ToMctbConsentTexml(providerNumberId);
   const live = await verify571MctbConsentTexmlRoute(providerNumberId);
   record("texml_571_route", live.ok ? "PASS" : "FAIL", live.detail);
   return live.ok;
