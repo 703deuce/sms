@@ -10,6 +10,10 @@ import {
   assignPhoneNumberToEventOnlyConnection,
   ensureMctb571EventOnlyCallControlApplication,
 } from "@/lib/mctb/consent-prompt/telnyx-event-only-route";
+import {
+  isPlatform571E164,
+  route571ToMctbConsentTexml,
+} from "@/lib/mctb/consent-prompt/telnyx-texml-route";
 
 function mergeSettings(
   current: unknown,
@@ -31,8 +35,9 @@ export type ProvisionMctbTelnyxSipIngressResult = {
 };
 
 /**
- * Idempotent: mark a Telnyx DID for MCTB Call Control ingress (Event Only app).
- * Routes voice to /api/telnyx/voice/mctb-event-only — no LiveKit SIP hop.
+ * Idempotent Telnyx voice ingress for MCTB.
+ * - Platform 571 (+15714073615): TeXML consent (instant answer for AT&T carrier forwards).
+ * - Other DIDs (866 test, customer): Call Control event-only → mctb-event-only.
  */
 export async function provisionMctbTelnyxSipIngress(input: {
   workspaceId: string;
@@ -49,6 +54,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
       id: true,
       e164: true,
       provider: true,
+      providerNumberId: true,
       settingsJson: true,
       status: true,
       workspaceId: true,
@@ -62,6 +68,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
         id: true,
         e164: true,
         provider: true,
+        providerNumberId: true,
         settingsJson: true,
         status: true,
         workspaceId: true,
@@ -96,6 +103,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
   }
 
   const role = input.mctbRole || "customer_mctb";
+  const useTexmlConsent = isPlatform571E164(phone.e164);
   const mctbSettings = telnyxLocalA2pSettings({
     role: role === "platform_demo" ? "platform_demo" : "customer_production",
   });
@@ -103,7 +111,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     ...mctbSettings,
     mctbSipIngress: true,
     mctbRole: role,
-    routingOwner: "mctb_call_control",
+    routingOwner: useTexmlConsent ? "mctb_texml" : "mctb_call_control",
   });
 
   await prisma.phoneNumber.update({
@@ -114,13 +122,6 @@ export async function provisionMctbTelnyxSipIngress(input: {
   const actions = ["mctb_sip_ingress_tagged"];
 
   try {
-    await ensureMctb571EventOnlyCallControlApplication();
-    const assigned = await assignPhoneNumberToEventOnlyConnection(phone.e164);
-    actions.push(
-      `call_control_event_only_assigned:${assigned.callControlAppId}`,
-      `telnyx_connection:${assigned.liveConnectionId}`,
-    );
-
     const settings =
       nextSettings && typeof nextSettings === "object"
         ? { ...nextSettings }
@@ -129,11 +130,36 @@ export async function provisionMctbTelnyxSipIngress(input: {
       settings.telephony && typeof settings.telephony === "object"
         ? { ...(settings.telephony as Record<string, unknown>) }
         : {};
-    telephony.routingMode = "call_control_event_only";
-    telephony.telnyxCallControlAppId = assigned.callControlAppId;
-    telephony.lastProvisionedAt = new Date().toISOString();
-    telephony.state = "active";
-    telephony.lastError = null;
+
+    if (useTexmlConsent) {
+      const providerNumberId = String(phone.providerNumberId || "").trim();
+      if (!providerNumberId) {
+        throw new Error("missing_telnyx_provider_number_id");
+      }
+      const routed = await route571ToMctbConsentTexml(providerNumberId);
+      actions.push(
+        `texml_consent_assigned:${routed.texmlAppId}`,
+        `texml_voice_url:${routed.voiceUrl}`,
+      );
+      telephony.routingMode = "texml_consent";
+      telephony.telnyxTexmlAppId = routed.texmlAppId;
+      telephony.lastProvisionedAt = new Date().toISOString();
+      telephony.state = "active";
+      telephony.lastError = null;
+    } else {
+      await ensureMctb571EventOnlyCallControlApplication();
+      const assigned = await assignPhoneNumberToEventOnlyConnection(phone.e164);
+      actions.push(
+        `call_control_event_only_assigned:${assigned.callControlAppId}`,
+        `telnyx_connection:${assigned.liveConnectionId}`,
+      );
+      telephony.routingMode = "call_control_event_only";
+      telephony.telnyxCallControlAppId = assigned.callControlAppId;
+      telephony.lastProvisionedAt = new Date().toISOString();
+      telephony.state = "active";
+      telephony.lastError = null;
+    }
+
     settings.telephony = telephony;
 
     await prisma.phoneNumber.update({
@@ -147,7 +173,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
       phoneNumberId: phone.id,
       e164: phone.e164,
       actions,
-      error: message || "call_control_provision_failed",
+      error: message || "voice_provision_failed",
     };
   }
 

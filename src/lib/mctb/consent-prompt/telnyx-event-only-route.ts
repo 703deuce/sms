@@ -6,8 +6,10 @@ import {
   assign571ToConnection,
   fetchTelnyxPhoneNumberByE164,
 } from "@/lib/mctb/consent-prompt/telnyx-call-control-route";
+import { TELNYX_THIRD_PARTY_CONTROL_API_FIELD } from "@/lib/mctb/consent-prompt/telnyx-3pcc";
+import { MCTB_866_DIRECT_CALL_CONTROL_APP_NAME } from "@/lib/mctb/sip-diagnostic/constants";
 
-export const MCTB_571_EVENT_ONLY_APP_NAME = "MCTB 571 Event Only";
+export const MCTB_571_EVENT_ONLY_APP_NAME = MCTB_866_DIRECT_CALL_CONTROL_APP_NAME;
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -17,57 +19,15 @@ export function mctb571EventOnlyWebhookUrl(): string {
   return getTelnyxWebhookUrls().mctbEventOnly;
 }
 
+/**
+ * Shared MCTB Event Only Call Control app (571 production + 866 test).
+ * Must keep 3PCC enabled for carrier forwarded (AT&T) no-answer legs.
+ */
 export async function ensureMctb571EventOnlyCallControlApplication(): Promise<string> {
-  const webhookUrl = mctb571EventOnlyWebhookUrl();
-  const preferred = process.env.MCTB_571_EVENT_ONLY_CALL_CONTROL_APP_ID?.trim() || "";
-
-  if (preferred) {
-    try {
-      await telnyxRequest(`/call_control_applications/${encodeURIComponent(preferred)}`, {
-        method: "PATCH",
-        body: {
-          application_name: MCTB_571_EVENT_ONLY_APP_NAME,
-          webhook_event_url: webhookUrl,
-          webhook_api_version: "2",
-          active: true,
-          first_command_timeout: false,
-        },
-      });
-      return preferred;
-    } catch {
-      // fall through
-    }
-  }
-
-  const listed = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>(
-    "/call_control_applications",
-    { query: { "page[size]": 50 } },
+  const { ensureMctb866DirectCallControlApp } = await import(
+    "@/lib/mctb/sip-diagnostic/fqdn-direct-setup"
   );
-  const rows = Array.isArray(listed.data) ? listed.data : [];
-  const existing = rows.find(
-    (row) =>
-      String(row.webhook_event_url || "").replace(/\/$/, "") === webhookUrl.replace(/\/$/, "") ||
-      String(row.application_name || "") === MCTB_571_EVENT_ONLY_APP_NAME,
-  );
-  if (existing?.id) return String(existing.id);
-
-  const created = await telnyxRequest<{ data?: Record<string, unknown> }>(
-    "/call_control_applications",
-    {
-      method: "POST",
-      body: {
-        application_name: MCTB_571_EVENT_ONLY_APP_NAME,
-        webhook_event_url: webhookUrl,
-        webhook_api_version: "2",
-        active: true,
-        first_command_timeout: false,
-      },
-    },
-  );
-  const app = asRecord(created.data) || asRecord(created) || {};
-  const id = String(app.id || "");
-  if (!id) throw new Error("Failed to create MCTB 571 Event Only Call Control application");
-  return id;
+  return ensureMctb866DirectCallControlApp();
 }
 
 export async function verify571EventOnlyRoute(): Promise<{

@@ -34,6 +34,23 @@ export function isMctbCallControlVoiceIngress(settingsJson: unknown): boolean {
   return false;
 }
 
+/** Platform 571 carrier-forward path: TeXML instant answer at Telnyx edge. */
+export function isMctbTexmlVoiceIngress(settingsJson: unknown): boolean {
+  if (!isPhoneMctbSipIngress(settingsJson)) return false;
+  const settings = readPhoneMctbSettings(settingsJson);
+  if (settings.routingOwner === "mctb_texml") return true;
+  const telephony = settings.telephony;
+  if (telephony && typeof telephony === "object" && !Array.isArray(telephony)) {
+    return (telephony as Record<string, unknown>).routingMode === "texml_consent";
+  }
+  return false;
+}
+
+/** MCTB-dedicated Telnyx voice routing (Call Control or TeXML) — do not steal to Transovo Voice. */
+export function isMctbDedicatedVoiceIngress(settingsJson: unknown): boolean {
+  return isMctbCallControlVoiceIngress(settingsJson) || isMctbTexmlVoiceIngress(settingsJson);
+}
+
 function envAllowlist(): Set<string> {
   const raw = process.env.MCTB_SIP_INGRESS_E164S?.trim();
   const values = new Set<string>();
