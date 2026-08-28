@@ -232,6 +232,25 @@ export async function gatherUsingAudio(input: {
   );
 }
 
+/** Gather audio with arbitrary base64 client_state (MCTB press-1, etc.). */
+export async function gatherUsingAudioRaw(input: {
+  callControlId: string;
+  audioUrl: string;
+  validDigits: string;
+  maxDigits?: number;
+  timeoutMs?: number;
+  clientStateBase64?: string;
+}) {
+  return telnyxAction(input.callControlId, "gather_using_audio", {
+    audio_url: input.audioUrl,
+    valid_digits: input.validDigits,
+    maximum_digits: input.maxDigits ?? 1,
+    minimum_digits: 1,
+    timeout_millis: input.timeoutMs ?? 10000,
+    ...(input.clientStateBase64 ? { client_state: input.clientStateBase64 } : {}),
+  });
+}
+
 export async function transferToPhone(
   callControlId: string,
   to: string,

@@ -165,22 +165,24 @@ export async function startFqdnDirectPress1Gather(input: {
     return { action: "playback_fail_closed_hangup" };
   }
 
-  const { gatherUsingAudio, gatherUsingSpeak } = await import("@/lib/smart-routing/telnyx-provider");
+  const { gatherUsingAudioRaw, gatherUsingSpeakRaw } = await import(
+    "@/lib/smart-routing/telnyx-provider"
+  );
+  const gatherOpts = {
+    callControlId,
+    validDigits: "1",
+    timeoutMs: 15000,
+  };
   if (playback.playUrl) {
-    await gatherUsingAudio({
-      callControlId,
+    await gatherUsingAudioRaw({
+      ...gatherOpts,
       audioUrl: playback.playUrl,
-      validDigits: "1",
-      timeoutMs: 15000,
-      clientState: { awaiting: "mctb_press_1" },
     });
   } else {
-    await gatherUsingSpeak({
-      callControlId,
+    await gatherUsingSpeakRaw({
+      ...gatherOpts,
       text: playback.sayText || DEFAULT_PRESS_1_SAY,
-      validDigits: "1",
-      timeoutMs: 15000,
-      clientState: { awaiting: "mctb_press_1" },
+      clientStateBase64: "",
     });
   }
 
