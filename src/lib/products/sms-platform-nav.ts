@@ -1,11 +1,10 @@
+import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BookOpen,
-  HelpCircle,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
   Puzzle,
-  Settings,
   Users,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
@@ -37,8 +36,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
     { label: "Contacts", href: "/contacts", icon: Users },
     { label: "Playbooks", href: "/playbooks", icon: BookOpen },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
-    { label: "Settings", href: "/settings", icon: Settings, sectionLabel: "Account" },
-    { label: "Help", href: "/settings", icon: HelpCircle },
+    ...buildAccountNavItems(),
   ];
 }
 

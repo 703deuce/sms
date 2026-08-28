@@ -18,7 +18,7 @@ import {
   productShellLabel,
   productShellShortLabel,
 } from "@/lib/products/product-shell";
-import { useProductShell } from "@/components/products/product-shell-tabs";
+import { useProductShell, ProductShellSwitcher } from "@/components/products/product-shell-tabs";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
@@ -437,7 +437,7 @@ export function Sidebar({
                 <span className="block truncate text-[13px] font-bold tracking-[0.02em] text-[#111827]">
                   {realtorMode ? "TRANSOVO" : "Transovo"}
                 </span>
-                {!realtorMode && sidebarProductLabel && !isLauncher ? (
+                {!realtorMode && sidebarProductLabel && !isLauncher && !dualProduct ? (
                   <span className="mt-0.5 block truncate text-[10px] leading-tight text-sidebar-muted">
                     {sidebarProductLabel}
                   </span>
@@ -475,6 +475,15 @@ export function Sidebar({
         ) : null}
       </div>
 
+      {dualProduct && !realtorMode && !isLauncher && currentProduct !== "numbers" ? (
+        <ProductShellSwitcher
+          hasMctb={hasMctb}
+          hasMassSms={hasMassSms}
+          collapsed={collapsed}
+          onNavigate={onClose}
+        />
+      ) : null}
+
       <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -507,6 +516,15 @@ export function Sidebar({
           const settingsOwned =
             item.label === "Settings" &&
             (pathname === "/settings" || pathname.startsWith("/settings/"));
+          const accountOwned =
+            item.label === "Account" &&
+            (pathname === "/settings/business" || pathname.startsWith("/settings/business/"));
+          const helpOwned =
+            item.label === "Help" &&
+            (pathname === "/getting-started" ||
+              pathname.startsWith("/getting-started/") ||
+              pathname.startsWith("/help") ||
+              pathname.startsWith("/contact"));
           const ownedOutcome =
             tryItOwned ||
             mctbConfigureOwned ||
@@ -517,6 +535,8 @@ export function Sidebar({
             growOwned ||
             smsNumbersOwned ||
             settingsOwned ||
+            accountOwned ||
+            helpOwned ||
             (currentProduct === "numbers" && item.href === "/personal"
               ? pathname === "/personal"
               : !item.matchExact &&

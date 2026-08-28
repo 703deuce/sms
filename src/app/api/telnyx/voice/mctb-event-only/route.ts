@@ -20,7 +20,16 @@ const FALLBACK_WORKSPACE_ID = resolveMctbPlatformOwnerWorkspaceId();
  */
 export async function POST(request: Request) {
   const verified = await readTelnyxWebhook(request);
-  if (!verified.ok) return verified.response;
+  if (!verified.ok) {
+    console.error(
+      JSON.stringify({
+        source: "mctb-event-only",
+        event: "webhook_auth_failed",
+        status: verified.response.status,
+      }),
+    );
+    return verified.response;
+  }
 
   const body = verified.payload as TelnyxPayload;
   const eventType = body.data?.event_type || "unknown";
@@ -33,6 +42,21 @@ export async function POST(request: Request) {
       eventPayload,
       fallbackWorkspaceId: FALLBACK_WORKSPACE_ID,
     });
+    if (eventType.startsWith("call.")) {
+      console.info(
+        JSON.stringify({
+          source: "mctb-event-only",
+          event: "call_webhook",
+          eventType,
+          providerEventId,
+          callControlId: eventPayload.call_control_id ?? null,
+          to: eventPayload.to ?? null,
+          from: eventPayload.from ?? null,
+          handled: result.handled,
+          action: result.action ?? null,
+        }),
+      );
+    }
     return NextResponse.json({
       ok: true,
       source: "mctb-event-only",

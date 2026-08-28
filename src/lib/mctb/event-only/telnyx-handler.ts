@@ -92,6 +92,36 @@ function captureMctbEventAsync(
   });
 }
 
+async function answerInboundMctbLeg(
+  callControlId: string,
+  eventPayload: TelnyxPayload,
+): Promise<void> {
+  logMctbEventOnly("telnyx_call_initiated", {
+    callControlId,
+    from: eventPayload.from,
+    to: eventPayload.to,
+    connectionId: eventPayload.connection_id ?? null,
+    callControlVoice: true,
+    livekitBypass: true,
+  });
+
+  const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
+  const answerResult = await answerCall(callControlId);
+  if ((answerResult as { mock?: boolean }).mock) {
+    logMctbEventOnly("fqdn_direct_answer_mock_skipped", {
+      callControlId,
+      reason: "telnyx_call_control_not_configured",
+      livekitRoomCreated: false,
+    });
+    throw new Error("Telnyx Call Control answer skipped (missing TELNYX_API_KEY)");
+  }
+
+  logMctbEventOnly("fqdn_direct_answer_sent", {
+    callControlId,
+    livekitRoomCreated: false,
+  });
+}
+
 /**
  * Telnyx EVENT_ONLY MCTB handler.
  * FQDN direct path: answer immediately on call.initiated (before slow DB work).
@@ -103,46 +133,36 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
   const { eventType, eventPayload, fallbackWorkspaceId } = input;
   const callControlId = String(eventPayload.call_control_id || "");
+  const inbound = isInbound(eventPayload);
+
+  // Carrier no-answer forwards (AT&T Diversion) expire in ~2s. This webhook only
+  // receives the shared MCTB Event Only Call Control app — answer before DB ingress.
+  if (eventType === "call.initiated" && callControlId && inbound) {
+    try {
+      await answerInboundMctbLeg(callControlId, eventPayload);
+    } catch (err) {
+      logMctbEventOnly("fqdn_direct_answer_failed", {
+        callControlId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+
+    if (!processedCalls.has(callControlId)) {
+      processedCalls.set(callControlId, "fqdn_press1");
+      setTimeout(() => processedCalls.delete(callControlId), 10 * 60 * 1000);
+    }
+  }
+
   const isIngress = await resolvesMctbEventOnlyIngress(eventPayload);
   const callControlVoice = isIngress;
 
-  if (!callControlId || !isIngress || !isInbound(eventPayload)) {
+  if (!callControlId || !isIngress || !inbound) {
     return { handled: false };
   }
 
   switch (eventType) {
     case "call.initiated": {
-      logMctbEventOnly("telnyx_call_initiated", {
-        callControlId,
-        from: eventPayload.from,
-        to: eventPayload.to,
-        connectionId: eventPayload.connection_id ?? null,
-        callControlVoice,
-        livekitBypass: callControlVoice,
-      });
-
-      if (callControlVoice) {
-        try {
-          const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
-          await answerCall(callControlId);
-          logMctbEventOnly("fqdn_direct_answer_sent", {
-            callControlId,
-            livekitRoomCreated: false,
-          });
-        } catch (err) {
-          logMctbEventOnly("fqdn_direct_answer_failed", {
-            callControlId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          throw err;
-        }
-      }
-
-      if (!processedCalls.has(callControlId)) {
-        processedCalls.set(callControlId, callControlVoice ? "fqdn_press1" : "captured");
-        setTimeout(() => processedCalls.delete(callControlId), 10 * 60 * 1000);
-      }
-
       return {
         handled: true,
         action: callControlVoice ? "fqdn_direct_answer" : "event_only_capture",

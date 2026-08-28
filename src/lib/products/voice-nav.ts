@@ -1,3 +1,4 @@
+import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   Activity,
   BarChart3,
@@ -8,7 +9,6 @@ import {
   MessageSquare,
   PhoneForwarded,
   PhoneMissed,
-  Settings,
   SlidersHorizontal,
   Sparkles,
   Users,
@@ -105,11 +105,6 @@ function buildMctbNav(options: VoiceNavOptions): NavItem[] {
     { label: "Consent Log", href: "/voice/consent-log", icon: ClipboardCheck },
     { label: "Text Back Setup", href: "/voice/setup", icon: SlidersHorizontal },
     { label: "Schedule", href: "/voice/schedule", icon: Clock },
-    {
-      label: "Business Profile",
-      href: "/settings/business",
-      icon: Settings,
-    },
   ];
   if (options.showTryIt) {
     items.push({ label: "Try It", href: "/voice/try-it", icon: Sparkles });
@@ -157,6 +152,8 @@ export function buildMctbShellNav(options: VoiceNavOptions = {}): NavItem[] {
       { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     );
   }
+
+  items.push(...buildAccountNavItems());
 
   return items;
 }

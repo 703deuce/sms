@@ -3,7 +3,7 @@
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
-import { ProductShellTabs, useProductShell } from "@/components/products/product-shell-tabs";
+import { useProductShell } from "@/components/products/product-shell-tabs";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { formatPhone } from "@/lib/utils";
 import {
@@ -215,14 +215,6 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        {currentProduct && !isLauncher ? (
-          <ProductShellTabs
-            hasMctb={hasMctb}
-            hasMassSms={hasSms}
-            className="hidden shrink-0 lg:flex"
-          />
-        ) : null}
-
         {title && (currentProduct === "sms" || currentProduct === "voice") ? (
           <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
             {title}
@@ -414,11 +406,6 @@ export function Header({
           </div>
         </div>
       </div>
-      {currentProduct && !isLauncher && hasMctb && hasSms ? (
-        <div className="border-t border-border px-4 py-2 lg:hidden">
-          <ProductShellTabs hasMctb={hasMctb} hasMassSms={hasSms} className="w-full justify-center" />
-        </div>
-      ) : null}
     </header>
   );
 }

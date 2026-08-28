@@ -5,23 +5,22 @@ import {
   mctbShellHome,
   massSmsShellHome,
   productShellLabel,
-  productShellShortLabel,
   PRODUCT_SWITCHER_ONBOARDING_KEY,
   readStoredProductShell,
   resolveProductShellFromPath,
-  shellHomePath,
   writeStoredProductShell,
   type ProductShell,
 } from "@/lib/products/product-shell";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, Megaphone, PhoneMissed, X } from "lucide-react";
-import Link from "next/link";
+import { Check, ChevronDown, LayoutGrid, Megaphone, PhoneMissed, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   hasMctb: boolean;
   hasMassSms: boolean;
+  collapsed?: boolean;
+  onNavigate?: () => void;
   className?: string;
 };
 
@@ -54,46 +53,36 @@ export function useProductShell(hasMctb: boolean, hasMassSms: boolean) {
   return { shell: fromPath ?? shell, setShell };
 }
 
-function ShellTab({
-  active,
-  shell,
-  icon: Icon,
-  label,
-  shortLabel,
-  onSelect,
-}: {
-  active: boolean;
+const SHELL_OPTIONS: {
   shell: ProductShell;
   icon: typeof Megaphone;
-  label: string;
-  shortLabel: string;
-  onSelect: (shell: ProductShell) => void;
-}) {
-  const home = shellHomePath(shell);
-  return (
-    <Link
-      href={home}
-      onClick={() => onSelect(shell)}
-      className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition",
-        active
-          ? "bg-primary text-primary-foreground shadow-sm"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-      aria-current={active ? "page" : undefined}
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className="hidden md:inline">{label}</span>
-      <span className="md:hidden">{shortLabel}</span>
-    </Link>
-  );
-}
+  description: string;
+}[] = [
+  {
+    shell: "mass_sms",
+    icon: Megaphone,
+    description: "Campaigns, inbox, contacts, and playbooks",
+  },
+  {
+    shell: "mctb",
+    icon: PhoneMissed,
+    description: "Missed calls, voicemail, consent, and text-back setup",
+  },
+];
 
-export function ProductShellTabs({ hasMctb, hasMassSms, className }: Props) {
+export function ProductShellSwitcher({
+  hasMctb,
+  hasMassSms,
+  collapsed = false,
+  onNavigate,
+  className,
+}: Props) {
   const router = useRouter();
   const { shell, setShell } = useProductShell(hasMctb, hasMassSms);
   const showSwitcher = hasMctb && hasMassSms;
+  const [open, setOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showSwitcher) return;
@@ -104,6 +93,16 @@ export function ProductShellTabs({ hasMctb, hasMassSms, className }: Props) {
       // ignore
     }
   }, [showSwitcher]);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
 
   if (!showSwitcher) return null;
 
@@ -117,44 +116,117 @@ export function ProductShellTabs({ hasMctb, hasMassSms, className }: Props) {
   }
 
   function selectShell(next: ProductShell) {
+    if (next === shell) {
+      setOpen(false);
+      return;
+    }
     setShell(next);
+    setOpen(false);
+    onNavigate?.();
     const target = next === "mass_sms" ? massSmsShellHome() : mctbShellHome();
     router.push(target);
   }
 
   return (
-    <div className={cn("relative flex items-center gap-2", className)}>
-      <div className="hidden items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground xl:flex">
-        <LayoutGrid className="h-3.5 w-3.5" />
-        Switch product
-      </div>
-      <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
-        <ShellTab
-          active={shell === "mass_sms"}
-          shell="mass_sms"
-          icon={Megaphone}
-          label={productShellLabel("mass_sms")}
-          shortLabel={productShellShortLabel("mass_sms")}
-          onSelect={selectShell}
-        />
-        <ShellTab
-          active={shell === "mctb"}
-          shell="mctb"
-          icon={PhoneMissed}
-          label={productShellLabel("mctb")}
-          shortLabel={productShellShortLabel("mctb")}
-          onSelect={selectShell}
-        />
-      </div>
+    <div ref={rootRef} className={cn("relative shrink-0 px-2 pb-2", className)}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-[10px] border border-[#e6e8ef] bg-[#f8f9fc] text-left transition hover:border-primary/30 hover:bg-[#f3f4ff]",
+          collapsed ? "justify-center px-2 py-2" : "px-2.5 py-2",
+        )}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        title={collapsed ? "Switch product" : undefined}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <LayoutGrid className="h-4 w-4" />
+        </span>
+        {!collapsed ? (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-muted">
+                Switch product
+              </span>
+              <span className="mt-0.5 block truncate text-[12px] font-semibold text-[#111827]">
+                {productShellLabel(shell)}
+              </span>
+            </span>
+            <ChevronDown
+              className={cn("h-4 w-4 shrink-0 text-sidebar-muted transition", open && "rotate-180")}
+            />
+          </>
+        ) : null}
+      </button>
 
-      {showOnboarding ? (
-        <div className="absolute left-0 top-[calc(100%+10px)] z-50 w-[min(320px,calc(100vw-2rem))] rounded-xl border border-primary/20 bg-card p-4 shadow-lg">
+      {open ? (
+        <div
+          role="listbox"
+          aria-label="Switch product"
+          className={cn(
+            "absolute z-50 overflow-hidden rounded-xl border border-border bg-card shadow-lg",
+            collapsed ? "left-full top-0 ml-2 w-[min(280px,calc(100vw-4rem))]" : "left-2 right-2 top-[calc(100%+6px)]",
+          )}
+        >
+          <div className="border-b border-border px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Choose platform
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Currently active:{" "}
+              <span className="font-semibold text-foreground">{productShellLabel(shell)}</span>
+            </p>
+          </div>
+          <div className="p-1.5">
+            {SHELL_OPTIONS.map(({ shell: optionShell, icon: Icon, description }) => {
+              const active = shell === optionShell;
+              return (
+                <button
+                  key={optionShell}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => selectShell(optionShell)}
+                  className={cn(
+                    "flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition",
+                    active ? "bg-primary/10" : "hover:bg-muted",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+                      active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        {productShellLabel(optionShell)}
+                      </span>
+                      {active ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      {description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {showOnboarding && !collapsed ? (
+        <div className="absolute left-2 right-2 top-[calc(100%+10px)] z-50 rounded-xl border border-primary/20 bg-card p-4 shadow-lg">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[13px] font-semibold text-foreground">You have 2 platforms</p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                Switch anytime between Mass SMS campaigns and your Missed Call Engine. Each tab
-                shows that product&apos;s own menu.
+                Click Switch product anytime to move between Mass SMS campaigns and your Missed Call
+                Engine. Each platform shows its own menu.
               </p>
             </div>
             <button
@@ -176,6 +248,19 @@ export function ProductShellTabs({ hasMctb, hasMassSms, className }: Props) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** @deprecated Use ProductShellSwitcher in the sidebar instead. */
+export function ProductShellTabs(props: Props) {
+  return (
+    <ProductShellSwitcher
+      hasMctb={props.hasMctb}
+      hasMassSms={props.hasMassSms}
+      collapsed={props.collapsed}
+      onNavigate={props.onNavigate}
+      className={props.className}
+    />
   );
 }
 

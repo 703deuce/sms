@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
 import { isTelnyxVoiceConfigured } from "@/lib/voice/telnyx/assistant-sync";
 
 export type SmartRoutingClientState = {
@@ -78,7 +79,8 @@ async function telnyxAction(
   body: Record<string, unknown>,
   sessionId?: string,
 ) {
-  if (!callControlId || callControlId.startsWith("mock_") || !isTelnyxVoiceConfigured()) {
+  // Inbound Call Control (answer/hangup/speak/gather) only needs the API key — not TELNYX_CONNECTION_ID.
+  if (!callControlId || callControlId.startsWith("mock_") || !getTelnyxApiKey()) {
     return { mock: true };
   }
   const res = await telnyxRequest(`/calls/${callControlId}/actions/${action}`, {
