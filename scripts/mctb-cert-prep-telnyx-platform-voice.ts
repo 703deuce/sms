@@ -31,7 +31,6 @@ import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { getOnboardingForwardTargetE164 } from "@/lib/mctb/onboarding/forward-target";
 import { formatDemoPhoneDisplay } from "@/lib/mctb/onboarding/demo";
 import {
-  preparePlatformDemoNumberForSmartRouting,
   resolvePlatformDemoOwnerWorkspaceId,
   syncPlatformDemoConsentRuntime,
 } from "@/lib/mctb/onboarding/platform-demo";
