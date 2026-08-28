@@ -405,12 +405,13 @@ export function MctbSetupView() {
             sends. Use this to run Try It, Test My Setup, and paid-customer flows in the browser.
           </p>
           <p className="text-[13px] text-muted-foreground">
-            Production path (frozen SIP/LiveKit): forward your business line to{" "}
+            Production path: forward your business line to{" "}
             <strong>
               {productionForwardE164 ? fmtPhone(productionForwardE164) : "your assigned MCTB number"}
             </strong>
-            , then call your business line from another phone. Try It uses the same SIP handler —
-            you call the shared demo number directly with no forwarding.
+            , then call your business line from another phone. Calls route through Call Control
+            (mctb-event-only) — same path as the 866 forward test. Try It uses the shared demo
+            number with a direct dial (no forwarding).
           </p>
           <label className="block space-y-1.5">
             <span className="text-[12px] font-semibold text-[#374151]">
@@ -548,7 +549,8 @@ export function MctbSetupView() {
             <p className="text-[13px] text-muted-foreground">
               For production, forward your carrier business line to the MCTB number you chose above.
               That same number sends recovery texts (once A2P or toll-free verification is approved)
-              and runs the frozen SIP handler — Press 1 or existing consent, depending on your setup.
+              and runs Call Control voice (mctb-event-only) — Press 1 or existing consent,
+              depending on your setup.
             </p>
             {productionForwardE164 ? (
               <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3">

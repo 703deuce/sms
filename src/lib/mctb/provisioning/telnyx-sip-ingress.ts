@@ -10,6 +10,11 @@ import {
   assignPhoneNumberToEventOnlyConnection,
 } from "@/lib/mctb/consent-prompt/telnyx-event-only-route";
 import { prepareFqdnForDirectMctb } from "@/lib/mctb/sip-diagnostic/fqdn-direct-setup";
+import {
+  MCTB_CANONICAL_ROUTING_MODE,
+  MCTB_CANONICAL_ROUTING_OWNER,
+  scrubLegacyMctbTelephonyFields,
+} from "@/lib/mctb/voice-ingress-guard";
 
 function mergeSettings(
   current: unknown,
@@ -106,7 +111,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     ...mctbSettings,
     mctbSipIngress: true,
     mctbRole: role,
-    routingOwner: "mctb_call_control",
+    routingOwner: MCTB_CANONICAL_ROUTING_OWNER,
   });
 
   await prisma.phoneNumber.update({
@@ -139,11 +144,12 @@ export async function provisionMctbTelnyxSipIngress(input: {
       nextSettings && typeof nextSettings === "object"
         ? { ...nextSettings }
         : ({} as Record<string, unknown>);
-    const telephony =
+    const telephony = scrubLegacyMctbTelephonyFields(
       settings.telephony && typeof settings.telephony === "object"
         ? { ...(settings.telephony as Record<string, unknown>) }
-        : {};
-    telephony.routingMode = "call_control_event_only";
+        : {},
+    );
+    telephony.routingMode = MCTB_CANONICAL_ROUTING_MODE;
     telephony.telnyxCallControlAppId = assigned.callControlAppId;
     telephony.telnyxReferenceFqdnConnectionId = prepared.referenceFqdnConnectionId;
     telephony.lastProvisionedAt = new Date().toISOString();

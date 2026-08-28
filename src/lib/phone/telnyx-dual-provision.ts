@@ -434,6 +434,14 @@ export async function assignVoiceConnection(
   providerNumberId: string,
   connectionId: string,
 ) {
+  const { assertMctbVoiceRouteNotGenericTelnyx } = await import(
+    "@/lib/mctb/voice-ingress-guard"
+  );
+  await assertMctbVoiceRouteNotGenericTelnyx({
+    providerNumberId,
+    operation: "assignVoiceConnection",
+  });
+
   // Base PATCH sets connection_id and does not touch messaging profile.
   await telnyxRequest(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, {
     method: "PATCH",
@@ -471,8 +479,8 @@ export async function enableVoiceOnWorkspaceNumber(input: {
   const before = await fetchTelnyxNumber(row.providerNumberId);
   if (!before) throw new Error("Could not load number from Telnyx");
 
-  const { isMctbDedicatedVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
-  if (isMctbDedicatedVoiceIngress(row.settingsJson)) {
+  const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
+  if (isMctbVoiceRouteLocked(row.settingsJson)) {
     return verifyAndPersistNumber({
       workspaceId: input.workspaceId,
       phoneNumberId: input.phoneNumberId,
@@ -680,8 +688,8 @@ export async function repairNumberConfiguration(input: {
     (await fetchMessagingAssignment(row.providerNumberId));
 
   let connectionId: string | null = null;
-  const { isMctbDedicatedVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
-  if (before.capabilities.voice !== false && !isMctbDedicatedVoiceIngress(row.settingsJson)) {
+  const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
+  if (before.capabilities.voice !== false && !isMctbVoiceRouteLocked(row.settingsJson)) {
     try {
       const { workspaceNumberUsesTexmlDirect } = await import(
         "@/lib/voice/telnyx/texml-direct-route"
@@ -825,23 +833,22 @@ export async function diagnoseWorkspaceNumber(input: {
   }
 
   const voiceOk = await (async () => {
-    if (
-      telnyx?.connectionId &&
-      expectedVoice &&
-      telnyx.connectionId === expectedVoice
-    ) {
-      return true;
-    }
-    if (telnyx?.connectionId && row.providerNumberId) {
-      const { isPlatform571E164, verify571MctbConsentTexmlRoute } = await import(
-        "@/lib/mctb/consent-prompt/telnyx-texml-route"
+    const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
+    if (!isMctbVoiceRouteLocked(row.settingsJson) || !row.providerNumberId) {
+      return Boolean(
+        telnyx?.connectionId && expectedVoice && telnyx.connectionId === expectedVoice,
       );
-      if (isPlatform571E164(row.e164)) {
-        const texml = await verify571MctbConsentTexmlRoute(row.providerNumberId);
-        return texml.ok;
-      }
     }
-    return false;
+    const { verify571EventOnlyRoute } = await import(
+      "@/lib/mctb/consent-prompt/telnyx-event-only-route"
+    );
+    const verify = await verify571EventOnlyRoute();
+    if (row.e164 && verify.liveConnectionId === telnyx?.connectionId) return verify.ok;
+    const { verifyFqdnDirectMctbRoute } = await import(
+      "@/lib/mctb/sip-diagnostic/fqdn-direct-setup"
+    );
+    const direct = await verifyFqdnDirectMctbRoute();
+    return direct.ok && direct.callControlAppId === telnyx?.connectionId;
   })();
   const messagingOk = Boolean(
     messagingProfileId &&
@@ -856,14 +863,16 @@ export async function diagnoseWorkspaceNumber(input: {
       message: "Number has no Voice Connection / Call Control Application",
     });
   } else if (telnyx && expectedVoice && telnyx.connectionId !== expectedVoice) {
-    const { isPlatform571E164, verify571MctbConsentTexmlRoute } = await import(
-      "@/lib/mctb/consent-prompt/telnyx-texml-route"
-    );
-    const onMctbTexml =
-      isPlatform571E164(row.e164) &&
-      row.providerNumberId &&
-      (await verify571MctbConsentTexmlRoute(row.providerNumberId)).ok;
-    if (!onMctbTexml) {
+    const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
+    let onMctbCallControl = false;
+    if (isMctbVoiceRouteLocked(row.settingsJson) && row.providerNumberId) {
+      const { verify571EventOnlyRoute } = await import(
+        "@/lib/mctb/consent-prompt/telnyx-event-only-route"
+      );
+      const verify = await verify571EventOnlyRoute();
+      onMctbCallControl = verify.ok && verify.liveConnectionId === telnyx.connectionId;
+    }
+    if (!onMctbCallControl) {
       issues.push({
         code: "voice_wrong_connection",
         severity: "warn",

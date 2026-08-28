@@ -66,7 +66,7 @@ async function pauseLegacyPlatformDemoSmartRouting(
 }
 
 /**
- * Wire the shared Try It platform demo DID to the frozen MCTB SIP/LiveKit handler.
+ * Wire the shared Try It platform demo DID to MCTB Call Control (mctb-event-only).
  * Same voice engine as production — only the entry point differs (direct dial vs forward).
  */
 export async function ensurePlatformDemoSipIngress(): Promise<{
@@ -136,7 +136,7 @@ export async function preparePlatformDemoNumberForSmartRouting(): Promise<{
 }
 
 /**
- * Ensure Try It uses the same frozen SIP/LiveKit MCTB handler as production.
+ * Ensure Try It uses the same MCTB Call Control handler as production (mctb-event-only).
  * Consent mode (Press 1 vs existing) is resolved per-workspace at SIP session time.
  */
 export async function syncPlatformDemoConsentRuntime(mode: MctbConsentMode): Promise<{

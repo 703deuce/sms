@@ -82,8 +82,8 @@ export async function activateJohnOnPhoneNumber(input: {
     );
     await twilioNumberProvider.configureVoiceWebhook(phoneRow.twilioSid, input.workspaceId);
   } else if (!input.skipGenericVoiceProvision) {
-    const { isMctbDedicatedVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
-    if (!isMctbDedicatedVoiceIngress(phoneRow?.settingsJson)) {
+    const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
+    if (!isMctbVoiceRouteLocked(phoneRow?.settingsJson)) {
       await enableVoiceOnWorkspaceNumber({
         workspaceId: input.workspaceId,
         phoneNumberId: input.phoneNumberId,
