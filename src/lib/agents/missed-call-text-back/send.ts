@@ -76,6 +76,17 @@ export async function executeMissedCallTextSend(input: {
     }
   }
 
+  const forwardedFromE164 =
+    typeof eventMeta.forwardedFromE164 === "string"
+      ? eventMeta.forwardedFromE164
+      : typeof eventMeta.forwardedFrom === "string"
+        ? eventMeta.forwardedFrom
+        : null;
+  const transovoNumberE164 =
+    typeof eventMeta.transovoNumberE164 === "string"
+      ? eventMeta.transovoNumberE164
+      : event.businessE164;
+
   const eligibility = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: event.callerE164,
@@ -84,6 +95,8 @@ export async function executeMissedCallTextSend(input: {
     idempotencyKey: event.idempotencyKey,
     demoMode,
     eventOnly: isEventOnly,
+    forwardedFromE164,
+    transovoNumberE164,
     call: {
       direction: "inbound",
       disposition: event.disposition,

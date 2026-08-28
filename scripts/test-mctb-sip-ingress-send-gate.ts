@@ -29,4 +29,16 @@ assert.doesNotMatch(
   "must not require attestation for SIP_INGRESS / isEventOnly broadly",
 );
 
+assert.match(
+  source,
+  /forwardedFromE164/,
+  "send worker must pass forwardedFromE164 on eligibility recheck",
+);
+
+assert.match(
+  source,
+  /transovoNumberE164/,
+  "send worker must pass transovoNumberE164 on eligibility recheck",
+);
+
 console.log("test-mctb-sip-ingress-send-gate: ok");
