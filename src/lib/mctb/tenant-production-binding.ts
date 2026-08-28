@@ -131,6 +131,16 @@ export async function ensureMctbTenantProductionBinding(input: {
       where: { id: input.workspaceId },
       data: { activeFromNumberId: demo.phoneNumberId },
     });
+
+    const { provisionMctbTelnyxSipIngress } = await import(
+      "@/lib/mctb/provisioning/telnyx-sip-ingress"
+    );
+    await provisionMctbTelnyxSipIngress({
+      workspaceId: input.workspaceId,
+      phoneNumberId: demo.phoneNumberId,
+      mctbRole: "platform_demo",
+      delaySeconds: 0,
+    }).catch(() => undefined);
   }
 
   let forwardingConnected = Boolean(state.forwardingConnectedAt);

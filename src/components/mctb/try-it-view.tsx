@@ -100,8 +100,9 @@ export function MctbTryItView() {
           <h1 className="text-2xl font-semibold tracking-tight">Try Missed Call Text Back</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Same frozen SIP/LiveKit flow as production — you call the shared demo number directly
-          instead of forwarding your business line. No carrier setup required before A2P approval.
+          Same Call Control voice path as production (mctb-event-only) — you call the shared demo
+          number directly instead of forwarding your business line. No carrier setup required before
+          A2P approval.
         </p>
       </div>
 

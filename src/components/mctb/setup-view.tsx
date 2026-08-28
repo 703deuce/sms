@@ -331,7 +331,7 @@ export function MctbSetupView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
       if (json.data?.sipProvision && !json.data.sipProvision.ok) {
-        throw new Error(json.data.sipProvision.error || "Voice/SIP provisioning failed");
+        throw new Error(json.data.sipProvision.error || "Call Control voice provisioning failed");
       }
       const stillPaused = Boolean(json.data?.schedule?.paused);
       setSaved(true);
@@ -702,7 +702,7 @@ export function MctbSetupView() {
                 onChange={(e) => setDirectDialForwardE164(e.target.value)}
               />
               <p className="text-[11px] text-muted-foreground">
-                When set, SIP ingress can forward callers directly without the consent prompt.
+                When set, inbound calls can be forwarded directly without the consent prompt.
               </p>
             </label>
           </Card>

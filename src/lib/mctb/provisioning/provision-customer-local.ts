@@ -24,7 +24,7 @@ function formatPhoneDisplay(e164: string): string {
 }
 
 /**
- * Self-serve: purchase a Telnyx local DID and wire it into the proven MCTB SIP/LiveKit path.
+ * Self-serve: purchase a Telnyx local DID and wire it into MCTB Call Control (mctb-event-only).
  * Used for paid customers and optional trial local-number path (not platform 571 demo).
  */
 export async function provisionMctbCustomerTelnyxLocalNumber(
