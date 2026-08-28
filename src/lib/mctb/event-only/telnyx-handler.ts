@@ -12,7 +12,7 @@ import {
 
 type TelnyxPayload = Record<string, unknown>;
 
-const processedCalls = new Map<string, "captured" | "hangup_only">();
+const processedCalls = new Map<string, "captured" | "fqdn_press1" | "hangup_only">();
 
 function normalizeDid(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -110,11 +110,9 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       }
 
       if (!processedCalls.has(callControlId)) {
-        processedCalls.set(callControlId, "captured");
+        processedCalls.set(callControlId, fqdnDirect ? "fqdn_press1" : "captured");
         setTimeout(() => processedCalls.delete(callControlId), 10 * 60 * 1000);
-        if (fqdnDirect) {
-          captureMctbEventAsync(eventPayload, fallbackWorkspaceId, "EVENT_CAPTURED");
-        } else {
+        if (!fqdnDirect) {
           const normalized = normalizeTelnyxMctbInboundEvent(eventPayload, {
             voiceCaptureStatus: "EVENT_CAPTURED",
           });
@@ -182,6 +180,11 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
         fqdnDirect,
         livekitRoomCreated: false,
       });
+
+      if (fqdnDirect) {
+        processedCalls.delete(callControlId);
+        return { handled: true, action: "fqdn_direct_hangup" };
+      }
 
       const prior = processedCalls.get(callControlId);
       if (prior === "captured") {

@@ -239,7 +239,7 @@ export async function handleFqdnDirectGatherEnded(input: {
 
   const consentMetadata = {
     path: "fqdn_direct_event_only",
-    captureMode: "EVENT_ONLY",
+    captureMode: "SIP_INGRESS",
     consentMode: "press_1",
     providerCallId: callControlId,
     transovoNumberE164: ctx.transovoE164,
