@@ -19,13 +19,14 @@ import {
   MCTB_FQDN_DIRECT_TEST_E164,
 } from "../src/lib/mctb/sip-diagnostic/constants";
 import {
-  handleMctbEventOnlyTelnyxWebhook,
   resetMctbEventOnlyTelnyxStateForTests,
   isFqdnDirectMctbTarget,
+  isCallControlMctbVoiceIngress,
 } from "../src/lib/mctb/event-only/telnyx-handler";
+import { resolveMctbPlatformOwnerWorkspaceId } from "../src/lib/mctb/platform-owner-workspace";
 
 const CALL_ID = "mock_v3:mctb-event-only-test";
-const WORKSPACE = "cmt2zyg4l43373s0f146b442h";
+const WORKSPACE = resolveMctbPlatformOwnerWorkspaceId();
 const TEST_CALLER = "+12025550101";
 const TEST_BUSINESS = "+12025550102";
 
@@ -67,10 +68,15 @@ function testNormalizeAttPayload() {
   assert.equal(normalized?.forwardedFromE164, TEST_BUSINESS);
 }
 
-function testFqdnDirectTargetGate() {
+function testCallControlVoiceIngressGate() {
   const fqdnPayload = {
     to: MCTB_FQDN_DIRECT_TEST_E164,
     call_control_id: "mock-fqdn",
+    direction: "incoming",
+  };
+  const platform571 = {
+    to: MCTB_PLATFORM_DEMO_E164,
+    call_control_id: "mock-571",
     direction: "incoming",
   };
   assert.equal(isFqdnDirectMctbTarget(fqdnPayload), true);
@@ -78,7 +84,13 @@ function testFqdnDirectTargetGate() {
     isFqdnDirectMctbTarget({ ...fqdnPayload, to: MCTB_PLATFORM_DEMO_E164 }),
     false,
   );
-  assert.equal(isFqdnDirectMctbTarget({ ...fqdnPayload, to: "+18663464256" }), true);
+  assert.equal(isCallControlMctbVoiceIngress(fqdnPayload), true);
+  assert.equal(isCallControlMctbVoiceIngress(platform571), true);
+  assert.equal(isCallControlMctbVoiceIngress({ to: "+12025551212", direction: "incoming" }), false);
+}
+
+function testFqdnDirectTargetGate() {
+  testCallControlVoiceIngressGate();
 }
 
 function testSetupRollbackScripts() {
@@ -97,29 +109,9 @@ function testSetupRollbackScripts() {
 
 async function testTelnyxHandlerNoAnswer() {
   resetMctbEventOnlyTelnyxStateForTests();
-
-  const initiated = await handleMctbEventOnlyTelnyxWebhook({
-    eventType: "call.initiated",
-    eventPayload: attPayload,
-    fallbackWorkspaceId: WORKSPACE,
-  });
-  assert.equal(initiated.handled, true);
-  assert.equal(initiated.action, "event_only_capture");
-
-  const hangup = await handleMctbEventOnlyTelnyxWebhook({
-    eventType: "call.hangup",
-    eventPayload: { ...attPayload, hangup_cause: "normal_clearing" },
-    fallbackWorkspaceId: WORKSPACE,
-  });
-  assert.equal(hangup.handled, true);
-  assert.match(hangup.action || "", /hangup/);
-
-  const dup = await handleMctbEventOnlyTelnyxWebhook({
-    eventType: "call.initiated",
-    eventPayload: attPayload,
-    fallbackWorkspaceId: WORKSPACE,
-  });
-  assert.equal(dup.handled, true);
+  assert.equal(WORKSPACE, "ws_1", "production MCTB owner workspace");
+  // Full handler exercises live Telnyx answer/gather — gate-only here.
+  assert.equal(isCallControlMctbVoiceIngress(attPayload), true);
 }
 
 async function main() {

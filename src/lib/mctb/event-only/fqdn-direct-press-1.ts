@@ -9,9 +9,9 @@ import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/
 import { businessNumberForConsentStorage } from "@/lib/mctb/consent-identity";
 import { parseTelnyxForwardedFrom, hasDiversionHeaderInPayload } from "@/lib/voice/telnyx/forwarded-from";
 import { resolveSmsConsentPlayback } from "@/lib/smart-routing/prompt-playback";
+import { resolveMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
 
-const FALLBACK_WORKSPACE_ID =
-  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
+const FALLBACK_WORKSPACE_ID = resolveMctbPlatformOwnerWorkspaceId();
 
 const DEFAULT_PRESS_1_SAY =
   "Sorry we missed your call. To receive a text message from us, press 1 now.";
@@ -240,7 +240,7 @@ export async function handleFqdnDirectGatherEnded(input: {
   const consentMetadata = {
     path: "fqdn_direct_event_only",
     captureMode: "SIP_INGRESS",
-    consentMode: "press_1",
+    consentMode: ctx.consentMode,
     providerCallId: callControlId,
     transovoNumberE164: ctx.transovoE164,
     forwardedFrom: ctx.forwardedFrom,
@@ -321,6 +321,17 @@ export async function handleFqdnDirectSpeakEnded(input: {
     return { action: "confirmation_hangup" };
   }
   return { action: "hangup_duplicate_ignored" };
+}
+
+export function wasPress1ConsentCompleted(callControlId: string): boolean {
+  return phaseByCall.get(callControlId)?.has("confirmed") ?? false;
+}
+
+export async function resolveCallControlVoiceContext(
+  payload: Record<string, unknown>,
+  fallbackWorkspaceId: string,
+): Promise<CallContext | null> {
+  return resolveCallContext(payload, fallbackWorkspaceId);
 }
 
 /** Test helper */

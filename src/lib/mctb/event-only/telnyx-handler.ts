@@ -8,7 +8,10 @@ import {
   handleFqdnDirectSpeakEnded,
   resetFqdnDirectPress1StateForTests,
   startFqdnDirectPress1Gather,
+  wasPress1ConsentCompleted,
+  resolveCallControlVoiceContext,
 } from "@/lib/mctb/event-only/fqdn-direct-press-1";
+import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 
 type TelnyxPayload = Record<string, unknown>;
 
@@ -43,6 +46,16 @@ export function isFqdnDirectMctbTarget(payload: TelnyxPayload): boolean {
   return to === test;
 }
 
+/**
+ * Call Control voice ingress (no LiveKit): platform 571 + FQDN direct test 866.
+ * Same answer → press-1 / existing-consent capture path for both.
+ */
+export function isCallControlMctbVoiceIngress(payload: TelnyxPayload): boolean {
+  const to = String(payload.to || "");
+  if (isMctb571Target(to)) return true;
+  return isFqdnDirectMctbTarget(payload);
+}
+
 function isMctbEventOnlyTarget(payload: TelnyxPayload): boolean {
   const to = String(payload.to || "");
   if (isMctb571Target(to)) return true;
@@ -75,7 +88,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
   const { eventType, eventPayload, fallbackWorkspaceId } = input;
   const callControlId = String(eventPayload.call_control_id || "");
-  const fqdnDirect = isFqdnDirectMctbTarget(eventPayload);
+  const callControlVoice = isCallControlMctbVoiceIngress(eventPayload);
 
   if (!callControlId || !isMctbEventOnlyTarget(eventPayload) || !isInbound(eventPayload)) {
     return { handled: false };
@@ -88,11 +101,11 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
         from: eventPayload.from,
         to: eventPayload.to,
         connectionId: eventPayload.connection_id ?? null,
-        fqdnDirect,
-        livekitBypass: fqdnDirect,
+        callControlVoice,
+        livekitBypass: callControlVoice,
       });
 
-      if (fqdnDirect) {
+      if (callControlVoice) {
         try {
           const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
           await answerCall(callControlId);
@@ -110,29 +123,17 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       }
 
       if (!processedCalls.has(callControlId)) {
-        processedCalls.set(callControlId, fqdnDirect ? "fqdn_press1" : "captured");
+        processedCalls.set(callControlId, callControlVoice ? "fqdn_press1" : "captured");
         setTimeout(() => processedCalls.delete(callControlId), 10 * 60 * 1000);
-        if (!fqdnDirect) {
-          const normalized = normalizeTelnyxMctbInboundEvent(eventPayload, {
-            voiceCaptureStatus: "EVENT_CAPTURED",
-          });
-          if (!normalized) return { handled: true, action: "invalid_payload" };
-          const result = await handleMctbInboundEvent(normalized, { fallbackWorkspaceId });
-          return {
-            handled: true,
-            action: "event_only_capture",
-            callEventId: result.callEventId,
-          };
-        }
       }
 
       return {
         handled: true,
-        action: fqdnDirect ? "fqdn_direct_answer" : "event_only_capture",
+        action: callControlVoice ? "fqdn_direct_answer" : "event_only_capture",
       };
     }
     case "call.answered": {
-      if (fqdnDirect) {
+      if (callControlVoice) {
         try {
           const press1 = await startFqdnDirectPress1Gather({
             eventPayload,
@@ -150,7 +151,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       return { handled: true, action: "ignored" };
     }
     case "call.gather.ended": {
-      if (!fqdnDirect) return { handled: true, action: "ignored" };
+      if (!callControlVoice) return { handled: true, action: "ignored" };
       const gather = await handleFqdnDirectGatherEnded({
         eventPayload,
         fallbackWorkspaceId,
@@ -158,7 +159,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       return { handled: true, action: gather.action };
     }
     case "call.dtmf.received": {
-      if (!fqdnDirect) return { handled: true, action: "ignored" };
+      if (!callControlVoice) return { handled: true, action: "ignored" };
       const digit = String(eventPayload.digit ?? eventPayload.digits ?? "").trim();
       if (!digit) return { handled: true, action: "ignored" };
       const gather = await handleFqdnDirectGatherEnded({
@@ -168,7 +169,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       return { handled: true, action: gather.action };
     }
     case "call.speak.ended": {
-      if (!fqdnDirect) return { handled: true, action: "ignored" };
+      if (!callControlVoice) return { handled: true, action: "ignored" };
       const speak = await handleFqdnDirectSpeakEnded({ eventPayload });
       return { handled: true, action: speak.action };
     }
@@ -177,13 +178,22 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
         callControlId,
         hangupCause: eventPayload.hangup_cause ?? null,
         sipHangupCause: eventPayload.sip_hangup_cause ?? null,
-        fqdnDirect,
+        callControlVoice,
         livekitRoomCreated: false,
       });
 
-      if (fqdnDirect) {
+      if (callControlVoice) {
+        if (
+          !wasPress1ConsentCompleted(callControlId) &&
+          (await resolveCallControlVoiceContext(eventPayload, fallbackWorkspaceId))
+            ?.consentMode === MCTB_CONSENT_MODE_EXISTING
+        ) {
+          captureMctbEventAsync(eventPayload, fallbackWorkspaceId, "EVENT_CAPTURED");
+          processedCalls.delete(callControlId);
+          return { handled: true, action: "call_control_existing_consent_capture" };
+        }
         processedCalls.delete(callControlId);
-        return { handled: true, action: "fqdn_direct_hangup" };
+        return { handled: true, action: "call_control_hangup" };
       }
 
       const prior = processedCalls.get(callControlId);
@@ -208,7 +218,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
     default:
       logMctbEventOnly(`telnyx_${eventType.replace(/\./g, "_")}`, {
         callControlId,
-        fqdnDirect,
+        callControlVoice,
       });
       return { handled: true, action: "ignored" };
   }

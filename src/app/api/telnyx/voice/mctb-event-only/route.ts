@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleMctbEventOnlyTelnyxWebhook } from "@/lib/mctb/event-only/telnyx-handler";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
+import { resolveMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
 
 type TelnyxPayload = {
   data?: {
@@ -11,11 +12,10 @@ type TelnyxPayload = {
   };
 };
 
-const FALLBACK_WORKSPACE_ID =
-  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
+const FALLBACK_WORKSPACE_ID = resolveMctbPlatformOwnerWorkspaceId();
 
 /**
- * Telnyx EVENT_ONLY MCTB: existing handler for 571 + FQDN direct SIP (no LiveKit).
+ * Telnyx EVENT_ONLY MCTB: Call Control voice for 571 + FQDN direct 866 (no LiveKit).
  * FQDN path answers via Call Control so forwarded calls stay connected.
  */
 export async function POST(request: Request) {
@@ -60,6 +60,6 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "mctb-event-only",
-    flow: "866 direct: answer → press-1 gather → consent → SMS (no LiveKit)",
+    flow: "571 + 866 Call Control: answer → press-1 or existing-consent capture → SMS (no LiveKit)",
   });
 }

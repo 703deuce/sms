@@ -7,6 +7,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { getPrisma } from "@/lib/db";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import {
   assign571ToConnection,
@@ -93,7 +94,31 @@ async function main() {
 
   if (!verify.ok) process.exit(1);
 
-  console.log("\nREADY FOR EXISTING CONSENT EVENT-ONLY PHYSICAL TEST");
+  const prisma = getPrisma();
+  const localPn = await prisma.phoneNumber.findFirst({
+    where: { e164: MCTB_PLATFORM_DEMO_E164 },
+    select: { id: true, settingsJson: true, workspaceId: true },
+  });
+  if (localPn) {
+    const settings =
+      localPn.settingsJson && typeof localPn.settingsJson === "object"
+        ? { ...(localPn.settingsJson as Record<string, unknown>) }
+        : {};
+    const telephony =
+      settings.telephony && typeof settings.telephony === "object"
+        ? { ...(settings.telephony as Record<string, unknown>) }
+        : {};
+    telephony.routingMode = "call_control_event_only";
+    telephony.lastProvisionedAt = new Date().toISOString();
+    settings.telephony = telephony;
+    await prisma.phoneNumber.update({
+      where: { id: localPn.id },
+      data: { settingsJson: settings },
+    });
+    console.log(`✓ Phone settings routingMode → call_control_event_only (ws ${localPn.workspaceId})`);
+  }
+
+  console.log("\nREADY FOR MCTB CALL CONTROL TEST (571 → mctb-event-only, no LiveKit)");
   console.log(
     "Rollback: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-rollback-571-event-only.ts --apply",
   );
