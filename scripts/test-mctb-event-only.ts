@@ -23,6 +23,10 @@ import {
   isFqdnDirectMctbTarget,
   isCallControlMctbVoiceIngress,
 } from "../src/lib/mctb/event-only/telnyx-handler";
+import {
+  resetCallControlVoicemailStateForTests,
+  isCallControlVoicemailActive,
+} from "../src/lib/mctb/event-only/call-control-voicemail";
 import { resolveMctbPlatformOwnerWorkspaceId } from "../src/lib/mctb/platform-owner-workspace";
 
 const CALL_ID = "mock_v3:mctb-event-only-test";
@@ -98,6 +102,11 @@ function testSetupRollbackScripts() {
   const rollback571 = join(process.cwd(), "scripts/mctb-rollback-571-event-only.ts");
   const setupFqdn = join(process.cwd(), "scripts/mctb-setup-fqdn-direct-mctb.ts");
   const rollbackFqdn = join(process.cwd(), "scripts/mctb-rollback-fqdn-direct-mctb.ts");
+  const sipIngress = join(process.cwd(), "src/lib/mctb/provisioning/telnyx-sip-ingress.ts");
+  const eventOnlyRoute = join(
+    process.cwd(),
+    "src/lib/mctb/consent-prompt/telnyx-event-only-route.ts",
+  );
   assert.ok(existsSync(setup571));
   assert.ok(existsSync(rollback571));
   assert.ok(existsSync(setupFqdn));
@@ -105,6 +114,16 @@ function testSetupRollbackScripts() {
   const rollbackSource = readFileSync(rollback571, "utf8");
   assert.match(rollbackSource, /assign571ToConnection/);
   assert.match(rollbackSource, /\.mctb-571-event-only-backup\.json/);
+  const ingressSource = readFileSync(sipIngress, "utf8");
+  assert.doesNotMatch(ingressSource, /livekit_sip/);
+  assert.match(ingressSource, /assignPhoneNumberToEventOnlyConnection/);
+  const routeSource = readFileSync(eventOnlyRoute, "utf8");
+  assert.match(routeSource, /assignPhoneNumberToEventOnlyConnection/);
+}
+
+function testCallControlVoicemailState() {
+  resetCallControlVoicemailStateForTests();
+  assert.equal(isCallControlVoicemailActive("cc-test-1"), false);
 }
 
 async function testTelnyxHandlerNoAnswer() {
@@ -112,6 +131,12 @@ async function testTelnyxHandlerNoAnswer() {
   assert.equal(WORKSPACE, "ws_1", "production MCTB owner workspace");
   // Full handler exercises live Telnyx answer/gather — gate-only here.
   assert.equal(isCallControlMctbVoiceIngress(attPayload), true);
+  const fqdnDirect = readFileSync(
+    join(process.cwd(), "src/lib/mctb/event-only/fqdn-direct-press-1.ts"),
+    "utf8",
+  );
+  assert.match(fqdnDirect, /startCallControlVoicemailFallback/);
+  assert.match(fqdnDirect, /isMctbAutomationActive/);
 }
 
 async function main() {
@@ -119,6 +144,7 @@ async function main() {
   testNormalizeAttPayload();
   testFqdnDirectTargetGate();
   testSetupRollbackScripts();
+  testCallControlVoicemailState();
   await testTelnyxHandlerNoAnswer();
   console.log("test-mctb-event-only: ok");
   process.exit(0);

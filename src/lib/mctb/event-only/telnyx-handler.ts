@@ -11,6 +11,12 @@ import {
   wasPress1ConsentCompleted,
   resolveCallControlVoiceContext,
 } from "@/lib/mctb/event-only/fqdn-direct-press-1";
+import {
+  completeCallControlVoicemailRecording,
+  handleCallControlVoicemailMediaEnded,
+  clearCallControlVoicemailState,
+  resetCallControlVoicemailStateForTests,
+} from "@/lib/mctb/event-only/call-control-voicemail";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 
 type TelnyxPayload = Record<string, unknown>;
@@ -62,6 +68,14 @@ function isMctbEventOnlyTarget(payload: TelnyxPayload): boolean {
   return isFqdnDirectMctbTarget(payload);
 }
 
+async function resolvesMctbEventOnlyIngress(payload: TelnyxPayload): Promise<boolean> {
+  if (isMctbEventOnlyTarget(payload)) return true;
+  const to = normalizeDid(String(payload.to || ""));
+  if (!to) return false;
+  const { isMctbSipIngressTarget } = await import("@/lib/mctb/sip-ingress/resolver");
+  return isMctbSipIngressTarget(to);
+}
+
 function captureMctbEventAsync(
   eventPayload: TelnyxPayload,
   fallbackWorkspaceId: string,
@@ -88,9 +102,10 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
   const { eventType, eventPayload, fallbackWorkspaceId } = input;
   const callControlId = String(eventPayload.call_control_id || "");
-  const callControlVoice = isCallControlMctbVoiceIngress(eventPayload);
+  const isIngress = await resolvesMctbEventOnlyIngress(eventPayload);
+  const callControlVoice = isIngress;
 
-  if (!callControlId || !isMctbEventOnlyTarget(eventPayload) || !isInbound(eventPayload)) {
+  if (!callControlId || !isIngress || !isInbound(eventPayload)) {
     return { handled: false };
   }
 
@@ -170,8 +185,21 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
     }
     case "call.speak.ended": {
       if (!callControlVoice) return { handled: true, action: "ignored" };
+      const vmSpeak = await handleCallControlVoicemailMediaEnded({ eventPayload });
+      if (vmSpeak.handled) return { handled: true, action: vmSpeak.action };
       const speak = await handleFqdnDirectSpeakEnded({ eventPayload });
       return { handled: true, action: speak.action };
+    }
+    case "call.playback.ended": {
+      if (!callControlVoice) return { handled: true, action: "ignored" };
+      const vmPlayback = await handleCallControlVoicemailMediaEnded({ eventPayload });
+      return { handled: true, action: vmPlayback.action || "playback_ignored" };
+    }
+    case "call.recording.saved": {
+      if (!callControlVoice) return { handled: true, action: "ignored" };
+      const vmSaved = await completeCallControlVoicemailRecording({ eventPayload });
+      if (vmSaved.handled) return { handled: true, action: vmSaved.action };
+      return { handled: true, action: "recording_ignored" };
     }
     case "call.hangup": {
       logMctbEventOnly("telnyx_call_hangup", {
@@ -193,6 +221,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
           return { handled: true, action: "call_control_existing_consent_capture" };
         }
         processedCalls.delete(callControlId);
+        clearCallControlVoicemailState(callControlId);
         return { handled: true, action: "call_control_hangup" };
       }
 
@@ -227,4 +256,5 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 export function resetMctbEventOnlyTelnyxStateForTests(): void {
   processedCalls.clear();
   resetFqdnDirectPress1StateForTests();
+  resetCallControlVoicemailStateForTests();
 }

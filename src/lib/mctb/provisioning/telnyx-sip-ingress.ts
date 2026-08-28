@@ -4,9 +4,12 @@ import { getPrisma } from "@/lib/db";
 import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/phone-switch";
 import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
-import { ensureNumberProvisioned } from "@/lib/telephony/provisioning/number-assignment";
 import { clearMctbSipIngressCache } from "@/lib/mctb/sip-ingress/resolver";
 import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
+import {
+  assignPhoneNumberToEventOnlyConnection,
+  ensureMctb571EventOnlyCallControlApplication,
+} from "@/lib/mctb/consent-prompt/telnyx-event-only-route";
 
 function mergeSettings(
   current: unknown,
@@ -28,8 +31,8 @@ export type ProvisionMctbTelnyxSipIngressResult = {
 };
 
 /**
- * Idempotent: mark a Telnyx DID for MCTB SIP ingress and wire Telnyx FQDN → LiveKit.
- * Does not modify the frozen Python SIP handler — only provider routing + DB flags.
+ * Idempotent: mark a Telnyx DID for MCTB Call Control ingress (Event Only app).
+ * Routes voice to /api/telnyx/voice/mctb-event-only — no LiveKit SIP hop.
  */
 export async function provisionMctbTelnyxSipIngress(input: {
   workspaceId: string;
@@ -100,7 +103,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     ...mctbSettings,
     mctbSipIngress: true,
     mctbRole: role,
-    routingOwner: "mctb_sip",
+    routingOwner: "mctb_call_control",
   });
 
   await prisma.phoneNumber.update({
@@ -108,11 +111,45 @@ export async function provisionMctbTelnyxSipIngress(input: {
     data: { settingsJson: nextSettings as object },
   });
 
-  const provision = await ensureNumberProvisioned({
-    workspaceId: input.workspaceId,
-    phoneNumberId: phone.id,
-    routingMode: "livekit_sip",
-  });
+  const actions = ["mctb_sip_ingress_tagged"];
+
+  try {
+    await ensureMctb571EventOnlyCallControlApplication();
+    const assigned = await assignPhoneNumberToEventOnlyConnection(phone.e164);
+    actions.push(
+      `call_control_event_only_assigned:${assigned.callControlAppId}`,
+      `telnyx_connection:${assigned.liveConnectionId}`,
+    );
+
+    const settings =
+      nextSettings && typeof nextSettings === "object"
+        ? { ...nextSettings }
+        : ({} as Record<string, unknown>);
+    const telephony =
+      settings.telephony && typeof settings.telephony === "object"
+        ? { ...(settings.telephony as Record<string, unknown>) }
+        : {};
+    telephony.routingMode = "call_control_event_only";
+    telephony.telnyxCallControlAppId = assigned.callControlAppId;
+    telephony.lastProvisionedAt = new Date().toISOString();
+    telephony.state = "active";
+    telephony.lastError = null;
+    settings.telephony = telephony;
+
+    await prisma.phoneNumber.update({
+      where: { id: phone.id },
+      data: { settingsJson: settings as object },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      phoneNumberId: phone.id,
+      e164: phone.e164,
+      actions,
+      error: message || "call_control_provision_failed",
+    };
+  }
 
   await activateJohnOnPhoneNumber({
     workspaceId: input.workspaceId,
@@ -125,21 +162,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);
   clearMctbSipIngressCache();
 
-  const actions = [
-    "mctb_sip_ingress_tagged",
-    ...provision.actions,
-    ...(provision.ok ? ["mctb_john_activated"] : []),
-  ];
-
-  if (!provision.ok) {
-    return {
-      ok: false,
-      phoneNumberId: phone.id,
-      e164: phone.e164,
-      actions,
-      error: provision.error || "livekit_provision_failed",
-    };
-  }
+  actions.push("mctb_john_activated");
 
   return {
     ok: true,

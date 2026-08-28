@@ -19,7 +19,7 @@ const DEFAULT_PRESS_1_SAY =
 const PRESS_1_CONFIRMATION_SAY =
   "Perfect. Check your phone. We have just sent you a message.";
 
-type CallContext = {
+export type CallContext = {
   workspaceId: string;
   demoMode: boolean;
   consentMode: string;
@@ -140,6 +140,20 @@ export async function startFqdnDirectPress1Gather(input: {
   const callControlId = String(input.eventPayload.call_control_id || "");
   const ctx = await resolveCallContext(input.eventPayload, input.fallbackWorkspaceId);
   if (!ctx) return { action: "missing_context" };
+
+  const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
+  const { loadMctbScheduleSettings, isMctbAutomationActive } = await import("@/lib/mctb/schedule");
+  const runtimeConfig = await loadMissedCallTextConfig(ctx.workspaceId);
+  const scheduleSettings = await loadMctbScheduleSettings(ctx.workspaceId, runtimeConfig);
+  if (!isMctbAutomationActive(scheduleSettings, runtimeConfig)) {
+    const { startCallControlVoicemailFallback } = await import(
+      "@/lib/mctb/event-only/call-control-voicemail"
+    );
+    return startCallControlVoicemailFallback({
+      eventPayload: input.eventPayload,
+      ctx,
+    });
+  }
 
   if (ctx.consentMode === MCTB_CONSENT_MODE_EXISTING) {
     logMctbEventOnly("fqdn_direct_existing_consent_skip_gather", {
