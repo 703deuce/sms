@@ -88,7 +88,6 @@ export default async function AppLayout({
       hasMctb={hasMctb}
       showTryIt={showTryIt}
       productFeatures={productFeatures}
-      hasMctb={hasMctb}
     >
       {children}
     </AppShell>
