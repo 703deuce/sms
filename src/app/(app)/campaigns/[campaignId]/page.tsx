@@ -1,5 +1,8 @@
 import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
 import { CampaignLaunchReview } from "@/components/campaigns/campaign-launch-review";
+import { CampaignResultsView } from "@/components/campaigns/broadcast/campaign-results";
+import { listBroadcastRecipients } from "@/lib/mass-texting/broadcast/analytics";
+import { isBroadcastCampaign } from "@/lib/mass-texting/broadcast/service";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -156,6 +159,47 @@ export default async function CampaignDetailPage({
       log.event.toLowerCase().includes("campaign"),
   );
 
+  const statusNorm = campaign.status.toLowerCase();
+  const showResultsView =
+    statusNorm === "completed" ||
+    statusNorm === "sending" ||
+    statusNorm === "sent" ||
+    statusNorm === "failed";
+
+  if (showResultsView) {
+    const recipients =
+      isBroadcastCampaign(campaign.configJson)
+        ? await listBroadcastRecipients(workspaceId, campaignId)
+        : [];
+    return (
+      <CampaignResultsView
+        campaign={{
+          id: campaign.id,
+          name: campaign.name,
+          status: campaign.status,
+          audience: campaign.audience,
+          body: campaign.body,
+          sent: campaign.sent,
+          delivered: campaign.delivered,
+          clicks: campaign.clicks,
+          replies: campaign.replies,
+          optOuts: campaign.optOuts,
+          configJson: campaign.configJson,
+        }}
+        recipients={recipients.map((r) => ({
+          id: r.id,
+          name: r.name,
+          phone: r.phone,
+          status: r.status,
+          deliveredAt: r.deliveredAt,
+          clickedAt: r.clickedAt,
+          repliedAt: r.repliedAt,
+          optedOutAt: r.optedOutAt,
+        }))}
+      />
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -170,11 +214,11 @@ export default async function CampaignDetailPage({
               </Button>
             </Link>
             {campaign.status === "Draft" ? (
-              <Link href="/send">
+              <Link href={`/campaigns/new?edit=${campaignId}`}>
                 <Button>Continue editing</Button>
               </Link>
             ) : (
-              <Link href="/send">
+              <Link href={`/campaigns/new?duplicate=${campaignId}`}>
                 <Button variant="outline">Duplicate</Button>
               </Link>
             )}

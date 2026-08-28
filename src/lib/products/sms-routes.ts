@@ -35,6 +35,7 @@ export const SMS_APP_ROUTE_PREFIXES = [
   "/inbox",
   "/analytics",
   "/campaigns",
+  "/playbooks",
   "/contacts",
   "/automations",
   "/grow",
@@ -106,7 +107,7 @@ export const SMS_CREATE_ACTIONS: SmsCreateAction[] = [
   {
     label: "Create Campaign",
     description: "Broadcast to a list or segment",
-    href: "/campaigns/new/promotion",
+    href: "/campaigns/new",
   },
   {
     label: "Create Automation",

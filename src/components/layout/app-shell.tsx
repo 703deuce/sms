@@ -69,10 +69,11 @@ export function AppShell({
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const hideChromeTitle =
-    realtorMode &&
-    (pathname.startsWith("/realtor/setup") ||
-      pathname.startsWith("/realtor/dashboard") ||
-      pathname.startsWith("/realtor/leads"));
+    pathname.startsWith("/conversations") ||
+    (realtorMode &&
+      (pathname.startsWith("/realtor/setup") ||
+        pathname.startsWith("/realtor/dashboard") ||
+        pathname.startsWith("/realtor/leads")));
   const title = hideChromeTitle
     ? ""
     : isLauncher
@@ -141,7 +142,15 @@ export function AppShell({
             hasNumbers={hasNumbers}
           />
         )}
-        <main className="px-4 pb-28 pt-5 lg:px-6 lg:pb-8">{children}</main>
+        <main
+          className={
+            pathname.startsWith("/conversations")
+              ? "px-0 pb-0 pt-0 lg:px-0"
+              : "px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
+          }
+        >
+          {children}
+        </main>
       </div>
       <MobileNav
         realtorMode={realtorMode}

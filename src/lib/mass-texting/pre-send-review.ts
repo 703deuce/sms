@@ -54,6 +54,163 @@ export async function buildPreSendReview(
     campaign.configJson && typeof campaign.configJson === "object"
       ? (campaign.configJson as Record<string, unknown>)
       : {};
+
+  const { isBroadcastCampaign } = await import("@/lib/mass-texting/broadcast/service");
+  const { previewBroadcastAudience, audienceSummaryLabel } = await import(
+    "@/lib/mass-texting/broadcast/audience"
+  );
+
+  if (isBroadcastCampaign(config) && config.audience) {
+    const audience = config.audience as import("@/lib/mass-texting/broadcast/types").BroadcastAudienceDefinition;
+    const preview = await previewBroadcastAudience(workspaceId, audience, campaignId);
+    type ContactRow = {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      customFields: unknown;
+      phone: string;
+      email: string | null;
+    };
+    const enrolled = await prisma.campaignRecipient.findMany({
+      where: { campaignId, workspaceId },
+      select: { phone: true, email: true, contactId: true, displayName: true },
+    });
+    const contactIds = enrolled
+      .map((r: (typeof enrolled)[number]) => r.contactId)
+      .filter(Boolean) as string[];
+    const contacts: ContactRow[] = contactIds.length
+      ? await prisma.contact.findMany({
+          where: { workspaceId, id: { in: contactIds } },
+        })
+      : preview.eligibleSample.length
+        ? await prisma.contact.findMany({
+            where: { workspaceId, id: { in: preview.eligibleSample.map((s) => s.contactId) } },
+          })
+        : [];
+    const byId = new Map<string, ContactRow>(contacts.map((c) => [c.id, c]));
+    const recipients: Array<{
+      phone?: string;
+      email?: string;
+      contactId?: string;
+      displayName?: string;
+      firstName?: string | null;
+      lastName?: string | null;
+      customFields?: Record<string, unknown> | null;
+    }> = [];
+    for (const r of enrolled) {
+      const contact = r.contactId ? byId.get(r.contactId) : undefined;
+      recipients.push({
+        phone: r.phone || undefined,
+        email: r.email || undefined,
+        contactId: r.contactId || undefined,
+        displayName: r.displayName || undefined,
+        firstName: contact?.firstName,
+        lastName: contact?.lastName,
+        customFields:
+          contact?.customFields && typeof contact.customFields === "object"
+            ? (contact.customFields as Record<string, unknown>)
+            : null,
+      });
+    }
+    if (!recipients.length) {
+      const resolved = await previewBroadcastAudience(workspaceId, audience, campaignId);
+      for (const sample of resolved.eligibleSample) {
+        const contact = byId.get(sample.contactId);
+        recipients.push({
+          phone: sample.phone,
+          contactId: sample.contactId,
+          displayName: sample.name,
+          firstName: contact?.firstName,
+          lastName: contact?.lastName,
+          customFields:
+            contact?.customFields && typeof contact.customFields === "object"
+              ? (contact.customFields as Record<string, unknown>)
+              : null,
+        });
+      }
+    }
+    const listNames = [audienceSummaryLabel(audience)];
+    const rawContactCount = preview.selectedCount;
+    const duplicateRemoved = preview.duplicateRemoved + preview.excludedCount;
+    const invalidRemoved = preview.invalidRemoved;
+    const suppressedRemoved = preview.suppressedRemoved;
+    const { accepted, rejected } = await validateBulkRecipients(workspaceId, campaignId, recipients);
+    void rejected;
+    const body = campaign.body || "";
+    const sequence = parseSequence(campaign.sequenceJson);
+    const smsSteps = sequence.filter((s) => s.step_type === "send_sms");
+    const stepsToPrice = smsSteps.length
+      ? smsSteps
+      : [{ step_key: "sms_1", step_type: "send_sms" as const, config: { body } }];
+    const sequenceForMedia = smsSteps.length ? sequence : undefined;
+    const mmsStepCount = stepsToPrice.filter(
+      (step) => mediaUrlsForSequenceStep(step, config, sequenceForMedia).length > 0,
+    ).length;
+    const isMms = mmsStepCount > 0;
+    const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
+    let estimatedSegments = 0;
+    const acceptedByPhone = new Map(accepted.map((r) => [r.phone, r]));
+    for (const recipient of recipients) {
+      if (!recipient.phone || !acceptedByPhone.has(recipient.phone)) continue;
+      const vars = massTextMergeVarsFromContact({
+        firstName: recipient.firstName,
+        lastName: recipient.lastName,
+        displayName: recipient.displayName,
+        phone: recipient.phone,
+        email: recipient.email,
+        businessName: workspace?.name,
+        customFields: recipient.customFields,
+      });
+      for (const step of stepsToPrice) {
+        const template = String(step.config?.body || body);
+        const stepMedia = mediaUrlsForSequenceStep(step, config, sequenceForMedia);
+        const priced = creditsForRecipientBody({
+          template,
+          isMms: stepMedia.length > 0,
+          vars,
+        });
+        estimatedSegments += priced.credits;
+      }
+    }
+    const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
+    const sender = await resolveMassTextSendingNumber(workspaceId);
+    const availability = await getSegmentAvailability(workspaceId);
+    const canSend = availability.canSend && estimatedSegments <= availability.available && !mmsBlocked;
+    const shortage = Math.max(0, estimatedSegments - availability.available);
+    return {
+      campaignId,
+      campaignName: campaign.name,
+      listIds: [],
+      listNames,
+      rawContactCount,
+      duplicateRemoved,
+      invalidRemoved,
+      suppressedRemoved,
+      finalRecipientCount: preview.eligibleCount || accepted.length,
+      estimatedSegments,
+      mmsCount: accepted.length * mmsStepCount,
+      messagePreview: body.slice(0, 280),
+      mediaUrls: mediaUrlsFromCampaignConfig(config),
+      phoneNumberId: sender?.phoneNumberId ?? null,
+      phoneE164: sender?.phoneE164 ?? null,
+      scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
+      a2pUseCase: "MASS_TEXT_MARKETING",
+      availableSegments: availability.available,
+      requiredSegments: estimatedSegments,
+      shortage,
+      canSend,
+      blockReason: mmsBlocked
+        ? "MMS is not enabled in production yet"
+        : shortage > 0
+          ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+          : availability.blockReason,
+      mmsBlocked,
+      acceptedPhones: accepted
+        .map((r) => r.phone)
+        .filter((phone): phone is string => Boolean(phone)),
+    };
+  }
+
   const listIds = Array.isArray(config.listIds)
     ? (config.listIds as string[])
     : config.listId

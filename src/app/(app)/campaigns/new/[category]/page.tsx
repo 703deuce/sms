@@ -112,7 +112,7 @@ export default function NewCategoryCampaignPage() {
     return (
       <div className="p-8">
         <p className="text-slate-600">Unknown campaign category.</p>
-        <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover">Back to campaigns</Link>
+        <Link href="/playbooks" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover">Back to playbooks</Link>
       </div>
     );
   }
@@ -205,7 +205,7 @@ export default function NewCategoryCampaignPage() {
         title={category.title}
         description={category.description}
         actions={
-          <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"><ArrowLeft className="h-4 w-4" />
+          <Link href="/playbooks" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"><ArrowLeft className="h-4 w-4" />
               All types</Link>
         }
       />
@@ -434,7 +434,7 @@ export default function NewCategoryCampaignPage() {
                     ? "Schedule campaign"
                     : "Send campaign"}
             </Button>
-            <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">Cancel</Link>
+            <Link href="/playbooks" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">Cancel</Link>
           </div>
         </Card>
 

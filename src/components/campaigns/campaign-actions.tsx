@@ -21,7 +21,11 @@ function normalizeStatus(status: string) {
 export function campaignLooksLikeMassText(configJson: unknown): boolean {
   if (!configJson || typeof configJson !== "object") return false;
   const config = configJson as Record<string, unknown>;
-  return config.productSource === "mass_text" || config.massTexting === true;
+  return (
+    (config.broadcastVersion === 1 && config.productSource === "mass_text") ||
+    config.productSource === "mass_text" ||
+    config.massTexting === true
+  );
 }
 
 export function CampaignActions({
@@ -61,6 +65,15 @@ export function CampaignActions({
     setLoading(action);
     setError("");
     try {
+      if (isMassText && action === "cancel") {
+        const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, {
+          method: "DELETE",
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Action failed");
+        router.refresh();
+        return;
+      }
       const res = await fetch("/api/campaigns", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

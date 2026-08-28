@@ -45,7 +45,7 @@ export default async function CampaignDraftsPage() {
         title="Draft campaigns"
         description="Campaigns saved but not yet scheduled or sent. Finish audience, message, and compliance before launch."
         actions={
-          <Link href="/campaigns">
+          <Link href="/campaigns/new">
             <Button>New campaign</Button>
           </Link>
         }

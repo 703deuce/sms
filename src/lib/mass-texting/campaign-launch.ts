@@ -259,6 +259,31 @@ export async function launchCampaignWithAudit(input: {
         error: err instanceof Error ? err.message : "Could not enroll audience",
       };
     }
+  } else {
+    const { isBroadcastCampaign, readBroadcastConfig } = await import(
+      "@/lib/mass-texting/broadcast/service"
+    );
+    const { enrollBroadcastAudience } = await import("@/lib/mass-texting/broadcast/audience");
+    if (isBroadcastCampaign(campaign.configJson)) {
+      const broadcastConfig = readBroadcastConfig(campaign.configJson);
+      if (broadcastConfig?.audience) {
+        try {
+          await enrollBroadcastAudience(
+            input.workspaceId,
+            input.campaignId,
+            broadcastConfig.audience,
+          );
+        } catch (err) {
+          if (reservation.createdThisCall) {
+            await releaseReservation(reservation.reservationId, "enroll_failed");
+          }
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : "Could not enroll audience",
+          };
+        }
+      }
+    }
   }
 
   await pruneStaleLaunchRecipients({

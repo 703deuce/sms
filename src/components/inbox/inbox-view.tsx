@@ -1,37 +1,65 @@
 "use client";
 
+import { InboxContactDrawer } from "@/components/inbox/inbox-contact-drawer";
+import { TemplatePicker } from "@/components/inbox/template-picker";
+import { MediaPicker, AttachedMediaThumbs } from "@/components/messaging/media-picker";
 import { Button } from "@/components/ui/button";
-import { StatusChip } from "@/components/ui/status-chip";
 import type { Contact, Conversation, User } from "@/lib/types";
-import { cn, formatPhone } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
+  Bookmark,
   ChevronDown,
+  ChevronLeft,
+  Code2,
   Filter,
-  Languages,
+  Image as ImageIcon,
+  Info,
   MoreHorizontal,
   Paperclip,
-  Plus,
+  PenSquare,
   Search,
   Smile,
-  Sparkles,
+  Tag,
+  UserCircle2,
 } from "lucide-react";
-import { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { MediaPicker, AttachedMediaThumbs } from "@/components/messaging/media-picker";
-import { TemplatePicker } from "@/components/inbox/template-picker";
-import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const LANG_OPTIONS = [
-  { value: "es", label: "Spanish" },
-  { value: "en", label: "English" },
-  { value: "fr", label: "French" },
-  { value: "de", label: "German" },
-  { value: "pt", label: "Portuguese" },
-  { value: "zh", label: "Chinese" },
-  { value: "ja", label: "Japanese" },
-];
+type InboxFilter =
+  | "my:all"
+  | "my:unread"
+  | "my:open"
+  | "my:pending"
+  | "my:snoozed"
+  | "all:all"
+  | "all:unassigned"
+  | "all:unread"
+  | "all:open"
+  | "all:pending"
+  | "all:closed"
+  | "all:spam"
+  | `tag:${string}`
+  | `teammate:${string}`;
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d`;
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 export function InboxView({
-  initialFilter = "All conversations",
+  initialFilter = "all:all",
   conversations: seed,
   contacts,
   teamMembers,
@@ -45,58 +73,54 @@ export function InboxView({
   currentUserName?: string;
   currentUserId?: string;
 }) {
-  const [filter, setFilter] = useState(initialFilter);
-  const [selectedId, setSelectedId] = useState(seed[0]?.id);
+  const mapInitialFilter = (): InboxFilter => {
+    switch (initialFilter) {
+      case "Mine":
+        return "my:all";
+      case "Unassigned":
+        return "all:unassigned";
+      case "Unread":
+        return "all:unread";
+      case "Open":
+        return "all:open";
+      case "Pending":
+        return "all:pending";
+      case "Closed":
+        return "all:closed";
+      default:
+        return "my:all";
+    }
+  };
+
+  const [filter, setFilter] = useState<InboxFilter>(mapInitialFilter());
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<string | undefined>(seed[0]?.id);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reply, setReply] = useState("");
   const [composerTab, setComposerTab] = useState<"reply" | "note">("reply");
   const [items, setItems] = useState(seed);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiAssist, setAiAssist] = useState<{
-    summary?: string;
-    suggestedReply?: string;
-    suggestedTags?: string[];
-    suggestedNextAction?: string;
-    urgency?: string;
-    optOutRisk?: boolean;
-    mode?: "openai" | "heuristic";
-  } | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
-  const [targetLang, setTargetLang] = useState("es");
-  const [alsoViewing, setAlsoViewing] = useState<Array<{ userId: string; userName: string }>>([]);
-  const [translations, setTranslations] = useState<Record<string, { text: string; mode: string }>>({});
-  const [translatingId, setTranslatingId] = useState<string | null>(null);
-  const [callbackMarking, setCallbackMarking] = useState(false);
-  const [callbackMarkMsg, setCallbackMarkMsg] = useState<string | null>(null);
-  const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [contactDrawerOpen, setContactDrawerOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [assignMenuOpen, setAssignMenuOpen] = useState(false);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [expandedGroups, setExpandedGroups] = useState({
+    my: true,
+    all: true,
+    tags: true,
+    teammates: true,
+  });
 
-  const filterDefs = useMemo(() => {
-    const counts = {
-      all: items.length,
-      mine: items.filter((c) => c.assignedTo === currentUserName).length,
-      unassigned: items.filter((c) => !c.assignedTo).length,
-      unread: items.filter((c) => c.unread).length,
-      open: items.filter((c) => c.status === "Open").length,
-      pending: items.filter((c) => c.status === "Pending").length,
-      closed: items.filter((c) => c.status === "Closed").length,
-      snoozed: items.filter((c) => c.status === "Snoozed").length,
-      spam: items.filter((c) => c.status === "Spam").length,
-    };
-    return [
-      { label: "All conversations", count: counts.all },
-      { label: "Mine", count: counts.mine },
-      { label: "Unassigned", count: counts.unassigned },
-      { label: "Unread", count: counts.unread, accent: "unread" as const },
-      { label: "Open", count: counts.open },
-      { label: "Pending", count: counts.pending, accent: "pending" as const },
-      { label: "Closed", count: counts.closed },
-      { label: "Snoozed", count: counts.snoozed },
-      { label: "Spam", count: counts.spam },
-    ];
-  }, [items, currentUserName]);
+  const statusRef = useRef<HTMLDivElement>(null);
+  const assignRef = useRef<HTMLDivElement>(null);
+  const tagRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   const tagCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -108,27 +132,71 @@ export function InboxView({
     return Array.from(map.entries()).map(([label, count]) => ({ label, count }));
   }, [items]);
 
+  const counts = useMemo(() => {
+    const mine = items.filter((c) => c.assignedTo === currentUserName);
+    return {
+      myAll: mine.length,
+      myUnread: mine.filter((c) => c.unread).length,
+      myOpen: mine.filter((c) => c.status === "Open").length,
+      myPending: mine.filter((c) => c.status === "Pending").length,
+      mySnoozed: mine.filter((c) => c.status === "Snoozed").length,
+      allAll: items.length,
+      allUnassigned: items.filter((c) => !c.assignedTo).length,
+      allUnread: items.filter((c) => c.unread).length,
+      allOpen: items.filter((c) => c.status === "Open").length,
+      allPending: items.filter((c) => c.status === "Pending").length,
+      allClosed: items.filter((c) => c.status === "Closed").length,
+      allSpam: items.filter((c) => c.status === "Spam").length,
+    };
+  }, [items, currentUserName]);
+
   const filtered = useMemo(() => {
-    return items.filter((c) => {
-      if (filter === "Mine") return c.assignedTo === currentUserName;
-      if (filter === "Unassigned") return !c.assignedTo;
-      if (filter === "Unread") return c.unread;
-      if (filter === "Open") return c.status === "Open";
-      if (filter === "Pending") return c.status === "Pending";
-      if (filter === "Closed") return c.status === "Closed";
-      if (filter === "Snoozed") return c.status === "Snoozed";
-      if (filter === "Spam") return c.status === "Spam";
-      return true;
+    let rows = items;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(
+        (c) =>
+          c.contactName.toLowerCase().includes(q) ||
+          c.phone.includes(q) ||
+          c.lastMessage.toLowerCase().includes(q),
+      );
+    }
+
+    const [scope, key] = filter.split(":") as [string, string];
+    if (scope === "my") {
+      rows = rows.filter((c) => c.assignedTo === currentUserName);
+      if (key === "unread") rows = rows.filter((c) => c.unread);
+      if (key === "open") rows = rows.filter((c) => c.status === "Open");
+      if (key === "pending") rows = rows.filter((c) => c.status === "Pending");
+      if (key === "snoozed") rows = rows.filter((c) => c.status === "Snoozed");
+    } else if (scope === "all") {
+      if (key === "unassigned") rows = rows.filter((c) => !c.assignedTo);
+      if (key === "unread") rows = rows.filter((c) => c.unread);
+      if (key === "open") rows = rows.filter((c) => c.status === "Open");
+      if (key === "pending") rows = rows.filter((c) => c.status === "Pending");
+      if (key === "closed") rows = rows.filter((c) => c.status === "Closed");
+      if (key === "spam") rows = rows.filter((c) => c.status === "Spam");
+    } else if (scope === "tag") {
+      rows = rows.filter((c) => c.tags?.includes(key));
+    } else if (scope === "teammate") {
+      const member = teamMembers.find((m) => m.id === key);
+      if (member) rows = rows.filter((c) => c.assignedTo === member.name);
+    }
+
+    rows = [...rows].sort((a, b) => {
+      const ta = new Date(a.updatedAt).getTime();
+      const tb = new Date(b.updatedAt).getTime();
+      return sortOrder === "newest" ? tb - ta : ta - tb;
     });
-  }, [filter, items, currentUserName]);
+    return rows;
+  }, [items, filter, search, currentUserName, teamMembers, sortOrder]);
 
   const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? items[0];
   const contact = contacts.find((c) => c.id === selected?.contactId);
+  const bulkMode = selectedIds.size > 0;
 
   useEffect(() => {
-    setAiAssist(null);
     setMediaUrls([]);
-    setTranslations({});
   }, [selected?.id]);
 
   useEffect(() => {
@@ -146,70 +214,29 @@ export function InboxView({
     };
   }, [selectedId]);
 
-  const sendPresenceHeartbeat = useCallback(async () => {
-    if (!selected?.id || !currentUserId) return;
-    try {
-      const res = await fetch(`/api/inbox/${selected.id}/presence`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: currentUserId }),
-      });
-      const json = await res.json();
-      if (res.ok && json.data?.viewers) {
-        setAlsoViewing(json.data.viewers);
-      }
-    } catch {
-      // ignore presence errors
-    }
-  }, [selected?.id, currentUserId]);
-
   useEffect(() => {
-    if (!selected?.id || !currentUserId) {
-      setAlsoViewing([]);
-      return;
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as Node;
+      if (statusRef.current && !statusRef.current.contains(t)) setStatusMenuOpen(false);
+      if (assignRef.current && !assignRef.current.contains(t)) setAssignMenuOpen(false);
+      if (tagRef.current && !tagRef.current.contains(t)) setTagMenuOpen(false);
+      if (moreRef.current && !moreRef.current.contains(t)) setMoreMenuOpen(false);
     }
-    sendPresenceHeartbeat();
-    presenceTimerRef.current = setInterval(sendPresenceHeartbeat, 20_000);
-    return () => {
-      if (presenceTimerRef.current) clearInterval(presenceTimerRef.current);
-    };
-  }, [selected?.id, currentUserId, sendPresenceHeartbeat]);
-
-  async function translateMessage(messageId: string, text: string) {
-    if (translatingId) return;
-    setTranslatingId(messageId);
-    setError(null);
-    try {
-      const res = await fetch("/api/ai/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, targetLang }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Translation failed");
-      setTranslations((prev) => ({
-        ...prev,
-        [messageId]: { text: json.data.translated, mode: json.data.mode },
-      }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Translation failed");
-    } finally {
-      setTranslatingId(null);
-    }
-  }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   async function sendReply() {
     if (!selected || !reply.trim() || sending) return;
     setSending(true);
     setError(null);
-    const body = reply.trim();
     try {
       const res = await fetch(`/api/inbox/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: composerTab === "note" ? "note" : "reply",
-          body,
+          body: reply.trim(),
           mediaUrls: composerTab === "reply" && mediaUrls.length ? mediaUrls : undefined,
         }),
       });
@@ -229,6 +256,7 @@ export function InboxView({
 
   async function updateStatus(status: string) {
     if (!selected) return;
+    setStatusMenuOpen(false);
     const res = await fetch(`/api/inbox/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -242,12 +270,11 @@ export function InboxView({
 
   async function assignTo(assigneeId: string) {
     if (!selected) return;
+    setAssignMenuOpen(false);
     const res = await fetch(`/api/inbox/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        assigneeId: assigneeId || null,
-      }),
+      body: JSON.stringify({ assigneeId: assigneeId || null }),
     });
     const json = (await res.json()) as { data?: Conversation };
     if (res.ok && json.data) {
@@ -255,431 +282,469 @@ export function InboxView({
     }
   }
 
-  async function markNeedsCallback() {
-    if (!selected?.phone) return;
-    setCallbackMarking(true);
-    setCallbackMarkMsg(null);
-    try {
-      const res = await fetch("/api/callback-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          callerE164: selected.phone,
-          sourceRoute: "MCTB inbox",
-          reason: "Marked needs callback from conversation",
-          metadata: { conversationId: selected.id },
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setCallbackMarkMsg(json.error || "Callback Requests add-on required");
-        return;
-      }
-      setCallbackMarkMsg("Callback request created");
-    } finally {
-      setCallbackMarking(false);
+  async function markUnread() {
+    if (!selected) return;
+    setMoreMenuOpen(false);
+    const res = await fetch(`/api/inbox/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unread: true }),
+    });
+    const json = (await res.json()) as { data?: Conversation };
+    if (res.ok && json.data) {
+      setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
     }
   }
 
-  async function runAiAssist() {
-    if (!selected || aiLoading) return;
-    setAiLoading(true);
-    setError(null);
-    try {
-      const messages = selected.messages.map((m) => ({
-        direction:
-          m.direction === "in"
-            ? "inbound"
-            : m.direction === "out"
-              ? "outbound"
-              : "note",
-        body: m.body,
-      }));
-      const res = await fetch("/api/ai/inbox-assist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages,
-          contactName: selected.contactName,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "AI assist failed");
-      setAiAssist(json.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "AI assist failed");
-    } finally {
-      setAiLoading(false);
+  function downloadTranscript() {
+    if (!selected) return;
+    setMoreMenuOpen(false);
+    const lines = (selected.messages || []).map((m) => {
+      const who = m.direction === "in" ? selected.contactName : m.user || "You";
+      const when = new Date(m.at).toLocaleString();
+      return `[${when}] ${who}: ${m.body}`;
+    });
+    const blob = new Blob([lines.join("\n\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${selected.contactName.replace(/\s+/g, "-")}-transcript.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function updateTags(tags: string[]) {
+    if (!selected) return;
+    setTagMenuOpen(false);
+    const res = await fetch(`/api/inbox/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags }),
+    });
+    const json = (await res.json()) as { data?: Conversation };
+    if (res.ok && json.data) {
+      setItems((prev) => prev.map((c) => (c.id === selected.id ? json.data! : c)));
     }
   }
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleGroup = (key: keyof typeof expandedGroups) => {
+    setExpandedGroups((g) => ({ ...g, [key]: !g[key] }));
+  };
+
+  const filterBtn = (id: InboxFilter, label: string, count: number) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => {
+        setFilter(id);
+        setSelectedIds(new Set());
+      }}
+      className={cn(
+        "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[13px] transition",
+        filter === id
+          ? "bg-[#eef2ff] font-semibold text-[#6366f1]"
+          : "text-[#374151] hover:bg-[#f9fafb]",
+      )}
+    >
+      <span>{label}</span>
+      <span className="text-[12px] tabular-nums text-[#9ca3af]">{count}</span>
+    </button>
+  );
 
   return (
-    <div className="surface grid h-[calc(100vh-7.5rem)] min-h-[620px] overflow-hidden rounded-[12px] lg:grid-cols-[200px_280px_minmax(0,1fr)_260px]">
-      {/* Filters */}
-      <aside className="hidden border-r border-border p-3 lg:block">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              className="h-9 w-full rounded-[10px] border border-border bg-card pl-8 pr-2 text-[12px] outline-none focus:border-primary"
-              placeholder="Search conversations..."
-            />
-          </div>
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border hover:bg-muted"
-            aria-label="Filters"
-          >
-            <Filter className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        <div className="space-y-0.5">
-          {filterDefs.map((f) => {
-            const active = filter === f.label;
-            const accentUnread = f.accent === "unread" && !active;
-            const accentPending = f.accent === "pending" && !active;
-            return (
-              <button
-                key={f.label}
-                type="button"
-                onClick={() => setFilter(f.label)}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-[10px] px-2.5 py-2 text-[12px] font-medium transition",
-                  active
-                    ? "bg-violet-50 text-violet-700"
-                    : accentUnread
-                      ? "bg-violet-50/70 text-violet-700 hover:bg-violet-50"
-                      : accentPending
-                        ? "bg-orange-50/80 text-orange-700 hover:bg-orange-50"
-                        : "text-muted-foreground hover:bg-muted",
-                )}
-              >
-                <span>{f.label}</span>
-                <span
-                  className={cn(
-                    "text-[11px] tabular-nums",
-                    accentUnread
-                      ? "font-semibold text-violet-700"
-                      : accentPending
-                        ? "font-semibold text-orange-700"
-                        : "opacity-80",
-                  )}
-                >
-                  {f.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Tags</p>
-            <button type="button" className="rounded-md p-1 hover:bg-muted" aria-label="Add tag">
-              <Plus className="h-3.5 w-3.5" />
+    <div className="-mx-0 flex h-[calc(100vh-3.5rem)] min-h-[640px] overflow-hidden border-y border-[#e5e7eb] bg-white">
+      {/* Filter rail */}
+      <aside className="hidden w-[240px] shrink-0 flex-col border-r border-[#e5e7eb] bg-[#fafafa] lg:flex">
+        <div className="border-b border-[#e5e7eb] px-4 py-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[15px] font-bold text-[#111827]">Inbox</h2>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-[#059669]"
+            >
+              <span className="h-2 w-2 rounded-full bg-[#059669]" />
+              Online
+              <ChevronDown className="h-3 w-3" />
             </button>
           </div>
-          <div className="space-y-1">
-            {tagCounts.length === 0 ? (
-              <p className="px-2.5 text-[11px] text-muted-foreground">No tags yet</p>
-            ) : (
-              tagCounts.map((t) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-[10px] px-2.5 py-1.5 text-[12px] text-muted-foreground hover:bg-muted"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rotate-45 bg-violet-400" />
-                    {t.label}
-                  </span>
-                  <span className="text-[11px]">{t.count}</span>
-                </button>
-              ))
-            )}
+          <div className="mt-3 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9ca3af]" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search conversations"
+                className="h-9 w-full rounded-lg border border-[#e5e7eb] bg-white pl-8 pr-2 text-[12px] outline-none focus:border-[#6366f1]"
+              />
+            </div>
+            <Link
+              href="/send/quick"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6366f1] hover:bg-[#eef2ff]"
+              title="New message"
+            >
+              <PenSquare className="h-4 w-4" />
+            </Link>
           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          <FilterGroup
+            title="My Conversations"
+            open={expandedGroups.my}
+            onToggle={() => toggleGroup("my")}
+          >
+            {filterBtn("my:all", "All", counts.myAll)}
+            {filterBtn("my:unread", "Unread", counts.myUnread)}
+            {filterBtn("my:open", "Open", counts.myOpen)}
+            {filterBtn("my:pending", "Pending", counts.myPending)}
+            {filterBtn("my:snoozed", "Snoozed", counts.mySnoozed)}
+          </FilterGroup>
+
+          <FilterGroup
+            title="All Conversations"
+            open={expandedGroups.all}
+            onToggle={() => toggleGroup("all")}
+          >
+            {filterBtn("all:all", "All", counts.allAll)}
+            {filterBtn("all:unassigned", "Unassigned", counts.allUnassigned)}
+            {filterBtn("all:unread", "Unread", counts.allUnread)}
+            {filterBtn("all:open", "Open", counts.allOpen)}
+            {filterBtn("all:pending", "Pending", counts.allPending)}
+            {filterBtn("all:closed", "Closed", counts.allClosed)}
+            {filterBtn("all:spam", "Spam", counts.allSpam)}
+          </FilterGroup>
+
+          <FilterGroup
+            title="Tagged Conversations"
+            open={expandedGroups.tags}
+            onToggle={() => toggleGroup("tags")}
+          >
+            {tagCounts.length === 0 ? (
+              <p className="px-2.5 py-1 text-[12px] text-[#9ca3af]">No tags yet</p>
+            ) : (
+              tagCounts.map((t) =>
+                filterBtn(`tag:${t.label}` as InboxFilter, t.label, t.count),
+              )
+            )}
+            <Link
+              href="/settings"
+              className="mt-1 block px-2.5 text-[12px] font-medium text-[#6366f1] hover:underline"
+            >
+              + Manage Tags
+            </Link>
+          </FilterGroup>
+
+          <FilterGroup
+            title="Teammates"
+            open={expandedGroups.teammates}
+            onToggle={() => toggleGroup("teammates")}
+          >
+            {teamMembers.slice(0, 5).map((m) => {
+              const count = items.filter((c) => c.assignedTo === m.name).length;
+              return filterBtn(`teammate:${m.id}` as InboxFilter, m.name, count);
+            })}
+          </FilterGroup>
         </div>
       </aside>
 
       {/* Conversation list */}
-      <aside className="border-r border-border">
-        <div className="space-y-1 p-2">
+      <aside
+        className={cn(
+          "flex w-full max-w-[320px] shrink-0 flex-col border-r border-[#e5e7eb] bg-white sm:max-w-[300px]",
+          selectedId ? "hidden md:flex" : "flex",
+        )}
+      >
+        <div className="flex items-center gap-2 border-b border-[#f3f4f6] px-3 py-2.5">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-[#d1d5db]"
+            checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
+            onChange={(e) => {
+              if (e.target.checked) setSelectedIds(new Set(filtered.map((c) => c.id)));
+              else setSelectedIds(new Set());
+            }}
+          />
+          <select className="h-8 flex-1 rounded-md border border-[#e5e7eb] bg-white px-2 text-[12px]">
+            <option>All</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as "newest" | "oldest")}
+            className="h-8 rounded-md border border-[#e5e7eb] bg-white px-2 text-[12px]"
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-[#e5e7eb] hover:bg-[#f9fafb]"
+          >
+            <Filter className="h-3.5 w-3.5 text-[#6b7280]" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="p-4 text-center text-[12px] text-muted-foreground">
-              No conversations yet
-            </p>
-          ) : null}
-          {filtered.map((c) => {
-            const active = c.id === selected?.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setSelectedId(c.id)}
-                className={cn(
-                  "flex w-full gap-2.5 rounded-[12px] px-2.5 py-2.5 text-left transition",
-                  active ? "bg-indigo-50" : "hover:bg-muted/60",
-                )}
-              >
-                <span className="relative shrink-0">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700">
-                    {(c.contactName || "?").slice(0, 2).toUpperCase()}
-                  </span>
-                  <span
-                    className={cn(
-                      "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white",
-                      c.status === "Pending" ? "bg-amber-400" : c.status === "Closed" ? "bg-slate-400" : "bg-violet-500",
-                    )}
+            <p className="p-6 text-center text-[13px] text-[#6b7280]">No conversations in this view</p>
+          ) : (
+            filtered.map((c) => {
+              const active = !bulkMode && c.id === selected?.id;
+              const checked = selectedIds.has(c.id);
+              return (
+                <div
+                  key={c.id}
+                  className={cn(
+                    "relative flex w-full gap-2.5 border-b border-[#f9fafb] px-3 py-3 text-left transition",
+                    active && "bg-[#eef2ff]",
+                    checked && "bg-[#f5f3ff]",
+                    !active && !checked && "hover:bg-[#fafafa]",
+                  )}
+                >
+                  {active ? (
+                    <span className="absolute bottom-0 left-0 top-0 w-[3px] bg-[#6366f1]" />
+                  ) : null}
+                  <input
+                    type="checkbox"
+                    className="mt-2 h-4 w-4 shrink-0 rounded border-[#d1d5db]"
+                    checked={checked}
+                    onChange={() => toggleSelect(c.id)}
+                    onClick={(e) => e.stopPropagation()}
                   />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[13px] font-semibold">{c.contactName}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {new Date(c.updatedAt).toLocaleTimeString(undefined, {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 gap-2.5 text-left"
+                    onClick={() => {
+                      if (bulkMode) toggleSelect(c.id);
+                      else setSelectedId(c.id);
+                    }}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[11px] font-bold text-[#6366f1]">
+                      {initials(c.contactName)}
                     </span>
-                  </span>
-                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                    {c.productSourceLabel ? (
-                      <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[10px] font-medium text-foreground">
-                        {c.productSourceLabel}
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="truncate text-[13px] font-semibold text-[#111827]">
+                          {c.contactName}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-[#9ca3af]">
+                          {relativeTime(c.updatedAt)}
+                        </span>
                       </span>
-                    ) : null}
-                    {c.campaignName ? `Campaign: ${c.campaignName} · ` : ""}
-                    {c.lastMessage}
-                  </span>
-                  <span className="mt-1.5 flex items-center justify-between gap-2">
-                    <StatusChip status={c.status} />
-                    <span className="truncate text-[10px] text-muted-foreground">
-                      {c.assignedTo ?? "Unassigned"}
+                      <span className="mt-0.5 block truncate text-[12px] text-[#6b7280]">
+                        {c.lastMessage}
+                      </span>
+                      {c.unread ? (
+                        <span className="mt-1.5 inline-block h-2 w-2 rounded-full bg-[#6366f1]" />
+                      ) : null}
                     </span>
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </aside>
 
-      {/* Chat */}
-      <section className="flex min-w-0 flex-col">
-        {selected ? (
+      {/* Thread */}
+      <section
+        className={cn(
+          "min-w-0 flex-1 flex-col bg-white",
+          selectedId ? "flex" : "hidden md:flex",
+        )}
+      >
+        {bulkMode ? (
+          <BulkActionsBar
+            count={selectedIds.size}
+            onClear={() => setSelectedIds(new Set())}
+            onSetStatus={(status) => {
+              void Promise.all(
+                [...selectedIds].map((id) =>
+                  fetch(`/api/inbox/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status }),
+                  }),
+                ),
+              ).then(() => window.location.reload());
+            }}
+          />
+        ) : selected ? (
           <>
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-[15px] font-bold whitespace-nowrap">{selected.contactName}</p>
-                  {selected.repeatCaller && selected.repeatCaller.missedToday > 1 ? (
-                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
-                      Called {selected.repeatCaller.missedToday}× today
-                    </span>
-                  ) : null}
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-violet-500" />
-                </div>
-                <p className="text-[12px] text-muted-foreground">{formatPhone(selected.phone)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <Languages className="h-3.5 w-3.5 text-muted-foreground" />
-                  <select
-                    className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
-                    value={targetLang}
-                    onChange={(e) => setTargetLang(e.target.value)}
-                    aria-label="Translation language"
-                  >
-                    {LANG_OPTIONS.map((lang) => (
-                      <option key={lang.value} value={lang.value}>
-                        {lang.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <select
-                  className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
-                  value={teamMembers.find((m) => m.name === selected.assignedTo)?.id || ""}
-                  onChange={(e) => assignTo(e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {teamMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="h-9 rounded-[10px] border border-border bg-card px-2 text-[12px]"
-                  value={selected.status}
-                  onChange={(e) => updateStatus(e.target.value)}
-                >
-                  <option>Open</option>
-                  <option>Pending</option>
-                  <option>Closed</option>
-                  <option>Snoozed</option>
-                  <option>Spam</option>
-                </select>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+              <div className="flex min-w-0 items-center gap-2">
                 <button
                   type="button"
-                  className="h-9 rounded-[10px] border border-border px-2 text-[11px] font-semibold hover:bg-muted disabled:opacity-50"
-                  disabled={callbackMarking}
-                  onClick={() => void markNeedsCallback()}
+                  className="rounded-lg p-1.5 text-[#6b7280] hover:bg-[#f3f4f6] md:hidden"
+                  onClick={() => setSelectedId(undefined)}
+                  aria-label="Back to conversations"
                 >
-                  {callbackMarking ? "Saving…" : "Needs callback"}
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
-                <button type="button" className="rounded-[10px] border border-border p-2 hover:bg-muted">
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {callbackMarkMsg ? (
-              <div className="border-b border-border bg-muted/40 px-4 py-2 text-[12px] text-muted-foreground">
-                {callbackMarkMsg}
-              </div>
-            ) : null}
-
-            {alsoViewing.length > 0 ? (
-              <div className="border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-[12px] text-indigo-900">
-                Also viewing: {alsoViewing.map((v) => v.userName).join(", ")}
-              </div>
-            ) : null}
-
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              {selected.messages.map((m) => {
-                if (m.direction === "note") {
-                  return (
-                    <div
-                      key={m.id}
-                      className="rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-950"
-                    >
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                        Internal note · {m.user ?? "Team"}
-                      </p>
-                      <p className="mt-1">{m.body}</p>
-                    </div>
-                  );
-                }
-                const outbound = m.direction === "out";
-                const translation = translations[m.id];
-                return (
-                  <div key={m.id} className={cn("flex", outbound ? "justify-end" : "justify-start")}>
-                    <div
-                      className={cn(
-                        "max-w-[75%] rounded-[14px] px-3.5 py-2.5 text-[13px]",
-                        outbound
-                          ? "bg-primary text-white"
-                          : "bg-muted text-foreground",
-                      )}
-                    >
-                      {outbound ? (
-                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/80">
-                          You
-                        </p>
-                      ) : null}
-                      <p>{m.body}</p>
-                      {translation ? (
-                        <p
-                          className={cn(
-                            "mt-2 border-t pt-2 text-[12px]",
-                            outbound ? "border-white/20 text-white/90" : "border-border text-muted-foreground",
-                          )}
-                        >
-                          {translation.text}
-                          {translation.mode === "stub" ? (
-                            <span className="ml-1 text-[10px] opacity-70">(demo)</span>
-                          ) : null}
-                        </p>
-                      ) : null}
-                      {!outbound ? (
-                        <button
-                          type="button"
-                          className="mt-1.5 text-[10px] font-medium text-primary hover:underline"
-                          onClick={() => translateMessage(m.id, m.body)}
-                          disabled={translatingId === m.id}
-                        >
-                          {translatingId === m.id ? "Translating…" : "Translate"}
-                        </button>
-                      ) : null}
-                      <p className={cn("mt-1 text-[10px]", outbound ? "text-white/70" : "text-muted-foreground")}>
-                        {new Date(m.at).toLocaleString(undefined, {
-                          month: "numeric",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                        {outbound ? " · ✓✓" : ""}
-                      </p>
-                    </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef2ff] text-[11px] font-bold text-[#6366f1]">
+                    {initials(selected.contactName)}
+                  </span>
+                  <div>
+                    <p className="text-[15px] font-bold text-[#111827]">{selected.contactName}</p>
+                    {selected.tags?.[0] ? (
+                      <span className="mt-0.5 inline-flex rounded-full bg-[#eef2ff] px-2 py-0.5 text-[10px] font-semibold text-[#6366f1]">
+                        {selected.tags[0]}
+                      </span>
+                    ) : null}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+                </div>
+              </div>
 
-            <div className="border-t border-border p-3">
-              {aiAssist ? (
-                <div className="mb-3 rounded-[12px] border border-violet-200 bg-violet-50 p-3 text-[12px] text-violet-950">
-                  <p className="font-semibold text-violet-800">AI assistant</p>
-                  {aiAssist.mode === "heuristic" ? (
-                    <p className="mt-1 rounded bg-amber-100 px-2 py-1 text-[11px] text-amber-900">
-                      Offline mode — no OpenAI key configured. Showing a heuristic suggestion.
-                    </p>
-                  ) : null}
-                  <p className="mt-1">{aiAssist.summary}</p>
-                  {aiAssist.suggestedTags?.length ? (
-                    <p className="mt-2 text-[11px]">
-                      Tags: {aiAssist.suggestedTags.join(", ")}
-                    </p>
-                  ) : null}
-                  {aiAssist.suggestedNextAction ? (
-                    <p className="mt-1 text-[11px] text-violet-700">
-                      Next: {aiAssist.suggestedNextAction}
-                    </p>
-                  ) : null}
-                  {aiAssist.optOutRisk ? (
-                    <p className="mt-1 text-[11px] font-semibold text-rose-700">
-                      Opt-out risk detected — review before replying
-                    </p>
-                  ) : null}
-                  {aiAssist.suggestedReply ? (
-                    <button
-                      type="button"
-                      className="mt-2 text-left text-[12px] font-medium text-primary hover:underline"
-                      onClick={() => {
-                        setReply(aiAssist.suggestedReply || "");
-                        setComposerTab("reply");
-                      }}
-                    >
-                      Use suggested reply
-                    </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <div ref={statusRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setStatusMenuOpen((v) => !v)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[12px] font-semibold text-[#059669]"
+                  >
+                    {selected.status}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                  {statusMenuOpen ? (
+                    <MenuPanel title="Conversation Status">
+                      {["Open", "Pending", "Closed"].map((s) => (
+                        <MenuItem key={s} onClick={() => void updateStatus(s)}>
+                          {s}
+                        </MenuItem>
+                      ))}
+                    </MenuPanel>
                   ) : null}
                 </div>
-              ) : null}
-              <div className="mb-2 flex gap-4 border-b border-border px-1">
+
+                <div ref={assignRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAssignMenuOpen((v) => !v)}
+                    className="inline-flex h-8 max-w-[180px] items-center gap-1.5 truncate rounded-lg border border-[#e5e7eb] bg-white px-2 text-[12px] text-[#374151]"
+                  >
+                    <UserCircle2 className="h-4 w-4 shrink-0 text-[#9ca3af]" />
+                    <span className="truncate">
+                      {selected.assignedTo ? `Assigned to ${selected.assignedTo}` : "Unassigned"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </button>
+                  {assignMenuOpen ? (
+                    <MenuPanel title="Assign To">
+                      <MenuItem onClick={() => void assignTo("")}>No One</MenuItem>
+                      {currentUserId ? (
+                        <MenuItem onClick={() => void assignTo(currentUserId)}>Me</MenuItem>
+                      ) : null}
+                      {teamMembers.map((m) => (
+                        <MenuItem key={m.id} onClick={() => void assignTo(m.id)}>
+                          {m.name}
+                        </MenuItem>
+                      ))}
+                    </MenuPanel>
+                  ) : null}
+                </div>
+
+                <div ref={tagRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setTagMenuOpen((v) => !v)}
+                    className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] hover:bg-[#f9fafb]"
+                    title="Tags"
+                  >
+                    <Tag className="h-4 w-4 text-[#6b7280]" />
+                    {selected.tags?.length ? (
+                      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#6366f1] text-[9px] font-bold text-white">
+                        {selected.tags.length}
+                      </span>
+                    ) : null}
+                  </button>
+                  {tagMenuOpen ? (
+                    <MenuPanel title="Tags">
+                      {tagCounts.map((t) => {
+                        const active = selected.tags?.includes(t.label);
+                        return (
+                          <label
+                            key={t.label}
+                            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px] hover:bg-[#f9fafb]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={active}
+                              onChange={() => {
+                                const next = active
+                                  ? (selected.tags || []).filter((x) => x !== t.label)
+                                  : [...(selected.tags || []), t.label];
+                                void updateTags(next);
+                              }}
+                            />
+                            {t.label}
+                          </label>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        className="w-full border-t border-[#f3f4f6] px-3 py-2 text-[12px] font-semibold text-[#6366f1]"
+                        onClick={() => setTagMenuOpen(false)}
+                      >
+                        Set Tags
+                      </button>
+                    </MenuPanel>
+                  ) : null}
+                </div>
+
+                <div ref={moreRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMoreMenuOpen((v) => !v)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] hover:bg-[#f9fafb]"
+                  >
+                    <MoreHorizontal className="h-4 w-4 text-[#6b7280]" />
+                  </button>
+                  {moreMenuOpen ? (
+                    <MenuPanel>
+                      <MenuItem onClick={() => void markUnread()}>Mark unread</MenuItem>
+                      <MenuItem onClick={downloadTranscript}>Download transcript</MenuItem>
+                    </MenuPanel>
+                  ) : null}
+                </div>
+
                 <button
                   type="button"
+                  onClick={() => setContactDrawerOpen(true)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#6366f1] bg-[#eef2ff] text-[#6366f1]"
+                  title="Contact details"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-[#fafafa] px-5 py-4">
+              <ThreadTimeline conversation={selected} currentUserName={currentUserName} />
+            </div>
+
+            <div className="border-t border-[#e5e7eb] bg-white px-4 py-3">
+              <div className="mb-2 flex gap-6 border-b border-[#f3f4f6]">
+                <ComposerTab
+                  active={composerTab === "reply"}
                   onClick={() => setComposerTab("reply")}
-                  className={cn(
-                    "-mb-px border-b-2 pb-2 text-[13px] font-semibold",
-                    composerTab === "reply"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground",
-                  )}
-                >
-                  Reply
-                </button>
-                <button
-                  type="button"
+                  label="Message"
+                />
+                <ComposerTab
+                  active={composerTab === "note"}
                   onClick={() => setComposerTab("note")}
-                  className={cn(
-                    "-mb-px border-b-2 pb-2 text-[13px] font-semibold",
-                    composerTab === "note"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground",
-                  )}
-                >
-                  Internal note
-                </button>
+                  label="Note"
+                />
               </div>
               {mediaUrls.length > 0 ? (
                 <AttachedMediaThumbs
@@ -688,157 +753,55 @@ export function InboxView({
                 />
               ) : null}
               <textarea
-                className="min-h-[88px] w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 text-[13px] outline-none focus:border-primary"
-                placeholder={
-                  composerTab === "note"
-                    ? `Write an internal note… Use @Name to mention (${teamMembers.map((m) => m.name).join(", ")})`
-                    : "Write a reply..."
-                }
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
+                placeholder={
+                  composerTab === "note"
+                    ? "Add an internal note…"
+                    : "Type a message…"
+                }
+                className="min-h-[72px] w-full resize-none rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-[13px] outline-none focus:border-[#6366f1]"
               />
-              {error ? (
-                <p className="mt-2 text-[12px] text-rose-600">{error}</p>
-              ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button className="h-9 rounded-[10px]" onClick={sendReply} disabled={sending}>
-                  {sending ? "Sending…" : "Send"}
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-9 rounded-[10px]"
-                  type="button"
-                  onClick={runAiAssist}
-                  disabled={aiLoading}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {aiLoading ? "Analyzing…" : "AI suggestion"}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-9 rounded-[10px]"
-                  type="button"
-                  onClick={() => setShowTemplates(true)}
-                >
-                  Saved replies
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 rounded-[10px]"
-                  type="button"
-                  onClick={() => setShowMedia(true)}
-                  disabled={composerTab === "note"}
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 rounded-[10px]" type="button">
-                  <Smile className="h-4 w-4" />
-                </Button>
+              {error ? <p className="mt-1 text-[12px] text-[#dc2626]">{error}</p> : null}
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-0.5">
+                  {composerTab === "reply" ? (
+                    <>
+                      <IconBtn icon={Paperclip} onClick={() => setShowMedia(true)} />
+                      <IconBtn icon={Smile} />
+                      <IconBtn icon={ImageIcon} />
+                      <IconBtn icon={Code2} onClick={() => setShowTemplates(true)} />
+                      <IconBtn icon={Bookmark} />
+                    </>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-[#9ca3af]">
+                    {reply.length} / 918
+                  </span>
+                  <Button
+                    className="h-9 rounded-lg bg-[#6366f1] px-4 text-[13px] hover:bg-[#4f46e5]"
+                    onClick={() => void sendReply()}
+                    disabled={sending || !reply.trim()}
+                  >
+                    {sending ? "Sending…" : "Send"}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center text-[13px] text-muted-foreground">
-            Select a conversation
-          </div>
+          <EmptyThread />
         )}
       </section>
 
-      {/* Contact details */}
-      <aside className="hidden border-l border-border p-4 xl:block">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-          Contact details
-        </p>
-        {contact ? (
-          <div className="mt-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-violet-100 text-[16px] font-bold text-violet-700">
-              {`${contact.firstName?.[0] || ""}${contact.lastName?.[0] || ""}`.toUpperCase() || "?"}
-            </span>
-            <p className="mt-3 text-[15px] font-bold">
-              {contact.firstName} {contact.lastName}
-            </p>
-            <p className="text-[12px] text-muted-foreground">{contact.email || formatPhone(contact.phone)}</p>
-            <div className="mt-3">
-              <StatusChip status={contact.status} />
-            </div>
-            <dl className="mt-4 space-y-3 text-[12px]">
-              <div>
-                <dt className="text-muted-foreground">Source</dt>
-                <dd className="mt-0.5 font-medium">{contact.consentSource || "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Lists</dt>
-                <dd className="mt-1 flex flex-wrap gap-1">
-                  {contact.lists.length ? (
-                    contact.lists.map((l) => (
-                      <span key={l} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                        {l}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-muted-foreground">None</span>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Opt-out</dt>
-                <dd className="mt-0.5 font-medium">
-                  {contact.status === "Unsubscribed" || contact.status === "Blocked"
-                    ? "Yes"
-                    : "No"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Added</dt>
-                <dd className="mt-0.5 font-medium">
-                  {contact.dateAdded
-                    ? new Date(contact.dateAdded).toLocaleDateString()
-                    : contact.consentDate
-                      ? new Date(contact.consentDate).toLocaleDateString()
-                      : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Last message</dt>
-                <dd className="mt-0.5 font-medium">
-                  {contact.lastMessaged
-                    ? new Date(contact.lastMessaged).toLocaleDateString()
-                    : "—"}
-                </dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <p className="text-[11px] font-semibold text-muted-foreground">Tags</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {contact.tags.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700"
-                  >
-                    {t}
-                  </span>
-                ))}
-                <button
-                  type="button"
-                  className="rounded-full border border-dashed border-border px-2 py-1 text-[11px] text-muted-foreground"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <div className="mt-5 border-t border-border pt-4">
-              <p className="text-[11px] font-semibold text-muted-foreground">Connected apps</p>
-              <div className="mt-2">
-                <ConnectedRecordsPanel contactId={contact.id} compact />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-4 text-[12px] text-muted-foreground">No contact selected</p>
-        )}
-      </aside>
+      <InboxContactDrawer
+        open={contactDrawerOpen}
+        onClose={() => setContactDrawerOpen(false)}
+        contact={contact}
+        conversation={selected}
+      />
       <TemplatePicker
         open={showTemplates}
         onClose={() => setShowTemplates(false)}
@@ -854,5 +817,246 @@ export function InboxView({
         onConfirm={setMediaUrls}
       />
     </div>
+  );
+}
+
+function FilterGroup({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="mb-1 flex w-full items-center justify-between px-1 text-[11px] font-bold uppercase tracking-wide text-[#9ca3af]"
+      >
+        {title}
+        <ChevronDown className={cn("h-3.5 w-3.5 transition", open && "rotate-180")} />
+      </button>
+      {open ? <div className="space-y-0.5">{children}</div> : null}
+    </div>
+  );
+}
+
+function ThreadTimeline({
+  conversation,
+  currentUserName,
+}: {
+  conversation: Conversation;
+  currentUserName?: string;
+}) {
+  const messages = conversation.messages || [];
+  let lastDate = "";
+
+  return (
+    <div className="space-y-4">
+      {messages.map((m) => {
+        const dateKey = new Date(m.at).toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+        const showDate = dateKey !== lastDate;
+        if (showDate) lastDate = dateKey;
+
+        if (m.direction === "note") {
+          return (
+            <div key={m.id}>
+              {showDate ? <DateSeparator label={dateKey} /> : null}
+              <div className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-[#b45309]">
+                  Note from {m.user ?? currentUserName ?? "Team"}{" "}
+                  <span className="font-normal normal-case text-[#d97706]">[Internal]</span>
+                </p>
+                <p className="mt-1">{m.body}</p>
+                <p className="mt-1 text-[11px] text-[#d97706]">
+                  {new Date(m.at).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        const outbound = m.direction === "out";
+        return (
+          <div key={m.id}>
+            {showDate ? <DateSeparator label={dateKey} /> : null}
+            <div className={cn("flex gap-2", outbound ? "justify-end" : "justify-start")}>
+              {!outbound ? (
+                <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[10px] font-bold text-[#6366f1]">
+                  {initials(conversation.contactName)}
+                </span>
+              ) : null}
+              <div className={cn("max-w-[70%]", outbound && "text-right")}>
+                <p className="mb-1 text-[11px] text-[#9ca3af]">
+                  {outbound ? currentUserName ?? "You" : conversation.contactName} ·{" "}
+                  {new Date(m.at).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+                <div
+                  className={cn(
+                    "inline-block rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed",
+                    outbound
+                      ? "rounded-br-md bg-[#6366f1] text-white"
+                      : "rounded-bl-md border border-[#e5e7eb] bg-white text-[#111827]",
+                  )}
+                >
+                  {m.body}
+                </div>
+                {outbound ? (
+                  <p className="mt-1 text-[10px] text-[#9ca3af]">✓✓</p>
+                ) : null}
+              </div>
+              {outbound ? (
+                <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-[10px] font-bold text-white">
+                  {(currentUserName || "Y").slice(0, 2).toUpperCase()}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <p className="py-2 text-center text-[11px] font-medium text-[#9ca3af]">{label}</p>
+  );
+}
+
+function EmptyThread() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <p className="text-[18px] font-semibold text-[#111827]">No Conversation Selected</p>
+      <p className="mt-2 max-w-sm text-[14px] text-[#6b7280]">
+        Select a conversation to begin chatting.
+      </p>
+      <Link
+        href="/send/quick"
+        className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-[#6366f1] px-5 text-[14px] font-semibold text-white hover:bg-[#4f46e5]"
+      >
+        New Message
+      </Link>
+    </div>
+  );
+}
+
+function BulkActionsBar({
+  count,
+  onClear,
+  onSetStatus,
+}: {
+  count: number;
+  onClear: () => void;
+  onSetStatus: (status: string) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
+      <p className="text-[20px] font-bold text-[#111827]">{count} Conversations Selected</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button variant="outline" onClick={() => onSetStatus("Open")}>
+          Set Open
+        </Button>
+        <Button variant="outline" onClick={() => onSetStatus("Pending")}>
+          Set Pending
+        </Button>
+        <Button variant="outline" onClick={() => onSetStatus("Closed")}>
+          Close
+        </Button>
+        <Button variant="ghost" onClick={onClear}>
+          Clear selection
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ComposerTab({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "-mb-px border-b-2 pb-2 text-[13px] font-semibold transition",
+        active
+          ? "border-[#6366f1] text-[#6366f1]"
+          : "border-transparent text-[#6b7280] hover:text-[#111827]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function IconBtn({
+  icon: Icon,
+  onClick,
+}: {
+  icon: typeof Paperclip;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+function MenuPanel({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <div className="absolute right-0 top-full z-30 mt-1 min-w-[200px] rounded-xl border border-[#e5e7eb] bg-white py-1 shadow-lg">
+      {title ? (
+        <p className="border-b border-[#f3f4f6] px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-[#9ca3af]">
+          {title}
+        </p>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+function MenuItem({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full px-3 py-2 text-left text-[13px] text-[#374151] hover:bg-[#f9fafb]"
+    >
+      {children}
+    </button>
   );
 }

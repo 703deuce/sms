@@ -50,7 +50,7 @@ export default function AllCampaignsPage() {
         title="All campaigns"
         description="Live campaigns from your workspace. Create new ones from the 14 core categories."
         actions={
-          <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover"><Plus className="h-4 w-4" />
+          <Link href="/campaigns/new" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover"><Plus className="h-4 w-4" />
               New campaign</Link>
         }
       />
@@ -62,7 +62,7 @@ export default function AllCampaignsPage() {
         {!loading && !error && campaigns.length === 0 && (
           <div className="p-8 text-center">
             <p className="text-slate-600">No campaigns yet.</p>
-            <Link href="/campaigns" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover">Choose a campaign type</Link>
+            <Link href="/campaigns/new" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover">Create campaign</Link>
           </div>
         )}
         {!loading && campaigns.length > 0 && (

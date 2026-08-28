@@ -697,7 +697,7 @@ export function Sidebar({
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" aria-hidden />
             ) : null}
           </div>
-          {realtorMode && onToggleCollapse ? (
+          {onToggleCollapse ? (
             <button
               type="button"
               onClick={onToggleCollapse}

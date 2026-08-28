@@ -1,119 +1,40 @@
 import {
-  BarChart3,
-  ClipboardList,
-  CreditCard,
-  FileText,
-  Hash,
-  Link2,
-  Megaphone,
+  BookOpen,
+  HelpCircle,
+  LayoutDashboard,
   MessageSquare,
+  Megaphone,
   Puzzle,
-  Send,
   Settings,
-  ShieldCheck,
-  ShoppingCart,
-  Sparkles,
-  Sprout,
-  Upload,
   Users,
-  Workflow,
-  Wrench,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
-import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
 
 export type SmsPlatformNavOptions = {
   conversationsBadge?: number;
 };
 
 /**
- * V1 SMS platform sidebar — messaging, contacts, automations, lead capture, analytics.
+ * V1 SMS platform sidebar — focused operator nav matching inbox wireframe.
  */
 export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavItem[] {
   const badge = options.conversationsBadge ?? 0;
 
-  const items: NavItem[] = [
+  return [
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     {
       label: "Conversations",
       href: "/conversations",
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
-      sectionLabel: "Messaging",
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
-    { label: "Send", href: "/send", icon: Send },
-    { label: "AI Composer", href: "/send/ai", icon: Sparkles },
-    { label: "Message Templates", href: "/templates", icon: FileText },
-    { label: "Link Tracking", href: "/reports/links", icon: Link2 },
-    {
-      label: "Contacts",
-      href: "/contacts",
-      icon: Users,
-      sectionLabel: "Contacts",
-    },
-    { label: "Imports", href: "/contacts/imports", icon: Upload },
-    {
-      label: "Flows",
-      href: "/automations",
-      icon: Workflow,
-      sectionLabel: "Automations",
-    },
-    { label: "Automation Templates", href: "/automations/templates", icon: FileText },
-    { label: "Flow Builder", href: "/automations/new", icon: Wrench },
-    { label: "Run History", href: "/automations/logs", icon: ClipboardList },
-    {
-      label: leadCaptureTabs[0]?.label ?? "Keywords",
-      href: leadCaptureTabs[0]?.href ?? "/grow/keywords",
-      icon: Sprout,
-      sectionLabel: "Lead Capture",
-    },
+    { label: "Contacts", href: "/contacts", icon: Users },
+    { label: "Playbooks", href: "/playbooks", icon: BookOpen },
+    { label: "Integrations", href: "/integrations", icon: Puzzle },
+    { label: "Settings", href: "/settings", icon: Settings, sectionLabel: "Account" },
+    { label: "Help", href: "/settings", icon: HelpCircle },
   ];
-
-  for (const tab of leadCaptureTabs.slice(1)) {
-    items.push({ label: tab.label, href: tab.href, icon: Sprout });
-  }
-
-  items.push(
-    {
-      label: "Manage Numbers",
-      href: "/numbers",
-      icon: Hash,
-      sectionLabel: "Numbers",
-    },
-    {
-      label: "Buy Numbers",
-      href: "/numbers/buy",
-      icon: ShoppingCart,
-    },
-    {
-      label: "Compliance",
-      href: "/compliance",
-      icon: ShieldCheck,
-      sectionLabel: "Compliance",
-    },
-    {
-      label: "Integrations",
-      href: "/integrations",
-      icon: Puzzle,
-      sectionLabel: "Integrations",
-    },
-    {
-      label: "Analytics",
-      href: "/analytics",
-      icon: BarChart3,
-      sectionLabel: "Analytics",
-    },
-    {
-      label: "Settings",
-      href: "/settings",
-      icon: Settings,
-      sectionLabel: "Account",
-    },
-    { label: "Billing", href: "/settings/billing", icon: CreditCard },
-    { label: "Workspace", href: "/settings/workspaces", icon: Settings },
-  );
-
-  return items;
 }
 
 export function getSmsPlatformPageTitle(pathname: string): string {
@@ -129,9 +50,14 @@ export function getSmsPlatformPageTitle(pathname: string): string {
     if (pathname.startsWith("/sms/settings")) return "Settings";
     return "Analytics";
   }
-  if (pathname.startsWith("/campaigns")) return "Campaigns";
+  if (pathname.startsWith("/playbooks")) return "Playbooks";
+  if (pathname.startsWith("/campaigns")) {
+    if (pathname.startsWith("/campaigns/new/review")) return "Review Campaign";
+    if (pathname.startsWith("/campaigns/new")) return "Create Campaign";
+    return "Campaigns";
+  }
   if (pathname === "/send" || pathname.startsWith("/send/")) {
-    if (pathname.startsWith("/send/quick")) return "Quick text";
+    if (pathname.startsWith("/send/quick")) return "Quick Send";
     if (pathname.startsWith("/send/test")) return "Send test";
     if (pathname.startsWith("/send/ai")) return "AI Composer";
     return "Send";
@@ -141,16 +67,12 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/messaging/payments")) return "Text-to-pay";
   if (pathname.startsWith("/contacts/imports")) return "Imports";
   if (pathname.startsWith("/contacts")) return "Contacts";
-  if (pathname === "/automations/templates") return "Automation Templates";
-  if (pathname === "/automations/new") return "Flow Builder";
+  if (pathname === "/automations/new") return "Create Automation";
   if (pathname === "/automations/logs") return "Run History";
-  if (pathname.startsWith("/automations")) return "Flows";
-  if (pathname.startsWith("/grow")) {
-    const tab = leadCaptureTabs.find(
-      (t) => pathname === t.href || pathname.startsWith(`${t.href}/`),
-    );
-    return tab?.label ?? "Lead Capture";
-  }
+  if (pathname.startsWith("/automations")) return "Automations";
+  if (pathname.startsWith("/grow")) return "Lead Capture";
+  if (pathname.startsWith("/help")) return "Help";
+  if (pathname.startsWith("/dashboard")) return "Dashboard";
   if (pathname.startsWith("/reports")) return "Analytics";
   if (pathname.startsWith("/numbers")) return "Numbers";
   if (pathname.startsWith("/integrations")) return "Integrations";

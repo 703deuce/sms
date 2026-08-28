@@ -1,6 +1,4 @@
 import { InboxView } from "@/components/inbox/inbox-view";
-import { InboxProductFilters } from "@/components/inbox/inbox-product-filters";
-import { Button } from "@/components/ui/button";
 import { parseInboxSearchParams } from "@/lib/mass-texting/inbox-filters";
 import {
   loadContacts,
@@ -8,11 +6,8 @@ import {
   loadTeamMembers,
   requireWorkspaceContext,
 } from "@/lib/workspace-data";
-import { Archive, MessageSquareText } from "lucide-react";
-import Link from "next/link";
-import { Suspense } from "react";
 
-/** Primary SMS messaging inbox — threads, replies, attachments, filters. */
+/** Primary SMS shared inbox — three-column workspace with optional contact drawer. */
 export default async function ConversationsPage({
   searchParams,
 }: {
@@ -44,35 +39,13 @@ export default async function ConversationsPage({
             : "All conversations";
 
   return (
-    <div>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-[24px] font-bold tracking-tight">Conversations</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/conversations/saved-replies">
-            <Button variant="outline" className="h-9 rounded-[10px] text-[13px]">
-              <MessageSquareText className="h-4 w-4" />
-              Saved replies
-            </Button>
-          </Link>
-          <Link href="/conversations?filter=archived">
-            <Button variant="outline" className="h-9 rounded-[10px] text-[13px]">
-              <Archive className="h-4 w-4" />
-              Archived
-            </Button>
-          </Link>
-        </div>
-      </div>
-      <Suspense fallback={null}>
-        <InboxProductFilters basePath="/conversations" />
-      </Suspense>
-      <InboxView
-        initialFilter={initialFilter}
-        conversations={conversations}
-        contacts={contacts}
-        teamMembers={teamMembers}
-        currentUserName={session.name}
-        currentUserId={session.userId}
-      />
-    </div>
+    <InboxView
+      initialFilter={initialFilter}
+      conversations={conversations}
+      contacts={contacts}
+      teamMembers={teamMembers}
+      currentUserName={session.name}
+      currentUserId={session.userId}
+    />
   );
 }
