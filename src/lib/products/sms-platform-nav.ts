@@ -1,6 +1,7 @@
 import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BookOpen,
+  Hash,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
@@ -33,7 +34,17 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       badge: badge > 0 ? badge : undefined,
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
-    { label: "Contacts", href: "/contacts", icon: Users },
+    {
+      label: "Audience",
+      href: "/contacts",
+      icon: Users,
+      children: [
+        { label: "Contacts", href: "/contacts" },
+        { label: "Lists", href: "/contacts/lists" },
+        { label: "Segments", href: "/contacts/segments" },
+      ],
+    },
+    { label: "Keywords", href: "/grow/keywords", icon: Hash },
     { label: "Playbooks", href: "/playbooks", icon: BookOpen },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
     ...buildAccountNavItems(),
@@ -69,7 +80,10 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/messaging/media")) return "Media library";
   if (pathname.startsWith("/messaging/payments")) return "Text-to-pay";
   if (pathname.startsWith("/contacts/imports")) return "Imports";
+  if (pathname.startsWith("/contacts/lists")) return "Lists";
+  if (pathname.startsWith("/contacts/segments")) return "Segments";
   if (pathname.startsWith("/contacts")) return "Contacts";
+  if (pathname.startsWith("/grow/keywords")) return "Keywords";
   if (pathname === "/automations/new") return "Create Automation";
   if (pathname === "/automations/logs") return "Run History";
   if (pathname.startsWith("/automations")) return "Automations";

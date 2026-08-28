@@ -1,4 +1,5 @@
-import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
+import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import { CampaignLaunchReview } from "@/components/campaigns/campaign-launch-review";
 import { CampaignResultsView } from "@/components/campaigns/broadcast/campaign-results";
 import { listBroadcastRecipients } from "@/lib/mass-texting/broadcast/analytics";

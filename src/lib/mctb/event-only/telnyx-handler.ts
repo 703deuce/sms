@@ -92,10 +92,15 @@ function captureMctbEventAsync(
   });
 }
 
+function isCallAlreadyEndedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("90018") || msg.includes("Call has already ended");
+}
+
 async function answerInboundMctbLeg(
   callControlId: string,
   eventPayload: TelnyxPayload,
-): Promise<void> {
+): Promise<{ answered: boolean; skippedReason?: string }> {
   logMctbEventOnly("telnyx_call_initiated", {
     callControlId,
     from: eventPayload.from,
@@ -106,20 +111,37 @@ async function answerInboundMctbLeg(
   });
 
   const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
-  const answerResult = await answerCall(callControlId);
-  if ((answerResult as { mock?: boolean }).mock) {
-    logMctbEventOnly("fqdn_direct_answer_mock_skipped", {
+  try {
+    const answerResult = await answerCall(callControlId);
+    if ((answerResult as { mock?: boolean }).mock) {
+      logMctbEventOnly("fqdn_direct_answer_mock_skipped", {
+        callControlId,
+        reason: "telnyx_call_control_not_configured",
+        livekitRoomCreated: false,
+      });
+      throw new Error("Telnyx Call Control answer skipped (missing TELNYX_API_KEY)");
+    }
+
+    logMctbEventOnly("fqdn_direct_answer_sent", {
       callControlId,
-      reason: "telnyx_call_control_not_configured",
       livekitRoomCreated: false,
     });
-    throw new Error("Telnyx Call Control answer skipped (missing TELNYX_API_KEY)");
+    return { answered: true };
+  } catch (err) {
+    if (isCallAlreadyEndedError(err)) {
+      logMctbEventOnly("fqdn_direct_answer_late", {
+        callControlId,
+        error: err instanceof Error ? err.message : String(err),
+        livekitRoomCreated: false,
+      });
+      return { answered: false, skippedReason: "call_already_ended" };
+    }
+    logMctbEventOnly("fqdn_direct_answer_failed", {
+      callControlId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   }
-
-  logMctbEventOnly("fqdn_direct_answer_sent", {
-    callControlId,
-    livekitRoomCreated: false,
-  });
 }
 
 /**
@@ -138,19 +160,18 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
   // Carrier no-answer forwards (AT&T Diversion) expire in ~2s. This webhook only
   // receives the shared MCTB Event Only Call Control app — answer before DB ingress.
   if (eventType === "call.initiated" && callControlId && inbound) {
-    try {
-      await answerInboundMctbLeg(callControlId, eventPayload);
-    } catch (err) {
-      logMctbEventOnly("fqdn_direct_answer_failed", {
-        callControlId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
+    const answer = await answerInboundMctbLeg(callControlId, eventPayload);
 
     if (!processedCalls.has(callControlId)) {
       processedCalls.set(callControlId, "fqdn_press1");
       setTimeout(() => processedCalls.delete(callControlId), 10 * 60 * 1000);
+    }
+
+    if (!answer.answered && answer.skippedReason === "call_already_ended") {
+      return {
+        handled: true,
+        action: "answer_skipped_call_ended",
+      };
     }
   }
 

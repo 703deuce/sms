@@ -6,7 +6,7 @@ import { Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-export function AddContactDialog() {
+export function AddContactDialog({ triggerLabel = "Add contact" }: { triggerLabel?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,7 +43,7 @@ export function AddContactDialog() {
     <>
       <Button type="button" onClick={() => setOpen(true)}>
         <Plus className="h-4 w-4" />
-        Add contact
+        {triggerLabel}
       </Button>
 
       {open ? (

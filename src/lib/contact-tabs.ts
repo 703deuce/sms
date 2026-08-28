@@ -1,12 +1,6 @@
+/** Audience sub-nav — matches SlickText Contacts / Lists / Segments tabs. */
 export const contactTabs = [
-  { label: "All Contacts", href: "/contacts" },
+  { label: "Contacts", href: "/contacts" },
   { label: "Lists", href: "/contacts/lists" },
   { label: "Segments", href: "/contacts/segments" },
-  { label: "Tags", href: "/contacts/tags" },
-  { label: "Imports", href: "/contacts/imports" },
-  { label: "Custom Fields", href: "/contacts/fields" },
-  { label: "Validation", href: "/contacts/validation" },
-  { label: "Unsubscribed", href: "/contacts/unsubscribed" },
-  { label: "Blocked", href: "/contacts/blocked" },
-  { label: "Invalid", href: "/contacts/invalid" },
 ];

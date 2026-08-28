@@ -1,17 +1,17 @@
 "use client";
 
+import {
+  formatSlickDateTime,
+  SlickAudienceHeader,
+  SlickTableToolbar,
+} from "@/components/audience/slick-audience-ui";
+import { RowActionsMenu } from "@/components/audience/row-actions-menu";
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle, StatCard } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { Tabs } from "@/components/ui/tabs";
-import { formatNumber } from "@/lib/utils";
-import { Hash, Plus } from "lucide-react";
+import { Filter, Hash, List, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-
-import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
 
 type KeywordRow = {
   id: string;
@@ -21,21 +21,20 @@ type KeywordRow = {
   confirmation: string;
   status: string;
   subscribers: number;
+  updatedAt?: string;
 };
-
-type CampaignOption = { id: string; name: string; status: string };
 
 export default function KeywordsPage() {
   const [rows, setRows] = useState<KeywordRow[]>([]);
-  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
-  const [keyword, setKeyword] = useState("JOIN");
+  const [keyword, setKeyword] = useState("");
   const [listName, setListName] = useState("Keyword subscribers");
+  const [description, setDescription] = useState("");
   const [confirmation, setConfirmation] = useState(
-    "You're subscribed! Reply STOP to opt out. Msg&data rates may apply.",
+    "Thanks for subscribing! Reply STOP to opt out. Msg&data rates may apply.",
   );
-  const [startCampaignId, setStartCampaignId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   async function load() {
     const res = await fetch("/api/growth/keywords");
@@ -44,23 +43,12 @@ export default function KeywordsPage() {
     setRows(json.data || []);
   }
 
-  async function loadCampaigns() {
-    try {
-      const res = await fetch("/api/campaigns");
-      if (!res.ok) return;
-      const json = await res.json();
-      setCampaigns(json.data || []);
-    } catch {
-      // optional
-    }
-  }
-
   useEffect(() => {
     load().catch(() => undefined);
-    loadCampaigns();
   }, []);
 
   async function create() {
+    if (!keyword.trim()) return;
     setSaving(true);
     setError(null);
     try {
@@ -69,15 +57,16 @@ export default function KeywordsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           keyword,
-          listName,
+          listName: listName || "Keyword subscribers",
           confirmation,
           autoReply: confirmation,
-          startCampaignId: startCampaignId || undefined,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");
       setKeyword("");
+      setDescription("");
+      setShowCreate(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
@@ -86,107 +75,146 @@ export default function KeywordsPage() {
     }
   }
 
-  const totalSubscribers = rows.reduce((sum, k) => sum + (k.subscribers || 0), 0);
-
   return (
-    <div>
-      <PageHeader
+    <div className="text-[13px]">
+      <SlickAudienceHeader
+        breadcrumb="Tools / Keywords"
         title="Keywords"
-        description="Contacts text a keyword (JOIN, QUOTE, BOOK…) to opt in, join a list, store consent, and optionally start a welcome workflow."
+        description="View and manage all of your keywords."
+        icon={Hash}
       />
-      <Tabs items={leadCaptureTabs} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active keywords" value={formatNumber(rows.length)} />
-        <StatCard label="Total subscribers" value={formatNumber(totalSubscribers)} />
-        <StatCard label="Runtime" value="Live" hint="Wired to inbound SMS" />
-      </div>
-
-      <Card className="mb-6 p-5">
-        <div className="flex items-center gap-2">
-          <Hash className="h-4 w-4 text-primary" />
-          <CardTitle>Create keyword</CardTitle>
-        </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="keyword">Keyword</Label>
-            <Input
-              id="keyword"
-              className="uppercase"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value.toUpperCase())}
-            />
-          </div>
-          <div>
-            <Label htmlFor="list">List name</Label>
-            <Input id="list" value={listName} onChange={(e) => setListName(e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="start-campaign">Start campaign / workflow (optional)</Label>
-            <select
-              id="start-campaign"
-              className="h-10 w-full rounded-[10px] border border-border bg-card px-3 text-sm"
-              value={startCampaignId}
-              onChange={(e) => setStartCampaignId(e.target.value)}
+      <Card className="rounded-xl border-slate-200 p-4 shadow-sm">
+        <SlickTableToolbar
+          createSlot={
+            <Button
+              type="button"
+              className="h-10 bg-primary px-4 text-[13px] font-semibold"
+              onClick={() => setShowCreate(true)}
             >
-              <option value="">— none —</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.status})
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              When someone texts this keyword, they&apos;ll be enrolled into the selected campaign.
-            </p>
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="confirm">Auto-reply / confirmation</Label>
-            <Textarea
-              id="confirm"
-              rows={3}
-              value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value)}
-            />
-          </div>
-        </div>
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
-        <Button className="mt-4" disabled={saving} onClick={create}>
-          <Plus className="h-4 w-4" />
-          {saving ? "Saving…" : "Create keyword"}
-        </Button>
-      </Card>
+              Create Keyword
+            </Button>
+          }
+          filterSlot={
+            <Button variant="outline" size="sm" className="h-10 gap-2 border-slate-200">
+              <Filter className="h-4 w-4" />
+              Filter
+            </Button>
+          }
+        />
 
-      <Card className="overflow-hidden p-0">
-        <Table>
+        {showCreate ? (
+          <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-slate-900">Create keyword</h2>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="rounded p-1 text-slate-400 hover:bg-white"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="keyword">Keyword</Label>
+                <Input
+                  id="keyword"
+                  className="uppercase"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div>
+                <Label htmlFor="list">Default list</Label>
+                <Input id="list" value={listName} onChange={(e) => setListName(e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What this keyword is for"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="confirm">Auto response</Label>
+                <Textarea
+                  id="confirm"
+                  rows={3}
+                  value={confirmation}
+                  onChange={(e) => setConfirmation(e.target.value)}
+                />
+              </div>
+            </div>
+            {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
+            <div className="mt-4 flex gap-2">
+              <Button disabled={saving || !keyword.trim()} onClick={create}>
+                <Plus className="h-4 w-4" />
+                {saving ? "Saving…" : "Save keyword"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowCreate(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <Table className="text-[13px]">
           <THead>
-            <TR>
+            <TR className="border-slate-200">
               <TH>Keyword</TH>
-              <TH>List</TH>
-              <TH>Subscribers</TH>
-              <TH>Status</TH>
+              <TH>Description</TH>
+              <TH>Lists</TH>
+              <TH>Creates Contacts</TH>
+              <TH className="w-12" />
             </TR>
           </THead>
           <TBody>
             {rows.map((k) => (
-              <TR key={k.id}>
-                <TD className="font-medium">{k.keyword}</TD>
-                <TD>{k.listName}</TD>
-                <TD>{k.subscribers}</TD>
+              <TR key={k.id} className="border-slate-100">
                 <TD>
-                  <StatusChip status={k.status} />
+                  <p className="font-semibold text-slate-900">{k.keyword}</p>
+                  <p className="mt-1 text-[12px] text-slate-400">
+                    Last saved on {formatSlickDateTime(k.updatedAt || new Date().toISOString())}
+                  </p>
+                </TD>
+                <TD className="max-w-md text-slate-600">{k.confirmation || k.listName || "—"}</TD>
+                <TD>
+                  <span className="inline-flex items-center gap-1.5 text-primary">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+                      <List className="h-3.5 w-3.5" />
+                    </span>
+                    {k.listName ? "1 Connected List" : "0 Connected Lists"}
+                  </span>
+                </TD>
+                <TD>
+                  <span className="inline-flex rounded-full bg-teal-100 px-2.5 py-0.5 text-[12px] font-semibold text-teal-700">
+                    Yes
+                  </span>
+                </TD>
+                <TD>
+                  <RowActionsMenu />
                 </TD>
               </TR>
             ))}
-            {rows.length === 0 && (
+            {rows.length === 0 ? (
               <TR>
-                <TD colSpan={4} className="text-slate-500">
-                  No keywords yet — create JOIN to start collecting opt-ins.
+                <TD colSpan={5} className="py-10 text-center text-slate-500">
+                  No keywords yet — create one to start collecting opt-ins.
                 </TD>
               </TR>
-            )}
+            ) : null}
           </TBody>
         </Table>
+
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+          <select className="rounded border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-500">
+            <option>25 Per Page</option>
+          </select>
+        </div>
       </Card>
     </div>
   );

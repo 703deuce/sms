@@ -1,8 +1,11 @@
 "use client";
 
+import { campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+export { campaignLooksLikeMassText };
 
 type Action = "activate" | "pause" | "resume" | "cancel";
 
@@ -16,16 +19,6 @@ type Props = {
 
 function normalizeStatus(status: string) {
   return status.toUpperCase().replace("CANCELLED", "CANCELED");
-}
-
-export function campaignLooksLikeMassText(configJson: unknown): boolean {
-  if (!configJson || typeof configJson !== "object") return false;
-  const config = configJson as Record<string, unknown>;
-  return (
-    (config.broadcastVersion === 1 && config.productSource === "mass_text") ||
-    config.productSource === "mass_text" ||
-    config.massTexting === true
-  );
 }
 
 export function CampaignActions({

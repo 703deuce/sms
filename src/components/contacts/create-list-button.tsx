@@ -6,7 +6,7 @@ import { ListPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function CreateListButton() {
+export function CreateListButton({ label = "Create list" }: { label?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -44,9 +44,9 @@ export function CreateListButton() {
 
   if (!open) {
     return (
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button variant="outline" onClick={() => setOpen(true)} className="h-10 bg-primary text-white hover:bg-primary/90">
         <ListPlus className="h-4 w-4" />
-        Create list
+        {label}
       </Button>
     );
   }
