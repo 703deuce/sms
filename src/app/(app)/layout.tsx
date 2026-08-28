@@ -85,8 +85,10 @@ export default async function AppLayout({
         productAccess.hasSms || isActiveEntitlement(productFeatures.mass_texting)
       }
       hasNumbers={productAccess.hasNumbers}
+      hasMctb={hasMctb}
       showTryIt={showTryIt}
       productFeatures={productFeatures}
+      hasMctb={hasMctb}
     >
       {children}
     </AppShell>

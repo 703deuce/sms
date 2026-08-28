@@ -101,3 +101,35 @@ export async function linkWorkspaceToPlatformDemoNumber(input: {
     alreadyLinked,
   };
 }
+
+/** Remove a tenant from shared 571 access when they move to a dedicated MCTB DID. */
+export async function unlinkWorkspaceFromPlatformDemoNumber(input: {
+  workspaceId: string;
+}): Promise<{ unlinked: boolean; remainingLinked: number }> {
+  const pn = await getPlatformDemoPhoneRecord();
+  if (!pn) return { unlinked: false, remainingLinked: 0 };
+
+  const existing = readAdminTestWorkspaceIds(pn.settingsJson);
+  if (!existing.includes(input.workspaceId) && pn.ownerWorkspaceId !== input.workspaceId) {
+    return { unlinked: false, remainingLinked: existing.length };
+  }
+
+  const nextIds = existing.filter((id) => id !== input.workspaceId);
+  if (nextIds.length === existing.length && pn.ownerWorkspaceId !== input.workspaceId) {
+    return { unlinked: false, remainingLinked: existing.length };
+  }
+
+  const prisma = getPrisma();
+  const nextSettings = {
+    ...pn.settingsJson,
+    adminTestWorkspaceIds: nextIds,
+    lastUnlinkAt: new Date().toISOString(),
+    lastUnlinkedWorkspaceId: input.workspaceId,
+  };
+  await prisma.phoneNumber.update({
+    where: { id: pn.phoneNumberId },
+    data: { settingsJson: nextSettings },
+  });
+
+  return { unlinked: true, remainingLinked: nextIds.length };
+}

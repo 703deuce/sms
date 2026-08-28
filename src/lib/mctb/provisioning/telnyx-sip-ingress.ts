@@ -161,6 +161,18 @@ export async function provisionMctbTelnyxSipIngress(input: {
       where: { id: phone.id },
       data: { settingsJson: settings as object },
     });
+
+    await prisma.voiceAgent.updateMany({
+      where: { phoneNumberId: phone.id, status: "ACTIVE" },
+      data: { phoneNumberId: null },
+    });
+
+    const { pauseLegacyMctbSmartRoutingFlows } = await import(
+      "@/lib/mctb/consent-prompt/service"
+    );
+    await pauseLegacyMctbSmartRoutingFlows(input.workspaceId, {
+      activePhoneNumberId: phone.id,
+    }).catch(() => undefined);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {

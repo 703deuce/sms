@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import {
-  ensureMessagingProductRegistration,
-  getMessagingProductRegistration,
-} from "@/lib/mass-texting/messaging-registration";
+import { getRegistrationByWorkspace } from "@/lib/messaging/store";
+import { assertWorkspaceMessagingSendAllowed } from "@/lib/messaging/unified-send-gate";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
+import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
 import { refreshMassTextingSendState } from "@/lib/mass-texting/send-readiness";
 
 export async function GET() {
@@ -13,19 +12,21 @@ export async function GET() {
     if ("error" in auth) return auth.error;
 
     await refreshMassTextingSendState(auth.workspaceId);
-    const registration = await getMessagingProductRegistration(
-      auth.workspaceId,
-      "MASS_TEXT_MARKETING",
-    );
-    const billing = await getMassTextingBillingSummary(auth.workspaceId);
+    const [registration, billing, credits, a2p] = await Promise.all([
+      getRegistrationByWorkspace(auth.workspaceId),
+      getMassTextingBillingSummary(auth.workspaceId),
+      getSegmentAvailability(auth.workspaceId),
+      assertWorkspaceMessagingSendAllowed(auth.workspaceId),
+    ]);
 
     return NextResponse.json({
       data: {
-        useCase: "MASS_TEXT_MARKETING",
+        useCase: a2p.useCase,
         registration,
         billing,
-        separateFromMctb: true,
-        mctbConsentDoesNotAuthorizeBulk: true,
+        credits,
+        a2pReady: a2p.allowed,
+        sharedWithMctb: true,
       },
     });
   } catch (err) {

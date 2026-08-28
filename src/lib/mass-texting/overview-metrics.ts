@@ -127,10 +127,9 @@ export async function loadMassTextOverviewMetrics(
     )
     .slice(0, 5);
   const recent = massTextCampaigns.slice(0, 5);
-  const creditsRemaining =
-    billing.lifecycleState === "TRIAL_ACTIVE"
-      ? billing.trialSegmentsRemaining
-      : billing.monthlySegmentsRemaining + billing.paygCreditsSegments;
+  const { getSegmentAvailability } = await import("@/lib/mass-texting/credit-accounting");
+  const unifiedCredits = await getSegmentAvailability(workspaceId);
+  const totalCreditsRemaining = unifiedCredits.available;
 
   const { isApprovedMessagingStatus, isHpCertifiedSmsNumber, workspaceMessagingStatusLabel } =
     await import("@/lib/messaging/preferred-sending-number");
@@ -164,8 +163,8 @@ export async function loadMassTextOverviewMetrics(
     replies,
     replyRate: sent > 0 ? Math.round((replies / sent) * 1000) / 10 : 0,
     optOuts,
-    creditsRemaining,
-    creditsRemainingCents: creditsRemaining,
+    creditsRemaining: totalCreditsRemaining,
+    creditsRemainingCents: totalCreditsRemaining,
     sendingNumber: sender?.phoneE164 ?? workspaceReg?.phoneE164 ?? null,
     a2pStatus: workspaceMessagingStatusLabel({
       productRegistrationStatus: mtRegistration?.overallStatus,

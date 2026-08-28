@@ -5,12 +5,21 @@ import { getPrisma } from "@/lib/db";
 import { getOrCreateMassTextingBillingAccount } from "@/lib/mass-texting/billing-account";
 import { MASS_TEXT_TRIAL } from "@/lib/mass-texting/pricing";
 import { estimateSmsSegments } from "@/lib/utils";
+import {
+  getWorkspaceCreditSegmentsAvailable,
+  holdCreditsForCampaignReservation,
+  releaseCreditsForCampaignReservation,
+} from "@/lib/settings/billing";
 
 /** Segment balance returned for admin / certification workspaces. */
 export const ADMIN_UNLIMITED_SEGMENT_BALANCE = 999_999_999;
 
 export type SegmentAvailability = {
   available: number;
+  /** Segments from Mass Texting plan buckets (trial / monthly / PAYG). */
+  massTextSegments: number;
+  /** Segments from the shared workspace credit balance (MCTB + campaigns). */
+  workspaceCreditSegments: number;
   monthlyRemaining: number;
   paygRemaining: number;
   trialRemaining: number;
@@ -62,12 +71,16 @@ function availabilityFromAccount(account: {
     blockReason =
       account.lifecycleState === "TRIAL_PENDING_A2P" ||
       account.lifecycleState === "PRODUCTION_A2P_PENDING"
-        ? "Mass Texting A2P approval pending — promotional broadcasts require a separate MASS_TEXT_MARKETING registration from one-to-one SMS"
+        ? "Messaging approval pending — complete shared workspace A2P setup"
         : `Cannot send in state ${account.lifecycleState}`;
   }
 
+  const massTextSegments = available;
+
   return {
-    available,
+    available: massTextSegments,
+    massTextSegments,
+    workspaceCreditSegments: 0,
     monthlyRemaining,
     paygRemaining: Math.max(0, account.paygCreditsSegments),
     trialRemaining,
@@ -81,6 +94,8 @@ function availabilityFromAccount(account: {
 function adminUnlimitedAvailability(): SegmentAvailability {
   return {
     available: ADMIN_UNLIMITED_SEGMENT_BALANCE,
+    massTextSegments: ADMIN_UNLIMITED_SEGMENT_BALANCE,
+    workspaceCreditSegments: ADMIN_UNLIMITED_SEGMENT_BALANCE,
     monthlyRemaining: ADMIN_UNLIMITED_SEGMENT_BALANCE,
     paygRemaining: ADMIN_UNLIMITED_SEGMENT_BALANCE,
     trialRemaining: ADMIN_UNLIMITED_SEGMENT_BALANCE,
@@ -91,6 +106,38 @@ function adminUnlimitedAvailability(): SegmentAvailability {
   };
 }
 
+async function mergeWorkspaceCredits(
+  workspaceId: string,
+  base: SegmentAvailability,
+): Promise<SegmentAvailability> {
+  const workspaceCreditSegments = await getWorkspaceCreditSegmentsAvailable(workspaceId);
+  const available = base.massTextSegments + workspaceCreditSegments;
+  let canSend = base.canSend;
+  let blockReason = base.blockReason;
+
+  if (!canSend && workspaceCreditSegments > 0 && base.accountSendEligible) {
+    canSend = available > 0;
+    if (canSend) blockReason = null;
+  } else if (!canSend && workspaceCreditSegments > 0 && base.blockReason?.includes("approval pending")) {
+    const { assertWorkspaceMessagingSendAllowed } = await import(
+      "@/lib/messaging/unified-send-gate"
+    );
+    const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
+    if (a2p.allowed) {
+      canSend = available > 0;
+      blockReason = canSend ? null : base.blockReason;
+    }
+  }
+
+  return {
+    ...base,
+    available,
+    workspaceCreditSegments,
+    canSend,
+    blockReason,
+  };
+}
+
 export async function getSegmentAvailability(
   workspaceId: string,
 ): Promise<SegmentAvailability> {
@@ -98,7 +145,12 @@ export async function getSegmentAvailability(
     return adminUnlimitedAvailability();
   }
   const account = await getOrCreateMassTextingBillingAccount(workspaceId);
-  return availabilityFromAccount(account);
+  const base = availabilityFromAccount({
+    ...account,
+    paygLineActive: account.paygLineActive,
+    billingModel: account.billingModel,
+  });
+  return mergeWorkspaceCredits(workspaceId, base);
 }
 
 function nextCounters(
@@ -217,7 +269,7 @@ export async function reserveSegmentsForCampaign(input: {
     }
 
     const availability = await getSegmentAvailability(input.workspaceId);
-    if (!availability.canSend) {
+    if (!availability.accountSendEligible && availability.workspaceCreditSegments <= 0) {
       return { ok: false, error: availability.blockReason || "Cannot send", available: 0 };
     }
     if (input.segments > availability.available) {
@@ -229,7 +281,17 @@ export async function reserveSegmentsForCampaign(input: {
     }
 
     const account = await getOrCreateMassTextingBillingAccount(input.workspaceId);
-    const next = nextCounters(account, input.segments);
+    const fromMassText = Math.min(input.segments, availability.massTextSegments);
+    const fromWorkspace = input.segments - fromMassText;
+    const next =
+      fromMassText > 0
+        ? nextCounters(account, fromMassText)
+        : {
+            ok: true as const,
+            trialSegmentsUsed: account.trialSegmentsUsed,
+            monthlySegmentsUsed: account.monthlySegmentsUsed,
+            paygCreditsSegments: account.paygCreditsSegments,
+          };
     if (!next.ok) {
       return {
         ok: false,
@@ -268,25 +330,94 @@ export async function reserveSegmentsForCampaign(input: {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });
+      if (fromWorkspace > 0) {
+        try {
+          await holdCreditsForCampaignReservation(
+            input.workspaceId,
+            fromWorkspace,
+            reservation.id,
+          );
+        } catch (holdErr) {
+          await prisma.massTextingCreditReservation.updateMany({
+            where: { id: reservation.id, status: "ACTIVE" },
+            data: { status: "RELEASED" },
+          });
+          if (fromMassText > 0) {
+            await refundAccount(account.id, fromMassText, account.lifecycleState);
+          }
+          throw holdErr;
+        }
+      }
       return { ok: true, reservationId: reservation.id, reserved: input.segments };
     } catch (err) {
       if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
         const raced = await prisma.massTextingCreditReservation.findUnique({
           where: { idempotencyKey },
         });
-        await refundAccount(account.id, input.segments, account.lifecycleState);
+        await refundAccount(account.id, fromMassText, account.lifecycleState);
         if (raced?.status === "ACTIVE") {
           return { ok: true, reservationId: raced.id, reserved: raced.reservedSegments };
         }
         idempotencyKey = `${input.idempotencyKey}:${attempt + 1}`;
         continue;
       }
-      await refundAccount(account.id, input.segments, account.lifecycleState);
+      if (fromMassText > 0) {
+        await refundAccount(account.id, fromMassText, account.lifecycleState);
+      }
       throw err;
     }
   }
 
   return { ok: false, error: "Could not reserve segments (concurrent campaigns)", available: 0 };
+}
+
+async function workspaceCreditHoldSegments(
+  workspaceId: string,
+  reservationId: string,
+): Promise<number> {
+  const prisma = getPrisma();
+  const hold = await prisma.creditLedgerEntry.findFirst({
+    where: {
+      workspaceId,
+      description: `Campaign reservation hold ${reservationId}`,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!hold) return 0;
+  const { smsCostCents } = await import("@/lib/settings/billing");
+  const cost = smsCostCents();
+  if (cost <= 0) return 0;
+  return Math.max(0, Math.round(Math.abs(hold.amountCents) / cost));
+}
+
+async function releaseReservationCredits(
+  reservation: {
+    id: string;
+    workspaceId: string;
+    billingAccountId: string;
+    reservedSegments: number;
+    billingAccount: { lifecycleState: string };
+  },
+  segmentsToRelease: number,
+) {
+  if (segmentsToRelease <= 0) return;
+  const workspaceHeld = await workspaceCreditHoldSegments(reservation.workspaceId, reservation.id);
+  const releaseWorkspace = Math.min(segmentsToRelease, workspaceHeld);
+  const releaseMassText = segmentsToRelease - releaseWorkspace;
+  if (releaseMassText > 0) {
+    await refundAccount(
+      reservation.billingAccountId,
+      releaseMassText,
+      reservation.billingAccount.lifecycleState,
+    );
+  }
+  if (releaseWorkspace > 0) {
+    await releaseCreditsForCampaignReservation(
+      reservation.workspaceId,
+      releaseWorkspace,
+      reservation.id,
+    );
+  }
 }
 
 async function refundAccount(
@@ -331,11 +462,7 @@ export async function releaseReservation(reservationId: string, _reason: string)
   });
   if (claimed.count !== 1) return;
 
-  await refundAccount(
-    reservation.billingAccountId,
-    reservation.reservedSegments,
-    reservation.billingAccount.lifecycleState,
-  );
+  await releaseReservationCredits(reservation, reservation.reservedSegments);
 }
 
 export async function consumeReservation(reservationId: string) {
@@ -389,11 +516,7 @@ export async function settleCampaignReservation(campaignId: string) {
   if (claimed.count !== 1) return { settled: false as const };
 
   if (unused > 0) {
-    await refundAccount(
-      reservation.billingAccountId,
-      unused,
-      reservation.billingAccount.lifecycleState,
-    );
+    await releaseReservationCredits(reservation, unused);
   }
   return { settled: true as const, consumed, unused };
 }

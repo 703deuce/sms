@@ -42,7 +42,7 @@ export async function ensureMessagingProductRegistration(
   }
 }
 
-/** Mass Text sends must not reuse MCTB-only A2P campaign registration. */
+/** Mass Text sends use the same workspace A2P registration as MCTB (low-volume mixed). */
 export async function resolveMassTextSendingNumber(workspaceId: string) {
   const { pickPreferredSmsSendingNumber, isApprovedMessagingStatus } = await import(
     "@/lib/messaging/preferred-sending-number"

@@ -8,9 +8,9 @@ export function getCurrentProduct(pathname: string): CurrentProduct {
 export function productContextLabel(product: ProductKey): string {
   switch (product) {
     case "voice":
-      return "Missed Call Text Back";
+      return "Missed Call Engine";
     case "sms":
-      return "SMS";
+      return "Mass SMS Platform";
     case "numbers":
       return "Numbers";
     default:

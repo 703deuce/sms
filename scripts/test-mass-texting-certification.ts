@@ -63,6 +63,7 @@ async function cleanupWorkspace(workspaceId: string) {
   await prisma.massTextingCreditReservation.deleteMany({ where: { workspaceId } });
   await prisma.massTextingBillingEvent.deleteMany({ where: { workspaceId } });
   await prisma.massTextingBillingAccount.deleteMany({ where: { workspaceId } });
+  await prisma.messagingRegistration.deleteMany({ where: { workspaceId } });
   await prisma.messagingProductRegistration.deleteMany({ where: { workspaceId } });
   await prisma.phoneNumber.deleteMany({ where: { workspaceId } }).catch(() => {});
   await prisma.workspaceProductFeature.deleteMany({ where: { workspaceId } }).catch(() => {});
@@ -83,6 +84,46 @@ async function main() {
     await getOrCreateMassTextingBillingAccount(workspaceId);
     const pendingTrial = await activateMassTextingTrial(workspaceId);
     assert.equal(pendingTrial.ok, false);
+
+    await prisma.messagingRegistration.upsert({
+      where: { workspaceId },
+      create: {
+        workspaceId,
+        overallStatus: "ready",
+        messagingEnabled: true,
+        phoneAttached: true,
+        phoneE164: "+15550001111",
+        brandStatus: "approved",
+        campaignStatus: "approved",
+        messagingProfileId: "mock-profile",
+        campaignId: "mock-campaign",
+        messagingProvider: "mock",
+        messagingServiceSid: "mock-service",
+        useCase: "mixed",
+      },
+      update: {
+        overallStatus: "ready",
+        messagingEnabled: true,
+        phoneAttached: true,
+        phoneE164: "+15550001111",
+        brandStatus: "approved",
+        campaignStatus: "approved",
+        messagingProfileId: "mock-profile",
+        campaignId: "mock-campaign",
+        messagingProvider: "mock",
+        messagingServiceSid: "mock-service",
+        useCase: "mixed",
+      },
+    });
+    await prisma.phoneNumber.create({
+      data: {
+        workspaceId,
+        e164: "+15550001111",
+        status: "Active",
+        type: "local",
+        a2pStatus: "APPROVED",
+      },
+    }).catch(() => undefined);
 
     await prisma.messagingProductRegistration.upsert({
       where: {
@@ -256,15 +297,19 @@ async function main() {
         settingsJson: { mctbRole: "customer_mctb" },
       },
     });
-    const mtNumber = await prisma.phoneNumber.create({
-      data: {
-        workspaceId,
-        e164: "+15550001111",
-        type: "local",
-        status: "Active",
-        settingsJson: { massTextRole: "primary" },
-      },
-    });
+    const mtNumber =
+      (await prisma.phoneNumber.findFirst({
+        where: { workspaceId, e164: "+15550001111" },
+      })) ??
+      (await prisma.phoneNumber.create({
+        data: {
+          workspaceId,
+          e164: "+15550001111",
+          type: "local",
+          status: "Active",
+          settingsJson: { massTextRole: "primary" },
+        },
+      }));
     const mctbConvo = await ensureProductConversation({
       workspaceId,
       contactId: contactA.id,

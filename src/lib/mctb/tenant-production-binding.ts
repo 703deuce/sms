@@ -8,6 +8,7 @@ import {
   getPlatformDemoPhoneRecord,
   isWorkspaceAuthorizedForPlatformDemoNumber,
   linkWorkspaceToPlatformDemoNumber,
+  unlinkWorkspaceFromPlatformDemoNumber,
   readAdminTestWorkspaceIds,
 } from "@/lib/mctb/platform-demo-access";
 import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
@@ -75,8 +76,6 @@ export async function ensureMctbTenantProductionBinding(input: {
   const prisma = getPrisma();
   const demo = await getPlatformDemoPhoneRecord();
   const runtime = await loadMissedCallTextConfig(input.workspaceId);
-  const flags = await loadAdminMctbTestFlags(input.workspaceId);
-  const adminTest = isAdminMctbTestWorkspace(flags);
 
   const ws = await prisma.workspace.findUnique({
     where: { id: input.workspaceId },
@@ -106,10 +105,17 @@ export async function ensureMctbTenantProductionBinding(input: {
         }))),
   );
 
-  const usesPlatformDemoTenant =
-    Boolean(demo) && (adminTest || selectedIsPlatformDemo || (await isWorkspaceAuthorizedForPlatformDemoNumber(input.workspaceId)));
+  // Shared 571 is opt-in only: explicit selection in Setup (or admin bootstrap).
+  // Never overwrite a customer's own provisioned DID because Try It linked them once.
+  const usesPlatformDemoTenant = Boolean(demo) && selectedIsPlatformDemo;
 
   let platformDemoLinked = false;
+  if (!usesPlatformDemoTenant && demo && phoneNumberId && phoneNumberId !== demo.phoneNumberId) {
+    await unlinkWorkspaceFromPlatformDemoNumber({ workspaceId: input.workspaceId }).catch(
+      () => undefined,
+    );
+  }
+
   if (usesPlatformDemoTenant && demo) {
     await linkWorkspaceToPlatformDemoNumber({
       workspaceId: input.workspaceId,
@@ -209,9 +215,8 @@ export async function resolveLinkedPlatformDemoTenantWorkspace(
 
     const tenantState = parseMctbOnboardingState(ws.customFieldsConfig);
     const businessLine = readBusinessLineE164(tenantState, ws.customFieldsConfig);
-    if (!businessLine) continue;
-
     const adminProduction = await isAdminProductionMctbActive(workspaceId);
+    if (!businessLine && !adminProduction) continue;
     if (!productionForwardActive(tenantState, ws.customFieldsConfig, adminProduction)) continue;
 
     candidates.push(workspaceId);

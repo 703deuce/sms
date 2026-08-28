@@ -145,7 +145,7 @@ export async function startFqdnDirectPress1Gather(input: {
   const { loadMctbScheduleSettings, isMctbAutomationActive } = await import("@/lib/mctb/schedule");
   const runtimeConfig = await loadMissedCallTextConfig(ctx.workspaceId);
   const scheduleSettings = await loadMctbScheduleSettings(ctx.workspaceId, runtimeConfig);
-  if (!isMctbAutomationActive(scheduleSettings, runtimeConfig)) {
+  if (!ctx.demoMode && !isMctbAutomationActive(scheduleSettings, runtimeConfig)) {
     const { startCallControlVoicemailFallback } = await import(
       "@/lib/mctb/event-only/call-control-voicemail"
     );

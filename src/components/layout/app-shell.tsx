@@ -49,6 +49,7 @@ export function AppShell({
   hasVoice = false,
   hasSms = false,
   hasNumbers = false,
+  hasMctb = false,
   showTryIt = false,
   productFeatures = null,
 }: {
@@ -69,6 +70,7 @@ export function AppShell({
   hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
+  hasMctb?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
@@ -128,6 +130,7 @@ export function AppShell({
           hasVoice={hasVoice}
           hasSms={hasSms}
           hasNumbers={hasNumbers}
+          hasMctb={hasMctb}
           showTryIt={showTryIt}
           productFeatures={productFeatures}
         />
@@ -163,6 +166,7 @@ export function AppShell({
             hasVoice={hasVoice}
             hasSms={hasSms}
             hasNumbers={hasNumbers}
+            hasMctb={hasMctb}
           />
         )}
         <main
@@ -180,6 +184,8 @@ export function AppShell({
         currentProduct={currentProduct}
         showTryIt={showTryIt}
         productFeatures={productFeatures}
+        hasMctb={hasMctb}
+        hasMassSms={hasSms}
         onMore={() => setMenuOpen(true)}
       />
     </div>

@@ -9,9 +9,16 @@ import {
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
-import { buildVoiceNav } from "@/lib/products/voice-nav";
-import { isVoiceShellRoute } from "@/lib/products/voice-routes";
-import { productLogoHome, productContextLabel } from "@/lib/products/context";
+import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
+import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
+import { productLogoHome } from "@/lib/products/context";
+import {
+  mctbShellHome,
+  massSmsShellHome,
+  productShellLabel,
+  productShellShortLabel,
+} from "@/lib/products/product-shell";
+import { useProductShell } from "@/components/products/product-shell-tabs";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
@@ -274,6 +281,7 @@ export function Sidebar({
   hasVoice = false,
   hasSms = false,
   hasNumbers = false,
+  hasMctb = false,
   showTryIt = false,
   productFeatures = null,
 }: {
@@ -293,6 +301,7 @@ export function Sidebar({
   hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
+  hasMctb?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
@@ -301,6 +310,9 @@ export function Sidebar({
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const hasMassSms = hasSms;
+  const dualProduct = hasMctb && hasMassSms;
+  const { shell: productShell } = useProductShell(hasMctb, hasMassSms);
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
@@ -310,7 +322,27 @@ export function Sidebar({
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
     }
-    return buildVoiceNav({
+
+    if (dualProduct) {
+      if (productShell === "mass_sms") {
+        return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
+      }
+      return buildMctbShellNav({
+        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
+        showTryIt,
+        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
+        productFeatures,
+        showBillingNav: true,
+        inboxBadge,
+        hasSms,
+      });
+    }
+
+    if (hasMassSms) {
+      return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
+    }
+
+    return buildMctbShellNav({
       primaryVoiceAgentId: primaryVoiceAgentId ?? null,
       showTryIt,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
@@ -329,6 +361,26 @@ export function Sidebar({
     isLauncher,
     inboxBadge,
     hasSms,
+    hasMctb,
+    hasMassSms,
+    dualProduct,
+    productShell,
+  ]);
+
+  const sidebarProductLabel = useMemo(() => {
+    if (realtorMode || isLauncher || currentProduct === "numbers") return null;
+    if (dualProduct) return productShellLabel(productShell);
+    if (hasMassSms && !hasMctb) return productShellLabel("mass_sms");
+    if (hasMctb) return productShellLabel("mctb");
+    return "Transovo";
+  }, [
+    realtorMode,
+    isLauncher,
+    currentProduct,
+    dualProduct,
+    productShell,
+    hasMassSms,
+    hasMctb,
   ]);
 
   useEffect(() => {
@@ -361,9 +413,17 @@ export function Sidebar({
                 ? "/realtor/dashboard"
                 : isLauncher
                   ? "/app"
-                  : currentProduct
-                    ? productLogoHome(currentProduct)
-                    : "/app"
+                  : currentProduct === "numbers"
+                    ? productLogoHome("numbers")
+                    : dualProduct
+                      ? productShell === "mass_sms"
+                        ? massSmsShellHome()
+                        : mctbShellHome()
+                      : hasMassSms
+                        ? massSmsShellHome()
+                        : hasMctb
+                          ? mctbShellHome()
+                          : "/app"
             }
             className={cn("flex min-w-0 items-start gap-2", collapsed && "justify-center")}
             onClick={onClose}
@@ -376,15 +436,10 @@ export function Sidebar({
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-bold tracking-[0.02em] text-[#111827]">
                   {realtorMode ? "TRANSOVO" : "Transovo"}
-                  {!realtorMode && currentProduct ? (
-                    <span className="ml-1 text-[10px] font-semibold text-sidebar-muted">
-                      / {productContextLabel(currentProduct)}
-                    </span>
-                  ) : null}
                 </span>
-                {!realtorMode && !currentProduct && !isLauncher ? (
-                  <span className="mt-0.5 block text-[10px] leading-tight text-sidebar-muted">
-                    Missed Call Text Back
+                {!realtorMode && sidebarProductLabel && !isLauncher ? (
+                  <span className="mt-0.5 block truncate text-[10px] leading-tight text-sidebar-muted">
+                    {sidebarProductLabel}
                   </span>
                 ) : null}
               </span>
@@ -709,11 +764,15 @@ export function Sidebar({
                 <p className="truncate text-[10px] text-sidebar-muted">
                   {currentProduct === "numbers"
                     ? "Numbers"
-                    : currentProduct === "sms"
-                      ? "SMS"
-                      : realtorMode && workspaceName
-                        ? workspaceName
-                        : "Account"}
+                    : dualProduct
+                      ? productShellShortLabel(productShell)
+                      : hasMassSms
+                        ? "Mass SMS"
+                        : hasMctb
+                          ? "Missed Calls"
+                          : realtorMode && workspaceName
+                            ? workspaceName
+                            : "Account"}
                 </p>
               </div>
             ) : null}

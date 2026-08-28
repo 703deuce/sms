@@ -25,7 +25,7 @@ export type PreSendReview = {
   phoneNumberId: string | null;
   phoneE164: string | null;
   scheduledAt: string | null;
-  a2pUseCase: "MASS_TEXT_MARKETING";
+  a2pUseCase: string;
   availableSegments: number;
   requiredSegments: number;
   shortage: number;
@@ -173,9 +173,17 @@ export async function buildPreSendReview(
       }
     }
     const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
+    const { assertWorkspaceMessagingSendAllowed } = await import(
+      "@/lib/messaging/unified-send-gate"
+    );
     const sender = await resolveMassTextSendingNumber(workspaceId);
     const availability = await getSegmentAvailability(workspaceId);
-    const canSend = availability.canSend && estimatedSegments <= availability.available && !mmsBlocked;
+    const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
+    const canSend =
+      a2p.allowed &&
+      availability.canSend &&
+      estimatedSegments <= availability.available &&
+      !mmsBlocked;
     const shortage = Math.max(0, estimatedSegments - availability.available);
     return {
       campaignId,
@@ -194,16 +202,18 @@ export async function buildPreSendReview(
       phoneNumberId: sender?.phoneNumberId ?? null,
       phoneE164: sender?.phoneE164 ?? null,
       scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
-      a2pUseCase: "MASS_TEXT_MARKETING",
+      a2pUseCase: a2p.useCase,
       availableSegments: availability.available,
       requiredSegments: estimatedSegments,
       shortage,
       canSend,
       blockReason: mmsBlocked
         ? "MMS is not enabled in production yet"
-        : shortage > 0
-          ? `Need ${estimatedSegments} credits but only ${availability.available} available`
-          : availability.blockReason,
+        : !a2p.allowed
+          ? a2p.reason || "Messaging A2P not ready"
+          : shortage > 0
+            ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+            : availability.blockReason,
       mmsBlocked,
       acceptedPhones: accepted
         .map((r) => r.phone)
@@ -362,9 +372,17 @@ export async function buildPreSendReview(
   }
 
   const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
+  const { assertWorkspaceMessagingSendAllowed } = await import(
+    "@/lib/messaging/unified-send-gate"
+  );
   const sender = await resolveMassTextSendingNumber(workspaceId);
   const availability = await getSegmentAvailability(workspaceId);
-  const canSend = availability.canSend && estimatedSegments <= availability.available && !mmsBlocked;
+  const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
+  const canSend =
+    a2p.allowed &&
+    availability.canSend &&
+    estimatedSegments <= availability.available &&
+    !mmsBlocked;
   const shortage = Math.max(0, estimatedSegments - availability.available);
 
   return {
@@ -384,16 +402,18 @@ export async function buildPreSendReview(
     phoneNumberId: sender?.phoneNumberId ?? null,
     phoneE164: sender?.phoneE164 ?? null,
     scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
-    a2pUseCase: "MASS_TEXT_MARKETING",
+    a2pUseCase: a2p.useCase,
     availableSegments: availability.available,
     requiredSegments: estimatedSegments,
     shortage,
     canSend,
     blockReason: mmsBlocked
       ? "MMS is not enabled in production yet"
-      : shortage > 0
-        ? `Need ${estimatedSegments} credits but only ${availability.available} available`
-        : availability.blockReason,
+      : !a2p.allowed
+        ? a2p.reason || "Messaging A2P not ready"
+        : shortage > 0
+          ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+          : availability.blockReason,
     mmsBlocked,
     acceptedPhones: accepted
       .map((r) => r.phone)

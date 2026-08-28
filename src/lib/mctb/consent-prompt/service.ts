@@ -104,6 +104,48 @@ async function findMctbConsentFlow(workspaceId: string) {
   });
 }
 
+/**
+ * MCTB Call Control (mctb-event-only) must not share the line with legacy Smart Routing
+ * consent flows. Pause stale SR flows when the active MCTB DID uses sip ingress.
+ */
+export async function pauseLegacyMctbSmartRoutingFlows(
+  workspaceId: string,
+  options?: { activePhoneNumberId?: string | null },
+): Promise<{ pausedFlowIds: string[] }> {
+  const prisma = getPrisma();
+  const activePhoneNumberId = options?.activePhoneNumberId?.trim() || null;
+
+  let sipIngressPhone = false;
+  if (activePhoneNumberId) {
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { id: activePhoneNumberId },
+      select: { settingsJson: true },
+    });
+    sipIngressPhone = isPhoneMctbSipIngress(pn?.settingsJson);
+  }
+
+  const flows = await prisma.smartRoutingFlow.findMany({
+    where: {
+      workspaceId,
+      name: MCTB_CONSENT_FLOW_NAME,
+      status: "active",
+      ...(sipIngressPhone
+        ? {}
+        : activePhoneNumberId
+          ? { NOT: { assignedPhoneNumberId: activePhoneNumberId } }
+          : {}),
+    },
+    select: { id: true },
+  });
+
+  const pausedFlowIds: string[] = [];
+  for (const flow of flows) {
+    await pauseFlow(workspaceId, flow.id).catch(() => undefined);
+    pausedFlowIds.push(flow.id);
+  }
+  return { pausedFlowIds };
+}
+
 function buildConsentFlowDraft(input: {
   scriptText: string;
   audioAssetId: string;
@@ -262,6 +304,26 @@ export async function syncMctbConsentRouting(
       await pauseFlow(workspaceId, flow.id);
     }
     return { mode, action: "blocked_unpublished" as const };
+  }
+
+  const phoneNumberId = await resolveMctbAssignedPhoneNumberId(
+    workspaceId,
+    options?.assignedPhoneNumberId,
+  );
+  if (phoneNumberId) {
+    const pn = await getPrisma().phoneNumber.findFirst({
+      where: { id: phoneNumberId },
+      select: { settingsJson: true },
+    });
+    if (isPhoneMctbSipIngress(pn?.settingsJson)) {
+      await publishMctbConsentPrompt(workspaceId, actorUserId, {
+        assignedPhoneNumberId: phoneNumberId,
+      });
+      await pauseLegacyMctbSmartRoutingFlows(workspaceId, {
+        activePhoneNumberId: phoneNumberId,
+      });
+      return { mode, action: "sip_ingress_consent_ready" as const };
+    }
   }
 
   await publishMctbConsentPrompt(workspaceId, actorUserId, {

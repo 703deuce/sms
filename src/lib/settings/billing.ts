@@ -269,6 +269,77 @@ export async function deductCreditsForSend(
   return cost;
 }
 
+/** Hold workspace credits for a campaign segment reservation (shared MCTB + Mass Text pool). */
+export async function holdCreditsForCampaignReservation(
+  workspaceId: string,
+  segments: number,
+  reservationId: string,
+): Promise<number> {
+  if (segments <= 0) return 0;
+  return deductCreditsForSend(
+    workspaceId,
+    segments,
+    `Campaign reservation hold ${reservationId}`,
+  );
+}
+
+/** Release a prior campaign credit hold back to the workspace balance. */
+export async function releaseCreditsForCampaignReservation(
+  workspaceId: string,
+  segments: number,
+  reservationId: string,
+): Promise<number> {
+  if (segments <= 0) return 0;
+  if (!(await isWorkspaceCreditEnforced(workspaceId))) return 0;
+
+  const count = Math.max(1, Math.round(segments));
+  const refundCents = smsCostCents() * count;
+  if (refundCents <= 0) return 0;
+
+  const prisma = getPrisma();
+  const recent = await prisma.creditLedgerEntry.findFirst({
+    where: { workspaceId },
+    orderBy: { createdAt: "desc" },
+  });
+  const prevBalance = recent?.balanceAfterCents ?? 0;
+
+  await prisma.creditLedgerEntry.create({
+    data: {
+      workspaceId,
+      amountCents: refundCents,
+      balanceAfterCents: prevBalance + refundCents,
+      description: `Campaign reservation release ${reservationId}`,
+      source: "adjustment",
+    },
+  });
+  await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: { creditBalanceCents: { increment: refundCents } },
+  });
+  return refundCents;
+}
+
+/** Segments purchasable from the shared workspace credit balance. */
+export async function getWorkspaceCreditSegmentsAvailable(workspaceId: string): Promise<number> {
+  if (!workspaceId) return 0;
+  if (await isAdminUnlimitedWorkspace(workspaceId)) {
+    return 999_999_999;
+  }
+  if (!(await isWorkspaceCreditEnforced(workspaceId))) return 0;
+
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { creditBalanceCents: true },
+  });
+  const balanceCents = Number(workspace?.creditBalanceCents ?? 0);
+  if (balanceCents <= 0) return 0;
+
+  const cost = smsCostCents();
+  if (cost <= 0) return 999_999_999;
+  return Math.floor(balanceCents / cost);
+}
+
 export type BillingSummary = {
   plan: string;
   balanceCents: number;

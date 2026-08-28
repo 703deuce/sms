@@ -23,7 +23,7 @@ import {
 import { isActiveEntitlement } from "@/lib/products/types";
 import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 import { isMctbFocusedCustomerNav } from "@/lib/products/mctb-focused-nav";
-import { buildSmsPlatformNav, getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
+import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
 
 export type VoiceNavOptions = {
   primaryVoiceAgentId?: string | null;
@@ -118,33 +118,33 @@ function buildMctbNav(options: VoiceNavOptions): NavItem[] {
 }
 
 /**
- * Unified Transovo customer sidebar — full SMS platform with MCTB as a module.
+ * MCTB + Smart Routing sidebar — separate from Mass SMS platform nav.
  */
-export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
+export function buildMctbShellNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
   const showMctbSection = hasMctb || options.showTryIt;
-  const hasMassTexting = featureActive(features, "mass_texting", false);
-  const showSmsPlatform = hasMassTexting || options.hasSms === true;
   const mctbFocused = isMctbFocusedCustomerNav();
 
-  const items: NavItem[] = [];
-
-  if (showSmsPlatform) {
-    items.push(
-      ...buildSmsPlatformNav({
-        conversationsBadge: options.inboxBadge,
-      }),
-    );
-  } else {
-    items.push({
+  const items: NavItem[] = [
+    {
       label: "Dashboard",
-      href: "/dashboard",
+      href: "/voice/missed-calls",
       icon: LayoutDashboard,
-      sectionLabel: "Dashboard",
+      sectionLabel: "Overview",
       matchExact: true,
-    });
-    if (!showMctbSection) {
+    },
+  ];
+
+  if (!mctbFocused) {
+    items.push(...buildLegacyProductNav(features));
+  }
+
+  if (showMctbSection) {
+    items.push(...buildMctbNav(options));
+  }
+
+  if (!showMctbSection) {
     items.push(
       {
         label: "Numbers",
@@ -156,18 +156,16 @@ export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
       { label: "Messaging Compliance", href: "/compliance", icon: ClipboardCheck },
       { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     );
-    }
-  }
-
-  if (!mctbFocused) {
-    items.push(...buildLegacyProductNav(features));
-  }
-
-  if (showMctbSection) {
-    items.push(...buildMctbNav(options));
   }
 
   return items;
+}
+
+/**
+ * @deprecated Prefer buildMctbShellNav or buildSmsPlatformNav via product shell tabs.
+ */
+export function buildVoiceNav(options: VoiceNavOptions = {}): NavItem[] {
+  return buildMctbShellNav(options);
 }
 
 export function getVoicePageTitle(pathname: string): string {
@@ -219,41 +217,32 @@ export function getVoicePageTitle(pathname: string): string {
   return "";
 }
 
+export function buildMassSmsMobileNav() {
+  return [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Campaigns", href: "/campaigns" },
+    { label: "Inbox", href: "/conversations" },
+    { label: "Contacts", href: "/contacts" },
+  ];
+}
+
 export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
   const showMctbSection = hasMctb || options.showTryIt;
-  const hasMassTexting = featureActive(features, "mass_texting", false);
-  const showSmsPlatform = hasMassTexting || options.hasSms === true;
-  const mctbFocused = isMctbFocusedCustomerNav();
 
-  const items = [{ label: "Dashboard", href: "/dashboard" }];
-
-  if (showSmsPlatform) {
-    items.push(
-      { label: "Conversations", href: "/conversations" },
-      { label: "Campaigns", href: "/campaigns" },
-      { label: "Send", href: "/send" },
-      { label: "Contacts", href: "/contacts" },
-      { label: "Analytics", href: "/analytics" },
-    );
-  }
-
-  if (!mctbFocused && featureActive(features, "smart_routing", false)) {
-    items.push({ label: "Routing", href: "/smart-routing" });
-  }
-
-  if (!showSmsPlatform && !showMctbSection) {
-    items.push({ label: "Analytics", href: "/voice/analytics" });
-  }
+  const items = [{ label: "Missed", href: "/voice/missed-calls" }];
 
   if (showMctbSection) {
     items.push(
-      { label: "Missed", href: "/voice/missed-calls" },
-      { label: "Visual Voicemail", href: "/voice/voicemail" },
       { label: "Setup", href: "/voice/setup" },
+      { label: "Consent", href: "/voice/consent-log" },
     );
   }
 
-  return items;
+  if (options.showTryIt) {
+    items.push({ label: "Try It", href: "/voice/try-it" });
+  }
+
+  return items.slice(0, 4);
 }

@@ -135,3 +135,42 @@ export async function ensureTryItDemoVoiceReady(
     confirmationPlayUrl,
   };
 }
+
+/**
+ * Wire tenant workspace for Try It: platform demo DID + enabled MCTB runtime.
+ * Without this, inbound calls can fall through to legacy voicemail (LiveKit bridge).
+ */
+export async function ensureTryItMctbRuntimeReady(input: {
+  workspaceId: string;
+  userEmail?: string | null;
+}): Promise<{ phoneNumberId: string; e164: string }> {
+  const { getPlatformDemoPhoneRecord } = await import("@/lib/mctb/platform-demo-access");
+  const { updateMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
+  const { saveMissedCallTextBack } = await import("@/lib/solutions/missed-call-text-back/save");
+
+  const demo = await getPlatformDemoPhoneRecord();
+  if (!demo?.phoneNumberId) {
+    throw new Error("platform_demo_number_missing");
+  }
+
+  // Try It uses an active demo session for routing — do NOT add permanent 571 tenant links.
+  await saveMissedCallTextBack(input.workspaceId, {
+    phoneNumberId: demo.phoneNumberId,
+    initialDelaySeconds: 0,
+    initialDelayMinutes: 0,
+    activate: true,
+  });
+
+  await updateMissedCallTextConfig({
+    workspaceId: input.workspaceId,
+    patch: {
+      enabled: true,
+      phone_number_id: demo.phoneNumberId,
+      sms_phone_number_id: demo.phoneNumberId,
+      delay_seconds: 0,
+    },
+    source: "try_it_start",
+  });
+
+  return { phoneNumberId: demo.phoneNumberId, e164: demo.e164 };
+}

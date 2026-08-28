@@ -227,6 +227,15 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as MctbSetupPayload;
   const prisma = getPrisma();
 
+  const sessionUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { phone: true },
+  });
+  const businessLineForBinding =
+    body.businessLineE164?.trim() ||
+    sessionUser?.phone?.trim() ||
+    null;
+
   const pauseMutation = buildMctbPauseMutation({
     enabled: body.enabled,
     pauseUntil: body.pauseUntil,
@@ -390,6 +399,12 @@ export async function POST(req: Request) {
         businessNumberE164: body.businessLineE164.trim(),
         forwardingConnectedAt: new Date().toISOString(),
       });
+    } else if (businessLineForBinding) {
+      const { saveMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
+      await saveMctbOnboardingState(workspaceId, {
+        businessNumberE164: businessLineForBinding,
+        forwardingConnectedAt: new Date().toISOString(),
+      });
     }
 
     await prisma.workspace.update({
@@ -405,7 +420,9 @@ export async function POST(req: Request) {
               : {}),
             ...(body.businessLineE164 !== undefined
               ? { businessLineE164: body.businessLineE164?.trim() || null }
-              : {}),
+              : businessLineForBinding
+                ? { businessLineE164: businessLineForBinding }
+                : {}),
             ...(body.scheduleMode !== undefined ? { scheduleMode: body.scheduleMode } : {}),
             ...(body.weeklySchedule !== undefined
               ? { weeklySchedule: body.weeklySchedule }
@@ -432,7 +449,9 @@ export async function POST(req: Request) {
 
     if (body.consentMode) {
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
-      await syncMctbConsentRouting(workspaceId, session.userId).catch(() => undefined);
+      await syncMctbConsentRouting(workspaceId, session.userId, {
+        assignedPhoneNumberId: phoneId ?? undefined,
+      }).catch(() => undefined);
 
       if (body.consentMode === "existing_consent") {
         const { recordWorkspaceExistingConsentAttestation } = await import(
@@ -443,13 +462,6 @@ export async function POST(req: Request) {
           attestedByUserId: session.userId,
         }).catch(() => undefined);
       }
-
-      const { syncPlatformDemoConsentRuntime } = await import(
-        "@/lib/mctb/onboarding/platform-demo"
-      );
-      await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
-        console.error("[mctb/setup] syncPlatformDemoConsentRuntime", err);
-      });
     }
   }
 
@@ -460,8 +472,26 @@ export async function POST(req: Request) {
     workspaceId,
     userEmail: session.email,
     phoneNumberId: body.phoneNumberId ?? runtimeResult.config.phoneNumberId,
-    businessLineE164: body.businessLineE164,
+    businessLineE164: businessLineForBinding,
   });
+
+  if (body.consentMode && tenantBinding.platformDemoLinked) {
+    const { syncPlatformDemoConsentRuntime } = await import(
+      "@/lib/mctb/onboarding/platform-demo"
+    );
+    await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
+      console.error("[mctb/setup] syncPlatformDemoConsentRuntime", err);
+    });
+  }
+
+  if (sipProvision?.ok && phoneId) {
+    const { pauseLegacyMctbSmartRoutingFlows } = await import(
+      "@/lib/mctb/consent-prompt/service"
+    );
+    await pauseLegacyMctbSmartRoutingFlows(workspaceId, {
+      activePhoneNumberId: phoneId,
+    }).catch(() => undefined);
+  }
 
   const wsAfter = await prisma.workspace.findUnique({
     where: { id: workspaceId },

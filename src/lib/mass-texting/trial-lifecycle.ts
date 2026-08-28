@@ -15,24 +15,12 @@ export async function activateMassTextingTrial(workspaceId: string): Promise<{
   trialEndsAt?: string;
 }> {
   const prisma = getPrisma();
-  const reg = await prisma.messagingProductRegistration.findUnique({
-    where: {
-      workspaceId_productUseCase: {
-        workspaceId,
-        productUseCase: "MASS_TEXT_MARKETING",
-      },
-    },
-  });
-
-  if (!reg?.messagingEnabled || !reg.phoneAttached) {
+  const { assertWorkspaceMessagingSendAllowed } = await import(
+    "@/lib/messaging/unified-send-gate"
+  );
+  const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
+  if (!a2p.allowed) {
     return { ok: false, reason: "messaging_not_ready" };
-  }
-  if (
-    reg.overallStatus !== "approved" &&
-    reg.overallStatus !== "certified" &&
-    reg.overallStatus !== "ready"
-  ) {
-    return { ok: false, reason: "a2p_not_approved" };
   }
 
   const account = await getOrCreateMassTextingBillingAccount(workspaceId);
@@ -50,11 +38,6 @@ export async function activateMassTextingTrial(workspaceId: string): Promise<{
 
   const now = new Date();
   const trialEndsAt = new Date(now.getTime() + MASS_TEXT_TRIAL.durationDays * 86400000);
-
-  await prisma.messagingProductRegistration.update({
-    where: { id: reg.id },
-    data: { trialStartedAt: now, trialEndsAt },
-  });
 
   await updateMassTextingLifecycle(workspaceId, "TRIAL_ACTIVE", {
     trialStartedAt: now,

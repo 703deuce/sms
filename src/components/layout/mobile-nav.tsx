@@ -2,21 +2,27 @@
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
-import { buildVoiceMobileNav } from "@/lib/products/voice-nav";
+import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
+import { useProductShell } from "@/components/products/product-shell-tabs";
 import { cn } from "@/lib/utils";
 import {
   AudioLines,
   BookOpen,
   LayoutDashboard,
+  Megaphone,
+  MessageSquare,
   MoreHorizontal,
   PhoneCall,
+  PhoneMissed,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import type { CurrentProduct } from "@/lib/products/types";
 
-const voiceMobileIcons = [LayoutDashboard, PhoneCall, AudioLines, BookOpen];
+const voiceMobileIcons = [PhoneMissed, PhoneCall, AudioLines, BookOpen];
+const massSmsMobileIcons = [LayoutDashboard, Megaphone, MessageSquare, Users];
 
 export function MobileNav({
   onMore,
@@ -24,17 +30,28 @@ export function MobileNav({
   currentProduct = null,
   showTryIt = false,
   productFeatures = null,
+  hasMctb = false,
+  hasMassSms = false,
 }: {
   onMore: () => void;
   realtorMode?: boolean;
   currentProduct?: CurrentProduct;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
+  hasMctb?: boolean;
+  hasMassSms?: boolean;
 }) {
   const pathname = usePathname();
+  const { shell } = useProductShell(hasMctb, hasMassSms);
+  const dualProduct = hasMctb && hasMassSms;
+
   const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
     ...item,
     icon: voiceMobileIcons[i] ?? LayoutDashboard,
+  }));
+  const massSmsItems = buildMassSmsMobileNav().map((item, i) => ({
+    ...item,
+    icon: massSmsMobileIcons[i] ?? LayoutDashboard,
   }));
   const numbersItems = buildNumbersMobileNav().map((item, i) => ({
     ...item,
@@ -45,9 +62,13 @@ export function MobileNav({
     ? buildRealtorMobileNav()
     : currentProduct === "numbers"
       ? numbersItems
-      : currentProduct === "voice" || currentProduct === null
-        ? voiceItems
-        : voiceItems;
+      : dualProduct
+        ? shell === "mass_sms"
+          ? massSmsItems
+          : voiceItems
+        : hasMassSms
+          ? massSmsItems
+          : voiceItems;
 
   return (
     <>

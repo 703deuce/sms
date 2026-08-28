@@ -44,13 +44,8 @@ async function resolveWorkspaceForMctbPhoneAssignment(input: {
     }
   }
 
-  const prisma = getPrisma();
-  const assigned = await prisma.missedCallTextConfig.findFirst({
-    where: { phoneNumberId: input.phoneNumberId },
-    select: { workspaceId: true },
-    orderBy: { updatedAt: "desc" },
-  });
-  return assigned?.workspaceId || null;
+  // Dedicated customer DIDs: only the owning workspace row may route inbound MCTB.
+  return null;
 }
 
 const CACHE_TTL_MS = 15_000;

@@ -3,7 +3,7 @@
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
-import { productContextLabel } from "@/lib/products/context";
+import { ProductShellTabs, useProductShell } from "@/components/products/product-shell-tabs";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { formatPhone } from "@/lib/utils";
 import {
@@ -51,6 +51,7 @@ export function Header({
   hasVoice = false,
   hasSms = false,
   hasNumbers = false,
+  hasMctb = false,
 }: {
   title: string;
   userName: string;
@@ -68,8 +69,12 @@ export function Header({
   hasVoice?: boolean;
   hasSms?: boolean;
   hasNumbers?: boolean;
+  hasMctb?: boolean;
 }) {
   const router = useRouter();
+  const { shell: productShell } = useProductShell(hasMctb, hasSms);
+  const showMassSmsChrome =
+    hasSms && (!hasMctb || productShell === "mass_sms");
   const [numberId, setNumberId] = useState(
     activeFromNumberId || phoneNumbers[0]?.id || "",
   );
@@ -200,7 +205,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-header/95 backdrop-blur">
-      <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
+      <div className="flex h-16 items-center gap-2 px-4 lg:gap-3 lg:px-6">
         <button
           type="button"
           className="rounded-lg p-2 text-foreground hover:bg-muted lg:hidden"
@@ -211,9 +216,11 @@ export function Header({
         </button>
 
         {currentProduct && !isLauncher ? (
-          <span className="hidden shrink-0 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
-            {productContextLabel(currentProduct)}
-          </span>
+          <ProductShellTabs
+            hasMctb={hasMctb}
+            hasMassSms={hasSms}
+            className="hidden shrink-0 lg:flex"
+          />
         ) : null}
 
         {title && (currentProduct === "sms" || currentProduct === "voice") ? (
@@ -226,7 +233,7 @@ export function Header({
 
         <div className="flex-1" />
 
-        {currentProduct === "sms" ? (
+        {showMassSmsChrome ? (
           <SmsCreateMenu variant="header" className="hidden sm:block" />
         ) : null}
 
@@ -239,7 +246,7 @@ export function Header({
           </Link>
         ) : null}
 
-        {currentProduct === "sms" ? (
+        {showMassSmsChrome ? (
         <div className="mx-auto hidden w-full max-w-[440px] flex-1 md:block" ref={searchRef}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -281,7 +288,7 @@ export function Header({
         ) : null}
 
         <div className="flex items-center gap-2">
-          {!isLauncher && currentProduct === "sms" && phoneNumbers.length > 0 ? (
+          {!isLauncher && showMassSmsChrome && phoneNumbers.length > 0 ? (
             <select
               className="hidden h-9 max-w-[170px] rounded-full border border-border bg-card px-3 text-[12px] font-medium outline-none focus:border-primary sm:block"
               value={numberId}
@@ -407,6 +414,11 @@ export function Header({
           </div>
         </div>
       </div>
+      {currentProduct && !isLauncher && hasMctb && hasSms ? (
+        <div className="border-t border-border px-4 py-2 lg:hidden">
+          <ProductShellTabs hasMctb={hasMctb} hasMassSms={hasSms} className="w-full justify-center" />
+        </div>
+      ) : null}
     </header>
   );
 }

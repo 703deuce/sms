@@ -83,6 +83,7 @@ export async function resolveWorkspaceByForwardedBusinessLine(
     take: 2000,
   });
 
+  const matches: string[] = [];
   for (const ws of workspaces) {
     const state = parseMctbOnboardingState(ws.customFieldsConfig);
     const line = readBusinessLineE164(state, ws.customFieldsConfig);
@@ -91,9 +92,52 @@ export async function resolveWorkspaceByForwardedBusinessLine(
     const adminProduction = await isAdminProductionMctbActive(ws.id);
     if (!productionForwardActive(state, ws.customFieldsConfig, adminProduction)) continue;
 
-    return ws.id;
+    matches.push(ws.id);
   }
 
+  if (matches.length === 1) return matches[0]!;
+  if (matches.length > 1) return null;
+
+  // Forwarding from a verified member mobile before business line was saved in Setup.
+  const memberMatch = await resolveWorkspaceByMemberPhoneForward(businessLine);
+  if (memberMatch) return memberMatch;
+
+  return null;
+}
+
+async function resolveWorkspaceByMemberPhoneForward(
+  forwardedFromE164: string,
+): Promise<string | null> {
+  let forward = "";
+  try {
+    forward = normalizeE164(forwardedFromE164);
+  } catch {
+    return null;
+  }
+
+  const prisma = getPrisma();
+  const users = await prisma.user.findMany({
+    where: { phone: forward },
+    select: { id: true },
+    take: 5,
+  });
+  if (!users.length) return null;
+
+  const memberships = await prisma.membership.findMany({
+    where: { userId: { in: users.map((u) => u.id) } },
+    select: { workspaceId: true },
+  });
+
+  const candidates: string[] = [];
+  for (const membership of memberships) {
+    const adminProduction = await isAdminProductionMctbActive(membership.workspaceId);
+    if (!adminProduction) continue;
+    const runtime = await loadMissedCallTextConfig(membership.workspaceId);
+    if (!runtime.enabled || !runtime.phoneNumberId) continue;
+    candidates.push(membership.workspaceId);
+  }
+
+  if (candidates.length === 1) return candidates[0]!;
   return null;
 }
 

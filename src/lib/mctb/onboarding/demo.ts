@@ -149,6 +149,7 @@ export async function startDemoSession(input: {
   workspaceId: string;
   callerE164: string;
   context?: "try_it" | "onboarding";
+  userEmail?: string | null;
 }): Promise<{ demoNumberE164: string; session: MctbDemoSession }> {
   const demoNumberE164 = getPlatformDemoNumberE164();
   const startedAt = new Date().toISOString();
@@ -184,7 +185,15 @@ export async function startDemoSession(input: {
   });
 
   if (context === "try_it") {
-    const { ensureTryItDemoVoiceReady } = await import("@/lib/mctb/try-it/demo-voice");
+    const { ensureTryItDemoVoiceReady, ensureTryItMctbRuntimeReady } = await import(
+      "@/lib/mctb/try-it/demo-voice"
+    );
+    await ensureTryItMctbRuntimeReady({
+      workspaceId: input.workspaceId,
+      userEmail: input.userEmail,
+    }).catch((err) => {
+      console.error("[demo] ensureTryItMctbRuntimeReady", err);
+    });
     await ensureTryItDemoVoiceReady(input.workspaceId).catch((err) => {
       console.error("[demo] ensureTryItDemoVoiceReady", err);
     });

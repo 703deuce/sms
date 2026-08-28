@@ -40,6 +40,15 @@ export async function syncVoiceAgentPhoneAssignment(input: {
     throw new Error("Phone number not found in this workspace");
   }
 
+  if (input.phoneNumberId) {
+    const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
+    if (isMctbVoiceRouteLocked(pn.settingsJson)) {
+      throw new Error(
+        "This number is configured for Missed Call Text Back (Call Control). Unassign it from MCTB in Text Back Setup before attaching an AI receptionist.",
+      );
+    }
+  }
+
   if (exclusive) {
     // One inbound AI owner per DID: clear other agents on this number.
     await prisma.voiceAgentPhoneNumber.deleteMany({
