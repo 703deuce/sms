@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
+// Coolify build VMs OOM during Next's post-compile "Running TypeScript" step (exit 137).
+// Types are checked via `tsc --noEmit` in CI/dev before deploy.
+const isCoolifyBuild = Boolean(process.env.COOLIFY_RESOURCE_UUID);
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  typescript: {
+    ignoreBuildErrors: isCoolifyBuild,
+  },
   async redirects() {
     return [
       { source: "/inbox", destination: "/conversations", permanent: false },

@@ -9,6 +9,9 @@ export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
 
 echo "[coolify-build] starting next production build (turbopack default)"
 echo "[coolify-build] node=$(node -v) heap_limit=${NODE_OPTIONS:-unset}"
+if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
+  echo "[coolify-build] COOLIFY_RESOURCE_UUID set — next.config skips in-build TypeScript (OOM guard; run tsc in CI)"
+fi
 
 set -o pipefail
 npm run build > >(stdbuf -oL -eL tee /tmp/coolify-next-build.log) 2>&1 &
