@@ -34,9 +34,20 @@ export async function evaluateParityCondition(
 
   if (block === "condition_contact_segment") {
     const segmentId = String(cfg.segmentId || "").trim();
-    if (!segmentId) return "no";
-    const onList = await isContactOnLists(ctx.workspaceId, ctx.contactId, [segmentId], "any");
-    return onList ? "yes" : "no";
+    const segmentIds = Array.isArray(cfg.segmentIds)
+      ? (cfg.segmentIds as string[]).map(String).filter(Boolean)
+      : segmentId
+        ? [segmentId]
+        : [];
+    if (!segmentIds.length) return "no";
+    const { contactMatchesSavedSegments } = await import("./segment-match");
+    const match = await contactMatchesSavedSegments(
+      ctx.workspaceId,
+      ctx.contactId,
+      segmentIds,
+      String(cfg.matchMode || "any"),
+    );
+    return match ? "yes" : "no";
   }
 
   if (block === "condition_general_link_clicked") {

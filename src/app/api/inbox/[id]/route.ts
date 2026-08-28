@@ -159,15 +159,41 @@ export async function PATCH(
         Spam: "SPAM",
         SPAM: "SPAM",
       };
+      const previous = {
+        status: existing.status,
+        assigneeId: existing.assigneeId,
+        tags: existing.tags || [],
+        unread: existing.unread,
+      };
+      const nextStatus = body.status ? statusMap[body.status] : undefined;
       await getPrisma().conversation.update({
         where: { id },
         data: {
-          status: body.status ? statusMap[body.status] : undefined,
+          status: nextStatus,
           unread: body.unread,
           assigneeId: body.assigneeId === undefined ? undefined : body.assigneeId,
           tags: body.tags,
         },
       });
+      try {
+        const { emitInboxAutomationEvents } = await import(
+          "@/lib/automations/parity/inbox-events"
+        );
+        await emitInboxAutomationEvents({
+          workspaceId: auth.workspaceId,
+          contactId: existing.contactId,
+          conversationId: id,
+          previous,
+          next: {
+            status: nextStatus ?? previous.status,
+            assigneeId: body.assigneeId === undefined ? previous.assigneeId : body.assigneeId,
+            tags: body.tags ?? previous.tags,
+            unread: body.unread ?? previous.unread,
+          },
+        });
+      } catch {
+        /* non-fatal */
+      }
     }
 
     const row = await loadFull(auth.workspaceId, id);

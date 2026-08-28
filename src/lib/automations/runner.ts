@@ -274,9 +274,13 @@ export async function processAutomationWaits() {
 
     const meta = (ex.metadata || {}) as Record<string, unknown>;
     if (meta.eventWaitActive === true && ex.currentNodeId) {
-      const timeoutOutcome = await handleEventWaitTimeout(ex.id, ex.currentNodeId);
-      if (!timeoutOutcome) {
-        continue;
+      const { readEventWaitState } = await import("./parity/event-waits");
+      const state = await readEventWaitState(ex.id, ex.currentNodeId);
+      if (state?.eventWaitActive) {
+        const timeoutOutcome = await handleEventWaitTimeout(ex.id, ex.currentNodeId);
+        if (!timeoutOutcome) {
+          continue;
+        }
       }
     } else {
       try {
@@ -358,5 +362,7 @@ export async function processScheduledAutomations() {
 export async function processActiveAutomations() {
   await processAutomationWaits();
   await processScheduledAutomations();
+  const { processContactBirthdayTriggers } = await import("./parity/birthday-processor");
+  await processContactBirthdayTriggers();
   return { ok: true };
 }

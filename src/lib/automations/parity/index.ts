@@ -37,3 +37,9 @@ export {
   PARITY_TRIGGER_TYPES,
   type TriggerFilterContext,
 } from "./trigger-matching";
+export { processContactBirthdayTriggers } from "./birthday-processor";
+export { emitInboxAutomationEvents } from "./inbox-events";
+export {
+  contactMatchesSavedSegment,
+  contactMatchesSavedSegments,
+} from "./segment-match";

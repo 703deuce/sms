@@ -10,37 +10,161 @@ import type { AutomationCanvasNode } from "@/lib/automations/types";
 import { useEffect, useState } from "react";
 
 type ListOption = { id: string; name: string };
+type SegmentOption = { id: string; name: string };
+type TeamOption = { id: string; name: string };
+type FlowOption = { id: string; name: string };
+type NumberOption = { id: string; number: string };
+type TagOption = { id: string; name: string };
+
+function DurationFields({
+  cfg,
+  setConfig,
+}: {
+  cfg: Record<string, unknown>;
+  setConfig: (p: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <Label>Weeks</Label>
+        <Input
+          type="number"
+          value={Number(cfg.weeks || 0)}
+          onChange={(e) => setConfig({ weeks: Number(e.target.value) })}
+        />
+      </div>
+      <div>
+        <Label>Days</Label>
+        <Input
+          type="number"
+          value={Number(cfg.days || 1)}
+          onChange={(e) => setConfig({ days: Number(e.target.value) })}
+        />
+      </div>
+      <div>
+        <Label>Hours</Label>
+        <Input
+          type="number"
+          value={Number(cfg.hours || 0)}
+          onChange={(e) => setConfig({ hours: Number(e.target.value) })}
+        />
+      </div>
+      <div>
+        <Label>Minutes</Label>
+        <Input
+          type="number"
+          value={Number(cfg.minutes || 0)}
+          onChange={(e) => setConfig({ minutes: Number(e.target.value) })}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function ParityNodeConfig({
   node,
   onUpdate,
+  flowId,
 }: {
   node: AutomationCanvasNode;
   onUpdate: (patch: Partial<AutomationCanvasNode["data"]>) => void;
+  flowId?: string;
 }) {
   const cfg = node.data.config || {};
   const block = node.data.blockType;
   const [lists, setLists] = useState<ListOption[]>([]);
+  const [segments, setSegments] = useState<SegmentOption[]>([]);
+  const [team, setTeam] = useState<TeamOption[]>([]);
+  const [flows, setFlows] = useState<FlowOption[]>([]);
+  const [numbers, setNumbers] = useState<NumberOption[]>([]);
+  const [tags, setTags] = useState<TagOption[]>([]);
 
   useEffect(() => {
     fetch("/api/contacts/lists")
       .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setLists((j?.data || []).map((l: ListOption) => l)))
+      .catch(() => undefined);
+    fetch("/api/contacts/segments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setSegments((j?.data || []).map((s: SegmentOption) => s)))
+      .catch(() => undefined);
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
       .then((j) =>
-        setLists((j?.data || []).map((l: { id: string; name: string }) => ({
-          id: l.id,
-          name: l.name,
-        }))),
+        setTeam(
+          (j?.data || []).map((m: { id: string; name: string }) => ({
+            id: m.id,
+            name: m.name,
+          })),
+        ),
       )
       .catch(() => undefined);
-  }, []);
+    fetch("/api/automations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) =>
+        setFlows(
+          (j?.data || [])
+            .filter((f: { id: string }) => f.id !== flowId)
+            .map((f: FlowOption) => f),
+        ),
+      )
+      .catch(() => undefined);
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) =>
+        setNumbers(
+          (j?.data || []).map((n: { id: string; e164?: string; number?: string }) => ({
+            id: n.id,
+            number: n.e164 || n.number || "",
+          })),
+        ),
+      )
+      .catch(() => undefined);
+    fetch("/api/contacts/tags")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setTags((j?.data || []).map((t: TagOption) => t)))
+      .catch(() => undefined);
+  }, [flowId]);
 
   function setConfig(patch: Record<string, unknown>) {
     onUpdate({ config: { ...cfg, ...patch } });
   }
 
-  if (block === "message_received" || block === "wait_for_reply") {
+  if (block === "message_received") {
     return (
       <div className="space-y-3">
+        <div>
+          <Label>Receiving number</Label>
+          <Select
+            value={String(cfg.receivingNumberMode || "any")}
+            onChange={(e) => setConfig({ receivingNumberMode: e.target.value })}
+          >
+            <option value="any">Any eligible number</option>
+            <option value="specific">Specific number(s)</option>
+          </Select>
+        </div>
+        {cfg.receivingNumberMode === "specific" ? (
+          <select
+            multiple
+            className="w-full rounded-md border bg-background p-2 text-sm"
+            value={
+              Array.isArray(cfg.receivingNumberIds)
+                ? (cfg.receivingNumberIds as string[])
+                : []
+            }
+            onChange={(e) =>
+              setConfig({
+                receivingNumberIds: Array.from(e.target.selectedOptions).map((o) => o.value),
+              })
+            }
+          >
+            {numbers.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.number}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <div>
           <Label>Message matching</Label>
           <Select
@@ -65,24 +189,82 @@ export function ParityNodeConfig({
             />
           </div>
         ) : null}
-        {block === "wait_for_reply" ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Days</Label>
-              <Input
-                type="number"
-                value={Number(cfg.days || 1)}
-                onChange={(e) => setConfig({ days: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <Label>Hours</Label>
-              <Input
-                type="number"
-                value={Number(cfg.hours || 0)}
-                onChange={(e) => setConfig({ hours: Number(e.target.value) })}
-              />
-            </div>
+      </div>
+    );
+  }
+
+  if (block === "wait_for_reply") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>What to look for</Label>
+          <Select
+            value={String(cfg.matchType || "any")}
+            onChange={(e) => setConfig({ matchType: e.target.value })}
+          >
+            {MESSAGE_MATCH_TYPES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <DurationFields cfg={cfg} setConfig={setConfig} />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={cfg.saveDetectedData === true}
+            onChange={(e) => setConfig({ saveDetectedData: e.target.checked })}
+          />
+          Save detected data
+        </label>
+      </div>
+    );
+  }
+
+  if (
+    block === "wait_for_link_click" ||
+    block === "wait_for_workflow_message_click" ||
+    block === "general_link_clicked" ||
+    block === "condition_general_link_clicked" ||
+    block === "condition_workflow_message_clicked"
+  ) {
+    return (
+      <div className="space-y-3">
+        {block === "wait_for_workflow_message_click" ||
+        block === "condition_workflow_message_clicked" ? (
+          <div>
+            <Label>Prior Send SMS node</Label>
+            <Input
+              placeholder="Node ID from canvas"
+              value={String(cfg.sendSmsNodeId || "")}
+              onChange={(e) => setConfig({ sendSmsNodeId: e.target.value })}
+            />
+          </div>
+        ) : null}
+        <div>
+          <Label>Link</Label>
+          <Select
+            value={String(cfg.linkMode || "any")}
+            onChange={(e) => setConfig({ linkMode: e.target.value })}
+          >
+            <option value="any">Any tracked link</option>
+            <option value="specific">Specific tracked link</option>
+            <option value="review">Review link</option>
+          </Select>
+        </div>
+        {block.startsWith("wait_") ? <DurationFields cfg={cfg} setConfig={setConfig} /> : null}
+        {block.startsWith("condition_") ? (
+          <div>
+            <Label>Timeframe</Label>
+            <Select
+              value={String(cfg.timeframe || "ever")}
+              onChange={(e) => setConfig({ timeframe: e.target.value })}
+            >
+              <option value="ever">Ever</option>
+              <option value="since_workflow_started">Since workflow started</option>
+              <option value="within_last">Within last X days</option>
+            </Select>
           </div>
         ) : null}
       </div>
@@ -100,16 +282,28 @@ export function ParityNodeConfig({
     return (
       <div className="space-y-3">
         {(block === "customer_added_to_list" || block === "customer_removed_from_list") && (
-          <div>
-            <Label>List scope</Label>
-            <Select
-              value={String(cfg.listMode || "any")}
-              onChange={(e) => setConfig({ listMode: e.target.value })}
-            >
-              <option value="any">Any list</option>
-              <option value="specific">Specific list(s)</option>
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label>List scope</Label>
+              <Select
+                value={String(cfg.listMode || "any")}
+                onChange={(e) => setConfig({ listMode: e.target.value })}
+              >
+                <option value="any">Any list</option>
+                <option value="specific">Specific list(s)</option>
+              </Select>
+            </div>
+            {block === "customer_added_to_list" ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={cfg.firstOnly !== false}
+                  onChange={(e) => setConfig({ firstOnly: e.target.checked })}
+                />
+                First addition only
+              </label>
+            ) : null}
+          </>
         )}
         {block === "condition_contact_on_list" && (
           <div>
@@ -147,6 +341,39 @@ export function ParityNodeConfig({
     );
   }
 
+  if (block === "condition_contact_segment") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Segment</Label>
+          <Select
+            value={String(cfg.segmentId || "")}
+            onChange={(e) => {
+              const seg = segments.find((s) => s.id === e.target.value);
+              setConfig({ segmentId: e.target.value, segmentName: seg?.name || "" });
+            }}
+          >
+            <option value="">Select segment</option>
+            {segments.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Match</Label>
+          <Select
+            value={String(cfg.matchMode || "any")}
+            onChange={(e) => setConfig({ matchMode: e.target.value })}
+          >
+            <option value="any">Matches segment</option>
+          </Select>
+        </div>
+      </div>
+    );
+  }
+
   if (block === "customer_field_changed" || block === "wait_for_customer_field_change") {
     return (
       <div className="space-y-3">
@@ -161,6 +388,7 @@ export function ParityNodeConfig({
                 {f.label}
               </option>
             ))}
+            <option value="dateOfBirth">Birthday (custom)</option>
           </Select>
         </div>
         {block === "customer_field_changed" ? (
@@ -178,19 +406,22 @@ export function ParityNodeConfig({
             </Select>
           </div>
         ) : (
-          <div>
-            <Label>Operator</Label>
-            <Select
-              value={String(cfg.operator || "is")}
-              onChange={(e) => setConfig({ operator: e.target.value })}
-            >
-              {TEXT_OPERATORS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label>Operator</Label>
+              <Select
+                value={String(cfg.operator || "is")}
+                onChange={(e) => setConfig({ operator: e.target.value })}
+              >
+                {TEXT_OPERATORS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <DurationFields cfg={cfg} setConfig={setConfig} />
+          </>
         )}
         <div>
           <Label>Value</Label>
@@ -204,6 +435,70 @@ export function ParityNodeConfig({
               )
             }
           />
+        </div>
+      </div>
+    );
+  }
+
+  if (block === "contact_birthday") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Birthday field</Label>
+          <Select
+            value={String(cfg.birthdayField || "dateOfBirth")}
+            onChange={(e) => setConfig({ birthdayField: e.target.value })}
+          >
+            <option value="dateOfBirth">Date of birth (custom field)</option>
+            <option value="birthday">Birthday (custom field)</option>
+          </Select>
+        </div>
+        <div>
+          <Label>Time of day</Label>
+          <Input
+            type="time"
+            value={String(cfg.timeOfDay || "09:00")}
+            onChange={(e) => setConfig({ timeOfDay: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Timezone</Label>
+          <Select
+            value={String(cfg.timezoneMode || "business")}
+            onChange={(e) => setConfig({ timezoneMode: e.target.value })}
+          >
+            <option value="business">Business timezone</option>
+            <option value="contact">Contact timezone</option>
+            <option value="specified">Specified</option>
+          </Select>
+        </div>
+      </div>
+    );
+  }
+
+  if (block === "popup_submitted") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Popup</Label>
+          <Select
+            value={String(cfg.popupMode || "any")}
+            onChange={(e) => setConfig({ popupMode: e.target.value })}
+          >
+            <option value="any">Any popup</option>
+            <option value="specific">Specific popup</option>
+          </Select>
+        </div>
+        <div>
+          <Label>Contact type</Label>
+          <Select
+            value={String(cfg.contactType || "either")}
+            onChange={(e) => setConfig({ contactType: e.target.value })}
+          >
+            <option value="either">Either</option>
+            <option value="new">New contact</option>
+            <option value="existing">Existing contact</option>
+          </Select>
         </div>
       </div>
     );
@@ -263,10 +558,42 @@ export function ParityNodeConfig({
     );
   }
 
-  if (block.startsWith("inbox_") || block.includes("inbox_conversation")) {
+  if (
+    block.startsWith("inbox_") ||
+    block.includes("inbox_conversation") ||
+    block.startsWith("condition_inbox")
+  ) {
     return (
       <div className="space-y-3">
-        {block.includes("status") && (
+        {(block.includes("assign") || block === "condition_inbox_assignee") && (
+          <div>
+            <Label>Assignee</Label>
+            <Select
+              value={String(cfg.assigneeId || cfg.assigneeMode || "anyone")}
+              onChange={(e) => {
+                if (e.target.value === "anyone" || e.target.value === "unassigned") {
+                  setConfig({ assigneeMode: e.target.value, assigneeId: "" });
+                } else {
+                  const member = team.find((t) => t.id === e.target.value);
+                  setConfig({
+                    assigneeMode: "teammate",
+                    assigneeId: e.target.value,
+                    assigneeName: member?.name || "",
+                  });
+                }
+              }}
+            >
+              <option value="anyone">Anyone</option>
+              <option value="unassigned">Unassigned</option>
+              {team.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+        {(block.includes("status") || block === "condition_inbox_status") && (
           <div>
             <Label>Status</Label>
             <Select
@@ -281,20 +608,23 @@ export function ParityNodeConfig({
         )}
         {(block.includes("tag") || block === "condition_inbox_tags") && (
           <div>
-            <Label>Tags (comma-separated)</Label>
-            <Input
-              value={
-                Array.isArray(cfg.tags) ? (cfg.tags as string[]).join(", ") : String(cfg.tag || "")
-              }
+            <Label>Conversation tags</Label>
+            <select
+              multiple
+              className="w-full rounded-md border bg-background p-2 text-sm"
+              value={Array.isArray(cfg.tags) ? (cfg.tags as string[]) : []}
               onChange={(e) =>
                 setConfig({
-                  tags: e.target.value
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean),
+                  tags: Array.from(e.target.selectedOptions).map((o) => o.value),
                 })
               }
-            />
+            >
+              {tags.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         {block === "create_inbox_conversation_note" && (
@@ -319,6 +649,26 @@ export function ParityNodeConfig({
             </Select>
           </div>
         )}
+        {block === "assign_inbox_conversation" && (
+          <>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cfg.onlyIfUnassigned === true}
+                onChange={(e) => setConfig({ onlyIfUnassigned: e.target.checked })}
+              />
+              Only assign if currently unassigned
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={cfg.reassignAllowed !== false}
+                onChange={(e) => setConfig({ reassignAllowed: e.target.checked })}
+              />
+              Reassign allowed
+            </label>
+          </>
+        )}
       </div>
     );
   }
@@ -339,6 +689,70 @@ export function ParityNodeConfig({
         <p className="mt-2 text-xs text-muted-foreground">
           Workflows cannot manufacture consent. Subscribed requires existing consent evidence.
         </p>
+      </div>
+    );
+  }
+
+  if (block === "condition_sms_opt_in_status") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Mode</Label>
+          <Select
+            value={String(cfg.mode || "compare")}
+            onChange={(e) => setConfig({ mode: e.target.value })}
+          >
+            <option value="compare">Compare to selected status</option>
+            <option value="branch">Branch by current status</option>
+          </Select>
+        </div>
+        {cfg.mode !== "branch" ? (
+          <>
+            <div>
+              <Label>Status</Label>
+              <Select
+                value={String(cfg.compareStatus || "SUBSCRIBED")}
+                onChange={(e) => setConfig({ compareStatus: e.target.value })}
+              >
+                <option value="SUBSCRIBED">Subscribed</option>
+                <option value="UNSUBSCRIBED">Unsubscribed</option>
+                <option value="BLOCKED">Blocked</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Match</Label>
+              <Select
+                value={String(cfg.match || "is")}
+                onChange={(e) => setConfig({ match: e.target.value })}
+              >
+                <option value="is">Is</option>
+                <option value="is_not">Is not</option>
+              </Select>
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (block === "condition_workflow_status") {
+    return (
+      <div>
+        <Label>Automation</Label>
+        <Select
+          value={String(cfg.flowId || "")}
+          onChange={(e) => {
+            const f = flows.find((x) => x.id === e.target.value);
+            setConfig({ flowId: e.target.value, flowName: f?.name || "" });
+          }}
+        >
+          <option value="">Select automation</option>
+          {flows.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </Select>
       </div>
     );
   }
@@ -369,55 +783,30 @@ export function ParityNodeConfig({
     );
   }
 
-  if (block === "general_link_clicked" || block === "wait_for_link_click") {
+  if (block === "condition_business_hours") {
     return (
       <div className="space-y-3">
         <div>
-          <Label>Link</Label>
+          <Label>Check</Label>
           <Select
-            value={String(cfg.linkMode || "any")}
-            onChange={(e) => setConfig({ linkMode: e.target.value })}
+            value={String(cfg.checkType || "during")}
+            onChange={(e) => setConfig({ checkType: e.target.value })}
           >
-            <option value="any">Any tracked link</option>
-            <option value="specific">Specific tracked link</option>
-            <option value="review">Review link</option>
+            <option value="during">During business hours</option>
+            <option value="outside">Outside business hours</option>
           </Select>
         </div>
-        {block === "wait_for_link_click" ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Days</Label>
-              <Input
-                type="number"
-                value={Number(cfg.days || 1)}
-                onChange={(e) => setConfig({ days: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <Label>Hours</Label>
-              <Input
-                type="number"
-                value={Number(cfg.hours || 0)}
-                onChange={(e) => setConfig({ hours: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (block === "condition_business_hours") {
-    return (
-      <div>
-        <Label>Check</Label>
-        <Select
-          value={String(cfg.checkType || "during")}
-          onChange={(e) => setConfig({ checkType: e.target.value })}
-        >
-          <option value="during">During business hours</option>
-          <option value="outside">Outside business hours</option>
-        </Select>
+        <div>
+          <Label>Timezone</Label>
+          <Select
+            value={String(cfg.timezoneMode || "business")}
+            onChange={(e) => setConfig({ timezoneMode: e.target.value })}
+          >
+            <option value="business">Business</option>
+            <option value="contact">Contact</option>
+            <option value="specified">Specified</option>
+          </Select>
+        </div>
       </div>
     );
   }

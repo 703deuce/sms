@@ -94,7 +94,7 @@ async function main() {
     pathCount: 3,
     distribution: "even",
   });
-  if (splitOutcomes.length === 3) ok("split_traffic dynamic outcomes");
+  if (splitOutcomes.length === 4) ok("split_traffic dynamic outcomes (+ failed)");
   else fail("split_traffic outcomes", String(splitOutcomes.length));
 
   const paths = new Map<string, number>();

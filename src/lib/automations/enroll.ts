@@ -179,6 +179,27 @@ export async function enrollForTrigger(
     }
 
     if (
+      (triggerBlockType === "customer_added_to_list" ||
+        triggerBlockType === "customer_removed_from_list") &&
+      filters?.listId
+    ) {
+      const mode = String(cfg.listMode || "any");
+      const ids = Array.isArray(cfg.listIds) ? (cfg.listIds as string[]) : [];
+      if (mode === "specific" && ids.length && !ids.includes(filters.listId)) continue;
+
+      if (triggerBlockType === "customer_added_to_list" && cfg.firstOnly === true) {
+        const prior = await prisma.auditLog.findFirst({
+          where: {
+            workspaceId,
+            event: "automation.list_added",
+            detail: { contains: `${flow.id}:${contactId}:${filters.listId}` },
+          },
+        });
+        if (prior) continue;
+      }
+    }
+
+    if (
       (triggerBlockType === "tag_added" || triggerBlockType === "integration_tag_added") &&
       filters?.tag
     ) {
@@ -308,8 +329,7 @@ export async function enrollForTrigger(
       continue;
     }
 
-    results.push(
-      await enrollInAutomation({
+    const enrolled = await enrollInAutomation({
         workspaceId,
         flowId: flow.id,
         contactId,
@@ -319,14 +339,33 @@ export async function enrollForTrigger(
             ? `msg:${filters.messageId}`
             : filters?.trackingToken
               ? `link:${filters.trackingToken}`
-              : undefined,
+              : filters?.conversationId &&
+                  (triggerBlockType.startsWith("inbox_conversation_") ||
+                    triggerBlockType === "inbox_conversation_status_changed")
+                ? `inbox:${filters.conversationId}:${filters.assigneeId || filters.toStatus || filters.tag || "event"}`
+                : undefined,
         variables: {
           ...(filters?.callId ? { callId: filters.callId, phoneNumberId: filters.phoneNumberId } : {}),
           ...(filters?.conversationId ? { conversationId: filters.conversationId } : {}),
           ...(filters?.body ? { triggerMessageBody: filters.body } : {}),
         },
-      }),
-    );
+      });
+
+    if (
+      triggerBlockType === "customer_added_to_list" &&
+      filters?.listId &&
+      !enrolled.skipped
+    ) {
+      await prisma.auditLog.create({
+        data: {
+          workspaceId,
+          event: "automation.list_added",
+          detail: `${flow.id}:${contactId}:${filters.listId}`,
+        },
+      }).catch(() => undefined);
+    }
+
+    results.push(enrolled);
   }
   return results;
 }

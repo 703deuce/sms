@@ -274,7 +274,7 @@ export function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <ParityNodeConfig node={node} onUpdate={onUpdate} />
+        <ParityNodeConfig node={node} onUpdate={onUpdate} flowId={flowId} />
         {(block === "send_sms" || block === "send_review_request") && (
           <>
             <div>

@@ -837,6 +837,18 @@ export function triggerFromBlockType(blockType: string): string {
     call_voicemail_detected: "Voicemail detected",
     call_appointment_booked: "Appointment booked",
     call_transferred: "Call transferred",
+    customer_field_changed: "Customer field changed",
+    general_link_clicked: "General link clicked",
+    customer_added_to_list: "Customer added to list",
+    customer_removed_from_list: "Customer removed from list",
+    message_received: "Message received",
+    inbox_conversation_status_changed: "Inbox status changed",
+    inbox_conversation_tagged: "Inbox conversation tagged",
+    inbox_conversation_untagged: "Inbox conversation untagged",
+    inbox_conversation_assigned: "Inbox conversation assigned",
+    inbox_conversation_unassigned: "Inbox conversation unassigned",
+    contact_birthday: "Contact birthday",
+    popup_submitted: "Popup submitted",
   };
   return map[blockType] || blockType;
 }

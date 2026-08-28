@@ -264,7 +264,7 @@ export function getBlockOutcomes(
   config?: Record<string, unknown>,
 ): BlockOutcome[] {
   if (blockType === "split_traffic") {
-    return splitTrafficOutcomes(config || {});
+    return [...splitTrafficOutcomes(config || {}), { id: "failed", label: "Failed" }];
   }
   const def = BLOCK_OUTCOMES[blockType];
   if (!def) {

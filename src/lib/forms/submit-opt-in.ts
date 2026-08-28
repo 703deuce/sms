@@ -89,12 +89,19 @@ export async function submitOptInForm(
         status: "SUBSCRIBED",
         consentSource: `form:${form.slug}`,
         consentDate: new Date(),
+        customFields: input.dateOfBirth
+          ? ({ dateOfBirth: input.dateOfBirth } as Prisma.InputJsonValue)
+          : undefined,
       },
     });
   } else {
     if (contact.status === "BLOCKED" || contact.status === "UNSUBSCRIBED") {
       return { ok: false, error: "This contact cannot be subscribed." };
     }
+    const existingCf =
+      contact.customFields && typeof contact.customFields === "object"
+        ? (contact.customFields as Record<string, unknown>)
+        : {};
     await prisma.contact.update({
       where: { id: contact.id },
       data: {
@@ -104,6 +111,10 @@ export async function submitOptInForm(
         email: input.email || contact.email,
         consentSource: `form:${form.slug}`,
         consentDate: new Date(),
+        customFields: {
+          ...existingCf,
+          ...(input.dateOfBirth ? { dateOfBirth: input.dateOfBirth } : {}),
+        } as Prisma.InputJsonValue,
       },
     });
   }
@@ -137,6 +148,10 @@ export async function submitOptInForm(
       await prisma.contactListMember.create({
         data: { listId: list.id, contactId: contact.id },
       });
+      const { emitAutomationEvent } = await import("@/lib/automations/events");
+      await emitAutomationEvent(form.workspaceId, "list.member_added", contact.id, {
+        listId: list.id,
+      }).catch(() => undefined);
     } catch {
       // already member
     }
@@ -187,7 +202,25 @@ export async function submitOptInForm(
   const { emitAutomationEvent } = await import("@/lib/automations/events");
   await emitAutomationEvent(form.workspaceId, "form.submitted", contact.id, {
     formSlug: form.slug || "",
+    sourceType: input.embedHost?.includes("widget") ? "popup" : undefined,
   }).catch(() => undefined);
+
+  // Popup/widget submissions share form infrastructure — also fire popup trigger.
+  const isPopup =
+    Boolean(input.embedHost?.includes("widget")) ||
+    Boolean(input.referrer?.includes("/embed/w/"));
+  if (isPopup) {
+    const widget = await prisma.growWidget.findFirst({
+      where: { workspaceId: form.workspaceId, linkedFormId: form.id },
+      select: { id: true, name: true, widgetType: true },
+    });
+    await emitAutomationEvent(form.workspaceId, "popup.submitted", contact.id, {
+      popupId: widget?.id,
+      formSlug: form.slug || "",
+      sourceType: "popup",
+      widgetType: widget?.widgetType,
+    }).catch(() => undefined);
+  }
 
   if (isNew) {
     await emitAutomationEvent(form.workspaceId, "customer.created", contact.id).catch(

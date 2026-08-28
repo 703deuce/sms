@@ -56,7 +56,7 @@ Last updated: Aug 28, 2026 — branch `cursor/automation-slicktext-parity-founda
 | Block | Prior status | Notes |
 |-------|--------------|-------|
 | Contact Is On List | missing → **added** | `condition_contact_on_list` |
-| Contact Matches Segment | missing → **added** | `condition_contact_segment` (list-based segment stub) |
+| Contact Matches Segment | missing → **added** | `condition_contact_segment` — real segment evaluation via `segment-match.ts` |
 | General Link Clicked | missing → **added** | `condition_general_link_clicked` |
 | Workflow Message Clicked | missing → **added** | `condition_workflow_message_clicked` |
 | Inbox Conversation Assignee | missing → **added** | `condition_inbox_assignee` |
@@ -95,25 +95,37 @@ Last updated: Aug 28, 2026 — branch `cursor/automation-slicktext-parity-founda
 | Block registry (outcomes, operators, summaries) | `src/lib/automations/block-registry/` |
 | Parity catalog entries | `src/lib/automations/catalog-parity-blocks.ts` |
 | Runtime: lists, inbox, split, opt-in, conditions | `src/lib/automations/parity/` |
+| Segment evaluation | `src/lib/automations/parity/segment-match.ts` |
+| Birthday processor | `src/lib/automations/parity/birthday-processor.ts` |
+| Inbox event emitters | `src/lib/automations/parity/inbox-events.ts` |
 | Event wait resume | `src/lib/automations/parity/event-waits.ts` |
 | Trigger matching | `src/lib/automations/parity/trigger-matching.ts` |
-| Certification tests | `scripts/test-automation-parity-foundation.ts` |
+| Certification tests | `scripts/test-automation-parity-foundation.ts`, `scripts/test-automation-parity-full-cert.ts` |
+| Catalog audit (recommendations) | `docs/AUTOMATION_CATALOG_AUDIT.md` |
 
 ---
 
 ## Certification checklist (per brief §11)
 
-- [ ] Message Received trigger — inbound SMS → workflow starts
-- [ ] Customer Field Changed — field update → workflow starts
-- [ ] Add to List action + Added to List trigger
-- [ ] Inbox assignment trigger
-- [ ] Wait for Reply — reply resumes correct branch
-- [ ] Wait timeout — no reply → timeout branch
-- [ ] Wait for Email extraction
-- [ ] Wait for Link Click
-- [ ] Field change wait
-- [ ] Split Traffic distribution + retry stability
-- [ ] Conversation actions mutate real conversation state
-- [ ] Opt-in action cannot manufacture consent
+- [x] Message Received trigger — inbound SMS → workflow starts
+- [x] Customer Field Changed — field update → workflow starts
+- [x] Add to List action + Added to List trigger
+- [x] Inbox assignment trigger
+- [x] Wait for Reply — reply resumes correct branch
+- [x] Wait timeout — no reply → timeout branch
+- [x] Wait for Email extraction
+- [x] Wait for Link Click
+- [x] Field change wait
+- [x] Split Traffic distribution + retry stability
+- [x] Conversation actions mutate real conversation state
+- [x] Opt-in action cannot manufacture consent
+- [x] Contact matches segment (real segment engine)
+- [x] Birthday processor runs on schedule
+- [x] Popup submitted event wiring
 
-Run: `npx tsx scripts/test-automation-parity-foundation.ts`
+Run:
+
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-automation-parity-foundation.ts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-automation-parity-full-cert.ts
+```

@@ -52,7 +52,7 @@ export async function runSplitTraffic(
   if (cfg.distribution === "custom") {
     const total = percentages.slice(0, pathCount).reduce((a, b) => a + Number(b || 0), 0);
     if (total !== 100) {
-      return outcomeResult(def, node.id, "path_a", {
+      return outcomeResult(def, node.id, "failed", {
         error: "percentages_must_total_100",
         total,
       });

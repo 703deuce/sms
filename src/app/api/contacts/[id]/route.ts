@@ -127,14 +127,17 @@ export async function PATCH(
           previousValue: f.prev != null ? String(f.prev) : "",
           newValue: f.next != null ? String(f.next) : "",
         });
-      }
-      if (updated) {
-        await resumeEventWaitsOnFieldChange({
-          workspaceId: auth.workspaceId,
-          contactId: id,
-          field: "company",
-          contact: updated as unknown as Record<string, unknown>,
-        });
+        if (updated) {
+          await resumeEventWaitsOnFieldChange({
+            workspaceId: auth.workspaceId,
+            contactId: id,
+            field: f.field,
+            contact: {
+              ...(updated as unknown as Record<string, unknown>),
+              [f.field]: f.next,
+            },
+          });
+        }
       }
     } catch {
       /* non-fatal */
