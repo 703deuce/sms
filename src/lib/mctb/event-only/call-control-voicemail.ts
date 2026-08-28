@@ -14,6 +14,11 @@ export function isCallControlVoicemailActive(callControlId: string): boolean {
   return voicemailPhaseByCall.has(callControlId);
 }
 
+/** True once MCTB voicemail has picked up the call (greeting, recording, or saved). */
+export function wasCallControlVoicemailEngaged(callControlId: string): boolean {
+  return isCallControlVoicemailActive(callControlId);
+}
+
 export async function startCallControlVoicemailFallback(input: {
   eventPayload: Record<string, unknown>;
   ctx: CallContext;

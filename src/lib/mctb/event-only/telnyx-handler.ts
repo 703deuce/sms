@@ -16,6 +16,7 @@ import {
   handleCallControlVoicemailMediaEnded,
   clearCallControlVoicemailState,
   resetCallControlVoicemailStateForTests,
+  wasCallControlVoicemailEngaged,
 } from "@/lib/mctb/event-only/call-control-voicemail";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 
@@ -211,13 +212,27 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       });
 
       if (callControlVoice) {
+        const voiceCtx = await resolveCallControlVoiceContext(
+          eventPayload,
+          fallbackWorkspaceId,
+        );
         if (
           !wasPress1ConsentCompleted(callControlId) &&
-          (await resolveCallControlVoiceContext(eventPayload, fallbackWorkspaceId))
-            ?.consentMode === MCTB_CONSENT_MODE_EXISTING
+          voiceCtx?.consentMode === MCTB_CONSENT_MODE_EXISTING
         ) {
+          if (!wasCallControlVoicemailEngaged(callControlId)) {
+            logMctbEventOnly("existing_consent_hangup_before_voicemail", {
+              callControlId,
+              workspaceId: voiceCtx.workspaceId,
+              livekitRoomCreated: false,
+            });
+            processedCalls.delete(callControlId);
+            clearCallControlVoicemailState(callControlId);
+            return { handled: true, action: "existing_consent_hangup_no_voicemail" };
+          }
           captureMctbEventAsync(eventPayload, fallbackWorkspaceId, "EVENT_CAPTURED");
           processedCalls.delete(callControlId);
+          clearCallControlVoicemailState(callControlId);
           return { handled: true, action: "call_control_existing_consent_capture" };
         }
         processedCalls.delete(callControlId);

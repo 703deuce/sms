@@ -2,7 +2,7 @@ import { AddOnUpgradeCard } from "@/components/products/add-on-upgrade-card";
 import { PersonalVoicemailUI } from "@/components/personal/personal-voicemail-ui";
 import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
+import { hasMctbBundledVoicemailAccess } from "@/lib/products/feature-entitlements";
 
 export default async function VoiceVoicemailPage({
   searchParams,
@@ -10,7 +10,7 @@ export default async function VoiceVoicemailPage({
   searchParams: Promise<{ numberId?: string }>;
 }) {
   const { workspaceId, session } = await requireWorkspaceContext();
-  const entitled = await hasWorkspaceProductFeature(workspaceId, "visual_voicemail", {
+  const entitled = await hasMctbBundledVoicemailAccess(workspaceId, {
     isPlatformAdmin: session.isAdmin,
   });
 

@@ -28,9 +28,10 @@ const FEATURE_COPY: Record<
     upgradeParam: "call_forwarding",
   },
   visual_voicemail: {
-    title: "Visual Voicemail",
-    description: "Transcribed voicemail inbox with assignment and callbacks.",
-    upgradeParam: "visual_voicemail",
+    title: "Voicemail",
+    description:
+      "Included with Missed Call Text Back — recorded messages, transcripts, and AI summaries when callers reach voicemail.",
+    upgradeParam: "mctb",
   },
   callback_requests: {
     title: "Callback Requests",
@@ -41,8 +42,8 @@ const FEATURE_COPY: Record<
   ai_transcription: {
     title: "Transcription",
     description:
-      "Turn voicemails into readable text and get a quick AI summary of what the caller needs.",
-    upgradeParam: "ai_transcription",
+      "Included with Missed Call Text Back voicemail capture — readable transcripts and AI summaries.",
+    upgradeParam: "mctb",
   },
 };
 

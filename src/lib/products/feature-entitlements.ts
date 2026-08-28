@@ -423,6 +423,22 @@ export async function hasWorkspaceProductFeature(
   return isActiveEntitlement(snap[feature]);
 }
 
+/** Voicemail inbox + transcription — included with every active MCTB workspace. */
+export async function hasMctbBundledVoicemailAccess(
+  workspaceId: string,
+  options?: FeatureEntitlementOptions,
+): Promise<boolean> {
+  if (await workspaceHasAdminFullEntitlements(workspaceId, options)) return true;
+  if (await hasWorkspaceProductFeature(workspaceId, "visual_voicemail", options)) {
+    return true;
+  }
+  if (await hasWorkspaceProductFeature(workspaceId, "mctb", options)) {
+    return true;
+  }
+  if (await workspaceHasMctbUsage(workspaceId)) return true;
+  return workspaceHasPurchasedMctb(workspaceId);
+}
+
 export async function grantWorkspaceProductFeature(
   workspaceId: string,
   feature: TransovoProductFeature,

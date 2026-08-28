@@ -101,7 +101,7 @@ function buildMctbNav(options: VoiceNavOptions): NavItem[] {
       icon: PhoneMissed,
       sectionLabel: "Missed Call Text Back",
     },
-    { label: "Visual Voicemail", href: "/voice/voicemail", icon: Voicemail },
+    { label: "Voicemail", href: "/voice/voicemail", icon: Voicemail },
     { label: "Consent Log", href: "/voice/consent-log", icon: ClipboardCheck },
     { label: "Text Back Setup", href: "/voice/setup", icon: SlidersHorizontal },
     { label: "Schedule", href: "/voice/schedule", icon: Clock },
@@ -199,7 +199,7 @@ export function getVoicePageTitle(pathname: string): string {
     return "";
   }
   if (pathname.startsWith("/voice/voicemail") || pathname.startsWith("/personal/voicemail")) {
-    return "Visual Voicemail";
+    return "Voicemail";
   }
   if (pathname === "/voice/numbers/buy" || pathname === "/numbers/buy") return "Buy Numbers";
   if (pathname.startsWith("/voice/numbers") || pathname.startsWith("/numbers")) return "Numbers";

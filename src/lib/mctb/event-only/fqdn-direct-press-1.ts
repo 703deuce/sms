@@ -156,12 +156,18 @@ export async function startFqdnDirectPress1Gather(input: {
   }
 
   if (ctx.consentMode === MCTB_CONSENT_MODE_EXISTING) {
-    logMctbEventOnly("fqdn_direct_existing_consent_skip_gather", {
+    const { startCallControlVoicemailFallback } = await import(
+      "@/lib/mctb/event-only/call-control-voicemail"
+    );
+    logMctbEventOnly("fqdn_direct_existing_consent_voicemail", {
       callControlId,
       workspaceId: ctx.workspaceId,
       livekitRoomCreated: false,
     });
-    return { action: "existing_consent_no_gather" };
+    return startCallControlVoicemailFallback({
+      eventPayload: input.eventPayload,
+      ctx,
+    });
   }
 
   if (!isVerifiedCallConsentMode(ctx.consentMode as "press_1" | "existing_consent")) {
