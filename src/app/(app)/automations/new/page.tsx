@@ -5,6 +5,10 @@ import {
   buildAutomationDefinitionFromTemplate,
   getIntegrationTemplate,
 } from "@/lib/automations/integration-templates";
+import {
+  buildAutomationDefinitionFromCampaignPlaybook,
+  campaignPlaybookAutomationName,
+} from "@/lib/campaigns/playbook-automation";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -24,8 +28,13 @@ export default function NewAutomationPage() {
       try {
         // Optional starter template — seeds a trigger + suggested actions.
         // Templates never auto-activate; the new flow is always created as DRAFT.
-        const templateId = new URLSearchParams(window.location.search).get("template");
+        const params = new URLSearchParams(window.location.search);
+        const templateId = params.get("template");
+        const playbookId = params.get("playbook");
         const template = templateId ? getIntegrationTemplate(templateId) : null;
+        const playbookDefinition = playbookId
+          ? buildAutomationDefinitionFromCampaignPlaybook(playbookId)
+          : null;
         const stamp = new Date()
           .toISOString()
           .slice(5, 16)
@@ -35,7 +44,12 @@ export default function NewAutomationPage() {
           definition?: ReturnType<typeof buildAutomationDefinitionFromTemplate>;
         } = template
           ? { name: template.title, definition: buildAutomationDefinitionFromTemplate(template) }
-          : { name: `New automation · ${stamp}` };
+          : playbookDefinition
+            ? {
+                name: campaignPlaybookAutomationName(playbookId!) || `New automation · ${stamp}`,
+                definition: playbookDefinition,
+              }
+            : { name: `New automation · ${stamp}` };
 
         const res = await fetch("/api/automations", {
           method: "POST",

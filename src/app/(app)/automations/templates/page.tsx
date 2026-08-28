@@ -2,6 +2,7 @@ import { CATEGORY_ICONS } from "@/components/campaigns/category-icons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/catalog";
+import { playbookHref } from "@/lib/campaigns/playbook-routes";
 import { INTEGRATION_AUTOMATION_TEMPLATES } from "@/lib/automations/integration-templates";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
@@ -62,7 +63,7 @@ export default function AutomationTemplatesPage() {
           return (
             <Link
               key={cat.id}
-              href={cat.id === "custom" ? "/automations/new" : `/campaigns/new/${cat.id}`}
+              href={playbookHref(cat)}
               className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
             >
               <div className="flex items-start gap-3">

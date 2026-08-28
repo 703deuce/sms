@@ -17,6 +17,7 @@ import {
   type AudienceSelection,
   type CampaignComposeDraft,
 } from "@/lib/campaigns/compose-draft";
+import { seedBroadcastComposeFromPlaybook } from "@/lib/campaigns/playbook-broadcast";
 import { cn, estimateSmsSegments, formatNumber, formatPhone } from "@/lib/utils";
 import {
   Beaker,
@@ -87,9 +88,12 @@ export function CampaignComposeView() {
   useEffect(() => {
     const loaded = loadComposeDraft();
     const playbook = searchParams.get("playbook");
-    if (playbook === "broadcast" && !loaded.name) {
-      loaded.name = "New announcement";
-    }
+    const seeded = seedBroadcastComposeFromPlaybook(playbook, {
+      name: loaded.name,
+      message: loaded.message,
+    });
+    loaded.name = seeded.name;
+    loaded.message = seeded.message;
     setDraft(loaded);
 
     const duplicateId = searchParams.get("duplicate");
