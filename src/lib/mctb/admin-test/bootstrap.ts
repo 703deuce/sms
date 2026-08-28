@@ -177,6 +177,19 @@ export async function bootstrapAdminMctbTestAccount(input: {
 
   await grantProductEntitlement(input.workspaceId, "voice", "active");
 
+  const { provisionMctbTelnyxSipIngress } = await import(
+    "@/lib/mctb/provisioning/telnyx-sip-ingress"
+  );
+  const voiceProvision = await provisionMctbTelnyxSipIngress({
+    workspaceId: input.workspaceId,
+    phoneNumberId: pn.phoneNumberId,
+    mctbRole: "platform_demo",
+    delaySeconds: 0,
+  });
+  if (!voiceProvision.ok) {
+    throw new Error(voiceProvision.error || "mctb_call_control_provision_failed");
+  }
+
   const runtime = await prisma.missedCallTextConfig.findUnique({ where: { workspaceId: input.workspaceId } });
   const refreshedUser = await prisma.user.findUnique({
     where: { id: user.id },

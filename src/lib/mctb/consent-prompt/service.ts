@@ -6,16 +6,9 @@ import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { isPhoneMctbSipIngress } from "@/lib/mctb/sip-ingress/sync";
 import { generatePromptAudio } from "@/lib/smart-routing/media-service";
-import {
-  createFlow,
-  pauseFlow,
-  publishFlow,
-  updateFlowDraft,
-} from "@/lib/smart-routing/flow-service";
-import { templateForType } from "@/lib/smart-routing/templates";
+import { pauseFlow } from "@/lib/smart-routing/flow-service";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { resolvePlatformDemoOwnerWorkspaceId } from "@/lib/mctb/onboarding/platform-demo";
-import type { DraftConfig } from "@/lib/smart-routing/types";
 import {
   canPublishConsentPrompt,
   computeConsentScriptHash,
@@ -104,33 +97,62 @@ async function findMctbConsentFlow(workspaceId: string) {
   });
 }
 
-function buildConsentFlowDraft(input: {
-  scriptText: string;
-  audioAssetId: string;
-  promptVersion: number;
-  scriptHash: string;
-}): DraftConfig {
-  const template = templateForType("missed_call_recovery");
-  const draft: DraftConfig = JSON.parse(JSON.stringify(template.draftConfig)) as DraftConfig;
-  const consentNode = draft.nodes?.find((n) => n.type === "SMS_CONSENT");
-  if (consentNode) {
-    consentNode.config = {
-      ...consentNode.config,
-      consentDigit: "1",
-      promptText: input.scriptText,
-      promptAssetId: input.audioAssetId,
-      audioAssetId: input.audioAssetId,
-      promptVersion: String(input.promptVersion),
-      promptScriptHash: input.scriptHash,
-    };
+/** Legacy Smart Routing consent flows must stay paused — MCTB voice is Call Control only. */
+async function pauseLegacyMctbConsentFlows(
+  workspaceId: string,
+  phoneNumberId?: string | null,
+): Promise<void> {
+  const prisma = getPrisma();
+  const flows = await prisma.smartRoutingFlow.findMany({
+    where: {
+      workspaceId,
+      status: "active",
+      OR: [
+        { name: MCTB_CONSENT_FLOW_NAME, type: "missed_call_recovery" },
+        ...(phoneNumberId ? [{ assignedPhoneNumberId: phoneNumberId }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  for (const flow of flows) {
+    await pauseFlow(workspaceId, flow.id).catch(() => undefined);
   }
-  draft.greeting = {
-    source: "elevenlabs",
-    text: input.scriptText,
-    audioAssetId: input.audioAssetId,
-  };
-  draft.metadata = { ...(draft.metadata || {}), mctbManaged: true, purpose: "verified_consent" };
-  return draft;
+}
+
+async function resolveMctbProvisionRole(
+  phoneNumberId: string,
+): Promise<"platform_demo" | "customer_mctb"> {
+  const prisma = getPrisma();
+  const pn = await prisma.phoneNumber.findFirst({
+    where: { id: phoneNumberId },
+    select: { e164: true },
+  });
+  return pn?.e164 === MCTB_PLATFORM_DEMO_E164 ? "platform_demo" : "customer_mctb";
+}
+
+/** Wire Telnyx DID to shared mctb-event-only Call Control app (never Transovo Voice / SR flows). */
+async function provisionMctbCallControlVoiceForNumber(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+}): Promise<{ ok: boolean; actions?: string[]; error?: string }> {
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId },
+    select: { id: true, provider: true },
+  });
+  if (!phone?.id || String(phone.provider || "").toLowerCase() !== "telnyx") {
+    return { ok: true, actions: ["voice_provision_skipped_non_telnyx"] };
+  }
+
+  const { provisionMctbTelnyxSipIngress } = await import(
+    "@/lib/mctb/provisioning/telnyx-sip-ingress"
+  );
+  const mctbRole = await resolveMctbProvisionRole(phone.id);
+  return provisionMctbTelnyxSipIngress({
+    workspaceId: input.workspaceId,
+    phoneNumberId: phone.id,
+    mctbRole,
+  });
 }
 
 export async function generateMctbConsentAudio(
@@ -169,14 +191,13 @@ export async function generateMctbConsentAudio(
 
 export async function publishMctbConsentPrompt(
   workspaceId: string,
-  actorUserId?: string,
+  _actorUserId?: string,
   options?: { assignedPhoneNumberId?: string },
 ) {
   const config = await loadMctbConsentPrompt(workspaceId);
   const gate = canPublishConsentPrompt(config);
   if (!gate.ok) throw new Error(gate.reason || "Cannot publish consent prompt");
 
-  const prisma = getPrisma();
   const phoneNumberId = await resolveMctbAssignedPhoneNumberId(
     workspaceId,
     options?.assignedPhoneNumberId,
@@ -187,9 +208,10 @@ export async function publishMctbConsentPrompt(
     );
   }
 
+  const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
     where: { id: phoneNumberId },
-    select: { id: true, settingsJson: true },
+    select: { id: true, settingsJson: true, provider: true },
   });
   if (!phone?.id) {
     throw new Error("Selected MCTB number was not found");
@@ -202,72 +224,53 @@ export async function publishMctbConsentPrompt(
     publishedAudioAssetId: config.audioAssetId,
   };
 
-  if (isPhoneMctbSipIngress(phone.settingsJson)) {
-    return saveMctbConsentPrompt(workspaceId, {
-      ...publishedPatch,
-      flowId: config.flowId,
-    });
-  }
+  await pauseLegacyMctbConsentFlows(workspaceId, phoneNumberId);
 
-  const version = config.publishedVersion || 1;
-  const draft = buildConsentFlowDraft({
-    scriptText: config.scriptText,
-    audioAssetId: config.audioAssetId!,
-    promptVersion: version,
-    scriptHash: config.scriptHash!,
-  });
-
-  let flow = await findMctbConsentFlow(workspaceId);
-  if (!flow) {
-    flow = await createFlow(workspaceId, {
-      name: MCTB_CONSENT_FLOW_NAME,
-      type: "missed_call_recovery",
-      createdBy: actorUserId,
-    });
-  }
-
-  await updateFlowDraft(workspaceId, flow.id, {
-    draftConfig: draft,
-    assignedPhoneNumberId: phoneNumberId,
-    status: "draft",
-  });
-
-  await publishFlow(workspaceId, flow.id, actorUserId);
-
-  return saveMctbConsentPrompt(workspaceId, {
+  const saved = await saveMctbConsentPrompt(workspaceId, {
     ...publishedPatch,
-    flowId: flow.id,
+    flowId: config.flowId,
   });
+
+  const provision =
+    isPhoneMctbSipIngress(phone.settingsJson) ||
+    String(phone.provider || "").toLowerCase() === "telnyx"
+      ? await provisionMctbCallControlVoiceForNumber({ workspaceId, phoneNumberId: phone.id })
+      : { ok: true as const };
+
+  if (!provision.ok) {
+    throw new Error(provision.error || "mctb_call_control_provision_failed");
+  }
+
+  return saved;
 }
 
-/** Keep Smart Routing flow aligned with consent mode (press_1 vs existing_consent). */
+/** Align consent mode with Call Control voice (press_1 vs existing_consent). */
 export async function syncMctbConsentRouting(
   workspaceId: string,
   actorUserId?: string,
   options?: { assignedPhoneNumberId?: string },
 ) {
   const mode = await loadMctbConsentMode(workspaceId);
-  const flow = await findMctbConsentFlow(workspaceId);
+  const phoneNumberId = await resolveMctbAssignedPhoneNumberId(
+    workspaceId,
+    options?.assignedPhoneNumberId,
+  );
+
+  await pauseLegacyMctbConsentFlows(workspaceId, phoneNumberId);
 
   if (mode === "existing_consent") {
-    if (flow && flow.status === "active") {
-      await pauseFlow(workspaceId, flow.id);
-    }
-    return { mode, action: "paused_consent_flow" as const };
+    return { mode, action: "call_control_existing_consent" as const };
   }
 
   const config = await loadMctbConsentPrompt(workspaceId);
   if (!isConsentPromptPublished(config)) {
-    if (flow && flow.status === "active") {
-      await pauseFlow(workspaceId, flow.id);
-    }
     return { mode, action: "blocked_unpublished" as const };
   }
 
   await publishMctbConsentPrompt(workspaceId, actorUserId, {
     assignedPhoneNumberId: options?.assignedPhoneNumberId,
   });
-  return { mode, action: "published_consent_flow" as const };
+  return { mode, action: "call_control_press1_ready" as const };
 }
 
 export async function initMctbConsentPromptForWorkspace(workspaceId: string) {
@@ -309,7 +312,7 @@ export async function getMctbConsentPromptStatus(workspaceId: string) {
 
 /**
  * Publish consent prompt metadata for the platform demo owner workspace.
- * Voice uses the frozen SIP/LiveKit handler — not TeXML or programmable voice.
+ * Voice uses Call Control (mctb-event-only) — same path as production MCTB.
  */
 export async function publishPlatformDemoMctbConsent(actorUserId?: string) {
   const ownerId = await resolvePlatformDemoOwnerWorkspaceId();

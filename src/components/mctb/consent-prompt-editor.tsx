@@ -137,7 +137,7 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
         <p className="text-[14px] font-semibold text-[#111827]">What callers will hear</p>
         <p className="mt-1 text-[12px] text-muted-foreground">
           Write your Press-1 disclosure. We generate static audio once — live calls play the saved
-          recording (no runtime text-to-speech).
+          recording via Call Control (mctb-event-only), not Smart Routing or LiveKit.
         </p>
       </div>
 
