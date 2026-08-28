@@ -54,19 +54,20 @@ No environment variables required.
 
 1. Your phone rings first.
 2. Forward reaches Telnyx `+18663464256`.
-3. Call stays connected (handler answers via 3PCC Call Control).
-4. Original caller ID preserved (Diversion header → `forwardedFrom`).
-5. Existing missed-call event fires (`handleMctbInboundEvent`).
-6. **No** LiveKit room (`mctb-sip-e2e` / `worker_job_received` absent).
-
-SMS: at most one message if workspace is configured for existing_consent and eligibility passes.
+3. Call stays connected (handler answers via Call Control).
+4. **Press-1 prompt** plays (same disclosure as TeXML/LiveKit path).
+5. Caller presses **1** → consent recorded → recovery SMS sent (if eligible).
+6. Confirmation: *"Perfect. Check your phone..."*
+7. Original caller ID preserved (Diversion header → `forwardedFrom`).
+8. **No** LiveKit room (`livekitRoomCreated: false` on all logs).
 
 ## Logs to watch
 
 ```bash
 grep 'mctb-event-only'
-grep 'fqdn_direct_answer_sent'
-grep 'inbound_call_captured'
+grep 'fqdn_direct_press1_gather_sent'
+grep 'fqdn_direct_press1_received'
+grep 'fqdn_direct_press1_sms_triggered'
 ```
 
 Confirm `livekitRoomCreated: false` and `fqdnDirect: true` on FQDN path events.

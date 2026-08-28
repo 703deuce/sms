@@ -1,12 +1,14 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import {
-  MCTB_FQDN_DIRECT_CONNECTION_NAME,
-  MCTB_FQDN_DIRECT_TEST_E164,
-} from "@/lib/mctb/sip-diagnostic/constants";
+import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
 import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
 import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
-import { MCTB_CALL_CONTROL_DIAGNOSTIC_SAY } from "@/lib/mctb/consent-prompt/call-control-diagnostic";
+import {
+  handleFqdnDirectGatherEnded,
+  handleFqdnDirectSpeakEnded,
+  resetFqdnDirectPress1StateForTests,
+  startFqdnDirectPress1Gather,
+} from "@/lib/mctb/event-only/fqdn-direct-press-1";
 
 type TelnyxPayload = Record<string, unknown>;
 
@@ -134,17 +136,43 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
     case "call.answered": {
       if (fqdnDirect) {
         try {
-          const { speakOnCall } = await import("@/lib/smart-routing/telnyx-provider");
-          await speakOnCall(callControlId, MCTB_CALL_CONTROL_DIAGNOSTIC_SAY);
-          logMctbEventOnly("fqdn_direct_speak_sent", { callControlId });
+          const press1 = await startFqdnDirectPress1Gather({
+            eventPayload,
+            fallbackWorkspaceId,
+          });
+          return { handled: true, action: press1.action };
         } catch (err) {
-          logMctbEventOnly("fqdn_direct_speak_failed", {
+          logMctbEventOnly("fqdn_direct_press1_start_failed", {
             callControlId,
             error: err instanceof Error ? err.message : String(err),
           });
+          throw err;
         }
       }
-      return { handled: true, action: fqdnDirect ? "fqdn_direct_speak" : "ignored" };
+      return { handled: true, action: "ignored" };
+    }
+    case "call.gather.ended": {
+      if (!fqdnDirect) return { handled: true, action: "ignored" };
+      const gather = await handleFqdnDirectGatherEnded({
+        eventPayload,
+        fallbackWorkspaceId,
+      });
+      return { handled: true, action: gather.action };
+    }
+    case "call.dtmf.received": {
+      if (!fqdnDirect) return { handled: true, action: "ignored" };
+      const digit = String(eventPayload.digit ?? eventPayload.digits ?? "").trim();
+      if (!digit) return { handled: true, action: "ignored" };
+      const gather = await handleFqdnDirectGatherEnded({
+        eventPayload: { ...eventPayload, digits: digit },
+        fallbackWorkspaceId,
+      });
+      return { handled: true, action: gather.action };
+    }
+    case "call.speak.ended": {
+      if (!fqdnDirect) return { handled: true, action: "ignored" };
+      const speak = await handleFqdnDirectSpeakEnded({ eventPayload });
+      return { handled: true, action: speak.action };
     }
     case "call.hangup": {
       logMctbEventOnly("telnyx_call_hangup", {
@@ -185,4 +213,5 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 
 export function resetMctbEventOnlyTelnyxStateForTests(): void {
   processedCalls.clear();
+  resetFqdnDirectPress1StateForTests();
 }

@@ -60,6 +60,6 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "mctb-event-only",
-    flow: "call.initiated/hangup → capture metadata → Existing Consent eligibility → queue SMS (no voice media)",
+    flow: "866 direct: answer → press-1 gather → consent → SMS (no LiveKit)",
   });
 }
