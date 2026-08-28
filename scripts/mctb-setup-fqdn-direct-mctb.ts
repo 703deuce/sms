@@ -1,5 +1,6 @@
 /**
- * Wire 866 toll-free to isolated FQDN (PRACK/3PCC, no LiveKit SIP dest) → mctb-event-only.
+ * Wire 866 toll-free to Call Control app (3PCC) → mctb-event-only.
+ * Reference FQDN keeps PRACK/ringback flags for audit only (not PSTN assignment).
  *
  * Usage:
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-setup-fqdn-direct-mctb.ts
@@ -10,7 +11,7 @@ import { join } from "node:path";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { fetchTelnyxPhoneNumberByE164 } from "@/lib/mctb/consent-prompt/telnyx-call-control-route";
 import {
-  assignE164ToFqdnConnection,
+  assignE164ToCallControlApp,
   ensureMctbFqdnDirectConnection,
   fetchFqdnConnectionRaw,
   listTelnyxTollFreeCandidates,
@@ -24,6 +25,7 @@ import {
 import {
   MCTB_571_SIP_FQDN_CONNECTION_ID,
   MCTB_571_SIP_FQDN_CONNECTION_NAME,
+  MCTB_866_DIRECT_CALL_CONTROL_APP_NAME,
   MCTB_FQDN_DIRECT_CONNECTION_NAME,
 } from "@/lib/mctb/sip-diagnostic/constants";
 
@@ -35,7 +37,8 @@ type Backup = {
   providerNumberId: string;
   previousConnectionId: string;
   previousConnectionName: string;
-  directFqdnConnectionId: string;
+  callControlAppId: string;
+  referenceFqdnConnectionId: string;
   livekitFqdnConnectionId: string;
   previousLivekitFqdnWebhookUrl: string | null;
   savedAt: string;
@@ -52,12 +55,13 @@ async function main() {
   const candidates = await listTelnyxTollFreeCandidates();
   const direct = await ensureMctbFqdnDirectConnection();
 
-  console.log("\n══ MCTB FQDN Direct — PRACK/3PCC without LiveKit SIP ══\n");
+  console.log("\n══ MCTB 866 Direct — Call Control (no LiveKit) ══\n");
   console.log(`Test toll-free:       ${testE164} (NOT ${MCTB_PLATFORM_DEMO_E164})`);
-  console.log(`Direct FQDN:          ${MCTB_FQDN_DIRECT_CONNECTION_NAME} (${direct.connectionId})`);
+  console.log(`Call Control app:     ${MCTB_866_DIRECT_CALL_CONTROL_APP_NAME}`);
+  console.log(`Reference FQDN:       ${MCTB_FQDN_DIRECT_CONNECTION_NAME} (${direct.connectionId})`);
   console.log(`LiveKit FQDN (571):   ${MCTB_571_SIP_FQDN_CONNECTION_NAME} (${MCTB_571_SIP_FQDN_CONNECTION_ID})`);
   console.log(`Webhook target:       ${mctbFqdnDirectEventOnlyWebhookUrl()}`);
-  console.log(`LiveKit SIP dests:    ${direct.fqdnDestinations.join(", ") || "(none — required)"}`);
+  console.log(`Reference FQDN dests: ${direct.fqdnDestinations.join(", ") || "(none — not used for PSTN)"}`);
   console.log(`Telnyx TFNs:          ${candidates.map((c) => `${c.e164} → ${c.connectionName || c.connectionId}`).join(", ") || "(none)"}\n`);
 
   const testPn = await fetchTelnyxPhoneNumberByE164(testE164);
@@ -73,16 +77,18 @@ async function main() {
       ? String(livekitFqdnBefore.webhook_url)
       : null;
 
-  const { lateMediaPatched, audit } = await prepareFqdnForDirectMctb();
-  console.log("Direct FQDN late-media (same flags as LiveKit path):");
-  console.log(`  3PCC:           ${formatBool(audit.thirdPartyControlEnabled)}`);
-  console.log(`  PRACK:          ${formatBool(audit.prackEnabled)}`);
-  console.log(`  Ringback:       ${formatBool(audit.generateRingbackTone)}`);
-  console.log(`  lateMediaReady: ${audit.lateMediaReady ? "YES" : "NO"}`);
-  if (lateMediaPatched) console.log("  (late-media flags were patched)");
+  const { lateMediaPatched, callControlAppId, referenceFqdnConnectionId, media } =
+    await prepareFqdnForDirectMctb();
+  console.log("Late-media / signaling:");
+  console.log(`  3PCC (Call Control): ${formatBool(media.thirdPartyControlEnabled)}`);
+  console.log(`  PRACK (ref FQDN):    ${formatBool(media.prackEnabled)}`);
+  console.log(`  Ringback (ref FQDN): ${formatBool(media.generateRingbackTone)}`);
+  console.log(`  lateMediaReady:      ${media.lateMediaReady ? "YES" : "NO"}`);
+  console.log(`  Note:                ${media.note}`);
+  if (lateMediaPatched) console.log("  (reference FQDN late-media flags were patched)");
 
-  if (!audit.lateMediaReady && apply) {
-    console.error("\n✗ Direct FQDN late-media not ready after PATCH");
+  if (!media.lateMediaReady && apply) {
+    console.error("\n✗ 3PCC not enabled on Call Control app after PATCH");
     process.exit(1);
   }
 
@@ -94,7 +100,8 @@ async function main() {
     providerNumberId: String(testPn.id),
     previousConnectionId: currentConnectionId,
     previousConnectionName: currentConnectionName,
-    directFqdnConnectionId: direct.connectionId,
+    callControlAppId,
+    referenceFqdnConnectionId,
     livekitFqdnConnectionId: MCTB_571_SIP_FQDN_CONNECTION_ID,
     previousLivekitFqdnWebhookUrl,
     savedAt: new Date().toISOString(),
@@ -102,7 +109,7 @@ async function main() {
 
   const ready = await verifyFqdnDirectMctbRoute();
   if (ready.ok) {
-    console.log("\n✓ FQDN direct MCTB route already configured.");
+    console.log("\n✓ 866 direct MCTB route already configured.");
     if (
       previousLivekitFqdnWebhookUrl &&
       previousLivekitFqdnWebhookUrl.includes("mctb-event-only")
@@ -117,8 +124,9 @@ async function main() {
   if (!apply) {
     console.log("\nDry run — no changes made.");
     console.log(`Would save backup → ${BACKUP_PATH}`);
-    console.log(`Would assign ${testE164} → ${MCTB_FQDN_DIRECT_CONNECTION_NAME}`);
+    console.log(`Would assign ${testE164} → ${MCTB_866_DIRECT_CALL_CONTROL_APP_NAME} (${callControlAppId})`);
     console.log(`Would restore LiveKit FQDN webhook → ${mctbLiveKitFqdnWebhookUrl()}`);
+    console.log(`\nCurrent: ${ready.detail}`);
     console.log("\nRe-run with --apply after deploying transovo-web.");
     return;
   }
@@ -129,8 +137,8 @@ async function main() {
   await restoreLiveKitFqdnForProduction(mctbLiveKitFqdnWebhookUrl());
   console.log(`✓ LiveKit FQDN webhook restored → ${mctbLiveKitFqdnWebhookUrl()}`);
 
-  await assignE164ToFqdnConnection(testE164, direct.connectionId);
-  console.log(`✓ ${testE164} assigned to ${MCTB_FQDN_DIRECT_CONNECTION_NAME}`);
+  await assignE164ToCallControlApp(testE164, callControlAppId);
+  console.log(`✓ ${testE164} assigned to ${MCTB_866_DIRECT_CALL_CONTROL_APP_NAME}`);
 
   const verify = await verifyFqdnDirectMctbRoute();
   if (!verify.ok) {
@@ -138,7 +146,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("\n✓ FQDN direct MCTB route configured");
+  console.log("\n✓ 866 direct MCTB route configured");
   console.log(`\nForward your business line to: ${verify.testE164}`);
   console.log("\nREADY FOR CONDITIONAL-FORWARD TEST (Call Control answer, no LiveKit)");
   console.log("Rollback: npm run rollback:mctb-fqdn-direct-mctb -- --apply");

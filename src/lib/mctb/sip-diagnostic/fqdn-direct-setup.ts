@@ -9,7 +9,11 @@ import {
   ensureMctb571SipFqdnLateMediaSettings,
 } from "@/lib/mctb/sip-diagnostic/fqdn-audit";
 import {
+  TELNYX_THIRD_PARTY_CONTROL_API_FIELD,
+} from "@/lib/mctb/consent-prompt/telnyx-3pcc";
+import {
   MCTB_571_SIP_FQDN_CONNECTION_ID,
+  MCTB_866_DIRECT_CALL_CONTROL_APP_NAME,
   MCTB_FQDN_DIRECT_CONNECTION_NAME,
   MCTB_FQDN_DIRECT_TEST_E164,
 } from "@/lib/mctb/sip-diagnostic/constants";
@@ -62,6 +66,99 @@ export async function listFqdnDestinations(connectionId: string): Promise<string
  * Dedicated FQDN with same PRACK/3PCC as LiveKit ingress but NO SIP destinations.
  * PSTN on this connection becomes programmable Call Control (webhook + answer).
  */
+export async function ensureMctb866DirectCallControlApp(): Promise<string> {
+  const webhookUrl = mctbFqdnDirectEventOnlyWebhookUrl();
+  const listed = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>(
+    "/call_control_applications",
+    { query: { "page[size]": 50 } },
+  );
+  const existing = (listed.data || []).find(
+    (row) =>
+      String(row.application_name || "") === MCTB_866_DIRECT_CALL_CONTROL_APP_NAME ||
+      String(row.webhook_event_url || "").replace(/\/$/, "") === webhookUrl.replace(/\/$/, ""),
+  );
+  const appId = existing?.id ? String(existing.id) : null;
+
+  const body = {
+    application_name: MCTB_866_DIRECT_CALL_CONTROL_APP_NAME,
+    webhook_event_url: webhookUrl,
+    webhook_api_version: "2",
+    active: true,
+    first_command_timeout: true,
+    first_command_timeout_secs: 30,
+    [TELNYX_THIRD_PARTY_CONTROL_API_FIELD]: true,
+  };
+
+  if (appId) {
+    await telnyxRequest(`/call_control_applications/${encodeURIComponent(appId)}`, {
+      method: "PATCH",
+      body,
+    });
+    return appId;
+  }
+
+  const created = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    "/call_control_applications",
+    { method: "POST", body },
+  );
+  const id = String(asRecord(created.data)?.id || "");
+  if (!id) throw new Error("Failed to create MCTB 866 direct Call Control app");
+  return id;
+}
+
+export async function fetchCallControlAppRaw(appId: string): Promise<Record<string, unknown> | null> {
+  const res = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/call_control_applications/${encodeURIComponent(appId)}`,
+  );
+  return asRecord(res.data);
+}
+
+export async function auditDirectTestLateMedia(input: {
+  fqdnConnectionId?: string;
+  callControlAppId?: string;
+}): Promise<{
+  thirdPartyControlEnabled: boolean | null;
+  prackEnabled: boolean | null;
+  generateRingbackTone: boolean | null;
+  lateMediaReady: boolean;
+  note: string;
+}> {
+  const fqdnId = input.fqdnConnectionId;
+  const ccId = input.callControlAppId;
+  let thirdPartyControlEnabled: boolean | null = null;
+  let prackEnabled: boolean | null = null;
+  let generateRingbackTone: boolean | null = null;
+
+  if (fqdnId) {
+    const fqdnAudit = await auditMctb571SipFqdnConnection(fqdnId);
+    thirdPartyControlEnabled = fqdnAudit.thirdPartyControlEnabled;
+    prackEnabled = fqdnAudit.prackEnabled;
+    generateRingbackTone = fqdnAudit.generateRingbackTone;
+  }
+  if (ccId) {
+    const cc = await fetchCallControlAppRaw(ccId);
+    const cc3pcc = cc?.[TELNYX_THIRD_PARTY_CONTROL_API_FIELD];
+    if (typeof cc3pcc === "boolean") thirdPartyControlEnabled = cc3pcc;
+  }
+
+  const lateMediaReady =
+    thirdPartyControlEnabled === true &&
+    (prackEnabled === true || prackEnabled === null) &&
+    (generateRingbackTone === true || generateRingbackTone === null);
+
+  return {
+    thirdPartyControlEnabled,
+    prackEnabled,
+    generateRingbackTone,
+    lateMediaReady,
+    note:
+      prackEnabled === true
+        ? "FQDN PRACK + ringback (183/100rel path) on reference connection"
+        : "Call Control 3PCC — PRACK/ringback are FQDN-only; number uses programmable voice",
+  };
+}
+
+/** Reference FQDN with PRACK/3PCC/ringback — same flags as LiveKit ingress (not used for 866 assignment). */
 export async function ensureMctbFqdnDirectConnection(): Promise<{
   connectionId: string;
   created: boolean;
@@ -149,7 +246,7 @@ export async function resolveFqdnDirectTestE164(): Promise<string> {
   throw new Error("No Telnyx toll-free available (excluding platform 571)");
 }
 
-export async function assignE164ToFqdnConnection(
+export async function assignE164ToConnection(
   e164: string,
   connectionId: string,
 ): Promise<{ providerNumberId: string; liveConnectionId: string }> {
@@ -172,6 +269,16 @@ export async function assignE164ToFqdnConnection(
     );
   }
   return { providerNumberId, liveConnectionId };
+}
+
+/** @deprecated Use assignE164ToConnection */
+export const assignE164ToFqdnConnection = assignE164ToConnection;
+
+export async function assignE164ToCallControlApp(
+  e164: string,
+  callControlAppId: string,
+): Promise<{ providerNumberId: string; liveConnectionId: string }> {
+  return assignE164ToConnection(e164, callControlAppId);
 }
 
 export async function patchFqdnWebhook(
@@ -210,61 +317,76 @@ export async function restoreFqdnWebhook(input: {
 export async function verifyFqdnDirectMctbRoute(): Promise<{
   ok: boolean;
   testE164: string;
-  directFqdnConnectionId: string;
-  directFqdnConnectionName: string;
+  callControlAppId: string;
+  callControlAppName: string;
+  referenceFqdnConnectionId: string;
   webhookUrl: string;
   liveWebhookUrl: string | null;
+  thirdPartyControlEnabled: boolean | null;
+  prackEnabled: boolean | null;
+  generateRingbackTone: boolean | null;
   lateMediaReady: boolean;
-  livekitFqdnDestinations: string[];
   detail: string;
+  note: string;
 }> {
-  const direct = await ensureMctbFqdnDirectConnection();
+  const callControlAppId = await ensureMctb866DirectCallControlApp();
+  const reference = await ensureMctbFqdnDirectConnection();
   const testE164 = await resolveFqdnDirectTestE164();
   const webhookUrl = mctbFqdnDirectEventOnlyWebhookUrl();
-  const fqdnRaw = await fetchFqdnConnectionRaw(direct.connectionId);
-  const liveWebhook = fqdnRaw?.webhook_event_url
-    ? String(fqdnRaw.webhook_event_url).replace(/\/$/, "")
-    : fqdnRaw?.webhook_url
-      ? String(fqdnRaw.webhook_url).replace(/\/$/, "")
-      : null;
+  const ccRaw = await fetchCallControlAppRaw(callControlAppId);
+  const liveWebhook = ccRaw?.webhook_event_url
+    ? String(ccRaw.webhook_event_url).replace(/\/$/, "")
+    : null;
 
-  const audit = await auditMctb571SipFqdnConnection(direct.connectionId);
+  const media = await auditDirectTestLateMedia({
+    fqdnConnectionId: reference.connectionId,
+    callControlAppId,
+  });
   const pn = await fetchTelnyxPhoneNumberByE164(testE164);
-  const onDirect = String(pn?.connection_id || "") === direct.connectionId;
-  const noLiveKitDestinations = direct.fqdnDestinations.length === 0;
+  const onCallControl = String(pn?.connection_id || "") === callControlAppId;
 
   const ok =
-    onDirect &&
-    noLiveKitDestinations &&
+    onCallControl &&
     liveWebhook === webhookUrl.replace(/\/$/, "") &&
-    audit.lateMediaReady;
+    media.thirdPartyControlEnabled === true;
 
   return {
     ok,
     testE164,
-    directFqdnConnectionId: direct.connectionId,
-    directFqdnConnectionName: MCTB_FQDN_DIRECT_CONNECTION_NAME,
+    callControlAppId,
+    callControlAppName: MCTB_866_DIRECT_CALL_CONTROL_APP_NAME,
+    referenceFqdnConnectionId: reference.connectionId,
     webhookUrl,
     liveWebhookUrl: liveWebhook,
-    lateMediaReady: audit.lateMediaReady,
-    livekitFqdnDestinations: direct.fqdnDestinations,
+    thirdPartyControlEnabled: media.thirdPartyControlEnabled,
+    prackEnabled: media.prackEnabled,
+    generateRingbackTone: media.generateRingbackTone,
+    lateMediaReady: media.lateMediaReady,
+    note: media.note,
     detail: ok
-      ? `${testE164} on ${MCTB_FQDN_DIRECT_CONNECTION_NAME} (no LiveKit SIP dest) → mctb-event-only`
-      : `e164=${testE164} onDirect=${onDirect} noLkDest=${noLiveKitDestinations} webhook=${liveWebhook || "(none)"} lateMedia=${audit.lateMediaReady}`,
+      ? `${testE164} on Call Control ${callControlAppId} → mctb-event-only (3PCC ON)`
+      : `e164=${testE164} onCallControl=${onCallControl} webhook=${liveWebhook || "(none)"} 3pcc=${media.thirdPartyControlEnabled}`,
   };
 }
 
 export async function prepareFqdnForDirectMctb(): Promise<{
   lateMediaPatched: boolean;
-  audit: Awaited<ReturnType<typeof auditMctb571SipFqdnConnection>>;
-  directConnectionId: string;
+  callControlAppId: string;
+  referenceFqdnConnectionId: string;
+  media: Awaited<ReturnType<typeof auditDirectTestLateMedia>>;
 }> {
-  const direct = await ensureMctbFqdnDirectConnection();
-  const enabled = await ensureMctb571SipFqdnLateMediaSettings(direct.connectionId);
+  const callControlAppId = await ensureMctb866DirectCallControlApp();
+  const reference = await ensureMctbFqdnDirectConnection();
+  const enabled = await ensureMctb571SipFqdnLateMediaSettings(reference.connectionId);
+  const media = await auditDirectTestLateMedia({
+    fqdnConnectionId: reference.connectionId,
+    callControlAppId,
+  });
   return {
     lateMediaPatched: enabled.patched,
-    audit: enabled.audit,
-    directConnectionId: direct.connectionId,
+    callControlAppId,
+    referenceFqdnConnectionId: reference.connectionId,
+    media,
   };
 }
 

@@ -8,7 +8,10 @@ export const MCTB_571_SIP_FQDN_CONNECTION_NAME = "Transovo LiveKit Inbound";
 /** Isolated FQDN for direct MCTB test — same PRACK/3PCC, no LiveKit SIP destinations. */
 export const MCTB_FQDN_DIRECT_CONNECTION_NAME = "MCTB FQDN Direct Inbound";
 
-/** Telnyx toll-free on FQDN for direct-SIP MCTB test — not platform 571. */
+/** Call Control app for 866 direct test — PSTN programmable answer (no LiveKit SIP dest). */
+export const MCTB_866_DIRECT_CALL_CONTROL_APP_NAME = "MCTB 866 Direct Test";
+
+/** Telnyx toll-free for direct MCTB test — not platform 571. */
 export const MCTB_FQDN_DIRECT_TEST_E164 = "+18663464256";
 
 export const MCTB_SIP_DIAGNOSTIC_SAY = "Transovo SIP diagnostic connected.";
