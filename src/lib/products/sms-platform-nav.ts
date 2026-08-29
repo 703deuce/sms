@@ -1,7 +1,6 @@
 import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BookOpen,
-  Hash,
   Layers,
   LayoutDashboard,
   MessageSquare,
@@ -56,9 +55,9 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
         { label: "QR Codes", href: "/grow/qr-codes" },
         { label: "Web Forms", href: "/grow/forms" },
         { label: "Tap-to-Join", href: "/grow/tap-to-join" },
+        { label: "Keywords", href: "/grow/keywords" },
       ],
     },
-    { label: "Keywords", href: "/grow/keywords", icon: Hash },
     {
       label: "Auto Replies",
       href: "/auto-replies",

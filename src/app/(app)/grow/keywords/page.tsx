@@ -9,7 +9,9 @@ import { RowActionsMenu } from "@/components/audience/row-actions-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { Tabs } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { listGrowthTabs } from "@/lib/list-growth-tabs";
 import { Filter, Hash, List, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -83,6 +85,8 @@ export default function KeywordsPage() {
         description="View and manage all of your keywords."
         icon={Hash}
       />
+
+      <Tabs items={[...listGrowthTabs]} />
 
       <Card className="rounded-xl border-slate-200 p-4 shadow-sm">
         <SlickTableToolbar

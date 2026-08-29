@@ -26,7 +26,11 @@ for (const tab of listGrowthTabs) {
   const child = listGrowth?.children?.find((c) => c.href === tab.href);
   assert.ok(child, `List Growth tab missing in nav: ${tab.label}`);
 }
-assert.ok(smsLabels.includes("Keywords"));
+assert.ok(!smsLabels.includes("Keywords"), "Keywords should be nested under List Growth");
+assert.ok(
+  listGrowth?.children?.some((c) => c.label === "Keywords" && c.href === "/grow/keywords"),
+  "Keywords child under List Growth",
+);
 assert.ok(smsLabels.includes("Account"));
 
 console.log("test-sms-platform-nav: ok");

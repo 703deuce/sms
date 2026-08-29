@@ -3,4 +3,5 @@ export const listGrowthTabs = [
   { label: "QR Codes", href: "/grow/qr-codes" },
   { label: "Web Forms", href: "/grow/forms" },
   { label: "Tap-to-Join", href: "/grow/tap-to-join" },
+  { label: "Keywords", href: "/grow/keywords" },
 ] as const;
