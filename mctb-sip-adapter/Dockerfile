@@ -1,8 +1,9 @@
 # Minimal MCTB SIP terminator — dumb telephony adapter for Telnyx FQDN ingress.
 # NOT routed through Coolify HTTP proxy. Use host networking (recommended) or publish UDP ports.
+# Asterisk is not packaged for Debian 12 (bookworm) — use bullseye (11).
 # Build from repo root: docker build -f mctb-sip-adapter/Dockerfile .
 
-FROM debian:bookworm-slim
+FROM debian:bullseye-slim
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
