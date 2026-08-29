@@ -1,6 +1,6 @@
 # MCTB SIP adapter — Coolify deployment (`transovo-mctb-sip`)
 
-Third Coolify application for the Asterisk MCTB press-1 SIP path. **Separate from `transovo-voice`** — Asterisk cannot install on `python:3.12-slim-bookworm` (no `asterisk` apt package).
+Third Coolify application for the Asterisk MCTB press-1 SIP path. **Separate from `transovo-voice`** — Asterisk is not in Debian 12 (`bookworm`) apt repos; the SIP image uses `debian:bullseye-slim`.
 
 ## Architecture
 

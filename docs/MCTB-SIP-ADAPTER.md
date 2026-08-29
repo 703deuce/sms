@@ -2,7 +2,7 @@
 
 Minimal SIP/RTP terminator for Telnyx FQDN ingress. Deploys as **`transovo-mctb-sip`** — a third Coolify application, **not** bundled into `transovo-voice`.
 
-> **Why separate?** `asterisk` is available on `debian:bookworm-slim` but **not** on `python:3.12-slim-bookworm`. Bundling Asterisk into the voice Dockerfile breaks Coolify builds.
+> **Why separate?** `asterisk` is packaged on `debian:bullseye-slim` but **not** on Debian 12 (`bookworm`) or `python:3.12-slim-bookworm`. Bundling Asterisk into the voice Dockerfile breaks Coolify builds.
 
 ## Architecture
 
