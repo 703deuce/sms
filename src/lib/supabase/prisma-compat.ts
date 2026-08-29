@@ -96,6 +96,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   solutionSetup: "solution_setups",
   platformEvent: "platform_events",
   keyword: "Keyword",
+  autoReply: "auto_replies",
   optInForm: "OptInForm",
   formSubmission: "FormSubmission",
   voiceAgent: "voice_agents",

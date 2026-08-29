@@ -62,7 +62,14 @@ export async function PATCH(
     });
 
     if (body.tagNames) {
+      const priorTags = await getPrisma().contactTag.findMany({
+        where: { contactId: id },
+        include: { tag: true },
+      });
+      const priorTagIds = new Set(priorTags.map((t) => t.tagId));
+
       await getPrisma().contactTag.deleteMany({ where: { contactId: id } });
+      const addedTagIds: string[] = [];
       for (const raw of body.tagNames) {
         const name = raw.trim().toLowerCase();
         if (!name) continue;
@@ -76,15 +83,48 @@ export async function PATCH(
         await getPrisma().contactTag.create({
           data: { tagId: tag.id, contactId: id },
         });
+        if (!priorTagIds.has(tag.id)) addedTagIds.push(tag.id);
+      }
+
+      if (addedTagIds.length) {
+        const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+        for (const tagId of addedTagIds) {
+          await dispatchAutoReplies({
+            workspaceId: auth.workspaceId,
+            contactId: id,
+            triggerType: "tag_added",
+            tagId,
+          }).catch(() => undefined);
+        }
       }
     }
 
     if (body.listIds) {
+      const priorLists = await getPrisma().contactListMember.findMany({
+        where: { contactId: id },
+        select: { listId: true },
+      });
+      const priorListIds = new Set(priorLists.map((l) => l.listId));
+
       await getPrisma().contactListMember.deleteMany({ where: { contactId: id } });
+      const addedListIds: string[] = [];
       for (const listId of body.listIds) {
         await getPrisma().contactListMember.create({
           data: { listId, contactId: id },
         }).catch(() => null);
+        if (!priorListIds.has(listId)) addedListIds.push(listId);
+      }
+
+      if (addedListIds.length) {
+        const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+        for (const listId of addedListIds) {
+          await dispatchAutoReplies({
+            workspaceId: auth.workspaceId,
+            contactId: id,
+            triggerType: "list_join",
+            listId,
+          }).catch(() => undefined);
+        }
       }
     }
 

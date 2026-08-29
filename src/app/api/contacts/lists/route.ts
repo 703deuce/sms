@@ -74,11 +74,20 @@ export async function PATCH(request: Request) {
     });
 
     for (const contactId of body.addContactIds || []) {
-      await getPrisma().contactListMember.upsert({
-        where: { listId_contactId: { listId: list.id, contactId } },
-        create: { listId: list.id, contactId },
-        update: {},
+      const existingMember = await getPrisma().contactListMember.findFirst({
+        where: { listId: list.id, contactId },
       });
+      if (existingMember) continue;
+      await getPrisma().contactListMember.create({
+        data: { listId: list.id, contactId },
+      });
+      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+      await dispatchAutoReplies({
+        workspaceId: auth.workspaceId,
+        contactId,
+        triggerType: "list_join",
+        listId: list.id,
+      }).catch(() => undefined);
     }
     for (const contactId of body.removeContactIds || []) {
       await getPrisma().contactListMember.deleteMany({

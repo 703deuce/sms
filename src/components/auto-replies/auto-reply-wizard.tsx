@@ -1,14 +1,16 @@
 "use client";
 
 import { PhonePreview } from "@/components/campaigns/broadcast/phone-preview";
+import { AutoReplyWizardStepper } from "@/components/auto-replies/auto-reply-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import type {
-  AutoReplyRecord,
-  AutoReplyRules,
-  AutoReplyTriggerConfig,
-  AutoReplyTriggerType,
+import {
+  autoReplyTriggerLabel,
+  type AutoReplyRecord,
+  type AutoReplyRules,
+  type AutoReplyTriggerConfig,
+  type AutoReplyTriggerType,
 } from "@/lib/auto-replies/types";
 import { DEFAULT_AUTO_REPLY_RULES } from "@/lib/auto-replies/types";
 import { cn, estimateSmsSegments } from "@/lib/utils";
@@ -23,6 +25,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
+const WIZARD_STEPS = ["Trigger", "Message", "Review"];
 
 const TRIGGERS: Array<{
   id: AutoReplyTriggerType;
@@ -79,7 +83,7 @@ type Props = {
 
 export function AutoReplyWizard({ mode = "create", initial }: Props) {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState(0);
   const [name, setName] = useState(initial?.name || "");
   const [triggerType, setTriggerType] = useState<AutoReplyTriggerType | null>(
     initial?.triggerType || null,
@@ -160,7 +164,7 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not save auto reply");
-      router.push("/auto-replies");
+      router.push(mode === "edit" && initial ? `/auto-replies/${initial.id}` : "/auto-replies");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -177,41 +181,19 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
             Auto Replies
           </Link>
           <span className="mx-2 text-slate-400">/</span>
-          {mode === "edit" ? "Edit" : "New"}
+          {mode === "edit" ? "Edit" : "Create"}
         </p>
         <h1 className="font-display text-[28px] font-semibold text-slate-900">
           {mode === "edit" ? "Edit Auto Reply" : "Create Auto Reply"}
         </h1>
       </div>
 
-      <div className="mb-6 flex gap-2">
-        {([1, 2, 3] as const).map((n) => (
-          <div
-            key={n}
-            className={cn(
-              "rounded-full px-3 py-1 text-[12px] font-semibold",
-              step === n ? "bg-primary text-white" : "bg-slate-100 text-slate-500",
-            )}
-          >
-            {n}. {n === 1 ? "Trigger" : n === 2 ? "Message" : "Rules"}
-          </div>
-        ))}
-      </div>
+      <AutoReplyWizardStepper steps={WIZARD_STEPS} activeIndex={step} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <Card className="rounded-xl border-slate-200 p-6 shadow-sm">
-          {step === 1 ? (
+          {step === 0 ? (
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Auto reply name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="New Lead Welcome"
-                  className="mt-1"
-                />
-              </div>
               <p className="text-[14px] font-semibold text-slate-900">Choose a trigger</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {TRIGGERS.map((trigger) => {
@@ -311,8 +293,18 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
             </div>
           ) : null}
 
-          {step === 2 ? (
+          {step === 1 ? (
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Auto reply name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="New Lead Welcome"
+                  className="mt-1"
+                />
+              </div>
               <p className="text-[14px] font-semibold text-slate-900">Compose your message</p>
               <Textarea
                 value={message}
@@ -326,39 +318,65 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
             </div>
           ) : null}
 
-          {step === 3 ? (
-            <div className="space-y-4">
-              <p className="text-[14px] font-semibold text-slate-900">Rules</p>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={rules.oncePerContact}
-                  onChange={(e) =>
-                    setRules((r) => ({ ...r, oncePerContact: e.target.checked }))
-                  }
-                />
-                Send only once per contact
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={rules.excludeUnsubscribed}
-                  onChange={(e) =>
-                    setRules((r) => ({ ...r, excludeUnsubscribed: e.target.checked }))
-                  }
-                />
-                Do not send to unsubscribed contacts
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={rules.respectQuietHours}
-                  onChange={(e) =>
-                    setRules((r) => ({ ...r, respectQuietHours: e.target.checked }))
-                  }
-                />
-                Respect quiet hours
-              </label>
+          {step === 2 ? (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+                  Summary
+                </p>
+                <dl className="mt-3 space-y-2 text-[13px]">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-500">Name</dt>
+                    <dd className="font-semibold text-slate-900">{name || "—"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-500">Trigger</dt>
+                    <dd className="text-right font-medium text-slate-900">
+                      {triggerType
+                        ? autoReplyTriggerLabel(triggerType, triggerConfig)
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Message</dt>
+                    <dd className="mt-1 whitespace-pre-wrap text-slate-700">{message || "—"}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-[14px] font-semibold text-slate-900">Rules</p>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rules.oncePerContact}
+                    onChange={(e) =>
+                      setRules((r) => ({ ...r, oncePerContact: e.target.checked }))
+                    }
+                  />
+                  Send only once per contact
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rules.excludeUnsubscribed}
+                    onChange={(e) =>
+                      setRules((r) => ({ ...r, excludeUnsubscribed: e.target.checked }))
+                    }
+                  />
+                  Do not send to unsubscribed contacts
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rules.respectQuietHours}
+                    onChange={(e) =>
+                      setRules((r) => ({ ...r, respectQuietHours: e.target.checked }))
+                    }
+                  />
+                  Respect quiet hours
+                </label>
+              </div>
             </div>
           ) : null}
 
@@ -366,22 +384,27 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
 
           <div className="mt-6 flex justify-between gap-3">
             <div>
-              {step > 1 ? (
-                <Button type="button" variant="outline" onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}>
+              {step > 0 ? (
+                <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)}>
                   Back
                 </Button>
               ) : (
-                <Link href="/auto-replies" className={cn("inline-flex h-10 items-center rounded-lg border px-4 text-[13px] font-semibold no-underline")}>
+                <Link
+                  href="/auto-replies"
+                  className={cn(
+                    "inline-flex h-10 items-center rounded-lg border px-4 text-[13px] font-semibold no-underline",
+                  )}
+                >
                   Cancel
                 </Link>
               )}
             </div>
             <div className="flex gap-2">
-              {step < 3 ? (
+              {step < 2 ? (
                 <Button
                   type="button"
-                  disabled={step === 1 ? !canNextFromTrigger || !name.trim() : !message.trim()}
-                  onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3)}
+                  disabled={step === 0 ? !canNextFromTrigger : !message.trim() || !name.trim()}
+                  onClick={() => setStep((s) => s + 1)}
                 >
                   Next
                 </Button>

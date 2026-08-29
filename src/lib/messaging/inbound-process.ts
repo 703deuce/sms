@@ -602,6 +602,25 @@ export async function processInboundMessage(input: {
   }
 
   // Away / business-hours auto-reply (once per contact per day).
+  // User-configured after-hours auto replies take precedence over the global away message.
+  try {
+    const afterHours = await (
+      await import("@/lib/auto-replies/dispatch")
+    ).dispatchAfterHoursAutoReply({
+      workspaceId: input.workspaceId,
+      contactId: contact.id,
+      fromE164: input.to,
+    });
+    if (afterHours.sent && afterHours.replyText) {
+      return {
+        kind: "away",
+        replyText: afterHours.replyText,
+      };
+    }
+  } catch {
+    /* non-fatal */
+  }
+
   if (shouldSendAwayReply(runtime)) {
     const custom =
       contact.customFields && typeof contact.customFields === "object"

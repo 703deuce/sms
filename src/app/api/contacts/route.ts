@@ -101,6 +101,12 @@ export async function POST(request: Request) {
     if (isNew) {
       const { emitAutomationEvent } = await import("@/lib/automations/events");
       await emitAutomationEvent(auth.workspaceId, "customer.created", contact.id).catch(() => undefined);
+      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+      await dispatchAutoReplies({
+        workspaceId: auth.workspaceId,
+        contactId: contact.id,
+        triggerType: "contact_added",
+      }).catch(() => undefined);
     }
 
     try {

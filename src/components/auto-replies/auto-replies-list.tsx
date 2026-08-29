@@ -6,6 +6,7 @@ import {
   SlickTableToolbar,
 } from "@/components/audience/slick-audience-ui";
 import { RowActionsMenu } from "@/components/audience/row-actions-menu";
+import { AutoReplyStatusToggle } from "@/components/auto-replies/auto-reply-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -14,7 +15,7 @@ import {
   autoReplyTriggerLabel,
   type AutoReplyRecord,
 } from "@/lib/auto-replies/types";
-import { cn } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { Filter, Plus, Reply } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,6 +25,8 @@ export function AutoRepliesList({ initialRows }: { initialRows: AutoReplyRecord[
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const filtered = rows;
 
   async function patchRow(id: string, body: Record<string, unknown>) {
     setBusyId(id);
@@ -61,23 +64,24 @@ export function AutoRepliesList({ initialRows }: { initialRows: AutoReplyRecord[
   return (
     <div className="text-[13px]">
       <SlickAudienceHeader
+        breadcrumb="Tools / Auto Replies"
         title="Auto Replies"
         description="Send one predefined message when a simple event happens."
         icon={Reply}
-        actions={
-          <Link
-            href="/auto-replies/new"
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-semibold text-white no-underline hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            New Auto Reply
-          </Link>
-        }
       />
 
       <Card className="rounded-xl border-slate-200 p-4 shadow-sm">
         <SlickTableToolbar
           searchPlaceholder="Search auto replies"
+          createSlot={
+            <Link
+              href="/auto-replies/new"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-semibold text-white no-underline hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Create
+            </Link>
+          }
           filterSlot={
             <Button variant="outline" size="sm" className="h-10 gap-2 border-slate-200">
               <Filter className="h-4 w-4" />
@@ -86,12 +90,12 @@ export function AutoRepliesList({ initialRows }: { initialRows: AutoReplyRecord[
           }
         />
 
-        {rows.length === 0 ? (
+        {filtered.length === 0 ? (
           <EmptyState
-            icon={<MessageSquareReply className="h-8 w-8" />}
+            icon={<Reply className="h-8 w-8" />}
             title="No auto replies yet"
             description="Create a simple one-message response for list joins, new contacts, forms, and more."
-            actionLabel="New Auto Reply"
+            actionLabel="Create"
             actionHref="/auto-replies/new"
           />
         ) : (
@@ -101,33 +105,38 @@ export function AutoRepliesList({ initialRows }: { initialRows: AutoReplyRecord[
                 <TH>Name</TH>
                 <TH>Trigger</TH>
                 <TH>Message</TH>
-                <TH>Status</TH>
+                <TH>Sent</TH>
+                <TH>Active</TH>
                 <TH>Last updated</TH>
                 <TH className="w-12" />
               </TR>
             </THead>
             <TBody>
-              {rows.map((row) => (
+              {filtered.map((row) => (
                 <TR key={row.id} className="border-slate-100">
-                  <TD className="font-semibold text-slate-900">{row.name}</TD>
+                  <TD>
+                    <Link
+                      href={`/auto-replies/${row.id}`}
+                      className="font-semibold text-slate-900 no-underline hover:text-primary"
+                    >
+                      {row.name}
+                    </Link>
+                  </TD>
                   <TD className="text-slate-600">
                     {autoReplyTriggerLabel(row.triggerType, row.triggerConfig)}
                   </TD>
                   <TD className="max-w-xs truncate text-slate-500">{row.message}</TD>
+                  <TD className="text-slate-600">{formatNumber(row.sendCount)}</TD>
                   <TD>
-                    <button
-                      type="button"
+                    <AutoReplyStatusToggle
+                      active={row.status === "active"}
                       disabled={busyId === row.id}
-                      onClick={() => void patchRow(row.id, { action: "toggle_status" })}
-                      className={cn(
-                        "rounded-full px-2.5 py-0.5 text-[12px] font-semibold",
-                        row.status === "active"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-600",
-                      )}
-                    >
-                      {row.status === "active" ? "Active" : "Paused"}
-                    </button>
+                      onChange={(next) =>
+                        void patchRow(row.id, {
+                          status: next ? "active" : "paused",
+                        })
+                      }
+                    />
                   </TD>
                   <TD className="whitespace-nowrap text-slate-500">
                     {formatSlickDateTime(row.updatedAt)}
@@ -135,6 +144,11 @@ export function AutoRepliesList({ initialRows }: { initialRows: AutoReplyRecord[
                   <TD>
                     <RowActionsMenu
                       actions={[
+                        {
+                          label: "View",
+                          icon: "users",
+                          href: `/auto-replies/${row.id}`,
+                        },
                         {
                           label: "Edit",
                           icon: "pencil",
