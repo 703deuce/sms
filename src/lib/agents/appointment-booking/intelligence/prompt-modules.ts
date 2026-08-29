@@ -195,6 +195,8 @@ ${ctx.fallbackPolicySummary || "On tool failure: take a message or transfer per 
   knowledge_policy: (ctx) =>
     `KNOWLEDGE POLICY
 ${ctx.businessKnowledge || "Answer only from approved business knowledge. Never invent business facts."}
+Answer hours, services, pricing ranges, policies, and FAQs directly from the Business knowledge section above — speak naturally and do not call any tool for those topics.
+Use the document retrieval tool only for uploaded PDFs or documents when the answer is not already in the Business knowledge section.
 Forbidden claims: do not promise pricing, guarantees, or services not in approved knowledge.`,
 
   workflow_architect_base: () =>

@@ -52,8 +52,8 @@ export function buildCallerAmyPromptFromModules(
       timezone: state.timezone || "America/New_York",
       bookingPolicySummary: bookingSummary,
       customFieldsSummary:
-        "Field requirements are provided by runtime_turn responses (current_field, missing_fields). " +
-        "Report extracted facts via runtime_turn extracted_information — never call field or scheduling tools directly.",
+        "Field requirements are provided by runtime context (current_field, missing_fields). " +
+        "Use runtime_turn only for workflow actions — collecting fields, booking, messaging, or transfer — not for company FAQ answers already in Business knowledge.",
       transferPolicySummary: transferSummary,
       fallbackPolicySummary: `On transfer failure: ${state.transferFallback.replaceAll("_", " ")}.`,
       businessKnowledge,

@@ -195,7 +195,8 @@ export const VOICE_FLOW_BLOCKS: VoiceFlowBlock[] = [
     category: "tools",
     layer: "conversation",
     label: "Knowledge lookup",
-    description: "Answer from the attached knowledge base",
+    description:
+      "Answer from the Business knowledge section in the prompt; use document retrieval only for uploaded PDFs not already covered there",
     branches: "none",
   },
   {

@@ -91,7 +91,7 @@ async function buildShortKnowledgeDigest(workspaceId: string, agentId: string): 
       .filter(Boolean);
     if (!chunks.length) return "";
     return [
-      "Business knowledge digest (answer from this — do not invent facts; for longer docs also use the retrieval knowledge tool when available):",
+      "Business knowledge digest (answer from this in your own words — do not invent facts; use the retrieval knowledge tool only for uploaded PDFs/documents not covered here):",
       ...chunks,
     ].join("\n\n");  } catch {
     return "";
@@ -324,7 +324,7 @@ export async function syncTelnyxAssistant(
       : "",
     digest,
     bucketIds.length
-      ? "You have a knowledge retrieval tool backed by the business document store. Use it for FAQs, policies, pricing, and detailed questions instead of guessing."
+      ? "You have a knowledge retrieval tool backed by uploaded business documents (PDFs, manuals, long-form docs). Use it only when the caller asks about material from those uploads that is not already in the Business knowledge section. Do not use it for basic hours, services, or company overview questions."
       : "",
     "Never claim an external action succeeded until the application tool confirms it.",
     "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",

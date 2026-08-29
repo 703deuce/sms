@@ -44,10 +44,19 @@ export async function syncCompanyBrainFromWizard(
         ]
       : [];
 
+  const hoursItem = (state.knowledgeItems || []).find(
+    (k) => k.id === "hours" || /hour/i.test(k.label),
+  );
+  const hoursSummary = (hoursItem?.summary || "").trim();
+  const hoursApproved =
+    hoursItem &&
+    ["complete", "owner_approved", "confirmed"].includes(String(hoursItem.status || ""));
+
   await saveBusinessBrainPartial(workspaceId, {
     businessName: state.businessName || undefined,
     website: state.websiteUrl || undefined,
     defaultTimezone: state.timezone || undefined,
+    businessHoursSummary: hoursApproved && hoursSummary ? hoursSummary : undefined,
     services: services.length ? services : undefined,
     transferDestinations: transfers.length ? transfers : undefined,
     knowledgeFacts: knowledgeFacts.length ? knowledgeFacts : undefined,

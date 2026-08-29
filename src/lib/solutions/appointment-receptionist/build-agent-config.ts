@@ -11,7 +11,9 @@ import { resolveWizardRoutingMode } from "./routing-mode";
 import { buildCallerAmyPromptFromModules } from "@/lib/agents/appointment-booking/intelligence/caller-prompt";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
-  "If a caller asks about something that is not covered in the Business knowledge section below (and not returned by an attached knowledge tool), say you don't have that information and offer to take a message or connect someone who can help. Never invent business facts.";
+  "Answer hours, services, pricing ranges, policies, and FAQs directly from the Business knowledge section below — do not call any tool for those topics. " +
+  "Use the document retrieval tool only when the caller asks about material from an uploaded PDF or document that is not covered below. " +
+  "If the answer is not in the Business knowledge section and no uploaded document applies, say you do not have that information and offer to take a message or connect someone who can help. Never invent business facts.";
 
 const DEFAULT_RECORDING_DISCLOSURE =
   "This call may be recorded for quality and training purposes.";
@@ -149,7 +151,7 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
   lines.push("Goals:");
   if (caps.includes("answer_questions")) {
     lines.push(
-      "- Answer common business questions using the Business knowledge section below (and any attached knowledge tools).",
+      "- Answer common business questions directly from the Business knowledge section below. Do not call tools for hours, services, pricing, or FAQs that are already listed there.",
     );
   }
   if (caps.includes("book_appointments")) {
@@ -263,7 +265,9 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
   if (b.confirmDetails) lines.push("- Confirm names, numbers, dates, and addresses.");
   if (b.neverInventPricing) lines.push("- Never invent pricing.");
   if (b.neverInventAvailability) lines.push("- Never invent availability.");
-  lines.push("- Use the Business knowledge section for hours, pricing, services, policies, and FAQs.");
+  lines.push(
+    "- Use the Business knowledge section for hours, pricing, services, policies, and FAQs — answer in your own words without calling tools.",
+  );
   lines.push("- Use scheduling tools only when workflow_state and allowed_tools permit them.");
   lines.push(`- ${KNOWLEDGE_FALLBACK_PHRASE}`);
   lines.push("");
