@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import type { MctbWeeklyDay, MctbWeeklySchedule } from "@/lib/mctb/schedule";
+import type { MctbWeeklyDay, MctbWeeklySchedule } from "@/lib/mctb/schedule-shared";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

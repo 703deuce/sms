@@ -6,10 +6,13 @@
  * The job worker is a sibling process (worker:all); Next.js gets DISABLE_INPROCESS_WORKER=1
  * so we never double-drain the queue.
  *
- * Opt out: EMBEDDED_JOB_WORKER=0 (falls back to in-process poller in instrumentation.ts).
+ * Node web boot (voice/messaging reconcilers) runs here via scripts/node-web-boot.ts —
+ * NOT from src/instrumentation.ts (keeps webpack instrumentation bundle Edge-safe).
+ *
+ * Opt out: EMBEDDED_JOB_WORKER=0 (falls back to in-process poller — not recommended in prod).
  */
 import { existsSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 
 const standaloneServer = path.join(process.cwd(), ".next", "standalone", "server.js");
@@ -58,6 +61,22 @@ process.on("SIGINT", () => shutdownAll("SIGINT"));
 process.on("SIGTERM", () => shutdownAll("SIGTERM"));
 
 const baseEnv = productionEnv();
+
+function runNodeWebBoot() {
+  console.log("[start] running node web boot (scripts/node-web-boot.ts)");
+  const result = spawnSync(
+    "npx",
+    ["tsx", "scripts/node-web-boot.ts"],
+    { cwd: repoRoot, stdio: "inherit", env: baseEnv },
+  );
+  if (result.status !== 0) {
+    console.error("[start] node-web-boot exited with status", result.status ?? "null");
+    process.exit(result.status ?? 1);
+  }
+}
+
+runNodeWebBoot();
+
 const useEmbeddedWorker = embeddedJobWorkerEnabled();
 const webEnv = useEmbeddedWorker
   ? { ...baseEnv, DISABLE_INPROCESS_WORKER: "1" }

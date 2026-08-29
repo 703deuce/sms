@@ -246,7 +246,7 @@ print_full_memory_snapshot() {
 # ============================================================================ END TEMPORARY OOM DIAG
 
 # Coolify: 4GB V8 heap (fixed earlier JS heap OOM). Use webpack — Turbopack hits ~6GB RSS + oom_kill.
-# instrumentation.node.ts keeps job-handlers/Twilio out of edge-instrumentation webpack graph.
+# instrumentation.ts is empty of app imports; Node boot runs from scripts/node-web-boot.ts at start.
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
   build_cmd=(npx next build --webpack)

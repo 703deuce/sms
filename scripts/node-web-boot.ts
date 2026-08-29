@@ -1,21 +1,19 @@
 /**
- * Node.js-only server boot — messaging reconcile, voice bootstraps.
- * Loaded from instrumentation.ts only when NEXT_RUNTIME === "nodejs".
+ * Node.js web server boot — runs OUTSIDE the Next instrumentation webpack graph.
  *
- * Job worker is intentionally NOT started here: inprocess-worker → job-handlers →
- * Twilio/jsonwebtoken must stay out of the edge-instrumentation webpack graph.
- * Production: scripts/start-production.mjs spawns worker:all (DISABLE_INPROCESS_WORKER=1).
+ * Invoked from scripts/start-production.mjs before the Next standalone server starts.
+ * Do NOT import this from src/instrumentation.ts (webpack would traverse Twilio/web-push).
  */
-import "server-only";
+import { getMediaBackendMode } from "@/lib/voice/media-backend";
 
-export async function registerNodeInstrumentation() {
-  const { getMediaBackendMode } = await import("@/lib/voice/media-backend");
+export async function registerNodeWebBoot(): Promise<void> {
   const mediaBackendMode = getMediaBackendMode();
   console.log(
     JSON.stringify({
       service: "transovo-web",
       event: "web_boot_started",
       mediaBackendMode,
+      source: "scripts/node-web-boot",
       timestamp: new Date().toISOString(),
     }),
   );
@@ -42,7 +40,7 @@ export async function registerNodeInstrumentation() {
         );
       }
     } catch (err) {
-      console.warn("[instrumentation] messaging send-state reconcile failed", err);
+      console.warn("[node-web-boot] messaging send-state reconcile failed", err);
     }
   })();
 
@@ -66,30 +64,47 @@ export async function registerNodeInstrumentation() {
     );
     await startInProcessVoiceRuntime();
   }
+
   const { bootstrapOutboundRealtimeTest } = await import(
     "@/lib/voice/outbound/outbound-boot"
   );
   void bootstrapOutboundRealtimeTest().catch((err) => {
-    console.warn("[instrumentation] outbound boot failed", err);
+    console.warn("[node-web-boot] outbound boot failed", err);
   });
+
   const { bootstrapFrontDeskRealtimeTest } = await import(
     "@/lib/voice/frontdesk/frontdesk-boot"
   );
   void bootstrapFrontDeskRealtimeTest().catch((err) => {
-    console.warn("[instrumentation] frontdesk boot failed", err);
+    console.warn("[node-web-boot] frontdesk boot failed", err);
   });
+
   const { bootstrapRealEstateFrontDesk } = await import(
     "@/lib/voice/real-estate/bootstrap"
   );
   void bootstrapRealEstateFrontDesk().catch((err) => {
-    console.warn("[instrumentation] re-frontdesk boot failed", err);
+    console.warn("[node-web-boot] re-frontdesk boot failed", err);
   });
+
   const { bootstrapRealtorVerification } = await import("@/lib/realtor/boot-verification");
   void bootstrapRealtorVerification().catch((err) => {
-    console.warn("[instrumentation] realtor verification boot failed", err);
+    console.warn("[node-web-boot] realtor verification boot failed", err);
   });
+
   const { scheduleOutboundAutoSmokeCall } = await import(
     "@/lib/voice/outbound/auto-smoke"
   );
   scheduleOutboundAutoSmokeCall();
+}
+
+const isMain =
+  typeof process.argv[1] === "string" &&
+  (process.argv[1].endsWith("node-web-boot.ts") ||
+    process.argv[1].endsWith("node-web-boot.mjs"));
+
+if (isMain) {
+  registerNodeWebBoot().catch((err) => {
+    console.error("[node-web-boot] failed", err);
+    process.exit(1);
+  });
 }

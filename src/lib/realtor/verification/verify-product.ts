@@ -52,6 +52,6 @@ export function verifyRealtorProduct(): void {
 
   assert.ok(projectFileExists("src/lib/voice/real-estate/agent-templates.ts"));
   assert.ok(projectFileExists("src/lib/realtor/boot-verification.ts"));
-  const instrumentation = readProjectFile("src/instrumentation.node.ts");
-  assert.ok(instrumentation.includes("bootstrapRealtorVerification"));
+  const boot = readProjectFile("scripts/node-web-boot.ts");
+  assert.ok(boot.includes("bootstrapRealtorVerification"));
 }

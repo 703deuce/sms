@@ -10,7 +10,7 @@ import {
   defaultWeeklySchedule,
   type MctbScheduleMode,
   type MctbWeeklySchedule,
-} from "@/lib/mctb/schedule";
+} from "@/lib/mctb/schedule-shared";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
