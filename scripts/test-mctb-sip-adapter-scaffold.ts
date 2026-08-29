@@ -26,6 +26,10 @@ for (const rel of required) {
 }
 
 const extensions = readFileSync(resolve(root, "asterisk/extensions.conf.template"), "utf8");
+if (!extensions.includes("exten => _.,1,")) {
+  console.error("extensions.conf must use _., pattern for E.164 (+prefix) inbound");
+  failed += 1;
+}
 if (!extensions.includes("Progress()")) {
   console.error("extensions.conf must call Progress() for 183 early dialog");
   failed += 1;
