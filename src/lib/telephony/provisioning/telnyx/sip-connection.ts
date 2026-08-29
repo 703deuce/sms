@@ -1,8 +1,8 @@
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
-  getAuthoritativeLiveKitSipHost,
   getStoredTelnyxFqdnConnectionId,
+  resolveTelnyxIngressLiveKitSipHost,
   TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
 } from "../config";
 
@@ -29,7 +29,7 @@ export async function ensureTelnyxLiveKitFqdnConnection(): Promise<{
   actions: string[];
 }> {
   const actions: string[] = [];
-  const { host: sipHost } = getAuthoritativeLiveKitSipHost();
+  const { host: sipHost } = resolveTelnyxIngressLiveKitSipHost();
   if (!sipHost) {
     const mode = process.env.MEDIA_BACKEND_MODE?.trim().toLowerCase();
     const hint =
