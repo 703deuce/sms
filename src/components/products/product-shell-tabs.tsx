@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  aiAfterHoursShellHome,
   defaultProductShell,
   mctbShellHome,
   massSmsShellHome,
@@ -8,27 +9,41 @@ import {
   PRODUCT_SWITCHER_ONBOARDING_KEY,
   readStoredProductShell,
   resolveProductShellFromPath,
+  shellHomePath,
   writeStoredProductShell,
   type ProductShell,
 } from "@/lib/products/product-shell";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, LayoutGrid, Megaphone, PhoneMissed, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  LayoutGrid,
+  Megaphone,
+  Moon,
+  PhoneMissed,
+  X,
+} from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   hasMctb: boolean;
   hasMassSms: boolean;
+  hasAiAfterHours: boolean;
   collapsed?: boolean;
   onNavigate?: () => void;
   className?: string;
 };
 
-export function useProductShell(hasMctb: boolean, hasMassSms: boolean) {
+export function useProductShell(
+  hasMctb: boolean,
+  hasMassSms: boolean,
+  hasAiAfterHours: boolean,
+) {
   const pathname = usePathname();
   const fromPath = useMemo(() => resolveProductShellFromPath(pathname), [pathname]);
   const [shell, setShellState] = useState<ProductShell>(() =>
-    defaultProductShell({ hasMctb, hasMassSms }),
+    defaultProductShell({ hasMctb, hasMassSms, hasAiAfterHours }),
   );
 
   useEffect(() => {
@@ -42,8 +57,8 @@ export function useProductShell(hasMctb: boolean, hasMassSms: boolean) {
       setShellState(stored);
       return;
     }
-    setShellState(defaultProductShell({ hasMctb, hasMassSms }));
-  }, [fromPath, hasMctb, hasMassSms]);
+    setShellState(defaultProductShell({ hasMctb, hasMassSms, hasAiAfterHours }));
+  }, [fromPath, hasMctb, hasMassSms, hasAiAfterHours]);
 
   const setShell = (next: ProductShell) => {
     writeStoredProductShell(next);
@@ -57,32 +72,46 @@ const SHELL_OPTIONS: {
   shell: ProductShell;
   icon: typeof Megaphone;
   description: string;
+  visible: (input: { hasMctb: boolean; hasMassSms: boolean; hasAiAfterHours: boolean }) => boolean;
 }[] = [
   {
     shell: "mass_sms",
     icon: Megaphone,
-    description: "Campaigns, inbox, contacts, and playbooks",
+    description: "Campaigns, conversations, contacts, and playbooks",
+    visible: (input) => input.hasMassSms,
   },
   {
     shell: "mctb",
     icon: PhoneMissed,
     description: "Missed calls, voicemail, consent, and text-back setup",
+    visible: (input) => input.hasMctb,
+  },
+  {
+    shell: "ai_after_hours",
+    icon: Moon,
+    description: "After-hours AI agent, calls, knowledge, and call handling",
+    visible: (input) => input.hasAiAfterHours,
   },
 ];
 
 export function ProductShellSwitcher({
   hasMctb,
   hasMassSms,
+  hasAiAfterHours,
   collapsed = false,
   onNavigate,
   className,
 }: Props) {
   const router = useRouter();
-  const { shell, setShell } = useProductShell(hasMctb, hasMassSms);
-  const showSwitcher = hasMctb && hasMassSms;
+  const entitlement = { hasMctb, hasMassSms, hasAiAfterHours };
+  const { shell, setShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
+  const showSwitcher =
+    [hasMctb, hasMassSms, hasAiAfterHours].filter(Boolean).length >= 2;
   const [open, setOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const visibleOptions = SHELL_OPTIONS.filter((option) => option.visible(entitlement));
 
   useEffect(() => {
     if (!showSwitcher) return;
@@ -123,8 +152,7 @@ export function ProductShellSwitcher({
     setShell(next);
     setOpen(false);
     onNavigate?.();
-    const target = next === "mass_sms" ? massSmsShellHome() : mctbShellHome();
-    router.push(target);
+    router.push(shellHomePath(next));
   }
 
   return (
@@ -171,7 +199,7 @@ export function ProductShellSwitcher({
         >
           <div className="border-b border-border px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Choose platform
+              Choose product
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               Currently active:{" "}
@@ -179,7 +207,7 @@ export function ProductShellSwitcher({
             </p>
           </div>
           <div className="p-1.5">
-            {SHELL_OPTIONS.map(({ shell: optionShell, icon: Icon, description }) => {
+            {visibleOptions.map(({ shell: optionShell, icon: Icon, description }) => {
               const active = shell === optionShell;
               return (
                 <button
@@ -223,10 +251,10 @@ export function ProductShellSwitcher({
         <div className="absolute left-2 right-2 top-[calc(100%+10px)] z-50 rounded-xl border border-primary/20 bg-card p-4 shadow-lg">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[13px] font-semibold text-foreground">You have 2 platforms</p>
+              <p className="text-[13px] font-semibold text-foreground">Multiple products</p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                Click Switch product anytime to move between Mass SMS campaigns and your Missed Call
-                Engine. Each platform shows its own menu.
+                Use Switch product to move between SMS, Missed Call Text Back, and AI After Hours.
+                Each product shows its own menu in the same workspace.
               </p>
             </div>
             <button
@@ -257,6 +285,7 @@ export function ProductShellTabs(props: Props) {
     <ProductShellSwitcher
       hasMctb={props.hasMctb}
       hasMassSms={props.hasMassSms}
+      hasAiAfterHours={props.hasAiAfterHours}
       collapsed={props.collapsed}
       onNavigate={props.onNavigate}
       className={props.className}
@@ -278,3 +307,6 @@ export function ProductShellActiveLabel({
     </p>
   );
 }
+
+// Re-export home helpers for legacy imports
+export { massSmsShellHome, mctbShellHome, aiAfterHoursShellHome };

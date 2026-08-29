@@ -2,7 +2,10 @@
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
+import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
+import { useProductShell } from "@/components/products/product-shell-tabs";
+import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { cn } from "@/lib/utils";
 import {
   AudioLines,
@@ -10,6 +13,7 @@ import {
   LayoutDashboard,
   Megaphone,
   MessageSquare,
+  Moon,
   MoreHorizontal,
   PhoneCall,
   PhoneMissed,
@@ -22,6 +26,7 @@ import type { CurrentProduct } from "@/lib/products/types";
 
 const voiceMobileIcons = [PhoneMissed, PhoneCall, AudioLines, BookOpen];
 const massSmsMobileIcons = [LayoutDashboard, Megaphone, MessageSquare, Users];
+const aiAfterHoursMobileIcons = [LayoutDashboard, Moon, PhoneCall, BookOpen];
 
 export function MobileNav({
   onMore,
@@ -31,6 +36,8 @@ export function MobileNav({
   productFeatures = null,
   hasMctb = false,
   hasMassSms = false,
+  hasAiAfterHours = false,
+  primaryVoiceAgentId = null,
 }: {
   onMore: () => void;
   realtorMode?: boolean;
@@ -39,8 +46,16 @@ export function MobileNav({
   productFeatures?: WorkspaceFeatureSnapshot | null;
   hasMctb?: boolean;
   hasMassSms?: boolean;
+  hasAiAfterHours?: boolean;
+  primaryVoiceAgentId?: string | null;
 }) {
   const pathname = usePathname();
+  const multiProduct = shouldShowProductSwitcher({
+    hasMctb,
+    hasMassSms,
+    hasAiAfterHours,
+  });
+  const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
 
   const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
     ...item,
@@ -49,6 +64,10 @@ export function MobileNav({
   const massSmsItems = buildMassSmsMobileNav().map((item, i) => ({
     ...item,
     icon: massSmsMobileIcons[i] ?? LayoutDashboard,
+  }));
+  const aiAfterHoursItems = buildAiAfterHoursMobileNav(primaryVoiceAgentId).map((item, i) => ({
+    ...item,
+    icon: aiAfterHoursMobileIcons[i] ?? LayoutDashboard,
   }));
   const numbersItems = buildNumbersMobileNav().map((item, i) => ({
     ...item,
@@ -59,9 +78,17 @@ export function MobileNav({
     ? buildRealtorMobileNav()
     : currentProduct === "numbers"
       ? numbersItems
-      : hasMassSms
-        ? massSmsItems
-        : voiceItems;
+      : multiProduct
+        ? productShell === "mass_sms"
+          ? massSmsItems
+          : productShell === "ai_after_hours"
+            ? aiAfterHoursItems
+            : voiceItems
+        : hasMassSms
+          ? massSmsItems
+          : hasAiAfterHours
+            ? aiAfterHoursItems
+            : voiceItems;
 
   return (
     <>

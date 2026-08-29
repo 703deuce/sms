@@ -94,6 +94,31 @@ def _faq_and_end_tools(agent: AmyAgent, backend: TransovoBackend) -> list:
 
         tools.append(cancel_appointment)
 
+    if ud.caller_e164 or ud.has_tool("send_sms") or ud.has_tool("send_text"):
+        @function_tool(
+            name="send_sms",
+            description=(
+                "Send an SMS to the caller from the business number — booking links, "
+                "forms, directions, or callback confirmations."
+            ),
+        )
+        async def send_sms(message: str, to: str = "") -> str:
+            result = await backend.call(
+                "send_sms",
+                {
+                    "workspaceId": ud.workspace_id,
+                    "agentId": ud.agent_id,
+                    "callId": ud.call_id,
+                    "to": to.strip() or ud.caller_e164,
+                    "body": message.strip(),
+                },
+            )
+            if not result.get("ok"):
+                return result.get("error") or "Could not send the text message."
+            return result.get("speak") or "I've sent that text message."
+
+        tools.append(send_sms)
+
     if ud.has_tool("reschedule_appointment"):
         @function_tool(
             name="reschedule_appointment",

@@ -5,11 +5,12 @@ import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/
 import { getUserProductAccess } from "@/lib/products/entitlements";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { isActiveEntitlement } from "@/lib/products/types";
-import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
+import { isAiAfterHoursEntitled } from "@/lib/products/ai-after-hours";
 import { loadOutcomeInstances } from "@/lib/outcomes/instances";
-import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
+import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
 import { getMaintenanceState } from "@/lib/platform-flags";
 import { loadShellData, loadWorkspace } from "@/lib/workspace-data";
+import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
 import { redirect } from "next/navigation";
 
 export default async function AppLayout({
@@ -56,6 +57,7 @@ export default async function AppLayout({
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
   const hasMctb = isActiveEntitlement(productFeatures.mctb);
+  const hasAiAfterHours = isAiAfterHoursEntitled(productAccess.hasVoice);
   const showTryIt =
     hasMctb &&
     shouldShowTryItNav(billingPlan, {
@@ -86,6 +88,7 @@ export default async function AppLayout({
       }
       hasNumbers={productAccess.hasNumbers}
       hasMctb={hasMctb}
+      hasAiAfterHours={hasAiAfterHours}
       showTryIt={showTryIt}
       productFeatures={productFeatures}
     >

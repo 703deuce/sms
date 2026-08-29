@@ -1,18 +1,32 @@
 /**
- * Transovo product shells — Mass SMS marketing vs Missed Call Text Back.
- * Top tabs switch shell context; ambiguous routes follow the last selected shell.
+ * Transovo product shells — SMS, Missed Call Text Back, and AI After Hours.
+ * Top switcher swaps shell context; ambiguous routes follow the last selected shell.
  */
 
-export type ProductShell = "mass_sms" | "mctb";
+export type ProductShell = "mass_sms" | "mctb" | "ai_after_hours";
 
 export const PRODUCT_SHELL_STORAGE_KEY = "transovo.activeProductShell";
-export const PRODUCT_SWITCHER_ONBOARDING_KEY = "transovo.productSwitcherOnboarding.v1";
+export const PRODUCT_SWITCHER_ONBOARDING_KEY = "transovo.productSwitcherOnboarding.v2";
 
 const MCTB_PATH_PREFIXES = [
-  "/voice",
+  "/voice/missed-calls",
+  "/voice/setup",
+  "/voice/consent-log",
+  "/voice/try-it",
+  "/voice/schedule",
+  "/voice/voicemail",
   "/smart-routing",
   "/call-forwarding",
   "/onboarding/mctb",
+] as const;
+
+const AI_AFTER_HOURS_PATH_PREFIXES = [
+  "/voice/overview",
+  "/voice/agents",
+  "/voice/calls",
+  "/voice/knowledge",
+  "/voice/inbound-routing",
+  "/voice/receptionist",
 ] as const;
 
 const MASS_SMS_PATH_PREFIXES = [
@@ -34,16 +48,44 @@ export function mctbShellHome(): string {
   return "/voice/missed-calls";
 }
 
+export function aiAfterHoursShellHome(): string {
+  return "/voice/overview";
+}
+
 export function productShellLabel(shell: ProductShell): string {
-  return shell === "mass_sms" ? "Mass SMS Platform" : "Missed Call Engine";
+  switch (shell) {
+    case "mass_sms":
+      return "SMS";
+    case "mctb":
+      return "Missed Call Text Back";
+    case "ai_after_hours":
+      return "AI After Hours";
+    default:
+      return "Transovo";
+  }
 }
 
 export function productShellShortLabel(shell: ProductShell): string {
-  return shell === "mass_sms" ? "Mass SMS" : "Missed Calls";
+  switch (shell) {
+    case "mass_sms":
+      return "SMS";
+    case "mctb":
+      return "MCTB";
+    case "ai_after_hours":
+      return "AI After Hours";
+    default:
+      return "Transovo";
+  }
 }
 
 export function isExplicitMctbShellPath(pathname: string): boolean {
   return MCTB_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+export function isExplicitAiAfterHoursShellPath(pathname: string): boolean {
+  return AI_AFTER_HOURS_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
 }
@@ -66,6 +108,7 @@ export function isExplicitMassSmsShellPath(pathname: string): boolean {
 /** Path implies a shell, or null when shared/ambiguous (settings, compliance, etc.). */
 export function resolveProductShellFromPath(pathname: string): ProductShell | null {
   if (isExplicitMctbShellPath(pathname)) return "mctb";
+  if (isExplicitAiAfterHoursShellPath(pathname)) return "ai_after_hours";
   if (isExplicitMassSmsShellPath(pathname)) return "mass_sms";
   return null;
 }
@@ -74,6 +117,8 @@ export function readStoredProductShell(): ProductShell | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(PRODUCT_SHELL_STORAGE_KEY);
+    if (raw === "mass_sms" || raw === "mctb" || raw === "ai_after_hours") return raw;
+    // Migrate legacy two-shell storage keys
     if (raw === "mass_sms" || raw === "mctb") return raw;
   } catch {
     // ignore
@@ -93,12 +138,39 @@ export function writeStoredProductShell(shell: ProductShell): void {
 export function defaultProductShell(input: {
   hasMctb: boolean;
   hasMassSms: boolean;
+  hasAiAfterHours?: boolean;
 }): ProductShell {
-  if (input.hasMassSms && !input.hasMctb) return "mass_sms";
-  if (input.hasMctb && !input.hasMassSms) return "mctb";
+  if (input.hasMassSms) return "mass_sms";
+  if (input.hasAiAfterHours) return "ai_after_hours";
+  if (input.hasMctb) return "mctb";
   return "mass_sms";
 }
 
 export function shellHomePath(shell: ProductShell): string {
-  return shell === "mass_sms" ? massSmsShellHome() : mctbShellHome();
+  switch (shell) {
+    case "mass_sms":
+      return massSmsShellHome();
+    case "mctb":
+      return mctbShellHome();
+    case "ai_after_hours":
+      return aiAfterHoursShellHome();
+    default:
+      return massSmsShellHome();
+  }
+}
+
+export function countEntitledProductShells(input: {
+  hasMctb: boolean;
+  hasMassSms: boolean;
+  hasAiAfterHours: boolean;
+}): number {
+  return [input.hasMassSms, input.hasMctb, input.hasAiAfterHours].filter(Boolean).length;
+}
+
+export function shouldShowProductSwitcher(input: {
+  hasMctb: boolean;
+  hasMassSms: boolean;
+  hasAiAfterHours: boolean;
+}): boolean {
+  return countEntitledProductShells(input) >= 2;
 }

@@ -10,8 +10,11 @@ import { getRealtorPageTitle } from "@/lib/realtor/nav";
 import { getCurrentProduct } from "@/lib/products/context";
 import { isVoiceShellRoute } from "@/lib/products/voice-routes";
 import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
+import { getAiAfterHoursPageTitle } from "@/lib/products/ai-after-hours-nav";
 import { getVoicePageTitle } from "@/lib/products/voice-nav";
 import { getSmsPageTitle } from "@/lib/products/sms-nav";
+import { useProductShell } from "@/components/products/product-shell-tabs";
+import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
@@ -50,6 +53,7 @@ export function AppShell({
   hasSms = false,
   hasNumbers = false,
   hasMctb = false,
+  hasAiAfterHours = false,
   showTryIt = false,
   productFeatures = null,
 }: {
@@ -71,6 +75,7 @@ export function AppShell({
   hasSms?: boolean;
   hasNumbers?: boolean;
   hasMctb?: boolean;
+  hasAiAfterHours?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
@@ -99,13 +104,23 @@ export function AppShell({
       (pathname.startsWith("/realtor/setup") ||
         pathname.startsWith("/realtor/dashboard") ||
         pathname.startsWith("/realtor/leads")));
+  const multiProduct = shouldShowProductSwitcher({
+    hasMctb,
+    hasMassSms: hasSms,
+    hasAiAfterHours,
+  });
+  const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
   const title = hideChromeTitle
     ? ""
     : isLauncher
       ? "Your Transovo Products"
         : currentProduct === "numbers"
         ? getNumbersPageTitle(pathname)
-        : currentProduct === "voice" || currentProduct === "sms"
+        : multiProduct && productShell === "ai_after_hours"
+          ? getAiAfterHoursPageTitle(pathname) ||
+            getVoicePageTitle(pathname) ||
+            getSmsPageTitle(pathname)
+          : currentProduct === "voice" || currentProduct === "sms"
           ? getVoicePageTitle(pathname) || getSmsPageTitle(pathname)
           : getPageTitle(pathname);
 
@@ -131,6 +146,7 @@ export function AppShell({
           hasSms={hasSms}
           hasNumbers={hasNumbers}
           hasMctb={hasMctb}
+          hasAiAfterHours={hasAiAfterHours}
           showTryIt={showTryIt}
           productFeatures={productFeatures}
         />
@@ -186,6 +202,8 @@ export function AppShell({
         productFeatures={productFeatures}
         hasMctb={hasMctb}
         hasMassSms={hasSms}
+        hasAiAfterHours={hasAiAfterHours}
+        primaryVoiceAgentId={primaryVoiceAgentId}
         onMore={() => setMenuOpen(true)}
       />
     </div>

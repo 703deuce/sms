@@ -9,10 +9,19 @@ import {
 } from "@/lib/solutions-nav";
 import { buildRealtorNav } from "@/lib/realtor/nav";
 import { buildNumbersNav } from "@/lib/products/numbers-nav";
+import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { productLogoHome } from "@/lib/products/context";
-import { massSmsShellHome, mctbShellHome } from "@/lib/products/product-shell";
+import {
+  aiAfterHoursShellHome,
+  massSmsShellHome,
+  mctbShellHome,
+  productShellLabel,
+  shouldShowProductSwitcher,
+  shellHomePath,
+} from "@/lib/products/product-shell";
+import { useProductShell, ProductShellSwitcher } from "@/components/products/product-shell-tabs";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
@@ -276,6 +285,7 @@ export function Sidebar({
   hasSms = false,
   hasNumbers = false,
   hasMctb = false,
+  hasAiAfterHours = false,
   showTryIt = false,
   productFeatures = null,
 }: {
@@ -296,6 +306,7 @@ export function Sidebar({
   hasSms?: boolean;
   hasNumbers?: boolean;
   hasMctb?: boolean;
+  hasAiAfterHours?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
@@ -305,6 +316,12 @@ export function Sidebar({
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
   const hasMassSms = hasSms;
+  const multiProduct = shouldShowProductSwitcher({
+    hasMctb,
+    hasMassSms,
+    hasAiAfterHours,
+  });
+  const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
@@ -315,8 +332,34 @@ export function Sidebar({
       });
     }
 
+    if (multiProduct) {
+      if (productShell === "mass_sms") {
+        return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
+      }
+      if (productShell === "ai_after_hours") {
+        return buildAiAfterHoursNav({
+          primaryVoiceAgentId: primaryVoiceAgentId ?? null,
+        });
+      }
+      return buildMctbShellNav({
+        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
+        showTryIt,
+        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
+        productFeatures,
+        showBillingNav: true,
+        inboxBadge,
+        hasSms,
+      });
+    }
+
     if (hasMassSms) {
       return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
+    }
+
+    if (hasAiAfterHours) {
+      return buildAiAfterHoursNav({
+        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
+      });
     }
 
     return buildMctbShellNav({
@@ -339,14 +382,29 @@ export function Sidebar({
     inboxBadge,
     hasSms,
     hasMassSms,
+    hasMctb,
+    hasAiAfterHours,
+    multiProduct,
+    productShell,
   ]);
 
   const sidebarProductLabel = useMemo(() => {
     if (realtorMode || isLauncher || currentProduct === "numbers") return null;
-    if (hasMassSms) return "Mass SMS";
-    if (hasMctb) return "Missed Calls";
+    if (multiProduct) return productShellLabel(productShell);
+    if (hasMassSms) return productShellLabel("mass_sms");
+    if (hasAiAfterHours) return productShellLabel("ai_after_hours");
+    if (hasMctb) return productShellLabel("mctb");
     return "Transovo";
-  }, [realtorMode, isLauncher, currentProduct, hasMassSms, hasMctb]);
+  }, [
+    realtorMode,
+    isLauncher,
+    currentProduct,
+    multiProduct,
+    productShell,
+    hasMassSms,
+    hasAiAfterHours,
+    hasMctb,
+  ]);
 
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
@@ -380,11 +438,15 @@ export function Sidebar({
                   ? "/app"
                   : currentProduct === "numbers"
                     ? productLogoHome("numbers")
-                    : hasMassSms
-                      ? massSmsShellHome()
-                      : hasMctb
-                        ? mctbShellHome()
-                        : "/app"
+                    : multiProduct
+                      ? shellHomePath(productShell)
+                      : hasMassSms
+                        ? massSmsShellHome()
+                        : hasAiAfterHours
+                          ? aiAfterHoursShellHome()
+                          : hasMctb
+                            ? mctbShellHome()
+                            : "/app"
             }
             className={cn("flex min-w-0 items-start gap-2", collapsed && "justify-center")}
             onClick={onClose}
@@ -398,7 +460,7 @@ export function Sidebar({
                 <span className="block truncate text-[13px] font-bold tracking-[0.02em] text-[#111827]">
                   {realtorMode ? "TRANSOVO" : "Transovo"}
                 </span>
-                {!realtorMode && sidebarProductLabel && !isLauncher ? (
+                {!realtorMode && sidebarProductLabel && !isLauncher && !multiProduct ? (
                   <span className="mt-0.5 block truncate text-[10px] leading-tight text-sidebar-muted">
                     {sidebarProductLabel}
                   </span>
@@ -435,6 +497,16 @@ export function Sidebar({
           </Link>
         ) : null}
       </div>
+
+      {multiProduct && !realtorMode && !isLauncher && currentProduct !== "numbers" ? (
+        <ProductShellSwitcher
+          hasMctb={hasMctb}
+          hasMassSms={hasMassSms}
+          hasAiAfterHours={hasAiAfterHours}
+          collapsed={collapsed}
+          onNavigate={onClose}
+        />
+      ) : null}
 
       <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
         {navItems.map((item) => {
@@ -732,13 +804,17 @@ export function Sidebar({
                 <p className="truncate text-[10px] text-sidebar-muted">
                   {currentProduct === "numbers"
                     ? "Numbers"
-                    : hasMassSms
-                      ? "Mass SMS"
-                      : hasMctb
-                        ? "Missed Calls"
-                        : realtorMode && workspaceName
-                          ? workspaceName
-                          : "Account"}
+                    : multiProduct
+                      ? productShellLabel(productShell)
+                      : hasMassSms
+                        ? productShellLabel("mass_sms")
+                        : hasAiAfterHours
+                          ? productShellLabel("ai_after_hours")
+                          : hasMctb
+                            ? productShellLabel("mctb")
+                            : realtorMode && workspaceName
+                              ? workspaceName
+                              : "Account"}
                 </p>
               </div>
             ) : null}

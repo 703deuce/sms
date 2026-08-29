@@ -28,6 +28,7 @@ type VoiceRuntimeAction =
   | "reschedule_booking"
   | "find_appointments"
   | "business_answer"
+  | "send_sms"
   | "emit_event"
   | "record_call_telemetry";
 
@@ -296,6 +297,21 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/business-answer-for-python"
         );
         result = await businessAnswerForPython(payload as never);
+        break;
+      }
+
+      case "send_sms": {
+        const { sendSmsForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/send-sms-for-python"
+        );
+        result = await sendSmsForPython({
+          workspaceId: String(payload.workspaceId || ""),
+          agentId: payload.agentId ? String(payload.agentId) : null,
+          callId: payload.callId ? String(payload.callId) : null,
+          to: payload.to ? String(payload.to) : null,
+          body: String(payload.body || ""),
+          phoneNumberId: payload.phoneNumberId ? String(payload.phoneNumberId) : null,
+        });
         break;
       }
 

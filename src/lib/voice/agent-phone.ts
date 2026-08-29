@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { isFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import { isRealEstateFrontDeskAgent } from "@/lib/voice/real-estate/config";
+import { mergePhoneCapabilitySettings } from "@/lib/numbers/phone-capabilities";
 
 /**
  * Keep `VoiceAgent.phoneNumberId` and the inbound join table
@@ -41,12 +42,15 @@ export async function syncVoiceAgentPhoneAssignment(input: {
   }
 
   if (input.phoneNumberId) {
-    const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
-    if (isMctbVoiceRouteLocked(pn.settingsJson)) {
-      throw new Error(
-        "This number is configured for Missed Call Text Back (Call Control). Unassign it from MCTB in Text Back Setup before attaching an AI receptionist.",
-      );
-    }
+    await prisma.phoneNumber.update({
+      where: { id: pn.id },
+      data: {
+        settingsJson: mergePhoneCapabilitySettings(pn.settingsJson, {
+          aiAfterHoursEnabled: true,
+          voiceEnabled: true,
+        }),
+      },
+    });
   }
 
   if (exclusive) {

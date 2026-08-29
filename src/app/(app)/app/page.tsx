@@ -29,7 +29,7 @@ export default async function ProductLauncherPage() {
           title={productLabel("voice")}
           description="Answer calls, help customers, take messages, transfer callers, and book appointments with AI."
           href="/api/products/open?product=voice"
-          actionLabel="Open AI Receptionist"
+          actionLabel="Open AI After Hours"
           entitled={hasVoice}
         />
         <ProductCard

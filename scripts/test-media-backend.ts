@@ -31,11 +31,11 @@ async function main() {
     assert.equal(parseMediaBackend("invalid"), null);
   });
 
-  await check("media_backend_mode_default_self_hosted", () => {
+  await check("media_backend_mode_default_livekit_cloud", () => {
     const prev = process.env.MEDIA_BACKEND_MODE;
     delete process.env.MEDIA_BACKEND_MODE;
-    assert.equal(getMediaBackendMode(), "self_hosted");
-    assert.equal(getActiveMediaBackend(), "self_hosted");
+    assert.equal(getMediaBackendMode(), "livekit_cloud");
+    assert.equal(getActiveMediaBackend(), "livekit_cloud");
     if (prev) process.env.MEDIA_BACKEND_MODE = prev;
   });
 

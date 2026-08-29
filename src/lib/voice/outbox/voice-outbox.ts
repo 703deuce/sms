@@ -35,6 +35,8 @@ export async function processVoiceOutboxJob(
         workspaceId: String(payload.workspaceId),
         to: String(payload.to || ""),
         body: String(payload.body || ""),
+        from: payload.from ? String(payload.from) : undefined,
+        idempotencyKey: payload.operationId ? String(payload.operationId) : undefined,
       });
     }
     case "voice_appointment_provider_cancel": {

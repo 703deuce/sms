@@ -18,5 +18,5 @@ export const LIVEKIT_SELF_HOSTED_STALE_INBOUND_TRUNK_ID = "ST_9v6jM2L5ktzr";
 export const LIVEKIT_CLOUD_INBOUND_TRUNK_ID = "ST_niZH3LgKj7Po";
 export const LIVEKIT_CLOUD_DISPATCH_RULE_ID = "SDR_6rYudQdFWV7R";
 
-/** Production default — Telnyx FQDN targets self-hosted SIP. */
-export const DEFAULT_MEDIA_BACKEND_MODE: MediaBackendMode = "self_hosted";
+/** Production default — LiveKit Cloud (self-hosted voice server removed). */
+export const DEFAULT_MEDIA_BACKEND_MODE: MediaBackendMode = "livekit_cloud";
