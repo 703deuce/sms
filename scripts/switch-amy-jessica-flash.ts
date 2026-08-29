@@ -21,6 +21,8 @@ const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AMY_AGENT_ID = process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501";
 const PHONE_E164 = process.env.PHONE_E164 || "+18663464256";
 
+const PHONE_866_ID = process.env.PHONE_866_ID || "cmsc3numa1j17084g391t2z5l";
+
 const JESSICA_NAME_HINT =
   process.env.JESSICA_VOICE_NAME || "Jessica - Playful, Bright, Warm";
 
@@ -65,6 +67,10 @@ async function resolveFlashModelIdFromApi(): Promise<string> {
 }
 
 async function main() {
+  // Amy 866 must stay on TeXML → Telnyx assistant. Default env is LiveKit, which
+  // repoints the DID to broken SIP and yields "not in service" on PSTN.
+  process.env.VOICE_RUNTIME_PROVIDER = "telnyx";
+
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
     where: { id: AMY_AGENT_ID, workspaceId: WORKSPACE_ID },
@@ -157,11 +163,26 @@ async function main() {
         status: published.agent.status,
         version: published.version.version,
         telnyxAssistantId: published.agent.telnyxAssistantId,
+        texmlRoute: published.texmlRoute,
       },
       null,
       2,
     ),
   );
+
+  console.log("\n=== Ensure TeXML inbound (never LiveKit on 866) ===");
+  const { restoreTexmlInboundRoute } = await import(
+    "../src/lib/telephony/provisioning/number-assignment"
+  );
+  const restored = await restoreTexmlInboundRoute({
+    workspaceId: WORKSPACE_ID,
+    phoneNumberId: PHONE_866_ID,
+    agentId: AMY_AGENT_ID,
+  });
+  if (!restored.ok) {
+    throw new Error(`TeXML route restore failed for ${PHONE_E164}`);
+  }
+  console.log(JSON.stringify(restored, null, 2));
 
   const remote = await ai.getAssistant(published.agent.telnyxAssistantId!);
   const remoteObj = (remote as { data?: Record<string, unknown> } | Record<string, unknown>)
