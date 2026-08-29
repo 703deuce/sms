@@ -105,7 +105,11 @@ export async function enrollContactInDripCampaign(
     data: { triggeredCount: { increment: 1 } },
   });
 
-  await scheduleDripStep(enrollment.id, 0, nextRunAt);
+  if (firstDelay === 0) {
+    await processDripCampaignStep({ enrollmentId: enrollment.id, stepIndex: 0 });
+  } else {
+    await scheduleDripStep(enrollment.id, 0, nextRunAt);
+  }
   return true;
 }
 
@@ -130,6 +134,10 @@ export async function processDripCampaignStep(payload: {
   });
   if (!enrollment || enrollment.status !== "active") {
     return { skipped: true, reason: "enrollment_inactive" };
+  }
+
+  if (payload.stepIndex < enrollment.currentStepIndex) {
+    return { skipped: true, reason: "step_already_processed" };
   }
 
   const campaignRow = await prisma.dripCampaign.findUnique({

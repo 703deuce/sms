@@ -233,6 +233,31 @@ async function main() {
     fail("drip enrollment created with nextRunAt");
   }
 
+  const immediateDrip = await createDripCampaign(workspaceId, {
+    name: "Immediate drip on add",
+    triggerType: "contact_added",
+    status: "active",
+    steps: [{ id: "s1", delayAmount: 0, delayUnit: "immediate", message: "Instant hello" }],
+  });
+
+  const instantEnroll = await triggerDripCampaigns({
+    workspaceId,
+    contactId: newContact.id,
+    triggerType: "contact_added",
+  });
+  if (instantEnroll >= 1) ok("immediate drip enrolls on contact_added");
+  else fail("immediate drip enrolls on contact_added");
+
+  const instantMsg = await prisma.message.findFirst({
+    where: {
+      workspaceId,
+      to: TEST_PHONE_B,
+      idempotencyKey: `drip:${immediateDrip.id}:${newContact.id}:0`,
+    },
+  });
+  if (instantMsg) ok("immediate drip sends step 0 without waiting for job worker");
+  else fail("immediate drip sends step 0 without waiting for job worker");
+
   const msgCount = await prisma.message.count({
     where: { workspaceId, to: TEST_PHONE_B },
   });
