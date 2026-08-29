@@ -49,7 +49,8 @@ Legacy fallbacks for internal auth: `VOICE_RUNTIME_INTERNAL_SECRET`, `INTEGRATIO
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `LIVEKIT_URL` | Yes | LiveKit Cloud WebSocket |
+| `MEDIA_BACKEND_MODE` | Yes | **`livekit_cloud`** for production PSTN. Do not leave unset — Python used to default to `self_hosted` and connect to `wss://voice.transovo.ai/agent`. |
+| `LIVEKIT_URL` | Yes | LiveKit Cloud WebSocket (e.g. `wss://sms-6w01zoya.livekit.cloud`) — **same project** as web app |
 | `LIVEKIT_API_KEY` | Yes | Worker auth |
 | `LIVEKIT_API_SECRET` | Yes | Worker auth |
 | `OPENAI_API_KEY` | Yes | OpenAI Realtime |
