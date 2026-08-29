@@ -27,26 +27,10 @@ render_template /etc/asterisk-templates/rtp.conf.template /etc/asterisk/rtp.conf
 
 cp /etc/asterisk-templates/modules.conf /etc/asterisk/modules.conf
 
-cat >/etc/asterisk/asterisk.conf <<EOF
-[directories]
-astetcdir => /etc/asterisk
-astmoddir => /usr/lib/asterisk/modules
-astvarlibdir => /var/lib/asterisk
-astdbdir => /var/lib/asterisk
-astkeydir => /var/lib/asterisk
-astdatadir => /var/lib/asterisk
-astagidir => /var/lib/asterisk/agi-bin
-astspooldir => /var/spool/asterisk
-astrundir => /var/run/asterisk
-astlogdir => /var/log/asterisk
-
-[options]
-verbose = 3
-debug = 0
-transmit_silence = yes
-EOF
-
-mkdir -p /var/lib/asterisk/agi-bin /var/run/asterisk /var/spool/asterisk/mctb-audio /var/log/asterisk
+mkdir -p /var/lib/asterisk/agi-bin /var/lib/asterisk/documentation /var/run/asterisk /var/spool/asterisk/mctb-audio /var/log/asterisk
+if [ -d /usr/share/asterisk/documentation ]; then
+  cp -rn /usr/share/asterisk/documentation/. /var/lib/asterisk/documentation/ 2>/dev/null || true
+fi
 ln -sf /opt/mctb-sip-adapter/agi/mctb_inbound.py /var/lib/asterisk/agi-bin/mctb_inbound.py
 
 echo "mctb-sip-adapter: external_ip=${EXTERNAL_SIP_IP} sip_udp=${SIP_UDP_PORT} rtp=${RTP_START_PORT}-${RTP_END_PORT}"

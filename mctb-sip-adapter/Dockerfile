@@ -9,6 +9,7 @@ RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     asterisk \
     asterisk-core-sounds-en \
+    asterisk-doc \
     ca-certificates \
     curl \
     gettext-base \
