@@ -151,35 +151,27 @@ export function CampaignReviewView() {
         </ReviewSection>
 
         <div className={cn(campaignUi.card, "p-5")}>
-          <h3 className="text-[15px] font-semibold text-[#111827]">Message Usage</h3>
+          <h3 className="text-[15px] font-semibold text-[#111827]">Send summary</h3>
           {loading ? (
             <p className="mt-3 text-[13px] text-[#6b7280]">Calculating…</p>
           ) : review ? (
             <dl className="mt-4 space-y-2 text-[13px]">
               <div className="flex justify-between">
-                <dt className="text-[#6b7280]">Messages available</dt>
-                <dd className="font-semibold tabular-nums">{formatNumber(review.availableSegments)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[#6b7280]">Estimated required</dt>
-                <dd className="font-semibold tabular-nums">{formatNumber(review.requiredSegments)}</dd>
-              </div>
-              <div className="flex justify-between border-t border-[#f3f4f6] pt-2">
-                <dt className="text-[#6b7280]">Estimated remaining</dt>
-                <dd
-                  className={cn(
-                    "font-semibold tabular-nums",
-                    review.shortage > 0 ? "text-[#dc2626]" : "text-[#059669]",
-                  )}
-                >
-                  {formatNumber(Math.max(0, review.availableSegments - review.requiredSegments))}
+                <dt className="text-[#6b7280]">Recipients</dt>
+                <dd className="font-semibold tabular-nums">
+                  {formatNumber(review.finalRecipientCount)}
                 </dd>
               </div>
-              {review.finalRecipientCount > 0 && review.estimatedSegments > review.finalRecipientCount ? (
-                <p className="pt-2 text-[12px] text-[#6b7280]">
-                  Recipients: {formatNumber(review.finalRecipientCount)} · Estimated SMS segments:{" "}
-                  {formatNumber(review.estimatedSegments)} (personalized messages may use multiple
-                  segments)
+              <div className="flex justify-between">
+                <dt className="text-[#6b7280]">Estimated messages</dt>
+                <dd className="font-semibold tabular-nums">
+                  {formatNumber(review.estimatedSegments)}
+                </dd>
+              </div>
+              {review.finalRecipientCount > 0 &&
+              review.estimatedSegments > review.finalRecipientCount ? (
+                <p className="pt-1 text-[12px] text-[#6b7280]">
+                  Personalized messages may use more than one SMS segment per recipient.
                 </p>
               ) : null}
             </dl>

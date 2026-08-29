@@ -230,7 +230,7 @@ export async function buildPreSendReview(
         : !a2p.allowed
           ? a2p.reason || "Messaging A2P not ready"
           : shortage > 0
-            ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+            ? `This send needs ${estimatedSegments} messages but your account does not have enough remaining`
             : availability.blockReason,
       mmsBlocked,
       acceptedPhones: accepted
