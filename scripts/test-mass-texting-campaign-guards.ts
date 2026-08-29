@@ -52,10 +52,20 @@ assert.ok(
   "mass-texting launch-review must not sync Telnyx on every page load",
 );
 
-const preSendReview = read("src/lib/mass-texting/pre-send-review.ts");
+const unifiedGate = read("src/lib/messaging/unified-send-gate.ts");
 assert.ok(
-  preSendReview.includes("syncTelnyx: false"),
-  "pre-send review reads cached A2P registration from DB only",
+  unifiedGate.includes("if (options?.syncTelnyx)"),
+  "A2P gate is DB-first; Telnyx sync is opt-in via syncTelnyx",
+);
+
+const sendReadiness = read("src/lib/mass-texting/send-readiness.ts");
+assert.ok(
+  sendReadiness.includes("syncMassTextingSendStateFromTelnyx"),
+  "explicit Telnyx sync helper exists for compliance refresh",
+);
+assert.ok(
+  !sendReadiness.includes("assertWorkspaceMessagingSendAllowed(workspaceId, { syncTelnyx: true })"),
+  "send-readiness does not Telnyx-sync on every lifecycle refresh",
 );
 
 const recurrence = read("src/lib/campaigns/recurrence.ts");

@@ -39,8 +39,8 @@ async function loadMessagingSendGate(workspaceId: string) {
   const { assertWorkspaceMessagingSendAllowed } = await import(
     "@/lib/messaging/unified-send-gate"
   );
-  // Review is read-only: use DB registration, do not sync Telnyx 10DLC on every page load.
-  return assertWorkspaceMessagingSendAllowed(workspaceId, { syncTelnyx: false });
+  // Cached messagingRegistration only — Telnyx sync is explicit (compliance refresh / webhooks).
+  return assertWorkspaceMessagingSendAllowed(workspaceId);
 }
 
 export async function buildPreSendReview(
@@ -432,7 +432,7 @@ export async function buildPreSendReview(
       : !a2p.allowed
         ? a2p.reason || "Messaging A2P not ready"
         : shortage > 0
-          ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+          ? `This send needs ${estimatedSegments} messages but your account does not have enough remaining`
           : availability.blockReason,
     mmsBlocked,
     acceptedPhones: accepted

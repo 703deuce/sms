@@ -14,8 +14,8 @@ export type UnifiedMessagingSendGate = {
 
 export type MessagingSendGateOptions = {
   /**
-   * When false, read cached messagingRegistration from DB only (review UI).
-   * When true (default), reconcile live Telnyx 10DLC state before gating (launch).
+   * When true, reconcile live Telnyx 10DLC state before gating (compliance refresh,
+   * post-registration change, explicit sync). Default false — read cached DB state.
    */
   syncTelnyx?: boolean;
 };
@@ -66,14 +66,15 @@ export async function syncWorkspaceMessagingFromTelnyx(
 
 /**
  * Single A2P gate for MCTB, Mass Texting, and transactional SMS.
- * One approved low-volume / mixed Telnyx campaign on the number is sufficient.
+ * DB-first: reads messagingRegistration from Postgres. Telnyx is synced only when
+ * options.syncTelnyx is true (explicit refresh, registration change, webhooks).
  */
 export async function assertWorkspaceMessagingSendAllowed(
   workspaceId: string,
   options?: MessagingSendGateOptions,
 ): Promise<UnifiedMessagingSendGate> {
   const phoneE164 = await resolveSendingPhoneE164(workspaceId);
-  if (options?.syncTelnyx !== false) {
+  if (options?.syncTelnyx) {
     await syncWorkspaceMessagingFromTelnyx(workspaceId, phoneE164);
   }
 
