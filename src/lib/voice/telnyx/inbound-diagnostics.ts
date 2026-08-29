@@ -49,7 +49,17 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function isCredentialLike(app: Record<string, unknown> | null): boolean {
+function routingModeForPhone(settingsJson: unknown): string {
+  const settings =
+    settingsJson && typeof settingsJson === "object"
+      ? (settingsJson as {
+          telephony?: { routingMode?: string };
+          provisioning?: { routingMode?: string };
+        })
+      : {};
+  const telephony = settings.telephony || settings.provisioning;
+  return String(telephony?.routingMode || "").toLowerCase();
+}
   if (!app) return false;
   const source = String(app._source || "");
   const connType = String(
@@ -479,9 +489,14 @@ export async function diagnoseAndRepairInboundNumber(input: {
               phoneNumberId: row.id,
             })
           : false;
+        const livekitSip = row ? routingModeForPhone(row.settingsJson) === "livekit_sip" : false;
         if (texmlDirect) {
           repairs.push(
             `Skipped Call Control attach — agent uses TeXML direct (left on ${numberConnId || "current connection"})`,
+          );
+        } else if (livekitSip) {
+          repairs.push(
+            `Skipped Call Control attach — number uses LiveKit SIP inbound (left on ${numberConnId || "current connection"})`,
           );
         } else {
           await attachConnection(providerNumberId, targetCcId);

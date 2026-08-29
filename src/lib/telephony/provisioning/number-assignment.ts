@@ -498,6 +498,14 @@ export async function repairLiveKitSipRouting(input: {
     await ensureTelnyxLiveKitFqdnConnection();
   actions.push(...telnyxActions);
 
+  try {
+    const { pruneStaleTelnyxFqdns } = await import("./telnyx/sip-connection");
+    const pruned = await pruneStaleTelnyxFqdns();
+    actions.push(...pruned.actions);
+  } catch {
+    actions.push("telnyx_fqdn_prune_skipped");
+  }
+
   const route = await routeTelnyxNumberToConnection({
     e164: phone.e164,
     providerNumberId: phone.providerNumberId,
@@ -560,6 +568,14 @@ export async function fullResetLiveKitSipRouting(input: {
   const { connectionId, fqdnId, actions: telnyxActions } =
     await ensureTelnyxLiveKitFqdnConnection();
   actions.push(...telnyxActions);
+
+  try {
+    const { pruneStaleTelnyxFqdns } = await import("./telnyx/sip-connection");
+    const pruned = await pruneStaleTelnyxFqdns();
+    actions.push(...pruned.actions);
+  } catch {
+    actions.push("telnyx_fqdn_prune_skipped");
+  }
 
   const route = await routeTelnyxNumberToConnection({
     e164: phone.e164,

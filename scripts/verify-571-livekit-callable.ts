@@ -17,7 +17,7 @@ import {
   TRANSOVO_LIVEKIT_AGENT_NAME,
   TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
 } from "../src/lib/telephony/provisioning/config";
-import { inspectLiveKitSipRouting } from "../src/lib/telephony/provisioning/livekit/inspect";
+import { inspectLiveKitSipRouting, isWildcardTelnyxTrunk } from "../src/lib/telephony/provisioning/livekit/inspect";
 import { verifyNumberRouting } from "../src/lib/telephony/provisioning";
 import { findFqdnConnectionByName } from "../src/lib/telephony/provisioning/telnyx/sip-connection";
 import { requireLiveKitEnv } from "../src/lib/voice/runtime-provider/config";
@@ -110,13 +110,18 @@ async function checkSipTrunkAndDispatch(): Promise<void> {
     const hasDid = (trunk.numbers || []).some(
       (n) => n === E164 || n === E164.replace(/^\+/, ""),
     );
+    const wildcard = isWildcardTelnyxTrunk(trunk);
     gate(
       "LIVEKIT_SIP_TRUNK",
-      hasDid ? "PASS" : "FAIL",
-      `${trunk.id} numbers=${JSON.stringify(trunk.numbers)}`,
+      hasDid || wildcard ? "PASS" : "FAIL",
+      wildcard
+        ? `${trunk.id} wildcard Telnyx IP trunk allowedAddresses=${JSON.stringify(trunk.allowedAddresses)}`
+        : `${trunk.id} numbers=${JSON.stringify(trunk.numbers)}`,
     );
 
-    const dispatch = inspect.dispatchRulesForTrunk[0];
+    const dispatch =
+      inspect.dispatchRulesForTrunk[0] ||
+      inspect.dispatchRules.find((r) => (r.trunkIds || []).length === 0);
     if (!dispatch) {
       gate("LIVEKIT_DISPATCH", "FAIL", `No dispatch rule for trunk ${trunk.id}`);
       return;

@@ -137,10 +137,13 @@ async function ensureFqdnRecord(
   const conn = await telnyxRequest<{ data?: TelnyxRecord }>(
     `/fqdn_connections/${encodeURIComponent(connectionId)}`,
   );
-  const primaryId = String(
-    (conn.data?.inbound as TelnyxRecord | undefined)?.default_primary_fqdn_id || "",
-  );
-  if (primaryId !== fqdnId) {
+  const inbound = (conn.data?.inbound as TelnyxRecord | undefined) || {};
+  const primaryId = String(inbound.default_primary_fqdn_id || "");
+  const dnisFormat = String(inbound.dnis_number_format || "");
+  const needsInboundPatch =
+    primaryId !== fqdnId ||
+    dnisFormat.toLowerCase() !== "+e164";
+  if (needsInboundPatch) {
     await telnyxRequest(`/fqdn_connections/${encodeURIComponent(connectionId)}`, {
       method: "PATCH",
       body: {
@@ -148,13 +151,59 @@ async function ensureFqdnRecord(
           default_primary_fqdn_id: fqdnId,
           default_secondary_fqdn_id: null,
           default_tertiary_fqdn_id: null,
+          dnis_number_format: "+e164",
         },
       },
     });
-    actions.push(`set_primary_fqdn_${sipHost}`);
+    if (primaryId !== fqdnId) {
+      actions.push(`set_primary_fqdn_${sipHost}`);
+    }
+    if (dnisFormat.toLowerCase() !== "+e164") {
+      actions.push("set_dnis_number_format_+e164");
+    }
   }
 
+  await pruneStaleTelnyxFqdnsOnConnection(connectionId, sipHost, actions);
+
   return fqdnId;
+}
+
+async function pruneStaleTelnyxFqdnsOnConnection(
+  connectionId: string,
+  keepHost: string,
+  actions: string[],
+): Promise<void> {
+  const listed = await telnyxRequest<{ data?: TelnyxRecord[] }>("/fqdns", {
+    query: { "filter[connection_id]": connectionId },
+  });
+  const keep = keepHost.toLowerCase();
+  for (const row of listed.data || []) {
+    const host = String(row.fqdn || "").toLowerCase();
+    const id = String(row.id || "");
+    if (!id || !host || host === keep) continue;
+    await telnyxRequest(`/fqdns/${encodeURIComponent(id)}`, { method: "DELETE" });
+    actions.push(`deleted_stale_fqdn_${host}`);
+  }
+}
+
+/** Remove FQDN records on the LiveKit inbound connection that do not match current SIP host. */
+export async function pruneStaleTelnyxFqdns(): Promise<{
+  connectionId: string;
+  sipHost: string;
+  actions: string[];
+}> {
+  const actions: string[] = [];
+  const { host: sipHost } = resolveTelnyxIngressLiveKitSipHost();
+  if (!sipHost) throw new Error("LiveKit SIP host not configured");
+
+  const conn = await findFqdnConnectionByName(TRANSOVO_TELNYX_FQDN_CONNECTION_NAME);
+  const connectionId = String(conn?.id || "");
+  if (!connectionId) throw new Error("Telnyx LiveKit FQDN connection not found");
+
+  await ensureFqdnRecord(connectionId, sipHost, actions);
+  await pruneStaleTelnyxFqdnsOnConnection(connectionId, sipHost, actions);
+
+  return { connectionId, sipHost, actions };
 }
 
 export async function routeTelnyxNumberToConnection(input: {
