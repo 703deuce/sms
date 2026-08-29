@@ -1,0 +1,27 @@
+# Run on the Hetzner host alongside transovo-web — NOT through Coolify HTTP proxy.
+# Prefer host networking so SIP/RTP use the machine's public IP directly.
+
+services:
+  mctb-sip-adapter:
+    build:
+      context: ./mctb-sip-adapter
+      dockerfile: Dockerfile
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # Public IPv4 Telnyx will signal/media to (Hetzner host).
+      EXTERNAL_SIP_IP: ${EXTERNAL_SIP_IP:?set on host}
+      SIP_UDP_PORT: ${MCTB_SIP_UDP_PORT:-5060}
+      RTP_START_PORT: ${MCTB_RTP_START_PORT:-10000}
+      RTP_END_PORT: ${MCTB_RTP_END_PORT:-10100}
+      # Restrict to Telnyx signaling CIDRs in production; 0.0.0.0/0 for initial spike only.
+      TELNYX_SIP_IDENTIFY_IPS: ${TELNYX_SIP_IDENTIFY_IPS:-0.0.0.0/0}
+      TRANSOVO_BACKEND_URL: ${TRANSOVO_BACKEND_URL:-https://app.transovo.ai}
+      TRANSOVO_INTERNAL_API_KEY: ${TRANSOVO_INTERNAL_API_KEY:?set on host}
+    volumes:
+      - mctb-sip-audio:/var/spool/asterisk/mctb-audio
+      - mctb-sip-logs:/var/log/asterisk
+
+volumes:
+  mctb-sip-audio:
+  mctb-sip-logs:

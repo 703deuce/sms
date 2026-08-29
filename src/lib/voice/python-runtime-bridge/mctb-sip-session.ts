@@ -277,6 +277,8 @@ export type RecordMctbSipPress1ConsentInput = {
   forwardedFrom?: string | null;
   audioAssetId?: string | null;
   dtmfDigit?: string;
+  /** Observability path override (default livekit_sip_mctb). */
+  capturePath?: string;
 };
 
 export async function recordMctbSipPress1ConsentForPython(
@@ -304,7 +306,7 @@ export async function recordMctbSipPress1ConsentForPython(
   const mediaBackend = getActiveMediaBackend();
   const transovoNumberE164 = String(input.transovoNumberE164 || input.businessNumber || "").trim();
   const observability = {
-    path: "livekit_sip_mctb",
+    path: input.capturePath?.trim() || "livekit_sip_mctb",
     captureMode: "SIP_INGRESS",
     consentMode: "press_1",
     providerCallId: input.providerCallId,

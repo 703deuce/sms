@@ -19,6 +19,8 @@ export type CaptureMctbSipInboundInput = {
   sipAttributes?: Record<string, string>;
   receivedAt?: string;
   fallbackWorkspaceId?: string;
+  /** Observability path override (default livekit_sip_mctb). */
+  capturePath?: string;
 };
 
 /**
@@ -50,6 +52,7 @@ export async function captureMctbSipInboundForPython(input: CaptureMctbSipInboun
     connectionId: normalized.connectionId || null,
     livekitRoomName: input.livekitRoomName || null,
     participantIdentity: input.participantIdentity || null,
+    capturePath: input.capturePath || "livekit_sip_mctb",
   });
 
   const result = await handleMctbInboundEvent(normalized, {

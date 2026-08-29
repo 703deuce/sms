@@ -1,0 +1,18 @@
+[general]
+static=yes
+writeprotect=no
+clearglobalvars=no
+
+[globals]
+
+[mctb-inbound]
+; Telnyx PSTN/SIP ingress for MCTB press-1 consent.
+; Progress() establishes early dialog (183) before AGI answers — match LiveKit baseline.
+exten => _X.,1,NoOp(MCTB inbound ${CALLERID(num)} -> ${EXTEN} uniqueid=${UNIQUEID})
+ same => n,Set(CHANNEL(hangup_handler_push)=mctb-hangup,s,1)
+ same => n,Progress()
+ same => n,AGI(mctb_inbound.py)
+ same => n,Hangup()
+
+[mctb-hangup]
+exten => s,1,NoOp(MCTB hangup handler complete)

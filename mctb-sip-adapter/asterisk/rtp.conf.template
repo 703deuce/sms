@@ -1,0 +1,5 @@
+[general]
+rtpstart=${RTP_START_PORT}
+rtpend=${RTP_END_PORT}
+icesupport=no
+strictrtp=yes
