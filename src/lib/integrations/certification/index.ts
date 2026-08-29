@@ -42,3 +42,8 @@ export {
 } from "./report";
 export { cleanupCertCreatedObjects } from "./cleanup";
 export { fixturesForProvider } from "./fixtures";
+export {
+  mapAcceptanceWebhook,
+  verifyCrmWebhookIngest,
+  verifyNativeWebhookAndTrigger,
+} from "./webhook-trigger-cert";

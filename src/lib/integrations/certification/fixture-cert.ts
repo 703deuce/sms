@@ -1,6 +1,9 @@
 import { processCrmWebhookAutomation } from "@/lib/crm/runtime/webhook-automation";
+import { upsertExternalContact } from "@/lib/integrations/connections";
 import { dispatchIntegrationAutomationEvent } from "@/lib/integrations/framework/automation-bridge";
+import { publishNormalizedEvent } from "@/lib/integrations/framework/events";
 import { getAdapter } from "@/lib/integrations/framework/registry";
+import type { NormalizedEvent } from "@/lib/integrations/framework/types";
 import { fixturesForProvider } from "./fixtures";
 import { asCrmProviderId, asNativeProviderId } from "./workspace-integration";
 import type { CertProviderId, FixtureCertResult } from "./types";
@@ -36,6 +39,12 @@ export async function runFixtureCertification(input: {
         if (!result || typeof result !== "object") {
           throw new Error("CRM webhook processor returned no result");
         }
+        if (input.includeTriggerE2E) {
+          const published = typeof result.published === "number" ? result.published : 0;
+          const enqueued = Boolean((result as { syncEnqueued?: boolean }).syncEnqueued);
+          if (published > 0 || enqueued) triggerE2EPassed += 1;
+          else triggerE2EFailed += 1;
+        }
       } else if (nativeId) {
         const adapter = getAdapter(nativeId);
         if (!adapter.normalizeWebhook) {
@@ -50,12 +59,27 @@ export async function runFixtureCertification(input: {
         }
         if (input.includeTriggerE2E) {
           for (const ev of events) {
+            const pub = await publishNormalizedEvent(ev as NormalizedEvent);
+            let contactId = pub.contactId || ev.contactId || null;
+            if (!contactId && (ev.phone || ev.email)) {
+              const matched = await upsertExternalContact({
+                workspaceId: input.workspaceId,
+                phone: ev.phone,
+                email: ev.email,
+                source: nativeId,
+                createIfMissing: true,
+                overwrite: true,
+              });
+              contactId = matched?.contactId || null;
+            }
             const dispatch = await dispatchIntegrationAutomationEvent({
               workspaceId: input.workspaceId,
               provider: nativeId,
               eventType: ev.eventType,
+              contactId,
               phone: ev.phone || null,
               email: ev.email || null,
+              webhookEventId: pub.eventId || null,
               payload: {
                 ...(ev.payload || {}),
                 certRunId: input.certRunId,

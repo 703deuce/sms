@@ -81,6 +81,7 @@ export function fixturesForProvider(
             payload: {
               email: "cert-calendly@transovo.test",
               name: `[TRANSOVO CERT] ${certRunId}`,
+              text_reminder_number: "+15550004444",
               uri: `https://api.calendly.com/scheduled_events/cert/${certRunId}`,
               event: "https://api.calendly.com/event_types/cert",
             },

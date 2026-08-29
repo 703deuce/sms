@@ -2,22 +2,12 @@ import { runCrmAcceptanceSuite } from "@/lib/crm/acceptance";
 import { runIntegrationAcceptance } from "@/lib/integrations/framework/acceptance";
 import { certObjectLabel } from "./constants";
 import { asCrmProviderId, asNativeProviderId } from "./workspace-integration";
+import {
+  mapAcceptanceWebhook,
+  verifyCrmWebhookIngest,
+  verifyNativeWebhookAndTrigger,
+} from "./webhook-trigger-cert";
 import type { CertProviderId, IntegrationCertCheckStatus, LiveCertResult } from "./types";
-
-function acceptancePassRatio(summary: Record<string, number> | undefined): boolean {
-  if (!summary) return false;
-  const passed = summary["Live tested and passed"] || 0;
-  const failed = summary["Failed and fixed"] || 0;
-  return passed > 0 && failed === 0;
-}
-
-function mapAcceptanceWebhook(items: Array<{ id: string; status: string }>): IntegrationCertCheckStatus {
-  const webhookItems = items.filter((i) => i.id.includes("webhook"));
-  if (webhookItems.length === 0) return "NOT_TESTED";
-  if (webhookItems.every((i) => i.status === "Live tested and passed")) return "PASS";
-  if (webhookItems.some((i) => i.status === "Live tested and passed")) return "PASS";
-  return "FAIL";
-}
 
 /**
  * Live provider certification — reuses existing acceptance batteries.
@@ -52,12 +42,27 @@ export async function runLiveCertification(input: {
         ? "PASS"
         : "FAIL";
 
+    const acceptanceWebhook = mapAcceptanceWebhook(report.items);
+    const ingest = await verifyCrmWebhookIngest({
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      certRunId: input.certRunId,
+    });
+    const webhook: IntegrationCertCheckStatus =
+      acceptanceWebhook === "PASS"
+        ? "PASS"
+        : ingest.ok
+          ? "PASS"
+          : acceptanceWebhook === "FAIL"
+            ? "FAIL"
+            : "FAIL";
+
     return {
       apiTest,
-      webhook: mapAcceptanceWebhook(report.items),
-      triggerE2E: passedItems.length > 0 ? "PASS" : "FAIL",
+      webhook,
+      triggerE2E: ingest.ok ? "PASS" : passedItems.length > 0 ? "PASS" : "FAIL",
       acceptanceSummary: summarizeCrm(report.items),
-      detail: `live acceptance (${passedItems.length}/${report.items.length} passed); cert object label=${label}`,
+      detail: `live acceptance (${passedItems.length}/${report.items.length} passed); webhook ingest published=${ingest.published} (${ingest.detail}); cert object label=${label}`,
       createdExternalIds,
     };
   }
@@ -66,16 +71,35 @@ export async function runLiveCertification(input: {
   if (nativeId) {
     const report = await runIntegrationAcceptance(input.workspaceId, nativeId);
     const apiOk = report.items.find((i) => i.id === "validate")?.status === "Live tested and passed";
-    const webhookOk = report.items.find((i) => i.id === "webhook")?.status === "Live tested and passed";
+    const acceptanceWebhook = mapAcceptanceWebhook(
+      report.items.map((i) => ({ id: i.id, status: i.status })),
+    );
+    const webhookItem = report.items.find((i) => i.id === "webhook");
+    const acceptanceWebhookOk = webhookItem?.status === "Live tested and passed";
+
+    const e2e = await verifyNativeWebhookAndTrigger({
+      workspaceId: input.workspaceId,
+      provider: input.provider,
+      certRunId: input.certRunId,
+    });
+
+    const webhook: IntegrationCertCheckStatus =
+      acceptanceWebhookOk || acceptanceWebhook === "PASS"
+        ? "PASS"
+        : e2e.webhook === "PASS"
+          ? "PASS"
+          : acceptanceWebhook === "FAIL"
+            ? "FAIL"
+            : e2e.webhook;
+
+    const triggerE2E: IntegrationCertCheckStatus = e2e.triggerE2E;
 
     return {
       apiTest: apiOk ? "PASS" : "FAIL",
-      webhook: webhookOk ? "PASS" : mapAcceptanceWebhook(
-        report.items.map((i) => ({ id: i.id, status: i.status })),
-      ),
-      triggerE2E: acceptancePassRatio(report.summary) ? "PASS" : "FAIL",
+      webhook,
+      triggerE2E,
       acceptanceSummary: report.summary,
-      detail: `live acceptance summary=${JSON.stringify(report.summary)}; cert object label=${label}`,
+      detail: `live acceptance summary=${JSON.stringify(report.summary)}; trigger e2e=${e2e.detail}; cert object label=${label}`,
       createdExternalIds,
     };
   }
