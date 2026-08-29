@@ -159,16 +159,28 @@ export async function runIntegrationCertification(
       validation?.ok &&
       (effectiveMode === "LIVE" || effectiveMode === "SANDBOX")
     ) {
-      const liveResult = await runLiveCertification({ workspaceId, provider, certRunId });
-      live = liveResult;
-      for (const externalId of liveResult.createdExternalIds) {
-        allCreated.push({
-          provider,
-          objectType: "cert_record",
-          externalId,
-        });
+      try {
+        const liveResult = await runLiveCertification({ workspaceId, provider, certRunId });
+        live = liveResult;
+        for (const externalId of liveResult.createdExternalIds) {
+          allCreated.push({
+            provider,
+            objectType: "cert_record",
+            externalId,
+          });
+        }
+        if (liveResult.detail) notes.push(liveResult.detail);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        notes.push(`Live certification error: ${message}`);
+        live = {
+          apiTest: "FAIL",
+          webhook: "NOT_TESTED",
+          triggerE2E: "NOT_TESTED",
+          detail: message,
+          createdExternalIds: [],
+        };
       }
-      if (liveResult.detail) notes.push(liveResult.detail);
     } else if (effectiveMode === "SIMULATED" && catalog.bucket === "sandbox_or_dev_account") {
       notes.push(
         "Salesforce live OAuth/webhook certification pending — connect a developer/sandbox org to ws_1",
