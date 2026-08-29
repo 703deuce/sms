@@ -12,6 +12,14 @@ export type UnifiedMessagingSendGate = {
   phoneE164: string | null;
 };
 
+export type MessagingSendGateOptions = {
+  /**
+   * When false, read cached messagingRegistration from DB only (review UI).
+   * When true (default), reconcile live Telnyx 10DLC state before gating (launch).
+   */
+  syncTelnyx?: boolean;
+};
+
 async function resolveSendingPhoneE164(workspaceId: string): Promise<string | null> {
   const { resolveMassTextSendingNumber } = await import(
     "@/lib/mass-texting/messaging-registration"
@@ -62,9 +70,12 @@ export async function syncWorkspaceMessagingFromTelnyx(
  */
 export async function assertWorkspaceMessagingSendAllowed(
   workspaceId: string,
+  options?: MessagingSendGateOptions,
 ): Promise<UnifiedMessagingSendGate> {
   const phoneE164 = await resolveSendingPhoneE164(workspaceId);
-  await syncWorkspaceMessagingFromTelnyx(workspaceId, phoneE164);
+  if (options?.syncTelnyx !== false) {
+    await syncWorkspaceMessagingFromTelnyx(workspaceId, phoneE164);
+  }
 
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!reg) {

@@ -46,6 +46,18 @@ assert.ok(
   "launch-review requires mass texting entitlement",
 );
 
+const massLaunchReviewRoute = read("src/app/api/mass-texting/campaigns/[id]/launch-review/route.ts");
+assert.ok(
+  !massLaunchReviewRoute.includes("refreshMassTextingSendState"),
+  "mass-texting launch-review must not sync Telnyx on every page load",
+);
+
+const preSendReview = read("src/lib/mass-texting/pre-send-review.ts");
+assert.ok(
+  preSendReview.includes("syncTelnyx: false"),
+  "pre-send review reads cached A2P registration from DB only",
+);
+
 const recurrence = read("src/lib/campaigns/recurrence.ts");
 assert.ok(
   recurrence.includes("massTextingRequiresLaunchAudit"),
