@@ -1,7 +1,13 @@
 "use client";
 
 import { PhonePreview } from "@/components/campaigns/broadcast/phone-preview";
-import { AutoReplyWizardStepper } from "@/components/auto-replies/auto-reply-ui";
+import {
+  MockupMessageToolbar,
+  MockupTriggerCard,
+  MockupWizardFooter,
+  MockupWizardSection,
+  MockupWizardStepper,
+} from "@/components/automate/mockup-automate-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -13,62 +19,61 @@ import {
   type AutoReplyTriggerType,
 } from "@/lib/auto-replies/types";
 import { DEFAULT_AUTO_REPLY_RULES } from "@/lib/auto-replies/types";
-import { cn, estimateSmsSegments } from "@/lib/utils";
+import { estimateSmsSegments } from "@/lib/utils";
 import {
-  Clock,
   FileText,
   List,
+  PhoneMissed,
   Tag,
   UserPlus,
-  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const WIZARD_STEPS = ["Trigger", "Message", "Review"];
+const WIZARD_STEPS = ["Trigger", "Message", "Rules", "Review"];
 
 const TRIGGERS: Array<{
   id: AutoReplyTriggerType;
   label: string;
   description: string;
-  icon: typeof Users;
+  icon: typeof UserPlus;
   needsList?: boolean;
   needsTag?: boolean;
   needsForm?: boolean;
 }> = [
   {
+    id: "contact_added",
+    label: "New Contact",
+    description: "When a new contact is created in your workspace.",
+    icon: UserPlus,
+  },
+  {
+    id: "tag_added",
+    label: "Tag Added",
+    description: "When a specific tag is applied to a contact.",
+    icon: Tag,
+    needsTag: true,
+  },
+  {
     id: "list_join",
-    label: "Contact joins a list",
-    description: "Send when someone is added to a specific list.",
+    label: "List Join",
+    description: "When someone is added to a specific list.",
     icon: List,
     needsList: true,
   },
   {
-    id: "contact_added",
-    label: "New contact is added",
-    description: "Send when a new contact is created in your workspace.",
-    icon: UserPlus,
+    id: "after_hours",
+    label: "After Hours",
+    description: "When someone texts outside business hours.",
+    icon: PhoneMissed,
   },
   {
     id: "form_submitted",
-    label: "Form is submitted",
-    description: "Send after an opt-in form submission.",
+    label: "Form Submitted",
+    description: "After an opt-in form submission.",
     icon: FileText,
     needsForm: true,
-  },
-  {
-    id: "after_hours",
-    label: "After-hours message received",
-    description: "Send when someone texts outside business hours.",
-    icon: Clock,
-  },
-  {
-    id: "tag_added",
-    label: "Tag is added",
-    description: "Send when a specific tag is applied to a contact.",
-    icon: Tag,
-    needsTag: true,
   },
 ];
 
@@ -139,6 +144,10 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
     return true;
   }, [triggerType, triggerConfig, selectedTrigger]);
 
+  function insertVariable(token: string) {
+    setMessage((m) => `${m}${token}`);
+  }
+
   async function save(activate: boolean) {
     if (!name.trim() || !triggerType || !message.trim()) {
       setError("Name, trigger, and message are required.");
@@ -175,7 +184,7 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
 
   return (
     <div className="text-[13px]">
-      <div className="mb-6">
+      <div className="mb-2">
         <p className="mb-1 text-[12px] font-medium text-primary">
           <Link href="/auto-replies" className="hover:underline">
             Auto Replies
@@ -188,41 +197,33 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
         </h1>
       </div>
 
-      <AutoReplyWizardStepper steps={WIZARD_STEPS} activeIndex={step} />
+      <MockupWizardStepper steps={WIZARD_STEPS} activeIndex={step} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <Card className="rounded-xl border-slate-200 p-6 shadow-sm">
           {step === 0 ? (
-            <div className="space-y-4">
-              <p className="text-[14px] font-semibold text-slate-900">Choose a trigger</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {TRIGGERS.map((trigger) => {
-                  const Icon = trigger.icon;
-                  const selected = triggerType === trigger.id;
-                  return (
-                    <button
-                      key={trigger.id}
-                      type="button"
-                      onClick={() => {
-                        setTriggerType(trigger.id);
-                        setTriggerConfig({});
-                      }}
-                      className={cn(
-                        "rounded-xl border p-4 text-left transition",
-                        selected
-                          ? "border-primary bg-primary/5 ring-1 ring-primary"
-                          : "border-slate-200 hover:border-slate-300",
-                      )}
-                    >
-                      <Icon className="mb-2 h-5 w-5 text-primary" />
-                      <p className="font-semibold text-slate-900">{trigger.label}</p>
-                      <p className="mt-1 text-[12px] text-slate-500">{trigger.description}</p>
-                    </button>
-                  );
-                })}
+            <div>
+              <MockupWizardSection
+                title="Choose your trigger"
+                description="When should this auto-reply be sent?"
+              />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {TRIGGERS.map((trigger) => (
+                  <MockupTriggerCard
+                    key={trigger.id}
+                    icon={trigger.icon}
+                    label={trigger.label}
+                    description={trigger.description}
+                    selected={triggerType === trigger.id}
+                    onClick={() => {
+                      setTriggerType(trigger.id);
+                      setTriggerConfig({});
+                    }}
+                  />
+                ))}
               </div>
               {selectedTrigger?.needsList ? (
-                <div>
+                <div className="mt-6 max-w-md">
                   <Label>List</Label>
                   <select
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3"
@@ -245,7 +246,7 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
                 </div>
               ) : null}
               {selectedTrigger?.needsTag ? (
-                <div>
+                <div className="mt-6 max-w-md">
                   <Label>Tag</Label>
                   <select
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3"
@@ -268,7 +269,7 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
                 </div>
               ) : null}
               {selectedTrigger?.needsForm ? (
-                <div>
+                <div className="mt-6 max-w-md">
                   <Label>Form</Label>
                   <select
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3"
@@ -294,59 +295,71 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
           ) : null}
 
           {step === 1 ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              <MockupWizardSection
+                title="Compose your message"
+                description="Name your auto reply and write the SMS your contacts will receive."
+              />
               <div>
-                <Label htmlFor="name">Auto reply name</Label>
+                <Label htmlFor="name">Name your auto reply</Label>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="New Lead Welcome"
+                  placeholder="Intro Reply"
                   className="mt-1"
                 />
               </div>
-              <p className="text-[14px] font-semibold text-slate-900">Compose your message</p>
-              <Textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={8}
-                placeholder="Hi {{firstName}}, thanks for reaching out..."
-              />
-              <p className="text-[12px] text-slate-500">
-                {characters} characters · {segments} SMS segment{segments === 1 ? "" : "s"}
-              </p>
+              <div>
+                <Label htmlFor="message">Message</Label>
+                <Textarea
+                  id="message"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={8}
+                  placeholder="Hi {{firstName}}, thanks for reaching out..."
+                  className="mt-1"
+                />
+                <MockupMessageToolbar onInsert={insertVariable} />
+                <p className="mt-2 text-[12px] text-slate-500">
+                  {characters} characters · {segments} SMS segment{segments === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-6 text-center">
+                <p className="text-[13px] font-medium text-slate-600">Media attachments</p>
+                <p className="mt-1 text-[12px] text-slate-400">MMS media upload coming soon</p>
+              </div>
             </div>
           ) : null}
 
           {step === 2 ? (
-            <div className="space-y-5">
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
-                  Summary
-                </p>
-                <dl className="mt-3 space-y-2 text-[13px]">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Name</dt>
-                    <dd className="font-semibold text-slate-900">{name || "—"}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Trigger</dt>
-                    <dd className="text-right font-medium text-slate-900">
-                      {triggerType
-                        ? autoReplyTriggerLabel(triggerType, triggerConfig)
-                        : "—"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-500">Message</dt>
-                    <dd className="mt-1 whitespace-pre-wrap text-slate-700">{message || "—"}</dd>
-                  </div>
-                </dl>
+            <div className="space-y-6">
+              <MockupWizardSection
+                title="Delivery rules"
+                description="Control when and how often this auto reply sends."
+              />
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-[14px] font-semibold text-slate-900">Sending window</p>
+                <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-700">
+                  <input
+                    type="radio"
+                    checked={!rules.respectQuietHours}
+                    onChange={() => setRules((r) => ({ ...r, respectQuietHours: false }))}
+                  />
+                  Send anytime
+                </label>
+                <label className="mt-2 flex items-center gap-2 text-[13px] text-slate-700">
+                  <input
+                    type="radio"
+                    checked={rules.respectQuietHours}
+                    onChange={() => setRules((r) => ({ ...r, respectQuietHours: true }))}
+                  />
+                  Respect quiet hours / business schedule
+                </label>
               </div>
-
-              <div className="space-y-3">
-                <p className="text-[14px] font-semibold text-slate-900">Rules</p>
-                <label className="flex items-center gap-2">
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-[14px] font-semibold text-slate-900">Frequency</p>
+                <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-700">
                   <input
                     type="checkbox"
                     checked={rules.oncePerContact}
@@ -354,9 +367,9 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
                       setRules((r) => ({ ...r, oncePerContact: e.target.checked }))
                     }
                   />
-                  Send only once per contact
+                  Don&apos;t send more than once per contact
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="mt-2 flex items-center gap-2 text-[13px] text-slate-700">
                   <input
                     type="checkbox"
                     checked={rules.excludeUnsubscribed}
@@ -366,63 +379,85 @@ export function AutoReplyWizard({ mode = "create", initial }: Props) {
                   />
                   Do not send to unsubscribed contacts
                 </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={rules.respectQuietHours}
-                    onChange={(e) =>
-                      setRules((r) => ({ ...r, respectQuietHours: e.target.checked }))
-                    }
-                  />
-                  Respect quiet hours
-                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="space-y-5">
+              <MockupWizardSection
+                title="Review & activate"
+                description="Confirm everything looks right before publishing."
+              />
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+                <dl className="space-y-3 text-[13px]">
+                  <div className="flex justify-between gap-4 border-b border-slate-200/80 pb-3">
+                    <dt className="text-slate-500">Name</dt>
+                    <dd className="font-semibold text-slate-900">{name || "—"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 border-b border-slate-200/80 pb-3">
+                    <dt className="text-slate-500">Trigger</dt>
+                    <dd className="text-right font-medium text-slate-900">
+                      {triggerType
+                        ? autoReplyTriggerLabel(triggerType, triggerConfig)
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Message</dt>
+                    <dd className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-3 text-slate-700">
+                      {message || "—"}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4 pt-1">
+                    <dt className="text-slate-500">Rules</dt>
+                    <dd className="text-right text-slate-700">
+                      {rules.oncePerContact ? "Once per contact" : "May repeat"}
+                      {rules.respectQuietHours ? " · Quiet hours" : " · Anytime"}
+                    </dd>
+                  </div>
+                </dl>
               </div>
             </div>
           ) : null}
 
           {error ? <p className="mt-4 text-[13px] text-rose-600">{error}</p> : null}
 
-          <div className="mt-6 flex justify-between gap-3">
-            <div>
-              {step > 0 ? (
-                <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)}>
-                  Back
-                </Button>
-              ) : (
-                <Link
-                  href="/auto-replies"
-                  className={cn(
-                    "inline-flex h-10 items-center rounded-lg border px-4 text-[13px] font-semibold no-underline",
-                  )}
-                >
-                  Cancel
-                </Link>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {step < 2 ? (
+          <MockupWizardFooter
+            onBack={step > 0 ? () => setStep((s) => s - 1) : undefined}
+            onCancel={step === 0 ? () => router.push("/auto-replies") : undefined}
+            onNext={
+              step < 2
+                ? () => setStep((s) => s + 1)
+                : step === 2
+                  ? () => setStep(3)
+                  : () => void save(true)
+            }
+            nextLabel={step === 3 ? (saving ? "Activating…" : "Activate & Publish") : "Next"}
+            nextDisabled={
+              step === 0
+                ? !canNextFromTrigger
+                : step === 1
+                  ? !message.trim() || !name.trim()
+                  : step === 3 && saving
+            }
+            nextLoading={step === 3 && saving}
+            extraActions={
+              step === 3 ? (
                 <Button
                   type="button"
-                  disabled={step === 0 ? !canNextFromTrigger : !message.trim() || !name.trim()}
-                  onClick={() => setStep((s) => s + 1)}
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void save(false)}
                 >
-                  Next
+                  Save as draft
                 </Button>
-              ) : (
-                <>
-                  <Button type="button" variant="outline" disabled={saving} onClick={() => void save(false)}>
-                    Save
-                  </Button>
-                  <Button type="button" disabled={saving} onClick={() => void save(true)}>
-                    {saving ? "Saving…" : "Save & Activate"}
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
         </Card>
 
-        <PhonePreview message={message} />
+        <PhonePreview message={message} className="lg:sticky lg:top-6" />
       </div>
     </div>
   );

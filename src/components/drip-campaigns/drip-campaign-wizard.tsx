@@ -1,7 +1,12 @@
 "use client";
 
 import { PhonePreview } from "@/components/campaigns/broadcast/phone-preview";
-import { DripWizardStepper } from "@/components/drip-campaigns/drip-ui";
+import {
+  MockupMessageToolbar,
+  MockupWizardFooter,
+  MockupWizardSection,
+  MockupWizardStepper,
+} from "@/components/automate/mockup-automate-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -15,7 +20,7 @@ import {
   type DripTriggerConfig,
 } from "@/lib/drip-campaigns/types";
 import { cn, estimateSmsSegments, formatPhone } from "@/lib/utils";
-import { Braces, Info, Plus, Trash2 } from "lucide-react";
+import { Info, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -171,12 +176,16 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
         </h1>
       </div>
 
-      <DripWizardStepper steps={WIZARD_STEPS} activeIndex={step} />
+      <MockupWizardStepper steps={WIZARD_STEPS} activeIndex={step} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <Card className="rounded-xl border-slate-200 p-6 shadow-sm">
           {step === 0 ? (
             <div className="space-y-4">
+              <MockupWizardSection
+                title="Campaign setup"
+                description="Name your drip and choose when the sequence should start."
+              />
               <div>
                 <Label htmlFor="name">Campaign Name</Label>
                 <Input
@@ -285,6 +294,10 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
 
           {step === 1 ? (
             <div className="space-y-4">
+              <MockupWizardSection
+                title="Build your message sequence"
+                description="Add timed SMS messages that send after your trigger fires."
+              />
               <div className="space-y-3">
                 {steps.map((msg, index) => (
                   <div
@@ -327,7 +340,7 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
                   <Label className="mb-0">Message {activeMessageIndex + 1}</Label>
                   {activeMessageIndex > 0 ? (
                     <div className="ml-auto flex items-center gap-2 text-[12px] text-slate-600">
@@ -362,19 +375,7 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
                     <span className="ml-auto text-[12px] text-slate-500">Send immediately</span>
                   )}
                 </div>
-                <div className="mb-2 flex gap-2">
-                  {["{{firstName}}", "{{lastName}}", "{{businessName}}"].map((token) => (
-                    <button
-                      key={token}
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600"
-                      onClick={() => insertVariable(token)}
-                    >
-                      <Braces className="h-3 w-3" />
-                      {token.replace(/\{\{|\}\}/g, "")}
-                    </button>
-                  ))}
-                </div>
+                <MockupMessageToolbar onInsert={insertVariable} />
                 <Textarea
                   value={activeStep.message}
                   onChange={(e) => updateStep(activeMessageIndex, { message: e.target.value })}
@@ -395,6 +396,10 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
 
           {step === 2 ? (
             <div className="space-y-5">
+              <MockupWizardSection
+                title="Review & launch"
+                description="Confirm your drip campaign before going live."
+              />
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
                   Campaign Details
@@ -439,44 +444,37 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
 
           {error ? <p className="mt-4 text-[13px] text-rose-600">{error}</p> : null}
 
-          <div className="mt-6 flex justify-between gap-3">
-            <div>
-              {step > 0 ? (
-                <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)}>
-                  Back
+          <MockupWizardFooter
+            onBack={step > 0 ? () => setStep((s) => s - 1) : undefined}
+            onCancel={step === 0 ? () => router.push("/drip-campaigns") : undefined}
+            onNext={
+              step === 0
+                ? () => setStep(1)
+                : step === 1
+                  ? () => setStep(2)
+                  : () => void save(true)
+            }
+            nextLabel={
+              step === 0
+                ? "Next: Messages"
+                : step === 1
+                  ? "Next: Review"
+                  : saving
+                    ? "Launching…"
+                    : "Launch Campaign"
+            }
+            nextDisabled={
+              step === 0 ? !canNextFromSetup : step === 1 ? !canNextFromMessages : saving
+            }
+            nextLoading={step === 2 && saving}
+            extraActions={
+              step === 2 ? (
+                <Button type="button" variant="outline" disabled={saving} onClick={() => void save(false)}>
+                  Save
                 </Button>
-              ) : (
-                <Link
-                  href="/drip-campaigns"
-                  className="inline-flex h-10 items-center rounded-lg border px-4 text-[13px] font-semibold no-underline"
-                >
-                  Cancel
-                </Link>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {step < 2 ? (
-                <Button
-                  type="button"
-                  disabled={
-                    step === 0 ? !canNextFromSetup : !canNextFromMessages
-                  }
-                  onClick={() => setStep((s) => s + 1)}
-                >
-                  {step === 0 ? "Next: Messages" : "Next: Review"}
-                </Button>
-              ) : (
-                <>
-                  <Button type="button" variant="outline" disabled={saving} onClick={() => void save(false)}>
-                    Save
-                  </Button>
-                  <Button type="button" disabled={saving} onClick={() => void save(true)}>
-                    {saving ? "Launching…" : "Launch Campaign"}
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
         </Card>
 
         {step === 0 ? (

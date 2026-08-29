@@ -1,6 +1,11 @@
 "use client";
 
-import { AiChatPreview, AiWizardStepper } from "@/components/ai-replies/ai-reply-ui";
+import { AiChatPreview } from "@/components/ai-replies/ai-reply-ui";
+import {
+  MockupWizardFooter,
+  MockupWizardSection,
+  MockupWizardStepper,
+} from "@/components/automate/mockup-automate-ui";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -16,7 +21,7 @@ import {
   type AiTriggerConfig,
 } from "@/lib/ai-replies/types";
 import { cn, formatPhone } from "@/lib/utils";
-import { Info, Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -170,12 +175,16 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
         </h1>
       </div>
 
-      <AiWizardStepper steps={STEPS} activeIndex={step} />
+      <MockupWizardStepper steps={STEPS} activeIndex={step} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <Card className="rounded-xl border-slate-200 p-6 shadow-sm">
           {step === 0 ? (
             <div className="space-y-4">
+              <MockupWizardSection
+                title="Basic settings"
+                description="Name your agent and choose which number it handles."
+              />
               <div>
                 <Label>AI Name</Label>
                 <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="General AI Reply" />
@@ -209,40 +218,8 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
                   ))}
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label>Tone of Voice</Label>
-                  <select className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3" value={tone} onChange={(e) => setTone(e.target.value as typeof tone)}>
-                    <option value="professional">Professional</option>
-                    <option value="friendly">Friendly</option>
-                    <option value="sales">Sales-oriented</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>Response Length</Label>
-                  <div className="mt-2 flex gap-2">
-                    {(["short", "medium", "long"] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setResponseLength(l)}
-                        className={cn(
-                          "flex-1 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize",
-                          responseLength === l ? "border-primary bg-primary/5 text-primary" : "border-slate-200",
-                        )}
-                      >
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
               <div>
-                <Label>Instructions (System Prompt)</Label>
-                <Textarea className="mt-1" rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
-              </div>
-              <div>
-                <Label>Phone Number</Label>
+                <Label>Assigned inbox / phone number</Label>
                 <select className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)}>
                   <option value="">Select number</option>
                   {phones.map((p) => (
@@ -255,7 +232,10 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 1 ? (
             <div className="space-y-4">
-              <Label>When should AI respond?</Label>
+              <MockupWizardSection
+                title="Trigger condition"
+                description="When should this AI agent take over the conversation?"
+              />
               {(["all_incoming", "keywords", "segment"] as const).map((m) => (
                 <label key={m} className="flex items-center gap-2">
                   <input type="radio" checked={trigger.mode === m} onChange={() => setTrigger((t) => ({ ...t, mode: m }))} />
@@ -318,6 +298,42 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 2 ? (
             <div className="space-y-5">
+              <MockupWizardSection
+                title="Knowledge & persona"
+                description="Teach your agent how to speak and what it should know."
+              />
+              <div>
+                <Label>Instructions (system prompt)</Label>
+                <Textarea className="mt-1" rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="You are a helpful assistant for our business..." />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label>Tone of voice</Label>
+                  <select className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3" value={tone} onChange={(e) => setTone(e.target.value as typeof tone)}>
+                    <option value="professional">Professional</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="sales">Sales-oriented</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Response length</Label>
+                  <div className="mt-2 flex gap-2">
+                    {(["short", "medium", "long"] as const).map((l) => (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => setResponseLength(l)}
+                        className={cn(
+                          "flex-1 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize",
+                          responseLength === l ? "border-primary bg-primary/5 text-primary" : "border-slate-200",
+                        )}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div>
                 <Label>Websites</Label>
                 <div className="mt-1 flex gap-2">
@@ -361,6 +377,10 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 3 ? (
             <div className="space-y-5">
+              <MockupWizardSection
+                title="Lead capture & handoff"
+                description="Define when a human should take over and what to collect."
+              />
               <label className="flex items-center gap-2 font-semibold text-slate-900">
                 <input type="checkbox" checked={lead.enabled} onChange={(e) => setLead((l) => ({ ...l, enabled: e.target.checked }))} />
                 Lead capture
@@ -390,6 +410,10 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 4 ? (
             <div className="space-y-4">
+              <MockupWizardSection
+                title="Test your agent"
+                description="Send test messages before publishing to production."
+              />
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <p className="font-semibold text-slate-900">Ready to publish</p>
                 <p className="mt-1 text-[13px] text-slate-600">{name} · {triggerSummary(trigger)}</p>
@@ -419,37 +443,52 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {error ? <p className="mt-4 text-rose-600">{error}</p> : null}
 
-          <div className="mt-6 flex justify-between">
-            {step > 0 ? (
-              <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)}>Back</Button>
-            ) : (
-              <Link href="/ai-replies" className="inline-flex h-10 items-center rounded-lg border px-4 font-semibold no-underline">Cancel</Link>
-            )}
-            <div className="flex gap-2">
-              {step < 4 ? (
-                <Button type="button" disabled={step === 0 && (!name.trim() || !phoneNumberId)} onClick={() => setStep((s) => s + 1)}>Next</Button>
-              ) : (
-                <>
-                  <Button type="button" variant="outline" disabled={saving} onClick={() => void save(false)}>Save as Draft</Button>
-                  <Button type="button" disabled={saving} onClick={() => void save(true)}>{saving ? "Publishing…" : "Publish"}</Button>
-                </>
-              )}
-            </div>
-          </div>
+          <MockupWizardFooter
+            onBack={step > 0 ? () => setStep((s) => s - 1) : undefined}
+            onCancel={step === 0 ? () => router.push("/ai-replies") : undefined}
+            onNext={
+              step < 4
+                ? () => setStep((s) => s + 1)
+                : () => void save(true)
+            }
+            nextLabel={step === 4 ? (saving ? "Publishing…" : "Publish Agent") : "Next"}
+            nextDisabled={
+              step === 0
+                ? !name.trim() || !phoneNumberId
+                : step === 2
+                  ? !systemPrompt.trim()
+                  : step === 4 && saving
+            }
+            nextLoading={step === 4 && saving}
+            extraActions={
+              step === 4 ? (
+                <Button type="button" variant="outline" disabled={saving} onClick={() => void save(false)}>
+                  Save as Draft
+                </Button>
+              ) : undefined
+            }
+          />
         </Card>
 
         {step === 4 ? (
-          <Card className="h-fit rounded-xl border-slate-200 p-4 shadow-sm">
+          <Card className="h-fit rounded-xl border-slate-200 p-4 shadow-sm lg:sticky lg:top-6">
             <p className="mb-2 text-[12px] font-semibold text-slate-500">Debug log</p>
-            {testDebug.length ? testDebug.map((d, i) => <p key={i} className="text-[12px] text-slate-600">{d}</p>) : <p className="text-[12px] text-slate-400">Run a test message to see context</p>}
-          </Card>
-        ) : step === 0 ? (
-          <Card className="h-fit rounded-xl border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center gap-2 font-semibold text-slate-900"><Info className="h-4 w-4 text-primary" /> About AI Replies</div>
-            <p className="mt-3 text-[13px] leading-relaxed text-slate-600">AI replies handle inbound SMS conversationally using your instructions and knowledge. Agents can take over anytime from the inbox.</p>
+            {testDebug.length ? (
+              testDebug.map((d, i) => (
+                <p key={i} className="text-[12px] text-slate-600">
+                  {d}
+                </p>
+              ))
+            ) : (
+              <p className="text-[12px] text-slate-400">Run a test message to see context</p>
+            )}
           </Card>
         ) : (
-          <AiChatPreview messages={testHistory} senderLabel={selectedPhone?.number} />
+          <AiChatPreview
+            messages={testHistory}
+            senderLabel={selectedPhone?.number}
+            className="lg:sticky lg:top-6"
+          />
         )}
       </div>
     </div>

@@ -58,12 +58,14 @@ export function AiWizardStepper({
 export function AiChatPreview({
   messages,
   senderLabel,
+  className,
 }: {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   senderLabel?: string;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col items-center">
+    <div className={cn("flex flex-col items-center", className)}>
       <p className="mb-3 text-[12px] font-medium text-slate-500">Preview as customer</p>
       <div className="w-[280px] rounded-[32px] border-[6px] border-slate-900 bg-slate-900 p-2 shadow-xl">
         <div className="rounded-[26px] bg-white">
@@ -84,8 +86,8 @@ export function AiChatPreview({
                   className={cn(
                     "max-w-[85%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed",
                     m.role === "user"
-                      ? "ml-auto rounded-br-md bg-primary text-white"
-                      : "rounded-bl-md bg-slate-200 text-slate-900",
+                      ? "rounded-bl-md bg-slate-200 text-slate-900"
+                      : "ml-auto rounded-br-md bg-primary text-white",
                   )}
                 >
                   {m.content}

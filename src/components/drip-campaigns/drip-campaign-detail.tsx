@@ -6,6 +6,7 @@ import {
   SlickStatCard,
 } from "@/components/audience/slick-audience-ui";
 import { DripStatusToggle } from "@/components/drip-campaigns/drip-ui";
+import { MockupDetailTabs } from "@/components/automate/mockup-automate-ui";
 import { Card } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
@@ -52,6 +53,7 @@ export function DripCampaignDetail({
   const router = useRouter();
   const [campaign, setCampaign] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("Overview");
   const totalSteps = campaign.steps.length;
 
   async function toggleStatus(next: boolean) {
@@ -169,60 +171,96 @@ export function DripCampaignDetail({
         </div>
       </Card>
 
-      <Card className="rounded-xl border-slate-200 p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-[15px] font-semibold text-slate-900">Recipients</h2>
-          <input
-            className="h-9 w-full max-w-xs rounded-lg border border-slate-200 px-3 text-[13px]"
-            placeholder="Search recipients..."
-          />
-        </div>
-        {recipients.length === 0 ? (
-          <p className="text-slate-500">No recipients yet. Enrollments appear when the trigger fires.</p>
-        ) : (
-          <Table className="text-[13px]">
-            <THead>
-              <TR className="border-slate-200">
-                <TH>Contact</TH>
-                <TH>Status</TH>
-                <TH>Current Step</TH>
-                <TH>Next Message</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {recipients.map((row) => (
-                <TR key={row.id} className="border-slate-100">
-                  <TD>
-                    <p className="font-semibold text-slate-900">{row.contactName}</p>
-                    <p className="text-[12px] text-slate-400">{row.contactPhone}</p>
-                  </TD>
-                  <TD className="capitalize text-slate-600">{row.status.replace("_", " ")}</TD>
-                  <TD className="text-slate-600">
-                    {enrollmentStatusLabel(row.status, row.currentStepIndex, totalSteps)}
-                  </TD>
-                  <TD className="whitespace-nowrap text-slate-500">
-                    {row.nextRunAt ? formatSlickDateTime(row.nextRunAt) : "—"}
-                  </TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </Card>
+      <MockupDetailTabs tabs={["Overview", "Recipients", "Sequence"]} active={tab} onChange={setTab} />
 
-      <Card className="mt-6 rounded-xl border-slate-200 p-5 shadow-sm">
-        <h2 className="text-[15px] font-semibold text-slate-900">Message sequence</h2>
-        <ul className="mt-3 space-y-2">
-          {campaign.steps.map((step, index) => (
-            <li key={step.id} className="rounded-lg border border-slate-200 px-4 py-3">
-              <p className="font-semibold text-slate-900">
-                Message {index + 1} · {delayLabel(step, index)}
-              </p>
-              <p className="mt-1 text-slate-600">{step.message}</p>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {tab === "Overview" ? (
+        <Card className="rounded-xl border-slate-200 p-5 shadow-sm">
+          <h2 className="text-[15px] font-semibold text-slate-900">Campaign summary</h2>
+          <dl className="mt-4 grid gap-3 text-[13px] sm:grid-cols-2">
+            <div>
+              <dt className="text-slate-500">Trigger</dt>
+              <dd className="font-medium text-slate-900">
+                {dripTriggerLabel(campaign.triggerType, campaign.triggerConfig)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Messages in sequence</dt>
+              <dd className="font-medium text-slate-900">{totalSteps}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Active enrollments</dt>
+              <dd className="font-medium text-slate-900">
+                {recipients.filter((r) => r.status === "active").length}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Completed</dt>
+              <dd className="font-medium text-slate-900">
+                {recipients.filter((r) => r.status === "completed").length}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      ) : null}
+
+      {tab === "Recipients" ? (
+        <Card className="rounded-xl border-slate-200 p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-[15px] font-semibold text-slate-900">Recipients</h2>
+            <input
+              className="h-9 w-full max-w-xs rounded-lg border border-slate-200 px-3 text-[13px]"
+              placeholder="Search recipients..."
+            />
+          </div>
+          {recipients.length === 0 ? (
+            <p className="text-slate-500">No recipients yet. Enrollments appear when the trigger fires.</p>
+          ) : (
+            <Table className="text-[13px]">
+              <THead>
+                <TR className="border-slate-200">
+                  <TH>Contact</TH>
+                  <TH>Status</TH>
+                  <TH>Current Step</TH>
+                  <TH>Next Message</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {recipients.map((row) => (
+                  <TR key={row.id} className="border-slate-100">
+                    <TD>
+                      <p className="font-semibold text-slate-900">{row.contactName}</p>
+                      <p className="text-[12px] text-slate-400">{row.contactPhone}</p>
+                    </TD>
+                    <TD className="capitalize text-slate-600">{row.status.replace("_", " ")}</TD>
+                    <TD className="text-slate-600">
+                      {enrollmentStatusLabel(row.status, row.currentStepIndex, totalSteps)}
+                    </TD>
+                    <TD className="whitespace-nowrap text-slate-500">
+                      {row.nextRunAt ? formatSlickDateTime(row.nextRunAt) : "—"}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      ) : null}
+
+      {tab === "Sequence" ? (
+        <Card className="rounded-xl border-slate-200 p-5 shadow-sm">
+          <h2 className="text-[15px] font-semibold text-slate-900">Message sequence</h2>
+          <ul className="mt-3 space-y-2">
+            {campaign.steps.map((step, index) => (
+              <li key={step.id} className="rounded-lg border border-slate-200 px-4 py-3">
+                <p className="font-semibold text-slate-900">
+                  Message {index + 1} · {delayLabel(step, index)}
+                </p>
+                <p className="mt-1 text-slate-600">{step.message}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
     </div>
   );
 }
