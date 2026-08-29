@@ -28,7 +28,7 @@ COPY mctb-sip-adapter/agi/ /opt/mctb-sip-adapter/agi/
 COPY mctb-sip-adapter/docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN chmod +x /docker-entrypoint.sh /opt/mctb-sip-adapter/agi/mctb_inbound.py \
-  && mkdir -p /var/spool/asterisk/mctb-audio /var/log/asterisk
+  && mkdir -p /var/lib/asterisk/agi-bin /var/spool/asterisk/mctb-audio /var/log/asterisk /var/run/asterisk
 
 ENV MCTB_SIP_UDP_PORT=5070
 

@@ -46,6 +46,7 @@ debug = 0
 transmit_silence = yes
 EOF
 
+mkdir -p /var/lib/asterisk/agi-bin /var/run/asterisk /var/spool/asterisk/mctb-audio /var/log/asterisk
 ln -sf /opt/mctb-sip-adapter/agi/mctb_inbound.py /var/lib/asterisk/agi-bin/mctb_inbound.py
 
 echo "mctb-sip-adapter: external_ip=${EXTERNAL_SIP_IP} sip_udp=${SIP_UDP_PORT} rtp=${RTP_START_PORT}-${RTP_END_PORT}"
