@@ -8,6 +8,7 @@ import {
 import type { SIPDispatchRuleInfo as SdkDispatchRuleInfo } from "livekit-server-sdk";
 import {
   TRANSOVO_LIVEKIT_AGENT_NAME,
+  TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
 } from "../config";
 import type { ExplicitDispatchMetadata } from "../dispatch-metadata";
@@ -175,6 +176,66 @@ export async function findDidDispatchRuleByName(
 }
 
 /**
+ * When a shared trunk dispatch rule already owns the DID, LiveKit rejects a second
+ * per-DID rule with the same trunk+number. Stamp the runtime snapshot on the shared rule instead.
+ */
+export async function syncSharedDispatchRuleSnapshot(input: {
+  trunkId: string;
+  dispatchMetadata: ExplicitDispatchMetadata;
+  backend?: MediaBackend;
+}): Promise<{ ruleId: string; actions: string[] }> {
+  const backend = input.backend ?? getActiveMediaBackend();
+  const client = getLiveKitSipClient(backend);
+  const jobMetadata = buildLiveKitAgentJobMetadata(input.dispatchMetadata);
+  const jobMetadataJson = JSON.stringify(jobMetadata);
+
+  const rules = await client.listSipDispatchRule();
+  const shared =
+    rules.find((r) => r.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) ||
+    rules.find((r) => (r.trunkIds || []).includes(input.trunkId)) ||
+    null;
+  if (!shared?.sipDispatchRuleId) {
+    throw new Error("No shared LiveKit dispatch rule found for trunk snapshot sync");
+  }
+
+  const dispatchRule = new SIPDispatchRuleInfo({
+    sipDispatchRuleId: shared.sipDispatchRuleId,
+    rule: shared.rule,
+    trunkIds: shared.trunkIds || [input.trunkId],
+    hidePhoneNumber: shared.hidePhoneNumber,
+    name: shared.name || TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
+    metadata: JSON.stringify({
+      owner: "transovo",
+      kind: "shared_inbound_dispatch_with_snapshot",
+      agentId: jobMetadata.agentId,
+      publishedVersionId: jobMetadata.publishedVersionId || null,
+    }),
+    roomConfig: new RoomConfiguration({
+      agents: [
+        new RoomAgentDispatch({
+          agentName: TRANSOVO_LIVEKIT_AGENT_NAME,
+          metadata: jobMetadataJson,
+        }),
+      ],
+    }),
+  });
+
+  const updated = await client.updateSipDispatchRule(shared.sipDispatchRuleId, dispatchRule);
+
+  const agentMeta = updated.roomConfig?.agents?.[0]?.metadata || "";
+  if (!agentMeta.includes(PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY)) {
+    throw new Error(
+      `LiveKit shared dispatch rule ${shared.sipDispatchRuleId} missing ${PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY}`,
+    );
+  }
+
+  return {
+    ruleId: shared.sipDispatchRuleId,
+    actions: ["livekit_updated_shared_dispatch_snapshot"],
+  };
+}
+
+/**
  * Stamp immutable runtime snapshot into LiveKit per-DID dispatch rule agent metadata.
  * Enables zero-HTTP bootstrap (`bootstrapPath: dispatch_local`) at call time.
  */
@@ -195,12 +256,27 @@ export async function syncDidDispatchRuleSnapshot(input: {
   });
 
   const actions: string[] = [];
-  const rule = await upsertDispatchRuleInfo(existing?.sipDispatchRuleId, ruleInfo, backend);
-  actions.push(
-    existing?.sipDispatchRuleId
-      ? "livekit_updated_did_dispatch_snapshot"
-      : "livekit_created_did_dispatch_snapshot",
-  );
+  let rule: SdkDispatchRuleInfo;
+  try {
+    rule = await upsertDispatchRuleInfo(existing?.sipDispatchRuleId, ruleInfo, backend);
+    actions.push(
+      existing?.sipDispatchRuleId
+        ? "livekit_updated_did_dispatch_snapshot"
+        : "livekit_created_did_dispatch_snapshot",
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/already exists in dispatch rule/i.test(msg)) {
+      throw err;
+    }
+    const shared = await syncSharedDispatchRuleSnapshot({
+      trunkId: input.trunkId,
+      dispatchMetadata: input.dispatchMetadata,
+      backend,
+    });
+    actions.push(...shared.actions);
+    return { ruleId: shared.ruleId, created: false, actions };
+  }
 
   const ruleId = rule.sipDispatchRuleId || "";
   if (!ruleId) {
