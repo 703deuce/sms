@@ -1,5 +1,5 @@
 /**
- * Wire ws_1 AI After Hours for PSTN: assign ACTIVE agent to +15714073615,
+ * Wire ws_1 AI After Hours for PSTN: assign ACTIVE agent to +18663464256 (866 toll-free),
  * provision LiveKit Cloud SIP route, republish dispatch snapshot.
  *
  * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/setup-ws1-ai-after-hours-callable.ts
@@ -15,8 +15,8 @@ import { loadExplicitDispatchForDid } from "../src/lib/telephony/provisioning/di
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const PHONE_NUMBER_ID =
-  process.env.PHONE_NUMBER_ID || "cmsgtjms84g6l2h0o255w1e3v";
-const PHONE_E164 = process.env.PHONE_E164 || "+15714073615";
+  process.env.PHONE_NUMBER_ID || "cmsc3numa1j17084g391t2z5l";
+const PHONE_E164 = process.env.PHONE_E164 || "+18663464256";
 const AGENT_ID =
   process.env.AGENT_ID || "cmsdkcnwr5p3i5s0h3i1x0j60"; // Main Office Appointment Receptionist
 const PUBLISHED_BY = process.env.PUBLISHED_BY || "ai_after_hours_setup";
