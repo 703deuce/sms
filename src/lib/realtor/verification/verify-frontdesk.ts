@@ -97,7 +97,7 @@ export function verifyRealEstateFrontdesk(): void {
   assert.ok(projectFileExists("src/lib/voice/real-estate/compile/index.ts"));
   assert.ok(projectFileExists("src/lib/voice/real-estate/templates/definitions.ts"));
 
-  const instrumentation = readProjectFile("src/instrumentation.ts");
+  const instrumentation = readProjectFile("src/instrumentation.node.ts");
   assert.ok(instrumentation.includes("bootstrapRealEstateFrontDesk"));
 
   assert.ok(projectFileExists("scripts/fixtures/blue-ridge-realty-rag-knowledge.txt"));

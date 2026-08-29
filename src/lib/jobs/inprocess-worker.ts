@@ -5,6 +5,7 @@
  * Disable with DISABLE_INPROCESS_WORKER=1 if you intentionally run an
  * external worker (avoids double-consume with BullMQ or a second poller).
  */
+import "server-only";
 
 const INTERVAL_MS = Number(process.env.WORKER_POLL_MS || 5_000);
 
