@@ -245,12 +245,12 @@ print_full_memory_snapshot() {
 }
 # ============================================================================ END TEMPORARY OOM DIAG
 
-# Coolify: V8 heap at 4GB (diagnostics proved cgroup/host OOM was not the limit).
-# Use Next 16 default builder — webpack path hits Twilio/jsonwebtoken crypto resolution errors.
+# Coolify: 4GB V8 heap (fixed earlier JS heap OOM). Use webpack — Turbopack hits ~6GB RSS + oom_kill.
+# instrumentation.node.ts keeps job-handlers/Twilio out of edge-instrumentation webpack graph.
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
-  build_cmd=(npx next build)
-  build_mode="next build default (Coolify 4GB heap)"
+  build_cmd=(npx next build --webpack)
+  build_mode="webpack (Coolify 4GB heap)"
 else
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
   build_cmd=(npm run build)
