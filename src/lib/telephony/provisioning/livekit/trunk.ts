@@ -162,25 +162,26 @@ export async function ensureInboundTrunkForNumber(
   if (!trunkId) throw new Error("LiveKit inbound trunk id missing");
 
   const currentNumbers = keeper.numbers || [];
-  const hasPlusVariant = currentNumbers.includes(normalizeE164(e164));
-  const hasBareVariant = currentNumbers.includes(trunkDid);
+  const variants = liveKitDidLookupVariants(e164);
+  const hasAllVariants = variants.every((v) => currentNumbers.includes(v));
 
-  if (!hasBareVariant || hasPlusVariant) {
+  if (!hasAllVariants) {
     // Self-hosted trunks are often pre-provisioned with +E.164; skip destructive rewrite.
-    if (backend === "self_hosted" && hasPlusVariant) {
+    if (
+      backend === "self_hosted" &&
+      currentNumbers.includes(normalizeE164(e164))
+    ) {
       return { trunk: keeper, created: false, actions: [...actions, "skip_trunk_number_rewrite_self_hosted"] };
     }
     const nextNumbers = [
-      ...currentNumbers.filter((n) => !liveKitDidLookupVariants(e164).includes(n)),
-      trunkDid,
+      ...currentNumbers.filter((n) => !variants.includes(n)),
+      ...variants,
     ];
     await client.updateSipInboundTrunkFields(trunkId, {
       numbers: new ListUpdate({ set: nextNumbers }),
     });
     keeper = await assertTrunkHasNumber(trunkId, e164);
-    actions.push(
-      hasPlusVariant ? "livekit_trunk_normalized_did_format" : "livekit_trunk_added_number",
-    );
+    actions.push("livekit_trunk_ensured_did_variants");
   } else {
     keeper = await assertTrunkHasNumber(trunkId, e164);
     actions.push("livekit_trunk_number_ok");
