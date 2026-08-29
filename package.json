@@ -69,6 +69,8 @@
     "test:sms-platform-nav": "tsx scripts/test-sms-platform-nav.ts",
     "test:product-shell": "tsx scripts/test-product-shell.ts",
     "test:ai-after-hours-cert": "tsx scripts/test-product-shell.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-ai-after-hours-cert.ts",
+    "verify:571-livekit-callable": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-571-livekit-callable.ts",
+    "verify:571-livekit-watch": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-571-livekit-callable.ts --watch --interval=60",
     "test:platform-bundle-pricing": "tsx scripts/test-platform-bundle-pricing.ts",
     "test:platform-stripe-catalog": "tsx scripts/test-platform-stripe-catalog.ts",
     "test:mass-texting": "tsx scripts/test-mass-texting-boundary.ts && tsx scripts/test-mass-texting-inbox-filters.ts && tsx scripts/test-mass-texting-pricing-billing.ts && tsx scripts/test-mass-texting-credit-units.ts && tsx scripts/test-mass-texting-integration.ts && tsx scripts/test-mass-texting-campaign-guards.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mass-texting-credit-reservations.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mass-texting-certification.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mass-texting-send-safety.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mass-texting-launch-holes.ts && tsx scripts/test-mass-texting-stripe-catalog-live.ts",
