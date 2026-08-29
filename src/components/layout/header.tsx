@@ -3,7 +3,6 @@
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
-import { useProductShell } from "@/components/products/product-shell-tabs";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { formatPhone } from "@/lib/utils";
 import {
@@ -72,9 +71,7 @@ export function Header({
   hasMctb?: boolean;
 }) {
   const router = useRouter();
-  const { shell: productShell } = useProductShell(hasMctb, hasSms);
-  const showMassSmsChrome =
-    hasSms && (!hasMctb || productShell === "mass_sms");
+  const showMassSmsChrome = hasSms;
   const [numberId, setNumberId] = useState(
     activeFromNumberId || phoneNumbers[0]?.id || "",
   );

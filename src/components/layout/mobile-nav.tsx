@@ -3,7 +3,6 @@
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
 import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
-import { useProductShell } from "@/components/products/product-shell-tabs";
 import { cn } from "@/lib/utils";
 import {
   AudioLines,
@@ -42,8 +41,6 @@ export function MobileNav({
   hasMassSms?: boolean;
 }) {
   const pathname = usePathname();
-  const { shell } = useProductShell(hasMctb, hasMassSms);
-  const dualProduct = hasMctb && hasMassSms;
 
   const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
     ...item,
@@ -62,13 +59,9 @@ export function MobileNav({
     ? buildRealtorMobileNav()
     : currentProduct === "numbers"
       ? numbersItems
-      : dualProduct
-        ? shell === "mass_sms"
-          ? massSmsItems
-          : voiceItems
-        : hasMassSms
-          ? massSmsItems
-          : voiceItems;
+      : hasMassSms
+        ? massSmsItems
+        : voiceItems;
 
   return (
     <>
