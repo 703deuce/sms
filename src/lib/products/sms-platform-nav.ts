@@ -1,11 +1,11 @@
 import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
+  BarChart3,
   BookOpen,
   Layers,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
-  Puzzle,
   Reply,
   Sparkles,
   Sprout,
@@ -37,6 +37,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       badge: badge > 0 ? badge : undefined,
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
+    { label: "Analytics", href: "/analytics", icon: BarChart3 },
     {
       label: "Audience",
       href: "/contacts",
@@ -67,7 +68,6 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
     { label: "Drip Campaigns", href: "/drip-campaigns", icon: Layers },
     { label: "AI Replies", href: "/ai-replies", icon: Sparkles },
     { label: "Playbooks", href: "/playbooks", icon: BookOpen },
-    { label: "Integrations", href: "/integrations", icon: Puzzle },
     ...buildAccountNavItems(),
   ];
 }

@@ -1,6 +1,7 @@
 /** Shared settings subnav — keep every settings surface in sync. */
 export const settingsTabs = [
   { label: "Business", href: "/settings/business" },
+  { label: "Integrations", href: "/settings/integrations" },
   { label: "Messaging", href: "/settings/messaging" },
   { label: "Email-to-SMS", href: "/settings/email-to-sms" },
   { label: "Users", href: "/settings/users" },

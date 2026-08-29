@@ -31,6 +31,8 @@ assert.ok(
   listGrowth?.children?.some((c) => c.label === "Keywords" && c.href === "/grow/keywords"),
   "Keywords child under List Growth",
 );
+assert.ok(smsLabels.includes("Analytics"));
+assert.ok(!smsLabels.includes("Integrations"), "Integrations should not be in main nav");
 assert.ok(smsLabels.includes("Settings"));
 assert.ok(!smsLabels.includes("Account"), "Account should not be a separate nav item");
 
