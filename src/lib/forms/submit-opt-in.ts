@@ -159,6 +159,13 @@ export async function submitOptInForm(
         triggerType: "list_join",
         listId: list.id,
       }).catch(() => undefined);
+      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+      await triggerDripCampaigns({
+        workspaceId: form.workspaceId,
+        contactId: contact.id,
+        triggerType: "list_join",
+        listId: list.id,
+      }).catch(() => undefined);
     } catch {
       // already member
     }
@@ -239,10 +246,23 @@ export async function submitOptInForm(
       contactId: contact.id,
       triggerType: "contact_added",
     }).catch(() => undefined);
+    const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+    await triggerDripCampaigns({
+      workspaceId: form.workspaceId,
+      contactId: contact.id,
+      triggerType: "contact_added",
+    }).catch(() => undefined);
   }
 
   const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
   await dispatchAutoReplies({
+    workspaceId: form.workspaceId,
+    contactId: contact.id,
+    triggerType: "form_submitted",
+    formId: form.id,
+  }).catch(() => undefined);
+  const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+  await triggerDripCampaigns({
     workspaceId: form.workspaceId,
     contactId: contact.id,
     triggerType: "form_submitted",

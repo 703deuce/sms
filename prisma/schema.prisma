@@ -233,6 +233,7 @@ model Workspace {
   platformEvents PlatformEvent[]
   keywords    Keyword[]
   autoReplies AutoReply[]
+  dripCampaigns DripCampaign[]
   forms       OptInForm[]
   consentRecords ConsentRecord[]
   qrCodes     QrCode[]
@@ -1816,6 +1817,54 @@ model AutoReply {
   @@index([workspaceId, status])
   @@index([workspaceId, triggerType])
   @@map("auto_replies")
+}
+
+/// Event-triggered linear SMS sequence (timed steps).
+model DripCampaign {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  /// tag_added | list_join | contact_added | form_submitted
+  triggerType    String
+  triggerConfig  Json     @default("{}")
+  phoneNumberId  String?
+  /// active | paused | draft
+  status         String   @default("paused")
+  stepsJson      Json     @default("[]")
+  triggeredCount Int      @default(0)
+  messagesSent   Int      @default(0)
+  lastSentAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  enrollments    DripCampaignEnrollment[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, triggerType])
+  @@map("drip_campaigns")
+}
+
+model DripCampaignEnrollment {
+  id               String   @id @default(cuid())
+  dripCampaignId   String
+  workspaceId      String
+  contactId        String
+  /// active | completed | opted_out | paused
+  status           String   @default("active")
+  currentStepIndex Int      @default(0)
+  nextRunAt        DateTime?
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  lastSentAt       DateTime?
+  replied          Boolean  @default(false)
+  opened           Boolean  @default(false)
+  dripCampaign     DripCampaign @relation(fields: [dripCampaignId], references: [id], onDelete: Cascade)
+
+  @@unique([dripCampaignId, contactId])
+  @@index([workspaceId, status])
+  @@index([dripCampaignId, status])
+  @@index([nextRunAt])
+  @@map("drip_campaign_enrollments")
 }
 
 model OptInForm {

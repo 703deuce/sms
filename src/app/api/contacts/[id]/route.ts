@@ -96,6 +96,15 @@ export async function PATCH(
             tagId,
           }).catch(() => undefined);
         }
+        const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+        for (const tagId of addedTagIds) {
+          await triggerDripCampaigns({
+            workspaceId: auth.workspaceId,
+            contactId: id,
+            triggerType: "tag_added",
+            tagId,
+          }).catch(() => undefined);
+        }
       }
     }
 
@@ -119,6 +128,15 @@ export async function PATCH(
         const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
         for (const listId of addedListIds) {
           await dispatchAutoReplies({
+            workspaceId: auth.workspaceId,
+            contactId: id,
+            triggerType: "list_join",
+            listId,
+          }).catch(() => undefined);
+        }
+        const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+        for (const listId of addedListIds) {
+          await triggerDripCampaigns({
             workspaceId: auth.workspaceId,
             contactId: id,
             triggerType: "list_join",

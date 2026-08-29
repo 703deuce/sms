@@ -107,6 +107,12 @@ export async function POST(request: Request) {
         contactId: contact.id,
         triggerType: "contact_added",
       }).catch(() => undefined);
+      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+      await triggerDripCampaigns({
+        workspaceId: auth.workspaceId,
+        contactId: contact.id,
+        triggerType: "contact_added",
+      }).catch(() => undefined);
     }
 
     try {

@@ -88,6 +88,13 @@ export async function PATCH(request: Request) {
         triggerType: "list_join",
         listId: list.id,
       }).catch(() => undefined);
+      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+      await triggerDripCampaigns({
+        workspaceId: auth.workspaceId,
+        contactId,
+        triggerType: "list_join",
+        listId: list.id,
+      }).catch(() => undefined);
     }
     for (const contactId of body.removeContactIds || []) {
       await getPrisma().contactListMember.deleteMany({

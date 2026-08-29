@@ -55,6 +55,13 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     case "automation_batch": {
       return processActiveAutomations();
     }
+    case "drip_campaign_step": {
+      const { processDripCampaignStep } = await import("@/lib/drip-campaigns/engine");
+      const enrollmentId = String(payload.enrollmentId || "");
+      const stepIndex = Number(payload.stepIndex ?? 0);
+      if (!enrollmentId) throw new Error("enrollmentId required");
+      return processDripCampaignStep({ enrollmentId, stepIndex });
+    }
     case "voice_webhook_process": {
       const { processVoiceWebhookEvent } = await import("@/lib/voice/telnyx/webhook-handlers");
       return processVoiceWebhookEvent({
