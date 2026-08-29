@@ -1,5 +1,6 @@
 # Minimal MCTB SIP terminator — dumb telephony adapter for Telnyx FQDN ingress.
-# NOT routed through Coolify HTTP proxy. Use host networking or explicit SIP/RTP ports.
+# NOT routed through Coolify HTTP proxy. Use host networking (recommended) or publish UDP ports.
+# Build from repo root: docker build -f mctb-sip-adapter/Dockerfile .
 
 FROM debian:bookworm-slim
 
@@ -18,17 +19,19 @@ RUN apt-get update \
 
 WORKDIR /opt/mctb-sip-adapter
 
-COPY agi/requirements.txt ./agi/
+COPY mctb-sip-adapter/agi/requirements.txt ./agi/
 RUN pip3 install --no-cache-dir --break-system-packages -r agi/requirements.txt
 
-COPY asterisk/ /etc/asterisk-templates/
-COPY agi/ /opt/mctb-sip-adapter/agi/
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY mctb-sip-adapter/asterisk/ /etc/asterisk-templates/
+COPY mctb-sip-adapter/agi/ /opt/mctb-sip-adapter/agi/
+COPY mctb-sip-adapter/docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN chmod +x /docker-entrypoint.sh /opt/mctb-sip-adapter/agi/mctb_inbound.py \
   && mkdir -p /var/spool/asterisk/mctb-audio /var/log/asterisk
 
-EXPOSE 5060/udp 5060/tcp 10000-10100/udp
+ENV MCTB_SIP_UDP_PORT=5070
+
+EXPOSE 5070/udp 10000-10100/udp
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["asterisk", "-f", "-vvv", "-c"]

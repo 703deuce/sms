@@ -144,7 +144,7 @@ async function main() {
   console.log(`✓ ${e164} assigned to connection ${assigned.liveConnectionId}`);
 
   console.log("\nNext:");
-  console.log("  1. transovo-voice Coolify: MCTB_SIP_ADAPTER_ENABLED=1 (redeploy on merge)");
+  console.log("  1. transovo-mctb-sip Coolify app deployed (host network) — docs/deployment-mctb-sip-adapter.md");
   console.log("  2. No new DNS if using", DEFAULT_SIP_HOST, `port ${sipPort}`);
   console.log("  3. 10× AT&T conditional-forward test on", e164);
 }

@@ -11,7 +11,7 @@ services:
     environment:
       # Public IPv4 Telnyx will signal/media to (Hetzner host).
       EXTERNAL_SIP_IP: ${EXTERNAL_SIP_IP:?set on host}
-      SIP_UDP_PORT: ${MCTB_SIP_UDP_PORT:-5060}
+      SIP_UDP_PORT: ${MCTB_SIP_UDP_PORT:-5070}
       RTP_START_PORT: ${MCTB_RTP_START_PORT:-10000}
       RTP_END_PORT: ${MCTB_RTP_END_PORT:-10100}
       # Restrict to Telnyx signaling CIDRs in production; 0.0.0.0/0 for initial spike only.

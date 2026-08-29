@@ -1,6 +1,6 @@
 # Transovo web ↔ voice split deployment
 
-Production uses **two independent Coolify Applications** from the same GitHub repo/branch.
+Production uses **three independent Coolify Applications** from the same GitHub repo/branch (web, voice, MCTB SIP).
 
 ## Application 1 — `transovo-web`
 
@@ -60,23 +60,10 @@ Legacy fallbacks for internal auth: `VOICE_RUNTIME_INTERNAL_SECRET`, `INTEGRATIO
 | `VOICE_REALTIME_VOICE` | Optional | Default `marin` |
 | `LIVEKIT_SIP_OUTBOUND_TRUNK` | Optional | Fallback if bootstrap omits `sipOutboundTrunkId` (prefer web bootstrap) |
 | `LIVEKIT_SIP_NUMBER` | Optional | Caller ID E164 for outbound transfer (or bootstrap `sipCallerIdE164`) |
-| `MCTB_SIP_ADAPTER_ENABLED` | Optional | `1` — start Asterisk MCTB press-1 adapter on UDP **5070** (see `docs/MCTB-SIP-ADAPTER.md`) |
-| `MCTB_SIP_ADAPTER_ONLY` | Optional | `1` — Asterisk only; **skip LiveKit worker** (MCTB spike — stops LiveKit connection logs) |
-
-### Coolify ports (required for MCTB SIP)
-
-`transovo-voice` must expose **UDP** ports to the host (not HTTP proxy):
-
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| `5070` | UDP | Telnyx SIP signaling (Asterisk) |
-| `10000-10100` | UDP | RTP media for consent audio |
-
-Without these, Telnyx reaches the Hetzner IP but **not** Asterisk inside the container → carrier hears "disconnected" (SIP 408/404).
-
-Verify after deploy: `npm run test:mctb-sip-adapter-e2e`
 
 **Do not copy** full web env (Stripe, Telnyx webhooks, session secrets, etc.).
+
+MCTB press-1 SIP runs in a **separate** Coolify app (`transovo-mctb-sip`) — see `docs/deployment-mctb-sip-adapter.md`.
 
 Python does **not** need `DATABASE_URL` — all persistence goes through the web internal API.
 
@@ -196,3 +183,4 @@ After fix, Safari should show JSON on both probe URLs before redeploying voice.
 6. Set `TRANSOVO_INTERNAL_API_KEY` on **both** apps (identical value).
 7. Deploy voice; confirm logs: `python_voice_boot_started`, `registered worker`, agent_name `transovo-voice-runtime`.
 8. Smoke inbound call → bootstrap → Amy speaks.
+9. **transovo-mctb-sip** — see `docs/deployment-mctb-sip-adapter.md` (host network, UDP 5070).

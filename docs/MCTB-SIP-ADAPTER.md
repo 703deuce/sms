@@ -1,6 +1,8 @@
-# MCTB SIP Adapter (Asterisk in transovo-voice)
+# MCTB SIP Adapter (Asterisk — separate Coolify app)
 
-Minimal SIP/RTP terminator for Telnyx FQDN ingress. **Deploys with `transovo-voice`** on git push — no separate Docker commands, no firewall work for the spike.
+Minimal SIP/RTP terminator for Telnyx FQDN ingress. Deploys as **`transovo-mctb-sip`** — a third Coolify application, **not** bundled into `transovo-voice`.
+
+> **Why separate?** `asterisk` is available on `debian:bookworm-slim` but **not** on `python:3.12-slim-bookworm`. Bundling Asterisk into the voice Dockerfile breaks Coolify builds.
 
 ## Architecture
 
@@ -9,38 +11,25 @@ AT&T conditional forward
         ↓
 Telnyx FQDN (PRACK / 3PCC / ringback)
         ↓
-voice.transovo.ai:5070  ← Asterisk in transovo-voice container
+voice.transovo.ai:5070  ← transovo-mctb-sip (Asterisk)
         ↓
 POST /api/internal/voice-runtime → consent → SMS
 ```
 
-LiveKit SIP stays on **voice.transovo.ai:5060**. Asterisk uses **5070** on the same host — **no new DNS A record**.
+LiveKit SIP stays on **voice.transovo.ai:5060** via `transovo-voice`. Asterisk uses **5070** on the same host — **no new DNS A record**.
 
-## What you do NOT need to do
+## Coolify setup
 
-- Run `docker compose` manually
-- Create a new A record (uses existing `voice.transovo.ai`)
-- Touch 571 until 866 passes 10/10
+Full steps: **`docs/deployment-mctb-sip-adapter.md`**
 
-## What you DO need in Coolify (one-time)
+Summary:
 
-On **transovo-voice** → **Ports** / **Port Mappings**, expose:
+| App | Dockerfile | Purpose |
+|-----|------------|---------|
+| `transovo-mctb-sip` | `mctb-sip-adapter/Dockerfile` | Asterisk press-1 SIP |
+| `transovo-voice` | `voice-runtime-python/Dockerfile` | LiveKit worker only |
 
-- `5070/udp` (SIP)
-- `10000-10100/udp` (RTP)
-
-`EXPOSE` in the Dockerfile is not enough — Coolify must publish UDP to the host. Without this, `npm run test:mctb-sip-adapter-e2e` fails `sip_options_reachable`.
-
-## LiveKit vs Asterisk in the same container
-
-Both can run:
-
-| Process | Purpose |
-|---------|---------|
-| **Asterisk :5070** | MCTB press-1 SIP path (AT&T forwards) |
-| **LiveKit worker** | AI receptionist / other voice products |
-
-MCTB inbound does **not** use LiveKit rooms. If LiveKit connection logs are noisy during MCTB-only testing, set `MCTB_SIP_ADAPTER_ONLY=1` on transovo-voice to run Asterisk without the LiveKit worker.
+**Network mode: `host`** on `transovo-mctb-sip` (critical for UDP SIP/RTP).
 
 ## Automated verification (no phone call)
 
@@ -50,35 +39,13 @@ npm run test:mctb-sip-adapter-e2e
 
 Checks Telnyx FQDN, voice-runtime HTTP, and SIP OPTIONS to `voice.transovo.ai:5070`.
 
-## What deploys automatically
-
-| Piece | How |
-|-------|-----|
-| Asterisk + AGI | Bundled in `voice-runtime-python/Dockerfile` |
-| Coolify rebuild | Git push to `master` → `transovo-voice` rebuilds |
-| Telnyx FQDN + 866 | Cloud agent runs `scripts/mctb-deploy-sip-adapter-production.ts --apply` |
-
-## One Coolify env var (transovo-voice)
-
-Add on the existing **transovo-voice** app (same place as `LIVEKIT_URL`, etc.):
-
-```
-MCTB_SIP_ADAPTER_ENABLED=1
-```
-
-`TRANSOVO_BACKEND_URL` and `TRANSOVO_INTERNAL_API_KEY` are already set on voice.
-
-`MCTB_SIP_ADAPTER_ENABLED` defaults to `1` in the voice Dockerfile for the current MCTB spike. Set `0` to disable without redeploying Asterisk bits.
-
-Redeploy happens automatically after merge when Coolify picks up the new Dockerfile.
-
-## Cloud agent cutover (Telnyx)
+## Telnyx cutover
 
 ```bash
 npx tsx scripts/mctb-deploy-sip-adapter-production.ts --apply
 ```
 
-This ensures PRACK/3PCC/ringback, points FQDN to `voice.transovo.ai:5070`, assigns **866** to the FQDN connection.
+Ensures PRACK/3PCC/ringback, points FQDN to `voice.transovo.ai:5070`, assigns **866** to the FQDN connection.
 
 ## Certification
 
@@ -103,7 +70,7 @@ Only if you want a dedicated SIP hostname (not required for the spike):
 | **TTL** | `300` (or provider default) |
 | **Proxy / CDN** | Off (DNS only — no Cloudflare proxy) |
 
-Then set `MCTB_SIP_ADAPTER_HOST=mctb-sip.transovo.ai` on transovo-voice and re-run the deploy script.
+Then set `MCTB_SIP_ADAPTER_HOST=mctb-sip.transovo.ai` on `transovo-mctb-sip` and re-run the deploy script.
 
 ## Rollback
 
@@ -113,8 +80,8 @@ npx tsx scripts/mctb-setup-fqdn-direct-mctb.ts --apply   # Call Control
 npx tsx scripts/point-telnyx-fqdn-to-self-hosted.ts --apply   # LiveKit :5060
 ```
 
-Set `MCTB_SIP_ADAPTER_ENABLED=0` on transovo-voice.
+Stop the `transovo-mctb-sip` Coolify app.
 
 ## Standalone compose (reference only)
 
-`docker-compose.mctb-sip-adapter.yml` remains for local debugging. Production uses transovo-voice bundle.
+`docker-compose.mctb-sip-adapter.yml` — local debugging with host networking. Production uses Coolify `transovo-mctb-sip`.

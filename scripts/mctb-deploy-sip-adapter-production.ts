@@ -21,7 +21,8 @@ async function main() {
   console.log(`  apply: ${apply}`);
   console.log(`  e164:  ${e164}`);
   console.log("");
-  console.log("Deploy model: Asterisk ships inside transovo-voice (git push → Coolify rebuild).");
+  console.log("Deploy model: transovo-mctb-sip Coolify app (mctb-sip-adapter/Dockerfile, host network).");
+  console.log("transovo-voice stays LiveKit-only — redeploy voice after merge to fix broken Asterisk apt build.");
   console.log("SIP target: voice.transovo.ai:5070 (no new DNS — LiveKit keeps :5060).");
   console.log("");
 
@@ -45,13 +46,13 @@ async function main() {
   if (!apply) {
     console.log("\nDry run complete. Re-run with --apply to cut over Telnyx.");
     console.log(
-      "Ensure transovo-voice Coolify has MCTB_SIP_ADAPTER_ENABLED=1 after this branch merges.",
+      "Ensure transovo-mctb-sip Coolify app is deployed (host network) — see docs/deployment-mctb-sip-adapter.md.",
     );
     return;
   }
 
   console.log("\n✓ Telnyx cutover applied for", e164);
-  console.log("After transovo-voice redeploys with MCTB_SIP_ADAPTER_ENABLED=1, run AT&T forward test.");
+  console.log("After transovo-mctb-sip deploys, run: npm run test:mctb-sip-adapter-e2e");
   console.log("Certification: npx tsx scripts/mctb-certify-sip-adapter.ts");
 }
 
