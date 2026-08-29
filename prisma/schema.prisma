@@ -232,6 +232,7 @@ model Workspace {
   solutionSetups SolutionSetup[]
   platformEvents PlatformEvent[]
   keywords    Keyword[]
+  autoReplies AutoReply[]
   forms       OptInForm[]
   consentRecords ConsentRecord[]
   qrCodes     QrCode[]
@@ -1791,6 +1792,30 @@ model Keyword {
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, keyword, phoneNumber])
+}
+
+/// One trigger → one predefined SMS/MMS (not keywords, not drip sequences).
+model AutoReply {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  name          String
+  /// list_join | contact_added | form_submitted | after_hours | tag_added
+  triggerType   String
+  triggerConfig Json     @default("{}")
+  message       String
+  mediaUrls     String[] @default([])
+  /// active | paused
+  status        String   @default("paused")
+  rulesJson     Json     @default("{}")
+  sendCount     Int      @default(0)
+  lastTriggeredAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, triggerType])
+  @@map("auto_replies")
 }
 
 model OptInForm {

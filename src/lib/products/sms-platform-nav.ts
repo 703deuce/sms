@@ -2,10 +2,13 @@ import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BookOpen,
   Hash,
+  Layers,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
   Puzzle,
+  Reply,
+  Sparkles,
   Users,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
@@ -45,6 +48,14 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       ],
     },
     { label: "Keywords", href: "/grow/keywords", icon: Hash },
+    {
+      label: "Auto Replies",
+      href: "/auto-replies",
+      icon: Reply,
+      sectionLabel: "Automate",
+    },
+    { label: "Drip Campaigns", href: "/drip-campaigns", icon: Layers },
+    { label: "AI Replies", href: "/ai-replies", icon: Sparkles },
     { label: "Playbooks", href: "/playbooks", icon: BookOpen },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
     ...buildAccountNavItems(),
@@ -84,6 +95,9 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/contacts/segments")) return "Segments";
   if (pathname.startsWith("/contacts")) return "Contacts";
   if (pathname.startsWith("/grow/keywords")) return "Keywords";
+  if (pathname.startsWith("/auto-replies")) return "Auto Replies";
+  if (pathname.startsWith("/drip-campaigns")) return "Drip Campaigns";
+  if (pathname.startsWith("/ai-replies")) return "AI Replies";
   if (pathname === "/automations/new") return "Create Automation";
   if (pathname === "/automations/logs") return "Run History";
   if (pathname.startsWith("/automations")) return "Automations";
