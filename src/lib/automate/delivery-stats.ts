@@ -8,8 +8,9 @@ export type DeliveryStats = {
   deliveryRate: number;
 };
 
-const DELIVERED_STATUSES = new Set(["delivered", "sent", "read"]);
-const FAILED_STATUSES = new Set(["failed", "undelivered", "rejected", "bounced"]);
+const DELIVERED_STATUSES = new Set(["delivered", "read"]);
+const SENT_STATUSES = new Set(["sent"]);
+const FAILED_STATUSES = new Set(["failed", "undelivered", "rejected", "bounced", "expired"]);
 const PENDING_STATUSES = new Set(["queued", "sending", "pending", "accepted"]);
 
 export function summarizeDeliveryStatuses(
@@ -18,20 +19,25 @@ export function summarizeDeliveryStatuses(
   let delivered = 0;
   let failed = 0;
   let pending = 0;
+  let sent = 0;
   for (const raw of statuses) {
     const s = raw.toLowerCase();
     if (DELIVERED_STATUSES.has(s)) delivered += 1;
     else if (FAILED_STATUSES.has(s)) failed += 1;
-    else if (PENDING_STATUSES.has(s)) pending += 1;
+    else if (PENDING_STATUSES.has(s) || SENT_STATUSES.has(s)) pending += 1;
     else delivered += 1;
+    if (SENT_STATUSES.has(s) || DELIVERED_STATUSES.has(s) || FAILED_STATUSES.has(s)) {
+      sent += 1;
+    }
   }
-  const sent = statuses.length;
+  const total = statuses.length;
+  const sentCount = sent || total;
   return {
-    sent,
+    sent: sentCount,
     delivered,
     failed,
     pending,
-    deliveryRate: sent ? delivered / sent : 0,
+    deliveryRate: sentCount ? delivered / sentCount : 0,
   };
 }
 
@@ -46,10 +52,10 @@ export async function loadDeliveryStatsByIdempotencyPrefix(
     take: limit,
     select: { id: true, to: true, status: true, createdAt: true },
   });
-  const stats = summarizeDeliveryStatuses(messages.map((m) => m.status));
+  const stats = summarizeDeliveryStatuses(messages.map((m: { status: string }) => m.status));
   return {
     ...stats,
-    recent: messages.map((m) => ({
+    recent: messages.map((m: { id: string; to: string; status: string; createdAt: Date }) => ({
       id: m.id,
       to: m.to,
       status: m.status,
@@ -61,6 +67,7 @@ export async function loadDeliveryStatsByIdempotencyPrefix(
 export function deliveryStatusLabel(status: string): string {
   const s = status.toLowerCase();
   if (DELIVERED_STATUSES.has(s)) return "Delivered";
+  if (SENT_STATUSES.has(s)) return "Sent";
   if (FAILED_STATUSES.has(s)) return "Failed";
   if (PENDING_STATUSES.has(s)) return "Pending";
   return status;

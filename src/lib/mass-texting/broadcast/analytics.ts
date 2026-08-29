@@ -3,14 +3,31 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import type { BroadcastRecipientRow } from "./types";
 
+import { normalizeDeliveryError } from "@/lib/messaging/delivery-errors";
+
 function recipientDisplayStatus(
   workflowStatus: string,
-  messages: Array<{ status: string; sentAt: Date | null; error: string | null }>,
+  messages: Array<{
+    status: string;
+    sentAt: Date | null;
+    error: string | null;
+    providerErrorCode?: string | null;
+    failureCategory?: string | null;
+  }>,
 ): { status: string; failureReason: string | null } {
   const latest = messages[messages.length - 1];
   if (workflowStatus === "opted_out") return { status: "Opted out", failureReason: null };
-  if (workflowStatus === "failed" || latest?.status === "failed") {
-    return { status: "Failed", failureReason: latest?.error ?? "send_failed" };
+  if (workflowStatus === "failed" || latest?.status === "failed" || latest?.status === "undelivered") {
+    const normalized = latest?.failureCategory
+      ? null
+      : normalizeDeliveryError({
+          errorCode: latest?.providerErrorCode,
+          errorDetail: latest?.error,
+        });
+    return {
+      status: latest?.status === "undelivered" ? "Undelivered" : "Failed",
+      failureReason: latest?.error || normalized?.explanation || "send_failed",
+    };
   }
   if (latest?.status === "delivered") return { status: "Delivered", failureReason: null };
   if (latest?.status === "sent" || latest?.sentAt) return { status: "Sent", failureReason: null };
@@ -37,6 +54,8 @@ export async function listBroadcastRecipients(
           clickedCounted: true,
           providerId: true,
           error: true,
+          providerErrorCode: true,
+          failureCategory: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -86,6 +105,7 @@ export async function getBroadcastCampaignStats(workspaceId: string, campaignId:
     select: {
       sent: true,
       delivered: true,
+      failed: true,
       clicks: true,
       replies: true,
       optOuts: true,
@@ -102,7 +122,7 @@ export async function getBroadcastCampaignStats(workspaceId: string, campaignId:
     recipients: recipientCount,
     sent: campaign.sent,
     delivered: campaign.delivered,
-    failed: Math.max(0, campaign.sent - campaign.delivered),
+      failed: campaign.failed ?? Math.max(0, campaign.sent - campaign.delivered),
     clicks: campaign.clicks,
     replies: campaign.replies,
     optOuts: campaign.optOuts,

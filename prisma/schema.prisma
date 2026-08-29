@@ -1073,6 +1073,7 @@ model Campaign {
   sendWindowEnd   Int?
   sent           Int            @default(0)
   delivered      Int            @default(0)
+  failed         Int            @default(0)
   replies        Int            @default(0)
   clicks         Int            @default(0)
   optOuts        Int            @default(0)
@@ -1097,13 +1098,19 @@ model Message {
   from          String
   body          String
   status        String
+  providerStatus String?
+  providerErrorCode String?
+  failureCategory String?
   segments      Int      @default(1)
   costCents     Int      @default(0)
   providerId    String?
   idempotencyKey String?
   trackingToken String?  @unique
   destinationUrl String?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, idempotencyKey])
@@ -1420,13 +1427,19 @@ model CampaignMessage {
   to              String
   body            String
   status          String    @default("queued")
+  providerStatus  String?
+  providerErrorCode String?
+  failureCategory String?
   scheduledFor    DateTime?
   sentAt          DateTime?
+  deliveredAt     DateTime?
+  failedAt        DateTime?
   providerId      String?
   trackingToken   String?   @unique
   destinationUrl  String?
   error           String?
   deliveredCounted Boolean  @default(false)
+  failedCounted   Boolean   @default(false)
   clickedCounted  Boolean   @default(false)
   sentCounted     Boolean   @default(false)
   advancedAfterSend Boolean @default(false)

@@ -3,7 +3,7 @@ import { getPrisma } from "@/lib/db";
 import { decryptSecret } from "@/lib/messaging/crypto";
 import { getTwilioParentCredentials, isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
 import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
-import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
+import { applyOutboundDeliveryStatus } from "@/lib/messaging/delivery-status";
 
 async function parseTwilioForm(request: Request) {
   const form = await request.formData();
@@ -41,23 +41,6 @@ async function verify(request: Request, params: Record<string, string>) {
   return tokens.some((t) => validateTwilioSignature(t, signature, request.url, params));
 }
 
-/** Monotonic ranks — never downgrade (clicked is sticky via separate path). */
-const STATUS_RANK: Record<string, number> = {
-  queued: 0,
-  sending: 1,
-  sent: 2,
-  undelivered: 3,
-  failed: 3,
-  delivered: 4,
-  clicked: 5,
-};
-
-function statusesAtOrBelow(rank: number) {
-  return Object.entries(STATUS_RANK)
-    .filter(([, r]) => r <= rank)
-    .map(([s]) => s);
-}
-
 export async function POST(request: Request) {
   try {
     const params = await parseTwilioForm(request);
@@ -69,46 +52,14 @@ export async function POST(request: Request) {
     const status = (params.MessageStatus || params.SmsStatus || "").toLowerCase();
     if (!sid) return NextResponse.json({ ok: true, skipped: true });
 
-    const prisma = getPrisma();
-    await prisma.message.updateMany({
-      where: { providerId: sid },
-      data: { status },
+    await applyOutboundDeliveryStatus({
+      providerMessageId: sid,
+      status,
+      providerStatus: params.MessageStatus || params.SmsStatus || null,
+      errorCode: params.ErrorCode || null,
+      errorDetail: params.ErrorMessage || null,
+      provider: "twilio",
     });
-
-    const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
-    if (campaignMsg) {
-      const incomingRank = STATUS_RANK[status];
-      if (incomingRank != null && campaignMsg.status !== "clicked") {
-        // Only move status forward (or equal). Never overwrite clicked.
-        await prisma.campaignMessage.updateMany({
-          where: {
-            id: campaignMsg.id,
-            status: { in: statusesAtOrBelow(incomingRank) },
-            NOT: { status: "clicked" },
-          },
-          data: { status },
-        });
-      }
-
-      if (status === "delivered") {
-        await prisma.$transaction(async (tx: any) => {
-          const counted = await tx.campaignMessage.updateMany({
-            where: { id: campaignMsg.id, deliveredCounted: false },
-            data: { deliveredCounted: true },
-          });
-          if (counted.count === 1) {
-            await tx.campaign.update({
-              where: { id: campaignMsg.campaignId },
-              data: { delivered: { increment: 1 } },
-            });
-          }
-        });
-        const fresh = await prisma.campaignMessage.findUnique({ where: { id: campaignMsg.id } });
-        if (fresh?.deliveredCounted) {
-          await markRecipientFact(campaignMsg.recipientId, "message_delivered", true);
-        }
-      }
-    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

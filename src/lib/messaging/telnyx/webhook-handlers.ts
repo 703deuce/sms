@@ -5,7 +5,7 @@
 import { getPrisma } from "@/lib/db";
 import { processInboundMessage, resolveInboundContext } from "@/lib/messaging/inbound-process";
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
-import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
+import { applyParsedDeliveryStatus } from "@/lib/messaging/delivery-status";
 import { looksLikeTwilioMessagingServiceSid } from "../provider-ids";
 import { telnyxProvider } from "./provider";
 import {
@@ -15,23 +15,6 @@ import {
   isRejectedCampaignStatus,
 } from "./status-map";
 import { telnyxEventType } from "./webhook-auth";
-
-const STATUS_RANK: Record<string, number> = {
-  queued: 0,
-  sending: 1,
-  sent: 2,
-  undelivered: 3,
-  failed: 3,
-  expired: 3,
-  delivered: 4,
-  clicked: 5,
-};
-
-function statusesAtOrBelow(rank: number) {
-  return Object.entries(STATUS_RANK)
-    .filter(([, r]) => r <= rank)
-    .map(([s]) => s);
-}
 
 const INBOUND_EVENTS = new Set(["message.received"]);
 const STATUS_EVENTS = new Set([
@@ -200,52 +183,8 @@ export async function handleTelnyxMessageStatus(payload: unknown) {
   const sid = parsed.providerMessageId;
   if (!sid) return { ok: true as const, skipped: true as const };
 
-  const status =
-    parsed.internalStatus === "unknown"
-      ? parsed.providerStatus.toLowerCase()
-      : parsed.internalStatus;
-  const prisma = getPrisma();
-
-  await prisma.message.updateMany({
-    where: { providerId: sid },
-    data: { status },
-  });
-
-  const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
-  if (campaignMsg) {
-    const incomingRank = STATUS_RANK[status];
-    if (incomingRank != null && campaignMsg.status !== "clicked") {
-      await prisma.campaignMessage.updateMany({
-        where: {
-          id: campaignMsg.id,
-          status: { in: statusesAtOrBelow(incomingRank) },
-          NOT: { status: "clicked" },
-        },
-        data: {
-          status,
-          ...(parsed.errorDetail ? { error: parsed.errorDetail } : {}),
-        },
-      });
-    }
-
-    if (status === "delivered") {
-      await prisma.$transaction(async (tx: any) => {
-        const counted = await tx.campaignMessage.updateMany({
-          where: { id: campaignMsg.id, deliveredCounted: false },
-          data: { deliveredCounted: true },
-        });
-        if (counted.count === 1) {
-          await tx.campaign.update({
-            where: { id: campaignMsg.campaignId },
-            data: { delivered: { increment: 1 } },
-          });
-        }
-      });
-      if (campaignMsg.recipientId) {
-        await markRecipientFact(campaignMsg.recipientId, "message_delivered").catch(() => undefined);
-      }
-    }
-  }
+  const result = await applyParsedDeliveryStatus(parsed, "telnyx");
+  const status = result.status;
 
   const { appendMctbDeliveryTraceFromProviderStatus } = await import(
     "@/lib/mctb/messaging/delivery-trace"
