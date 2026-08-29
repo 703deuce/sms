@@ -30,13 +30,19 @@ const WIZARD_STEPS = ["Setup", "Messages", "Review"];
 const TRIGGERS: Array<{
   id: DripCampaignTriggerType;
   label: string;
+  description?: string;
   needsList?: boolean;
   needsTag?: boolean;
   needsForm?: boolean;
 }> = [
   { id: "tag_added", label: "Contact Tag Added", needsTag: true },
   { id: "list_join", label: "Contact Joins a List", needsList: true },
-  { id: "contact_added", label: "New Contact is Added" },
+  {
+    id: "contact_added",
+    label: "New Contact is Added",
+    description:
+      "When a contact is first created (manual, form, or first inbound text). To target list membership, use Contact Joins a List.",
+  },
   { id: "form_submitted", label: "Form is Submitted", needsForm: true },
 ];
 
@@ -213,6 +219,11 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
                     </option>
                   ))}
                 </select>
+                {selectedTrigger?.description ? (
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">
+                    {selectedTrigger.description}
+                  </p>
+                ) : null}
               </div>
               {selectedTrigger?.needsTag ? (
                 <div>
@@ -342,9 +353,9 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <Label className="mb-0">Message {activeMessageIndex + 1}</Label>
-                  {activeMessageIndex > 0 ? (
-                    <div className="ml-auto flex items-center gap-2 text-[12px] text-slate-600">
-                      <span>Send</span>
+                  <div className="ml-auto flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
+                    <span>Send</span>
+                    {activeStep.delayUnit !== "immediate" ? (
                       <Input
                         type="number"
                         min={1}
@@ -356,24 +367,29 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
                           })
                         }
                       />
-                      <select
-                        className="h-8 rounded-lg border border-slate-200 px-2"
-                        value={activeStep.delayUnit}
-                        onChange={(e) =>
-                          updateStep(activeMessageIndex, {
-                            delayUnit: e.target.value as DripStep["delayUnit"],
-                          })
-                        }
-                      >
-                        <option value="minutes">Minute(s)</option>
-                        <option value="hours">Hour(s)</option>
-                        <option value="days">Day(s)</option>
-                      </select>
-                      <span>after previous message</span>
-                    </div>
-                  ) : (
-                    <span className="ml-auto text-[12px] text-slate-500">Send immediately</span>
-                  )}
+                    ) : null}
+                    <select
+                      className="h-8 rounded-lg border border-slate-200 px-2"
+                      value={activeStep.delayUnit}
+                      onChange={(e) =>
+                        updateStep(activeMessageIndex, {
+                          delayUnit: e.target.value as DripStep["delayUnit"],
+                          delayAmount:
+                            e.target.value === "immediate" ? 0 : activeStep.delayAmount || 1,
+                        })
+                      }
+                    >
+                      <option value="immediate">
+                        {activeMessageIndex === 0 ? "immediately when triggered" : "immediately after previous"}
+                      </option>
+                      <option value="minutes">minute(s)</option>
+                      <option value="hours">hour(s)</option>
+                      <option value="days">day(s)</option>
+                    </select>
+                    {activeStep.delayUnit !== "immediate" ? (
+                      <span>{activeMessageIndex === 0 ? "after trigger" : "after previous message"}</span>
+                    ) : null}
+                  </div>
                 </div>
                 <MockupMessageToolbar onInsert={insertVariable} />
                 <Textarea

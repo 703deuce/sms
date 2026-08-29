@@ -434,6 +434,23 @@ export async function processInboundMessage(input: {
     contact = await prisma.contact.create({
       data: { workspaceId: input.workspaceId, phone: from, lastReply: new Date() },
     });
+    try {
+      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+      await dispatchAutoReplies({
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        triggerType: "contact_added",
+        fromE164: input.to,
+      });
+      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+      await triggerDripCampaigns({
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        triggerType: "contact_added",
+      });
+    } catch {
+      /* non-fatal */
+    }
   } else {
     await prisma.contact.update({
       where: { id: contact.id },
@@ -619,6 +636,7 @@ export async function processInboundMessage(input: {
       phoneNumberId: phone?.id,
       fromE164: input.to,
       body: body || "",
+      inboundMessageId: input.providerMessageId || undefined,
     });
   } catch {
     /* non-fatal */

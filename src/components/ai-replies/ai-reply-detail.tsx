@@ -25,6 +25,9 @@ type Props = {
     leadsCaptured: number;
     resolutionRate: number;
     handoffs: number;
+    deliveryRate?: number;
+    deliveredCount?: number;
+    failedCount?: number;
   };
   chart: { labels: string[]; values: number[] };
   sentiment: { positive: number; neutral: number; negative: number };
@@ -38,9 +41,10 @@ type Props = {
     handedOff: boolean;
     lastMessageAt: string | null;
   }>;
+  recentDeliveries?: Array<{ id: string; to: string; status: string; sentAt: string }>;
 };
 
-export function AiReplyDetail({ campaign: initial, stats, chart, sentiment, topQueries, sessions }: Props) {
+export function AiReplyDetail({ campaign: initial, stats, chart, sentiment, topQueries, sessions, recentDeliveries = [] }: Props) {
   const router = useRouter();
   const [campaign, setCampaign] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -110,9 +114,18 @@ export function AiReplyDetail({ campaign: initial, stats, chart, sentiment, topQ
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SlickStatCard label="Total Sent" value={formatNumber(stats.totalReplies)} icon={MessageSquare} tone="violet" />
-            <SlickStatCard label="Response Rate" value={formatPercent(responseRate / 100)} icon={TrendingUp} tone="green" />
+            <SlickStatCard
+              label="Delivered"
+              value={
+                stats.deliveryRate != null && stats.totalReplies > 0
+                  ? formatPercent(stats.deliveryRate)
+                  : "—"
+              }
+              icon={TrendingUp}
+              tone="green"
+            />
             <SlickStatCard label="Human Hand-offs" value={formatNumber(stats.handoffs)} icon={Users} tone="rose" />
-            <SlickStatCard label="Time Saved" value={`${Math.round(stats.totalReplies * 2)}m`} icon={Clock} tone="violet" />
+            <SlickStatCard label="Failed" value={formatNumber(stats.failedCount ?? 0)} icon={Clock} tone="violet" />
           </div>
 
           <div className="mb-6 grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -248,6 +261,29 @@ export function AiReplyDetail({ campaign: initial, stats, chart, sentiment, topQ
               </TBody>
             </Table>
           )}
+          {recentDeliveries.length ? (
+            <>
+              <h2 className="mt-8 text-[15px] font-semibold text-slate-900">Delivery log</h2>
+              <Table className="mt-4 text-[13px]">
+                <THead>
+                  <TR className="border-slate-200">
+                    <TH>To</TH>
+                    <TH>Delivery</TH>
+                    <TH>Sent</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {recentDeliveries.map((row) => (
+                    <TR key={row.id} className="border-slate-100">
+                      <TD className="font-medium text-slate-900">{row.to}</TD>
+                      <TD className="capitalize text-slate-600">{row.status}</TD>
+                      <TD className="text-slate-500">{formatSlickDateTime(row.sentAt)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </>
+          ) : null}
         </Card>
       ) : null}
     </div>

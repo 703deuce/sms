@@ -15,6 +15,6 @@ export default async function AutoReplyDetailPage({ params }: Props) {
   const data = await getAutoReplyWithActivity(workspaceId, id);
   if (!data) notFound();
 
-  const { recentSends, ...autoReply } = data;
-  return <AutoReplyDetail autoReply={autoReply} recentSends={recentSends} />;
+  const { recentSends, delivery, ...autoReply } = data;
+  return <AutoReplyDetail autoReply={autoReply} recentSends={recentSends} delivery={delivery} />;
 }

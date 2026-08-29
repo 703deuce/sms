@@ -19,6 +19,7 @@ export default async function AiReplyDetailPage({ params }: Props) {
       sentiment={data.sentiment}
       topQueries={data.topQueries}
       sessions={data.sessions}
+      recentDeliveries={data.recentDeliveries}
     />
   );
 }

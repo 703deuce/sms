@@ -45,6 +45,20 @@ export async function POST(request: Request) {
       await emitAutomationEvent(auth.workspaceId, "customer.tag_added", contactId, {
         tag: tag.name,
       }).catch(() => undefined);
+      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+      await dispatchAutoReplies({
+        workspaceId: auth.workspaceId,
+        contactId,
+        triggerType: "tag_added",
+        tagId: tag.id,
+      }).catch(() => undefined);
+      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+      await triggerDripCampaigns({
+        workspaceId: auth.workspaceId,
+        contactId,
+        triggerType: "tag_added",
+        tagId: tag.id,
+      }).catch(() => undefined);
     }
     return NextResponse.json({ data: tag }, { status: 201 });
   } catch (err) {

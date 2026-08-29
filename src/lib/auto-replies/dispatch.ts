@@ -191,5 +191,7 @@ export async function getAutoReplyWithActivity(workspaceId: string, id: string) 
   const row = await getAutoReply(workspaceId, id);
   if (!row) return null;
   const recentSends = await loadAutoReplyRecentSends(workspaceId, id);
-  return { ...row, recentSends };
+  const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
+  const delivery = summarizeDeliveryStatuses(recentSends.map((s) => s.status));
+  return { ...row, recentSends, delivery };
 }

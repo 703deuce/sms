@@ -13,6 +13,7 @@ import {
   autoReplyTriggerLabel,
   type AutoReplyRecord,
 } from "@/lib/auto-replies/types";
+import { deliveryStatusLabel } from "@/lib/automate/delivery-stats";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import { MessageSquare, MousePointerClick, Pencil, Reply, Send, UserMinus } from "lucide-react";
 import Link from "next/link";
@@ -31,9 +32,16 @@ type RecentSend = {
 type Props = {
   autoReply: AutoReplyRecord;
   recentSends: RecentSend[];
+  delivery?: {
+    sent: number;
+    delivered: number;
+    failed: number;
+    pending: number;
+    deliveryRate: number;
+  };
 };
 
-export function AutoReplyDetail({ autoReply: initial, recentSends }: Props) {
+export function AutoReplyDetail({ autoReply: initial, recentSends, delivery }: Props) {
   const router = useRouter();
   const [row, setRow] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -107,7 +115,13 @@ export function AutoReplyDetail({ autoReply: initial, recentSends }: Props) {
         <SlickStatCard label="Total Sent" value={formatNumber(row.sendCount)} icon={Send} tone="violet" />
         <SlickStatCard
           label="Delivered"
-          value={row.sendCount > 0 ? formatPercent(0.98) : "—"}
+          value={
+            delivery && delivery.sent > 0
+              ? formatPercent(delivery.deliveryRate)
+              : row.sendCount > 0
+                ? "—"
+                : "—"
+          }
           icon={MessageSquare}
           tone="green"
         />
@@ -168,7 +182,7 @@ export function AutoReplyDetail({ autoReply: initial, recentSends }: Props) {
                         )}
                         <p className="text-[12px] text-slate-400">{send.to}</p>
                       </TD>
-                      <TD className="capitalize text-slate-600">{send.status}</TD>
+                      <TD className="text-slate-600">{deliveryStatusLabel(send.status)}</TD>
                       <TD className="whitespace-nowrap text-slate-500">
                         {formatSlickDateTime(send.sentAt)}
                       </TD>

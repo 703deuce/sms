@@ -29,12 +29,16 @@ type Props = {
     messagesSent: number;
     avgOpenRate: number;
     avgReplyRate: number;
+    deliveryRate?: number;
+    deliveredCount?: number;
+    failedCount?: number;
   };
   chart: {
     labels: string[];
     sent: number[];
     replies: number[];
   };
+  recentDeliveries?: Array<{ id: string; to: string; status: string; sentAt: string }>;
 };
 
 function enrollmentStatusLabel(status: string, stepIndex: number, totalSteps: number) {
@@ -49,6 +53,7 @@ export function DripCampaignDetail({
   recipients,
   stats,
   chart,
+  recentDeliveries = [],
 }: Props) {
   const router = useRouter();
   const [campaign, setCampaign] = useState(initial);
@@ -126,14 +131,18 @@ export function DripCampaignDetail({
           tone="green"
         />
         <SlickStatCard
-          label="Avg. Open Rate"
-          value={formatPercent(stats.avgOpenRate / 100)}
+          label="Delivered"
+          value={
+            stats.deliveryRate != null && stats.messagesSent > 0
+              ? formatPercent(stats.deliveryRate)
+              : "—"
+          }
           icon={Layers}
           tone="rose"
         />
         <SlickStatCard
-          label="Avg. Reply Rate"
-          value={formatPercent(stats.avgReplyRate / 100)}
+          label="Failed"
+          value={formatNumber(stats.failedCount ?? 0)}
           icon={Reply}
           tone="violet"
         />
@@ -200,6 +209,29 @@ export function DripCampaignDetail({
               </dd>
             </div>
           </dl>
+          {recentDeliveries.length ? (
+            <div className="mt-6">
+              <h3 className="text-[14px] font-semibold text-slate-900">Delivery log</h3>
+              <Table className="mt-3 text-[13px]">
+                <THead>
+                  <TR className="border-slate-200">
+                    <TH>To</TH>
+                    <TH>Status</TH>
+                    <TH>Sent</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {recentDeliveries.slice(0, 20).map((row) => (
+                    <TR key={row.id} className="border-slate-100">
+                      <TD className="font-medium text-slate-900">{row.to}</TD>
+                      <TD className="capitalize text-slate-600">{row.status}</TD>
+                      <TD className="text-slate-500">{formatSlickDateTime(row.sentAt)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          ) : null}
         </Card>
       ) : null}
 

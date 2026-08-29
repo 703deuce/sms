@@ -72,7 +72,7 @@ export function dripTriggerLabel(
     case "list_join":
       return config.listName ? `Contact joins ${config.listName}` : "Contact joins a list";
     case "contact_added":
-      return "New contact is added";
+      return "New contact created (not list membership)";
     case "form_submitted":
       return config.formName ? `${config.formName} submitted` : "Form is submitted";
     default:
@@ -106,7 +106,9 @@ export function parseDripSteps(raw: unknown): DripStep[] {
 }
 
 export function delayLabel(step: DripStep, index: number): string {
-  if (index === 0 && step.delayUnit === "immediate") return "Immediate";
+  if (step.delayUnit === "immediate") {
+    return index === 0 ? "When triggered" : "Immediately after previous";
+  }
   const amount = step.delayAmount || 1;
   const unit =
     step.delayUnit === "minutes"
@@ -120,7 +122,9 @@ export function delayLabel(step: DripStep, index: number): string {
         : amount === 1
           ? "day"
           : "days";
-  return `${amount} ${unit} after previous message`;
+  return index === 0
+    ? `${amount} ${unit} after trigger`
+    : `${amount} ${unit} after previous message`;
 }
 
 export function delayToMs(step: DripStep): number {

@@ -45,7 +45,8 @@ const TRIGGERS: Array<{
   {
     id: "contact_added",
     label: "New Contact",
-    description: "When a new contact is created in your workspace.",
+    description:
+      "When a contact is first created (manual, form, or first inbound text). To target list membership, use List Join.",
     icon: UserPlus,
   },
   {
@@ -58,7 +59,7 @@ const TRIGGERS: Array<{
   {
     id: "list_join",
     label: "List Join",
-    description: "When someone is added to a specific list.",
+    description: "When someone is added to a specific audience list.",
     icon: List,
     needsList: true,
   },

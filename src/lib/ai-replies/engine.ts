@@ -22,7 +22,14 @@ export type InboundAiContext = {
   phoneNumberId?: string;
   fromE164?: string;
   body: string;
+  /** Provider message id — used to dedupe webhook retries and one-reply-per-inbound. */
+  inboundMessageId?: string;
 };
+
+function inboundDedupeKey(ctx: InboundAiContext): string {
+  if (ctx.inboundMessageId) return ctx.inboundMessageId;
+  return `${ctx.conversationId}:${ctx.body.trim().toLowerCase()}`;
+}
 
 function toneInstruction(tone: string): string {
   switch (tone) {
@@ -233,6 +240,14 @@ export async function scheduleInboundAiReply(ctx: InboundAiContext): Promise<boo
       },
     });
 
+    const dedupeKey = inboundDedupeKey(ctx);
+    const sendIdempotencyKey = `ai-reply-send:${session.id}:${dedupeKey}`;
+    const priorSend = await prisma.message.findFirst({
+      where: { workspaceId: ctx.workspaceId, idempotencyKey: sendIdempotencyKey },
+      select: { id: true },
+    });
+    if (priorSend) continue;
+
     const delayMs = Math.max(0, (ai.advanced.replyDelaySec ?? 3) * 1000);
     await enqueueJob({
       jobType: "ai_reply_respond",
@@ -244,9 +259,11 @@ export async function scheduleInboundAiReply(ctx: InboundAiContext): Promise<boo
         contactId: ctx.contactId,
         inboundBody: ctx.body,
         fromE164: ctx.fromE164,
+        inboundDedupeKey: dedupeKey,
       },
-      idempotencyKey: `ai-reply:${session.id}:${Date.now()}`,
+      idempotencyKey: `ai-reply-pending:${session.id}`,
       runAfter: new Date(Date.now() + delayMs),
+      wake: true,
     });
 
     return true;
@@ -313,20 +330,57 @@ export async function processAiReplyRespond(payload: {
   contactId: string;
   inboundBody: string;
   fromE164?: string;
+  inboundDedupeKey?: string;
 }) {
   const prisma = getPrisma();
   const session = await prisma.aiReplySession.findUnique({ where: { id: payload.sessionId } });
   if (!session || session.status !== "ai_active") {
-    return { skipped: true };
+    return { skipped: true, reason: "session_inactive" };
   }
 
   const ai = await getAiReply(session.workspaceId, payload.aiReplyId);
-  if (!ai || ai.status !== "active") return { skipped: true };
+  if (!ai || ai.status !== "active") return { skipped: true, reason: "campaign_inactive" };
+
+  const maxReplies = ai.advanced.maxRepliesPerContact ?? 10;
+  if (session.messageCount >= maxReplies) {
+    if (ai.handoff.enabled) {
+      await markHandoff(
+        ai,
+        {
+          workspaceId: session.workspaceId,
+          contactId: payload.contactId,
+          conversationId: payload.conversationId,
+          body: payload.inboundBody,
+        },
+        "max_replies",
+        session.id,
+      );
+    }
+    return { skipped: true, reason: "max_replies" };
+  }
 
   const contact = await prisma.contact.findFirst({
     where: { id: payload.contactId, workspaceId: session.workspaceId },
   });
-  if (!contact || contact.status !== "SUBSCRIBED") return { skipped: true };
+  if (!contact || contact.status !== "SUBSCRIBED") return { skipped: true, reason: "contact_opted_out" };
+
+  const latestMessage = await prisma.conversationMessage.findFirst({
+    where: { conversationId: payload.conversationId },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!latestMessage || latestMessage.direction !== "inbound") {
+    return { skipped: true, reason: "awaiting_customer_reply" };
+  }
+
+  const dedupeKey =
+    payload.inboundDedupeKey ||
+    `${payload.conversationId}:${payload.inboundBody.trim().toLowerCase()}`;
+  const sendIdempotencyKey = `ai-reply-send:${payload.sessionId}:${dedupeKey}`;
+  const priorSend = await prisma.message.findFirst({
+    where: { workspaceId: session.workspaceId, idempotencyKey: sendIdempotencyKey },
+    select: { id: true },
+  });
+  if (priorSend) return { skipped: true, reason: "already_responded" };
 
   const messages = await prisma.conversationMessage.findMany({
     where: { conversationId: payload.conversationId },
@@ -355,7 +409,7 @@ export async function processAiReplyRespond(payload: {
     to: contact.phone,
     body: replyText,
     from: fromE164,
-    idempotencyKey: `ai-reply-send:${payload.sessionId}:${session.messageCount + 1}`,
+    idempotencyKey: sendIdempotencyKey,
   });
 
   await prisma.conversationMessage.create({
@@ -484,6 +538,26 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
       ? ((campaign.contactsEngaged - campaign.handoffs) / campaign.contactsEngaged) * 100
       : 0;
 
+  const sessionIds = sessions.map((s) => s.id);
+  const aiMessages = await prisma.message.findMany({
+    where: {
+      workspaceId,
+      idempotencyKey: { startsWith: "ai-reply-send:" },
+      ...(sessionIds.length
+        ? {
+            OR: sessionIds.map((sessionId) => ({
+              idempotencyKey: { startsWith: `ai-reply-send:${sessionId}:` },
+            })),
+          }
+        : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { id: true, to: true, status: true, createdAt: true, idempotencyKey: true },
+  });
+  const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
+  const delivery = summarizeDeliveryStatuses(aiMessages.map((m) => m.status));
+
   return {
     campaign,
     stats: {
@@ -493,7 +567,17 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
       leadsCaptured: sessions.filter((s) => s.leadCaptured).length,
       resolutionRate,
       handoffs: campaign.handoffs,
+      deliveryRate: delivery.deliveryRate,
+      deliveredCount: delivery.delivered,
+      failedCount: delivery.failed,
     },
+    delivery,
+    recentDeliveries: aiMessages.slice(0, 50).map((m) => ({
+      id: m.id,
+      to: m.to,
+      status: m.status,
+      sentAt: m.createdAt.toISOString(),
+    })),
     chart: {
       labels: chartLabels.map((d) =>
         new Date(d).toLocaleDateString(undefined, { weekday: "short" }),

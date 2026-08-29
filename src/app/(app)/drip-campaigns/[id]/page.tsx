@@ -21,6 +21,7 @@ export default async function DripCampaignDetailPage({ params }: Props) {
       recipients={data.recipients}
       stats={data.stats}
       chart={data.chart}
+      recentDeliveries={data.recentDeliveries}
     />
   );
 }

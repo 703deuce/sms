@@ -55,7 +55,7 @@ export function autoReplyTriggerLabel(
         ? `Contact joins ${config.listName}`
         : "Contact joins a list";
     case "contact_added":
-      return "New contact is added";
+      return "New contact created (not list membership)";
     case "form_submitted":
       return config.formName
         ? `${config.formName} submitted`

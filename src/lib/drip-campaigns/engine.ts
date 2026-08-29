@@ -277,6 +277,18 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
   const chartSent = chartLabels.map((d) => activityByDay.get(d)?.sent || 0);
   const chartReplies = chartLabels.map((d) => activityByDay.get(d)?.replies || 0);
 
+  const dripMessages = await prisma.message.findMany({
+    where: {
+      workspaceId,
+      idempotencyKey: { startsWith: `drip:${id}:` },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { id: true, to: true, status: true, createdAt: true },
+  });
+  const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
+  const delivery = summarizeDeliveryStatuses(dripMessages.map((m) => m.status));
+
   return {
     campaign,
     recipients,
@@ -285,7 +297,17 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
       messagesSent: campaign.messagesSent,
       avgOpenRate: totalEnrollments ? (openedCount / totalEnrollments) * 100 : 0,
       avgReplyRate: totalEnrollments ? (repliedCount / totalEnrollments) * 100 : 0,
+      deliveryRate: delivery.deliveryRate,
+      deliveredCount: delivery.delivered,
+      failedCount: delivery.failed,
     },
+    delivery,
+    recentDeliveries: dripMessages.slice(0, 50).map((m) => ({
+      id: m.id,
+      to: m.to,
+      status: m.status,
+      sentAt: m.createdAt.toISOString(),
+    })),
     chart: {
       labels: chartLabels.map((d) =>
         new Date(d).toLocaleDateString(undefined, { weekday: "short" }),
