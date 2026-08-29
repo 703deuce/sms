@@ -12,9 +12,9 @@ import {
   buildTapToJoinPublicUrl,
   buildTapToJoinSmsHref,
   createTapToJoinLink,
+  generateListGrowthPublicSlug,
   recordTapToJoinClick,
 } from "../src/lib/growth/tap-to-join";
-import { generateListGrowthPublicSlug } from "../src/lib/growth/tap-to-join";
 
 process.env.APP_URL ||= "http://localhost:3000";
 
