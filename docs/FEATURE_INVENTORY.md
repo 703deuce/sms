@@ -58,7 +58,7 @@ Outbound SMS (campaigns, automations, quick send, test message), inbound SMS (ke
 | PWA (manifest + service worker) | Partial | Assets present; installable; push needs VAPID |
 | Web push subscribe API | Partial | Needs VAPID keys |
 | Multi-workspace switch / create | Full | |
-| Job worker / cron drain | Full | Needs external cron → `/api/jobs/process` + `worker:all` |
+| Job worker / cron drain | Full | In-process poller in web container (`instrumentation.ts`); optional cron backup |
 | Maintenance mode page | Full | Driven by platform settings / env |
 
 ## 2. Messaging / Inbox
@@ -491,7 +491,7 @@ Covered in Part B with the same conclusions; walkthrough found **no 404s** after
 ### Ops still required for greenfield / schema
 - `npm run db:push` (or apply `supabase/finish-everything-fields.sql`) + grants / `NOTIFY pgrst` on Supabase  
 - Coolify env: `DATABASE_URL`, Telnyx keys, optional Stripe/OpenAI/Brevo/VAPID  
-- External cron → job drain (`/api/jobs/process` or `worker:all`)  
+- In-process job drain in web container (optional cron → `/api/jobs/process` as backup)
 - Telnyx messaging + voice webhooks pointed at production  
 
 ---

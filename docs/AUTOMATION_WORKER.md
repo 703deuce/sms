@@ -1,89 +1,91 @@
-# Automation worker deployment
+# Automation job processing
 
-Automations depend on a **background worker** (or cron) to advance executions, wake delayed steps, and run scheduled triggers. Saving a workflow in the UI does not execute it by itself.
+Drip campaigns, AI reply delays, automations, and campaigns all use the **Postgres `job_queue`** (with optional BullMQ dual-write when Redis is configured).
 
-## What must run
+## Production default (no Coolify changes)
+
+The **web container** start command is already:
+
+```bash
+node scripts/start-production.mjs
+```
+
+That script starts **two processes in the same container**:
+
+| Process | Role |
+|---------|------|
+| **web** | Next.js (` .next/standalone/server.js`) |
+| **job-worker** | `npm run worker:all` — polls every 5s (or BullMQ consumers) |
+
+The web process sets `DISABLE_INPROCESS_WORKER=1` so jobs are **not** drained twice.
+
+You do **not** need a separate Coolify service for SMS/automation jobs. Your existing **transovo-voice** container stays on Python/LiveKit only — do not repoint it unless you want voice and jobs split later.
+
+### Logs to expect on deploy
+
+```text
+[start] spawning embedded job worker (npm run worker:all) in same container
+[start] using Next standalone server ...
+[worker] starting (QUEUE_DRIVER=db)
+[worker] DB poll every 5000ms
+```
+
+When jobs run:
+
+```text
+[worker] processed=2 drip_campaign_step:ok, automation_batch:ok
+```
+
+## Job types (automation + SMS)
 
 | Responsibility | Job type | Queue |
 |----------------|----------|-------|
-| Advance execution steps | `automation_advance` | `automations` |
-| Wake waiting executions | `automation_batch` → `processAutomationWaits` | `automations` |
-| Scheduled datetime triggers | `automation_batch` → `processScheduledAutomations` | `automations` |
-| Campaign sends (separate) | `campaign_send_batch`, `send_campaign_sms` | `review-campaign`, `sms-send` |
+| Drip delayed steps | `drip_campaign_step` | `default` |
+| AI reply after delay | `ai_reply_respond` | `default` |
+| Automation advance | `automation_advance` | `automations` |
+| Wake waits / scheduled | `automation_batch` | `automations` |
 
-## Worker command
+### Drip campaigns
+
+- **Immediate first message** — sent inline on enroll (no queue wait).
+- **Delayed follow-ups** — `job_queue.run_after`; embedded worker sends when due (~5s poll).
+- Web container must stay running (normal Coolify deployment).
+
+## Optional configurations
+
+| Variable | Effect |
+|----------|--------|
+| `EMBEDDED_JOB_WORKER=0` | No sibling worker; use in-process poller only (`instrumentation.ts`) |
+| `DISABLE_INPROCESS_WORKER=1` | Web skips in-process drain (use with a **separate** `worker:all` service) |
+| `WORKER_POLL_MS` | Poll interval (default `5000`) |
+| `QUEUE_DRIVER=bullmq` + `REDIS_URL` | BullMQ consumers in embedded worker |
+
+### Separate worker container (optional, not required)
+
+If you already have a second Node container running `npm run worker:all`:
+
+1. Set `DISABLE_INPROCESS_WORKER=1` on **web**
+2. Set `EMBEDDED_JOB_WORKER=0` on **web** (so start script does not spawn another worker)
+
+**Do not** run embedded worker + standalone worker + in-process poller — that can double-send.
+
+Your **transovo-voice** Python container is unrelated to this queue; leave its start command as-is.
+
+## Optional cron backup
+
+Not required when the embedded worker is running. Safety net:
 
 ```bash
-npm run worker:all
-```
-
-This process:
-
-1. **Default (`QUEUE_DRIVER` unset)** — polls the Postgres `job_queue` table every `WORKER_POLL_MS` (default 5s) and processes due jobs including `automation_batch` and `automation_advance`.
-2. **BullMQ (`QUEUE_DRIVER=bullmq` + `REDIS_URL`)** — starts BullMQ workers for `automations` (and other queues). Minute cron should still call `POST /api/jobs/process` to enqueue `automation_batch` and sync the DB outbox.
-
-Do **not** run two consumers on the same queue (DB poll + BullMQ for the same jobs) — that can double-send messages.
-
-## Coolify / production
-
-Run **two services** (or one web + one worker):
-
-1. **Web** — `npm run build && npm run start` (Next.js app)
-2. **Worker** — `npm run worker:all` (long-running process, no HTTP port)
-
-Optional **cron** (if not relying solely on worker poll):
-
-```bash
-# Every minute — enqueue batch jobs and sync outbox
 curl -sS -X POST "$APP_URL/api/jobs/process" -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-## Required environment variables
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | Prisma / job queue |
-| `APP_URL` | Tracking links, webhook URLs |
-| `INTEGRATION_SECRET_KEY` | Messaging credential encryption |
-| `QUEUE_DRIVER` | `bullmq` for Redis queues, omit for DB-only |
-| `REDIS_URL` | Required when `QUEUE_DRIVER=bullmq` |
-| `CRON_SECRET` | Auth for `/api/jobs/process` |
-| Telnyx vars (below) | Live SMS — this deployment uses **Telnyx**, not Twilio |
-| `BREVO_API_KEY` | Email automation actions |
-
-### Telnyx (production SMS)
-
-Automations send through the same messaging registration path as campaigns (`sendQuickSms` → workspace registration → Telnyx when configured).
-
-| Variable | Purpose |
-|----------|---------|
-| `MESSAGING_PROVIDER=telnyx` or `TELNYX_MODE=live` | Select Telnyx adapter |
-| `TELNYX_API_KEY` | API key |
-| `TELNYX_PUBLIC_KEY` | Webhook signature verification |
-| `TELNYX_ORG_ID` | Organization |
-| `APP_URL` | Base URL for `POST /api/telnyx/messaging` and compliance webhooks |
-
-Messaging registration must be **ready** (brand/campaign approved, number attached) before automation SMS steps send. Without Telnyx credentials, the **mock** adapter can be used for local/E2E testing.
-
-Twilio env vars remain in the repo for rollback only; do not configure them on the Telnyx deployment.
-
 ## Health check
 
-- Worker logs: `[worker] processed=N` when jobs run
-- DB: `job_queue` rows move from `pending` → `completed`
-- DB: `automation_execution` with `status=WAITING` and `next_action_at` in the past should transition to `RUNNING` after worker/cron tick
+- `[worker] processed=N` in web container logs
+- `job_queue` rows: `pending` → `completed`
+- Drip: `next_run_at` in the past → send within one poll interval
+- Automations: `WAITING` + `next_action_at` in the past → advances after tick
 
-## Retry policy
+## Telnyx SMS
 
-- BullMQ: 8 attempts with exponential backoff (15s base) for automation jobs; registration jobs use higher attempts
-- DB queue: soft defer via `JobDeferredError` re-schedules `run_after`
-- SMS/email actions use **idempotency keys** (`auto:{executionId}:{nodeId}`) so retries do not double-send
-
-### Builder test SMS
-
-`POST /api/automations/[id]/test-sms` uses the same Telnyx/mock send path as quick send. It does not create automation executions. Requires messaging registration ready for a real outbound test.
-
-## Paused automations
-
-- Flow `status=PAUSED` — `advanceAutomationExecution` skips; waits do not resume
-- Scheduled triggers skip non-`ACTIVE` flows
+Jobs call `sendQuickSms` → workspace messaging registration → Telnyx when configured. Registration must be **ready** (brand/campaign approved, number attached).

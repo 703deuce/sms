@@ -57,10 +57,11 @@ export async function scheduleDripStep(
   enrollmentId: string,
   stepIndex: number,
   runAfter = new Date(),
+  workspaceId?: string,
 ) {
   await enqueueJob({
     jobType: "drip_campaign_step",
-    workspaceId: undefined,
+    workspaceId,
     payload: { enrollmentId, stepIndex },
     idempotencyKey: `drip-step:${enrollmentId}:${stepIndex}`,
     runAfter,
@@ -108,7 +109,7 @@ export async function enrollContactInDripCampaign(
   if (firstDelay === 0) {
     await processDripCampaignStep({ enrollmentId: enrollment.id, stepIndex: 0 });
   } else {
-    await scheduleDripStep(enrollment.id, 0, nextRunAt);
+    await scheduleDripStep(enrollment.id, 0, nextRunAt, campaign.workspaceId);
   }
   return true;
 }
@@ -211,7 +212,7 @@ export async function processDripCampaignStep(payload: {
         nextRunAt,
       },
     });
-    await scheduleDripStep(enrollment.id, nextIndex, nextRunAt);
+    await scheduleDripStep(enrollment.id, nextIndex, nextRunAt, enrollment.workspaceId);
   } else {
     await prisma.dripCampaignEnrollment.update({
       where: { id: enrollment.id },

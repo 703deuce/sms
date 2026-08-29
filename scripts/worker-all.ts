@@ -1,14 +1,10 @@
 /**
- * Optional standalone worker process.
+ * Job drain process — started automatically by `scripts/start-production.mjs`
+ * in the same Coolify web container (sibling of Next.js).
  *
- * Preferred default: the Next.js web container already drains jobs via
- * `src/instrumentation.ts` + `src/lib/jobs/inprocess-worker.ts`.
- * Only run this if you set DISABLE_INPROCESS_WORKER=1 on the web app.
- *
- * Drains DB job_queue, OR BullMQ when QUEUE_DRIVER=bullmq.
- * Never both — dual consumers double-send.
- *
- *   npm run worker:all
+ * Can also run manually: npm run worker:all
+ * Only disable the embedded spawn (EMBEDDED_JOB_WORKER=0) if another consumer
+ * already drains this queue.
  */
 import { processDueJobs } from "../src/lib/jobs/job-handlers";
 

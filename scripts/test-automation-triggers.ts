@@ -318,6 +318,45 @@ async function main() {
   if (listDrip >= 1) ok("list_join drip enrolled");
   else fail("list_join drip enrolled", `count=${listDrip}`);
 
+  const followUpDrip = await createDripCampaign(workspaceId, {
+    name: "Two-step drip delayed follow-up",
+    triggerType: "contact_added",
+    status: "active",
+    steps: [
+      { id: "s1", delayAmount: 0, delayUnit: "immediate", message: "Drip step one" },
+      { id: "s2", delayAmount: 5, delayUnit: "minutes", message: "Drip step two" },
+    ],
+  });
+
+  await triggerDripCampaigns({
+    workspaceId,
+    contactId: inboundContact.id,
+    triggerType: "contact_added",
+  });
+
+  const followEnrollment = await prisma.dripCampaignEnrollment.findFirst({
+    where: { dripCampaignId: followUpDrip.id, contactId: inboundContact.id },
+  });
+  if (!followEnrollment) {
+    fail("delayed drip enrollment created");
+  } else {
+    await prisma.jobQueue.updateMany({
+      where: { idempotencyKey: `drip-step:${followEnrollment.id}:1` },
+      data: { runAfter: new Date(Date.now() - 1000) },
+    });
+    const { processDueJobs } = await import("../src/lib/jobs/job-handlers");
+    await processDueJobs(20);
+    const stepTwoMsg = await prisma.message.findFirst({
+      where: {
+        workspaceId,
+        to: TEST_PHONE_A,
+        idempotencyKey: `drip:${followUpDrip.id}:${inboundContact.id}:1`,
+      },
+    });
+    if (stepTwoMsg) ok("delayed drip step 2 sent by same-server job drain");
+    else fail("delayed drip step 2 sent by same-server job drain");
+  }
+
   // --- AI reply waits for customer reply (no burst) — reuse TEST_PHONE_B contact ---
   const ai = await createAiReply(workspaceId, {
     name: "Keyword AI",
