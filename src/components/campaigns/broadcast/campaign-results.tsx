@@ -9,7 +9,7 @@ import {
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
 import { Copy, Search } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type CampaignStats = {
   id: string;
@@ -34,6 +34,7 @@ type RecipientRow = {
   clickedAt?: string | null;
   repliedAt?: string | null;
   optedOutAt?: string | null;
+  failureReason?: string | null;
 };
 
 const RESULT_TABS = [
@@ -67,11 +68,52 @@ export function CampaignResultsView({
   const [tab, setTab] = useState("overview");
   const [recipientFilter, setRecipientFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [live, setLive] = useState(campaign);
 
-  const deliveryRate = campaign.sent > 0 ? (campaign.delivered / campaign.sent) * 100 : 0;
-  const clickRate = campaign.delivered > 0 ? (campaign.clicks / campaign.delivered) * 100 : 0;
-  const replyRate = campaign.delivered > 0 ? (campaign.replies / campaign.delivered) * 100 : 0;
-  const optOutRate = campaign.delivered > 0 ? (campaign.optOuts / campaign.delivered) * 100 : 0;
+  const isSending = ["SENDING", "Sending", "sending"].includes(campaign.status);
+
+  useEffect(() => {
+    setLive(campaign);
+  }, [campaign]);
+
+  useEffect(() => {
+    if (!isSending) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/mass-texting/campaigns/${campaign.id}/stats`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && json.data) {
+          setLive((prev) => ({
+            ...prev,
+            sent: json.data.sent ?? prev.sent,
+            delivered: json.data.delivered ?? prev.delivered,
+            clicks: json.data.clicks ?? prev.clicks,
+            replies: json.data.replies ?? prev.replies,
+            optOuts: json.data.optOuts ?? prev.optOuts,
+            status: json.data.status ?? prev.status,
+          }));
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    };
+
+    void poll();
+    const timer = setInterval(poll, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [campaign.id, isSending]);
+
+  const deliveryRate = live.sent > 0 ? (live.delivered / live.sent) * 100 : 0;
+  const clickRate = live.delivered > 0 ? (live.clicks / live.delivered) * 100 : 0;
+  const replyRate = live.delivered > 0 ? (live.replies / live.delivered) * 100 : 0;
+  const optOutRate = live.delivered > 0 ? (live.optOuts / live.delivered) * 100 : 0;
+  const pending = Math.max(0, live.sent - live.delivered);
 
   const filteredRecipients = useMemo(() => {
     let rows = recipients;
@@ -107,16 +149,17 @@ export function CampaignResultsView({
         </>
       }
     >
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <MetricCard label="Sent" value={formatNumber(campaign.sent)} />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <MetricCard label="Sent" value={formatNumber(live.sent)} />
         <MetricCard
           label="Delivered"
-          value={formatNumber(campaign.delivered)}
+          value={formatNumber(live.delivered)}
           sub={formatPercent(deliveryRate)}
         />
-        <MetricCard label="Clicks" value={formatNumber(campaign.clicks)} sub={formatPercent(clickRate)} />
-        <MetricCard label="Replies" value={formatNumber(campaign.replies)} sub={formatPercent(replyRate)} />
-        <MetricCard label="Opt-outs" value={formatNumber(campaign.optOuts)} sub={formatPercent(optOutRate)} />
+        <MetricCard label="Pending" value={formatNumber(pending)} />
+        <MetricCard label="Clicks" value={formatNumber(live.clicks)} sub={formatPercent(clickRate)} />
+        <MetricCard label="Replies" value={formatNumber(live.replies)} sub={formatPercent(replyRate)} />
+        <MetricCard label="Opt-outs" value={formatNumber(live.optOuts)} sub={formatPercent(optOutRate)} />
       </div>
 
       <CampaignFilterTabs
@@ -142,7 +185,7 @@ export function CampaignResultsView({
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#fbbf24]" />
-                  Pending {formatNumber(Math.max(0, campaign.sent - campaign.delivered))}
+                  Pending {formatNumber(pending)}
                 </li>
               </ul>
             </div>
@@ -150,7 +193,7 @@ export function CampaignResultsView({
           <div className={cn(campaignUi.card, "p-5")}>
             <h3 className="text-[14px] font-semibold text-[#111827]">Engagement Over Time</h3>
             <div className="mt-6 flex h-32 items-end gap-2">
-              {[campaign.clicks, campaign.replies, campaign.clicks * 0.6, campaign.replies * 1.2].map(
+              {[live.clicks, live.replies, live.clicks * 0.6, live.replies * 1.2].map(
                 (v, i) => (
                   <div
                     key={i}
@@ -209,6 +252,7 @@ export function CampaignResultsView({
                   <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3">Phone Number</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Delivered At</th>
                   <th className="px-4 py-3">Clicked At</th>
                   <th className="px-4 py-3">Replied At</th>
@@ -218,7 +262,7 @@ export function CampaignResultsView({
               <tbody className="divide-y divide-[#f3f4f6]">
                 {filteredRecipients.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-[#6b7280]">
+                    <td colSpan={8} className="px-4 py-8 text-center text-[#6b7280]">
                       No recipients to show yet.
                     </td>
                   </tr>
@@ -230,6 +274,7 @@ export function CampaignResultsView({
                       <td className="px-4 py-3">
                         <RecipientStatus status={r.status} />
                       </td>
+                      <td className="px-4 py-3 text-[#6b7280]">{r.failureReason || "—"}</td>
                       <td className="px-4 py-3 text-[#6b7280]">{formatTs(r.deliveredAt)}</td>
                       <td className="px-4 py-3 text-[#6b7280]">{formatTs(r.clickedAt)}</td>
                       <td className="px-4 py-3 text-[#6b7280]">{formatTs(r.repliedAt)}</td>
