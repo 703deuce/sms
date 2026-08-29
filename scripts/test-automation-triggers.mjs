@@ -47,6 +47,33 @@ async function run() {
   }
   console.log("PASS approved test numbers configured via env");
 
+  function contactAddedAutomationsAlreadyFired(customFields) {
+    if (!customFields || typeof customFields !== "object") return false;
+    return Boolean(customFields.contactAddedAutomationsAt);
+  }
+  function shouldRunContactAddedAutomations(existing, consentSource) {
+    if (!existing) return true;
+    if (contactAddedAutomationsAlreadyFired(existing.customFields)) return false;
+    return consentSource === "manual" || consentSource === "import";
+  }
+  assert.equal(shouldRunContactAddedAutomations(null, "manual"), true);
+  assert.equal(
+    shouldRunContactAddedAutomations(
+      { id: "c1", customFields: {}, consentSource: "inbound_sms" },
+      "manual",
+    ),
+    true,
+  );
+  assert.equal(
+    shouldRunContactAddedAutomations(
+      { id: "c1", customFields: { contactAddedAutomationsAt: "2026-01-01" }, consentSource: null },
+      "manual",
+    ),
+    false,
+  );
+  assert.equal(contactAddedAutomationsAlreadyFired({ contactAddedAutomationsAt: "x" }), true);
+  console.log("PASS contact_added trigger eligibility");
+
   if (process.env.DATABASE_URL) {
     const { getPrisma } = await import("../src/lib/db.ts");
     const prisma = getPrisma();

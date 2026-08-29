@@ -30,9 +30,9 @@ export function AddContactDialog({ triggerLabel = "Add contact" }: { triggerLabe
       }),
     });
     setLoading(false);
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error || "Could not add contact. Check the phone number and try again.");
+      setError(payload.error || "Could not add contact. Check the phone number and try again.");
       return;
     }
     setOpen(false);

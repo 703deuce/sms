@@ -435,19 +435,8 @@ export async function processInboundMessage(input: {
       data: { workspaceId: input.workspaceId, phone: from, lastReply: new Date() },
     });
     try {
-      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
-      await dispatchAutoReplies({
-        workspaceId: input.workspaceId,
-        contactId: contact.id,
-        triggerType: "contact_added",
-        fromE164: input.to,
-      });
-      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
-      await triggerDripCampaigns({
-        workspaceId: input.workspaceId,
-        contactId: contact.id,
-        triggerType: "contact_added",
-      });
+      const { fireContactAddedAutomations } = await import("@/lib/automate/contact-added-triggers");
+      await fireContactAddedAutomations(input.workspaceId, contact.id);
     } catch {
       /* non-fatal */
     }

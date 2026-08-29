@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  fireContactAddedAutomations,
+  shouldRunContactAddedAutomations,
+} from "@/lib/automate/contact-added-triggers";
+
+const CONTACT_STATUSES = new Set(["SUBSCRIBED", "UNSUBSCRIBED", "BLOCKED", "INVALID"]);
 
 export async function GET(request: Request) {
   try {
@@ -73,12 +79,25 @@ export async function POST(request: Request) {
       lastName?: string;
       email?: string;
       consentSource?: string;
+      status?: string;
     };
     if (!body.phone) {
       return NextResponse.json({ error: "phone is required" }, { status: 400 });
     }
     const phone = normalizeE164(body.phone);
-    const contact = await getPrisma().contact.upsert({
+    const consentSource = body.consentSource || "manual";
+    const statusRaw = (body.status || "SUBSCRIBED").toUpperCase();
+    const status = CONTACT_STATUSES.has(statusRaw)
+      ? (statusRaw as "SUBSCRIBED" | "UNSUBSCRIBED" | "BLOCKED" | "INVALID")
+      : "SUBSCRIBED";
+
+    const prisma = getPrisma();
+    const existing = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: auth.workspaceId, phone } },
+      select: { id: true, customFields: true, consentSource: true },
+    });
+
+    const contact = await prisma.contact.upsert({
       where: { workspaceId_phone: { workspaceId: auth.workspaceId, phone } },
       create: {
         workspaceId: auth.workspaceId,
@@ -86,33 +105,28 @@ export async function POST(request: Request) {
         firstName: body.firstName || null,
         lastName: body.lastName || null,
         email: body.email || null,
-        status: "SUBSCRIBED",
-        consentSource: body.consentSource || "manual",
+        status,
+        consentSource,
         consentDate: new Date(),
       },
       update: {
         firstName: body.firstName || undefined,
         lastName: body.lastName || undefined,
         email: body.email || undefined,
+        status,
+        ...(consentSource === "manual" ? { consentSource, consentDate: new Date() } : {}),
       },
     });
 
-    const isNew = contact.createdAt.getTime() > Date.now() - 5000;
-    if (isNew) {
+    const isNew = !existing;
+    let automations: Awaited<ReturnType<typeof fireContactAddedAutomations>> | null = null;
+
+    if (shouldRunContactAddedAutomations(existing, consentSource)) {
       const { emitAutomationEvent } = await import("@/lib/automations/events");
       await emitAutomationEvent(auth.workspaceId, "customer.created", contact.id).catch(() => undefined);
-      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
-      await dispatchAutoReplies({
-        workspaceId: auth.workspaceId,
-        contactId: contact.id,
-        triggerType: "contact_added",
-      }).catch(() => undefined);
-      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
-      await triggerDripCampaigns({
-        workspaceId: auth.workspaceId,
-        contactId: contact.id,
-        triggerType: "contact_added",
-      }).catch(() => undefined);
+      automations = await fireContactAddedAutomations(auth.workspaceId, contact.id, {
+        consentSource,
+      });
     }
 
     try {
@@ -132,7 +146,16 @@ export async function POST(request: Request) {
       // CRM push is optional
     }
 
-    return NextResponse.json({ data: contact }, { status: 201 });
+    return NextResponse.json(
+      {
+        data: contact,
+        meta: {
+          created: isNew,
+          automations,
+        },
+      },
+      { status: isNew ? 201 : 200 },
+    );
   } catch (err) {
     return jsonError(err, 400);
   }
