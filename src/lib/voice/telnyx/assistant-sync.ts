@@ -27,6 +27,11 @@ import {
   shouldInjectCallerPlaybook,
 } from "@/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
 import { resolveEnabledBuiltinTools } from "../tools/catalog";
+import {
+  assistantModelFields,
+  GEMINI_API_KEY_REF,
+  OPENAI_API_KEY_REF,
+} from "./official-baseline";
 
 function unwrapTelnyxId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -350,12 +355,18 @@ export async function syncTelnyxAssistant(
   const transcription = config.transcription || {};
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
 
+  const modelFields = assistantModelFields(modelId, {
+    llmApiKeyRef: config.model?.customApiKeyRef ?? undefined,
+    geminiKeyRef: GEMINI_API_KEY_REF,
+    openaiKeyRef: OPENAI_API_KEY_REF,
+  });
+
   // Core create body — keep strict; optional fields go on a follow-up update.
   // No native Telnyx first_speaker field: caller-first omits greeting so the
   // assistant waits; AI-first includes the configured greeting.
   const corePayload: Record<string, unknown> = {
     name: `${agent.name} (${workspaceId.slice(0, 8)})`.slice(0, 100),
-    model: modelId,
+    ...modelFields,
     instructions: instructions.slice(0, 100_000),
   };
   if (!speaksFirstIsCaller(config)) {
@@ -381,8 +392,6 @@ export async function syncTelnyxAssistant(
       base_url: config.model.customBaseUrl,
       ...(apiKey ? { llm_api_key_ref: config.model.customApiKeyRef } : {}),
     };
-  } else if (config.model?.customApiKeyRef) {
-    corePayload.llm_api_key_ref = config.model.customApiKeyRef;
   }
 
   const gainLinear = outputGainLinear(config);
