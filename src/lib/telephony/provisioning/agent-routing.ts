@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
 import { findFrontDeskAgentForWorkspace } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
 import {
@@ -73,9 +74,39 @@ export async function resolveFallbackInboundCalledNumber(input: {
   return null;
 }
 
+function routingModeForPhone(settingsJson: unknown): string {
+  const settings =
+    settingsJson && typeof settingsJson === "object"
+      ? (settingsJson as {
+          telephony?: { routingMode?: string };
+          provisioning?: { routingMode?: string };
+        })
+      : {};
+  const telephony = settings.telephony || settings.provisioning;
+  return String(telephony?.routingMode || "").toLowerCase();
+}
+
+function scoreInboundPhoneCandidate(input: {
+  status: string;
+  settingsJson: unknown;
+  updatedAt: Date;
+}): number {
+  let score = 0;
+  if (input.status === "ACTIVE") score += 10;
+  if (routingModeForPhone(input.settingsJson) === "livekit_sip") score += 100;
+  const caps = readPhoneCapabilities({ settingsJson: input.settingsJson });
+  if (caps.aiAfterHoursEnabled) score += 50;
+  if (caps.voiceEnabled) score += 5;
+  score += (input.updatedAt?.getTime() ?? 0) / 1_000_000_000_000;
+  return score;
+}
+
 /**
  * Authoritative Transovo lookup: called number → workspace → active agent.
  * LiveKit dispatch stays generic; tenant/agent resolution happens here.
+ *
+ * When duplicate E164 rows exist (legacy imports), prefer the phone that has an
+ * ACTIVE inbound AI assignment and LiveKit SIP routing configured.
  */
 export async function resolveAgentByCalledNumber(
   toE164: string,
@@ -84,23 +115,46 @@ export async function resolveAgentByCalledNumber(
   if (!e164) return null;
   const prisma = getPrisma();
 
-  const phone = await prisma.phoneNumber.findFirst({
+  const phones = await prisma.phoneNumber.findMany({
     where: { e164 },
-    select: { id: true, workspaceId: true, e164: true, status: true },
+    select: {
+      id: true,
+      workspaceId: true,
+      e164: true,
+      status: true,
+      settingsJson: true,
+      updatedAt: true,
+    },
   });
-  if (!phone) return null;
+  if (!phones.length) return null;
 
-  const agent = await resolveInboundAiAgent(phone.workspaceId, phone.id);
-  if (!agent) return null;
+  const candidates: Array<{
+    phone: (typeof phones)[number];
+    routing: AgentRoutingResolution;
+    score: number;
+  }> = [];
 
-  return {
-    workspaceId: phone.workspaceId,
-    agentId: agent.id,
-    phoneNumberId: phone.id,
-    e164: phone.e164,
-    agentStatus: agent.status,
-    agentName: agent.name,
-  };
+  for (const phone of phones) {
+    const agent = await resolveInboundAiAgent(phone.workspaceId, phone.id);
+    if (!agent) continue;
+    candidates.push({
+      phone,
+      routing: {
+        workspaceId: phone.workspaceId,
+        agentId: agent.id,
+        phoneNumberId: phone.id,
+        e164: phone.e164,
+        agentStatus: agent.status,
+        agentName: agent.name,
+      },
+      score: scoreInboundPhoneCandidate(phone),
+    });
+  }
+
+  if (!candidates.length) return null;
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0]!.routing;
 }
 
 async function applyInboundFrontDeskDefault(
