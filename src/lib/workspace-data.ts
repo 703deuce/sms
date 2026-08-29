@@ -75,30 +75,68 @@ export async function loadPhoneNumbers(
 }
 
 export async function loadContacts(workspaceId: string, status?: string): Promise<Contact[]> {
-  const rows = await getPrisma().contact.findMany({
-    where: {
-      workspaceId,
-      // Hide the synthetic workspace-level automation contact (used only as an FK
-      // for event_type.* triggers) from user-facing contact lists.
-      NOT: { customFields: { path: ["systemAutomationContact"], equals: true } },
-      ...(status
-        ? {
-            status: status.toUpperCase() as
-              | "SUBSCRIBED"
-              | "UNSUBSCRIBED"
-              | "BLOCKED"
-              | "INVALID",
-          }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: {
-      tagMembers: { include: { tag: true } },
-      listMembers: { include: { list: true } },
-    },
+  const { contacts } = await loadContactsPage(workspaceId, { page: 1, perPage: 200, status });
+  return contacts;
+}
+
+function visibleContactWhere(
+  workspaceId: string,
+  opts?: { status?: string; listId?: string },
+) {
+  return {
+    workspaceId,
+    NOT: { customFields: { path: ["systemAutomationContact"], equals: true } },
+    ...(opts?.status
+      ? {
+          status: opts.status.toUpperCase() as
+            | "SUBSCRIBED"
+            | "UNSUBSCRIBED"
+            | "BLOCKED"
+            | "INVALID",
+        }
+      : {}),
+    ...(opts?.listId
+      ? {
+          listMembers: { some: { listId: opts.listId } },
+        }
+      : {}),
+  };
+}
+
+export async function loadContactStats(workspaceId: string) {
+  const prisma = getPrisma();
+  const baseWhere = visibleContactWhere(workspaceId);
+  const [total, subscribed, unsubscribed] = await Promise.all([
+    prisma.contact.count({ where: baseWhere }),
+    prisma.contact.count({ where: { ...baseWhere, status: "SUBSCRIBED" } }),
+    prisma.contact.count({ where: { ...baseWhere, status: "UNSUBSCRIBED" } }),
+  ]);
+  return { total, subscribed, unsubscribed };
+}
+
+export async function loadContactsPage(
+  workspaceId: string,
+  opts: { page: number; perPage: number; status?: string; listId?: string },
+): Promise<{ contacts: Contact[]; total: number }> {
+  const where = visibleContactWhere(workspaceId, {
+    status: opts.status,
+    listId: opts.listId,
   });
-  return (rows as Array<Record<string, unknown> & {
+  const skip = (Math.max(1, opts.page) - 1) * opts.perPage;
+  const [total, rows] = await Promise.all([
+    getPrisma().contact.count({ where }),
+    getPrisma().contact.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: opts.perPage,
+      include: {
+        tagMembers: { include: { tag: true } },
+        listMembers: { include: { list: true } },
+      },
+    }),
+  ]);
+  const contacts = (rows as Array<Record<string, unknown> & {
     tagMembers?: Array<{ tag: { name: string } }>;
     listMembers?: Array<{ list: { name: string } }>;
   }>).map((c) =>
@@ -108,6 +146,7 @@ export async function loadContacts(workspaceId: string, status?: string): Promis
       lists: c.listMembers,
     } as Parameters<typeof mapContact>[0]),
   );
+  return { contacts, total };
 }
 
 export async function loadContactById(workspaceId: string, id: string) {
@@ -141,17 +180,32 @@ export type SegmentSummary = {
 };
 
 export async function loadLists(workspaceId: string): Promise<ContactListSummary[]> {
-  const rows = await getPrisma().contactList.findMany({
-    where: { workspaceId },
-    include: { _count: { select: { members: true } } },
-    orderBy: { name: "asc" },
-  });
-  return (rows as Array<{ id: string; name: string; description: string | null; _count: { members: number } }>).map((l) => ({
+  const { lists } = await loadListsPage(workspaceId, { page: 1, perPage: 500 });
+  return lists;
+}
+
+export async function loadListsPage(
+  workspaceId: string,
+  opts: { page: number; perPage: number },
+): Promise<{ lists: ContactListSummary[]; total: number }> {
+  const skip = (Math.max(1, opts.page) - 1) * opts.perPage;
+  const [total, rows] = await Promise.all([
+    getPrisma().contactList.count({ where: { workspaceId } }),
+    getPrisma().contactList.findMany({
+      where: { workspaceId },
+      include: { _count: { select: { members: true } } },
+      orderBy: { name: "asc" },
+      skip,
+      take: opts.perPage,
+    }),
+  ]);
+  const lists = (rows as Array<{ id: string; name: string; description: string | null; _count: { members: number } }>).map((l) => ({
     id: l.id,
     name: l.name,
     description: l.description || "",
     contactCount: l._count.members,
   }));
+  return { lists, total };
 }
 
 export async function loadTags(workspaceId: string) {

@@ -1,4 +1,5 @@
 import { CreateListButton } from "@/components/contacts/create-list-button";
+import { AudienceTablePagination } from "@/components/audience/audience-table-pagination";
 import {
   SlickAudienceHeader,
   SlickTableToolbar,
@@ -8,17 +9,23 @@ import { RowActionsMenu } from "@/components/audience/row-actions-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PaginationBar } from "@/components/ui/metric";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { getActiveWorkspaceId } from "@/lib/auth";
+import { parseAudiencePagination } from "@/lib/contacts/audience-pagination";
 import { contactTabs } from "@/lib/contact-tabs";
-import { loadLists } from "@/lib/workspace-data";
+import { loadListsPage } from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
-import { Filter, List } from "lucide-react";
-import Link from "next/link";
+import { Filter, List, Users } from "lucide-react";
+import { Suspense } from "react";
 
-export default async function ContactListsPage() {
+type SearchParams = Promise<{ page?: string; perPage?: string }>;
+
+export default async function ContactListsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const workspaceId = await getActiveWorkspaceId();
 
   if (!workspaceId) {
@@ -34,7 +41,9 @@ export default async function ContactListsPage() {
     );
   }
 
-  const lists = await loadLists(workspaceId);
+  const params = await searchParams;
+  const { page, perPage } = parseAudiencePagination(params);
+  const { lists, total } = await loadListsPage(workspaceId, { page, perPage });
 
   return (
     <div className="text-[13px]">
@@ -57,7 +66,7 @@ export default async function ContactListsPage() {
           }
         />
 
-        {lists.length === 0 ? (
+        {total === 0 ? (
           <EmptyState
             icon={<Users className="h-8 w-8" />}
             title="No lists yet"
@@ -112,12 +121,9 @@ export default async function ContactListsPage() {
               </TBody>
             </Table>
 
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-              <select className="rounded border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-500">
-                <option>25 Per Page</option>
-              </select>
-              <PaginationBar rangeLabel={`1–${lists.length} of ${lists.length}`} />
-            </div>
+            <Suspense fallback={null}>
+              <AudienceTablePagination page={page} perPage={perPage} total={total} />
+            </Suspense>
           </>
         )}
       </Card>

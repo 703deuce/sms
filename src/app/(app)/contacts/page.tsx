@@ -1,4 +1,5 @@
 import { AddContactDialog } from "@/components/contacts/add-contact-dialog";
+import { AudienceTablePagination } from "@/components/audience/audience-table-pagination";
 import {
   formatSlickDateTime,
   SlickAudienceHeader,
@@ -10,18 +11,25 @@ import { RowActionsMenu } from "@/components/audience/row-actions-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PaginationBar } from "@/components/ui/metric";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { getActiveWorkspaceId } from "@/lib/auth";
+import { parseAudiencePagination } from "@/lib/contacts/audience-pagination";
 import { contactTabs } from "@/lib/contact-tabs";
 import type { Contact } from "@/lib/types";
-import { loadContacts } from "@/lib/workspace-data";
+import { loadContactStats, loadContactsPage } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
 import { Filter, UserCheck, UserMinus, Users } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
-export default async function ContactsPage() {
+type SearchParams = Promise<{ page?: string; perPage?: string; list?: string }>;
+
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const workspaceId = await getActiveWorkspaceId();
   if (!workspaceId) {
     return (
@@ -40,11 +48,14 @@ export default async function ContactsPage() {
     );
   }
 
-  const contacts: Contact[] = await loadContacts(workspaceId);
-  const total = contacts.length;
-  const subscribed = contacts.filter((c) => c.status === "Subscribed").length;
-  const unsubscribed = contacts.filter((c) => c.status === "Unsubscribed").length;
-  const shown = contacts.length;
+  const params = await searchParams;
+  const { page, perPage } = parseAudiencePagination(params);
+  const listId = params.list?.trim() || undefined;
+
+  const [stats, { contacts, total }] = await Promise.all([
+    loadContactStats(workspaceId),
+    loadContactsPage(workspaceId, { page, perPage, listId }),
+  ]);
 
   return (
     <div className="text-[13px]">
@@ -57,17 +68,17 @@ export default async function ContactsPage() {
       <Tabs items={contactTabs} />
 
       <div className="mb-5 grid gap-4 md:grid-cols-3">
-        <SlickStatCard label="Contacts" value={total} icon={Users} tone="violet" />
+        <SlickStatCard label="Contacts" value={stats.total} icon={Users} tone="violet" />
         <SlickStatCard
           label="Subscribed Contacts"
-          value={subscribed}
+          value={stats.subscribed}
           icon={UserCheck}
           tone="green"
           showInfo
         />
         <SlickStatCard
           label="Unsubscribed Contacts"
-          value={unsubscribed}
+          value={stats.unsubscribed}
           icon={UserMinus}
           tone="rose"
           showInfo
@@ -86,7 +97,16 @@ export default async function ContactsPage() {
           }
         />
 
-        {contacts.length === 0 ? (
+        {listId ? (
+          <p className="mb-3 text-[12px] text-slate-500">
+            Showing contacts in selected list.{" "}
+            <Link href="/contacts" className="text-primary hover:underline">
+              View all contacts
+            </Link>
+          </p>
+        ) : null}
+
+        {total === 0 ? (
           <EmptyState
             icon={<Users className="h-8 w-8" />}
             title="No contacts yet"
@@ -112,7 +132,7 @@ export default async function ContactsPage() {
                 </TR>
               </THead>
               <TBody>
-                {contacts.map((contact) => (
+                {contacts.map((contact: Contact) => (
                   <TR key={contact.id} className="border-slate-100">
                     <TD>
                       <input
@@ -161,16 +181,14 @@ export default async function ContactsPage() {
               </TBody>
             </Table>
 
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-              <label className="inline-flex items-center gap-2 text-[12px] text-slate-500">
-                <select className="rounded border border-slate-200 bg-white px-2 py-1 text-[12px]">
-                  <option>25 Per Page</option>
-                  <option>50 Per Page</option>
-                  <option>100 Per Page</option>
-                </select>
-              </label>
-              <PaginationBar rangeLabel={`1–${shown} of ${total}`} />
-            </div>
+            <Suspense fallback={null}>
+              <AudienceTablePagination
+                page={page}
+                perPage={perPage}
+                total={total}
+                extraParams={listId ? { list: listId } : undefined}
+              />
+            </Suspense>
           </>
         )}
       </Card>
