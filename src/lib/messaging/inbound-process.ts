@@ -601,6 +601,29 @@ export async function processInboundMessage(input: {
     });
   }
 
+  // AI conversational replies (scheduled with optional delay).
+  try {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        OR: [{ e164: input.to }, { e164: input.to.replace(/\D/g, "") }],
+      },
+      select: { id: true },
+    });
+    await (
+      await import("@/lib/ai-replies/engine")
+    ).scheduleInboundAiReply({
+      workspaceId: input.workspaceId,
+      contactId: contact.id,
+      conversationId: conversation.id,
+      phoneNumberId: phone?.id,
+      fromE164: input.to,
+      body: body || "",
+    });
+  } catch {
+    /* non-fatal */
+  }
+
   // Away / business-hours auto-reply (once per contact per day).
   // User-configured after-hours auto replies take precedence over the global away message.
   try {

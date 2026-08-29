@@ -62,6 +62,17 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!enrollmentId) throw new Error("enrollmentId required");
       return processDripCampaignStep({ enrollmentId, stepIndex });
     }
+    case "ai_reply_respond": {
+      const { processAiReplyRespond } = await import("@/lib/ai-replies/engine");
+      return processAiReplyRespond({
+        aiReplyId: String(payload.aiReplyId || ""),
+        sessionId: String(payload.sessionId || ""),
+        conversationId: String(payload.conversationId || ""),
+        contactId: String(payload.contactId || ""),
+        inboundBody: String(payload.inboundBody || ""),
+        fromE164: payload.fromE164 ? String(payload.fromE164) : undefined,
+      });
+    }
     case "voice_webhook_process": {
       const { processVoiceWebhookEvent } = await import("@/lib/voice/telnyx/webhook-handlers");
       return processVoiceWebhookEvent({

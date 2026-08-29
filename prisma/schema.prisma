@@ -234,6 +234,7 @@ model Workspace {
   keywords    Keyword[]
   autoReplies AutoReply[]
   dripCampaigns DripCampaign[]
+  aiReplies AiReply[]
   forms       OptInForm[]
   consentRecords ConsentRecord[]
   qrCodes     QrCode[]
@@ -1865,6 +1866,79 @@ model DripCampaignEnrollment {
   @@index([dripCampaignId, status])
   @@index([nextRunAt])
   @@map("drip_campaign_enrollments")
+}
+
+/// Conversational AI auto-responder for inbound SMS.
+model AiReply {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  description      String?
+  /// conversational | single_prompt
+  replyType        String   @default("conversational")
+  phoneNumberId    String?
+  status           String   @default("paused")
+  tone             String   @default("professional")
+  /// short | medium | long
+  responseLength   String   @default("medium")
+  systemPrompt     String
+  triggerConfig    Json     @default("{}")
+  knowledgeConfig  Json     @default("{}")
+  leadConfig       Json     @default("{}")
+  handoffConfig    Json     @default("{}")
+  advancedConfig   Json     @default("{}")
+  messagesSent     Int      @default(0)
+  contactsEngaged  Int      @default(0)
+  conversions      Int      @default(0)
+  handoffs         Int      @default(0)
+  lastTriggeredAt  DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sessions         AiReplySession[]
+  messageLogs      AiReplyMessageLog[]
+
+  @@index([workspaceId, status])
+  @@map("ai_replies")
+}
+
+model AiReplySession {
+  id             String   @id @default(cuid())
+  aiReplyId      String
+  workspaceId    String
+  conversationId String
+  contactId      String
+  /// ai_active | human | completed
+  status         String   @default("ai_active")
+  messageCount   Int      @default(0)
+  replied        Boolean  @default(false)
+  handedOff      Boolean  @default(false)
+  leadCaptured   Boolean  @default(false)
+  lastMessageAt  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  aiReply        AiReply  @relation(fields: [aiReplyId], references: [id], onDelete: Cascade)
+
+  @@unique([aiReplyId, conversationId])
+  @@index([workspaceId, conversationId])
+  @@index([conversationId, status])
+  @@map("ai_reply_sessions")
+}
+
+model AiReplyMessageLog {
+  id             String   @id @default(cuid())
+  aiReplyId      String
+  workspaceId    String
+  conversationId String?
+  contactId      String?
+  direction      String
+  body           String
+  knowledgeUsed  Json?
+  createdAt      DateTime @default(now())
+  aiReply        AiReply  @relation(fields: [aiReplyId], references: [id], onDelete: Cascade)
+
+  @@index([aiReplyId, createdAt])
+  @@map("ai_reply_message_logs")
 }
 
 model OptInForm {

@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  InboxAiAssistPanel,
+  InboxAiBanner,
+  useInboxAiAssist,
+} from "@/components/ai-replies/inbox-ai-assist-panel";
 import { InboxContactDrawer } from "@/components/inbox/inbox-contact-drawer";
 import { TemplatePicker } from "@/components/inbox/template-picker";
 import { MediaPicker, AttachedMediaThumbs } from "@/components/messaging/media-picker";
@@ -192,6 +197,7 @@ export function InboxView({
   }, [items, filter, search, currentUserName, teamMembers, sortOrder]);
 
   const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? items[0];
+  const aiAssist = useInboxAiAssist(selected?.id);
   const contact = contacts.find((c) => c.id === selected?.contactId);
   const bulkMode = selectedIds.size > 0;
 
@@ -578,7 +584,8 @@ export function InboxView({
             }}
           />
         ) : selected ? (
-          <>
+          <div className="flex min-w-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
               <div className="flex min-w-0 items-center gap-2">
                 <button
@@ -730,6 +737,10 @@ export function InboxView({
             </div>
 
             <div className="flex-1 overflow-y-auto bg-[#fafafa] px-5 py-4">
+              <InboxAiBanner
+                session={aiAssist.session}
+                onTakeover={() => void aiAssist.takeover()}
+              />
               <ThreadTimeline conversation={selected} currentUserName={currentUserName} />
             </div>
 
@@ -790,7 +801,17 @@ export function InboxView({
                 </div>
               </div>
             </div>
-          </>
+            </div>
+
+            <InboxAiAssistPanel
+              conversationId={selected.id}
+              assist={aiAssist}
+              onUseSuggestion={(text) => {
+                setReply(text);
+                setComposerTab("reply");
+              }}
+            />
+          </div>
         ) : (
           <EmptyThread />
         )}
@@ -890,6 +911,8 @@ function ThreadTimeline({
         }
 
         const outbound = m.direction === "out";
+        const isAiMessage = outbound && m.user === "AI";
+        const outboundLabel = isAiMessage ? "AI" : currentUserName ?? "You";
         return (
           <div key={m.id}>
             {showDate ? <DateSeparator label={dateKey} /> : null}
@@ -900,12 +923,19 @@ function ThreadTimeline({
                 </span>
               ) : null}
               <div className={cn("max-w-[70%]", outbound && "text-right")}>
-                <p className="mb-1 text-[11px] text-[#9ca3af]">
-                  {outbound ? currentUserName ?? "You" : conversation.contactName} ·{" "}
-                  {new Date(m.at).toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] text-[#9ca3af]">
+                  <span>
+                    {outbound ? outboundLabel : conversation.contactName} ·{" "}
+                    {new Date(m.at).toLocaleTimeString(undefined, {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  {isAiMessage ? (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
+                      AI
+                    </span>
+                  ) : null}
                 </p>
                 <div
                   className={cn(
@@ -922,8 +952,13 @@ function ThreadTimeline({
                 ) : null}
               </div>
               {outbound ? (
-                <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#6366f1] text-[10px] font-bold text-white">
-                  {(currentUserName || "Y").slice(0, 2).toUpperCase()}
+                <span
+                  className={cn(
+                    "mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white",
+                    isAiMessage ? "bg-primary" : "bg-[#6366f1]",
+                  )}
+                >
+                  {isAiMessage ? "AI" : (currentUserName || "Y").slice(0, 2).toUpperCase()}
                 </span>
               ) : null}
             </div>
