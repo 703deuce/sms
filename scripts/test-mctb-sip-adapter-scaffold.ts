@@ -44,6 +44,10 @@ if (!pjsip.includes("100rel=yes")) {
   console.error("pjsip.conf must enable 100rel");
   failed += 1;
 }
+if (!pjsip.includes("match=192.76.120.10")) {
+  console.error("pjsip.conf must identify Telnyx signaling IPs");
+  failed += 1;
+}
 
 const agi = readFileSync(resolve(root, "agi/mctb_inbound.py"), "utf8");
 for (const needle of [

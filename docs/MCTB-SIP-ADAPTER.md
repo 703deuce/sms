@@ -19,9 +19,36 @@ LiveKit SIP stays on **voice.transovo.ai:5060**. Asterisk uses **5070** on the s
 ## What you do NOT need to do
 
 - Run `docker compose` manually
-- Open new firewall rules for this spike (same host/IP as existing voice SIP)
 - Create a new A record (uses existing `voice.transovo.ai`)
 - Touch 571 until 866 passes 10/10
+
+## What you DO need in Coolify (one-time)
+
+On **transovo-voice** → **Ports** / **Port Mappings**, expose:
+
+- `5070/udp` (SIP)
+- `10000-10100/udp` (RTP)
+
+`EXPOSE` in the Dockerfile is not enough — Coolify must publish UDP to the host. Without this, `npm run test:mctb-sip-adapter-e2e` fails `sip_options_reachable`.
+
+## LiveKit vs Asterisk in the same container
+
+Both can run:
+
+| Process | Purpose |
+|---------|---------|
+| **Asterisk :5070** | MCTB press-1 SIP path (AT&T forwards) |
+| **LiveKit worker** | AI receptionist / other voice products |
+
+MCTB inbound does **not** use LiveKit rooms. If LiveKit connection logs are noisy during MCTB-only testing, set `MCTB_SIP_ADAPTER_ONLY=1` on transovo-voice to run Asterisk without the LiveKit worker.
+
+## Automated verification (no phone call)
+
+```bash
+npm run test:mctb-sip-adapter-e2e
+```
+
+Checks Telnyx FQDN, voice-runtime HTTP, and SIP OPTIONS to `voice.transovo.ai:5070`.
 
 ## What deploys automatically
 

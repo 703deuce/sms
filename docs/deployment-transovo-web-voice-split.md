@@ -61,6 +61,20 @@ Legacy fallbacks for internal auth: `VOICE_RUNTIME_INTERNAL_SECRET`, `INTEGRATIO
 | `LIVEKIT_SIP_OUTBOUND_TRUNK` | Optional | Fallback if bootstrap omits `sipOutboundTrunkId` (prefer web bootstrap) |
 | `LIVEKIT_SIP_NUMBER` | Optional | Caller ID E164 for outbound transfer (or bootstrap `sipCallerIdE164`) |
 | `MCTB_SIP_ADAPTER_ENABLED` | Optional | `1` — start Asterisk MCTB press-1 adapter on UDP **5070** (see `docs/MCTB-SIP-ADAPTER.md`) |
+| `MCTB_SIP_ADAPTER_ONLY` | Optional | `1` — Asterisk only; **skip LiveKit worker** (MCTB spike — stops LiveKit connection logs) |
+
+### Coolify ports (required for MCTB SIP)
+
+`transovo-voice` must expose **UDP** ports to the host (not HTTP proxy):
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| `5070` | UDP | Telnyx SIP signaling (Asterisk) |
+| `10000-10100` | UDP | RTP media for consent audio |
+
+Without these, Telnyx reaches the Hetzner IP but **not** Asterisk inside the container → carrier hears "disconnected" (SIP 408/404).
+
+Verify after deploy: `npm run test:mctb-sip-adapter-e2e`
 
 **Do not copy** full web env (Stripe, Telnyx webhooks, session secrets, etc.).
 

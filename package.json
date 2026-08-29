@@ -81,6 +81,7 @@
     "test:ai-transcription": "tsx scripts/test-ai-transcription.ts",
     "test:mctb-sip-ingress-send-gate": "tsx scripts/test-mctb-sip-ingress-send-gate.ts",
     "test:mctb-sip-adapter-scaffold": "tsx scripts/test-mctb-sip-adapter-scaffold.ts",
+    "test:mctb-sip-adapter-e2e": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-sip-adapter-e2e.ts",
     "test:mctb-certify-sip-adapter": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-certify-sip-adapter.ts",
     "mctb:deploy-sip-adapter": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-deploy-sip-adapter-production.ts",
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",

@@ -8,7 +8,6 @@ export RTP_START_PORT="${RTP_START_PORT:-10000}"
 export RTP_END_PORT="${RTP_END_PORT:-10100}"
 # 5070 avoids conflict with LiveKit SIP on 5060 at voice.transovo.ai
 export SIP_UDP_PORT="${MCTB_SIP_UDP_PORT:-${SIP_UDP_PORT:-5070}}"
-export TELNYX_SIP_IDENTIFY_IPS="${TELNYX_SIP_IDENTIFY_IPS:-0.0.0.0/0}"
 
 if [ -z "${EXTERNAL_SIP_IP:-}" ]; then
   resolve_host="${MCTB_SIP_ADAPTER_HOST:-voice.transovo.ai}"
