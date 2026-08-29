@@ -15,7 +15,7 @@ import { getActiveWorkspaceId } from "@/lib/auth";
 import { contactTabs } from "@/lib/contact-tabs";
 import { loadLists } from "@/lib/workspace-data";
 import { formatNumber } from "@/lib/utils";
-import { Filter, List, Pencil, Users } from "lucide-react";
+import { Filter, List } from "lucide-react";
 import Link from "next/link";
 
 export default async function ContactListsPage() {
@@ -102,8 +102,8 @@ export default async function ContactListsPage() {
                     <TD>
                       <RowActionsMenu
                         actions={[
-                          { label: "Edit", icon: Pencil, href: "#" },
-                          { label: "View contacts", icon: Users, href: `/contacts?list=${list.id}` },
+                          { label: "Edit", icon: "pencil", href: "#" },
+                          { label: "View contacts", icon: "users", href: `/contacts?list=${list.id}` },
                         ]}
                       />
                     </TD>

@@ -9,23 +9,43 @@ import {
   Pencil,
   QrCode,
   Trash2,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-type RowAction = {
+/** Serializable icon keys — server pages must not pass component references into this client menu. */
+export type RowActionIcon =
+  | "pencil"
+  | "copy"
+  | "qr-code"
+  | "link"
+  | "trash"
+  | "users";
+
+const ICONS: Record<RowActionIcon, LucideIcon> = {
+  pencil: Pencil,
+  copy: Copy,
+  "qr-code": QrCode,
+  link: Link2,
+  trash: Trash2,
+  users: Users,
+};
+
+export type RowAction = {
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: RowActionIcon;
   href?: string;
   onClick?: () => void;
   destructive?: boolean;
 };
 
 const defaultKeywordActions: RowAction[] = [
-  { label: "Edit", icon: Pencil, href: "#" },
-  { label: "Clone", icon: Copy, href: "#" },
-  { label: "Create QR Code", icon: QrCode, href: "/grow/qr-codes" },
-  { label: "Create Tap-to-Join Link", icon: Link2, href: "#" },
-  { label: "Delete", icon: Trash2, destructive: true, onClick: () => undefined },
+  { label: "Edit", icon: "pencil", href: "#" },
+  { label: "Clone", icon: "copy", href: "#" },
+  { label: "Create QR Code", icon: "qr-code", href: "/grow/qr-codes" },
+  { label: "Create Tap-to-Join Link", icon: "link", href: "#" },
+  { label: "Delete", icon: "trash", destructive: true, onClick: () => undefined },
 ];
 
 export function RowActionsMenu({
@@ -60,7 +80,7 @@ export function RowActionsMenu({
       {open ? (
         <div className="absolute right-0 top-full z-20 mt-1 min-w-[210px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
           {actions.map((action) => {
-            const Icon = action.icon;
+            const Icon = action.icon ? ICONS[action.icon] : null;
             const className = cn(
               "flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] no-underline hover:bg-slate-50",
               action.destructive ? "text-rose-600" : "text-slate-700",
@@ -73,7 +93,7 @@ export function RowActionsMenu({
                   className={className}
                   onClick={() => setOpen(false)}
                 >
-                  <Icon className="h-4 w-4" />
+                  {Icon ? <Icon className="h-4 w-4" /> : null}
                   {action.label}
                 </a>
               );
@@ -88,7 +108,7 @@ export function RowActionsMenu({
                   setOpen(false);
                 }}
               >
-                <Icon className="h-4 w-4" />
+                {Icon ? <Icon className="h-4 w-4" /> : null}
                 {action.label}
               </button>
             );

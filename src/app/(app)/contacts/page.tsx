@@ -150,7 +150,7 @@ export default async function ContactsPage() {
                         actions={[
                           {
                             label: "View",
-                            icon: Users,
+                            icon: "users",
                             href: `/contacts/${contact.id}`,
                           },
                         ]}
