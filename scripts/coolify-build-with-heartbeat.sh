@@ -245,12 +245,12 @@ print_full_memory_snapshot() {
 }
 # ============================================================================ END TEMPORARY OOM DIAG
 
-# Coolify VMs often have 8GB host RAM but Docker build + npm ci + compile spikes past 3GB heap.
-# Webpack production build uses less peak RAM than Next 16 Turbopack on constrained builders.
+# Coolify: diagnostics proved failures are V8 heap exhaustion (~2 GB default cap), not cgroup/host OOM.
+# Host has ~8 GB RAM + swap; cgroup memory.max is uncapped. Raise build heap to 4 GB.
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
-  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
+  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
   build_cmd=(npx next build --webpack)
-  build_mode="webpack (Coolify OOM guard)"
+  build_mode="webpack (Coolify 4GB heap)"
 else
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
   build_cmd=(npm run build)
@@ -321,8 +321,12 @@ fi
 if [[ "$build_status" -ne 0 ]]; then
   echo "[coolify-build] next build exited with status $build_status (peak_wrapper_tree_rss_kb=${max_rss_kb} peak_next_build_tree_rss_kb=${max_next_tree_kb})"
   if [[ "$build_status" -eq 137 ]]; then
-    echo "[coolify-build] exit 137: process likely OOM-killed (check [oom-diag] cgroup memory.events above for oom / oom_kill)"
-    echo "[coolify-build] tips: review [oom-diag] snapshots in this log — do not mask with swap/heap changes until root cause known"
+    echo "[coolify-build] exit 137: process likely SIGKILL (host/cgroup OOM — check [oom-diag] memory.events)"
+  elif grep -q "JavaScript heap out of memory" /tmp/coolify-next-build.log 2>/dev/null; then
+    echo "[coolify-build] V8 heap exhaustion detected in build log — raise --max-old-space-size if still failing"
+  fi
+  if [[ "$build_status" -ne 0 ]]; then
+    echo "[coolify-build] tips: review [oom-diag] snapshots in this log for cgroup vs V8 heap diagnosis"
   fi
   tail -n 40 /tmp/coolify-next-build.log 2>/dev/null || true
   exit "$build_status"
