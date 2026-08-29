@@ -2011,6 +2011,8 @@ model QrCode {
   name        String
   targetType  String   // form | click_to_text | url | review | booking | payment
   targetUrl   String
+  /// Opaque public id for scan tracking redirect (/q/{publicSlug})
+  publicSlug  String?  @unique
   scans       Int      @default(0)
   status      String   @default("Active")
   createdAt   DateTime @default(now())
@@ -2019,20 +2021,28 @@ model QrCode {
   @@index([workspaceId])
 }
 
-/// sms:+1…?body=JOIN style acquisition links.
+/// Tap-to-Join / sms:+1…?body=KEYWORD acquisition links (keyword runtime handles enrollment).
 model ClickToTextLink {
-  id          String   @id @default(cuid())
-  workspaceId String
-  name        String
-  phoneE164   String
-  body        String
-  href        String
-  clicks      Int      @default(0)
-  status      String   @default("Active")
-  createdAt   DateTime @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  workspaceId   String
+  name          String
+  keywordId     String?
+  phoneNumberId String?
+  phoneE164     String
+  body          String
+  href          String
+  /// Public redirect URL slug (/j/{publicSlug}) — not the raw sms: URI
+  publicSlug    String?  @unique
+  buttonText    String   @default("Join our text list")
+  clicks        Int      @default(0)
+  joinCount     Int      @default(0)
+  status        String   @default("Active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
+  @@index([workspaceId, keywordId])
 }
 
 model ComplianceBrand {

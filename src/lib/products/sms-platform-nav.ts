@@ -9,6 +9,7 @@ import {
   Puzzle,
   Reply,
   Sparkles,
+  Sprout,
   Users,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
@@ -45,6 +46,16 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
         { label: "Contacts", href: "/contacts" },
         { label: "Lists", href: "/contacts/lists" },
         { label: "Segments", href: "/contacts/segments" },
+      ],
+    },
+    {
+      label: "List Growth",
+      href: "/grow/forms",
+      icon: Sprout,
+      children: [
+        { label: "QR Codes", href: "/grow/qr-codes" },
+        { label: "Web Forms", href: "/grow/forms" },
+        { label: "Tap-to-Join", href: "/grow/tap-to-join" },
       ],
     },
     { label: "Keywords", href: "/grow/keywords", icon: Hash },
@@ -94,6 +105,9 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/contacts/lists")) return "Lists";
   if (pathname.startsWith("/contacts/segments")) return "Segments";
   if (pathname.startsWith("/contacts")) return "Contacts";
+  if (pathname.startsWith("/grow/qr-codes")) return "QR Codes";
+  if (pathname.startsWith("/grow/forms")) return "Web Forms";
+  if (pathname.startsWith("/grow/tap-to-join")) return "Tap-to-Join";
   if (pathname.startsWith("/grow/keywords")) return "Keywords";
   if (pathname.startsWith("/auto-replies")) return "Auto Replies";
   if (pathname.startsWith("/drip-campaigns")) return "Drip Campaigns";
@@ -101,7 +115,7 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname === "/automations/new") return "Create Automation";
   if (pathname === "/automations/logs") return "Run History";
   if (pathname.startsWith("/automations")) return "Automations";
-  if (pathname.startsWith("/grow")) return "Lead Capture";
+  if (pathname.startsWith("/grow")) return "List Growth";
   if (pathname.startsWith("/help")) return "Help";
   if (pathname.startsWith("/dashboard")) return "Dashboard";
   if (pathname.startsWith("/reports")) return "Analytics";

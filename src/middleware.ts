@@ -105,6 +105,8 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/r/")) return true;
   // Hosted + embeddable opt-in forms (consent capture)
   if (pathname.startsWith("/f/")) return true;
+  if (pathname.startsWith("/j/")) return true;
+  if (pathname.startsWith("/q/")) return true;
   if (pathname.startsWith("/s/")) return true;
   if (pathname.startsWith("/embed/f/")) return true;
   if (pathname.startsWith("/embed/w/")) return true;

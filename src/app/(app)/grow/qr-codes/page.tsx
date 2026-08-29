@@ -10,13 +10,15 @@ import { formatNumber } from "@/lib/utils";
 import { QrCode, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
+import { listGrowthTabs } from "@/lib/list-growth-tabs";
 
 type QrRow = {
   id: string;
   name: string;
   targetType: string;
   targetUrl: string;
+  trackedUrl?: string;
+  qrImageUrl?: string;
   scans: number;
 };
 
@@ -55,10 +57,10 @@ export default function QrCodesPage() {
   return (
     <div>
       <PageHeader
-        title="QR codes"
-        description="Generate QR codes that open signup forms, click-to-text actions, review links, booking links, or promotions."
+        title="QR Codes"
+        description="Generate QR codes that open hosted signup forms, Tap-to-Join links, or other consent-aware destinations."
       />
-      <Tabs items={leadCaptureTabs} />
+      <Tabs items={[...listGrowthTabs]} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         <StatCard label="QR codes" value={formatNumber(rows.length)} />
@@ -99,11 +101,7 @@ export default function QrCodesPage() {
           Create QR
         </Button>
         <p className="text-xs text-slate-500">
-          Tip: use a free QR encoder with the saved URL, or embed{" "}
-          <code className="rounded bg-slate-100 px-1">
-            https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=URL
-          </code>
-          .
+          Scans are tracked through a Transovo redirect before the visitor reaches your signup form or Tap-to-Join link.
         </p>
       </Card>
 
@@ -118,21 +116,36 @@ export default function QrCodesPage() {
             </TR>
           </THead>
           <TBody>
-            {rows.map((r) => (
-              <TR key={r.id}>
-                <TD className="font-medium">{r.name}</TD>
-                <TD>{r.targetType}</TD>
-                <TD>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    alt=""
-                    className="h-16 w-16 rounded border border-slate-200 bg-white"
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${encodeURIComponent(r.targetUrl)}`}
-                  />
-                </TD>
-                <TD>{r.scans}</TD>
-              </TR>
-            ))}
+            {rows.map((r) => {
+              const scanUrl = r.trackedUrl || r.targetUrl;
+              const imageUrl =
+                r.qrImageUrl ||
+                `https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${encodeURIComponent(scanUrl)}`;
+              return (
+                <TR key={r.id}>
+                  <TD className="font-medium">{r.name}</TD>
+                  <TD>{r.targetType}</TD>
+                  <TD>
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        alt=""
+                        className="h-16 w-16 rounded border border-slate-200 bg-white"
+                        src={imageUrl}
+                      />
+                      <a
+                        href={imageUrl.replace("128x128", "512x512")}
+                        download={`${r.name.replace(/\s+/g, "-").toLowerCase()}-qr.png`}
+                        className="text-sm text-indigo-600 hover:underline"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  </TD>
+                  <TD>{r.scans}</TD>
+                </TR>
+              );
+            })}
             {rows.length === 0 && (
               <TR>
                 <TD colSpan={4} className="text-slate-500">

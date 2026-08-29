@@ -12,7 +12,7 @@ import { Copy, ExternalLink, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { leadCaptureTabs } from "@/lib/lead-capture-tabs";
+import { listGrowthTabs } from "@/lib/list-growth-tabs";
 
 type FormRow = {
   id: string;
@@ -71,10 +71,10 @@ export default function FormsPage() {
   return (
     <div>
       <PageHeader
-        title="Opt-in forms"
+        title="Web Forms"
         description="Hosted signup pages and embeddable widgets with checkbox consent, disclosure text, list assignment, and consent records."
       />
-      <Tabs items={leadCaptureTabs} />
+      <Tabs items={[...listGrowthTabs]} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <StatCard label="Active forms" value={formatNumber(rows.length)} />

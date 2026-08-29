@@ -114,6 +114,7 @@
     "test:automation-e2e": "tsx scripts/test-automation-e2e.ts",
     "test:automation-triggers": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-automation-triggers.ts",
     "test:automation-triggers-live": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-automation-triggers-live.ts",
+    "test:list-growth": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-list-growth.ts",
     "test:forms-e2e": "tsx scripts/test-forms-e2e.ts",
     "test:voice-e2e": "tsx scripts/test-voice-e2e.ts",
     "test:voice-full": "tsx scripts/test-voice-full.ts",

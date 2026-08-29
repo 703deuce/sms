@@ -196,7 +196,19 @@ export default function KeywordsPage() {
                   </span>
                 </TD>
                 <TD>
-                  <RowActionsMenu />
+                  <RowActionsMenu
+                    actions={[
+                      { label: "Edit", icon: "pencil", href: `/grow/keywords?edit=${k.id}` },
+                      { label: "Clone", icon: "copy", href: "#" },
+                      { label: "Create QR Code", icon: "qr-code", href: "/grow/qr-codes" },
+                      {
+                        label: "Create Tap-to-Join Link",
+                        icon: "link",
+                        href: `/grow/tap-to-join/new?keywordId=${k.id}`,
+                      },
+                      { label: "Delete", icon: "trash", destructive: true, onClick: () => undefined },
+                    ]}
+                  />
                 </TD>
               </TR>
             ))}

@@ -150,6 +150,7 @@ export async function handleKeywordInbound(input: {
   let contact = await prisma.contact.findUnique({
     where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
   });
+  const isNewContact = !contact;
   if (!contact) {
     contact = await prisma.contact.create({
       data: {
@@ -180,6 +181,7 @@ export async function handleKeywordInbound(input: {
   });
 
   // Ensure list membership when listName is set
+  let joinedListId: string | null = null;
   if (keyword.listName) {
     let list = await prisma.contactList.findFirst({
       where: { workspaceId: input.workspaceId, name: keyword.listName },
@@ -189,13 +191,40 @@ export async function handleKeywordInbound(input: {
         data: { workspaceId: input.workspaceId, name: keyword.listName },
       });
     }
+    joinedListId = list.id;
     try {
       await prisma.contactListMember.create({
         data: { listId: list.id, contactId: contact.id },
       });
+      const { emitAutomationEvent } = await import("@/lib/automations/events");
+      await emitAutomationEvent(input.workspaceId, "list.member_added", contact.id, {
+        listId: list.id,
+      }).catch(() => undefined);
+      const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
+      await dispatchAutoReplies({
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        triggerType: "list_join",
+        listId: list.id,
+      }).catch(() => undefined);
+      const { triggerDripCampaigns } = await import("@/lib/drip-campaigns/engine");
+      await triggerDripCampaigns({
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        triggerType: "list_join",
+        listId: list.id,
+      }).catch(() => undefined);
     } catch {
       // already a member
     }
+  }
+
+  if (isNewContact) {
+    const { fireContactAddedAutomations } = await import("@/lib/automate/contact-added-triggers");
+    await fireContactAddedAutomations(input.workspaceId, contact.id, {
+      fromE164: to,
+      consentSource: `keyword:${keyword.keyword}`,
+    }).catch(() => undefined);
   }
 
   const tags = Array.isArray(keyword.tagsJson) ? (keyword.tagsJson as string[]) : [];
@@ -234,6 +263,9 @@ export async function handleKeywordInbound(input: {
     where: { id: keyword.id },
     data: { subscribers: { increment: 1 } },
   });
+
+  const { recordTapToJoinJoin } = await import("@/lib/growth/tap-to-join");
+  await recordTapToJoinJoin(input.workspaceId, keyword.id).catch(() => undefined);
 
   return {
     matched: true,
