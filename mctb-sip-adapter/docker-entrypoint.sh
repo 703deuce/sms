@@ -1,15 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-: "${EXTERNAL_SIP_IP:?EXTERNAL_SIP_IP is required — public IPv4 reachable by Telnyx}"
 : "${TRANSOVO_BACKEND_URL:?TRANSOVO_BACKEND_URL is required}"
 : "${TRANSOVO_INTERNAL_API_KEY:?TRANSOVO_INTERNAL_API_KEY is required}"
 
-export EXTERNAL_SIP_IP
 export RTP_START_PORT="${RTP_START_PORT:-10000}"
 export RTP_END_PORT="${RTP_END_PORT:-10100}"
-export SIP_UDP_PORT="${SIP_UDP_PORT:-5060}"
+# 5070 avoids conflict with LiveKit SIP on 5060 at voice.transovo.ai
+export SIP_UDP_PORT="${MCTB_SIP_UDP_PORT:-${SIP_UDP_PORT:-5070}}"
 export TELNYX_SIP_IDENTIFY_IPS="${TELNYX_SIP_IDENTIFY_IPS:-0.0.0.0/0}"
+
+if [ -z "${EXTERNAL_SIP_IP:-}" ]; then
+  resolve_host="${MCTB_SIP_ADAPTER_HOST:-voice.transovo.ai}"
+  EXTERNAL_SIP_IP="$(getent ahostsv4 "$resolve_host" 2>/dev/null | awk 'NR==1 {print $1}')"
+fi
+: "${EXTERNAL_SIP_IP:?EXTERNAL_SIP_IP is required — set explicitly or ensure MCTB_SIP_ADAPTER_HOST resolves}"
 
 render_template() {
   local src="$1"

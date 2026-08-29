@@ -60,6 +60,7 @@ Legacy fallbacks for internal auth: `VOICE_RUNTIME_INTERNAL_SECRET`, `INTEGRATIO
 | `VOICE_REALTIME_VOICE` | Optional | Default `marin` |
 | `LIVEKIT_SIP_OUTBOUND_TRUNK` | Optional | Fallback if bootstrap omits `sipOutboundTrunkId` (prefer web bootstrap) |
 | `LIVEKIT_SIP_NUMBER` | Optional | Caller ID E164 for outbound transfer (or bootstrap `sipCallerIdE164`) |
+| `MCTB_SIP_ADAPTER_ENABLED` | Optional | `1` — start Asterisk MCTB press-1 adapter on UDP **5070** (see `docs/MCTB-SIP-ADAPTER.md`) |
 
 **Do not copy** full web env (Stripe, Telnyx webhooks, session secrets, etc.).
 

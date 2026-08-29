@@ -1,96 +1,57 @@
-# MCTB SIP Adapter (Asterisk sidecar)
+# MCTB SIP Adapter (Asterisk in transovo-voice)
 
-Minimal SIP/RTP terminator for Telnyx FQDN ingress. Replaces LiveKit as the **signaling endpoint** only — all MCTB business logic stays in `transovo-web`.
+Minimal SIP/RTP terminator for Telnyx FQDN ingress. **Deploys with `transovo-voice`** on git push — no separate Docker commands, no firewall work for the spike.
 
 ## Architecture
 
 ```
-AT&T conditional forward (Diversion)
+AT&T conditional forward
         ↓
-Telnyx FQDN 3022029259041408870
-  third_party_control_enabled: true
-  prack_enabled: true
-  generate_ringback_tone: true
+Telnyx FQDN (PRACK / 3PCC / ringback)
         ↓
-Asterisk sidecar on existing Hetzner host (this container)
-  Progress() → 183 early dialog
-  Answer → play consent URL → gather digit 1
+voice.transovo.ai:5070  ← Asterisk in transovo-voice container
         ↓
-POST /api/internal/voice-runtime
-  resolve_mctb_sip_session
-  record_mctb_sip_press_1_consent
-        ↓
-existing consent → SMS pipeline
+POST /api/internal/voice-runtime → consent → SMS
 ```
 
-**Not** routed through Coolify's HTTP reverse proxy. SIP and RTP need direct host exposure.
+LiveKit SIP stays on **voice.transovo.ai:5060**. Asterisk uses **5070** on the same host — **no new DNS A record**.
 
-## What this container does
+## What you do NOT need to do
 
-| Does | Does not |
-|------|----------|
-| SIP UAS (100/180/183/PRACK/200/ACK) | Workspace resolution |
-| RTP playback of consent audio URLs | SMS sending |
-| DTMF gather (one digit) | Consent storage logic |
-| HTTP calls to voice-runtime API | Contacts, analytics, Telnyx messaging |
+- Run `docker compose` manually
+- Open new firewall rules for this spike (same host/IP as existing voice SIP)
+- Create a new A record (uses existing `voice.transovo.ai`)
+- Touch 571 until 866 passes 10/10
 
-## Deploy on Hetzner (same host as transovo-web)
+## What deploys automatically
 
-### 1. DNS
+| Piece | How |
+|-------|-----|
+| Asterisk + AGI | Bundled in `voice-runtime-python/Dockerfile` |
+| Coolify rebuild | Git push to `master` → `transovo-voice` rebuilds |
+| Telnyx FQDN + 866 | Cloud agent runs `scripts/mctb-deploy-sip-adapter-production.ts --apply` |
 
-Create an A record, e.g. `mctb-sip.transovo.ai` → Hetzner public IPv4.
+## One Coolify env var (transovo-voice)
 
-### 2. Firewall
+Add on the existing **transovo-voice** app (same place as `LIVEKIT_URL`, etc.):
 
-Open on the host (not via Coolify proxy):
+```
+MCTB_SIP_ADAPTER_ENABLED=1
+```
 
-- UDP/TCP **5060** (SIP)
-- UDP **10000–10100** (RTP)
+`TRANSOVO_BACKEND_URL` and `TRANSOVO_INTERNAL_API_KEY` are already set on voice.
 
-### 3. Environment
+`MCTB_SIP_ADAPTER_ENABLED` defaults to `1` in the voice Dockerfile for the current MCTB spike. Set `0` to disable without redeploying Asterisk bits.
 
-On the host (or Coolify env file for this compose only):
+Redeploy happens automatically after merge when Coolify picks up the new Dockerfile.
+
+## Cloud agent cutover (Telnyx)
 
 ```bash
-EXTERNAL_SIP_IP=203.0.113.10          # Hetzner public IPv4
-TRANSOVO_BACKEND_URL=https://app.transovo.ai
-TRANSOVO_INTERNAL_API_KEY=...         # same as transovo-voice
-MCTB_SIP_ADAPTER_HOST=mctb-sip.transovo.ai
+npx tsx scripts/mctb-deploy-sip-adapter-production.ts --apply
 ```
 
-Optional:
-
-```bash
-MCTB_SIP_UDP_PORT=5060
-MCTB_RTP_START_PORT=10000
-MCTB_RTP_END_PORT=10100
-TELNYX_SIP_IDENTIFY_IPS=0.0.0.0/0    # tighten to Telnyx signaling CIDRs in prod
-```
-
-### 4. Start container
-
-```bash
-docker compose -f docker-compose.mctb-sip-adapter.yml up -d --build
-```
-
-Uses `network_mode: host` so Asterisk advertises `EXTERNAL_SIP_IP` correctly.
-
-### 5. Point Telnyx FQDN (866 first)
-
-```bash
-NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
-  MCTB_SIP_ADAPTER_HOST=mctb-sip.transovo.ai \
-  EXTERNAL_SIP_IP=203.0.113.10 \
-  npx tsx scripts/mctb-point-fqdn-to-sip-adapter.ts --e164 +18663464256 --apply
-```
-
-This:
-
-1. Ensures PRACK/3PCC/ringback on the FQDN connection
-2. Creates/sets primary FQDN destination to your SIP host
-3. Assigns `+18663464256` to the FQDN connection (off Call Control)
-
-**Do not touch 571 until 866 passes 10/10.**
+This ensures PRACK/3PCC/ringback, points FQDN to `voice.transovo.ai:5070`, assigns **866** to the FQDN connection.
 
 ## Certification
 
@@ -98,52 +59,35 @@ This:
 npx tsx scripts/mctb-certify-sip-adapter.ts --e164 +18663464256
 ```
 
-### Gate 1 — SIP signaling
+Gate 1: SIP pcap (183/PRACK/200/ACK/RTP/DTMF) vs LiveKit baseline on AT&T forward.  
+Gate 2: press-1 → `asterisk_sip_mctb` → SMS.  
+Gate 3: 10/10 calls, no SIP 480.
 
-Capture pcap on the host during an AT&T conditional-forward test. Compare to a known-good LiveKit baseline:
+## Optional: separate hostname later
 
-- INVITE → 100 Trying → 183 Session Progress → PRACK/200 → 200 INVITE → ACK → RTP → DTMF → BYE
+Only if you want a dedicated SIP hostname (not required for the spike):
 
-Enable Asterisk SIP logging:
+| Field | Value |
+|-------|-------|
+| **Type** | `A` |
+| **Name / Host** | `mctb-sip` |
+| **FQDN** | `mctb-sip.transovo.ai` |
+| **Value / Points to** | Same IPv4 as `voice.transovo.ai` |
+| **TTL** | `300` (or provider default) |
+| **Proxy / CDN** | Off (DNS only — no Cloudflare proxy) |
 
-```bash
-docker exec -it <container> asterisk -rx 'pjsip set logger on'
-```
-
-**Do not assume default Asterisk behavior matches LiveKit.** The whole point of this spike is proving equivalence on real AT&T forwards.
-
-### Gate 2 — MCTB backend
-
-After press-1:
-
-- `metadata.path = asterisk_sip_mctb`
-- `missedCallEvent` + consent + SMS for ws_1
-
-### Gate 3 — Repeatability
-
-10 consecutive conditional-forward calls: CDR duration > 5s, no SIP 480, no `ORIGINATOR_CANCEL` at ~400ms.
+Then set `MCTB_SIP_ADAPTER_HOST=mctb-sip.transovo.ai` on transovo-voice and re-run the deploy script.
 
 ## Rollback
 
-1. Re-point 866 to Call Control or LiveKit FQDN:
+```bash
+npx tsx scripts/mctb-setup-fqdn-direct-mctb.ts --apply   # Call Control
+# or
+npx tsx scripts/point-telnyx-fqdn-to-self-hosted.ts --apply   # LiveKit :5060
+```
 
-   ```bash
-   npx tsx scripts/mctb-setup-fqdn-direct-mctb.ts --apply   # Call Control path
-   # or
-   npx tsx scripts/point-telnyx-fqdn-to-self-hosted.ts --apply   # LiveKit path
-   ```
+Set `MCTB_SIP_ADAPTER_ENABLED=0` on transovo-voice.
 
-2. Stop sidecar: `docker compose -f docker-compose.mctb-sip-adapter.yml down`
+## Standalone compose (reference only)
 
-## Relationship to other paths
-
-| Path | Status |
-|------|--------|
-| LiveKit FQDN → Python worker | Known-good SIP baseline |
-| Call Control → mctb-event-only | May work for some routes; **not** equivalent to FQDN SIP UAS for AT&T 183/PRACK |
-| TeXML mctb-consent | Deprecated for forwarded legs |
-| **This adapter** | Target replacement for LiveKit SIP layer |
-
-## Approved test phones
-
-Only use workspace-approved test handsets (see internal MCTB runbook — not committed here).
+`docker-compose.mctb-sip-adapter.yml` remains for local debugging. Production uses transovo-voice bundle.

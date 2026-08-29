@@ -16,9 +16,14 @@ import {
   MCTB_571_SIP_FQDN_CONNECTION_ID,
   MCTB_FQDN_DIRECT_TEST_E164,
 } from "@/lib/mctb/sip-diagnostic/constants";
+import { LIVEKIT_SELF_HOSTED_SIP_HOST } from "@/lib/voice/media-backend/constants";
 import { ensureMctb571SipFqdnLateMediaSettings } from "@/lib/mctb/sip-diagnostic/fqdn-audit";
 
 const apply = process.argv.includes("--apply");
+
+/** Reuse existing voice SIP hostname — no new DNS A record required. */
+const DEFAULT_SIP_HOST = LIVEKIT_SELF_HOSTED_SIP_HOST;
+const DEFAULT_SIP_PORT = Number(process.env.MCTB_SIP_UDP_PORT || 5070);
 
 function readArg(flag: string): string | null {
   const idx = process.argv.indexOf(flag);
@@ -26,7 +31,7 @@ function readArg(flag: string): string | null {
   return process.argv[idx + 1]?.trim() || null;
 }
 
-async function ensureFqdnRecord(connectionId: string, sipHost: string): Promise<string> {
+async function ensureFqdnRecord(connectionId: string, sipHost: string, sipPort: number): Promise<string> {
   const listed = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>("/fqdns", {
     query: { "filter[connection_id]": connectionId, "page[size]": 20 },
   });
@@ -43,7 +48,7 @@ async function ensureFqdnRecord(connectionId: string, sipHost: string): Promise<
       body: {
         connection_id: connectionId,
         fqdn: sipHost,
-        port: Number(process.env.MCTB_SIP_UDP_PORT || 5060),
+        port: sipPort,
         dns_record_type: "a",
       },
     });
@@ -53,6 +58,19 @@ async function ensureFqdnRecord(connectionId: string, sipHost: string): Promise<
 
   const fqdnId = String(target?.id || "");
   if (!fqdnId) throw new Error(`FQDN record missing for ${sipHost}`);
+
+  const currentPort = typeof target?.port === "number" ? target.port : Number(target?.port || 0);
+  if (currentPort !== sipPort) {
+    if (!apply) {
+      console.log(`Would PATCH FQDN ${sipHost} port ${currentPort || "(none)"} → ${sipPort}`);
+    } else {
+      await telnyxRequest(`/fqdns/${encodeURIComponent(fqdnId)}`, {
+        method: "PATCH",
+        body: { port: sipPort },
+      });
+      console.log(`✓ FQDN ${sipHost} port → ${sipPort}`);
+    }
+  }
 
   const conn = await telnyxRequest<{ data?: Record<string, unknown> }>(
     `/fqdn_connections/${encodeURIComponent(connectionId)}`,
@@ -88,11 +106,9 @@ async function main() {
   const sipHost = (
     process.env.MCTB_SIP_ADAPTER_HOST ||
     process.env.MCTB_SIP_ADAPTER_SIP_HOST ||
-    ""
+    DEFAULT_SIP_HOST
   ).trim();
-  if (!sipHost) {
-    throw new Error("MCTB_SIP_ADAPTER_HOST is required (DNS A record → Hetzner public IP)");
-  }
+  const sipPort = Number(readArg("--sip-port") || process.env.MCTB_SIP_UDP_PORT || DEFAULT_SIP_PORT);
 
   const externalIp = process.env.EXTERNAL_SIP_IP?.trim() || null;
   const e164 = readArg("--e164") || MCTB_FQDN_DIRECT_TEST_E164;
@@ -103,6 +119,7 @@ async function main() {
   console.log(`  e164:          ${e164}`);
   console.log(`  connectionId:  ${connectionId}`);
   console.log(`  sipHost:       ${sipHost}`);
+  console.log(`  sipPort:       ${sipPort}`);
   console.log(`  externalIp:    ${externalIp || "(set EXTERNAL_SIP_IP on host)"}`);
   console.log("");
 
@@ -115,7 +132,7 @@ async function main() {
   if (lateMedia.patched) console.log("  (patched late-media flags)");
   console.log("");
 
-  await ensureFqdnRecord(connectionId, sipHost);
+  await ensureFqdnRecord(connectionId, sipHost, sipPort);
 
   if (!apply) {
     console.log(`\nDry run — would assign ${e164} → FQDN connection ${connectionId}`);
@@ -127,11 +144,9 @@ async function main() {
   console.log(`✓ ${e164} assigned to connection ${assigned.liveConnectionId}`);
 
   console.log("\nNext:");
-  console.log("  1. DNS A record for", sipHost, "→", externalIp || "Hetzner public IP");
-  console.log("  2. docker compose -f docker-compose.mctb-sip-adapter.yml up -d --build");
-  console.log("  3. Firewall: UDP/TCP 5060 + RTP 10000-10100");
-  console.log("  4. 10× AT&T conditional-forward test — compare SIP trace to LiveKit baseline");
-  console.log("  5. Only then point 571 platform number");
+  console.log("  1. transovo-voice Coolify: MCTB_SIP_ADAPTER_ENABLED=1 (redeploy on merge)");
+  console.log("  2. No new DNS if using", DEFAULT_SIP_HOST, `port ${sipPort}`);
+  console.log("  3. 10× AT&T conditional-forward test on", e164);
 }
 
 main().catch((err) => {
