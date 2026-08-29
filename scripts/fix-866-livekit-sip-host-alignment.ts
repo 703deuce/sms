@@ -56,7 +56,12 @@ async function main() {
 
   console.log("\n=== FIXED ===");
   console.log(`Call ${E164}`);
-  console.log(`Telnyx primary FQDN should be sms-6w01zoya.sip.livekit.cloud (not voice.transovo.ai)`);
+  console.log(
+    "Telnyx primary FQDN must match LIVEKIT_SIP_URI (same LiveKit Cloud project).",
+  );
+  console.log(
+    "LIVEKIT_URL + API keys must be the SAME LiveKit Cloud project as LIVEKIT_SIP_URI.",
+  );
 }
 
 main().catch((err) => {

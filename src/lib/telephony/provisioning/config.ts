@@ -158,19 +158,21 @@ export function getLiveKitProjectAlignment(): {
 }
 
 /**
- * Telnyx FQDN must target the same LiveKit Cloud project as LIVEKIT_URL/API keys.
- * When LIVEKIT_SIP_URI points at a different project, inbound SIP gets 404 (not in service).
+ * Telnyx FQDN must target the LiveKit SIP ingress host.
+ * When LIVEKIT_SIP_URI is set explicitly, trust it (do not override with LIVEKIT_URL).
  */
 export function resolveTelnyxIngressLiveKitSipHost(): LiveKitSipHostResolution {
   const alignment = getLiveKitProjectAlignment();
-  if (
-    alignment.usingExplicitSipEnv &&
-    !alignment.sipMatchesDerivedFromApi &&
-    alignment.derivedSipFromApi
-  ) {
+  if (alignment.usingExplicitSipEnv && alignment.sipHost) {
+    return {
+      host: alignment.sipHost,
+      source: alignment.sipHostSource || "LIVEKIT_SIP_URI",
+    };
+  }
+  if (alignment.derivedSipFromApi) {
     return {
       host: alignment.derivedSipFromApi,
-      source: "LIVEKIT_URL(derived_for_telnyx_alignment)",
+      source: "LIVEKIT_URL(derived)",
     };
   }
   return getAuthoritativeLiveKitSipHost();

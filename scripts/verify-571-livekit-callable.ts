@@ -79,8 +79,8 @@ async function checkProjectAlignment(): Promise<void> {
     ) {
       gate(
         "LIVEKIT_SIP_PROJECT_ALIGN",
-        "WARN",
-        `LIVEKIT_SIP_URI (${alignment.sipHostSource}) differs from LIVEKIT_URL project (${alignment.derivedSipFromApi}); Telnyx ingress uses ${ingress.host}`,
+        "FAIL",
+        `LIVEKIT_SIP_URI (${alignment.sipHost}) must match LIVEKIT_URL project (${alignment.derivedSipFromApi}). Update LIVEKIT_URL/API keys to the same LiveKit Cloud project as LIVEKIT_SIP_URI, then reprovision SIP trunk.`,
       );
       return;
     }
