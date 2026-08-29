@@ -46,6 +46,7 @@
     "rollback:mctb-571-event-only": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-rollback-571-event-only.ts",
     "rollback:mctb-571-twilio-voice-bridge": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-rollback-571-twilio-voice-bridge.ts",
     "test:mctb-event-only": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-event-only.ts",
+    "test:mctb-pickup-routing": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-pickup-routing-parity.ts",
     "test:mctb-sip-event-only": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-sip-event-only.ts",
     "test:mctb-sip-e2e-trace": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-sip-e2e-trace.ts",
     "test:mctb-voice-bridge": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-voice-bridge.ts",

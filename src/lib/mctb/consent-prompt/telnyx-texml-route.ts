@@ -88,30 +88,15 @@ export async function ensureMctb571ConsentTexmlApplication(): Promise<string> {
   return id;
 }
 
-/** Route platform 571 inbound to TeXML (instant answer/play — required for carrier forwards). */
-export async function route571ToMctbConsentTexml(providerNumberId: string): Promise<{
+/** @deprecated TeXML breaks AT&T forwarded-call pickup — use Call Control event-only. */
+export async function route571ToMctbConsentTexml(_providerNumberId: string): Promise<{
   texmlAppId: string;
   voiceUrl: string;
 }> {
-  const texmlAppId = await ensureMctb571ConsentTexmlApplication();
-  const voiceUrl = mctb571ConsentTexmlVoiceUrl();
-
-  await telnyxRequest(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, {
-    method: "PATCH",
-    body: { connection_id: texmlAppId },
-  });
-
-  const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(
-    `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
+  throw new Error(
+    "route571ToMctbConsentTexml is deprecated — AT&T forwards need Call Control event-only. " +
+      "Run: npx tsx scripts/mctb-fix-571-forward-pickup.ts --apply",
   );
-  const live = String((asRecord(verify.data) || asRecord(verify) || {}).connection_id || "");
-  if (live !== texmlAppId) {
-    throw new Error(
-      `571 TeXML route mismatch: expected ${texmlAppId}, live connection ${live || "(none)"}`,
-    );
-  }
-
-  return { texmlAppId, voiceUrl };
 }
 
 export function isPlatform571E164(e164: string): boolean {

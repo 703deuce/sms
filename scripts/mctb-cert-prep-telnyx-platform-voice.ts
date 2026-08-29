@@ -34,11 +34,15 @@ import {
   resolvePlatformDemoOwnerWorkspaceId,
   syncPlatformDemoConsentRuntime,
 } from "@/lib/mctb/onboarding/platform-demo";
-import { verify571MctbConsentTexmlRoute, route571ToMctbConsentTexml } from "@/lib/mctb/consent-prompt/telnyx-texml-route";
+import {
+  verifyEventOnlyRouteForE164,
+} from "@/lib/mctb/consent-prompt/telnyx-event-only-route";
+import { provisionMctbTelnyxSipIngress } from "@/lib/mctb/provisioning/telnyx-sip-ingress";
+import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
+import { MCTB_CANONICAL_ROUTING_OWNER } from "@/lib/mctb/voice-ingress-guard";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { MCTB_CONSENT_FLOW_NAME } from "@/lib/mctb/consent-prompt/types";
 import { normalizeMctbConsentMode, MCTB_CONSENT_MODE_LABELS } from "@/lib/mctb/consent-mode";
-import { transitionNumberService } from "@/lib/numbers/state-service";
 import {
   hasActiveSmartRoutingOnNumber,
   pauseFlow,
@@ -178,45 +182,61 @@ async function pauseConflictingFlows(ownerWorkspaceId: string, phoneNumberId: st
   );
 }
 
-async function verifyTexmlRouting(providerNumberId: string | null) {
-  if (!providerNumberId) {
-    record("texml_571_route", "FAIL", "No providerNumberId on platform 571");
+async function verifyCallControlRouting(
+  ownerWorkspaceId: string,
+  phoneNumberId: string,
+  e164ToRoute: string,
+) {
+  if (!apply) {
+    const live571 = await verifyEventOnlyRouteForE164(e164ToRoute);
+    const live866 = await verifyEventOnlyRouteForE164(MCTB_FQDN_DIRECT_TEST_E164);
+    const sameApp =
+      live571.callControlAppId &&
+      live571.callControlAppId === live866.callControlAppId;
+    record(
+      "call_control_571_route",
+      live571.ok && sameApp ? "PASS" : "PENDING",
+      live571.ok
+        ? sameApp
+          ? `571 on ${live571.detail} (same app as 866)`
+          : `571 app ${live571.callControlAppId} ≠ 866 app ${live866.callControlAppId}`
+        : `Would assign 571 → Call Control event-only — ${live571.detail}`,
+    );
+    record(
+      "call_control_866_parity",
+      live866.ok ? "PASS" : "WARN",
+      live866.ok ? live866.detail : `866 reference not on Call Control — ${live866.detail}`,
+    );
+    return live571.ok && sameApp;
+  }
+
+  const provisioned = await provisionMctbTelnyxSipIngress({
+    workspaceId: ownerWorkspaceId,
+    phoneNumberId,
+    mctbRole: e164ToRoute === MCTB_PLATFORM_DEMO_E164 ? "platform_demo" : "customer_mctb",
+  });
+  if (!provisioned.ok) {
+    record("call_control_571_route", "FAIL", provisioned.error || "provision failed");
     return false;
   }
 
-  if (!apply) {
-    const live = await verify571MctbConsentTexmlRoute(providerNumberId);
-    record(
-      "texml_571_route",
-      live.ok ? "PASS" : "PENDING",
-      live.ok ? live.detail : `Would route to TeXML — ${live.detail}`,
-    );
-    return live.ok;
-  }
-
-  await route571ToMctbConsentTexml(providerNumberId);
-  const live = await verify571MctbConsentTexmlRoute(providerNumberId);
-  record("texml_571_route", live.ok ? "PASS" : "FAIL", live.detail);
-  return live.ok;
-}
-
-async function wireSmartRouting(ownerWorkspaceId: string, phoneNumberId: string) {
-  if (!apply) {
-    record(
-      "smart_routing_wiring",
-      "PENDING",
-      "Would set routingOwner=smart_routing and clear voice agent on 571",
-    );
-    return false;
-  }
-
-  await transitionNumberService(ownerWorkspaceId, phoneNumberId, "set_smart_routing_owner");
+  const live571 = await verifyEventOnlyRouteForE164(e164ToRoute);
+  const live866 = await verifyEventOnlyRouteForE164(MCTB_FQDN_DIRECT_TEST_E164);
+  const sameApp =
+    live571.callControlAppId && live571.callControlAppId === live866.callControlAppId;
   record(
-    "smart_routing_wiring",
-    "PASS",
-    "routingOwner=smart_routing, voice agent cleared (Press-1 via TeXML edge)",
+    "call_control_571_route",
+    live571.ok ? "PASS" : "FAIL",
+    live571.detail,
   );
-  return true;
+  record(
+    "call_control_866_parity",
+    sameApp ? "PASS" : "FAIL",
+    sameApp
+      ? `571 and 866 share Call Control app ${live571.callControlAppId}`
+      : `571 app ${live571.callControlAppId} ≠ 866 app ${live866.callControlAppId}`,
+  );
+  return live571.ok && sameApp;
 }
 
 async function syncConsentRuntime(mode: ReturnType<typeof normalizeMctbConsentMode>) {
@@ -250,10 +270,7 @@ async function verifyFinalState(
   const routingOwner = settings.routingOwner;
   const smartRouting = await hasActiveSmartRoutingOnNumber(ownerWorkspaceId, phoneNumberId);
   const activeFlow = await resolveActiveFlowForNumber(ownerWorkspaceId, phoneNumberId);
-  const texml =
-    pn.providerNumberId != null
-      ? await verify571MctbConsentTexmlRoute(pn.providerNumberId)
-      : { ok: false, detail: "no providerNumberId" };
+  const callControl = await verifyEventOnlyRouteForE164(MCTB_PLATFORM_DEMO_E164);
   const voiceAgent = await prisma.voiceAgent.findFirst({
     where: { workspaceId: ownerWorkspaceId, phoneNumberId, status: "ACTIVE" },
     select: { id: true },
@@ -263,17 +280,17 @@ async function verifyFinalState(
 
   record(
     "routing_owner",
-    routingOwner === "smart_routing" ? "PASS" : apply ? "FAIL" : "WARN",
-    `routingOwner=${routingOwner || "(none)"}`,
+    routingOwner === MCTB_CANONICAL_ROUTING_OWNER ? "PASS" : apply ? "FAIL" : "WARN",
+    `routingOwner=${routingOwner || "(none)"} (expected ${MCTB_CANONICAL_ROUTING_OWNER})`,
   );
   record(
-    "smart_routing_active",
-    texml.ok ? "PASS" : smartRouting ? "PASS" : apply ? "FAIL" : "WARN",
-    texml.ok
-      ? `Press-1 via TeXML edge (${texml.detail})`
+    "call_control_event_only",
+    callControl.ok ? "PASS" : apply ? "FAIL" : "WARN",
+    callControl.ok
+      ? `Press-1 via Call Control event-only (${callControl.detail})`
       : smartRouting
-        ? `Active flow: ${activeFlow?.name || "(unknown)"}`
-        : "No TeXML route or published smart routing flow on 571",
+        ? `WARN: smart routing flow still active (${activeFlow?.name || "unknown"}) while Call Control not verified`
+        : `Call Control not verified — ${callControl.detail}`,
   );
   record(
     "voice_agent_clear",
@@ -342,11 +359,10 @@ async function main() {
   record(
     "telnyx_inbound_voice",
     "SKIP",
-    "Platform 571 uses TeXML edge answer (not Call Control) — see texml_571_route",
+    "Platform 571 uses Call Control event-only (same app as 866) — see call_control_571_route",
   );
   await pauseConflictingFlows(ownerWorkspaceId, pn.id);
-  await verifyTexmlRouting(pn.providerNumberId);
-  await wireSmartRouting(ownerWorkspaceId, pn.id);
+  await verifyCallControlRouting(ownerWorkspaceId, pn.id, e164);
   await syncConsentRuntime(consentMode);
 
   console.log("\n── Verification ──\n");
