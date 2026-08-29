@@ -21,7 +21,7 @@ RUN apt-get update \
 WORKDIR /opt/mctb-sip-adapter
 
 COPY mctb-sip-adapter/agi/requirements.txt ./agi/
-RUN pip3 install --no-cache-dir --break-system-packages -r agi/requirements.txt
+RUN pip3 install --no-cache-dir -r agi/requirements.txt
 
 COPY mctb-sip-adapter/asterisk/ /etc/asterisk-templates/
 COPY mctb-sip-adapter/agi/ /opt/mctb-sip-adapter/agi/
