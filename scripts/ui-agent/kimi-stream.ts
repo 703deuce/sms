@@ -31,6 +31,14 @@ export function kimiLivePreviewPath(sessionId: string): string {
   return join(sessionDir(sessionId), "kimi-live.txt");
 }
 
+export function kimiReasoningLogPath(sessionId: string): string {
+  return join(sessionDir(sessionId), "kimi-reasoning.log");
+}
+
+export function kimiSseDebugPath(sessionId: string): string {
+  return join(sessionDir(sessionId), "kimi-sse-raw.log");
+}
+
 function ensureSessionDir(sessionId: string): void {
   mkdirSync(sessionDir(sessionId), { recursive: true });
 }
@@ -63,8 +71,10 @@ export async function streamKimiChatCompletion(input: {
   const started = Date.now();
   let firstTokenMs = 0;
   let rawText = "";
+  let reasoningText = "";
   let lastProgressAt = 0;
   let lastConsoleAt = 0;
+  let lastHeartbeatAt = started;
   const seenPaths = new Set<string>();
 
   if (input.sessionId) {
@@ -75,7 +85,9 @@ export async function streamKimiChatCompletion(input: {
       "utf8",
     );
     writeFileSync(kimiLivePreviewPath(input.sessionId), "", "utf8");
+    writeFileSync(kimiReasoningLogPath(input.sessionId), "", "utf8");
     appendProgressLog(input.sessionId, `kimi_stream_started — watch: tail -f ${kimiStreamLogPath(input.sessionId)}`);
+    appendProgressLog(input.sessionId, `kimi_reasoning — watch: tail -f ${kimiReasoningLogPath(input.sessionId)}`);
   }
 
   const streamBody = { ...input.body, stream: true };
@@ -104,6 +116,25 @@ export async function streamKimiChatCompletion(input: {
 
     for await (const chunk of reader) {
       buffer += Buffer.from(chunk).toString("utf8");
+      if (input.sessionId && buffer.length < 50000) {
+        appendFileSync(kimiSseDebugPath(input.sessionId), buffer, "utf8");
+      }
+
+      const now = Date.now();
+      if (!firstTokenMs && now - lastHeartbeatAt > 10000) {
+        lastHeartbeatAt = now;
+        const waitSec = Math.round((now - started) / 1000);
+        const msg = `kimi_waiting_for_tokens… ${waitSec}s (video analysis / reasoning before code)`;
+        if (input.sessionId) {
+          appendProgressLog(input.sessionId, msg);
+          updateProgress(input.sessionId, {
+            phase: "generating_ui",
+            message: `Waiting for Kimi… ${waitSec}s (analyzing video)`,
+          });
+        }
+        log("kimi stream", msg);
+      }
+
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
@@ -115,36 +146,60 @@ export async function streamKimiChatCompletion(input: {
 
         try {
           const json = JSON.parse(data) as {
-            choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+            choices?: Array<{
+              delta?: { content?: string; reasoning_content?: string };
+              message?: { content?: string; reasoning_content?: string };
+            }>;
           };
-          const delta =
-            json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.message?.content ?? "";
-          if (!delta) continue;
+          const delta = json.choices?.[0]?.delta;
+          const content = delta?.content ?? json.choices?.[0]?.message?.content ?? "";
+          const reasoning = delta?.reasoning_content ?? json.choices?.[0]?.message?.reasoning_content ?? "";
+
+          if (reasoning) {
+            if (!firstTokenMs) {
+              firstTokenMs = Date.now() - started;
+              if (input.sessionId) {
+                appendProgressLog(input.sessionId, `kimi_first_reasoning_token_ms=${firstTokenMs}`);
+                updateProgress(input.sessionId, {
+                  phase: "generating_ui",
+                  message: `Kimi reasoning… first activity in ${(firstTokenMs / 1000).toFixed(1)}s`,
+                });
+              }
+            }
+            reasoningText += reasoning;
+            if (input.sessionId) {
+              appendFileSync(kimiReasoningLogPath(input.sessionId), reasoning, "utf8");
+            }
+            if (Date.now() - lastConsoleAt > 300) {
+              process.stdout.write(reasoning);
+              lastConsoleAt = Date.now();
+            }
+          }
+
+          if (!content) continue;
 
           if (!firstTokenMs) {
             firstTokenMs = Date.now() - started;
             if (input.sessionId) {
-              appendProgressLog(input.sessionId, `kimi_first_token_ms=${firstTokenMs}`);
+              appendProgressLog(input.sessionId, `kimi_first_code_token_ms=${firstTokenMs}`);
               updateProgress(input.sessionId, {
                 phase: "generating_ui",
                 message: `Kimi streaming UI code… first tokens in ${(firstTokenMs / 1000).toFixed(1)}s`,
               });
             }
-            log("kimi stream", `first token after ${firstTokenMs}ms`);
+            log("kimi stream", `first code token after ${firstTokenMs}ms`);
           }
 
-          rawText += delta;
+          rawText += content;
 
           if (input.sessionId) {
-            appendFileSync(kimiStreamLogPath(input.sessionId), delta, "utf8");
+            appendFileSync(kimiStreamLogPath(input.sessionId), content, "utf8");
             writeFileSync(kimiLivePreviewPath(input.sessionId), rawText.slice(-8000), "utf8");
           }
 
-          // Echo code to terminal as it arrives (throttle slightly)
-          const now = Date.now();
-          if (now - lastConsoleAt > 200) {
-            process.stdout.write(delta);
-            lastConsoleAt = now;
+          if (Date.now() - lastConsoleAt > 200) {
+            process.stdout.write(content);
+            lastConsoleAt = Date.now();
           }
 
           const newPaths = extractNewFilePaths(rawText, seenPaths);
@@ -154,16 +209,16 @@ export async function streamKimiChatCompletion(input: {
             log("kimi stream", msg);
           }
 
-          if (input.sessionId && now - lastProgressAt > 5000) {
-            lastProgressAt = now;
+          if (input.sessionId && Date.now() - lastProgressAt > 5000) {
+            lastProgressAt = Date.now();
             const tail = rawText.slice(-120).replace(/\s+/g, " ");
             appendProgressLog(
               input.sessionId,
-              `kimi_stream ${rawText.length} chars, ${((Date.now() - started) / 1000).toFixed(0)}s — …${tail}`,
+              `kimi_stream ${rawText.length} code chars, ${reasoningText.length} reasoning chars — …${tail}`,
             );
             updateProgress(input.sessionId, {
               phase: "generating_ui",
-              message: `Kimi streaming… ${rawText.length.toLocaleString()} chars (${((Date.now() - started) / 1000).toFixed(0)}s)`,
+              message: `Kimi streaming… ${rawText.length.toLocaleString()} code chars (${((Date.now() - started) / 1000).toFixed(0)}s)`,
             });
           }
         } catch {
