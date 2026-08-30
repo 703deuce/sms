@@ -14,6 +14,11 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 };
 
+export function bundleReferencePreview(sessionId: string): string {
+  bundleReference(sessionId);
+  return join(generatedDirForSession(sessionId), "index.html");
+}
+
 function bundleReference(sessionId: string): void {
   const dir = generatedDirForSession(sessionId);
   const entry = existsSync(join(dir, "page.tsx"))

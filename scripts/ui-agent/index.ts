@@ -19,10 +19,13 @@ import { buildProjectManifest } from "./project-context";
 import { runPreview } from "./preview";
 import { buildReferenceImplementation } from "./reference-builder";
 import { buildLabeledMedia, loadNamedReference } from "./reference-media";
+import { runKimiCommand } from "./kimi-command";
 import { refineReferenceImplementation } from "./refine-reference";
+import { runRefsCommand } from "./refs-command";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession } from "./types";
 import { validateTouchedFiles } from "./validate-changes";
+import { writeHandoff } from "./handoff";
 import { compareApprovedReferenceToProduction, writeVisualComparisonReport } from "./visual-comparison";
 
 async function collectReferenceMedia(options: CliOptions, sessionDirPath: string): Promise<LabeledMedia[]> {
@@ -296,6 +299,9 @@ async function runIntegrate(options: CliOptions): Promise<void> {
         );
       }
     }
+    session.status = "integrated";
+    updateSession(session);
+    writeHandoff(session);
   }
 
   log("complete", `session=${session.id}`);
@@ -375,8 +381,13 @@ async function main(): Promise<void> {
   }
 
   switch (command) {
+    case "kimi":
     case "improve":
-      await runImprove(options);
+      ensureUiAgentDirs();
+      await runKimiCommand(await KimiVisionProvider.createValidated(), options);
+      break;
+    case "refs":
+      await runRefsCommand(process.argv.slice(3));
       break;
     case "approve":
       await runApprove(options);

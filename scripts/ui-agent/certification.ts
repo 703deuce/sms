@@ -100,6 +100,47 @@ gate("integration plan rejects mock-data imports", () => {
   );
 });
 
+gate("references manifest helpers", () => {
+  const { upsertReference, getReference, deleteReference } = require("../../src/lib/ui-agent/references-manifest") as typeof import("../../src/lib/ui-agent/references-manifest");
+  upsertReference("cert-test-ref", {
+    type: "image",
+    storage: "local",
+    path: ".ui-agent/references/cert-test/ref.png",
+    description: "cert",
+  });
+  assert.ok(getReference("cert-test-ref"));
+  deleteReference("cert-test-ref");
+});
+
+gate("environment manifest rejects scaffold", () => {
+  const { buildEnvironmentManifest } = require("./environment-manifest") as typeof import("./environment-manifest");
+  const { buildProjectManifest } = require("./project-context") as typeof import("./project-context");
+  const manifest = buildProjectManifest("/conversations");
+  const env = buildEnvironmentManifest(manifest);
+  assert.ok(env.instructions.some((line) => /do not scaffold/i.test(line)));
+  assert.equal(env.framework, "Next.js");
+});
+
+gate("handoff writer creates json", () => {
+  const { writeHandoff } = require("./handoff") as typeof import("./handoff");
+  const { saveSession, loadSession } = require("./session") as typeof import("./session");
+  const { buildProjectManifest } = require("./project-context") as typeof import("./project-context");
+  const sid = "cert-handoff-session";
+  saveSession({
+    id: sid,
+    createdAt: new Date().toISOString(),
+    target: "/conversations",
+    instruction: "test",
+    referenceMedia: [],
+    currentMedia: [],
+    manifest: buildProjectManifest("/conversations"),
+    generatedDir: `.ui-agent/generated/${sid}`,
+    status: "ready",
+  });
+  const path = writeHandoff(loadSession(sid));
+  assert.ok(path.endsWith("HANDOFF.json"));
+});
+
 gate("generated sandbox path isolation", () => {
   const { writeGeneratedFiles, listGeneratedFiles } = require("./generated-sandbox") as typeof import("./generated-sandbox");
   const sid = "cert-test-session";

@@ -137,29 +137,41 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 **LiveKit examples (reference):** `/agent/repos/agents/examples/survey/`, `hotel_receptionist/`, `warm-transfer/`, SDK `beta/workflows/task_group.py`.
 
-## Visual UI Agent
+## Visual UI Agent / Kimi UI Sub-Agent
 
-When the user supplies a screenshot, design reference, or screen recording and asks to improve an existing Transovo page:
+**Orchestration:** USER → CURSOR → repo-local Kimi tool → generated UI → CURSOR integrates.
 
-### Workflow (reference implementation mode)
+The user should **not** manually operate Kimi. When the user asks to use Kimi, recreate a page from a saved video/image, or improve UI from a reference:
+
+1. Resolve media from `.ui-agent/references.json` (`npm run ui:refs`) or local `--video-file` paths.
+2. Identify the exact existing Transovo target route/component.
+3. Capture the current rendered page when useful (`--capture-current`).
+4. Invoke `npm run ui:kimi -- --target <route> --video <name> [--instruction "..."]`.
+5. Inspect output at `/dev/ui-studio/preview/<session>` (Current | Kimi | Split).
+6. Optionally revise: `npm run ui:kimi -- --session <id> --revise --instruction "..."`.
+7. Approve: `npm run ui:approve -- --session <id>` → writes `HANDOFF.json`.
+8. Integrate into production — reuse Kimi presentation, wire real hooks/APIs.
+9. Compare **approved Kimi render** vs **production** — not the original competitor video.
+
+**Reference library:** upload once at `/dev/ui-references` (dev only), then tell Cursor: *"Use Kimi with slicktext-inbox to redo /conversations."*
+
+**Kimi must NOT scaffold a new Next.js project.** It generates only `page.tsx` + `components/**` in `.ui-agent/generated/<session>/` using the environment manifest. See `INTEGRATION_PRINCIPLES` in `scripts/ui-agent/config.ts`.
+
+### Workflow
 
 ```
 Reference media + current Transovo capture
         ↓
-Kimi builds UI in .ui-agent/generated/<session>/  (0 → 85–95% visual)
+npm run ui:kimi  (Cursor-invoked)
         ↓
-Preview → approve (APPROVED.json + screenshot.png)
+.ui-agent/generated/<session>/  (0 → 85–95% visual)
+        ↓
+/dev/ui-studio/preview/<session> → approve → HANDOFF.json
         ↓
 Cursor integrates into src/  (85–95% → production)
         ↓
 Final check: approved Kimi render vs production result
 ```
-
-1. **Kimi builds** a complete visual reference in `.ui-agent/generated/<session>/` (mock data allowed in sandbox only).
-2. **Preview** with `npm run ui:preview -- --session <id>` — inspect before touching production.
-3. **Approve** with `npm run ui:approve -- --session <id>` — freezes the approved Kimi render as the visual target.
-4. **Integrate** with `npm run ui:integrate` — transplant presentation into real `src/` components using existing hooks/APIs.
-5. **Never** let Kimi edit `src/` directly during the build phase.
 
 ### Integration rules (Cursor / Composer)
 
@@ -167,17 +179,13 @@ Kimi's generated UI is the **starting frontend implementation**, not merely a de
 
 - **Reuse 80–90%** of Kimi's presentation code where practical (JSX, classNames, layout, spacing, transitions).
 - **Visual fidelity** matters more than preserving exact generated source code.
-- **Refactor freely** for production: swap Kimi `useState` for existing hooks, merge JSX into existing components (e.g. put Kimi's row layout into `ConversationRow.tsx`), use design-system primitives, routing, a11y.
+- **Refactor freely** for production: swap Kimi `useState` for existing hooks, merge JSX into existing components, use design-system primitives, routing, a11y.
 - **Do not** copy `mock-data.ts`, `MOCK_*`, or imports from `.ui-agent/generated/` into production.
 - **Goal:** Kimi-created visual result + Transovo production functionality — NOT line-for-line source preservation.
-- **Final visual check:** compare **approved Kimi sandbox render** vs **production after integration** — NOT the original competitor video.
 
-Shared prompt text: `INTEGRATION_PRINCIPLES` in `scripts/ui-agent/config.ts`.
+### Dev routes (disabled in production)
 
-### Safety
-
-- Capture the **rendered** current page (`--capture-current`), not just source code.
-- Default to plan-only for `ui:integrate`; apply only with `--apply`.
-- If backend work is required, document in `backendChangesRequired` — do not fake it.
+- `/dev/ui-references` — upload/name reference videos and images
+- `/dev/ui-studio/preview/[sessionId]` — Current / Kimi / Split comparison
 
 See `scripts/ui-agent/README.md`.

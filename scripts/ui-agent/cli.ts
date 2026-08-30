@@ -15,6 +15,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
     referenceVideos: [],
     referenceUrls: [],
     referenceNames: [],
+    referenceVideoNames: [],
+    referenceImageNames: [],
     currentImages: [],
     currentVideos: [],
     captureCurrent: false,
@@ -27,6 +29,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     analyzeOnly: false,
     approve: false,
     integrate: false,
+    revise: false,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop", "mobile"],
     maxPasses: 2,
@@ -44,12 +47,18 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--instruction":
         options.instruction = nextValue(args, i++);
         break;
+      case "--video":
+        options.referenceVideoNames.push(nextValue(args, i++));
+        break;
       case "--image":
+        options.referenceImageNames.push(nextValue(args, i++));
+        break;
       case "--reference-image":
+      case "--image-file":
         options.referenceImages.push(nextValue(args, i++));
         break;
-      case "--video":
       case "--reference-video":
+      case "--video-file":
         options.referenceVideos.push(nextValue(args, i++));
         break;
       case "--reference-url":
@@ -94,6 +103,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--max-passes":
         options.maxPasses = Number(nextValue(args, i++));
         break;
+      case "--revise":
+        options.revise = true;
+        break;
       default:
         if (arg.startsWith("--")) throw new Error(`Unknown argument: ${arg}`);
     }
@@ -103,36 +115,34 @@ export function parseCliArgs(argv: string[]): CliOptions {
 }
 
 export function printUsage(): void {
-  console.log(`Visual UI Agent — Kimi builds reference, Cursor integrates production
+  console.log(`Visual UI Agent — Cursor orchestrates Kimi for visual UI work
 
-WORKFLOW:
-  1. ui:improve     Kimi builds reference in .ui-agent/generated/<session>/
-  2. ui:preview     Inspect the reference page locally
-  3. ui:approve     Freeze APPROVED.json when satisfied
-  4. ui:integrate   Transplant presentation into real src/ (plan-only default)
-  5. ui:integrate --apply   Apply production changes
-
-COMMANDS:
-  npm run ui:improve -- \\
+PRIMARY (Cursor-controlled):
+  npm run ui:kimi -- \\
     --target "/conversations" \\
-    --reference-video "./ref.mov" \\
-    --capture-current \\
+    --video "slicktext-inbox" \\
     --instruction "Match inbox layout; keep Transovo sidebar"
 
-  npm run ui:preview -- --session <session-id>
-  npm run ui:approve -- --session <session-id>
-  npm run ui:integrate -- --session <session-id>          # plan only
-  npm run ui:integrate -- --session <session-id> --apply  # transplant to src/
+  npm run ui:kimi -- --session <id> --revise --instruction "Tighten row spacing"
 
-  npm run ui:capture -- --target "/conversations" --screenshots --video-capture
-  npm run ui:reference -- --reference-url "https://example.com/inbox"
-  npm run ui:validate -- --session <session-id>
+REFERENCE LIBRARY:
+  npm run ui:refs
+  npm run ui:refs -- --show slicktext-inbox
+
+WORKFLOW:
+  1. ui:kimi        Kimi builds sandbox in .ui-agent/generated/<session>/
+  2. /dev/ui-studio/preview/<session>   Compare Current vs Kimi
+  3. ui:approve     Freeze approved visual target
+  4. ui:integrate   Cursor integrates into production src/
+
+LEGACY ALIASES: ui:improve (= ui:kimi), ui:preview, ui:capture, ui:reference
 
 OPTIONS:
-  --target, --session, --instruction
-  --reference-image, --reference-video, --reference-url, --reference-name
-  --current-image, --current-video, --capture-current
-  --apply, --dry-run, --max-passes (default 2 Kimi refinement passes)
+  --target, --session, --instruction, --revise
+  --video, --image (named references from .ui-agent/references.json)
+  --video-file, --image-file, --reference-video, --reference-image (local paths)
+  --reference-url, --reference-name, --capture-current
+  --apply, --dry-run, --max-passes (default 2)
   --base-url http://localhost:3000
 `);
 }

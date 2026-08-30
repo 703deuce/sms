@@ -169,6 +169,7 @@ export type UiAgentSession = {
   generatedDir?: string;
   refinementPasses?: number;
   approved?: boolean;
+  status?: "draft" | "generating" | "ready" | "approved" | "integrated";
   referenceAnalysis?: ReferenceAnalysis;
   differencePlan?: DifferencePlan;
   implementationPlan?: ImplementationPlan;
@@ -183,6 +184,8 @@ export type CliOptions = {
   referenceVideos: string[];
   referenceUrls: string[];
   referenceNames: string[];
+  referenceVideoNames: string[];
+  referenceImageNames: string[];
   currentImages: string[];
   currentVideos: string[];
   captureCurrent: boolean;
@@ -195,6 +198,7 @@ export type CliOptions = {
   analyzeOnly: boolean;
   approve: boolean;
   integrate: boolean;
+  revise: boolean;
   baseUrl: string;
   viewports: ViewportPreset[];
   maxPasses: number;

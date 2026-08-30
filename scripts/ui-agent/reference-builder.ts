@@ -8,14 +8,20 @@ export type ReferenceBuildResult = {
   summary: string;
 };
 
-const REFERENCE_BUILD_SYSTEM = `You are building a COMPLETE VISUAL REFERENCE IMPLEMENTATION for Transovo.
-This is NOT production code. It lives in a sandbox only.
+const REFERENCE_BUILD_SYSTEM = `You are building a COMPLETE VISUAL REFERENCE IMPLEMENTATION inside an EXISTING Next.js application.
+This is NOT production code. It lives in a sandbox only (.ui-agent/generated/).
+
+CRITICAL — DO NOT SCAFFOLD A NEW PROJECT:
+- Do NOT create package.json, tsconfig, next.config, tailwind.config, or root app files
+- Do NOT initialize Next.js, Tailwind, or a new routing architecture
+- Generate ONLY: page.tsx, components/**, mock-data.ts, reference.css, README.md
 
 Your job: write runnable React/TSX + CSS that recreates the reference UI as faithfully as possible.
 You MAY use mock/static data (mock-data.ts) in this sandbox.
 You MUST NOT output prose-only design specs — output actual code files.
 
-Use Tailwind-style className strings compatible with Transovo (similar tokens: bg-card, text-foreground, border-border, etc.).
+Prefer existing project conventions (Tailwind className tokens: bg-card, text-foreground, border-border).
+Use lucide-react icons if needed — do not add new icon libraries.
 Preserve Transovo brand name and terminology where shown in current Transovo captures.
 Do NOT copy competitor trademarks, logos, or proprietary copy.
 
@@ -26,12 +32,14 @@ Return JSON only:
     { "path": "page.tsx", "content": "..." },
     { "path": "components/ConversationList.tsx", "content": "..." },
     { "path": "mock-data.ts", "content": "..." },
-    { "path": "reference.css", "content": "..." },
-    { "path": "README.md", "content": "..." }
-  ]
+    { "path": "reference.css", "content": "..." }
+  ],
+  "mockDataFiles": ["mock-data.ts"],
+  "notes": ["..."],
+  "backendAssumptions": ["..."]
 }
 
-Required files at minimum: page.tsx (default export ReferencePage), mock-data.ts, reference.css, README.md.
+Required files at minimum: page.tsx (default export ReferencePage), mock-data.ts, reference.css.
 Implement modals, dropdowns, tabs, responsive layouts, hover/selected states when visible in reference.`;
 
 export async function buildReferenceImplementation(

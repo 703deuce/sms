@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { generatedDirForSession, listGeneratedFiles } from "./generated-sandbox";
+import { writeHandoff } from "./handoff";
 import { log } from "./logger";
+import { loadSession, updateSession } from "./session";
 import type { ApprovedReference } from "./types";
 
 export function approveReference(input: {
@@ -27,6 +29,17 @@ export function approveReference(input: {
 
   writeFileSync(join(generatedDirForSession(input.sessionId), "APPROVED.json"), JSON.stringify(approved, null, 2), "utf8");
   log("reference approved", input.sessionId);
+
+  try {
+    const session = loadSession(input.sessionId);
+    session.approved = true;
+    session.status = "approved";
+    updateSession(session);
+    writeHandoff(session);
+  } catch {
+    // session may not exist for standalone approve
+  }
+
   return approved;
 }
 

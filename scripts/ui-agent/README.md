@@ -1,108 +1,107 @@
 # Visual UI Agent (Kimi)
 
-Repo-local tool: **Kimi builds a complete visual reference** → **you approve it** → **Cursor integrates into production**.
+**Cursor orchestrates Kimi.** The user talks to Cursor; Cursor invokes the repo-local Kimi tool.
 
-## Role split
-
-| Phase | Who | Delivers |
-|-------|-----|----------|
-| **Build** | Kimi | 0 → 85–95% visual — runnable sandbox UI with mock data |
-| **Integrate** | Cursor / `ui:integrate` | 85–95% → production — real hooks, APIs, existing components |
+## Daily workflow
 
 ```
-Reference media + current Transovo capture
-              ↓
-         KIMI builds
-              ↓
-.ui-agent/generated/<session>/   ← sandbox (mock data OK)
-              ↓
-    preview → approve → integrate
-              ↓
-         src/ (real hooks/APIs)
-              ↓
-    compare: approved Kimi render vs production
+1. Upload reference once → /dev/ui-references (name: slicktext-inbox)
+2. Tell Cursor: "Use Kimi with slicktext-inbox to redo /conversations"
+3. Cursor runs: npm run ui:kimi -- --target /conversations --video slicktext-inbox
+4. Preview: /dev/ui-studio/preview/<session>  (Current | Kimi | Split)
+5. Approve: npm run ui:approve -- --session <id>
+6. Cursor integrates via npm run ui:integrate
+7. Compare approved Kimi vs production
 ```
-
-## Architecture
-
-| Layer | Responsibility |
-|-------|----------------|
-| **Kimi** | Builds runnable React reference in `.ui-agent/generated/` |
-| **You** | Preview + approve when it looks right |
-| **Cursor / integrate** | Reuses Kimi presentation; wires production data and handlers |
-
-Kimi **never** edits `src/` directly. Integration is a separate `ui:integrate` step.
-
-## Integration philosophy
-
-Kimi's output is the **starting frontend implementation**, not just a design reference.
-
-**Reuse 80–90%** of Kimi's presentation code where practical (JSX structure, classNames, layout, spacing, transitions, modals).
-
-**Refactor freely** when integrating:
-- Replace Kimi local state with existing production hooks
-- Merge Kimi JSX into **existing** production components instead of creating parallel `Reference*` components
-- Use design-system primitives, routing, accessibility, and performance improvements
-
-**Do NOT** preserve Kimi code line-for-line. Example: keep Kimi's sidebar layout but swap `useState("all")` for `useConversationFilters()`.
-
-**Goal:** Kimi-created visual result + Transovo production functionality.
-
-**Final visual check:** compare the **approved Kimi sandbox screenshot** against **production after integration** — not the original competitor video.
-
-Full prompt text: `INTEGRATION_PRINCIPLES` in `scripts/ui-agent/config.ts`.
 
 ## Commands
 
 ```bash
-export KIMI_API_KEY=...
-export KIMI_UI_MODEL=kimi-k3   # video-capable; not k3-256k
-
-# 1. Kimi builds reference (auto-captures current page)
-npm run ui:improve -- \
+# Primary — Cursor invokes this
+npm run ui:kimi -- \
   --target "/conversations" \
-  --reference-video "./ui-reference/inbox.mov" \
-  --capture-current \
-  --instruction "Match inbox layout; keep Transovo branding"
+  --video "slicktext-inbox" \
+  --instruction "Match inbox; keep our sidebar and functionality"
 
-# 2. Preview sandbox reference (local only, port 5174)
-npm run ui:preview -- --session "<session-id>"
+# Revise same session
+npm run ui:kimi -- --session <id> --revise --instruction "Tighten row spacing"
 
-# 3. Freeze when satisfied (approved render becomes visual target)
-npm run ui:approve -- --session "<session-id>"
+# List saved references
+npm run ui:refs
+npm run ui:refs -- --show slicktext-inbox
 
-# 4. Plan production integration (functional mapping report)
-npm run ui:integrate -- --session "<session-id>"
+# Local file (before uploading to library)
+npm run ui:kimi -- --target "/campaigns" --video-file "./ref.mov"
 
-# 5. Apply to production src/ + run Kimi-vs-production visual comparison
-npm run ui:integrate -- --session "<session-id>" --apply
+# Approve + integrate
+npm run ui:approve -- --session <id>
+npm run ui:integrate -- --session <id>
+npm run ui:integrate -- --session <id> --apply
 ```
 
-### Capture helpers
+## Dev UI (not in production)
 
-```bash
-npm run ui:capture -- --target "/conversations" --screenshots --video-capture
-npm run ui:reference -- --reference-url "https://example.com/inbox"
+| Route | Purpose |
+|-------|---------|
+| `/dev/ui-references` | Upload/name reference videos & images → Supabase + `references.json` |
+| `/dev/ui-studio/preview/[sessionId]` | Current / Kimi / Split comparison |
+
+Set `ALLOW_UI_STUDIO=1` to enable in production (not recommended).
+
+## Architecture
+
+| Layer | Role |
+|-------|------|
+| **User** | Talks to Cursor only |
+| **Cursor** | Orchestrates Kimi CLI, integrates, tests |
+| **Kimi** | Generates sandbox UI (0→85–95% visual) |
+| **Integration** | Cursor reuses presentation + real hooks (85–95%→100%) |
+
+**Kimi never scaffolds a new Next.js project.** It outputs only `page.tsx`, `components/**`, `mock-data.ts`, `reference.css` under `.ui-agent/generated/<session>/`.
+
+## Reference library
+
+Manifest: `.ui-agent/references.json`
+
+```json
+{
+  "slicktext-inbox": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-inbox.mp4"
+  }
+}
 ```
 
-## Sandbox structure
+Supabase bucket: `ui-references` (private). Env: `SUPABASE_UI_REFERENCES_BUCKET`.
+
+## Session artifacts
 
 ```
+.ui-agent/sessions/<session-id>/
+  session.json
+  input.json
+  environment.json
+  current/
+  HANDOFF.json          # after approve — Cursor reads this
+  HANDOFF.md
+
 .ui-agent/generated/<session-id>/
-  page.tsx              # ReferencePage — mock data OK
+  page.tsx
   components/
-  mock-data.ts          # NEVER copy to src/
-  reference.css
-  screenshot.png        # approved visual target (after refinement)
-  APPROVED.json         # frozen approval metadata
+  mock-data.ts
+  screenshot.png
+  APPROVED.json
 ```
 
-## Safety
+## Integration philosophy
 
-- **Sandbox** (`.ui-agent/generated/**`): mock data, fake handlers allowed
-- **Production** (`src/`): real hooks/APIs only; integration rejects `mock-data` imports
-- Protected: `src/lib/**`, `src/app/api/**`, `prisma/**`, providers, auth, billing
-- No auto-commit, push, or deploy
+See `INTEGRATION_PRINCIPLES` in `scripts/ui-agent/config.ts`.
+
+Kimi output = starting frontend implementation. Reuse 80–90% presentation; refactor state/handlers for production.
+
+Final visual check: **approved Kimi screenshot** vs **production** — not the original competitor video.
 
 ## Certification
 
@@ -112,4 +111,6 @@ npm run test:ui-agent-cert
 
 ## Env
 
-See `.env.example` — `KIMI_API_KEY`, `KIMI_UI_MODEL`, `UI_AGENT_SMOKE_EMAIL` (capture auth).
+- `KIMI_API_KEY`, `KIMI_UI_MODEL` (use `kimi-k3` for video)
+- `UI_AGENT_SMOKE_EMAIL` / `UI_AGENT_SMOKE_PASSWORD` (page capture auth)
+- Supabase for reference uploads (optional — use `--video-file` locally without it)

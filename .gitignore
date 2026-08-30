@@ -53,6 +53,9 @@ public/voicemail/
 .ui-agent/references/**
 .ui-agent/sessions/**
 .ui-agent/generated/**
+.ui-agent/uploads/**
+.ui-agent/cache/**
+!.ui-agent/references.json
 !.ui-agent/references/.gitkeep
 !.ui-agent/sessions/.gitkeep
 !.ui-agent/generated/.gitkeep

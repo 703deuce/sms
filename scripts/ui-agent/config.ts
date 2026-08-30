@@ -10,6 +10,9 @@ export const UI_AGENT_REPORTS_DIR = join(UI_AGENT_DIR, "reports");
 export const UI_AGENT_SESSIONS_DIR = join(UI_AGENT_DIR, "sessions");
 export const UI_AGENT_GENERATED_DIR = join(UI_AGENT_DIR, "generated");
 export const UI_AGENT_CURRENT_DIR = join(UI_AGENT_DIR, "current");
+export const UI_AGENT_UPLOADS_DIR = join(UI_AGENT_DIR, "uploads");
+export const UI_AGENT_CACHE_DIR = join(UI_AGENT_DIR, "cache");
+export const UI_AGENT_REFERENCES_MANIFEST = join(UI_AGENT_DIR, "references.json");
 
 export const DEFAULT_KIMI_BASE_URL = "https://api.moonshot.ai/v1";
 
@@ -135,6 +138,8 @@ export function ensureUiAgentDirs(): void {
     UI_AGENT_SESSIONS_DIR,
     UI_AGENT_GENERATED_DIR,
     UI_AGENT_CURRENT_DIR,
+    UI_AGENT_UPLOADS_DIR,
+    UI_AGENT_CACHE_DIR,
   ]) {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
