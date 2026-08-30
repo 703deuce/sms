@@ -43,8 +43,7 @@ export async function resolveConfiguredMctbPhoneForWorkspace(
 
 /**
  * Resolve the SMS sender for MCTB using only numbers saved in setup config.
- * Production: the voice/setup DID is the A2P sender (`phoneNumberId` wins).
- * `smsPhoneNumberId` is a legacy override when voice and SMS DIDs were split (cert only).
+ * Production: the voice/setup DID is the primary sender (`phoneNumberId` wins).
  */
 export async function resolveMctbSmsSender(input: {
   workspaceId: string;

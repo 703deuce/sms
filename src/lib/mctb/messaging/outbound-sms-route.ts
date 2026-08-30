@@ -23,6 +23,7 @@ import {
 } from "@/lib/messaging/compliance/phone-number-class";
 import {
   resolveMctbSmsSender,
+  resolveConfiguredMctbPhoneForWorkspace,
   type MctbSmsSender,
 } from "@/lib/agents/missed-call-text-back/sms-sender";
 import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-back/types";
@@ -165,10 +166,35 @@ export async function resolveMctbOutboundSmsRoute(input: {
     });
   }
 
-  const sender = await resolveMctbSmsSender({
+  const senderCandidates: MctbSmsSender[] = [];
+  const primary = await resolveMctbSmsSender({
     workspaceId: input.workspaceId,
     config: input.config,
   });
+  if (primary) senderCandidates.push(primary);
+
+  if (
+    input.config.smsPhoneNumberId &&
+    input.config.smsPhoneNumberId !== input.config.phoneNumberId
+  ) {
+    const alt = await resolveConfiguredMctbPhoneForWorkspace(
+      input.workspaceId,
+      input.config.smsPhoneNumberId,
+    );
+    if (alt) {
+      senderCandidates.push({ ...alt, source: "sms_phone_number_id" });
+    }
+  }
+
+  let sender: MctbSmsSender | null = null;
+  for (const candidate of senderCandidates) {
+    const auth = await isPhoneAuthorizedForOutboundSms(candidate.phoneNumberId);
+    if (auth.allowed) {
+      sender = candidate;
+      break;
+    }
+  }
+  sender = sender || senderCandidates[0] || null;
 
   if (!sender?.phoneNumberId) return null;
 

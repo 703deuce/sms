@@ -62,6 +62,17 @@ function pick(fields: Record<string, string>, ...keys: string[]): string {
   return "";
 }
 
+function mctbConsentSmsTriggerSucceeded(sms: unknown): boolean {
+  if (!sms || typeof sms !== "object") return false;
+  const row = sms as Record<string, unknown>;
+  if (row.triggered === true) return true;
+  if (row.scheduled === true) return true;
+  if (row.deduped === true) return true;
+  if (row.ok === true && row.eligible === false) return false;
+  if (row.triggered === false || typeof row.reason === "string") return false;
+  return row.ok === true;
+}
+
 async function resolveInboundTarget(input: {
   from: string;
   to: string;
@@ -110,9 +121,9 @@ export async function POST(request: Request) {
     const fields = await parseFields(request);
 
     const from = pick(fields, "From", "from", "Caller");
-    const to = pick(fields, "To", "to", "Called") || MCTB_PLATFORM_DEMO_E164;
+    const to = pick(fields, "To", "to", "Called");
     const digits = pick(fields, "Digits", "digits");
-    const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
+    const callSid = pick(fields, "CallSid", "call_sid");
     const callStatus = pick(fields, "CallStatus", "CallStatus", "call_status");
     const forwardedFrom =
       normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
@@ -127,6 +138,13 @@ export async function POST(request: Request) {
         : "texml_mctb_consent";
 
     if (event === "gather" && digits === "1" && from) {
+      if (!to) {
+        return texml(
+          buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."),
+          "gather_press_1",
+        );
+      }
+
       traceMctbTexml("MCTB_DTMF_RECEIVED", { from: "[present]", to, callSid, digit: digits });
 
       console.log(
@@ -144,6 +162,7 @@ export async function POST(request: Request) {
       );
 
       if (!certModeSkipsSms(certMode)) {
+        let gatherSucceeded = false;
         try {
           const { resolveMctbSipIngressByDid } = await import("@/lib/mctb/sip-ingress/resolver");
           const ingress = await resolveMctbSipIngressByDid(to);
@@ -215,6 +234,7 @@ export async function POST(request: Request) {
                 testSms: certModeUsesTestSms(certMode),
               },
             });
+            gatherSucceeded = mctbConsentSmsTriggerSucceeded(sms);
             traceMctbTexml("MCTB_SMS_ACCEPTED", {
               workspaceId: target.workspaceId,
               callSid,
@@ -230,6 +250,8 @@ export async function POST(request: Request) {
                 result: sms,
               }),
             );
+          } else if (consent.duplicate && allowSms) {
+            gatherSucceeded = true;
           } else if (!consent.identity?.consentIdentityVerified) {
             console.log(
               JSON.stringify({
@@ -267,6 +289,13 @@ export async function POST(request: Request) {
           }
         } catch (err) {
           console.error("[mctb-consent-texml] gather handler failed", err);
+        }
+
+        if (!gatherSucceeded) {
+          return texml(
+            buildMctbConsentControlledHangupTexml("Thank you. Goodbye."),
+            "gather_press_1",
+          );
         }
       }
 

@@ -150,6 +150,7 @@ export function isMctbTexmlIngressConnection(connectionId: string | null | undef
   if (!connectionId) return false;
   const envId = process.env.MCTB_TEXML_APP_ID?.trim();
   if (envId && connectionId === envId) return true;
+  if (connectionId === MCTB_TEXML_DEFAULT_APP_ID) return true;
   return false;
 }
 

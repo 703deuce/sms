@@ -196,7 +196,14 @@ export async function handleTexmlStatusCallback(request: Request) {
       const terminal = eventType === "call.hangup";
       if (terminal) {
         const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
-        const mode = await loadMctbConsentMode(pnMctb.workspaceId).catch(() => "press_1" as const);
+        const { resolveMctbTexmlIngressConfig } = await import(
+          "@/lib/mctb/texml-ingress/config-cache"
+        );
+        const ingressConfig = await resolveMctbTexmlIngressConfig(toEarly).catch(() => null);
+        const mode =
+          (await loadMctbConsentMode(pnMctb.workspaceId).catch(() => null)) ||
+          ingressConfig?.consentMode ||
+          "press_1";
         if (mode === MCTB_CONSENT_MODE_EXISTING) {
           const { scheduleMctbTexmlExistingConsentCapture } = await import(
             "@/lib/mctb/texml-ingress/existing-consent-capture"

@@ -28,6 +28,9 @@ import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voic
 export const runtime = "nodejs";
 
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
+const CONTROLLED_HANGUP = buildMctbConsentControlledHangupTexml(
+  "We are unable to complete your call. Goodbye.",
+);
 
 function texmlResponse(body: string, meta?: Record<string, unknown>) {
   const xml = wrapMctbConsentTexmlBody(body);
@@ -46,6 +49,14 @@ function texmlResponse(body: string, meta?: Record<string, unknown>) {
     status: 200,
     headers: { "Content-Type": TEXML_CONTENT_TYPE },
   });
+}
+
+function pickTexmlCallSid(fields: Record<string, string>): string {
+  return (
+    fields.CallSid?.trim() ||
+    fields.call_sid?.trim() ||
+    ""
+  );
 }
 
 async function parseFields(request: Request): Promise<Record<string, string>> {
@@ -85,7 +96,7 @@ export async function POST(request: Request) {
     const fields = await parseFields(request);
     const from = pick(fields, "From", "from", "Caller");
     const to = pick(fields, "To", "to", "Called");
-    const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
+    const callSid = pickTexmlCallSid(fields);
     const connectionId = pick(fields, "ConnectionId", "connection_id");
     const certMode = resolveMctbTexmlCertMode(requestUrl.searchParams.get("cert"));
 
@@ -97,7 +108,6 @@ export async function POST(request: Request) {
       certMode,
     });
 
-    // MINIMAL / A — zero DB, zero branching. Proves TeXML ingress only.
     if (isMinimalCertMode(certMode)) {
       traceMctbTexml("MCTB_TEXML_RETURNED", {
         branch: "cert_minimal",
@@ -108,7 +118,6 @@ export async function POST(request: Request) {
       return texmlResponse(buildMinimalCertTexml(), { branch: "cert_minimal", certMode });
     }
 
-    // B2 — Play production consent audio only (isolates Telnyx &lt;Play&gt; media fetch).
     if (isPlayOnlyCertMode(certMode)) {
       const audioUrl = getMctbConsentPlaybackUrl();
       traceMctbTexml("MCTB_TEXML_RETURNED", {
@@ -127,14 +136,17 @@ export async function POST(request: Request) {
 
     if (!to) {
       traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_to_did" });
-      return texmlResponse(buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."), {
-        branch: "error_missing_to",
-      });
+      return texmlResponse(CONTROLLED_HANGUP, { branch: "error_missing_to" });
     }
 
     const config = await resolveMctbTexmlIngressConfig(to).catch(() => null);
 
-    if (config?.branch === "ai_assistant" && config.routingMode === "telnyx_assistant") {
+    if (!config) {
+      traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "unknown_or_unprovisioned_did", to });
+      return texmlResponse(CONTROLLED_HANGUP, { branch: "unknown_did" });
+    }
+
+    if (config.branch === "ai_assistant" && config.routingMode === "telnyx_assistant") {
       traceMctbTexml("MCTB_ROUTING_FAIL", {
         to,
         reason: "did_still_on_ai_assistant_routing",
@@ -148,57 +160,90 @@ export async function POST(request: Request) {
       );
     }
 
-    const consentMode = config?.consentMode || "press_1";
-    const workspaceId = config?.workspaceId;
+    const consentMode = config.consentMode;
+    const workspaceId = config.workspaceId;
+    const resolvedTo = config.e164;
     const forwardedFrom =
       normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
       parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
       "";
 
-    let routeToVoicemail = consentMode === MCTB_CONSENT_MODE_EXISTING;
-    if (
-      workspaceId &&
+    const schedulePromise =
+      consentMode !== MCTB_CONSENT_MODE_EXISTING && !certModeForcesPress1Gather(certMode)
+        ? (async () => {
+            const { loadMissedCallTextConfig } = await import(
+              "@/lib/agents/missed-call-text-back/config"
+            );
+            const { loadMctbScheduleSettings, isMctbAutomationActive } = await import(
+              "@/lib/mctb/schedule"
+            );
+            const runtimeConfig = await loadMissedCallTextConfig(workspaceId);
+            const scheduleSettings = await loadMctbScheduleSettings(workspaceId, runtimeConfig);
+            return isMctbAutomationActive(scheduleSettings, runtimeConfig);
+          })()
+        : Promise.resolve(true);
+
+    const press1PlaybackPromise =
       consentMode !== MCTB_CONSENT_MODE_EXISTING &&
-      !certModeForcesPress1Gather(certMode)
-    ) {
-      const { loadMissedCallTextConfig } = await import(
-        "@/lib/agents/missed-call-text-back/config"
-      );
-      const { loadMctbScheduleSettings, isMctbAutomationActive } = await import(
-        "@/lib/mctb/schedule"
-      );
-      const runtimeConfig = await loadMissedCallTextConfig(workspaceId);
-      const scheduleSettings = await loadMctbScheduleSettings(workspaceId, runtimeConfig);
-      if (!isMctbAutomationActive(scheduleSettings, runtimeConfig)) {
-        routeToVoicemail = true;
-      }
+      !certModeSkipsConsentBackend(certMode)
+        ? resolveMctbPress1TexmlPlayback({ workspaceId }).catch(() => null)
+        : Promise.resolve(null);
+
+    const voicemailPlaybackPromise =
+      consentMode === MCTB_CONSENT_MODE_EXISTING || certModeForcesPress1Gather(certMode)
+        ? Promise.resolve(null)
+        : (async () => {
+            const automationActive = await schedulePromise;
+            if (automationActive) return null;
+            const { resolveMctbVoicemailFallbackPlayback } = await import(
+              "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback"
+            );
+            return resolveMctbVoicemailFallbackPlayback(workspaceId, resolvedTo);
+          })();
+
+    const [automationActive, press1Playback, pausedVoicemailPlayback] = await Promise.all([
+      schedulePromise,
+      press1PlaybackPromise,
+      voicemailPlaybackPromise,
+    ]);
+
+    let routeToVoicemail = consentMode === MCTB_CONSENT_MODE_EXISTING;
+    if (!routeToVoicemail && !certModeForcesPress1Gather(certMode) && !automationActive) {
+      routeToVoicemail = true;
     }
 
     if (routeToVoicemail && !certModeForcesPress1Gather(certMode)) {
       let voicemailBody = buildMctbVoicemailGreetingTexml({ playUrl: null, sayText: null });
       let voicemailPlayUrl: string | null = null;
-      if (workspaceId && from) {
-        await ensureMctbTexmlVoicemailSession({
-          callSid: callSid || `texml:${to}:${from}:${Date.now()}`,
-          workspaceId,
-          callerE164: from,
-          transovoNumberE164: to,
-          forwardedFromE164: forwardedFrom || null,
-        }).catch(() => null);
 
+      if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
         const { resolveMctbVoicemailFallbackPlayback } = await import(
           "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback"
         );
-        const playback = await resolveMctbVoicemailFallbackPlayback(workspaceId, to);
+        const playback = await resolveMctbVoicemailFallbackPlayback(workspaceId, resolvedTo);
         voicemailPlayUrl = playback.playUrl;
         voicemailBody = buildMctbVoicemailGreetingTexml(playback);
+      } else if (pausedVoicemailPlayback) {
+        voicemailPlayUrl = pausedVoicemailPlayback.playUrl;
+        voicemailBody = buildMctbVoicemailGreetingTexml(pausedVoicemailPlayback);
       }
+
+      if (from && callSid) {
+        void ensureMctbTexmlVoicemailSession({
+          callSid,
+          workspaceId,
+          callerE164: from,
+          transovoNumberE164: resolvedTo,
+          forwardedFromE164: forwardedFrom || null,
+        }).catch(() => undefined);
+      }
+
       traceMctbTexml("MCTB_TEXML_RETURNED", {
         branch: consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "paused_voicemail",
         latencyMs: Date.now() - started,
-        to,
+        to: resolvedTo,
         callSid,
-        routingMode: config?.routingMode || MCTB_TEXML_ROUTING_MODE,
+        routingMode: config.routingMode || MCTB_TEXML_ROUTING_MODE,
         consentMode,
         workspaceId,
         voicemailPlayUrl,
@@ -210,15 +255,8 @@ export async function POST(request: Request) {
       });
     }
 
-    const press1Playback =
-      workspaceId && !certModeSkipsConsentBackend(certMode)
-        ? await resolveMctbPress1TexmlPlayback({ workspaceId }).catch(() => null)
-        : null;
     if (press1Playback?.failClosed) {
-      return texmlResponse(
-        buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."),
-        { branch: "press1_playback_fail_closed" },
-      );
+      return texmlResponse(CONTROLLED_HANGUP, { branch: "press1_playback_fail_closed" });
     }
 
     const promptMode = certModeUsesPlayGather(certMode)
@@ -232,7 +270,7 @@ export async function POST(request: Request) {
     const built = buildMctbConsentInboundTexml(forwardedFrom, {
       promptMode,
       gatherBasePath: "mctb-consent",
-      certMode: certMode === "D" ? null : certMode,
+      certMode: certMode === "D" ? "D" : certMode,
       press1PlayUrl: press1Playback?.playUrl ?? null,
       press1SayText: press1Playback?.sayText ?? null,
     });
@@ -240,21 +278,21 @@ export async function POST(request: Request) {
     traceMctbTexml("MCTB_TEXML_RETURNED", {
       branch: "press_1_gather",
       latencyMs: Date.now() - started,
-      to,
+      to: resolvedTo,
       callSid,
       certMode,
       usesGather: built.usesGather,
       consentMode,
-      workspaceId: config?.workspaceId,
-      routingMode: config?.routingMode,
+      workspaceId,
+      routingMode: config.routingMode,
     });
 
-    if (!certModeSkipsConsentBackend(certMode) && from && config?.workspaceId) {
+    if (!certModeSkipsConsentBackend(certMode) && from) {
       void import("@/lib/mctb/consent-prompt/texml-inbound-call-event").then(
         ({ runMctbConsentTexmlDemoCallDetect }) =>
           runMctbConsentTexmlDemoCallDetect({
             from,
-            to,
+            to: resolvedTo,
             forwardedFrom: forwardedFrom || null,
             callSid: callSid || null,
             callStatus: pick(fields, "CallStatus", "call_status") || null,
@@ -267,7 +305,7 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(JSON.stringify({ source: "mctb-entry", event: "handler_error", error: message }));
     traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "handler_exception", error: message });
-    return texmlResponse(buildMinimalCertTexml(), { branch: "error_fallback" });
+    return texmlResponse(CONTROLLED_HANGUP, { branch: "error_fallback" });
   }
 }
 

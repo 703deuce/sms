@@ -284,6 +284,9 @@ export function MctbSetupView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not switch number");
+      if (json.data?.sipProvision && !json.data.sipProvision.ok) {
+        throw new Error(json.data.sipProvision.error || "Voice/SIP provisioning failed");
+      }
       setSaved(true);
       setSavedWhilePaused(Boolean(json.data?.schedule?.paused));
       await load();
@@ -409,8 +412,8 @@ export function MctbSetupView() {
             <strong>
               {productionForwardE164 ? fmtPhone(productionForwardE164) : "your assigned MCTB number"}
             </strong>
-            , then call your business line from another phone. Calls route through Call Control
-            (mctb-event-only) — same path as the 866 forward test. Try It uses the shared demo
+            , then call your business line from another phone. Calls route through the MCTB TeXML
+            pipeline (`mctb-entry`) — Press 1 or existing consent, per your setup. Try It uses the shared demo
             number with a direct dial (no forwarding).
           </p>
           <label className="block space-y-1.5">
@@ -549,7 +552,7 @@ export function MctbSetupView() {
             <p className="text-[13px] text-muted-foreground">
               For production, forward your carrier business line to the MCTB number you chose above.
               That same number sends recovery texts (once A2P or toll-free verification is approved)
-              and runs Call Control voice (mctb-event-only) — Press 1 or existing consent,
+              and routes the number through Telnyx TeXML (`mctb-entry`) — Press 1 or existing consent,
               depending on your setup.
             </p>
             {productionForwardE164 ? (

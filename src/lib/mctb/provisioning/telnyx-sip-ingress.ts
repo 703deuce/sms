@@ -117,8 +117,9 @@ export async function provisionMctbTelnyxSipIngress(input: {
   const actions = ["mctb_texml_ingress_tagged"];
 
   try {
+    const provisionWorkspaceId = phone.workspaceId;
     const routed = await switchDidToMctbTexmlIngress({
-      workspaceId: input.workspaceId,
+      workspaceId: provisionWorkspaceId,
       phoneNumberId: phone.id,
       friendlyName: role === "platform_demo" ? "MCTB Platform Demo" : `MCTB ${phone.e164}`,
     });
@@ -154,6 +155,12 @@ export async function provisionMctbTelnyxSipIngress(input: {
     };
   }
 
+  const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
+  const { loadMctbScheduleSettings, isMctbSchedulePaused } = await import("@/lib/mctb/schedule");
+  const runtimeConfig = await loadMissedCallTextConfig(input.workspaceId);
+  const scheduleSettings = await loadMctbScheduleSettings(input.workspaceId, runtimeConfig);
+  const paused = isMctbSchedulePaused(scheduleSettings, runtimeConfig);
+
   await activateJohnOnPhoneNumber({
     workspaceId: input.workspaceId,
     phoneNumberId: phone.id,
@@ -161,6 +168,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     delaySeconds: input.delaySeconds ?? 0,
     messageTemplate: input.messageTemplate,
     skipGenericVoiceProvision: true,
+    activate: !paused,
   }).catch(() => undefined);
 
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);

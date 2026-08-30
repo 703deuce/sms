@@ -8,6 +8,7 @@ import {
   MCTB_TEXML_ROUTING_MODE,
   type MctbTexmlIngressBranch,
 } from "./constants";
+import { mctbTexmlE164Variants } from "./e164-lookup";
 
 export type MctbTexmlIngressConfig = {
   workspaceId: string;
@@ -34,23 +35,26 @@ function telephonyRoutingMode(settingsJson: unknown): string {
   return String(telephony?.routingMode || provisioning?.routingMode || "").toLowerCase();
 }
 
-function resolveBranch(routingMode: string, mctbEnabled: boolean): MctbTexmlIngressBranch {
+function resolveBranch(routingMode: string, mctbEnabled: boolean): MctbTexmlIngressBranch | null {
   if (routingMode === MCTB_TEXML_ROUTING_MODE || mctbEnabled) return "mctb";
   if (routingMode === "telnyx_assistant") return "ai_assistant";
-  return "mctb";
+  return null;
 }
 
 /** Fast DID lookup — one DB round-trip, cached 60s. */
 export async function resolveMctbTexmlIngressConfig(
   toE164: string,
 ): Promise<MctbTexmlIngressConfig | null> {
-  const key = toE164.replace(/\D/g, "");
+  const variants = mctbTexmlE164Variants(toE164);
+  if (!variants.length) return null;
+
+  const key = variants[0]!.replace(/\D/g, "");
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.config;
 
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
-    where: { e164: toE164 },
+    where: { e164: { in: variants } },
     select: {
       id: true,
       e164: true,
@@ -65,6 +69,12 @@ export async function resolveMctbTexmlIngressConfig(
   const routingMode = telephonyRoutingMode(phone.settingsJson);
   const settings = (phone.settingsJson || {}) as Record<string, unknown>;
   const telephony = (settings.telephony || {}) as Record<string, unknown>;
+  const mctbEnabled = caps.mctbEnabled || routingMode === MCTB_TEXML_ROUTING_MODE;
+  const branch = resolveBranch(routingMode, mctbEnabled);
+
+  if (!branch || branch !== "mctb" || !mctbEnabled) {
+    return null;
+  }
 
   let consentMode: MctbConsentMode = "press_1";
   try {
@@ -78,9 +88,9 @@ export async function resolveMctbTexmlIngressConfig(
     phoneNumberId: phone.id,
     e164: phone.e164,
     consentMode,
-    branch: resolveBranch(routingMode, caps.mctbEnabled),
+    branch,
     routingMode,
-    mctbEnabled: caps.mctbEnabled || routingMode === MCTB_TEXML_ROUTING_MODE,
+    mctbEnabled,
     providerNumberId: phone.providerNumberId,
     texmlAppId: String(telephony.telnyxTexmlAppId || "") || null,
   };
@@ -94,5 +104,7 @@ export function invalidateMctbTexmlIngressCache(e164?: string): void {
     cache.clear();
     return;
   }
-  cache.delete(e164.replace(/\D/g, ""));
+  for (const variant of mctbTexmlE164Variants(e164)) {
+    cache.delete(variant.replace(/\D/g, ""));
+  }
 }

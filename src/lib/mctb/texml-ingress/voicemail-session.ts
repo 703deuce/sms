@@ -1,5 +1,7 @@
 import "server-only";
 
+const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 type VoicemailPhase = "greeting" | "recording" | "recorded";
 
 export type MctbTexmlVoicemailSession = {
@@ -11,8 +13,14 @@ export type MctbTexmlVoicemailSession = {
 
 const sessions = new Map<string, MctbTexmlVoicemailSession>();
 
-function cleanup(callSid: string) {
-  setTimeout(() => sessions.delete(callSid), 15 * 60 * 1000);
+function scheduleCleanup(callSid: string) {
+  const existing = cleanupTimers.get(callSid);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    sessions.delete(callSid);
+    cleanupTimers.delete(callSid);
+  }, 15 * 60 * 1000);
+  cleanupTimers.set(callSid, timer);
 }
 
 export function startMctbTexmlVoicemailSession(input: {
@@ -27,7 +35,7 @@ export function startMctbTexmlVoicemailSession(input: {
     phase: "greeting",
     recordingSaved: false,
   });
-  cleanup(input.callSid);
+  scheduleCleanup(input.callSid);
 }
 
 export function markMctbTexmlVoicemailRecording(callSid: string): void {
@@ -53,8 +61,15 @@ export function getMctbTexmlVoicemailSession(callSid: string): MctbTexmlVoicemai
 
 export function clearMctbTexmlVoicemailSession(callSid: string): void {
   sessions.delete(callSid);
+  const timer = cleanupTimers.get(callSid);
+  if (timer) {
+    clearTimeout(timer);
+    cleanupTimers.delete(callSid);
+  }
 }
 
 export function resetMctbTexmlVoicemailSessionsForTests(): void {
   sessions.clear();
+  for (const timer of cleanupTimers.values()) clearTimeout(timer);
+  cleanupTimers.clear();
 }

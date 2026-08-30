@@ -41,16 +41,18 @@ async function resolvePhoneNumberId(
  */
 export async function handleMctbInboundEvent(
   event: MctbInboundCallEvent,
-  input?: { fallbackWorkspaceId?: string },
+  input?: { fallbackWorkspaceId?: string; lockWorkspaceId?: string },
 ): Promise<HandleMctbInboundEventResult> {
   const fallbackWorkspaceId = input?.fallbackWorkspaceId || FALLBACK_WORKSPACE_ID;
 
-  const target = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: event.callerE164,
-    businessE164: event.transovoNumberE164,
-    fallbackWorkspaceId,
-    forwardedFrom: event.forwardedFromE164,
-  });
+  const target = input?.lockWorkspaceId
+    ? { workspaceId: input.lockWorkspaceId, isPlatformDemo: false, demoMode: false }
+    : await resolveMctbTargetWorkspaceForInboundCall({
+        callerE164: event.callerE164,
+        businessE164: event.transovoNumberE164,
+        fallbackWorkspaceId,
+        forwardedFrom: event.forwardedFromE164,
+      });
 
   const businessE164 = event.forwardedFromE164 || event.transovoNumberE164;
   const phoneNumberId = await resolvePhoneNumberId(

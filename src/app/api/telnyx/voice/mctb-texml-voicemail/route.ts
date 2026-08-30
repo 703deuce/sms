@@ -4,7 +4,9 @@ import {
   getMctbTexmlVoicemailSession,
   markMctbTexmlVoicemailRecorded,
   markMctbTexmlVoicemailRecording,
+  wasMctbTexmlVoicemailRecorded,
 } from "@/lib/mctb/texml-ingress/voicemail-session";
+import { resolveMctbTexmlVoicemailMessage } from "@/lib/mctb/texml-ingress/voicemail-lookup";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 
 export const runtime = "nodejs";
@@ -49,10 +51,12 @@ function texmlHangup() {
 export async function POST(request: Request) {
   try {
     const fields = await parseFields(request);
-    const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
+    const callSid = pick(fields, "CallSid", "call_sid");
     const recordingStatus = pick(fields, "RecordingStatus", "recording_status").toLowerCase();
     const recordingUrl = pick(fields, "RecordingUrl", "recording_url");
     const durationRaw = pick(fields, "RecordingDuration", "recording_duration", "Duration");
+    const from = pick(fields, "From", "from", "Caller");
+    const to = pick(fields, "To", "to", "Called");
 
     traceMctbTexml("MCTB_VOICEMAIL_RECORD", {
       callSid,
@@ -69,9 +73,24 @@ export async function POST(request: Request) {
       return texmlHangup();
     }
 
-    const session = getMctbTexmlVoicemailSession(callSid);
-    if (!session) {
+    if (wasMctbTexmlVoicemailRecorded(callSid)) {
       return texmlHangup();
+    }
+
+    let session = getMctbTexmlVoicemailSession(callSid);
+    if (!session) {
+      const resolved = await resolveMctbTexmlVoicemailMessage({
+        callSid,
+        callerE164: from || null,
+        transovoNumberE164: to || null,
+      });
+      if (!resolved) return texmlHangup();
+      session = {
+        workspaceId: resolved.workspaceId,
+        messageId: resolved.messageId,
+        phase: "recording",
+        recordingSaved: false,
+      };
     }
 
     if (recordingStatus && recordingStatus !== "completed") {
@@ -79,6 +98,16 @@ export async function POST(request: Request) {
     }
 
     if (!recordingUrl) {
+      return texmlHangup();
+    }
+
+    const prisma = (await import("@/lib/db")).getPrisma();
+    const existing = await prisma.voicemailMessage.findFirst({
+      where: { id: session.messageId, workspaceId: session.workspaceId },
+      select: { recordingUrl: true },
+    });
+    if (existing?.recordingUrl) {
+      markMctbTexmlVoicemailRecorded(callSid);
       return texmlHangup();
     }
 

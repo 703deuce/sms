@@ -126,7 +126,7 @@ export function buildMctbConsentInboundTexml(
   actionUrl.searchParams.set("path", "texml_mctb_ingress");
   if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
   const cert = options?.certMode?.trim();
-  if (cert && cert !== "D") actionUrl.searchParams.set("cert", cert);
+  actionUrl.searchParams.set("cert", cert || "D");
   const gatherActionUrl = actionUrl.toString();
 
   const press1PlayUrl = options?.press1PlayUrl?.trim() || null;

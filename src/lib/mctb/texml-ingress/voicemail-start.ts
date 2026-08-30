@@ -1,6 +1,11 @@
 import "server-only";
 
+import { getPrisma } from "@/lib/db";
 import { startMctbSipVoicemailForPython } from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-record";
+import {
+  mctbTexmlVoicemailHumanCallId,
+  resolveMctbTexmlVoicemailMessage,
+} from "./voicemail-lookup";
 import {
   getMctbTexmlVoicemailSession,
   startMctbTexmlVoicemailSession,
@@ -14,23 +19,45 @@ export async function ensureMctbTexmlVoicemailSession(input: {
   transovoNumberE164: string;
   forwardedFromE164?: string | null;
 }): Promise<{ messageId: string } | null> {
-  if (!input.callSid?.trim() || !input.workspaceId) return null;
+  const callSid = input.callSid?.trim();
+  if (!callSid || !input.workspaceId) return null;
 
-  const existing = getMctbTexmlVoicemailSession(input.callSid);
+  const existing = getMctbTexmlVoicemailSession(callSid);
   if (existing) return { messageId: existing.messageId };
+
+  const dbExisting = await resolveMctbTexmlVoicemailMessage({
+    callSid,
+    workspaceId: input.workspaceId,
+    callerE164: input.callerE164,
+    transovoNumberE164: input.transovoNumberE164,
+  });
+  if (dbExisting) {
+    startMctbTexmlVoicemailSession({
+      callSid,
+      workspaceId: dbExisting.workspaceId,
+      messageId: dbExisting.messageId,
+    });
+    return { messageId: dbExisting.messageId };
+  }
 
   const started = await startMctbSipVoicemailForPython({
     workspaceId: input.workspaceId,
     callerE164: input.callerE164,
     transovoNumberE164: input.transovoNumberE164,
-    providerCallId: input.callSid,
+    providerCallId: callSid,
     forwardedFromE164: input.forwardedFromE164 || null,
     livekitRoomName: null,
   });
   if (!started.ok || !started.messageId) return null;
 
+  const prisma = getPrisma();
+  await prisma.voicemailMessage.update({
+    where: { id: started.messageId },
+    data: { humanCallId: mctbTexmlVoicemailHumanCallId(callSid) },
+  });
+
   startMctbTexmlVoicemailSession({
-    callSid: input.callSid,
+    callSid,
     workspaceId: input.workspaceId,
     messageId: started.messageId,
   });

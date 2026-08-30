@@ -226,6 +226,8 @@ export async function POST(req: Request) {
   const workspaceId = await getActiveWorkspaceId();
   const body = (await req.json().catch(() => ({}))) as MctbSetupPayload;
   const prisma = getPrisma();
+  const priorRuntime = await loadMissedCallTextConfig(workspaceId);
+  const previousPhoneId = priorRuntime.phoneNumberId;
 
   const sessionUser = await prisma.user.findUnique({
     where: { id: session.userId },
@@ -247,6 +249,36 @@ export async function POST(req: Request) {
       : body.enabled !== undefined
         ? body.enabled
         : undefined;
+
+  if (body.activate === true && body.phoneNumberId) {
+    const [phoneNumbers, compliance, reg, adminFlags] = await Promise.all([
+      loadWorkspaceAccessiblePhoneNumbers(workspaceId),
+      loadComplianceOverview(workspaceId),
+      loadPhoneNumbers(workspaceId, { includeLinked: true }),
+      loadAdminMctbTestFlags(workspaceId),
+    ]);
+    const requiredActions = deriveRequiredActions(compliance.registration, reg);
+    if (
+      !isMctbSetupMessagingReady({
+        phoneNumbers,
+        requiredActions,
+        adminFlags,
+      })
+    ) {
+      return NextResponse.json(
+        { error: "Messaging setup is incomplete for the selected number (A2P approval required)." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const scheduleModePatch =
+    body.scheduleMode ??
+    (body.triggerRules?.afterHours === true
+      ? "after_hours"
+      : body.triggerRules?.afterHours === false
+        ? "always_on"
+        : undefined);
 
   const smsPhoneNumberIdForPatch =
     body.smsPhoneNumberId !== undefined
@@ -339,6 +371,19 @@ export async function POST(req: Request) {
 
   let sipProvision: { ok: boolean; actions?: string[]; error?: string } | null = null;
   const phoneId = body.phoneNumberId ?? runtimeResult.config.phoneNumberId;
+  if (
+    body.phoneNumberId &&
+    previousPhoneId &&
+    body.phoneNumberId !== previousPhoneId
+  ) {
+    const { releaseMctbTexmlIngressFromPhone } = await import(
+      "@/lib/mctb/texml-ingress/deprovision"
+    );
+    await releaseMctbTexmlIngressFromPhone({
+      workspaceId,
+      phoneNumberId: previousPhoneId,
+    }).catch(() => undefined);
+  }
   if (phoneId) {
     let pn = await prisma.phoneNumber.findFirst({
       where: { id: phoneId, workspaceId },
@@ -375,6 +420,7 @@ export async function POST(req: Request) {
     body.weeklySchedule !== undefined ||
     body.pauseUntil !== undefined ||
     body.enabled !== undefined ||
+    body.triggerRules?.afterHours !== undefined ||
     pauseMutation !== null
   ) {
     const ws = await prisma.workspace.findUnique({
@@ -400,6 +446,10 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+    }
+
+    if (scheduleModePatch !== undefined) {
+      mctb.scheduleMode = scheduleModePatch;
     }
 
     if (body.businessLineE164?.trim()) {
@@ -433,6 +483,9 @@ export async function POST(req: Request) {
                 ? { businessLineE164: businessLineForBinding }
                 : {}),
             ...(body.scheduleMode !== undefined ? { scheduleMode: body.scheduleMode } : {}),
+            ...(scheduleModePatch !== undefined && body.scheduleMode === undefined
+              ? { scheduleMode: scheduleModePatch }
+              : {}),
             ...(body.weeklySchedule !== undefined
               ? { weeklySchedule: body.weeklySchedule }
               : {}),
@@ -449,28 +502,31 @@ export async function POST(req: Request) {
       },
     });
 
-    if (body.scheduleMode !== undefined) {
+    if (body.scheduleMode !== undefined || scheduleModePatch !== undefined) {
       await prisma.missedCallTextConfig.update({
         where: { workspaceId },
-        data: { businessHoursOnly: body.scheduleMode === "business_hours" },
+        data: {
+          businessHoursOnly:
+            (body.scheduleMode ?? scheduleModePatch) === "business_hours",
+        },
       });
     }
 
-    if (body.consentMode) {
+    if (body.consentMode || phoneId) {
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
       await syncMctbConsentRouting(workspaceId, session.userId, {
         assignedPhoneNumberId: phoneId ?? undefined,
       }).catch(() => undefined);
+    }
 
-      if (body.consentMode === "existing_consent") {
-        const { recordWorkspaceExistingConsentAttestation } = await import(
-          "@/lib/mctb/event-only/attestation"
-        );
-        await recordWorkspaceExistingConsentAttestation({
-          workspaceId,
-          attestedByUserId: session.userId,
-        }).catch(() => undefined);
-      }
+    if (body.consentMode === "existing_consent") {
+      const { recordWorkspaceExistingConsentAttestation } = await import(
+        "@/lib/mctb/event-only/attestation"
+      );
+      await recordWorkspaceExistingConsentAttestation({
+        workspaceId,
+        attestedByUserId: session.userId,
+      }).catch(() => undefined);
     }
   }
 

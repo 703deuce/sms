@@ -43,12 +43,15 @@ export async function activateJohnOnPhoneNumber(input: {
   smsPhoneNumberId?: string | null;
   delaySeconds?: number;
   messageTemplate?: string;
+  /** When false, only update phone ids — do not force enabled: true (e.g. paused MCTB). */
+  activate?: boolean;
   /** When MCTB already assigned Event Only Call Control, do not steal back to Transovo Voice. */
   skipGenericVoiceProvision?: boolean;
 }) {
   const delaySeconds = input.delaySeconds ?? 0;
   const message =
     input.messageTemplate || "Hi, sorry we missed your call. How can we help?";
+  const shouldActivate = input.activate !== false;
 
   await saveMissedCallTextBack(input.workspaceId, {
     phoneNumberId: input.phoneNumberId,
@@ -56,14 +59,14 @@ export async function activateJohnOnPhoneNumber(input: {
     initialDelaySeconds: delaySeconds,
     firstMessage: message,
     followUpEnabled: false,
-    activate: true,
+    activate: shouldActivate,
     name: "John — Missed Call Text Back",
   });
 
   const configResult = await updateMissedCallTextConfig({
     workspaceId: input.workspaceId,
     patch: {
-      enabled: true,
+      ...(shouldActivate ? { enabled: true } : {}),
       delay_seconds: delaySeconds,
       initial_message: message,
       phone_number_id: input.phoneNumberId,

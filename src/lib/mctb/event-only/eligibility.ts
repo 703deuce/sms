@@ -15,8 +15,7 @@ export type MctbRecoveryEligibilityResult = {
 };
 
 function buildEventOnlyIdempotencyKey(workspaceId: string, event: MctbInboundCallEvent): string {
-  const providerKey = event.provider === "TELNYX_SIP" ? "telnyx-sip" : "telnyx";
-  return `missed-call-text:${workspaceId}:${providerKey}:${event.providerCallId}`;
+  return `missed-call-text:${workspaceId}:telnyx:${event.providerCallId}`;
 }
 
 export async function resolveMctbConsentMode(workspaceId: string): Promise<string> {
@@ -106,14 +105,24 @@ export async function evaluateMctbRecoveryEligibility(input: {
   }
 
   const prisma = getPrisma();
-  const phoneNumber = await prisma.phoneNumber.findFirst({
-    where: {
+  const phoneNumber = await (async () => {
+    const { resolveMctbPhoneNumberIdForWorkspace } = await import(
+      "@/lib/mctb/platform-production-routing"
+    );
+    const phoneNumberId = await resolveMctbPhoneNumberIdForWorkspace({
       workspaceId: input.workspaceId,
-      e164: input.event.transovoNumberE164,
-      releasedAt: null,
-    },
-    select: { id: true },
-  });
+      transovoE164: input.event.transovoNumberE164,
+    });
+    if (phoneNumberId) return { id: phoneNumberId };
+    return prisma.phoneNumber.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        e164: input.event.transovoNumberE164,
+        releasedAt: null,
+      },
+      select: { id: true },
+    });
+  })();
 
   const idempotencyKey = buildEventOnlyIdempotencyKey(input.workspaceId, input.event);
   const existing = await prisma.missedCallEvent.findUnique({ where: { idempotencyKey } });

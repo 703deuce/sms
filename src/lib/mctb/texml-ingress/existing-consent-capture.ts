@@ -24,6 +24,7 @@ export function scheduleMctbTexmlExistingConsentCapture(input: {
 
   void handleMctbInboundEvent(normalized, {
     fallbackWorkspaceId: input.workspaceId,
+    lockWorkspaceId: input.workspaceId,
   }).catch((err) => {
     console.error("[mctb-texml-ingress] existing_consent capture failed", err);
   });
