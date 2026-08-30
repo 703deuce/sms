@@ -10,10 +10,20 @@ import {
   synthesizeElevenLabsSpeech,
 } from "@/lib/voice/elevenlabs/client";
 import { RECEPTIONIST_TTS_MODEL } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
+import {
+  MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID,
+  MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID,
+} from "@/lib/mctb/texml-ingress/frozen-pipeline";
 import { promptHash } from "./session-store";
 import type { DraftConfig } from "./types";
 
 const AUDIO_DIR = path.join(process.cwd(), "public", "smart-routing-audio");
+
+/** Shipped in public/smart-routing-audio/*.mp3 — no per-workspace DB row required. */
+const BUNDLED_PLATFORM_AUDIO_IDS = new Set([
+  MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID,
+  MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID,
+]);
 
 /** Telnyx-facing HTTPS URL — always the public API route (not ephemeral /public files). */
 export function publicPlaybackUrl(assetId: string): string {
@@ -61,11 +71,24 @@ async function synthesizeAssetBytes(asset: {
   return Buffer.from(audioBuffer);
 }
 
+async function readBundledPlatformAudioBytes(assetId: string): Promise<{
+  bytes: Buffer;
+  mimeType: string;
+} | null> {
+  if (!BUNDLED_PLATFORM_AUDIO_IDS.has(assetId)) return null;
+  const diskPath = path.join(AUDIO_DIR, `${assetId}.mp3`);
+  if (!(await fileExists(diskPath))) return null;
+  return { bytes: await readFile(diskPath), mimeType: "audio/mpeg" };
+}
+
 /** Read greeting bytes from disk or regenerate from DB metadata (post-deploy safe). */
 export async function readSmartRoutingAudioBytes(assetId: string): Promise<{
   bytes: Buffer;
   mimeType: string;
 } | null> {
+  const bundled = await readBundledPlatformAudioBytes(assetId);
+  if (bundled) return bundled;
+
   const prisma = getPrisma();
   const asset = await prisma.smartRoutingAudioAsset.findUnique({
     where: { id: assetId },

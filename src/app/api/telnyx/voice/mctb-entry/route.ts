@@ -172,20 +172,28 @@ export async function POST(request: Request) {
 
     if (routeToVoicemail && !certModeForcesPress1Gather(certMode)) {
       let voicemailPlayUrl: string | null = null;
+      let voicemailSayText: string | null = PAUSED_VOICEMAIL_SAY;
       if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
-        const { isConsentAudioAssetReachable } = await import(
-          "@/lib/mctb/consent-prompt/audio-reachability"
+        const { getPrisma } = await import("@/lib/db");
+        const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+        const { resolveVoicemailGreetingPlayback } = await import(
+          "@/lib/phone/voicemail-greeting-playback"
         );
-        const { getMctbVoicemailGreetingAudioAssetId, getMctbVoicemailGreetingPlaybackUrl } =
-          await import("@/lib/mctb/consent-prompt/texml-response");
-        const greetingAssetId = getMctbVoicemailGreetingAudioAssetId();
-        if (await isConsentAudioAssetReachable(greetingAssetId)) {
-          voicemailPlayUrl = getMctbVoicemailGreetingPlaybackUrl();
-        }
+        const prisma = getPrisma();
+        const phone = await prisma.phoneNumber.findFirst({
+          where: { workspaceId, e164: resolvedTo },
+          select: { id: true },
+        });
+        const box = phone
+          ? await ensureNumberVoicemailBox(workspaceId, phone.id)
+          : { greetingUrl: null, greetingText: null };
+        const vmPlayback = await resolveVoicemailGreetingPlayback(workspaceId, box);
+        voicemailPlayUrl = vmPlayback.playUrl;
+        voicemailSayText = vmPlayback.sayText;
       }
       const voicemailBody = buildMctbVoicemailGreetingTexml({
         playUrl: voicemailPlayUrl,
-        sayText: voicemailPlayUrl ? null : PAUSED_VOICEMAIL_SAY,
+        sayText: voicemailPlayUrl ? null : voicemailSayText,
       });
 
       if (!callSid) {
