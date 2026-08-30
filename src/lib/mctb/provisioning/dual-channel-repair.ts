@@ -78,13 +78,16 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
     });
   }
 
+  const priorSettings = readPhoneMctbSettings(phone.settingsJson);
+  const priorTelephony = priorSettings.telephony;
   const taggedSettings = mergePhoneCapabilitySettings(
     mergeSettings(phone.settingsJson, {
       ...telnyxLocalA2pSettings({
         role: mctbRole === "platform_demo" ? "platform_demo" : "customer_production",
       }),
-      routingOwner: MCTB_TEXML_ROUTING_OWNER,
+      routingOwner: priorSettings.routingOwner || MCTB_TEXML_ROUTING_OWNER,
       mctbRole,
+      ...(priorTelephony ? { telephony: priorTelephony } : {}),
     }),
     DEFAULT_NUMBER_CAPABILITY_PATCH,
   );

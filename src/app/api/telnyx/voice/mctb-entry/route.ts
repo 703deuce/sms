@@ -239,12 +239,20 @@ export async function POST(request: Request) {
           ? resolveMctbConsentTexmlPromptMode("play-gather")
           : resolveMctbConsentTexmlPromptMode(null);
 
+    const playback = await (
+      await import("@/lib/mctb/texml-ingress/press1-playback")
+    ).resolveMctbPress1TexmlPlayback({ workspaceId });
+    if (playback.failClosed) {
+      traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "consent_audio_unpublished", workspaceId });
+      return texmlResponse(CONTROLLED_HANGUP, { branch: "consent_audio_unpublished" });
+    }
+
     const built = buildMctbConsentInboundTexml(forwardedFrom, {
       promptMode,
       gatherBasePath: "mctb-consent",
       certMode: certMode === "D" ? "D" : certMode,
-      press1PlayUrl: getMctbConsentPlaybackUrl(),
-      press1SayText: null,
+      press1PlayUrl: playback.playUrl,
+      press1SayText: playback.sayText,
     });
 
     traceMctbTexml("MCTB_TEXML_RETURNED", {

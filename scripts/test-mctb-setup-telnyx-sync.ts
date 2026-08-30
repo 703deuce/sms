@@ -36,7 +36,12 @@ async function main() {
   const settings = local571.settingsJson as Record<string, unknown>;
   const compliance = settings.messagingCompliance as Record<string, unknown>;
   assert.equal(compliance.status, "APPROVED", "messagingCompliance should reflect Telnyx approval");
-  assert.equal(settings.mctbRole, "customer_production", "reconcile should not use platform_demo role");
+  const telephony = settings.telephony as Record<string, unknown> | undefined;
+  assert.equal(
+    telephony?.routingMode,
+    "mctb_texml",
+    "Telnyx sync must preserve MCTB TeXML telephony routing",
+  );
 
   console.log("✓ ws_1 Telnyx sync leaves 571 A2P approved");
   console.log("✓ ws_1 MCTB setup messaging-ready after sync");

@@ -14,6 +14,7 @@ import {
 } from "@/lib/messaging/store";
 import { telnyxRequest } from "./client";
 import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
+import { MCTB_TEXML_ROUTING_OWNER } from "@/lib/mctb/texml-ingress/constants";
 import {
   inventoryTenDlc,
   listPhoneNumberCampaignAssignments,
@@ -25,6 +26,25 @@ import {
   isApprovedCampaignStatus,
   pickCampaignStatus,
 } from "./status-map";
+
+function mergePhoneSettingsForTelnyxSync(
+  existing: unknown,
+  input: { role: "customer_production" | "platform_demo"; a2pApproved: boolean },
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  return {
+    ...base,
+    ...telnyxLocalA2pSettings({
+      role: input.role,
+      a2pApproved: input.a2pApproved,
+    }),
+    routingOwner: base.routingOwner || MCTB_TEXML_ROUTING_OWNER,
+    mctbRole: base.mctbRole || "customer_mctb",
+  };
+}
 
 export type TelnyxLocalNumberProviderSnapshot = {
   phoneE164: string;
@@ -212,6 +232,10 @@ export async function reconcileTelnyxLocalNumberToWorkspace(input: {
   const prisma = getPrisma();
   const before = await getRegistrationByWorkspace(input.workspaceId);
   const messagingReadyBefore = isMessagingReady(before);
+  const existingPhone = await prisma.phoneNumber.findFirst({
+    where: { workspaceId: input.workspaceId, e164: phoneE164 },
+    select: { settingsJson: true },
+  });
 
   const brandStatus = mapBrandStatus(snapshot.brandStatusRaw);
   const campaignStatus = mapCampaignStatus(snapshot.campaignStatusRaw);
@@ -251,7 +275,7 @@ export async function reconcileTelnyxLocalNumberToWorkspace(input: {
     messagingService: snapshot.messagingProfileId,
     a2pStatus: ready ? ("APPROVED" as const) : ("PENDING" as const),
     status: "Active",
-    settingsJson: telnyxLocalA2pSettings({
+    settingsJson: mergePhoneSettingsForTelnyxSync(existingPhone?.settingsJson, {
       role: "customer_production",
       a2pApproved: ready,
     }),
