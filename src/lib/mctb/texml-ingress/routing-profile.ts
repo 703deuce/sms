@@ -6,7 +6,7 @@ import { getMctbConsentPlaybackUrl, getMctbTexmlVoicemailRecordCallbackUrl } fro
 import {
   greetingTokenForPhone,
   platformVoicemailGreetingPlayUrl as platformDefaultVoicemailUrl,
-  provisionActiveVoicemailGreeting,
+  resolveStableVoicemailGreetingPlayUrl,
 } from "@/lib/phone/voicemail-active-greeting";
 import { mctbTexmlE164Variants } from "./e164-lookup";
 
@@ -53,7 +53,7 @@ export function platformVoicemailPlayUrl(): string {
   return platformDefaultVoicemailUrl();
 }
 
-/** Fail-open voicemail URL — platform default smart-routing asset (not stable /active). */
+/** Fail-open voicemail — platform bundled asset when routing profile is cold. */
 export function failOpenVoicemailPlayUrl(): string {
   const url = platformVoicemailPlayUrl();
   return url.startsWith("http") ? url : "";
@@ -101,24 +101,7 @@ export function invalidateMctbInboundRoutingProfile(e164?: string): void {
   }
 }
 
-/** Setup-time — writes active.mp3 on disk, returns stable /voicemail/g_xxx/active.mp3 URL. */
-export async function resolveProvisionedVoicemailPlayUrl(input: {
-  greetingToken: string;
-  workspaceId: string;
-  greetingUrl: string | null | undefined;
-}): Promise<{ kind: MctbVoicemailGreetingKind; playUrl: string }> {
-  const provisioned = await provisionActiveVoicemailGreeting({
-    greetingToken: input.greetingToken,
-    workspaceId: input.workspaceId,
-    greetingUrl: input.greetingUrl,
-  });
-  return {
-    kind: provisioned.kind === "custom" ? "custom" : "platform_default",
-    playUrl: provisioned.playUrl,
-  };
-}
-
-/** Load routing profile from DB — call at setup/provision/boot only, never on ring. */
+/** Load routing profile from DB — setup/boot only (mode + callback tokens). Does not touch active.mp3. */
 export async function warmMctbInboundRoutingProfileForE164(
   e164: string,
 ): Promise<MctbInboundRoutingProfile | null> {
@@ -127,7 +110,6 @@ export async function warmMctbInboundRoutingProfileForE164(
   if (!config) return null;
 
   const { getPrisma } = await import("@/lib/db");
-  const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
   const prisma = getPrisma();
 
   const phone = await prisma.phoneNumber.findFirst({
@@ -158,27 +140,10 @@ export async function warmMctbInboundRoutingProfileForE164(
   let greetingToken = String(storedInbound.greetingToken || "").trim();
   if (!greetingToken) {
     greetingToken = greetingTokenForPhone(phone.id, phone.e164);
-    await prisma.phoneNumber.update({
-      where: { id: phone.id },
-      data: {
-        settingsJson: {
-          ...settings,
-          mctbInbound: {
-            ...storedInbound,
-            routingToken,
-            greetingToken,
-          },
-        },
-      },
-    });
   }
 
-  const box = await ensureNumberVoicemailBox(config.workspaceId, phone.id).catch(() => null);
-  const voicemail = await resolveProvisionedVoicemailPlayUrl({
-    greetingToken,
-    workspaceId: config.workspaceId,
-    greetingUrl: box?.greetingUrl ?? null,
-  });
+  // Stable URL forever — content is whatever active.mp3 contains (written on Save only).
+  const voicemailPlayUrl = resolveStableVoicemailGreetingPlayUrl(greetingToken);
 
   const profile: MctbInboundRoutingProfile = {
     routingToken,
@@ -189,7 +154,10 @@ export async function warmMctbInboundRoutingProfileForE164(
     consentMode: config.consentMode,
     automationActive: config.automationActive,
     press1PlayUrl: platformPress1PlayUrl(),
-    voicemail,
+    voicemail: {
+      kind: "platform_default",
+      playUrl: voicemailPlayUrl,
+    },
     warmedAt: Date.now(),
   };
 

@@ -14,7 +14,7 @@ import { readSmartRoutingAudioBytes } from "@/lib/smart-routing/media-service";
 const ACTIVE_FILENAME = "active.mp3";
 const MIN_GREETING_BYTES = 256;
 
-/** Persistent voicemail audio — mount Coolify volume here in production. */
+/** Voicemail greeting files — written only on Save (provisionActiveVoicemailGreeting). */
 export function voicemailGreetingsRoot(): string {
   return (
     process.env.VOICEMAIL_GREETINGS_DIR?.trim() ||
@@ -142,7 +142,7 @@ async function atomicSwapActiveMp3(greetingToken: string, newBytes: Buffer): Pro
 }
 
 /**
- * Configuration-time only — writes active.mp3 on disk. Never called on ring.
+ * Save-time only — swaps active.mp3 on disk. Never called on ring or boot warm.
  */
 export async function provisionActiveVoicemailGreeting(input: {
   greetingToken: string;
