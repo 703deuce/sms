@@ -9,6 +9,7 @@ import {
   isPhoneMctbSipIngress,
 } from "@/lib/mctb/sip-ingress/sync";
 import { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
+import { resolveBestMctbIngressPhoneRow } from "@/lib/mctb/texml-ingress/resolve-phone-row";
 
 export type MctbSipIngressResolution = {
   isMctbSipIngress: boolean;
@@ -114,15 +115,7 @@ export async function resolveMctbSipIngressByDid(
     };
   }
 
-  const pn = await getPrisma().phoneNumber.findFirst({
-    where: { e164 },
-    select: {
-      id: true,
-      workspaceId: true,
-      settingsJson: true,
-      status: true,
-    },
-  });
+  const pn = await resolveBestMctbIngressPhoneRow(e164);
 
   if (pn && String(pn.status || "").toLowerCase() !== "released") {
     const settingsIngress = isPhoneMctbSipIngress(pn.settingsJson);

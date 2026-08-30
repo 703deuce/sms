@@ -19,6 +19,7 @@ import {
   type NumberDiagnostics,
 } from "@/lib/phone/telnyx-dual-provision";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
+import { resolveMctbProvisionRole } from "@/lib/mctb/provisioning/resolve-mctb-role";
 
 function mergeSettings(
   current: unknown,
@@ -67,9 +68,15 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
   }
 
   const settings = readPhoneMctbSettings(phone.settingsJson);
-  const roleRaw = String(settings.mctbRole || "customer_mctb").toLowerCase();
-  const mctbRole =
-    roleRaw === "platform_demo" ? ("platform_demo" as const) : ("customer_mctb" as const);
+  const mctbRole = await resolveMctbProvisionRole({ phoneNumberId: phone.id });
+  if (String(settings.mctbRole || "").toLowerCase() !== mctbRole) {
+    traceMctbDebug("provision", "role_corrected", {
+      workspaceId: input.workspaceId,
+      phoneNumberId: phone.id,
+      fromRole: settings.mctbRole ?? null,
+      toRole: mctbRole,
+    });
+  }
 
   const taggedSettings = mergePhoneCapabilitySettings(
     mergeSettings(phone.settingsJson, {
@@ -77,6 +84,7 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
         role: mctbRole === "platform_demo" ? "platform_demo" : "customer_production",
       }),
       routingOwner: MCTB_TEXML_ROUTING_OWNER,
+      mctbRole,
     }),
     DEFAULT_NUMBER_CAPABILITY_PATCH,
   );
@@ -116,10 +124,7 @@ export async function reassertMctbTexmlVoiceRoute(input: {
   phoneNumberId: string;
 }): Promise<ReassertMctbTexmlVoiceRouteResult> {
   const phone = await assertMctbProvisionPhoneInWorkspace(input);
-  const settings = readPhoneMctbSettings(phone.settingsJson);
-  const roleRaw = String(settings.mctbRole || "customer_mctb").toLowerCase();
-  const mctbRole =
-    roleRaw === "platform_demo" ? ("platform_demo" as const) : ("customer_mctb" as const);
+  const mctbRole = await resolveMctbProvisionRole({ phoneNumberId: phone.id });
 
   const actions = ["mctb_texml_voice_reassert"];
   try {

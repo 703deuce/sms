@@ -26,7 +26,7 @@ export type PlatformDemoPhoneLink = {
 export async function getPlatformDemoPhoneRecord(): Promise<PlatformDemoPhoneLink | null> {
   const e164 = getPlatformDemoNumberE164();
   const prisma = getPrisma();
-  const pn = await prisma.phoneNumber.findFirst({
+  const matches = await prisma.phoneNumber.findMany({
     where: { e164 },
     select: {
       id: true,
@@ -36,7 +36,13 @@ export async function getPlatformDemoPhoneRecord(): Promise<PlatformDemoPhoneLin
       status: true,
     },
   });
-  if (!pn || String(pn.status || "").toLowerCase() === "released") return null;
+  const active = matches.filter((row) => String(row.status || "").toLowerCase() !== "released");
+  if (!active.length) return null;
+
+  const pn =
+    active.find((row) => asRecord(row.settingsJson).platformDemo === true) ??
+    active.find((row) => readAdminTestWorkspaceIds(row.settingsJson).length > 0) ??
+    active[0]!;
   return {
     phoneNumberId: pn.id,
     e164: pn.e164,

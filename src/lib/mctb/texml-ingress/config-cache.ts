@@ -11,6 +11,7 @@ import {
   type MctbTexmlIngressBranch,
 } from "./constants";
 import { mctbTexmlE164Variants } from "./e164-lookup";
+import { resolveBestMctbIngressPhoneRow } from "./resolve-phone-row";
 
 export type MctbTexmlIngressConfig = {
   workspaceId: string;
@@ -63,16 +64,7 @@ export async function resolveMctbTexmlIngressConfig(
   }
 
   const prisma = getPrisma();
-  const phone = await prisma.phoneNumber.findFirst({
-    where: { e164: { in: variants } },
-    select: {
-      id: true,
-      e164: true,
-      workspaceId: true,
-      providerNumberId: true,
-      settingsJson: true,
-    },
-  });
+  const phone = await resolveBestMctbIngressPhoneRow(toE164);
   if (!phone?.e164) return null;
 
   const caps = readPhoneCapabilities({ settingsJson: phone.settingsJson });
