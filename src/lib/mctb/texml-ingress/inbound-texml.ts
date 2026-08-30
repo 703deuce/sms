@@ -2,16 +2,15 @@ import "server-only";
 
 import {
   buildMctbConsentInboundTexml,
-  buildMctbVoicemailGreetingTexml,
   resolveMctbConsentTexmlPromptMode,
 } from "@/lib/mctb/consent-prompt/texml-response";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import type { ResolvedMctbTexmlCertMode } from "@/lib/mctb/texml-ingress/cert-mode";
 import { certModeForcesPress1Gather } from "@/lib/mctb/texml-ingress/cert-mode";
 import {
-  getMctbVoicemailRecordCallbackWithRoutingToken,
   type MctbInboundRoutingProfile,
 } from "@/lib/mctb/texml-ingress/routing-profile";
+import { buildInstantVoicemailTexml } from "@/lib/mctb/texml-ingress/instant-voicemail-texml";
 import { normalizeForwardedFromE164, parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 import { pickMctbTexmlField } from "@/lib/mctb/texml-ingress/parse-texml-fields";
 
@@ -65,22 +64,20 @@ export function buildInstantMctbInboundTexml(input: {
     (!routeToVoicemailInitial && !input.profile.automationActive);
 
   if (routeToVoicemail) {
-    const playUrl = input.profile.voicemail.playUrl?.trim() || null;
-    const body = buildMctbVoicemailGreetingTexml({
-      playUrl,
-      sayText: playUrl ? null : "Please leave a message after the tone.",
-      recordCallbackUrl: getMctbVoicemailRecordCallbackWithRoutingToken(
-        input.profile.routingToken,
-      ),
+    const toE164 = input.profile.e164?.trim() || pickMctbTexmlField(input.fields, "To", "to", "Called");
+    const built = buildInstantVoicemailTexml({
+      toE164,
+      greetingToken: input.profile.greetingToken,
+      routingToken: input.profile.routingToken,
     });
     return {
-      body,
+      body: built.body,
       branch:
         input.profile.consentMode === MCTB_CONSENT_MODE_EXISTING
           ? "existing_consent"
           : "paused_voicemail",
-      routingToken: input.profile.routingToken,
-      voicemailPlayUrl: playUrl,
+      routingToken: built.routingToken,
+      voicemailPlayUrl: built.playUrl,
     };
   }
 

@@ -4,7 +4,7 @@ import { createHash } from "crypto";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { getMctbConsentPlaybackUrl, getMctbTexmlVoicemailRecordCallbackUrl } from "@/lib/mctb/consent-prompt/texml-response";
 import {
-  greetingTokenForPhone,
+  greetingTokenForE164,
   platformVoicemailGreetingPlayUrl as platformDefaultVoicemailUrl,
   resolveStableVoicemailGreetingPlayUrl,
 } from "@/lib/phone/voicemail-active-greeting";
@@ -40,6 +40,16 @@ function e164Key(e164: string): string | null {
 function routingTokenForPhone(phoneNumberId: string, e164: string): string {
   const digest = createHash("sha256")
     .update(`${phoneNumberId}:${e164}`)
+    .digest("hex")
+    .slice(0, 16);
+  return `r_${digest}`;
+}
+
+/** Deterministic callback token from DID — no DB on ring. */
+export function routingTokenForE164(e164: string): string {
+  const digits = e164.replace(/\D/g, "");
+  const digest = createHash("sha256")
+    .update(`routing:e164:${digits}`)
     .digest("hex")
     .slice(0, 16);
   return `r_${digest}`;
@@ -139,10 +149,9 @@ export async function warmMctbInboundRoutingProfileForE164(
 
   let greetingToken = String(storedInbound.greetingToken || "").trim();
   if (!greetingToken) {
-    greetingToken = greetingTokenForPhone(phone.id, phone.e164);
+    greetingToken = greetingTokenForE164(phone.e164);
   }
 
-  // Stable URL forever — content is whatever active.mp3 contains (written on Save only).
   const voicemailPlayUrl = resolveStableVoicemailGreetingPlayUrl(greetingToken);
 
   const profile: MctbInboundRoutingProfile = {

@@ -1,38 +1,20 @@
 import "server-only";
 
-import { access, copyFile, mkdir, readFile, rename } from "fs/promises";
-import path from "path";
 import { createHash } from "crypto";
-import { atomicWriteFile } from "@/lib/fs/atomic-write";
 import { resolvePlatformVoicemailGreetingPlayUrl } from "@/lib/phone/voicemail-greeting-defaults";
 import {
   absolutizePublicMediaUrl,
   smartRoutingAssetIdFromUrl,
 } from "@/lib/phone/voicemail-greeting-playback";
 import { readSmartRoutingAudioBytes } from "@/lib/smart-routing/media-service";
+import {
+  readVoicemailActiveMp3Bytes,
+  resolveDurableVoicemailActivePublicUrl,
+  resolveLocalVoicemailActivePublicUrl,
+  writeVoicemailActiveMp3,
+} from "@/lib/phone/voicemail-greeting-storage";
 
 const ACTIVE_FILENAME = "active.mp3";
-const MIN_GREETING_BYTES = 256;
-
-/** Voicemail greeting files — written only on Save (provisionActiveVoicemailGreeting). */
-export function voicemailGreetingsRoot(): string {
-  return (
-    process.env.VOICEMAIL_GREETINGS_DIR?.trim() ||
-    path.join(process.cwd(), "public", "voicemail")
-  );
-}
-
-function greetingDir(greetingToken: string): string {
-  return path.join(voicemailGreetingsRoot(), greetingToken);
-}
-
-function activeMp3Path(greetingToken: string): string {
-  return path.join(greetingDir(greetingToken), ACTIVE_FILENAME);
-}
-
-function newTmpPath(greetingToken: string): string {
-  return path.join(greetingDir(greetingToken), "new.tmp");
-}
 
 function appBaseUrl(): string {
   return (
@@ -42,41 +24,30 @@ function appBaseUrl(): string {
   );
 }
 
-/** Opaque per-phone token — not workspace/phone IDs in the public URL. */
-export function greetingTokenForPhone(phoneNumberId: string, e164: string): string {
+/** Opaque per-DID token — derived from E164 only (no DB needed on ring). */
+export function greetingTokenForE164(e164: string): string {
+  const digits = e164.replace(/\D/g, "");
   const digest = createHash("sha256")
-    .update(`greeting:${phoneNumberId}:${e164}`)
+    .update(`greeting:e164:${digits}`)
     .digest("hex")
     .slice(0, 16);
   return `g_${digest}`;
 }
 
+/** @deprecated Use greetingTokenForE164 — token is per-DID, not per internal phone row id. */
+export function greetingTokenForPhone(_phoneNumberId: string, e164: string): string {
+  return greetingTokenForE164(e164);
+}
+
 /**
- * Stable carrier-facing URL — never changes; file content swapped at Save time.
- * Live path: GET /voicemail/g_xxx/active.mp3 (static, no app code).
+ * Stable carrier-facing URL — never changes; object/file content swapped on Save only.
+ * Supabase public URL when configured; else local /voicemail/.../active.mp3.
  */
 export function resolveStableVoicemailGreetingPlayUrl(greetingToken: string): string {
+  const durable = resolveDurableVoicemailActivePublicUrl(greetingToken);
+  if (durable) return durable;
   const base = appBaseUrl();
-  const pathPart = `/voicemail/${greetingToken}/${ACTIVE_FILENAME}`;
-  return base ? `${base}${pathPart}` : pathPart;
-}
-
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readPlatformDefaultBytes(): Promise<Buffer | null> {
-  const { resolvePlatformVoicemailGreetingAssetId } = await import(
-    "@/lib/phone/voicemail-greeting-defaults"
-  );
-  const assetId = resolvePlatformVoicemailGreetingAssetId();
-  const bundled = await readSmartRoutingAudioBytes(assetId);
-  return bundled?.bytes ?? null;
+  return resolveLocalVoicemailActivePublicUrl(greetingToken, base || "http://localhost");
 }
 
 async function resolveGreetingSourceBytes(
@@ -102,79 +73,52 @@ async function resolveGreetingSourceBytes(
     }
   }
 
-  const localPath = raw.startsWith("/") ? path.join(process.cwd(), "public", raw.slice(1)) : raw;
-  if (await fileExists(localPath)) {
-    return readFile(localPath);
-  }
-
   void workspaceId;
   return null;
 }
 
-function validateGreetingBytes(bytes: Buffer): void {
-  if (bytes.length < MIN_GREETING_BYTES) {
-    throw new Error(`voicemail greeting too small (${bytes.length} bytes)`);
-  }
+async function readPlatformDefaultBytes(): Promise<Buffer | null> {
+  const { resolvePlatformVoicemailGreetingAssetId } = await import(
+    "@/lib/phone/voicemail-greeting-defaults"
+  );
+  const assetId = resolvePlatformVoicemailGreetingAssetId();
+  const bundled = await readSmartRoutingAudioBytes(assetId);
+  return bundled?.bytes ?? null;
 }
 
 /**
- * Atomic active.mp3 swap at configuration time:
- *   new.tmp → validate → archive current active → rename tmp → active.mp3
- * POSIX rename(tmp, active) atomically replaces active when both exist.
- */
-async function atomicSwapActiveMp3(greetingToken: string, newBytes: Buffer): Promise<void> {
-  validateGreetingBytes(newBytes);
-  const dir = greetingDir(greetingToken);
-  await mkdir(dir, { recursive: true });
-
-  const activePath = activeMp3Path(greetingToken);
-  const tmpPath = newTmpPath(greetingToken);
-
-  await atomicWriteFile(tmpPath, newBytes);
-
-  if (await fileExists(activePath)) {
-    const archivePath = path.join(dir, `archive-${Date.now()}.mp3`);
-    await copyFile(activePath, archivePath);
-    await rename(activePath, path.join(dir, "previous.mp3"));
-  }
-
-  await rename(tmpPath, activePath);
-}
-
-/**
- * Save-time only — swaps active.mp3 on disk. Never called on ring or boot warm.
+ * Save-time only — atomically replaces active.mp3 in durable storage (Supabase or disk).
  */
 export async function provisionActiveVoicemailGreeting(input: {
   greetingToken: string;
   workspaceId: string;
   greetingUrl: string | null | undefined;
-}): Promise<{ playUrl: string; kind: "platform" | "custom" }> {
-  const playUrl = resolveStableVoicemailGreetingPlayUrl(input.greetingToken);
+  e164?: string;
+}): Promise<{ playUrl: string; kind: "platform" | "custom"; storage: "supabase" | "disk" }> {
+  const token =
+    input.greetingToken?.trim() ||
+    (input.e164 ? greetingTokenForE164(input.e164) : "");
+  if (!token) throw new Error("greetingToken or e164 required");
+
   const customBytes = await resolveGreetingSourceBytes(input.greetingUrl, input.workspaceId);
   const bytes = customBytes?.length ? customBytes : await readPlatformDefaultBytes();
+  if (!bytes?.length) throw new Error("could not resolve voicemail greeting audio");
 
-  if (!bytes?.length) {
-    throw new Error("could not resolve voicemail greeting audio");
-  }
-
-  await atomicSwapActiveMp3(input.greetingToken, bytes);
+  const written = await writeVoicemailActiveMp3({ greetingToken: token, bytes });
   return {
-    playUrl,
+    playUrl: written.publicUrl,
     kind: customBytes?.length ? "custom" : "platform",
+    storage: written.storage,
   };
 }
 
-/** Test/health helper — live calls hit static active.mp3 directly. */
+/** Test/health helper — not used on live call path (carrier hits public URL directly). */
 export async function readActiveVoicemailGreetingBytes(
   greetingToken: string,
-): Promise<{ bytes: Buffer; mimeType: string; source: "platform" | "custom" | "missing" }> {
-  const activePath = activeMp3Path(greetingToken);
-  if (await fileExists(activePath)) {
-    return {
-      bytes: await readFile(activePath),
-      mimeType: "audio/mpeg",
-      source: "custom",
-    };
+): Promise<{ bytes: Buffer; mimeType: string; source: "active" | "platform" | "missing" }> {
+  const active = await readVoicemailActiveMp3Bytes(greetingToken);
+  if (active?.length) {
+    return { bytes: active, mimeType: "audio/mpeg", source: "active" };
   }
 
   const platform = await readPlatformDefaultBytes();
@@ -185,7 +129,8 @@ export async function readActiveVoicemailGreetingBytes(
   return { bytes: Buffer.alloc(0), mimeType: "audio/mpeg", source: "missing" };
 }
 
-/** Re-export for routing-profile fail-open when active.mp3 not yet provisioned. */
 export function platformVoicemailGreetingPlayUrl(): string {
   return resolvePlatformVoicemailGreetingPlayUrl();
 }
+
+export { ACTIVE_FILENAME };

@@ -205,19 +205,15 @@ export async function POST(request: Request) {
           select: { id: true, e164: true, settingsJson: true },
         });
         if (phone?.e164) {
-          const { greetingTokenForPhone, provisionActiveVoicemailGreeting } = await import(
+          const { greetingTokenForE164, provisionActiveVoicemailGreeting } = await import(
             "@/lib/phone/voicemail-active-greeting"
           );
-          const inbound = (phone.settingsJson as Record<string, unknown>)?.mctbInbound as
-            | Record<string, unknown>
-            | undefined;
-          const greetingToken =
-            String(inbound?.greetingToken || "").trim() ||
-            greetingTokenForPhone(phone.id, phone.e164);
+          const greetingToken = greetingTokenForE164(phone.e164);
           void provisionActiveVoicemailGreeting({
             greetingToken,
             workspaceId: auth.workspaceId,
             greetingUrl: updated.greetingUrl,
+            e164: phone.e164,
           }).catch(() => undefined);
 
           const { warmMctbInboundRoutingProfileForE164 } = await import(

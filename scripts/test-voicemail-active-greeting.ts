@@ -6,21 +6,22 @@ import assert from "node:assert/strict";
 import { access, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import {
-  greetingTokenForPhone,
+  greetingTokenForE164,
   provisionActiveVoicemailGreeting,
   readActiveVoicemailGreetingBytes,
   resolveStableVoicemailGreetingPlayUrl,
-  voicemailGreetingsRoot,
 } from "../src/lib/phone/voicemail-active-greeting";
+import { voicemailGreetingsDiskRoot } from "../src/lib/phone/voicemail-greeting-storage";
 
 process.env.APP_URL = "https://app.example.com";
 process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
+delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const PHONE_ID = "phone_test_active_greeting";
 const E164 = "+15555550199";
-const TOKEN = greetingTokenForPhone(PHONE_ID, E164);
+const TOKEN = greetingTokenForE164(E164);
 const WS = "ws_test_active_greeting";
-const CLEANUP_DIR = path.join(voicemailGreetingsRoot(), TOKEN);
+const CLEANUP_DIR = path.join(voicemailGreetingsDiskRoot(), TOKEN);
 
 function test(name: string, fn: () => void | Promise<void>) {
   return Promise.resolve(fn()).then(
@@ -36,7 +37,7 @@ async function main() {
   try {
     await test("stable play URL is opaque and ends in active.mp3", () => {
       const url = resolveStableVoicemailGreetingPlayUrl(TOKEN);
-      assert.match(url, /\/voicemail\/g_[a-f0-9]+\/active\.mp3$/);
+      assert.match(url, /g_[a-f0-9]+\/active\.mp3$/);
     });
 
     await test("provision default writes active.mp3 on disk", async () => {
