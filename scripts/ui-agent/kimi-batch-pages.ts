@@ -25,8 +25,10 @@ import type { CliOptions } from "./types";
 const BATCH_DIR = join(UI_AGENT_DIR, "batch");
 const STATE_PATH = join(BATCH_DIR, "kimi-slicktext-pages.json");
 
-const DEFAULT_CONCURRENCY = Number(process.env.KIMI_BATCH_CONCURRENCY || 3);
-const DEFAULT_STAGGER_MS = Number(process.env.KIMI_BATCH_STAGGER_MS || 10_000);
+/** Tier 1+ Kimi accounts allow ~50 concurrent requests. Default 10; set KIMI_BATCH_CONCURRENCY=50 to max out. */
+const DEFAULT_CONCURRENCY = Number(process.env.KIMI_BATCH_CONCURRENCY || 10);
+/** Short stagger avoids RPM bursts; Tier 1 allows 200 RPM so 2s is plenty. */
+const DEFAULT_STAGGER_MS = Number(process.env.KIMI_BATCH_STAGGER_MS || 2_000);
 
 /** Inbox already approved-quality from benchmark B — skip unless --force */
 const PRECOMPLETED: Record<string, string> = {
@@ -193,23 +195,15 @@ function buildOptions(job: BatchJobState): CliOptions {
 }
 
 async function runOneJob(
-  state: BatchState,
   job: BatchJobState,
   jobIndex: number,
   total: number,
 ): Promise<void> {
-  const idx = state.jobs.findIndex((j) => j.videoName === job.videoName);
-  if (idx < 0) return;
-
-  await withStateLock(() => {
-    state.jobs[idx] = {
-      ...job,
-      status: "running",
-      startedAt: new Date().toISOString(),
-      error: undefined,
-      pid: process.pid,
-    };
-    saveState(state);
+  await updateJob(job.videoName, {
+    status: "running",
+    startedAt: new Date().toISOString(),
+    error: undefined,
+    pid: process.pid,
   });
 
   console.log(`\n[launch ${jobIndex + 1}/${total}] ${job.route}`);
@@ -219,30 +213,22 @@ async function runOneJob(
 
   try {
     const result = await runKimiCommand(provider, buildOptions(job));
-    await withStateLock(() => {
-      state.jobs[idx] = {
-        ...state.jobs[idx],
-        status: "complete",
-        sessionId: result.sessionId,
-        completedAt: new Date().toISOString(),
-        pid: undefined,
-      };
-      saveState(state);
+    await updateJob(job.videoName, {
+      status: "complete",
+      sessionId: result.sessionId,
+      completedAt: new Date().toISOString(),
+      pid: undefined,
     });
     log("batch complete", `${job.route} → ${result.sessionId}`);
     console.log(`✓ ${job.route} → ${result.sessionId}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const is429 = /429|rate limit/i.test(message);
-    await withStateLock(() => {
-      state.jobs[idx] = {
-        ...state.jobs[idx],
-        status: "failed",
-        error: message,
-        completedAt: new Date().toISOString(),
-        pid: undefined,
-      };
-      saveState(state);
+    await updateJob(job.videoName, {
+      status: "failed",
+      error: message,
+      completedAt: new Date().toISOString(),
+      pid: undefined,
     });
     log("batch failed", `${job.route}: ${message}`);
     console.error(`✗ ${job.route}: ${message}${is429 ? " (rate limit — lower --concurrency)" : ""}`);
@@ -278,7 +264,7 @@ async function runConcurrentBatch(
           nextLaunchAt = Date.now() + staggerMs;
 
           try {
-            await runOneJob(state, job, launchCursor - 1, total);
+            await runOneJob(job, launchCursor - 1, total);
           } finally {
             active--;
             done++;
@@ -303,13 +289,11 @@ async function main(): Promise<void> {
   const force = args.includes("--force");
   const statusOnly = args.includes("--status");
   const onlyName = parseArg(args, "--only");
-  const concurrency = Math.max(1, Number(parseArg(args, "--concurrency") || DEFAULT_CONCURRENCY));
+  const requestedConcurrency = Math.max(1, Number(parseArg(args, "--concurrency") || DEFAULT_CONCURRENCY));
   const staggerMs = Math.max(0, Number(parseArg(args, "--stagger-ms") || DEFAULT_STAGGER_MS));
 
   ensureUiAgentDirs();
   let state = mergeJobs(loadState(), listVideoJobs());
-  state.concurrency = concurrency;
-  state.staggerMs = staggerMs;
 
   // Mark auto-replies complete if it finished while sequential batch was running
   const autoRepliesSession = "2026-08-30T21-31-49-644Z-f833cc";
@@ -347,6 +331,11 @@ async function main(): Promise<void> {
     printStatus(state);
     return;
   }
+
+  const concurrency = Math.min(requestedConcurrency, pending.length);
+  state.concurrency = concurrency;
+  state.staggerMs = staggerMs;
+  saveState(state);
 
   await runConcurrentBatch(state, pending, concurrency, staggerMs);
   printStatus(state);
