@@ -1,90 +1,98 @@
 {
-  "slicktext-lists": {
+  "Using Lists to Organize Your Audience in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-lists.mp4",
-    "description": "SlickText — Using Lists to Organize Your Audience",
+    "path": "videos/Using Lists to Organize Your Audience in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/contacts/lists",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-contacts": {
+  "Adding and Uploading Contacts in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-contacts.mp4",
-    "description": "SlickText — Adding and Uploading Contacts",
+    "path": "videos/Adding and Uploading Contacts in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/contacts",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-mms": {
+  "Adding Multimedia Attachments in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-mms.mp4",
-    "description": "SlickText — Adding Multimedia Attachments",
+    "path": "videos/Adding Multimedia Attachments in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/messaging/media",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-keywords": {
+  "Creating Text-to-Join Keywords in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-keywords.mp4",
-    "description": "SlickText — Creating Text-to-Join Keywords",
+    "path": "videos/Creating Text-to-Join Keywords in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/grow/keywords",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-workflows": {
+  "Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-workflows.mp4",
-    "description": "SlickText — Creating Automated Workflows",
+    "path": "videos/Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/automations",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-qrcodes": {
+  "QRCodes": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-qrcodes.mp4",
-    "description": "SlickText — QR Codes",
+    "path": "videos/QRCodes.mp4",
+    "transovoRoute": "/grow/qr-codes",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-tap-to-join": {
+  "Creating Tap-to-Join Links in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-tap-to-join.mp4",
-    "description": "SlickText — Creating Tap-to-Join Links",
+    "path": "videos/Creating Tap-to-Join Links in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/grow/tap-to-join",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-mass-text": {
+  "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-mass-text.mp4",
-    "description": "SlickText — Sending Mass Texts",
+    "path": "videos/Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/campaigns",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-inbox": {
+  "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)(1)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-inbox.mp4",
-    "description": "SlickText — Navigating the Inbox",
+    "path": "videos/Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)(1).mp4",
+    "transovoRoute": "/campaigns",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-custom-fields": {
+  "Navigating the SlickText Inbox SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-custom-fields.mp4",
-    "description": "SlickText — Custom Fields",
+    "path": "videos/Navigating the SlickText Inbox SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/conversations",
     "createdAt": "2026-08-30T00:00:00.000Z"
   },
-  "slicktext-auto-responses": {
+  "How to Use Custom Fields in SlickText SlickText Tutorials - SlickText (360p)": {
     "type": "video",
     "storage": "supabase",
     "bucket": "ui-references",
-    "path": "videos/slicktext-auto-responses.mp4",
-    "description": "SlickText — SMS Auto-Responses",
+    "path": "videos/How to Use Custom Fields in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/contacts/fields",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/auto-replies",
     "createdAt": "2026-08-30T00:00:00.000Z"
   }
 }
