@@ -1,1 +1,90 @@
-{}
+{
+  "slicktext-lists": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-lists.mp4",
+    "description": "SlickText — Using Lists to Organize Your Audience",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-contacts": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-contacts.mp4",
+    "description": "SlickText — Adding and Uploading Contacts",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-mms": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-mms.mp4",
+    "description": "SlickText — Adding Multimedia Attachments",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-keywords": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-keywords.mp4",
+    "description": "SlickText — Creating Text-to-Join Keywords",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-workflows": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-workflows.mp4",
+    "description": "SlickText — Creating Automated Workflows",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-qrcodes": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-qrcodes.mp4",
+    "description": "SlickText — QR Codes",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-tap-to-join": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-tap-to-join.mp4",
+    "description": "SlickText — Creating Tap-to-Join Links",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-mass-text": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-mass-text.mp4",
+    "description": "SlickText — Sending Mass Texts",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-inbox": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-inbox.mp4",
+    "description": "SlickText — Navigating the Inbox",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-custom-fields": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-custom-fields.mp4",
+    "description": "SlickText — Custom Fields",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "slicktext-auto-responses": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/slicktext-auto-responses.mp4",
+    "description": "SlickText — SMS Auto-Responses",
+    "createdAt": "2026-08-30T00:00:00.000Z"
+  }
+}
