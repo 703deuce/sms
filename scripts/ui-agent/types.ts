@@ -4,12 +4,21 @@ export type UiAgentMode = "analyze" | "improve" | "validate" | "capture";
 
 export type MediaKind = "image" | "video";
 
+export type SupabaseReferenceSource = {
+  referenceName: string;
+  bucket: string;
+  path: string;
+  size?: number;
+  sha256?: string;
+};
+
 export type LabeledMedia = {
   label: string;
   purpose: string;
   path: string;
   kind: MediaKind;
   mimeType: string;
+  supabase?: SupabaseReferenceSource;
 };
 
 export type ReferenceDepth = "page" | "flow";
@@ -40,6 +49,7 @@ export type KimiMediaDelivery = {
   delivery: "native_ms" | "image_data_url";
   reference: string;
   kimiFileId?: string;
+  fromCache?: boolean;
 };
 
 export type UiAnalysisResult = {

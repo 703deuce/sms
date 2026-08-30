@@ -120,11 +120,16 @@ Do NOT automatically convert videos into large sets of screenshots unless native
 Use Kimi's supported native video/media-upload mechanism for the configured video-capable model (e.g. kimi-k3).
 
 Expected pipeline:
-  Supabase Storage reference (or local file)
-    → temporary authenticated retrieval / local cache
+  Supabase Storage reference (private)
+    → stream bytes in memory (no disk cache required for video)
     → POST /v1/files (purpose=video)
+    → if status=ready, proceed immediately (no mandatory processing poll)
+    → persist ms://<file_id> per reference in .ui-agent/cache/kimi-file-ids.json
+    → reuse cached ms:// on later sessions (skip Supabase + Kimi re-upload)
     → ms://<file_id> in video_url content part
-    → Kimi video-capable model
+
+Do NOT use signed Supabase HTTPS URLs on chat/completions — Kimi rejects them.
+Do NOT base64-embed full video files.
 
 Keep the textual request lightweight. The prompt references attached native video and provides:
 - target Transovo route

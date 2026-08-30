@@ -2,8 +2,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { downloadUiReferenceObject } from "./supabase-references";
 import { getReference, type UiReferenceEntry } from "@/lib/ui-agent/references-manifest";
-import { REPO_ROOT, UI_AGENT_DIR, resolveUiAgentPath } from "./config";
+import { UI_AGENT_DIR, resolveUiAgentPath } from "./config";
 import { loadNamedReference } from "./reference-media";
+import { detectMediaKind, inferMimeType } from "./path-guards";
+import type { LabeledMedia } from "./types";
 
 const CACHE_DIR = join(UI_AGENT_DIR, "cache");
 
@@ -13,7 +15,6 @@ export async function resolveReferenceByName(name: string): Promise<{ images: st
     return materializeReferenceEntry(name, entry);
   }
 
-  // Legacy local named reference folder
   try {
     return loadNamedReference(name);
   } catch {
@@ -46,17 +47,105 @@ async function materializeReferenceEntry(
   return entry.type === "video" ? { images: [], videos: [localPath] } : { images: [localPath], videos: [] };
 }
 
+function labeledFromSupabase(name: string, entry: UiReferenceEntry, purpose: string, label: string): LabeledMedia {
+  if (!entry.bucket) throw new Error(`Supabase reference ${name} is missing bucket`);
+  const kind = entry.type;
+  return {
+    label,
+    purpose,
+    path: entry.path,
+    kind,
+    mimeType: inferMimeType(entry.path, kind),
+    supabase: {
+      referenceName: name,
+      bucket: entry.bucket,
+      path: entry.path,
+    },
+  };
+}
+
+function labeledFromLocal(path: string, purpose: string, label: string): LabeledMedia {
+  const kind = detectMediaKind(path);
+  return {
+    label,
+    purpose,
+    path,
+    kind,
+    mimeType: inferMimeType(path, kind),
+  };
+}
+
+export async function resolveAllReferenceMediaForKimi(input: {
+  videoNames?: string[];
+  imageNames?: string[];
+  videoFiles?: string[];
+  imageFiles?: string[];
+  legacyNames?: string[];
+}): Promise<LabeledMedia[]> {
+  const labeled: LabeledMedia[] = [];
+
+  for (const p of input.imageFiles || []) {
+    const path = resolveUiAgentPath(p);
+    labeled.push(labeledFromLocal(path, "Reference image", `REFERENCE_IMAGE_${labeled.length + 1}`));
+  }
+  for (const p of input.videoFiles || []) {
+    const path = resolveUiAgentPath(p);
+    labeled.push(labeledFromLocal(path, "Reference video", `REFERENCE_VIDEO_${labeled.length + 1}`));
+  }
+
+  for (const name of input.videoNames || []) {
+    const entry = getReference(name);
+    if (entry?.storage === "supabase") {
+      labeled.push(labeledFromSupabase(name, entry, "Reference video", `REFERENCE_VIDEO_${labeled.length + 1}`));
+      continue;
+    }
+    const resolved = await resolveReferenceByName(name);
+    for (const path of resolved.videos) {
+      labeled.push(labeledFromLocal(path, "Reference video", `REFERENCE_VIDEO_${labeled.length + 1}`));
+    }
+    for (const path of resolved.images) {
+      labeled.push(labeledFromLocal(path, "Reference image", `REFERENCE_IMAGE_${labeled.length + 1}`));
+    }
+  }
+
+  for (const name of input.imageNames || []) {
+    const entry = getReference(name);
+    if (entry?.storage === "supabase") {
+      const materialized = await materializeReferenceEntry(name, entry);
+      for (const path of materialized.images) {
+        labeled.push(labeledFromLocal(path, "Reference image", `REFERENCE_IMAGE_${labeled.length + 1}`));
+      }
+      continue;
+    }
+    const resolved = await resolveReferenceByName(name);
+    for (const path of resolved.images) {
+      labeled.push(labeledFromLocal(path, "Reference image", `REFERENCE_IMAGE_${labeled.length + 1}`));
+    }
+  }
+
+  for (const name of input.legacyNames || []) {
+    const resolved = await resolveReferenceByName(name);
+    for (const path of resolved.videos) {
+      labeled.push(labeledFromLocal(path, "Reference video", `REFERENCE_VIDEO_${labeled.length + 1}`));
+    }
+    for (const path of resolved.images) {
+      labeled.push(labeledFromLocal(path, "Reference image", `REFERENCE_IMAGE_${labeled.length + 1}`));
+    }
+  }
+
+  return labeled;
+}
+
 export function resolveLocalMediaPaths(input: {
   videoFiles?: string[];
   imageFiles?: string[];
-  videoNames?: string[];
-  imageNames?: string[];
 }): { images: string[]; videos: string[] } {
   const images = [...(input.imageFiles || []).map((p) => resolveUiAgentPath(p))];
   const videos = [...(input.videoFiles || []).map((p) => resolveUiAgentPath(p))];
   return { images, videos };
 }
 
+/** @deprecated Use resolveAllReferenceMediaForKimi for Kimi runs. */
 export async function resolveAllReferenceMedia(input: {
   videoNames?: string[];
   imageNames?: string[];

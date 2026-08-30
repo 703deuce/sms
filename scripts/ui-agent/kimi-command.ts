@@ -8,7 +8,7 @@ import {
   writeEnvironmentManifest,
   writeSessionInput,
 } from "./environment-manifest";
-import { resolveAllReferenceMedia } from "./reference-resolve";
+import { resolveAllReferenceMediaForKimi } from "./reference-resolve";
 import { writeHandoff } from "./handoff";
 import { buildLabeledMedia } from "./reference-media";
 import { captureCurrentSite } from "./capture-current";
@@ -21,6 +21,7 @@ import {
 } from "./generated-sandbox";
 import { log } from "./logger";
 import { initProgress, markProgressError, markProgressReady, progressTailPath, updateProgress } from "./progress";
+import { startKimiTiming, markKimiTiming } from "./kimi-timing";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
 
@@ -105,7 +106,7 @@ Return updated files[] with same schema as original build.`,
   const manifest = buildProjectManifest(options.target);
   const envManifest = buildEnvironmentManifest(manifest);
 
-  const { images, videos } = await resolveAllReferenceMedia({
+  const referenceMedia = await resolveAllReferenceMediaForKimi({
     videoNames: options.referenceVideoNames,
     imageNames: options.referenceImageNames,
     videoFiles: options.referenceVideos,
@@ -113,9 +114,12 @@ Return updated files[] with same schema as original build.`,
     legacyNames: options.referenceNames,
   });
 
-  if (images.length === 0 && videos.length === 0) {
+  if (referenceMedia.length === 0) {
     throw new Error("Provide --video, --image, --reference-video, or --reference-image");
   }
+
+  const videoCount = referenceMedia.filter((m) => m.kind === "video").length;
+  const imageCount = referenceMedia.filter((m) => m.kind === "image").length;
 
   session = {
     id: createSessionId(),
@@ -132,6 +136,7 @@ Return updated files[] with same schema as original build.`,
   saveSession(session);
 
   initProgress(session.id, `Starting Kimi session for ${session.target}`);
+  startKimiTiming(session.id);
   log("progress log", progressTailPath(session.id));
 
   try {
@@ -144,29 +149,17 @@ Return updated files[] with same schema as original build.`,
       captureCurrent: options.captureCurrent,
     });
 
+    markKimiTiming(session.id, "referenceResolvedMs");
     updateProgress(session.id, {
       phase: "resolving_media",
-      message: `Resolved ${videos.length} video(s) and ${images.length} image(s). Preparing Kimi…`,
+      message: `Resolved ${videoCount} video(s) and ${imageCount} image(s). Preparing Kimi…`,
     });
-
-    const referenceMedia = buildLabeledMedia([
-      ...images.map((p, i) => ({
-        path: p,
-        label: `REFERENCE_IMAGE_${i + 1}`,
-        purpose: "Reference image",
-      })),
-      ...videos.map((p, i) => ({
-        path: p,
-        label: `REFERENCE_VIDEO_${i + 1}`,
-        purpose: "Reference video",
-      })),
-    ]);
 
     session.referenceMedia = referenceMedia.map((m) => ({
       label: m.label,
       purpose: m.purpose,
       path: m.path,
-      source: "resolved",
+      source: m.supabase ? `supabase:${m.supabase.bucket}/${m.supabase.path}` : "resolved",
     }));
     updateSession(session);
 

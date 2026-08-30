@@ -26,6 +26,28 @@ export async function downloadUiReferenceObject(input: { bucket: string; path: s
   return Buffer.from(await data.arrayBuffer());
 }
 
+/** Fetch object bytes for Kimi upload — no local disk persistence. */
+export async function fetchUiReferenceBytes(input: { bucket: string; path: string }): Promise<Buffer> {
+  return downloadUiReferenceObject(input);
+}
+
+export async function getUiReferenceObjectSize(input: { bucket: string; path: string }): Promise<number> {
+  const supabase = getAdmin();
+  const folder = input.path.includes("/") ? input.path.slice(0, input.path.lastIndexOf("/")) : "";
+  const filename = input.path.split("/").pop() || input.path;
+  const { data, error } = await supabase.storage.from(input.bucket).list(folder, {
+    limit: 200,
+    search: filename.slice(0, 40),
+  });
+  if (error) throw new Error(`List failed: ${error.message}`);
+  const match = (data || []).find((row) => row.name === filename);
+  if (!match?.metadata?.size && match?.metadata?.size !== 0) {
+    const bytes = await downloadUiReferenceObject(input);
+    return bytes.length;
+  }
+  return Number(match.metadata.size);
+}
+
 export async function createCliSignedUrl(input: {
   bucket: string;
   path: string;

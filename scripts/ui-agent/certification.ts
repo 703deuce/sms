@@ -166,7 +166,7 @@ gate("video delivery uses native ms:// not base64", () => {
   assert.ok(mediaSrc.includes("purpose\", \"video\"") || mediaSrc.includes('purpose", "video"'));
   assert.ok(mediaSrc.includes("ms://"));
   assert.ok(!/video.*toString\("base64"\)/i.test(mediaSrc));
-  assert.ok(clientSrc.includes("uploadVideoForNativeKimi"));
+  assert.ok(clientSrc.includes("deliverVideoForKimi") || clientSrc.includes("uploadVideoForNativeKimi"));
   const { VIDEO_DELIVERY_PRINCIPLES } = require("./config") as typeof import("./config");
   assert.ok(VIDEO_DELIVERY_PRINCIPLES.toLowerCase().includes("do not base64-embed"));
 });

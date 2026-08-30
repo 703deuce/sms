@@ -62,6 +62,18 @@ export function detectMediaKind(filePath: string): MediaKind {
   throw new Error(`Unsupported media type: ${filePath}`);
 }
 
+export function inferMimeType(filePath: string, kind: MediaKind): string {
+  const ext = extname(filePath).toLowerCase();
+  if (kind === "image") {
+    if (ext === ".png") return "image/png";
+    if (ext === ".webp") return "image/webp";
+    return "image/jpeg";
+  }
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".mov") return "video/quicktime";
+  return "video/mp4";
+}
+
 export function validateMediaFile(filePath: string): { kind: MediaKind; mimeType: string; size: number } {
   const abs = resolveUiAgentPath(filePath);
   if (!existsSync(abs)) throw new Error(`Media file not found: ${filePath}`);

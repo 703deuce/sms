@@ -1,100 +1,298 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
 import { KIMI_FILE_READY_TIMEOUT_MS, KIMI_FILE_UPLOAD_TIMEOUT_MS, KIMI_PROGRESS_HEARTBEAT_MS, MAX_VIDEO_BYTES } from "./config";
+import {
+  invalidateKimiFileCache,
+  lookupKimiFileCache,
+  saveKimiFileCache,
+  sha256Buffer,
+  touchKimiFileCacheVerified,
+} from "./kimi-file-cache";
 import { kimiFetch } from "./kimi-http";
+import { markKimiTiming } from "./kimi-timing";
 import { log } from "./logger";
 import { appendProgressLog, updateProgress } from "./progress";
-import { validateMediaFile } from "./path-guards";
-import type { KimiMediaDelivery } from "./types";
+import { inferMimeType, validateMediaFile } from "./path-guards";
+import { fetchUiReferenceBytes } from "./supabase-references";
+import type { KimiMediaDelivery, LabeledMedia } from "./types";
 
-type UploadCacheEntry = {
-  fileId: string;
-  uploadedAt: string;
-};
-
-const sessionUploadCache = new Map<string, UploadCacheEntry>();
-
-function cacheKey(filePath: string): string {
-  const stat = statSync(filePath);
-  return `${filePath}:${stat.size}:${stat.mtimeMs}`;
-}
+const READY_STATUSES = new Set(["ready", "processed", "ok", "completed"]);
+const PROCESSING_STATUSES = new Set(["processing", "pending", "uploaded"]);
 
 function redactSecrets(text: string): string {
   return text.replace(/sk-[A-Za-z0-9_-]{10,}/g, "[REDACTED_API_KEY]");
 }
 
-async function fetchJson(
-  url: string,
-  init: RequestInit,
-  apiKey: string,
-  options?: { timeoutMs?: number; label?: string; sessionId?: string },
-): Promise<unknown> {
-  const res = await kimiFetch(url, {
-    ...init,
-    timeoutMs: options?.timeoutMs ?? KIMI_FILE_UPLOAD_TIMEOUT_MS,
-    label: options?.label ?? "Kimi API request",
-    sessionId: options?.sessionId,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(init.headers || {}),
-    },
-  });
-  const body = await res.text();
-  if (!res.ok) {
-    throw new Error(`Kimi API ${res.status}: ${redactSecrets(body.slice(0, 500))}`);
-  }
-  return JSON.parse(body) as unknown;
-}
+type KimiFileObject = {
+  id?: string;
+  status?: string;
+};
 
-async function waitForKimiFileReady(
+async function fetchKimiFile(
   baseUrl: string,
   apiKey: string,
   fileId: string,
   sessionId?: string,
-): Promise<void> {
+): Promise<KimiFileObject> {
+  const res = await kimiFetch(`${baseUrl}/files/${fileId}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    timeoutMs: 60_000,
+    label: `Kimi file verify (${fileId})`,
+    sessionId,
+  });
+  const body = await res.text();
+  if (!res.ok) {
+    throw new Error(`Kimi file verify ${res.status}: ${redactSecrets(body.slice(0, 300))}`);
+  }
+  return JSON.parse(body) as KimiFileObject;
+}
+
+function isReadyStatus(status?: string): boolean {
+  return READY_STATUSES.has((status || "").toLowerCase());
+}
+
+async function waitForKimiFileIfProcessing(
+  baseUrl: string,
+  apiKey: string,
+  fileId: string,
+  sessionId?: string,
+): Promise<string> {
   const started = Date.now();
   let attempt = 0;
   while (Date.now() - started < KIMI_FILE_READY_TIMEOUT_MS) {
     attempt += 1;
-    const json = (await fetchJson(`${baseUrl}/files/${fileId}`, { method: "GET" }, apiKey, {
-      timeoutMs: 60_000,
-      label: `Kimi file status check (${fileId})`,
-      sessionId,
-    })) as {
-      status?: string;
-    };
-    const status = (json.status || "processed").toLowerCase();
-    if (status === "processed" || status === "ok" || status === "ready" || status === "completed") {
-      if (sessionId) {
-        updateProgress(sessionId, {
-          phase: "generating_ui",
-          message: `Video processed by Kimi (file ${fileId}). Starting UI generation…`,
-        });
-      }
-      return;
-    }
+    const json = await fetchKimiFile(baseUrl, apiKey, fileId, sessionId);
+    const status = (json.status || "").toLowerCase();
+    if (isReadyStatus(status)) return status || "ready";
     if (status === "error" || status === "failed") {
       throw new Error(`Kimi file processing failed for ${fileId}`);
     }
+    if (!PROCESSING_STATUSES.has(status) && status) {
+      log("video upload", `unknown Kimi file status "${status}" for ${fileId} — proceeding`);
+      return status;
+    }
     const elapsedSec = Math.round((Date.now() - started) / 1000);
-    if (sessionId && attempt % 2 === 0) {
+    if (sessionId && attempt % 3 === 0) {
       updateProgress(sessionId, {
         phase: "processing_video",
-        message: `Kimi is processing the video… ${elapsedSec}s (this is normal for multi-minute tutorials)`,
+        message: `Kimi reports video processing… ${elapsedSec}s`,
       });
     }
     await new Promise((resolve) => setTimeout(resolve, KIMI_PROGRESS_HEARTBEAT_MS / 3));
   }
-  log("video upload", `file ${fileId} status poll timed out after ${Math.round(KIMI_FILE_READY_TIMEOUT_MS / 1000)}s — proceeding with ms:// reference`);
-  if (sessionId) {
-    appendProgressLog(sessionId, `Video processing poll timed out; continuing with ms://${fileId}`);
+  log("video upload", `file ${fileId} still processing after ${Math.round(KIMI_FILE_READY_TIMEOUT_MS / 1000)}s — proceeding with ms://`);
+  if (sessionId) appendProgressLog(sessionId, `Video still processing after poll timeout; continuing with ms://${fileId}`);
+  return "processing_timeout";
+}
+
+async function uploadBytesToKimi(input: {
+  baseUrl: string;
+  apiKey: string;
+  bytes: Buffer;
+  filename: string;
+  mimeType: string;
+  sessionId?: string;
+}): Promise<{ fileId: string; status: string; uploadMs: number }> {
+  const uploadStarted = Date.now();
+  if (input.sessionId) {
+    markKimiTiming(input.sessionId, "kimiUploadStartedMs");
+    updateProgress(input.sessionId, {
+      phase: "uploading_video",
+      message: `Uploading ${input.filename} to Kimi (${(input.bytes.length / 1024 / 1024).toFixed(1)} MB)…`,
+    });
+  }
+
+  const form = new FormData();
+  form.append("purpose", "video");
+  form.append("file", new Blob([input.bytes], { type: input.mimeType }), input.filename);
+
+  const res = await kimiFetch(`${input.baseUrl}/files`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${input.apiKey}` },
+    body: form,
+    timeoutMs: KIMI_FILE_UPLOAD_TIMEOUT_MS,
+    label: `Kimi video upload (${input.filename})`,
+    sessionId: input.sessionId,
+    maxRetries: 2,
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Kimi video upload failed ${res.status}: ${redactSecrets(text.slice(0, 500))}`);
+  }
+
+  const json = JSON.parse(text) as KimiFileObject & { data?: KimiFileObject };
+  const fileId = json.id || json.data?.id;
+  if (!fileId) throw new Error("Kimi video upload did not return a file id");
+
+  const uploadMs = Date.now() - uploadStarted;
+  const status = (json.status || "ready").toLowerCase();
+  if (input.sessionId) {
+    markKimiTiming(input.sessionId, "kimiUploadCompletedMs", uploadMs);
+    markKimiTiming(input.sessionId, "kimiFileStatus", status);
+    appendProgressLog(input.sessionId, `kimi_upload_completed_ms=${uploadMs} kimi_file_status=${status} file_id=${fileId}`);
+  }
+
+  return { fileId, status, uploadMs };
+}
+
+function deliveryFromFileId(
+  media: LabeledMedia,
+  fileId: string,
+  bytes: number,
+  fromCache: boolean,
+): KimiMediaDelivery {
+  return {
+    kind: "video",
+    label: media.label,
+    localPath: media.path,
+    mimeType: media.mimeType,
+    bytes,
+    delivery: "native_ms",
+    reference: `ms://${fileId}`,
+    kimiFileId: fileId,
+    fromCache,
+  };
+}
+
+async function resolveVideoBytes(media: LabeledMedia, sessionId?: string): Promise<{ bytes: Buffer; filename: string }> {
+  if (media.supabase) {
+    if (sessionId) {
+      markKimiTiming(sessionId, "supabaseDownloadStartedMs");
+      appendProgressLog(sessionId, "supabase_download_started");
+    }
+    const bytes = await fetchUiReferenceBytes({
+      bucket: media.supabase.bucket,
+      path: media.supabase.path,
+    });
+    if (sessionId) {
+      markKimiTiming(sessionId, "supabaseDownloadCompletedMs");
+      appendProgressLog(sessionId, `supabase_download_completed_ms=${Date.now()}`);
+    }
+    return { bytes, filename: basename(media.supabase.path) };
+  }
+
+  const { kind, mimeType, size } = validateMediaFile(media.path);
+  if (kind !== "video") throw new Error(`Expected video: ${media.path}`);
+  if (size > MAX_VIDEO_BYTES) {
+    throw new Error(`Video exceeds Kimi limit (${(MAX_VIDEO_BYTES / 1024 / 1024).toFixed(0)}MB)`);
+  }
+  if (!existsSync(media.path)) throw new Error(`Video file not found: ${media.path}`);
+  return { bytes: readFileSync(media.path), filename: basename(media.path) };
+}
+
+async function tryCachedKimiFile(input: {
+  media: LabeledMedia;
+  baseUrl: string;
+  apiKey: string;
+  sessionId?: string;
+}): Promise<KimiMediaDelivery | null> {
+  const supabase = input.media.supabase;
+  if (!supabase) return null;
+
+  const cached = lookupKimiFileCache({
+    bucket: supabase.bucket,
+    path: supabase.path,
+  });
+  if (!cached) return null;
+
+  try {
+    const remote = await fetchKimiFile(input.baseUrl, input.apiKey, cached.kimi.fileId, input.sessionId);
+    if (!isReadyStatus(remote.status) && remote.status) {
+      invalidateKimiFileCache(supabase.bucket, supabase.path);
+      return null;
+    }
+    touchKimiFileCacheVerified(supabase.bucket, supabase.path);
+    if (input.sessionId) {
+      appendProgressLog(
+        input.sessionId,
+        `kimi_file_cache_hit file_id=${cached.kimi.fileId} (skip Supabase download + Kimi upload)`,
+      );
+      updateProgress(input.sessionId, {
+        phase: "generating_ui",
+        message: `Video ready (cached ms://${cached.kimi.fileId}) ✓`,
+      });
+    }
+    log("video delivery", `persistent cache hit ms://${cached.kimi.fileId} (${supabase.referenceName})`);
+    return deliveryFromFileId(input.media, cached.kimi.fileId, cached.size, true);
+  } catch {
+    invalidateKimiFileCache(supabase.bucket, supabase.path);
+    return null;
   }
 }
 
 /**
- * Upload video via Kimi Files API (purpose=video) and return ms:// file id.
- * NEVER base64-embed video bytes into prompt text.
+ * Primary Kimi video path: POST /v1/files → ms://file_id.
+ * Reuses persisted file IDs per Supabase reference. Skips polling when status=ready.
  */
+export async function deliverVideoForKimi(input: {
+  baseUrl: string;
+  apiKey: string;
+  media: LabeledMedia;
+  sessionId?: string;
+}): Promise<KimiMediaDelivery> {
+  const cachedDelivery = await tryCachedKimiFile({
+    media: input.media,
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    sessionId: input.sessionId,
+  });
+  if (cachedDelivery) return cachedDelivery;
+
+  const { bytes, filename } = await resolveVideoBytes(input.media, input.sessionId);
+  if (bytes.length > MAX_VIDEO_BYTES) {
+    throw new Error(`Video is ${(bytes.length / 1024 / 1024).toFixed(1)}MB — exceeds Kimi limit`);
+  }
+
+  const { fileId, status, uploadMs } = await uploadBytesToKimi({
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    bytes,
+    filename,
+    mimeType: input.media.mimeType || inferMimeType(filename, "video"),
+    sessionId: input.sessionId,
+  });
+
+  let finalStatus = status;
+  if (!isReadyStatus(status)) {
+    if (input.sessionId) {
+      updateProgress(input.sessionId, {
+        phase: "processing_video",
+        message: `Kimi file status=${status}; checking until ready…`,
+      });
+    }
+    finalStatus = await waitForKimiFileIfProcessing(input.baseUrl, input.apiKey, fileId, input.sessionId);
+  } else if (input.sessionId) {
+    updateProgress(input.sessionId, {
+      phase: "generating_ui",
+      message: `Video ready (${uploadMs}ms upload) ✓`,
+    });
+    appendProgressLog(input.sessionId, `video_ready immediate status=ready upload_ms=${uploadMs}`);
+  }
+
+  if (input.media.supabase) {
+    saveKimiFileCache({
+      referenceName: input.media.supabase.referenceName,
+      supabaseBucket: input.media.supabase.bucket,
+      supabasePath: input.media.supabase.path,
+      size: bytes.length,
+      sha256: sha256Buffer(bytes),
+      kimi: {
+        fileId,
+        uri: `ms://${fileId}`,
+        status: finalStatus,
+        uploadedAt: new Date().toISOString(),
+        lastVerifiedAt: new Date().toISOString(),
+      },
+    });
+  }
+
+  log("video delivery", `POST /v1/files → ms://${fileId} (${(bytes.length / 1024 / 1024).toFixed(1)}MB, ${uploadMs}ms) [${input.media.label}]`);
+
+  return deliveryFromFileId(input.media, fileId, bytes.length, false);
+}
+
+/** @deprecated Use deliverVideoForKimi */
 export async function uploadVideoForNativeKimi(input: {
   baseUrl: string;
   apiKey: string;
@@ -103,95 +301,20 @@ export async function uploadVideoForNativeKimi(input: {
   label: string;
   sessionId?: string;
 }): Promise<KimiMediaDelivery> {
-  const { kind, mimeType, size } = validateMediaFile(input.filePath);
-  if (kind !== "video") {
-    throw new Error(`Expected video file for native upload: ${input.filePath}`);
-  }
-
-  const maxBytes = MAX_VIDEO_BYTES;
-  if (size > maxBytes) {
-    throw new Error(
-      `Video ${input.filePath} is ${(size / 1024 / 1024).toFixed(1)}MB — exceeds Kimi limit (${(maxBytes / 1024 / 1024).toFixed(0)}MB).`,
-    );
-  }
-
-  const key = cacheKey(input.filePath);
-  const cached = sessionUploadCache.get(key);
-  if (cached) {
-    log("video delivery", `cache hit ms://${cached.fileId} (${input.label})`);
-    return {
-      kind: "video",
+  return deliverVideoForKimi({
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    media: {
       label: input.label,
-      localPath: input.filePath,
-      mimeType,
-      bytes: size,
-      delivery: "native_ms",
-      reference: `ms://${cached.fileId}`,
-      kimiFileId: cached.fileId,
-    };
-  }
-
-  if (!existsSync(input.filePath)) {
-    throw new Error(`Video file not found: ${input.filePath}`);
-  }
-
-  if (input.sessionId) {
-    updateProgress(input.sessionId, {
-      phase: "uploading_video",
-      message: `Uploading ${basename(input.filePath)} to Kimi (${(size / 1024 / 1024).toFixed(1)} MB)…`,
-    });
-  }
-
-  const fileBuffer = readFileSync(input.filePath);
-  const form = new FormData();
-  form.append("purpose", "video");
-  form.append("file", new Blob([fileBuffer], { type: input.mimeType }), basename(input.filePath));
-
-  const res = await kimiFetch(`${input.baseUrl}/files`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${input.apiKey}` },
-    body: form,
-    timeoutMs: KIMI_FILE_UPLOAD_TIMEOUT_MS,
-    label: `Kimi video upload (${basename(input.filePath)})`,
+      purpose: "Reference video",
+      path: input.filePath,
+      kind: "video",
+      mimeType: input.mimeType,
+    },
     sessionId: input.sessionId,
   });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Kimi video upload failed ${res.status}: ${redactSecrets(text.slice(0, 500))}`);
-  }
-
-  const json = JSON.parse(text) as { id?: string; data?: { id?: string } };
-  const fileId = json.id || json.data?.id;
-  if (!fileId) throw new Error("Kimi video upload did not return a file id");
-
-  if (input.sessionId) {
-    updateProgress(input.sessionId, {
-      phase: "processing_video",
-      message: `Uploaded to Kimi. Waiting for video processing (file ${fileId})…`,
-    });
-  }
-
-  await waitForKimiFileReady(input.baseUrl, input.apiKey, fileId, input.sessionId);
-  sessionUploadCache.set(key, { fileId, uploadedAt: new Date().toISOString() });
-
-  log(
-    "video delivery",
-    `native Files API → ms://${fileId} (${(size / 1024 / 1024).toFixed(1)}MB) [${input.label}]`,
-  );
-
-  return {
-    kind: "video",
-    label: input.label,
-    localPath: input.filePath,
-    mimeType,
-    bytes: size,
-    delivery: "native_ms",
-    reference: `ms://${fileId}`,
-    kimiFileId: fileId,
-  };
 }
 
-/** Screenshots stay as compact data URLs — never used for full reference videos. */
 export function imageToDataUrl(filePath: string, mimeType: string): string {
   const b64 = readFileSync(filePath).toString("base64");
   return `data:${mimeType};base64,${b64}`;
@@ -215,5 +338,5 @@ export function buildImageDataUrlDelivery(input: {
 }
 
 export function clearKimiUploadCache(): void {
-  sessionUploadCache.clear();
+  // session-scoped cache removed — persistent cache in kimi-file-cache.ts
 }

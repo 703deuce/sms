@@ -1,9 +1,10 @@
-import { uploadVideoForNativeKimi, buildImageDataUrlDelivery } from "./kimi-media";
+import { deliverVideoForKimi, buildImageDataUrlDelivery } from "./kimi-media";
 import { KIMI_CHAT_TIMEOUT_MS } from "./config";
 import { kimiFetch } from "./kimi-http";
 import { loadKimiConfig } from "./config";
 import { log } from "./logger";
 import { appendProgressLog, updateProgress } from "./progress";
+import { markKimiTiming, logKimiTiming } from "./kimi-timing";
 import type {
   AnalysisMode,
   KimiMediaDelivery,
@@ -58,7 +59,7 @@ export class KimiVisionProvider implements UiVisionProvider {
     if (!this.supportsVideo) {
       log("model capability", `${this.model} configured without native video support`);
     } else {
-      log("model capability", `${this.model} — video via Files API + ms:// (never base64 video)`);
+      log("model capability", `${this.model} — video via POST /v1/files + ms:// (cached per reference)`);
     }
   }
 
@@ -80,18 +81,10 @@ export class KimiVisionProvider implements UiVisionProvider {
     ];
 
     for (const media of videos) {
-      if (sessionId) {
-        updateProgress(sessionId, {
-          phase: "uploading_video",
-          message: `Sending reference video to Kimi (${media.label})…`,
-        });
-      }
-      const delivery = await uploadVideoForNativeKimi({
+      const delivery = await deliverVideoForKimi({
         baseUrl: this.baseUrl,
         apiKey: this.apiKey,
-        filePath: media.path,
-        mimeType: media.mimeType,
-        label: media.label,
+        media,
         sessionId,
       });
       deliveries.push(delivery);
@@ -101,7 +94,7 @@ export class KimiVisionProvider implements UiVisionProvider {
       });
       contentParts.push({
         type: "text",
-        text: `[${media.label}] ${media.purpose} — attached as native Kimi video (ms://), not serialized into prompt text.`,
+        text: `[${media.label}] ${media.purpose} — Kimi native video (${delivery.fromCache ? "cached " : ""}ms://).`,
       });
     }
 
@@ -137,16 +130,18 @@ export class KimiVisionProvider implements UiVisionProvider {
     }
 
     if (sessionId) {
+      markKimiTiming(sessionId, "kimiGenerationStartedMs");
       updateProgress(sessionId, {
         phase: "generating_ui",
-        message: `${phaseLabel}: Kimi is analyzing the video and writing UI code. This often takes several minutes…`,
+        message: `${phaseLabel}: Kimi is analyzing the video and writing UI code…`,
       });
       appendProgressLog(
         sessionId,
-        `Chat request started (timeout ${Math.round(KIMI_CHAT_TIMEOUT_MS / 60000)} min). Waiting for Kimi…`,
+        `kimi_generation_started (timeout ${Math.round(KIMI_CHAT_TIMEOUT_MS / 60000)} min)`,
       );
     }
 
+    const generationStarted = Date.now();
     const res = await kimiFetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -159,6 +154,9 @@ export class KimiVisionProvider implements UiVisionProvider {
       sessionId,
     });
     const rawBody = await res.text();
+    if (sessionId) {
+      markKimiTiming(sessionId, "kimiFirstResponseMs", Date.now() - generationStarted);
+    }
     if (!res.ok) {
       throw new Error(`Kimi API ${res.status}: ${rawBody.slice(0, 500)}`);
     }
@@ -171,6 +169,8 @@ export class KimiVisionProvider implements UiVisionProvider {
     const rawText = completion.choices?.[0]?.message?.content?.trim() || "";
     if (sessionId) {
       const tokens = completion.usage?.completion_tokens;
+      markKimiTiming(sessionId, "kimiGenerationCompletedMs", Date.now() - generationStarted);
+      logKimiTiming(sessionId, "generation_complete");
       appendProgressLog(
         sessionId,
         `Kimi response received${tokens ? ` (${tokens} completion tokens)` : ""}. Parsing generated files…`,
