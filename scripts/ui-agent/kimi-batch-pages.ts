@@ -11,6 +11,7 @@
  *   npm run ui:kimi-batch -- --only "contacts"
  *   npm run ui:kimi-batch -- --no-complete-pass
  *   npm run ui:kimi-batch -- --status
+ *   npm run ui:kimi-batch -- --restore-missing   # re-run jobs marked complete but sandbox files gone
  *
  * Env: KIMI_BATCH_CONCURRENCY, KIMI_BATCH_STAGGER_MS
  */
@@ -162,6 +163,11 @@ function parseArg(args: string[], flag: string): string | undefined {
   return undefined;
 }
 
+function generatedSandboxReady(sessionId?: string): boolean {
+  if (!sessionId) return false;
+  return existsSync(join(UI_AGENT_DIR, "generated", sessionId, "page.tsx"));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -303,6 +309,7 @@ async function runConcurrentBatch(
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
+  const restoreMissing = args.includes("--restore-missing");
   const statusOnly = args.includes("--status");
   const skipCompletePass = args.includes("--no-complete-pass");
   const onlyName = parseArg(args, "--only");
@@ -337,11 +344,19 @@ async function main(): Promise<void> {
   }
 
   const pending = jobs.filter((j) => {
-    if (j.status === "complete" && !force) return false;
     if (j.status === "skipped") return false;
     if (j.status === "running" && j.sessionId) return false;
+    if (force) return j.status !== "skipped";
+    if (restoreMissing && j.status === "complete" && j.sessionId && !generatedSandboxReady(j.sessionId)) {
+      return true;
+    }
+    if (j.status === "complete") return false;
     return true;
   });
+
+  if (restoreMissing && pending.length > 0) {
+    console.log(`\nRestore-missing: ${pending.length} sandbox(es) missing on disk — re-materializing from batch state.\n`);
+  }
 
   if (pending.length === 0) {
     console.log("\nNothing pending — all jobs complete.\n");
