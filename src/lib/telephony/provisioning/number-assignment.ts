@@ -178,6 +178,19 @@ export async function ensureNumberProvisioned(
     };
   }
 
+  const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
+  if (isMctbTexmlIngressLocked(phone.settingsJson)) {
+    return {
+      ok: false,
+      phoneNumberId: phone.id,
+      e164: phone.e164,
+      routingMode: "mctb_texml",
+      provision: readProvision(phone.settingsJson),
+      actions: ["skipped_mctb_texml_locked"],
+      error: "866 is locked to MCTB TeXML ingress — refusing LiveKit reprovision",
+    };
+  }
+
   const routingMode = resolveRoutingMode(input.routingMode);
   const actions: string[] = [];
 
@@ -491,6 +504,11 @@ export async function repairLiveKitSipRouting(input: {
     throw new Error("Phone number not found");
   }
 
+  const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
+  if (isMctbTexmlIngressLocked(phone.settingsJson)) {
+    throw new Error("MCTB TeXML locked — refusing LiveKit SIP repair on this DID");
+  }
+
   const before = await inspectLiveKitSipRouting(phone.e164);
   const actions: string[] = [];
 
@@ -562,20 +580,17 @@ export async function fullResetLiveKitSipRouting(input: {
   });
   if (!phone?.e164) throw new Error("Phone number not found");
 
+  const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
+  if (isMctbTexmlIngressLocked(phone.settingsJson)) {
+    throw new Error("MCTB TeXML locked — refusing LiveKit full reset on this DID");
+  }
+
   const before = await inspectLiveKitSipRouting(phone.e164);
   const actions: string[] = [];
 
   const { connectionId, fqdnId, actions: telnyxActions } =
     await ensureTelnyxLiveKitFqdnConnection();
   actions.push(...telnyxActions);
-
-  try {
-    const { pruneStaleTelnyxFqdns } = await import("./telnyx/sip-connection");
-    const pruned = await pruneStaleTelnyxFqdns();
-    actions.push(...pruned.actions);
-  } catch {
-    actions.push("telnyx_fqdn_prune_skipped");
-  }
 
   const route = await routeTelnyxNumberToConnection({
     e164: phone.e164,

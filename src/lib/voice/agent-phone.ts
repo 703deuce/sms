@@ -41,6 +41,13 @@ export async function syncVoiceAgentPhoneAssignment(input: {
     throw new Error("Phone number not found in this workspace");
   }
 
+  const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
+  if (isMctbTexmlIngressLocked(pn.settingsJson)) {
+    throw new Error(
+      `${pn.e164} is locked to MCTB TeXML ingress — unassign AI agents before routing MCTB`,
+    );
+  }
+
   if (input.phoneNumberId) {
     await prisma.phoneNumber.update({
       where: { id: pn.id },

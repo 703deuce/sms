@@ -59,6 +59,25 @@ export async function assertMctbVoiceRouteNotGenericTelnyx(input: {
   );
 }
 
+/** Remove LiveKit / legacy FQDN metadata when locking a DID to MCTB TeXML. */
+export function scrubCompetingIngressTelephonyFields(
+  telephony: Record<string, unknown>,
+): Record<string, unknown> {
+  const next = { ...telephony };
+  for (const key of [
+    "telnyxFqdnId",
+    "telnyxFqdnConnectionId",
+    "livekitDispatchRuleId",
+    "livekitInboundTrunkId",
+    "livekitOutboundTrunkId",
+    "livekitDidDispatchRuleId",
+    "explicitDispatch",
+  ]) {
+    delete next[key];
+  }
+  return next;
+}
+
 /** Drop legacy ingress metadata so only the canonical Call Control path is recorded. */
 export function scrubLegacyMctbTelephonyFields(
   telephony: Record<string, unknown>,

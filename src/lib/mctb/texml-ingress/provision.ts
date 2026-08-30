@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { mergePhoneCapabilitySettings } from "@/lib/numbers/phone-capabilities";
 import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
+import { scrubCompetingIngressTelephonyFields } from "@/lib/mctb/voice-ingress-guard";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
 import {
   MCTB_TEXML_ROUTING_MODE,
@@ -29,6 +30,7 @@ export async function switchDidToMctbTexmlIngress(input: {
   /** Unassign this agent from the DID (optional). */
   unassignAgentId?: string | null;
   friendlyName?: string;
+  preferredTexmlAppId?: string | null;
 }): Promise<SwitchDidToMctbTexmlResult> {
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
@@ -69,9 +71,10 @@ export async function switchDidToMctbTexmlIngress(input: {
   telephony.routingMode = MCTB_TEXML_ROUTING_MODE;
   telephony.routingOwner = MCTB_TEXML_ROUTING_OWNER;
   telephony.state = "active";
+  telephony.lastError = null;
   telephony.lastProvisionedAt = new Date().toISOString();
   telephony.telnyxTexmlAppId = telephony.telnyxTexmlAppId || null;
-  settings.telephony = telephony;
+  settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
   settings.routingOwner = MCTB_TEXML_ROUTING_OWNER;
   settings.mctbSipIngress = true;
   settings.mctbRole = "customer_mctb";
@@ -79,12 +82,15 @@ export async function switchDidToMctbTexmlIngress(input: {
   const texmlRoute = await routePhoneToMctbTexmlIngress({
     e164: phone.e164,
     providerNumberId: phone.providerNumberId,
-    friendlyName: input.friendlyName || `MCTB TeXML ${phone.e164}`,
-    preferredTexmlAppId: String(telephony.telnyxTexmlAppId || "") || null,
+    friendlyName: input.friendlyName,
+    preferredTexmlAppId:
+      input.preferredTexmlAppId ||
+      String(telephony.telnyxTexmlAppId || "") ||
+      null,
   });
 
   telephony.telnyxTexmlAppId = texmlRoute.texmlAppId;
-  settings.telephony = telephony;
+  settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
 
   await prisma.phoneNumber.update({
     where: { id: phone.id },

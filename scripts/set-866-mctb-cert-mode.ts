@@ -2,9 +2,12 @@
  * Switch 866 MCTB TeXML cert stage via Telnyx voice_url query param — no env vars, no redeploy.
  *
  * Usage:
- *   npx tsx scripts/set-866-mctb-cert-mode.ts B
- *   npx tsx scripts/set-866-mctb-cert-mode.ts D    # production (no ?cert= on URL)
  *   npx tsx scripts/set-866-mctb-cert-mode.ts A    # Say "Test successful."
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts B    # Gather + Say + press 1
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts B2   # Play consent audio only (media cert)
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts B3   # Gather + Play + press 1
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts C    # Gather + press 1 + test SMS
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts D    # production (no ?cert= on URL)
  *
  * Requires: TELNYX_API_KEY, APP_URL (or NEXT_PUBLIC_APP_URL)
  */

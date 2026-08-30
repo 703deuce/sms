@@ -1,6 +1,9 @@
 /**
  * Move ws_1 AI After Hours inbound from +15714073615 → +18663464256 (866 toll-free).
  *
+ * DEPRECATED for MCTB cert: 866 is locked to MCTB TeXML ingress. Use
+ * scripts/decommission-866-competing-routes.ts instead.
+ *
  * Run:
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/switch-ws1-ai-after-hours-to-866.ts
  */

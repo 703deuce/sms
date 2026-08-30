@@ -5,6 +5,7 @@ import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
 import {
   MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
+  MCTB_TEXML_DEFAULT_APP_ID,
 } from "./constants";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
 import { preflightTexmlVoiceUrl } from "./preflight";
@@ -40,23 +41,38 @@ export async function ensureMctbTexmlApplication(input?: {
   const preferred =
     input?.preferredAppId?.trim() ||
     process.env.MCTB_TEXML_APP_ID?.trim() ||
-    "";
+    MCTB_TEXML_DEFAULT_APP_ID;
+
+  const patchBody: Record<string, unknown> = {
+    voice_url: voiceUrl,
+    voice_method: "POST",
+    active: true,
+    ...texmlStatusCallbackBody(),
+  };
+  if (input?.friendlyName?.trim()) {
+    patchBody.friendly_name = input.friendlyName.trim();
+  }
 
   if (preferred) {
     try {
       await telnyxRequest(`/texml_applications/${encodeURIComponent(preferred)}`, {
         method: "PATCH",
-        body: {
-          friendly_name: input?.friendlyName || "MCTB TeXML Ingress",
-          voice_url: voiceUrl,
-          voice_method: "POST",
-          active: true,
-          ...texmlStatusCallbackBody(),
-        },
+        body: patchBody,
       });
       return preferred;
-    } catch {
-      // create below
+    } catch (patchErr) {
+      try {
+        const existing = await telnyxRequest<{ data?: Record<string, unknown> }>(
+          `/texml_applications/${encodeURIComponent(preferred)}`,
+        );
+        const row = asRecord(existing.data) || asRecord(existing);
+        if (row?.id) return String(row.id);
+      } catch {
+        // fall through
+      }
+      if (!input?.friendlyName?.trim()) {
+        throw patchErr;
+      }
     }
   }
 

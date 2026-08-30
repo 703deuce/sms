@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
+import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
 import {
   ensureNumberProvisioned,
   fullResetLiveKitSipRouting,
@@ -65,6 +66,23 @@ export async function POST(request: Request) {
     let texmlRestore = null;
 
     let patchTrunkResult = null;
+
+    const lockedPhone =
+      body.phoneNumberId &&
+      (body.provision || body.repair || body.fullReset || body.patchTrunk)
+        ? await getPrisma().phoneNumber.findFirst({
+            where: { id: body.phoneNumberId, workspaceId: auth.workspaceId },
+            select: { settingsJson: true, e164: true },
+          })
+        : null;
+    if (lockedPhone && isMctbTexmlIngressLocked(lockedPhone.settingsJson)) {
+      return jsonError(
+        new Error(
+          `${lockedPhone.e164 || body.phoneNumberId} is locked to MCTB TeXML — LiveKit repair/provision blocked`,
+        ),
+        409,
+      );
+    }
 
     if (body.restoreTexml && body.phoneNumberId && body.agentId) {
       texmlRestore = await restoreTexmlInboundRoute({

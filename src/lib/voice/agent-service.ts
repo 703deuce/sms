@@ -177,6 +177,17 @@ export async function updateVoiceAgentDraft(
     if (patch.phoneNumberId && nextStatus === "ACTIVE") {
       const { isLiveKitVoiceRuntime } = await import("./runtime-provider");
       if (isLiveKitVoiceRuntime()) {
+        const phone = await getPrisma().phoneNumber.findFirst({
+          where: { id: patch.phoneNumberId, workspaceId },
+          select: { settingsJson: true },
+        });
+        const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
+        if (phone && isMctbTexmlIngressLocked(phone.settingsJson)) {
+          console.warn(
+            "[voice] Skipping LiveKit provision — DID locked to MCTB TeXML",
+            patch.phoneNumberId,
+          );
+        } else {
         const { ensureNumberProvisioned } = await import(
           "@/lib/telephony/provisioning"
         );
@@ -191,6 +202,7 @@ export async function updateVoiceAgentDraft(
             err instanceof Error ? err.message : err,
           ),
         );
+        }
       }
     }
   }
@@ -508,21 +520,33 @@ export async function publishVoiceAgent(
   } | null = null;
 
   if (isLiveKitVoiceRuntime() && updated.phoneNumberId) {
-    const { ensureNumberProvisioned } = await import(
-      "@/lib/telephony/provisioning"
-    );
-    livekitProvision = await ensureNumberProvisioned({
-      workspaceId,
-      phoneNumberId: updated.phoneNumberId,
-      agentId,
-      routingMode: "livekit_sip",
-      publishedVersionId: versionRow.id,
-      publishedConfig: config,
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: updated.phoneNumberId, workspaceId },
+      select: { settingsJson: true },
     });
-    if (!(livekitProvision as { ok?: boolean }).ok) {
-      const detail =
-        (livekitProvision as { error?: string }).error || "LiveKit provisioning failed";
-      await rollbackPublish(`LiveKit provisioning failed — deploy rolled back: ${detail}`);
+    const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
+    if (phone && isMctbTexmlIngressLocked(phone.settingsJson)) {
+      console.warn(
+        "[voice] Skipping LiveKit provision on publish — DID locked to MCTB TeXML",
+        updated.phoneNumberId,
+      );
+    } else {
+      const { ensureNumberProvisioned } = await import(
+        "@/lib/telephony/provisioning"
+      );
+      livekitProvision = await ensureNumberProvisioned({
+        workspaceId,
+        phoneNumberId: updated.phoneNumberId,
+        agentId,
+        routingMode: "livekit_sip",
+        publishedVersionId: versionRow.id,
+        publishedConfig: config,
+      });
+      if (!(livekitProvision as { ok?: boolean }).ok) {
+        const detail =
+          (livekitProvision as { error?: string }).error || "LiveKit provisioning failed";
+        await rollbackPublish(`LiveKit provisioning failed — deploy rolled back: ${detail}`);
+      }
     }
   } else {
     const {

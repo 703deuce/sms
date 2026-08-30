@@ -1,6 +1,9 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
-import { MCTB_TEXML_ROUTING_MODE } from "@/lib/mctb/texml-ingress/constants";
+import {
+  MCTB_TEXML_ROUTING_MODE,
+  MCTB_TEXML_ROUTING_OWNER,
+} from "@/lib/mctb/texml-ingress/constants";
 
 function normalizeDid(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -46,6 +49,13 @@ export function isMctbTexmlVoiceIngress(settingsJson: unknown): boolean {
   const telephony = settings.telephony;
   if (!telephony || typeof telephony !== "object" || Array.isArray(telephony)) return false;
   return (telephony as Record<string, unknown>).routingMode === MCTB_TEXML_ROUTING_MODE;
+}
+
+/** DID is locked to MCTB TeXML — refuse LiveKit FQDN / agent reprovision steals. */
+export function isMctbTexmlIngressLocked(settingsJson: unknown): boolean {
+  const settings = readPhoneMctbSettings(settingsJson);
+  if (settings.routingOwner === MCTB_TEXML_ROUTING_OWNER) return true;
+  return isMctbTexmlVoiceIngress(settingsJson);
 }
 
 function envAllowlist(): Set<string> {

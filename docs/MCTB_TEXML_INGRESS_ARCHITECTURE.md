@@ -108,6 +108,30 @@ Run real PSTN conditional-forward tests for each mode before declaring pass.
 
 ---
 
+## 6b. Route drift prevention (866)
+
+**Why 866 kept switching routes:** Several code paths independently reprovision Telnyx to the LiveKit FQDN (`telnyxFqdnConnectionId`) and set `telephony.routingMode = livekit_sip`:
+
+- Agent publish / assign (`ensureNumberProvisioned` in `agent-service.ts`)
+- LiveKit readiness repair (`/api/voice/livekit/readiness`)
+- Ops scripts (`setup-ws1-ai-after-hours-callable.ts`, `switch-ws1-ai-after-hours-to-866.ts`)
+- `syncVoiceAgentPhoneAssignment` enabling `aiAfterHoursEnabled` on the DID
+
+When `aiAfterHoursEnabled` is true, smart routing can steal the call to Sarah/voicemail even if MCTB TeXML was configured moments earlier.
+
+**Lock strategy:**
+
+1. DB: `telephony.routingMode = mctb_texml`, `routingOwner = mctb_texml`, `aiAfterHoursEnabled = false`
+2. Code guards: `isMctbTexmlIngressLocked()` blocks LiveKit reprovision/repair/publish steals
+3. Telnyx: DID `connection_id` must stay on MCTB TeXML app `3037587396909598261`
+4. One-shot cleanup: `scripts/decommission-866-competing-routes.ts` (clears agent joins + repoints Telnyx + cert mode)
+
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/decommission-866-competing-routes.ts C
+```
+
+---
+
 ## 7. Observability trace events
 
 `source: mctb-texml-ingress` with `trace`:
@@ -168,9 +192,9 @@ Re-assigns Amy via `restoreTexmlInboundRoute` + `publishVoiceAgent`. Does not de
 |------|--------|-------|
 | A — Say/Pause/Hangup | **PASS (PSTN)** | `mctb-entry` on prod — caller heard "Test successful." on conditional forward (~02:05 UTC) |
 | B — Gather Say no SMS | **PASS (PSTN)** | Real AT&T CFNA → Say → Gather → DTMF 1 → Say → Hangup |
-| B2 — Play only | Pending PSTN | `set-866-mctb-cert-mode.ts B2` after audio URL validation |
+| B2 — Play only | **PASS (PSTN)** | Prerecorded consent audio ~6.5s + hangup (no press 1 by design) |
 | B3 — Gather Play no SMS | Pending PSTN | After B2 passes |
-| C — Consent + SMS enqueue | Pending PSTN | `set-866-mctb-cert-mode.ts C` |
+| C — Consent + SMS enqueue | **READY** | `set-866-mctb-cert-mode.ts C` applied — awaiting PSTN press-1 + SMS |
 | D — Full production | Pending PSTN | `set-866-mctb-cert-mode.ts D` |
 
 _Update this table after real conditional-forward calls._

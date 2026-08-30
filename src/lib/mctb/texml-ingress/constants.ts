@@ -1,6 +1,7 @@
 /** Telnyx-first MCTB ingress — same front door as proven AI TeXML path. */
 export const MCTB_TEXML_ROUTING_MODE = "mctb_texml" as const;
 export const MCTB_TEXML_ROUTING_OWNER = "mctb_texml" as const;
+export const MCTB_TEXML_DEFAULT_APP_ID = "3037587396909598261";
 export const MCTB_TEXML_CONSENT_PATH = "texml_mctb_ingress" as const;
 
 /** Certification stages — ?cert=A|B|B2|B3|C|D on Telnyx voice_url. Default D. */

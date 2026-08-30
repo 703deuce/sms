@@ -4,6 +4,7 @@
 import { getPrisma } from "../src/lib/db";
 import { mergePhoneCapabilitySettings } from "../src/lib/numbers/phone-capabilities";
 import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
+import { scrubCompetingIngressTelephonyFields } from "../src/lib/mctb/voice-ingress-guard";
 import { invalidateMctbTexmlIngressCache } from "../src/lib/mctb/texml-ingress/config-cache";
 
 const PHONE_866_ID = process.env.PHONE_866_ID || "cmsc3numa1j17084g391t2z5l";
@@ -26,7 +27,7 @@ async function main() {
   telephony.routingOwner = MCTB_TEXML_ROUTING_OWNER;
   telephony.state = "active";
   telephony.lastError = null;
-  settings.telephony = telephony;
+  settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
   settings.routingOwner = MCTB_TEXML_ROUTING_OWNER;
   settings.mctbRole = "customer_mctb";
 
