@@ -3,6 +3,7 @@ import {
   buildMctbCertPlayOnlyTexml,
   buildMctbConsentControlledHangupTexml,
   buildMctbConsentInboundTexml,
+  buildMctbVoicemailGreetingTexml,
   getMctbConsentPlaybackUrl,
   resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
@@ -148,7 +149,17 @@ export async function POST(request: Request) {
     const consentMode = config?.consentMode || "press_1";
 
     if (consentMode === MCTB_CONSENT_MODE_EXISTING && !certModeForcesPress1Gather(certMode)) {
-      const audioUrl = getMctbConsentPlaybackUrl();
+      const workspaceId = config?.workspaceId;
+      let voicemailBody = buildMctbVoicemailGreetingTexml({ playUrl: null, sayText: null });
+      let voicemailPlayUrl: string | null = null;
+      if (workspaceId) {
+        const { resolveMctbVoicemailFallbackPlayback } = await import(
+          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback"
+        );
+        const playback = await resolveMctbVoicemailFallbackPlayback(workspaceId, to);
+        voicemailPlayUrl = playback.playUrl;
+        voicemailBody = buildMctbVoicemailGreetingTexml(playback);
+      }
       traceMctbTexml("MCTB_TEXML_RETURNED", {
         branch: "existing_consent",
         latencyMs: Date.now() - started,
@@ -156,13 +167,13 @@ export async function POST(request: Request) {
         callSid,
         routingMode: config?.routingMode || MCTB_TEXML_ROUTING_MODE,
         consentMode,
-        workspaceId: config?.workspaceId,
-        audioUrl,
+        workspaceId,
+        voicemailPlayUrl,
       });
-      return texmlResponse(buildMctbCertPlayOnlyTexml(), {
+      return texmlResponse(voicemailBody, {
         branch: "existing_consent",
         consentMode,
-        audioUrl,
+        voicemailPlayUrl,
       });
     }
 

@@ -152,6 +152,19 @@ export function buildMctbCertPlayOnlyTexml(): string {
   return `<Play>${escapeXml(audioUrl)}</Play><Pause length="2"/><Hangup/>`;
 }
 
+/** existing_consent — voicemail greeting only (not press-1 consent audio), then hangup → auto SMS. */
+export function buildMctbVoicemailGreetingTexml(input: {
+  playUrl: string | null;
+  sayText: string | null;
+}): string {
+  const fallbackSay = "Please leave a message after the tone.";
+  if (input.playUrl?.trim()) {
+    return `<Play>${escapeXml(input.playUrl.trim())}</Play><Pause length="1"/><Hangup/>`;
+  }
+  const say = input.sayText?.trim() || fallbackSay;
+  return `<Say voice="female">${escapeXml(say)}</Say><Pause length="1"/><Hangup/>`;
+}
+
 export function wrapMctbConsentTexmlBody(body: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`;
 }

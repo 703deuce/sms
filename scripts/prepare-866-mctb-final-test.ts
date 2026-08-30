@@ -4,8 +4,8 @@
  *   npx tsx scripts/prepare-866-mctb-final-test.ts press_1
  *   npx tsx scripts/prepare-866-mctb-final-test.ts existing_consent
  *
- * press_1        → cert C3: prerecorded audio + Gather press 1 + SMS
- * existing_consent → cert D: play audio + hangup + auto SMS on texml-status
+ * press_1        → cert C3: press-1 **consent** audio + Gather + SMS on press 1
+ * existing_consent → cert D: **voicemail** greeting + hangup + auto SMS on texml-status
  */
 import { execSync } from "node:child_process";
 
@@ -42,8 +42,8 @@ async function main() {
         cert,
         expectedBehavior:
           mode === "press_1"
-            ? "Hear prerecorded consent audio → press 1 → SMS from 571"
-            : "Hear prerecorded audio → hangup → auto SMS (no press 1)",
+            ? "Hear press-1 consent audio → press 1 → SMS from 571"
+            : "Hear voicemail greeting (not consent audio) → hangup → auto SMS",
         next: `Conditional-forward to 866 and test. Switch modes by re-running with the other argument.`,
       },
       null,
