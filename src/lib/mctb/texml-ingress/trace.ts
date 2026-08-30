@@ -8,6 +8,8 @@ export type MctbTexmlTraceEvent =
   | "MCTB_SMS_QUEUED"
   | "MCTB_SMS_ACCEPTED"
   | "MCTB_CALL_COMPLETED"
+  | "MCTB_VOICEMAIL_RECORD"
+  | "MCTB_VOICEMAIL_RECORDED"
   | "MCTB_ROUTING_FAIL";
 
 export function traceMctbTexml(
