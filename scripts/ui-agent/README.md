@@ -114,7 +114,7 @@ Supabase ui-references → download to .ui-agent/cache/
   → kimi-k3 (video-capable)
 ```
 
-- Default max: **100MB** (`KIMI_MAX_VIDEO_BYTES` env override)
+- Default max: **100MB** (hardcoded API limit)
 - Upload cache avoids re-uploading the same file during refinement passes
 - Screenshots only for current-page captures (compact data URLs)
 
@@ -128,6 +128,6 @@ npm run test:ui-agent-cert
 
 ## Env
 
-- `KIMI_API_KEY`, `KIMI_UI_MODEL` (use `kimi-k3` for video)
+- `KIMI_API_KEY` (only required Kimi env var — model `kimi-k3` and API URL are hardcoded)
 - `UI_AGENT_SMOKE_EMAIL` / `UI_AGENT_SMOKE_PASSWORD` (page capture auth)
 - Supabase for reference uploads (optional — use `--video-file` locally without it)

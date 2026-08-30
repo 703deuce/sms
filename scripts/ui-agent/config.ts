@@ -14,7 +14,10 @@ export const UI_AGENT_UPLOADS_DIR = join(UI_AGENT_DIR, "uploads");
 export const UI_AGENT_CACHE_DIR = join(UI_AGENT_DIR, "cache");
 export const UI_AGENT_REFERENCES_MANIFEST = join(UI_AGENT_DIR, "references.json");
 
-export const DEFAULT_KIMI_BASE_URL = "https://api.moonshot.ai/v1";
+export const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
+export const KIMI_MODEL = "kimi-k3";
+/** @deprecated Use KIMI_BASE_URL */
+export const DEFAULT_KIMI_BASE_URL = KIMI_BASE_URL;
 
 export const VIEWPORT_PRESETS: Record<ViewportPreset, ViewportConfig> = {
   desktop: { name: "desktop", width: 1440, height: 900 },
@@ -122,7 +125,7 @@ Keep the textual request lightweight. The prompt references attached native vide
 
 Do not waste model context by serializing video bytes into text.
 
-File size: default API limit 100MB (configurable via KIMI_MAX_VIDEO_BYTES). Do not assume VS Code's 20MB UI picker limit applies to the API.`;
+File size: default API limit 100MB. Do not assume VS Code's 20MB UI picker limit applies to the API.`;
 
 export type KimiRuntimeConfig = {
   apiKey: string;
@@ -137,16 +140,12 @@ export function loadKimiConfig(): KimiRuntimeConfig {
   if (!apiKey) {
     throw new Error("KIMI_API_KEY is required. Set it in your environment — never commit API keys.");
   }
-  const baseUrl = (process.env.KIMI_API_BASE_URL?.trim() || DEFAULT_KIMI_BASE_URL).replace(/\/$/, "");
-  const model = process.env.KIMI_UI_MODEL?.trim() || "kimi-k3";
-  const modelLower = model.toLowerCase();
-  const supportsVideo = !modelLower.includes("256k");
   return {
     apiKey,
-    baseUrl,
-    model,
+    baseUrl: KIMI_BASE_URL,
+    model: KIMI_MODEL,
     supportsImage: true,
-    supportsVideo,
+    supportsVideo: true,
   };
 }
 

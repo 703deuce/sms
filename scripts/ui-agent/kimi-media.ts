@@ -12,12 +12,6 @@ type UploadCacheEntry = {
 
 const sessionUploadCache = new Map<string, UploadCacheEntry>();
 
-function resolveMaxVideoBytes(): number {
-  const fromEnv = process.env.KIMI_MAX_VIDEO_BYTES?.trim();
-  if (fromEnv && /^\d+$/.test(fromEnv)) return Number(fromEnv);
-  return MAX_VIDEO_BYTES;
-}
-
 function cacheKey(filePath: string): string {
   const stat = statSync(filePath);
   return `${filePath}:${stat.size}:${stat.mtimeMs}`;
@@ -77,11 +71,10 @@ export async function uploadVideoForNativeKimi(input: {
     throw new Error(`Expected video file for native upload: ${input.filePath}`);
   }
 
-  const maxBytes = resolveMaxVideoBytes();
+  const maxBytes = MAX_VIDEO_BYTES;
   if (size > maxBytes) {
     throw new Error(
-      `Video ${input.filePath} is ${(size / 1024 / 1024).toFixed(1)}MB — exceeds Kimi limit (${(maxBytes / 1024 / 1024).toFixed(0)}MB). ` +
-        `Set KIMI_MAX_VIDEO_BYTES if your endpoint allows a higher cap.`,
+      `Video ${input.filePath} is ${(size / 1024 / 1024).toFixed(1)}MB — exceeds Kimi limit (${(maxBytes / 1024 / 1024).toFixed(0)}MB).`,
     );
   }
 

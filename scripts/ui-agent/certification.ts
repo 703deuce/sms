@@ -141,6 +141,23 @@ gate("handoff writer creates json", () => {
   assert.ok(path.endsWith("HANDOFF.json"));
 });
 
+gate("kimi config hardcodes model and base url", () => {
+  const { loadKimiConfig, KIMI_BASE_URL, KIMI_MODEL } = require("./config") as typeof import("./config");
+  assert.equal(KIMI_MODEL, "kimi-k3");
+  assert.equal(KIMI_BASE_URL, "https://api.moonshot.ai/v1");
+  const prev = process.env.KIMI_API_KEY;
+  process.env.KIMI_API_KEY = "test-key";
+  try {
+    const cfg = loadKimiConfig();
+    assert.equal(cfg.model, "kimi-k3");
+    assert.equal(cfg.baseUrl, KIMI_BASE_URL);
+    assert.equal(cfg.supportsVideo, true);
+  } finally {
+    if (prev) process.env.KIMI_API_KEY = prev;
+    else delete process.env.KIMI_API_KEY;
+  }
+});
+
 gate("video delivery uses native ms:// not base64", () => {
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
