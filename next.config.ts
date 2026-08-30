@@ -49,6 +49,10 @@ const nextConfig: NextConfig = {
     return [
       { source: "/inbox", destination: "/conversations", permanent: false },
       { source: "/inbox/:path*", destination: "/conversations/:path*", permanent: false },
+      { source: "/kimi", destination: "/transovo/kimi", permanent: false },
+      { source: "/kimi/:path*", destination: "/transovo/kimi/:path*", permanent: false },
+      { source: "/kimmy", destination: "/transovo/kimi", permanent: false },
+      { source: "/kimmy/:path*", destination: "/transovo/kimi/:path*", permanent: false },
     ];
   },
   // BullMQ pulls Node builtins (net, child_process) — keep external when webpack is used.
