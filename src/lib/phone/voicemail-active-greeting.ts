@@ -1,7 +1,9 @@
 import "server-only";
 
-import { access, mkdir, readFile, writeFile } from "fs/promises";
+import { access, copyFile, mkdir, readFile, rename } from "fs/promises";
 import path from "path";
+import { createHash } from "crypto";
+import { atomicWriteFile } from "@/lib/fs/atomic-write";
 import { resolvePlatformVoicemailGreetingPlayUrl } from "@/lib/phone/voicemail-greeting-defaults";
 import {
   absolutizePublicMediaUrl,
@@ -9,31 +11,27 @@ import {
 } from "@/lib/phone/voicemail-greeting-playback";
 import { readSmartRoutingAudioBytes } from "@/lib/smart-routing/media-service";
 
-const GREETINGS_ROOT = () => path.join(process.cwd(), "public", "voicemail-greetings");
+const ACTIVE_FILENAME = "active.mp3";
+const MIN_GREETING_BYTES = 256;
 
-export type VoicemailActivePointer =
-  | { kind: "platform" }
-  | { kind: "version"; version: number };
-
-type ActiveCacheEntry = { pointer: VoicemailActivePointer; expires: number };
-
-const ACTIVE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const activePointerCache = new Map<string, ActiveCacheEntry>();
-
-function cacheKey(workspaceId: string, phoneNumberId: string): string {
-  return `${workspaceId}:${phoneNumberId}`;
+/** Persistent voicemail audio — mount Coolify volume here in production. */
+export function voicemailGreetingsRoot(): string {
+  return (
+    process.env.VOICEMAIL_GREETINGS_DIR?.trim() ||
+    path.join(process.cwd(), "public", "voicemail")
+  );
 }
 
-function greetingDir(workspaceId: string, phoneNumberId: string): string {
-  return path.join(GREETINGS_ROOT(), workspaceId, phoneNumberId);
+function greetingDir(greetingToken: string): string {
+  return path.join(voicemailGreetingsRoot(), greetingToken);
 }
 
-function activePointerPath(workspaceId: string, phoneNumberId: string): string {
-  return path.join(greetingDir(workspaceId, phoneNumberId), "active.json");
+function activeMp3Path(greetingToken: string): string {
+  return path.join(greetingDir(greetingToken), ACTIVE_FILENAME);
 }
 
-function versionedPath(workspaceId: string, phoneNumberId: string, version: number): string {
-  return path.join(greetingDir(workspaceId, phoneNumberId), `v${version}.mp3`);
+function newTmpPath(greetingToken: string): string {
+  return path.join(greetingDir(greetingToken), "new.tmp");
 }
 
 function appBaseUrl(): string {
@@ -44,13 +42,22 @@ function appBaseUrl(): string {
   );
 }
 
-/** Stable carrier-facing URL — never changes; content updated at configuration time. */
-export function resolveStableVoicemailGreetingPlayUrl(
-  workspaceId: string,
-  phoneNumberId: string,
-): string {
+/** Opaque per-phone token — not workspace/phone IDs in the public URL. */
+export function greetingTokenForPhone(phoneNumberId: string, e164: string): string {
+  const digest = createHash("sha256")
+    .update(`greeting:${phoneNumberId}:${e164}`)
+    .digest("hex")
+    .slice(0, 16);
+  return `g_${digest}`;
+}
+
+/**
+ * Stable carrier-facing URL — never changes; file content swapped at Save time.
+ * Live path: GET /voicemail/g_xxx/active.mp3 (static, no app code).
+ */
+export function resolveStableVoicemailGreetingPlayUrl(greetingToken: string): string {
   const base = appBaseUrl();
-  const pathPart = `/api/public/greetings/${encodeURIComponent(workspaceId)}/${encodeURIComponent(phoneNumberId)}/active`;
+  const pathPart = `/voicemail/${greetingToken}/${ACTIVE_FILENAME}`;
   return base ? `${base}${pathPart}` : pathPart;
 }
 
@@ -63,67 +70,13 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-function storeActivePointerCache(
-  workspaceId: string,
-  phoneNumberId: string,
-  pointer: VoicemailActivePointer,
-): void {
-  activePointerCache.set(cacheKey(workspaceId, phoneNumberId), {
-    pointer,
-    expires: Date.now() + ACTIVE_CACHE_TTL_MS,
-  });
-}
-
-export function peekActiveVoicemailPointer(
-  workspaceId: string,
-  phoneNumberId: string,
-): VoicemailActivePointer | null {
-  const hit = activePointerCache.get(cacheKey(workspaceId, phoneNumberId));
-  if (!hit || hit.expires <= Date.now()) return null;
-  return hit.pointer;
-}
-
-async function readActivePointerFromDisk(
-  workspaceId: string,
-  phoneNumberId: string,
-): Promise<VoicemailActivePointer | null> {
-  const pointerFile = activePointerPath(workspaceId, phoneNumberId);
-  if (!(await fileExists(pointerFile))) return null;
-  try {
-    const raw = JSON.parse(await readFile(pointerFile, "utf8")) as VoicemailActivePointer;
-    if (raw.kind === "platform") return { kind: "platform" };
-    if (raw.kind === "version" && typeof raw.version === "number" && raw.version > 0) {
-      return { kind: "version", version: raw.version };
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-async function resolveActivePointer(
-  workspaceId: string,
-  phoneNumberId: string,
-): Promise<VoicemailActivePointer> {
-  const cached = peekActiveVoicemailPointer(workspaceId, phoneNumberId);
-  if (cached) return cached;
-
-  const fromDisk = await readActivePointerFromDisk(workspaceId, phoneNumberId);
-  if (fromDisk) {
-    storeActivePointerCache(workspaceId, phoneNumberId, fromDisk);
-    return fromDisk;
-  }
-  return { kind: "platform" };
-}
-
-async function readPlatformDefaultBytes(): Promise<{ bytes: Buffer; mimeType: string } | null> {
+async function readPlatformDefaultBytes(): Promise<Buffer | null> {
   const { resolvePlatformVoicemailGreetingAssetId } = await import(
     "@/lib/phone/voicemail-greeting-defaults"
   );
   const assetId = resolvePlatformVoicemailGreetingAssetId();
   const bundled = await readSmartRoutingAudioBytes(assetId);
-  if (!bundled) return null;
-  return bundled;
+  return bundled?.bytes ?? null;
 }
 
 async function resolveGreetingSourceBytes(
@@ -158,95 +111,81 @@ async function resolveGreetingSourceBytes(
   return null;
 }
 
-async function writeActivePointer(
-  workspaceId: string,
-  phoneNumberId: string,
-  pointer: VoicemailActivePointer,
-): Promise<void> {
-  const dir = greetingDir(workspaceId, phoneNumberId);
-  await mkdir(dir, { recursive: true });
-  await writeFile(activePointerPath(workspaceId, phoneNumberId), JSON.stringify(pointer));
-  storeActivePointerCache(workspaceId, phoneNumberId, pointer);
+function validateGreetingBytes(bytes: Buffer): void {
+  if (bytes.length < MIN_GREETING_BYTES) {
+    throw new Error(`voicemail greeting too small (${bytes.length} bytes)`);
+  }
 }
 
 /**
- * Configuration-time: resolve custom/default, store versioned audio, update active pointer.
- * Call on voicemail save and during routing warm — never on ring.
+ * Atomic active.mp3 swap at configuration time:
+ *   new.tmp → validate → archive current active → rename tmp → active.mp3
+ * POSIX rename(tmp, active) atomically replaces active when both exist.
  */
-export async function provisionActiveVoicemailGreeting(input: {
-  workspaceId: string;
-  phoneNumberId: string;
-  greetingUrl: string | null | undefined;
-}): Promise<{ playUrl: string; kind: "platform" | "custom" }> {
-  const playUrl = resolveStableVoicemailGreetingPlayUrl(input.workspaceId, input.phoneNumberId);
-  const sourceBytes = await resolveGreetingSourceBytes(input.greetingUrl, input.workspaceId);
+async function atomicSwapActiveMp3(greetingToken: string, newBytes: Buffer): Promise<void> {
+  validateGreetingBytes(newBytes);
+  const dir = greetingDir(greetingToken);
+  await mkdir(dir, { recursive: true });
 
-  if (!sourceBytes?.length) {
-    await writeActivePointer(input.workspaceId, input.phoneNumberId, { kind: "platform" });
-    return { playUrl, kind: "platform" };
+  const activePath = activeMp3Path(greetingToken);
+  const tmpPath = newTmpPath(greetingToken);
+
+  await atomicWriteFile(tmpPath, newBytes);
+
+  if (await fileExists(activePath)) {
+    const archivePath = path.join(dir, `archive-${Date.now()}.mp3`);
+    await copyFile(activePath, archivePath);
+    await rename(activePath, path.join(dir, "previous.mp3"));
   }
 
-  const existing = await readActivePointerFromDisk(input.workspaceId, input.phoneNumberId);
-  const nextVersion =
-    existing?.kind === "version" ? existing.version + 1 : 1;
-  const versionPath = versionedPath(input.workspaceId, input.phoneNumberId, nextVersion);
-  await mkdir(greetingDir(input.workspaceId, input.phoneNumberId), { recursive: true });
-  await writeFile(versionPath, sourceBytes);
-  await writeActivePointer(input.workspaceId, input.phoneNumberId, {
-    kind: "version",
-    version: nextVersion,
-  });
-  return { playUrl, kind: "custom" };
+  await rename(tmpPath, activePath);
 }
 
-/** Synchronous-friendly read for public route — no Postgres. Fails open to platform default. */
-export async function readActiveVoicemailGreetingBytes(
-  workspaceId: string,
-  phoneNumberId: string,
-): Promise<{ bytes: Buffer; mimeType: string; source: "platform" | "custom" }> {
-  const pointer = await resolveActivePointer(workspaceId, phoneNumberId);
+/**
+ * Configuration-time only — writes active.mp3 on disk. Never called on ring.
+ */
+export async function provisionActiveVoicemailGreeting(input: {
+  greetingToken: string;
+  workspaceId: string;
+  greetingUrl: string | null | undefined;
+}): Promise<{ playUrl: string; kind: "platform" | "custom" }> {
+  const playUrl = resolveStableVoicemailGreetingPlayUrl(input.greetingToken);
+  const customBytes = await resolveGreetingSourceBytes(input.greetingUrl, input.workspaceId);
+  const bytes = customBytes?.length ? customBytes : await readPlatformDefaultBytes();
 
-  if (pointer.kind === "version") {
-    const versionPath = versionedPath(workspaceId, phoneNumberId, pointer.version);
-    if (await fileExists(versionPath)) {
-      return {
-        bytes: await readFile(versionPath),
-        mimeType: "audio/mpeg",
-        source: "custom",
-      };
-    }
+  if (!bytes?.length) {
+    throw new Error("could not resolve voicemail greeting audio");
+  }
+
+  await atomicSwapActiveMp3(input.greetingToken, bytes);
+  return {
+    playUrl,
+    kind: customBytes?.length ? "custom" : "platform",
+  };
+}
+
+/** Test/health helper — live calls hit static active.mp3 directly. */
+export async function readActiveVoicemailGreetingBytes(
+  greetingToken: string,
+): Promise<{ bytes: Buffer; mimeType: string; source: "platform" | "custom" | "missing" }> {
+  const activePath = activeMp3Path(greetingToken);
+  if (await fileExists(activePath)) {
+    return {
+      bytes: await readFile(activePath),
+      mimeType: "audio/mpeg",
+      source: "custom",
+    };
   }
 
   const platform = await readPlatformDefaultBytes();
   if (platform) {
-    return { ...platform, source: "platform" };
+    return { bytes: platform, mimeType: "audio/mpeg", source: "platform" };
   }
 
-  return {
-    bytes: Buffer.alloc(0),
-    mimeType: "audio/mpeg",
-    source: "platform",
-  };
+  return { bytes: Buffer.alloc(0), mimeType: "audio/mpeg", source: "missing" };
 }
 
-export function invalidateActiveVoicemailGreetingCache(
-  workspaceId?: string,
-  phoneNumberId?: string,
-): void {
-  if (!workspaceId) {
-    activePointerCache.clear();
-    return;
-  }
-  if (phoneNumberId) {
-    activePointerCache.delete(cacheKey(workspaceId, phoneNumberId));
-    return;
-  }
-  for (const key of activePointerCache.keys()) {
-    if (key.startsWith(`${workspaceId}:`)) activePointerCache.delete(key);
-  }
-}
-
-/** Re-export for routing-profile fail-open. */
+/** Re-export for routing-profile fail-open when active.mp3 not yet provisioned. */
 export function platformVoicemailGreetingPlayUrl(): string {
   return resolvePlatformVoicemailGreetingPlayUrl();
 }

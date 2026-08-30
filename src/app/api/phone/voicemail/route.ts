@@ -200,20 +200,26 @@ export async function POST(request: Request) {
         where: { id: body.boxId, workspaceId: auth.workspaceId },
       });
       if (updated?.phoneNumberId) {
-        const { provisionActiveVoicemailGreeting } = await import(
-          "@/lib/phone/voicemail-active-greeting"
-        );
-        void provisionActiveVoicemailGreeting({
-          workspaceId: auth.workspaceId,
-          phoneNumberId: updated.phoneNumberId,
-          greetingUrl: updated.greetingUrl,
-        }).catch(() => undefined);
-
         const phone = await getPrisma().phoneNumber.findFirst({
           where: { id: updated.phoneNumberId, workspaceId: auth.workspaceId },
-          select: { e164: true },
+          select: { id: true, e164: true, settingsJson: true },
         });
         if (phone?.e164) {
+          const { greetingTokenForPhone, provisionActiveVoicemailGreeting } = await import(
+            "@/lib/phone/voicemail-active-greeting"
+          );
+          const inbound = (phone.settingsJson as Record<string, unknown>)?.mctbInbound as
+            | Record<string, unknown>
+            | undefined;
+          const greetingToken =
+            String(inbound?.greetingToken || "").trim() ||
+            greetingTokenForPhone(phone.id, phone.e164);
+          void provisionActiveVoicemailGreeting({
+            greetingToken,
+            workspaceId: auth.workspaceId,
+            greetingUrl: updated.greetingUrl,
+          }).catch(() => undefined);
+
           const { warmMctbInboundRoutingProfileForE164 } = await import(
             "@/lib/mctb/texml-ingress/routing-profile"
           );

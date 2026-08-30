@@ -32,6 +32,19 @@ const nextConfig: NextConfig = {
           webpackMemoryOptimizations: true,
         },
       }),
+  async headers() {
+    return [
+      {
+        source: "/voicemail/:token/active.mp3",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, must-revalidate",
+          },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       { source: "/inbox", destination: "/conversations", permanent: false },

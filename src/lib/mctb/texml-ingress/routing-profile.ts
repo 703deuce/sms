@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { getMctbConsentPlaybackUrl, getMctbTexmlVoicemailRecordCallbackUrl } from "@/lib/mctb/consent-prompt/texml-response";
 import {
+  greetingTokenForPhone,
   platformVoicemailGreetingPlayUrl as platformDefaultVoicemailUrl,
   provisionActiveVoicemailGreeting,
 } from "@/lib/phone/voicemail-active-greeting";
@@ -13,6 +14,7 @@ export type MctbVoicemailGreetingKind = "platform_default" | "custom";
 
 export type MctbInboundRoutingProfile = {
   routingToken: string;
+  greetingToken: string;
   workspaceId: string;
   phoneNumberId: string;
   e164: string;
@@ -99,15 +101,15 @@ export function invalidateMctbInboundRoutingProfile(e164?: string): void {
   }
 }
 
-/** Setup-time resolution — provisions versioned active greeting, returns stable play URL. */
+/** Setup-time — writes active.mp3 on disk, returns stable /voicemail/g_xxx/active.mp3 URL. */
 export async function resolveProvisionedVoicemailPlayUrl(input: {
+  greetingToken: string;
   workspaceId: string;
-  phoneNumberId: string;
   greetingUrl: string | null | undefined;
 }): Promise<{ kind: MctbVoicemailGreetingKind; playUrl: string }> {
   const provisioned = await provisionActiveVoicemailGreeting({
+    greetingToken: input.greetingToken,
     workspaceId: input.workspaceId,
-    phoneNumberId: input.phoneNumberId,
     greetingUrl: input.greetingUrl,
   });
   return {
@@ -153,15 +155,34 @@ export async function warmMctbInboundRoutingProfileForE164(
     });
   }
 
+  let greetingToken = String(storedInbound.greetingToken || "").trim();
+  if (!greetingToken) {
+    greetingToken = greetingTokenForPhone(phone.id, phone.e164);
+    await prisma.phoneNumber.update({
+      where: { id: phone.id },
+      data: {
+        settingsJson: {
+          ...settings,
+          mctbInbound: {
+            ...storedInbound,
+            routingToken,
+            greetingToken,
+          },
+        },
+      },
+    });
+  }
+
   const box = await ensureNumberVoicemailBox(config.workspaceId, phone.id).catch(() => null);
   const voicemail = await resolveProvisionedVoicemailPlayUrl({
+    greetingToken,
     workspaceId: config.workspaceId,
-    phoneNumberId: phone.id,
     greetingUrl: box?.greetingUrl ?? null,
   });
 
   const profile: MctbInboundRoutingProfile = {
     routingToken,
+    greetingToken,
     workspaceId: config.workspaceId,
     phoneNumberId: phone.id,
     e164: phone.e164,
@@ -217,6 +238,7 @@ export async function warmMctbInboundRoutingProfileForWorkspace(
 export function buildFailOpenInboundRoutingProfile(e164: string): MctbInboundRoutingProfile {
   return {
     routingToken: "r_failopen",
+    greetingToken: "g_failopen",
     workspaceId: "",
     phoneNumberId: "",
     e164,

@@ -47,5 +47,6 @@ next-env.d.ts
 .mctb-571-event-only-backup.json
 .mctb-571-pre-sip-cutover.json
 public/connection-greeting/sources/*.wav
+public/voicemail/
 .mctb-571-forward-pickup-backup.json
 .mctb-fqdn-direct-mctb-backup.json
