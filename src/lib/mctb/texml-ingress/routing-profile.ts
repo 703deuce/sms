@@ -3,8 +3,10 @@ import "server-only";
 import { createHash } from "crypto";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { getMctbConsentPlaybackUrl, getMctbTexmlVoicemailRecordCallbackUrl } from "@/lib/mctb/consent-prompt/texml-response";
-import { resolvePlatformVoicemailGreetingPlayUrl } from "@/lib/phone/voicemail-greeting-defaults";
-import { absolutizePublicMediaUrl } from "@/lib/phone/voicemail-greeting-playback";
+import {
+  platformVoicemailGreetingPlayUrl as platformDefaultVoicemailUrl,
+  provisionActiveVoicemailGreeting,
+} from "@/lib/phone/voicemail-active-greeting";
 import { mctbTexmlE164Variants } from "./e164-lookup";
 
 export type MctbVoicemailGreetingKind = "platform_default" | "custom";
@@ -46,10 +48,10 @@ export function platformPress1PlayUrl(): string {
 }
 
 export function platformVoicemailPlayUrl(): string {
-  return resolvePlatformVoicemailGreetingPlayUrl();
+  return platformDefaultVoicemailUrl();
 }
 
-/** Fail-open voicemail URL — always platform default. */
+/** Fail-open voicemail URL — platform default smart-routing asset (not stable /active). */
 export function failOpenVoicemailPlayUrl(): string {
   const url = platformVoicemailPlayUrl();
   return url.startsWith("http") ? url : "";
@@ -97,23 +99,21 @@ export function invalidateMctbInboundRoutingProfile(e164?: string): void {
   }
 }
 
-function resolveCustomVoicemailPlayUrl(raw: string | null | undefined): string | null {
-  const trimmed = raw?.trim();
-  if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return absolutizePublicMediaUrl(trimmed);
-}
-
-/** Setup-time resolution — custom greeting fails open to platform default. */
-export function resolveProvisionedVoicemailPlayUrl(input: {
+/** Setup-time resolution — provisions versioned active greeting, returns stable play URL. */
+export async function resolveProvisionedVoicemailPlayUrl(input: {
+  workspaceId: string;
+  phoneNumberId: string;
   greetingUrl: string | null | undefined;
-}): { kind: MctbVoicemailGreetingKind; playUrl: string } {
-  const custom = resolveCustomVoicemailPlayUrl(input.greetingUrl);
-  if (custom?.startsWith("http")) {
-    return { kind: "custom", playUrl: custom };
-  }
-  const platform = failOpenVoicemailPlayUrl();
-  return { kind: "platform_default", playUrl: platform };
+}): Promise<{ kind: MctbVoicemailGreetingKind; playUrl: string }> {
+  const provisioned = await provisionActiveVoicemailGreeting({
+    workspaceId: input.workspaceId,
+    phoneNumberId: input.phoneNumberId,
+    greetingUrl: input.greetingUrl,
+  });
+  return {
+    kind: provisioned.kind === "custom" ? "custom" : "platform_default",
+    playUrl: provisioned.playUrl,
+  };
 }
 
 /** Load routing profile from DB — call at setup/provision/boot only, never on ring. */
@@ -154,7 +154,9 @@ export async function warmMctbInboundRoutingProfileForE164(
   }
 
   const box = await ensureNumberVoicemailBox(config.workspaceId, phone.id).catch(() => null);
-  const voicemail = resolveProvisionedVoicemailPlayUrl({
+  const voicemail = await resolveProvisionedVoicemailPlayUrl({
+    workspaceId: config.workspaceId,
+    phoneNumberId: phone.id,
     greetingUrl: box?.greetingUrl ?? null,
   });
 

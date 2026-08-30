@@ -200,6 +200,15 @@ export async function POST(request: Request) {
         where: { id: body.boxId, workspaceId: auth.workspaceId },
       });
       if (updated?.phoneNumberId) {
+        const { provisionActiveVoicemailGreeting } = await import(
+          "@/lib/phone/voicemail-active-greeting"
+        );
+        void provisionActiveVoicemailGreeting({
+          workspaceId: auth.workspaceId,
+          phoneNumberId: updated.phoneNumberId,
+          greetingUrl: updated.greetingUrl,
+        }).catch(() => undefined);
+
         const phone = await getPrisma().phoneNumber.findFirst({
           where: { id: updated.phoneNumberId, workspaceId: auth.workspaceId },
           select: { e164: true },

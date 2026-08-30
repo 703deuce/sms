@@ -60,6 +60,7 @@ async function main() {
     assert.ok(profile);
     assert.equal(profile!.press1PlayUrl, platformPress1PlayUrl());
     assert.ok(profile!.voicemail.playUrl.startsWith("http"));
+    assert.match(profile!.voicemail.playUrl, /\/api\/public\/greetings\/[^/]+\/[^/]+\/active$/);
   });
 
   console.log("\nAll inbound instant TeXML tests passed.");
