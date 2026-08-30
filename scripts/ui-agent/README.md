@@ -5,10 +5,10 @@
 ## Daily workflow
 
 ```
-1. Upload reference once → /dev/ui-references (name: slicktext-inbox)
+1. Upload reference once → /transovo/kimi (name: slicktext-inbox)
 2. Tell Cursor: "Use Kimi with slicktext-inbox to redo /conversations"
 3. Cursor runs: npm run ui:kimi -- --target /conversations --video slicktext-inbox
-4. Preview: /dev/ui-studio/preview/<session>  (Current | Kimi | Split)
+4. Preview: /transovo/kimi/preview/<session>  (Current | Kimi | Split)
 5. Approve: npm run ui:approve -- --session <id>
 6. Cursor integrates via npm run ui:integrate
 7. Compare approved Kimi vs production
@@ -43,10 +43,10 @@ npm run ui:integrate -- --session <id> --apply
 
 | Route | Purpose |
 |-------|---------|
-| `/dev/ui-references` | Upload/name reference videos & images → Supabase + `references.json` |
-| `/dev/ui-studio/preview/[sessionId]` | Current / Kimi / Split comparison |
+| `/transovo/kimi` | Upload/name reference videos & images → Supabase + `references.json` |
+| `/transovo/kimi/preview/[sessionId]` | Current / Kimi / Split comparison |
 
-Set `ALLOW_UI_STUDIO=1` to enable in production (not recommended).
+Available in production at `/transovo/kimi` (requires login).
 
 ## Architecture
 

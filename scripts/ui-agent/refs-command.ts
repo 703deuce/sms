@@ -22,7 +22,7 @@ export async function runRefsCommand(args: string[]): Promise<void> {
 
   const refs = listReferences();
   if (refs.length === 0) {
-    console.log("No saved UI references. Upload at /dev/ui-references or use --reference-image/--video-file.");
+    console.log("No saved UI references. Upload at /transovo/kimi or use --reference-image/--video-file.");
     return;
   }
 

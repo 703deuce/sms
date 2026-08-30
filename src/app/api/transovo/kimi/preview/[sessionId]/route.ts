@@ -1,16 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
-import { isUiStudioEnabled } from "@/lib/ui-agent/dev-gate";
-import { bundleReferencePreview } from "../../../../../../scripts/ui-agent/preview";
+import { bundleReferencePreview } from "../../../../../../../scripts/ui-agent/preview";
 
 export const runtime = "nodejs";
 
 export async function GET(_request: Request, context: { params: Promise<{ sessionId: string }> }) {
-  if (!isUiStudioEnabled()) {
-    return new NextResponse("Not found", { status: 404 });
-  }
-
   const { sessionId } = await context.params;
   const generatedDir = join(process.cwd(), ".ui-agent/generated", sessionId);
   if (!existsSync(join(generatedDir, "page.tsx"))) {

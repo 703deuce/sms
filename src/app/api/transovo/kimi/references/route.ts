@@ -6,21 +6,10 @@ import {
   isUiReferenceStorageConfigured,
   uploadUiReferenceToStorage,
 } from "@/lib/ui-agent/reference-storage";
-import { isUiStudioEnabled } from "@/lib/ui-agent/dev-gate";
 
 export const runtime = "nodejs";
 
-function gate() {
-  if (!isUiStudioEnabled()) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  return null;
-}
-
 export async function GET() {
-  const blocked = gate();
-  if (blocked) return blocked;
-
   const refs = listReferences();
   const withUrls = await Promise.all(
     refs.map(async ({ name, entry }) => {
@@ -43,9 +32,6 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const blocked = gate();
-  if (blocked) return blocked;
-
   if (!isUiReferenceStorageConfigured()) {
     return NextResponse.json({ error: "Supabase storage is not configured." }, { status: 503 });
   }
@@ -96,9 +82,6 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const blocked = gate();
-  if (blocked) return blocked;
-
   const { searchParams } = new URL(request.url);
   const name = searchParams.get("name")?.trim();
   if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });

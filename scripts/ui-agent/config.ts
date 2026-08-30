@@ -12,7 +12,8 @@ export const UI_AGENT_GENERATED_DIR = join(UI_AGENT_DIR, "generated");
 export const UI_AGENT_CURRENT_DIR = join(UI_AGENT_DIR, "current");
 export const UI_AGENT_UPLOADS_DIR = join(UI_AGENT_DIR, "uploads");
 export const UI_AGENT_CACHE_DIR = join(UI_AGENT_DIR, "cache");
-export const UI_AGENT_REFERENCES_MANIFEST = join(UI_AGENT_DIR, "references.json");
+export const KIMI_UI_REFERENCES_PATH = "/transovo/kimi";
+export const kimiUiPreviewPath = (sessionId: string) => `/transovo/kimi/preview/${sessionId}`;
 
 export const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
 export const KIMI_MODEL = "kimi-k3";

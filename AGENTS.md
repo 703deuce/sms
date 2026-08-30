@@ -147,13 +147,13 @@ The user should **not** manually operate Kimi. When the user asks to use Kimi, r
 2. Identify the exact existing Transovo target route/component.
 3. Capture the current rendered page when useful (`--capture-current`).
 4. Invoke `npm run ui:kimi -- --target <route> --video <name> [--instruction "..."]`.
-5. Inspect output at `/dev/ui-studio/preview/<session>` (Current | Kimi | Split).
+5. Inspect output at `/transovo/kimi/preview/<session>` (Current | Kimi | Split).
 6. Optionally revise: `npm run ui:kimi -- --session <id> --revise --instruction "..."`.
 7. Approve: `npm run ui:approve -- --session <id>` → writes `HANDOFF.json`.
 8. Integrate into production — reuse Kimi presentation, wire real hooks/APIs.
 9. Compare **approved Kimi render** vs **production** — not the original competitor video.
 
-**Reference library:** upload once at `/dev/ui-references` (dev only), then tell Cursor: *"Use Kimi with slicktext-inbox to redo /conversations."*
+**Reference library:** upload once at `/transovo/kimi`, then tell Cursor: *"Use Kimi with slicktext-inbox to redo /conversations."*
 
 **Kimi must NOT scaffold a new Next.js project.** It generates only `page.tsx` + `components/**` in `.ui-agent/generated/<session>/` using the environment manifest. See `INTEGRATION_PRINCIPLES` in `scripts/ui-agent/config.ts`.
 
@@ -166,7 +166,7 @@ npm run ui:kimi  (Cursor-invoked)
         ↓
 .ui-agent/generated/<session>/  (0 → 85–95% visual)
         ↓
-/dev/ui-studio/preview/<session> → approve → HANDOFF.json
+/transovo/kimi/preview/<session> → approve → HANDOFF.json
         ↓
 Cursor integrates into src/  (85–95% → production)
         ↓
@@ -193,9 +193,9 @@ Supabase reference → local cache → POST /v1/files (purpose=video) → ms://<
 
 Screenshots (current Transovo captures) stay as compact image data URLs. See `VIDEO_DELIVERY_PRINCIPLES` in `scripts/ui-agent/config.ts`.
 
-### Dev routes (disabled in production)
+### Kimi UI routes (production)
 
-- `/dev/ui-references` — upload/name reference videos and images
-- `/dev/ui-studio/preview/[sessionId]` — Current / Kimi / Split comparison
+- `/transovo/kimi` — upload/name reference videos and images
+- `/transovo/kimi/preview/[sessionId]` — Current / Kimi / Split comparison
 
 See `scripts/ui-agent/README.md`.

@@ -12,7 +12,13 @@ import { resolveAllReferenceMedia } from "./reference-resolve";
 import { writeHandoff } from "./handoff";
 import { buildLabeledMedia } from "./reference-media";
 import { captureCurrentSite } from "./capture-current";
-import { generatedDirForSession, listGeneratedFiles, readAllGeneratedSources, writeGeneratedFiles } from "./generated-sandbox";
+import { KIMI_UI_REFERENCES_PATH, kimiUiPreviewPath } from "./config";
+import {
+  generatedDirForSession,
+  listGeneratedFiles,
+  readAllGeneratedSources,
+  writeGeneratedFiles,
+} from "./generated-sandbox";
 import { log } from "./logger";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
@@ -191,7 +197,7 @@ Return updated files[] with same schema as original build.`,
 
   const files = listGeneratedFiles(session.id);
   printKimiReady(session, build.summary, files.length);
-  log("preview", `/dev/ui-studio/preview/${session.id}`);
+  log("preview", kimiUiPreviewPath(session.id));
   log("approve", `npm run ui:approve -- --session ${session.id}`);
 }
 
@@ -205,6 +211,7 @@ function printKimiReady(session: UiAgentSession, summary?: string, fileCount?: n
   console.log(`generated=${generated}`);
   console.log(`files=${count}`);
   if (summary) console.log(`summary=${summary}`);
-  console.log(`preview=/dev/ui-studio/preview/${session.id}`);
+  console.log(`preview=${kimiUiPreviewPath(session.id)}`);
+  console.log(`upload=${KIMI_UI_REFERENCES_PATH}`);
   console.log("");
 }

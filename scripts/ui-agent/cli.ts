@@ -131,7 +131,7 @@ REFERENCE LIBRARY:
 
 WORKFLOW:
   1. ui:kimi        Kimi builds sandbox in .ui-agent/generated/<session>/
-  2. /dev/ui-studio/preview/<session>   Compare Current vs Kimi
+  2. /transovo/kimi/preview/<session>   Compare Current vs Kimi
   3. ui:approve     Freeze approved visual target
   4. ui:integrate   Cursor integrates into production src/
 

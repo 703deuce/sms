@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { KIMI_API_PREVIEW, KIMI_API_SESSION } from "@/lib/ui-agent/kimi-routes";
 
 type Mode = "current" | "kimi" | "split";
 
@@ -16,14 +17,14 @@ type SessionPayload = {
   previewUrl: string;
 };
 
-export function UiStudioPreviewClient({ sessionId }: { sessionId: string }) {
+export function KimiPreviewClient({ sessionId }: { sessionId: string }) {
   const [data, setData] = useState<SessionPayload | null>(null);
   const [mode, setMode] = useState<Mode>("split");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch(`/api/dev/ui-studio/${sessionId}`);
+      const res = await fetch(KIMI_API_SESSION(sessionId));
       if (!res.ok) {
         setError("Session not found");
         return;
@@ -37,7 +38,7 @@ export function UiStudioPreviewClient({ sessionId }: { sessionId: string }) {
     return data.session.target;
   }, [data]);
 
-  const kimiUrl = `/api/dev/ui-studio/preview/${sessionId}`;
+  const kimiUrl = KIMI_API_PREVIEW(sessionId);
 
   if (error) {
     return <div className="p-8 text-sm text-destructive">{error}</div>;
@@ -51,7 +52,7 @@ export function UiStudioPreviewClient({ sessionId }: { sessionId: string }) {
     <div className="flex h-screen flex-col bg-background">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h1 className="text-lg font-semibold">UI Studio Preview</h1>
+          <h1 className="text-lg font-semibold">Kimi Preview</h1>
           <p className="text-xs text-muted-foreground">
             {data.session.target} · {data.session.status || "ready"}
             {data.session.approved ? " · approved" : ""}

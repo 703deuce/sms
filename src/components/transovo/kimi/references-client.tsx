@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { KIMI_API_REFERENCES } from "@/lib/ui-agent/kimi-routes";
 
 type ReferenceRow = {
   name: string;
@@ -14,7 +15,7 @@ type ReferenceRow = {
   previewUrl: string | null;
 };
 
-export function UiReferencesClient() {
+export function KimiReferencesClient() {
   const [refs, setRefs] = useState<ReferenceRow[]>([]);
   const [configured, setConfigured] = useState(true);
   const [name, setName] = useState("");
@@ -24,7 +25,7 @@ export function UiReferencesClient() {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/dev/ui-references");
+    const res = await fetch(KIMI_API_REFERENCES);
     if (!res.ok) return;
     const data = (await res.json()) as { references: ReferenceRow[]; configured: boolean };
     setRefs(data.references);
@@ -44,14 +45,14 @@ export function UiReferencesClient() {
     form.set("name", name.trim());
     form.set("description", description.trim());
     form.set("file", file);
-    const res = await fetch("/api/dev/ui-references", { method: "POST", body: form });
+    const res = await fetch(KIMI_API_REFERENCES, { method: "POST", body: form });
     setLoading(false);
     if (!res.ok) {
       const err = (await res.json()) as { error?: string };
       setStatus(err.error || "Upload failed");
       return;
     }
-    setStatus(`Uploaded "${name}" — use npm run ui:kimi -- --video ${name.trim()}`);
+    setStatus(`Uploaded "${name}" — tell Cursor: Use Kimi with ${name.trim()}`);
     setName("");
     setDescription("");
     setFile(null);
@@ -60,14 +61,14 @@ export function UiReferencesClient() {
 
   async function onDelete(refName: string) {
     if (!confirm(`Delete reference "${refName}"?`)) return;
-    await fetch(`/api/dev/ui-references?name=${encodeURIComponent(refName)}`, { method: "DELETE" });
+    await fetch(`${KIMI_API_REFERENCES}?name=${encodeURIComponent(refName)}`, { method: "DELETE" });
     await refresh();
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">UI Reference Library</h1>
+        <h1 className="text-2xl font-semibold">Kimi Reference Library</h1>
         <p className="text-sm text-muted-foreground">
           Upload videos/images once, name them, then tell Cursor: &quot;Use Kimi with <strong>name</strong> to redo
           /conversations.&quot;
@@ -84,7 +85,7 @@ export function UiReferencesClient() {
         <h2 className="font-medium">Upload reference</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-sm">
-            <span>Name (used in CLI)</span>
+            <span>Name (used when talking to Cursor)</span>
             <input
               className="w-full rounded-md border bg-background px-3 py-2"
               placeholder="slicktext-inbox"
@@ -141,7 +142,9 @@ export function UiReferencesClient() {
                     {row.entry.type} · {row.entry.storage} · {row.entry.path}
                   </div>
                   {row.entry.description ? <div className="text-sm">{row.entry.description}</div> : null}
-                  <code className="text-xs">npm run ui:kimi -- --{row.entry.type === "video" ? "video" : "image"} {row.name}</code>
+                  <code className="text-xs">
+                    Tell Cursor: Use Kimi with {row.name} on /your-route
+                  </code>
                 </div>
                 <div className="flex items-center gap-2">
                   {row.previewUrl && row.entry.type === "image" ? (
