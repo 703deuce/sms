@@ -22,7 +22,7 @@ function parseArg(args: string[], flag: string): string | undefined {
 
 function buildOptions(videoName: string): CliOptions {
   return {
-    target: "/layout/sidebar",
+    target: "/conversations",
     referenceImages: [],
     referenceVideos: [],
     referenceUrls: [],
@@ -31,7 +31,7 @@ function buildOptions(videoName: string): CliOptions {
     referenceImageNames: [],
     currentImages: [],
     currentVideos: [],
-    captureCurrent: true,
+    captureCurrent: false,
     captureScreenshots: true,
     captureVideo: false,
     referenceDepth: "page",
@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   ensureUiAgentDirs();
 
   console.log("\nKimi sidebar-only — reference video:", video);
-  console.log("Target sandbox: /layout/sidebar\n");
+  console.log("Target sandbox context: /conversations (sidebar-only output)\n");
 
   const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
   const result = await runKimiCommand(provider, buildOptions(video));
