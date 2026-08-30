@@ -91,6 +91,7 @@
     "verify:mctb-final-pipeline": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-mctb-final-pipeline.ts",
     "inventory:voice-lines": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/inventory-voice-lines.ts",
     "cleanup:orphan-texml-apps": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cleanup-orphan-texml-apps.ts",
+    "cleanup:livekit-fqdn-connections": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cleanup-livekit-fqdn-connections.ts",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
     "test:transovo-voicemail": "tsx scripts/test-transovo-voicemail.ts",
