@@ -154,6 +154,13 @@ export async function provisionMctbCustomerVoice(input: {
   }).catch(() => undefined);
 
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);
+
+  const { repairMessagingOnWorkspaceNumber } = await import("@/lib/phone/telnyx-dual-provision");
+  await repairMessagingOnWorkspaceNumber({
+    workspaceId: input.workspaceId,
+    phoneNumberId: phone.id,
+  }).catch(() => undefined);
+
   clearMctbSipIngressCache();
   invalidateMctbTexmlIngressCache(phone.e164);
 

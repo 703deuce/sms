@@ -481,10 +481,13 @@ export async function enableVoiceOnWorkspaceNumber(input: {
 
   const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
   if (isMctbVoiceRouteLocked(row.settingsJson)) {
-    const { assertNotMctbLockedForGenericVoiceProvision } = await import(
-      "@/lib/mctb/provision-policy"
+    const { repairMctbDualChannelNumber } = await import(
+      "@/lib/mctb/provisioning/dual-channel-repair"
     );
-    assertNotMctbLockedForGenericVoiceProvision(row.settingsJson, "enable_voice");
+    return repairMctbDualChannelNumber({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
+    });
   }
 
   if (!before.capabilities.voice && before.capabilities.sms === false) {
@@ -690,7 +693,19 @@ export async function repairNumberConfiguration(input: {
   let connectionId: string | null = null;
   const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
   const mctbVoiceLocked = isMctbVoiceRouteLocked(row.settingsJson);
-  if (before.capabilities.voice !== false && !mctbVoiceLocked) {
+  if (mctbVoiceLocked && before.capabilities.voice !== false) {
+    try {
+      const { reassertMctbTexmlVoiceRoute } = await import(
+        "@/lib/mctb/provisioning/dual-channel-repair"
+      );
+      await reassertMctbTexmlVoiceRoute({
+        workspaceId: input.workspaceId,
+        phoneNumberId: row.id,
+      });
+    } catch (err) {
+      console.error("[dual-provision] mctb texml voice reassert", err);
+    }
+  } else if (before.capabilities.voice !== false && !mctbVoiceLocked) {
     try {
       const { workspaceNumberUsesTexmlDirect } = await import(
         "@/lib/voice/telnyx/texml-direct-route"

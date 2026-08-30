@@ -48,29 +48,6 @@ export async function POST(
     };
     const action = (body.action || "diagnose") as Action;
 
-    const voiceMutatingActions = new Set<Action>([
-      "enable_voice",
-      "repair_voice",
-      "provision",
-      "repair",
-      "repair_configuration",
-    ]);
-    if (voiceMutatingActions.has(action)) {
-      const lockedRow = await getPrisma().phoneNumber.findFirst({
-        where: { id: numberId, workspaceId: auth.workspaceId },
-        select: { settingsJson: true, e164: true },
-      });
-      if (lockedRow) {
-        const { assertNotMctbLockedForGenericVoiceProvision } = await import(
-          "@/lib/mctb/provision-policy"
-        );
-        assertNotMctbLockedForGenericVoiceProvision(
-          lockedRow.settingsJson,
-          `numbers_provision:${action}`,
-        );
-      }
-    }
-
     if (
       action === "diagnose_outbound" ||
       action === "repair_outbound" ||

@@ -122,4 +122,12 @@ test("canonical MCTB provision entry is provisionMctbCustomerVoice", () => {
   assert.equal(MCTB_CANONICAL_PROVISION_ENTRY, "provisionMctbCustomerVoice");
 });
 
+test("MCTB dual-channel repair module exists for voice+SMS coexistence", () => {
+  const repairPath = join(
+    process.cwd(),
+    "src/lib/mctb/provisioning/dual-channel-repair.ts",
+  );
+  assert.equal(existsSync(repairPath), true);
+});
+
 console.log("test-mctb-final-pipeline-contract: ok");
