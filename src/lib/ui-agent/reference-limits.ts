@@ -11,8 +11,18 @@ export function kimiMaxBytesForMime(mime: string): number {
 }
 
 export function kimiFormatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function kimiFormatMime(mime: string): string {
+  const normalized = mime.toLowerCase();
+  if (normalized === "video/quicktime") return "video/quicktime (.mov)";
+  if (normalized === "video/mp4") return "video/mp4 (.mp4)";
+  if (normalized === "video/webm") return "video/webm (.webm)";
+  if (normalized) return normalized;
+  return "unknown type";
 }
 
 export function kimiEstimateUploadSeconds(bytes: number): number {

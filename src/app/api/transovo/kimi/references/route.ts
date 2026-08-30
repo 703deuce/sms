@@ -2,14 +2,11 @@ import { NextResponse } from "next/server";
 import {
   deleteReferenceAsync,
   listReferencesAsync,
-  upsertReferenceAsync,
 } from "@/lib/ui-agent/references-manifest-server";
-import { kimiMaxBytesForMime } from "@/lib/ui-agent/reference-limits";
 import {
   createUiReferenceSignedUrl,
   deleteUiReferenceFromStorage,
   isUiReferenceStorageConfigured,
-  uploadUiReferenceToStorage,
 } from "@/lib/ui-agent/reference-storage";
 
 export const runtime = "nodejs";
@@ -46,67 +43,16 @@ export async function GET() {
   }
 }
 
-/** Legacy single-request upload (small files). Prefer prepare + direct upload + complete. */
-export async function POST(request: Request) {
-  if (!isUiReferenceStorageConfigured()) {
-    return NextResponse.json({ error: "Supabase storage is not configured." }, { status: 503 });
-  }
-
-  try {
-    const form = await request.formData();
-    const name = String(form.get("name") || "").trim();
-    const description = String(form.get("description") || "").trim();
-    const file = form.get("file");
-
-    if (!name || !/^[a-z0-9][a-z0-9-_]*$/i.test(name)) {
-      return NextResponse.json({ error: "Name must be alphanumeric with dashes/underscores." }, { status: 400 });
-    }
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "File is required." }, { status: 400 });
-    }
-
-    const mime = file.type || "application/octet-stream";
-    const kind = mime.startsWith("video/") ? "video" : mime.startsWith("image/") ? "image" : null;
-    if (!kind) {
-      return NextResponse.json({ error: "Upload a video (mp4/mov/webm) or image (png/jpg/webp)." }, { status: 400 });
-    }
-
-    if (file.size > kimiMaxBytesForMime(mime)) {
-      return NextResponse.json(
-        { error: `File is too large. Max ${kind === "video" ? "100 MB" : "20 MB"}.` },
-        { status: 400 },
-      );
-    }
-
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const uploaded = await uploadUiReferenceToStorage({
-      name,
-      kind,
-      bytes,
-      mimeType: mime,
-      filename: file.name,
-    });
-
-    const entry = await upsertReferenceAsync(name, {
-      type: kind,
-      storage: "supabase",
-      bucket: uploaded.bucket,
-      path: uploaded.path,
-      description: description || undefined,
-    });
-
-    let previewUrl: string | null = null;
-    try {
-      previewUrl = await createUiReferenceSignedUrl({ bucket: uploaded.bucket, path: uploaded.path });
-    } catch {
-      previewUrl = null;
-    }
-
-    return NextResponse.json({ name, entry, previewUrl });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+/** Video bytes must use prepare → direct Supabase upload → complete. */
+export async function POST() {
+  return NextResponse.json(
+    {
+      error:
+        "Direct multipart upload is disabled. Use /api/transovo/kimi/references/prepare and /complete with browser → Supabase upload.",
+      code: "use_direct_upload",
+    },
+    { status: 405 },
+  );
 }
 
 export async function DELETE(request: Request) {

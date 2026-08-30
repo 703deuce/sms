@@ -9,11 +9,16 @@ import {
 import {
   KIMI_MAX_IMAGE_BYTES,
   KIMI_MAX_VIDEO_BYTES,
-  kimiEstimateUploadSeconds,
   kimiFormatBytes,
+  kimiFormatMime,
   kimiMaxBytesForMime,
 } from "@/lib/ui-agent/reference-limits";
-import { uploadReferenceWithProgress } from "@/lib/ui-agent/reference-upload-client";
+import {
+  ReferenceUploadAbortedError,
+  ReferenceUploadStalledError,
+  uploadReferenceWithProgress,
+  type ReferenceUploadProgress,
+} from "@/lib/ui-agent/reference-upload-client";
 
 type ReferenceRow = {
   name: string;
@@ -27,7 +32,32 @@ type ReferenceRow = {
   previewUrl: string | null;
 };
 
-type UploadPhase = "idle" | "preparing" | "uploading" | "saving" | "done" | "error";
+type UploadPhase =
+  | "idle"
+  | "preparing"
+  | "uploading"
+  | "processing"
+  | "complete"
+  | "stalled"
+  | "error";
+
+type PreparedUpload = {
+  uploadId: string;
+  bucket: string;
+  path: string;
+  token: string;
+  supabaseUrl: string;
+  kind: "video" | "image";
+  mimeType: string;
+  size: number;
+  filename: string | null;
+};
+
+function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 60) return `~${Math.ceil(seconds)}s remaining`;
+  return `~${Math.ceil(seconds / 60)}m remaining`;
+}
 
 export function KimiReferencesClient() {
   const [refs, setRefs] = useState<ReferenceRow[]>([]);
@@ -36,13 +66,19 @@ export function KimiReferencesClient() {
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<UploadPhase>("idle");
-  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState<ReferenceUploadProgress>({ loaded: 0, total: 0, percent: 0 });
+  const [eta, setEta] = useState("");
   const [elapsedSec, setElapsedSec] = useState(0);
-  const timerRef = useRef<number | null>(null);
+  const [completedName, setCompletedName] = useState("");
 
-  const loading = phase === "preparing" || phase === "uploading" || phase === "saving";
+  const abortRef = useRef<AbortController | null>(null);
+  const preparedRef = useRef<PreparedUpload | null>(null);
+  const uploadedRef = useRef(false);
+  const uploadMetaRef = useRef<{ name: string; description: string; file: File } | null>(null);
+  const elapsedTimerRef = useRef<number | null>(null);
+
+  const loading = phase === "preparing" || phase === "uploading" || phase === "processing";
 
   const refresh = useCallback(async () => {
     const res = await fetch(KIMI_API_REFERENCES);
@@ -58,23 +94,39 @@ export function KimiReferencesClient() {
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
+      abortRef.current?.abort();
+      if (elapsedTimerRef.current) window.clearInterval(elapsedTimerRef.current);
     };
   }, []);
 
   function startElapsedTimer() {
     setElapsedSec(0);
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = window.setInterval(() => {
+    if (elapsedTimerRef.current) window.clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = window.setInterval(() => {
       setElapsedSec((value) => value + 1);
     }, 1000);
   }
 
   function stopElapsedTimer() {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (elapsedTimerRef.current) {
+      window.clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
     }
+  }
+
+  function resetUploadUi() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    preparedRef.current = null;
+    uploadedRef.current = false;
+    uploadMetaRef.current = null;
+    setPhase("idle");
+    setError("");
+    setProgress({ loaded: 0, total: 0, percent: 0 });
+    setEta("");
+    setElapsedSec(0);
+    setCompletedName("");
+    stopElapsedTimer();
   }
 
   function validateFile(selected: File): string | null {
@@ -91,15 +143,146 @@ export function KimiReferencesClient() {
   }
 
   function onFileSelected(next: File | null) {
+    resetUploadUi();
     setFile(next);
-    setError("");
-    setStatus("");
-    setPhase("idle");
     if (!next) return;
     const validationError = validateFile(next);
     if (validationError) {
       setError(validationError);
+      setPhase("error");
       setFile(null);
+    }
+  }
+
+  function updateEta(next: ReferenceUploadProgress, startedAt: number) {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs < 1000 || next.loaded <= 0 || next.total <= 0) {
+      setEta("");
+      return;
+    }
+    const bytesPerMs = next.loaded / elapsedMs;
+    if (bytesPerMs <= 0) return;
+    const remainingSec = (next.total - next.loaded) / bytesPerMs / 1000;
+    setEta(formatEta(remainingSec));
+  }
+
+  async function prepareUpload(meta: { name: string; description: string; file: File }): Promise<PreparedUpload> {
+    const mime = meta.file.type || "application/octet-stream";
+    const prepareRes = await fetch(KIMI_API_REFERENCES_PREPARE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: meta.name,
+        mimeType: mime,
+        size: meta.file.size,
+        filename: meta.file.name,
+      }),
+      signal: abortRef.current?.signal,
+    });
+
+    const prepareBody = (await prepareRes.json()) as PreparedUpload & { error?: string };
+    if (!prepareRes.ok) {
+      throw new Error(prepareBody.error || "Could not prepare upload.");
+    }
+    if (!prepareBody.bucket || !prepareBody.path || !prepareBody.token || !prepareBody.supabaseUrl || !prepareBody.uploadId) {
+      throw new Error("Upload preparation returned incomplete data.");
+    }
+    return prepareBody;
+  }
+
+  async function completeUpload(prepared: PreparedUpload, meta: { name: string; description: string; file: File }) {
+    const completeRes = await fetch(KIMI_API_REFERENCES_COMPLETE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uploadId: prepared.uploadId,
+        name: meta.name,
+        description: meta.description,
+        bucket: prepared.bucket,
+        path: prepared.path,
+        kind: prepared.kind,
+        mimeType: prepared.mimeType || meta.file.type,
+        size: meta.file.size,
+        filename: meta.file.name,
+      }),
+      signal: abortRef.current?.signal,
+    });
+
+    const completeBody = (await completeRes.json()) as { error?: string; code?: string };
+    if (!completeRes.ok) {
+      throw new Error(completeBody.error || "Upload finished but saving the reference failed.");
+    }
+  }
+
+  async function runUpload(meta: { name: string; description: string; file: File }, options?: { skipPrepare?: boolean }) {
+    setError("");
+    setProgress({ loaded: 0, total: meta.file.size, percent: 0 });
+    setEta("");
+    uploadMetaRef.current = meta;
+
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    startElapsedTimer();
+
+    try {
+      let prepared = preparedRef.current;
+      if (!options?.skipPrepare || !prepared || !uploadedRef.current) {
+        uploadedRef.current = false;
+        setPhase("preparing");
+        prepared = await prepareUpload(meta);
+        preparedRef.current = prepared;
+      }
+
+      if (!uploadedRef.current) {
+        setPhase("uploading");
+        const startedAt = Date.now();
+
+        await uploadReferenceWithProgress({
+          supabaseUrl: prepared.supabaseUrl,
+          bucket: prepared.bucket,
+          path: prepared.path,
+          token: prepared.token,
+          file: meta.file,
+          signal: abortRef.current.signal,
+          onProgress: (next) => {
+            setProgress(next);
+            updateEta(next, startedAt);
+          },
+          onStall: () => setPhase("stalled"),
+        });
+
+        uploadedRef.current = true;
+      }
+
+      setPhase("processing");
+      setEta("");
+      await completeUpload(prepared, meta);
+
+      setPhase("complete");
+      setCompletedName(meta.name);
+      setProgress({ loaded: meta.file.size, total: meta.file.size, percent: 100 });
+      setName("");
+      setDescription("");
+      setFile(null);
+      preparedRef.current = null;
+      uploadedRef.current = false;
+      uploadMetaRef.current = null;
+      await refresh();
+    } catch (uploadError) {
+      if (uploadError instanceof ReferenceUploadAbortedError) {
+        setPhase("idle");
+        setError("Upload cancelled.");
+        return;
+      }
+      if (uploadError instanceof ReferenceUploadStalledError) {
+        setPhase("stalled");
+        setError(uploadError.message);
+        return;
+      }
+      setPhase("error");
+      setError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
+    } finally {
+      stopElapsedTimer();
     }
   }
 
@@ -110,97 +293,52 @@ export function KimiReferencesClient() {
     const validationError = validateFile(file);
     if (validationError) {
       setError(validationError);
+      setPhase("error");
       return;
     }
 
-    const mime = file.type || "application/octet-stream";
-    const kind = mime.startsWith("video/") ? "video" : "image";
-    const estimateSec = kimiEstimateUploadSeconds(file.size);
+    await runUpload({ name: name.trim(), description: description.trim(), file });
+  }
 
-    setError("");
-    setProgress(0);
-    setPhase("preparing");
-    setStatus(`Preparing upload for ${kimiFormatBytes(file.size)}…`);
-    startElapsedTimer();
-
-    try {
-      const prepareRes = await fetch(KIMI_API_REFERENCES_PREPARE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          mimeType: mime,
-          size: file.size,
-          filename: file.name,
-        }),
-      });
-
-      const prepareBody = (await prepareRes.json()) as {
-        error?: string;
-        bucket?: string;
-        path?: string;
-        token?: string;
-        supabaseUrl?: string;
-        kind?: "video" | "image";
-      };
-
-      if (!prepareRes.ok) {
-        throw new Error(prepareBody.error || "Could not prepare upload.");
+  async function onRetry() {
+    const meta = uploadMetaRef.current;
+    if (!meta) {
+      if (file && name.trim()) {
+        await runUpload({ name: name.trim(), description: description.trim(), file });
       }
-
-      if (!prepareBody.bucket || !prepareBody.path || !prepareBody.token || !prepareBody.supabaseUrl) {
-        throw new Error("Upload preparation returned incomplete data.");
-      }
-
-      setPhase("uploading");
-      setStatus(
-        `Uploading ${kimiFormatBytes(file.size)} directly to storage… usually ${estimateSec < 60 ? `${estimateSec}s` : `${Math.ceil(estimateSec / 60)} min`} on a typical connection.`,
-      );
-
-      await uploadReferenceWithProgress({
-        supabaseUrl: prepareBody.supabaseUrl,
-        bucket: prepareBody.bucket,
-        path: prepareBody.path,
-        token: prepareBody.token,
-        file,
-        onProgress: setProgress,
-      });
-
-      setPhase("saving");
-      setStatus("Saving reference…");
-      setProgress(100);
-
-      const completeRes = await fetch(KIMI_API_REFERENCES_COMPLETE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim(),
-          bucket: prepareBody.bucket,
-          path: prepareBody.path,
-          kind: prepareBody.kind || kind,
-        }),
-      });
-
-      const completeBody = (await completeRes.json()) as { error?: string };
-      if (!completeRes.ok) {
-        throw new Error(completeBody.error || "Upload finished but saving the reference failed.");
-      }
-
-      setPhase("done");
-      setStatus(`Uploaded "${name.trim()}" — tell Cursor: Use Kimi with ${name.trim()}`);
-      setName("");
-      setDescription("");
-      setFile(null);
-      await refresh();
-    } catch (uploadError) {
-      setPhase("error");
-      const message = uploadError instanceof Error ? uploadError.message : "Upload failed.";
-      setError(message);
-      setStatus("");
-    } finally {
-      stopElapsedTimer();
+      return;
     }
+
+    if (uploadedRef.current && preparedRef.current) {
+      setPhase("processing");
+      setError("");
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      try {
+        await completeUpload(preparedRef.current, meta);
+        setPhase("complete");
+        setCompletedName(meta.name);
+        setName("");
+        setDescription("");
+        setFile(null);
+        preparedRef.current = null;
+        uploadedRef.current = false;
+        uploadMetaRef.current = null;
+        await refresh();
+      } catch (retryError) {
+        setPhase("error");
+        setError(retryError instanceof Error ? retryError.message : "Could not save reference.");
+      }
+      return;
+    }
+
+    preparedRef.current = null;
+    uploadedRef.current = false;
+    await runUpload(meta);
+  }
+
+  function onCancel() {
+    resetUploadUi();
   }
 
   async function onDelete(refName: string) {
@@ -209,8 +347,23 @@ export function KimiReferencesClient() {
     await refresh();
   }
 
+  const phaseLabel =
+    phase === "preparing"
+      ? "Preparing upload…"
+      : phase === "uploading"
+        ? "Uploading…"
+        : phase === "processing"
+          ? "Processing…"
+          : phase === "complete"
+            ? "Complete"
+            : phase === "stalled"
+              ? "Upload stalled"
+              : "";
+
+  const activeFile = uploadMetaRef.current?.file || file;
+
   return (
-    <div className="mx-auto max-w-4xl space-y-8 p-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-4 sm:p-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Kimi Reference Library</h1>
         <p className="text-sm text-muted-foreground">
@@ -218,8 +371,7 @@ export function KimiReferencesClient() {
           /conversations.&quot;
         </p>
         <p className="text-xs text-muted-foreground">
-          Limits: videos up to {kimiFormatBytes(KIMI_MAX_VIDEO_BYTES)}, images up to {kimiFormatBytes(KIMI_MAX_IMAGE_BYTES)}.
-          Large videos upload directly to storage (not through the app server).
+          Videos up to {kimiFormatBytes(KIMI_MAX_VIDEO_BYTES)} upload directly to storage — not through the app server.
         </p>
         {!configured ? (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
@@ -253,7 +405,7 @@ export function KimiReferencesClient() {
             />
           </label>
         </div>
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground hover:bg-muted/40">
+        <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-6 text-sm text-muted-foreground hover:bg-muted/40 sm:p-8">
           <input
             type="file"
             accept="video/mp4,video/quicktime,video/webm,image/png,image/jpeg,image/webp"
@@ -262,47 +414,105 @@ export function KimiReferencesClient() {
             onChange={(e) => onFileSelected(e.target.files?.[0] || null)}
           />
           {file ? (
-            <span>
-              {file.name} ({kimiFormatBytes(file.size)})
-            </span>
+            <div className="space-y-1 text-center">
+              <div className="font-medium text-foreground">{file.name}</div>
+              <div>{kimiFormatBytes(file.size)}</div>
+              <div className="text-xs">{kimiFormatMime(file.type || "unknown")}</div>
+            </div>
           ) : (
-            <span>Drop video or image here, or click to choose (.mp4 .mov .webm .png .jpg .webp)</span>
+            <span>Drop video or image here, or tap to choose (.mp4 .mov .webm)</span>
           )}
         </label>
-        <button
-          type="submit"
-          disabled={loading || !configured || !file || Boolean(error)}
-          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-        >
-          {loading ? "Uploading…" : "Upload"}
-        </button>
 
-        {loading ? (
-          <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span>{status}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{elapsedSec}s elapsed</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${Math.max(progress, phase === "preparing" ? 8 : phase === "saving" ? 98 : progress)}%` }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {phase === "preparing"
-                ? "Getting a secure upload slot…"
-                : phase === "uploading"
-                  ? progress > 0
-                    ? `${progress}% uploaded`
-                    : "Starting upload…"
-                  : "Registering your reference…"}
-            </p>
+        {!loading && phase !== "stalled" && phase !== "error" ? (
+          <button
+            type="submit"
+            disabled={!configured || !file || Boolean(error)}
+            className="w-full rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50 sm:w-auto"
+          >
+            Upload
+          </button>
+        ) : null}
+
+        {loading || phase === "stalled" || phase === "complete" ? (
+          <div className="space-y-3 rounded-md border bg-muted/30 p-4 text-sm">
+            {activeFile ? (
+              <div className="font-medium">
+                {phase === "uploading" || phase === "stalled" ? "Uploading" : phaseLabel} {activeFile.name}
+              </div>
+            ) : (
+              <div className="font-medium">{phaseLabel}</div>
+            )}
+
+            {phase === "uploading" || phase === "stalled" || phase === "processing" || phase === "complete" ? (
+              <>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-200"
+                    style={{
+                      width: `${Math.max(progress.percent, phase === "processing" ? 98 : 0)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {progress.percent}% — {kimiFormatBytes(progress.loaded)} of {kimiFormatBytes(progress.total || activeFile?.size || 0)}
+                  </span>
+                  {eta ? <span>{eta}</span> : null}
+                  <span>{elapsedSec}s elapsed</span>
+                </div>
+              </>
+            ) : null}
+
+            {phase === "preparing" ? (
+              <p className="text-xs text-muted-foreground">Getting a secure upload slot…</p>
+            ) : null}
+            {phase === "processing" ? (
+              <p className="text-xs text-muted-foreground">Verifying storage and saving reference…</p>
+            ) : null}
+            {phase === "complete" ? (
+              <p className="text-sm text-green-700 dark:text-green-400">
+                Complete — tell Cursor: Use Kimi with {completedName}
+              </p>
+            ) : null}
+            {phase === "stalled" ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Upload appears stalled. Check your connection or retry.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
-        {!loading && status ? <p className="text-sm text-green-700 dark:text-green-400">{status}</p> : null}
-        {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+        {phase === "stalled" || phase === "error" ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void onRetry()}
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border px-4 py-2 text-sm hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border px-4 py-2 text-sm hover:bg-muted"
+          >
+            Cancel upload
+          </button>
+        ) : null}
+
+        {error && phase !== "stalled" ? <p className="text-sm text-red-600 dark:text-red-400">Upload failed — {error}</p> : null}
       </form>
 
       <section className="space-y-3">

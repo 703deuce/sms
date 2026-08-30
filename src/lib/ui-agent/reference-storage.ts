@@ -91,7 +91,7 @@ export async function createUiReferenceSignedUpload(input: {
   kind: "video" | "image";
   mimeType: string;
   filename?: string;
-}): Promise<{ bucket: string; path: string; token: string }> {
+}): Promise<{ bucket: string; path: string; token: string; signedUrl: string | null }> {
   assertMime(input.mimeType, input.kind);
   const bucket = await ensureUiReferencesBucket();
   const ext = input.filename?.split(".").pop()?.toLowerCase() || (input.kind === "video" ? "mp4" : "png");
@@ -106,7 +106,30 @@ export async function createUiReferenceSignedUpload(input: {
     throw new Error(`Signed upload URL failed: ${error?.message || "missing token"}`);
   }
 
-  return { bucket, path: objectPath, token: data.token };
+  return {
+    bucket,
+    path: objectPath,
+    token: data.token,
+    signedUrl: data.signedUrl || null,
+  };
+}
+
+export async function verifyUiReferenceObjectExists(input: {
+  bucket: string;
+  path: string;
+}): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  const folder = input.path.includes("/") ? input.path.slice(0, input.path.lastIndexOf("/")) : "";
+  const filename = input.path.split("/").pop() || input.path;
+  const { data, error } = await supabase.storage.from(input.bucket).list(folder, {
+    limit: 100,
+    search: filename,
+  });
+  if (error || !data?.length) return false;
+  return data.some((row) => {
+    const candidate = folder ? `${folder}/${row.name}` : row.name;
+    return candidate === input.path;
+  });
 }
 
 export async function readUiReferencesManifestFromStorage(): Promise<string | null> {

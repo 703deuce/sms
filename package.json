@@ -229,6 +229,7 @@
     "playwright": "^1.62.1",
     "prisma": "6.19.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "undici": "^6.28.0"
   }
 }

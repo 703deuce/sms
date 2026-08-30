@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { kimiMaxBytesForMime } from "@/lib/ui-agent/reference-limits";
 import { createUiReferenceSignedUpload, isUiReferenceStorageConfigured } from "@/lib/ui-agent/reference-storage";
@@ -61,10 +62,15 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
+      uploadId: randomUUID(),
       bucket: signed.bucket,
       path: signed.path,
       token: signed.token,
+      signedUrl: signed.signedUrl,
       kind,
+      mimeType,
+      size,
+      filename: filename || null,
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "",
     });
   } catch (error) {
