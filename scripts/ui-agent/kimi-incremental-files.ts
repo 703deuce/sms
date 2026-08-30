@@ -175,4 +175,5 @@ Rules:
 - Path on same line as KIMI_FILE_BEGIN
 - Raw file content between BEGIN and END (not JSON-escaped)
 - Required minimum: page.tsx, mock-data.ts, reference.css
+- Include every component for every screen/modal/builder view in the reference video
 - No markdown fences around file content`;
