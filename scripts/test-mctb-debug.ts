@@ -8,12 +8,15 @@ function restoreEnv() {
 }
 
 try {
-  process.env.MCTB_DEBUG = "1";
   process.env.NODE_ENV = "production";
-  assert.equal(isMctbDebugEnabled(), true);
+  delete process.env.MCTB_DEBUG;
+  assert.equal(isMctbDebugEnabled(), true, "production default should be on");
 
   process.env.MCTB_DEBUG = "0";
   assert.equal(isMctbDebugEnabled(), false);
+
+  process.env.MCTB_DEBUG = "1";
+  assert.equal(isMctbDebugEnabled(), true);
 
   process.env = { ...originalEnv, NODE_ENV: "development" };
   delete process.env.MCTB_DEBUG;

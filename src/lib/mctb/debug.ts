@@ -18,16 +18,13 @@ export type MctbDebugArea =
   | "provision"
   | "client";
 
-/** True when MCTB_DEBUG=1, or in non-production unless MCTB_DEBUG=0. */
+/** On by default (including production). Set MCTB_DEBUG=0 to disable. */
 export function isMctbDebugEnabled(): boolean {
   const raw = process.env.MCTB_DEBUG?.trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off") {
     return false;
   }
-  if (raw === "1" || raw === "true" || raw === "on") {
-    return true;
-  }
-  return process.env.NODE_ENV !== "production";
+  return true;
 }
 
 function serializeError(err: unknown): { error: string; stack?: string } {
