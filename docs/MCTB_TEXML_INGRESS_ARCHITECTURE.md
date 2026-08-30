@@ -92,9 +92,17 @@ npx tsx scripts/set-866-mctb-cert-mode.ts D   # Full production (default)
 | Mode | Behavior |
 |------|----------|
 | **A** | Say + Pause + Hangup (no Gather, no SMS) |
-| **B** | Gather + press 1 + "Thank you" (no SMS backend) |
+| **B** | Gather + Say + press 1 + thank you (no SMS) |
+| **B2** | `<Play>` production consent audio only + Pause + Hangup (media cert) |
+| **B3** | Gather + `<Play>` + press 1 + thank you (no SMS) |
 | **C** | Gather + consent + enqueue SMS (production pipeline) |
 | **D** | Full production (default when no `?cert=`) |
+
+```bash
+npx tsx scripts/set-866-mctb-cert-mode.ts B2   # Play-only media cert
+npx tsx scripts/validate-mctb-consent-audio-url.ts
+npx tsx scripts/test-mctb-texml-b2-play-route.ts
+```
 
 Run real PSTN conditional-forward tests for each mode before declaring pass.
 
@@ -159,7 +167,9 @@ Re-assigns Amy via `restoreTexmlInboundRoute` + `publishVoiceAgent`. Does not de
 | Test | Status | Notes |
 |------|--------|-------|
 | A — Say/Pause/Hangup | **PASS (PSTN)** | `mctb-entry` on prod — caller heard "Test successful." on conditional forward (~02:05 UTC) |
-| B — Gather no SMS | Pending PSTN | `npx tsx scripts/set-866-mctb-cert-mode.ts B` (no rebuild) |
+| B — Gather Say no SMS | **PASS (PSTN)** | Real AT&T CFNA → Say → Gather → DTMF 1 → Say → Hangup |
+| B2 — Play only | Pending PSTN | `set-866-mctb-cert-mode.ts B2` after audio URL validation |
+| B3 — Gather Play no SMS | Pending PSTN | After B2 passes |
 | C — Consent + SMS enqueue | Pending PSTN | `set-866-mctb-cert-mode.ts C` |
 | D — Full production | Pending PSTN | `set-866-mctb-cert-mode.ts D` |
 

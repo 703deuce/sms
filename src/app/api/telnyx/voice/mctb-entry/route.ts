@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  buildMctbCertPlayOnlyTexml,
   buildMctbConsentControlledHangupTexml,
   buildMctbConsentInboundTexml,
+  getMctbConsentPlaybackUrl,
   resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
@@ -9,7 +11,9 @@ import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import {
   certModeForcesPress1Gather,
   certModeSkipsConsentBackend,
+  certModeUsesPlayGather,
   isMinimalCertMode,
+  isPlayOnlyCertMode,
   resolveMctbTexmlCertMode,
 } from "@/lib/mctb/texml-ingress/cert-mode";
 import { resolveMctbTexmlIngressConfig } from "@/lib/mctb/texml-ingress/config-cache";
@@ -101,6 +105,23 @@ export async function POST(request: Request) {
       return texmlResponse(buildMinimalCertTexml(), { branch: "cert_minimal", certMode });
     }
 
+    // B2 — Play production consent audio only (isolates Telnyx &lt;Play&gt; media fetch).
+    if (isPlayOnlyCertMode(certMode)) {
+      const audioUrl = getMctbConsentPlaybackUrl();
+      traceMctbTexml("MCTB_TEXML_RETURNED", {
+        branch: "cert_play_only",
+        latencyMs: Date.now() - started,
+        to,
+        callSid,
+        audioUrl,
+      });
+      return texmlResponse(buildMctbCertPlayOnlyTexml(), {
+        branch: "cert_play_only",
+        certMode,
+        audioUrl,
+      });
+    }
+
     if (!to) {
       traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_to_did" });
       return texmlResponse(buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."), {
@@ -149,8 +170,9 @@ export async function POST(request: Request) {
       parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
       "";
 
-    const promptMode =
-      certMode === "B" || certMode === "C" || certMode === "D"
+    const promptMode = certModeUsesPlayGather(certMode)
+      ? resolveMctbConsentTexmlPromptMode("play-gather")
+      : certMode === "B" || certMode === "C"
         ? resolveMctbConsentTexmlPromptMode("say-gather")
         : resolveMctbConsentTexmlPromptMode(null);
 

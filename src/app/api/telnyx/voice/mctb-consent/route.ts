@@ -255,7 +255,7 @@ export async function POST(request: Request) {
       }
 
       const successBody =
-        certMode === "B"
+        certMode === "B" || certMode === "B3"
           ? `<Say voice="female">Thank you. Press 1 was received.</Say><Hangup/>`
           : buildMctbConsentGatherSuccessTexml();
       return texml(successBody, "gather_press_1");

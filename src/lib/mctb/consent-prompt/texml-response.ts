@@ -18,12 +18,17 @@ function consentTexmlVoiceUrl(segment: "mctb-consent" | "mctb-entry" = "mctb-con
   return `${base}/api/telnyx/voice/${segment}`;
 }
 
-function consentPlaybackUrl(): string {
+/** Production MCTB Press-1 prerecorded prompt URL (Telnyx &lt;Play&gt;). */
+export function getMctbConsentPlaybackUrl(): string {
   const assetId =
     process.env.MCTB_PLATFORM_CONSENT_AUDIO_ASSET_ID?.trim() || DEFAULT_CONSENT_AUDIO_ASSET_ID;
   const base = appBaseUrl();
   const path = `/api/public/smart-routing-audio/${assetId}`;
   return base ? `${base}${path}` : path;
+}
+
+export function getMctbConsentAudioAssetId(): string {
+  return process.env.MCTB_PLATFORM_CONSENT_AUDIO_ASSET_ID?.trim() || DEFAULT_CONSENT_AUDIO_ASSET_ID;
 }
 
 export type MctbConsentTexmlPromptMode = "say-gather" | "say-only" | "play-gather";
@@ -86,7 +91,7 @@ export function buildMctbConsentInboundTexml(
   const requestPrompt = options?.requestPrompt ?? null;
   const promptMode = options?.promptMode ?? resolveMctbConsentTexmlPromptMode(requestPrompt);
   const gatherBasePath = options?.gatherBasePath || "mctb-consent";
-  const audioUrl = consentPlaybackUrl();
+  const audioUrl = getMctbConsentPlaybackUrl();
 
   if (promptMode === "say-only") {
     const rawPrompt = (requestPrompt || process.env.MCTB_CONSENT_TEXML_PROMPT || "").toLowerCase();
@@ -139,6 +144,12 @@ export function buildMctbConsentGatherSuccessTexml(): string {
 
 export function buildMctbConsentControlledHangupTexml(message: string): string {
   return `<Say voice="female">${escapeXml(message)}</Say><Hangup/>`;
+}
+
+/** Cert B2 — Play production consent audio only (no Gather/SMS/DB). */
+export function buildMctbCertPlayOnlyTexml(): string {
+  const audioUrl = getMctbConsentPlaybackUrl();
+  return `<Play>${escapeXml(audioUrl)}</Play><Pause length="2"/><Hangup/>`;
 }
 
 export function wrapMctbConsentTexmlBody(body: string): string {
