@@ -40,9 +40,9 @@ Carrier CFNA → customer DID (e.g. +18663464256)
                                → existing-consent capture → MCTB SMS (any completed call; eligibility may block if paused)
 ```
 
-**Not in this pipeline:** LiveKit SIP, FQDN ingress, Call Control event-only (`mctb-event-only`), voice bridge, AI receptionist on the MCTB DID, Smart Routing after-hours steal, Press-1-only removal.
+**Not in this pipeline:** LiveKit SIP, FQDN ingress, Call Control event-only, voice bridge, AI receptionist on the MCTB DID, Smart Routing after-hours steal.
 
-Legacy ingress is **disabled in production** unless `MCTB_LEGACY_INGRESS_ENABLED=1` (cert scripts only). Policy: `src/lib/mctb/ingress-policy.ts`.
+MCTB voice ingress is **TeXML only** — legacy alternate paths have been removed from the codebase.
 
 ---
 

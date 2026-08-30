@@ -12,7 +12,7 @@ import {
   EXISTING_CONSENT_ATTESTATION_VERSION,
   type ExistingConsentAttestationRecord,
   validateExistingConsentAttestation,
-} from "@/lib/mctb/event-only/attestation";
+} from "@/lib/mctb/capture/attestation";
 import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { resolveRuntimeDemoMode } from "@/lib/mctb/ingress";

@@ -128,7 +128,6 @@ def _fire_backend_call(backend: TransovoBackend, action: str, payload: dict[str,
 async def run_inbound_session(ctx: JobContext) -> None:
     import traceback
 
-    from transovo_voice.session.mctb_sip_diagnostic import is_mctb_sip_route_target
     from transovo_voice.session.mctb_sip_e2e_trace import (
         MctbSipE2eTrace,
         derive_correlation_id,
@@ -280,26 +279,6 @@ async def run_inbound_session(ctx: JobContext) -> None:
     trace.log_telnyx_sip_inbound_seen()
     trace.log_telnyx_to_livekit_invite_attempted()
     trace.log_livekit_sip_session_received(participant)
-
-    if await is_mctb_sip_route_target(backend, to_e164):
-        from transovo_voice.session.mctb_sip_diagnostic import run_mctb_sip_diagnostic_session
-
-        trace.log("mctb_branch_selected", toE164=to_e164, fromE164=from_e164)
-        trace.log_worker_room_connect_start()
-        trace.log_worker_room_connected(0)
-
-        try:
-            await run_mctb_sip_diagnostic_session(
-                ctx,
-                backend,
-                trace=trace,
-                participant=participant,
-                agent_name=agent_name,
-                room_already_connected=room_connected,
-            )
-        finally:
-            await backend.close()
-        return
 
     try:
         from livekit.plugins.openai.realtime import RealtimeModel  # noqa: F401

@@ -1,8 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import type { Prisma } from "@/lib/domain";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
-import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import { parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 
 type TelnyxPayload = {
@@ -33,54 +31,6 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
   const eventType = body.data?.event_type || "unknown";
   const providerEventId = body.data?.id || `${eventType}:${Date.now()}`;
   const eventPayload = (body.data?.payload || {}) as Record<string, unknown>;
-
-  // Carrier-forwarded legs to platform 571 expire in ~5s. Answer + gather before ANY DB.
-  // LEGACY fast path — disabled when TeXML-only production policy is active.
-  if (eventType === "call.initiated") {
-    const { isMctbLegacyIngressEnabled } = await import("@/lib/mctb/ingress-policy");
-    if (!isMctbLegacyIngressEnabled()) {
-      // TeXML-only production — no Call Control gather on 571.
-    } else {
-    const callControlId = String(eventPayload.call_control_id || "");
-    const to = String(eventPayload.to || "");
-    const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
-    if (callControlId && to === MCTB_PLATFORM_DEMO_E164 && forwardedFrom) {
-      const { resolveMctbTargetWorkspaceForInboundCall } = await import(
-        "@/lib/mctb/onboarding/demo-workspace-target"
-      );
-      const callerE164 = String(eventPayload.from || "").trim();
-      const target = await resolveMctbTargetWorkspaceForInboundCall({
-        callerE164,
-        businessE164: to,
-        forwardedFrom,
-      });
-      if (target.workspaceId) {
-        const { startImmediate571ForwardGather } = await import(
-          "@/lib/smart-routing/platform-consent-fast-path"
-        );
-        await startImmediate571ForwardGather({
-          callControlId,
-          workspaceId: target.workspaceId,
-          flowId:
-            process.env.MCTB_PLATFORM_CONSENT_FLOW_ID?.trim() || "cmt3o902u2l4652654a4y1v3y",
-        });
-      } else {
-        const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
-        await answerCall(callControlId).catch((err) => {
-          console.error("[telnyx/voice] early answer (571 unresolved tenant) failed", {
-            callControlId,
-            err,
-          });
-        });
-      }
-    } else if (callControlId && to === MCTB_PLATFORM_DEMO_E164) {
-      const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
-      await answerCall(callControlId).catch((err) => {
-        console.error("[telnyx/voice] early answer (571) failed", { callControlId, err });
-      });
-    }
-    }
-  }
 
   const prisma = getPrisma();
 

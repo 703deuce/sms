@@ -217,8 +217,7 @@ async function main() {
   await auditFrozenConfig();
   await auditDatabase();
 
-  runTest("MCTB: sip-event-only", "npm run test:mctb-sip-event-only");
-  runTest("MCTB: event-only", "npm run test:mctb-event-only");
+  runTest("MCTB: final pipeline contract", "npm run test:mctb-final-pipeline-contract");
   runTest("Smart Routing: compiler", "npm run test:smart-routing-compiler");
   runTest("Smart Routing: preprod", "npm run test:smart-routing-preprod");
   runTest("Voicemail: unit", "npm run test:transovo-voicemail");

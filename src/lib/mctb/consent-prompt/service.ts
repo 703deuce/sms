@@ -105,7 +105,7 @@ async function findMctbConsentFlow(workspaceId: string) {
 }
 
 /**
- * MCTB Call Control (mctb-event-only) must not share the line with legacy Smart Routing
+ * MCTB TeXML ingress must not share the line with legacy Smart Routing
  * consent flows. Pause stale SR flows when the active MCTB DID uses sip ingress.
  */
 export async function pauseLegacyMctbSmartRoutingFlows(

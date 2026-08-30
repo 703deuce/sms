@@ -21,7 +21,8 @@ import {
   MCTB_FINAL_PRODUCTION_ENTRY_PATH,
   MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID,
 } from "../src/lib/mctb/texml-ingress/frozen-pipeline";
-import { checkMctbLegacyIngressBlocked } from "../src/lib/mctb/ingress-policy";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 process.env.APP_URL = "https://app.example.com";
 process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
@@ -83,14 +84,16 @@ test("existing_consent TeXML completed status is missed (not human answered)", (
   assert.equal(result.answeredAt, null);
 });
 
-test("production ingress policy blocks legacy by default", () => {
-  const saved = process.env.MCTB_LEGACY_INGRESS_ENABLED;
-  delete process.env.MCTB_LEGACY_INGRESS_ENABLED;
-  const blocked = checkMctbLegacyIngressBlocked("call_control_event_only");
-  assert.ok(blocked);
-  assert.equal(blocked.canonicalIngress, "texml");
-  if (saved === undefined) delete process.env.MCTB_LEGACY_INGRESS_ENABLED;
-  else process.env.MCTB_LEGACY_INGRESS_ENABLED = saved;
+test("legacy ingress routes are removed from the codebase", () => {
+  const removed = [
+    "src/app/api/telnyx/voice/mctb-event-only/route.ts",
+    "src/app/api/telnyx/voice/mctb-voice-bridge/route.ts",
+    "src/lib/mctb/voice-bridge/first-hop.ts",
+    "mctb-sip-adapter/agi/mctb_inbound.py",
+  ];
+  for (const rel of removed) {
+    assert.equal(existsSync(join(process.cwd(), rel)), false, `legacy path still exists: ${rel}`);
+  }
 });
 
 console.log("test-mctb-final-pipeline-contract: ok");

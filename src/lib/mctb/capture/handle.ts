@@ -3,12 +3,12 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { processMissedInboundCall } from "@/lib/agents/missed-call-text-back/process";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import {
-  buildEventOnlyIdempotencyKey,
+  buildMctbCaptureIdempotencyKey,
   evaluateMctbRecoveryEligibility,
-} from "@/lib/mctb/event-only/eligibility";
-import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
+} from "@/lib/mctb/capture/eligibility";
+import { logMctbCapture } from "@/lib/mctb/capture/logging";
 import { buildMctbTexmlTerminalCallInput } from "@/lib/mctb/texml-ingress/texml-call-classification";
-import type { MctbCaptureMode, MctbInboundCallEvent } from "@/lib/mctb/event-only/types";
+import type { MctbInboundCallEvent } from "@/lib/mctb/capture/types";
 
 function buildCallInput(event: MctbInboundCallEvent) {
   if (event.texmlCallStatus || event.callDurationSeconds != null) {
@@ -27,7 +27,7 @@ function buildCallInput(event: MctbInboundCallEvent) {
   };
 }
 
-export type HandleMctbInboundEventResult = {
+export type CaptureMctbMissedCallResult = {
   ok: boolean;
   callEventId?: string;
   missedCallEventId?: string;
@@ -36,6 +36,9 @@ export type HandleMctbInboundEventResult = {
   deduped?: boolean;
   reason?: string;
 };
+
+/** @deprecated Use CaptureMctbMissedCallResult */
+export type HandleMctbInboundEventResult = CaptureMctbMissedCallResult;
 
 async function resolvePhoneNumberId(
   workspaceId: string,
@@ -51,13 +54,13 @@ async function resolvePhoneNumberId(
 }
 
 /**
- * Core MCTB EVENT_ONLY handler — capture metadata, enforce Existing Consent, queue SMS.
- * Never answers, plays audio, or issues Call Control media commands.
+ * Canonical MCTB missed-call capture — TeXML terminal events only.
+ * Records metadata, enforces existing_consent eligibility, queues SMS.
  */
-export async function handleMctbInboundEvent(
+export async function captureMctbMissedCall(
   event: MctbInboundCallEvent,
   input?: { lockWorkspaceId?: string },
-): Promise<HandleMctbInboundEventResult> {
+): Promise<CaptureMctbMissedCallResult> {
   const target = input?.lockWorkspaceId
     ? { workspaceId: input.lockWorkspaceId, isPlatformDemo: false, demoMode: false }
     : await resolveMctbTargetWorkspaceForInboundCall({
@@ -67,7 +70,7 @@ export async function handleMctbInboundEvent(
       });
 
   if (!target.workspaceId) {
-    logMctbEventOnly("workspace_unresolved", {
+    logMctbCapture("workspace_unresolved", {
       caller: event.callerE164,
       transovoNumber: event.transovoNumberE164,
       providerCallId: event.providerCallId,
@@ -83,7 +86,7 @@ export async function handleMctbInboundEvent(
     event.transovoNumberE164,
   );
 
-  logMctbEventOnly("inbound_call_captured", {
+  logMctbCapture("inbound_call_captured", {
     caller: event.callerE164,
     transovoNumber: event.transovoNumberE164,
     businessNumber: businessE164,
@@ -93,7 +96,7 @@ export async function handleMctbInboundEvent(
     hasForwardMetadata: Boolean(event.forwardedFromE164 || event.diversionHeader),
   });
 
-  const idempotencyKey = buildEventOnlyIdempotencyKey(target.workspaceId, event);
+  const idempotencyKey = buildMctbCaptureIdempotencyKey(target.workspaceId, event);
   const prisma = getPrisma();
   const existing = await prisma.missedCallEvent.findUnique({ where: { idempotencyKey } });
   if (existing) {
@@ -165,14 +168,14 @@ export async function handleMctbInboundEvent(
     call: callInput,
   });
 
-  logMctbEventOnly("recovery_sms_queued", {
+  logMctbCapture("recovery_sms_queued", {
     callEventId: result.missedCallEventId,
     workspaceId: target.workspaceId,
     caller: event.callerE164,
     eligible: result.eligible !== false,
     scheduled: result.scheduled === true,
   });
-  logMctbEventOnly("mctb_sms_job_queued", {
+  logMctbCapture("mctb_sms_job_queued", {
     callEventId: result.missedCallEventId,
     workspaceId: target.workspaceId,
     caller: event.callerE164,
@@ -192,11 +195,8 @@ export async function handleMctbInboundEvent(
   };
 }
 
-function resolveCaptureMode(event: MctbInboundCallEvent): MctbCaptureMode {
-  if (event.ingressPath === "texml" || event.texmlCallStatus) return "TEXML";
-  if (event.provider === "TELNYX_SIP" || event.ingressPath === "sip") return "SIP_INGRESS";
-  return "EVENT_ONLY";
-}
+/** @deprecated Use captureMctbMissedCall */
+export const handleMctbInboundEvent = captureMctbMissedCall;
 
 function buildEventMetadata(
   event: MctbInboundCallEvent,
@@ -214,8 +214,8 @@ function buildEventMetadata(
   }
 
   return {
-    captureMode: resolveCaptureMode(event),
-    ingressPath: event.ingressPath || null,
+    captureMode: "TEXML" as const,
+    ingressPath: event.ingressPath || "texml",
     provider: event.provider,
     providerCallId: event.providerCallId,
     providerSessionId: event.providerSessionId || null,
@@ -236,7 +236,6 @@ function buildEventMetadata(
   };
 }
 
-/** Queue wrapper — scheduling is performed inside processMissedInboundCall when eligible. */
 export async function enqueueMctbRecoverySms(input: {
   workspaceId: string;
   missedCallEventId: string;

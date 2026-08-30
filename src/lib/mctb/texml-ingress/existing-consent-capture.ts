@@ -1,7 +1,7 @@
 import "server-only";
 
 import { captureMctbMissedCall } from "@/lib/mctb/capture/missed-call";
-import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
+import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/capture/normalize";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { traceMctbTexml } from "./trace";
 

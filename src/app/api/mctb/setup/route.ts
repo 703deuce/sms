@@ -531,7 +531,7 @@ export async function POST(req: Request) {
 
     if (body.consentMode === "existing_consent") {
       const { recordWorkspaceExistingConsentAttestation } = await import(
-        "@/lib/mctb/event-only/attestation"
+        "@/lib/mctb/capture/attestation"
       );
       try {
         await recordWorkspaceExistingConsentAttestation({
