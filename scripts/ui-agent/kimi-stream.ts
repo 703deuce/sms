@@ -115,9 +115,10 @@ export async function streamKimiChatCompletion(input: {
     let buffer = "";
 
     for await (const chunk of reader) {
-      buffer += Buffer.from(chunk).toString("utf8");
-      if (input.sessionId && buffer.length < 50000) {
-        appendFileSync(kimiSseDebugPath(input.sessionId), buffer, "utf8");
+      const piece = Buffer.from(chunk).toString("utf8");
+      buffer += piece;
+      if (input.sessionId) {
+        appendFileSync(kimiSseDebugPath(input.sessionId), piece, "utf8");
       }
 
       const now = Date.now();
