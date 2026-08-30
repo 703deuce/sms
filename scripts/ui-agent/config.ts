@@ -33,7 +33,11 @@ export const MINIMAL_UI_STACK_CONTEXT = `UI STACK (existing app — do NOT scaff
 - Brand: Transovo (not competitor names/logos)
 - Sandbox only: page.tsx, components/**, mock-data.ts, reference.css
 - Use mock data in mock-data.ts; Cursor integrates into production later`;
-/** @deprecated Use KIMI_BASE_URL */
+
+/** Default Kimi batch instruction — preserve visual fidelity from reference videos. */
+export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate this SlickText screen faithfully in a Transovo-branded sandbox.
+Preserve icons, colors, images/MMS previews, spacing, and interaction patterns from the reference video.
+Keep the Transovo sidebar with all nav links. Use mock data. Do not scaffold a new Next.js project.`;
 export const DEFAULT_KIMI_BASE_URL = KIMI_BASE_URL;
 
 export const VIEWPORT_PRESETS: Record<ViewportPreset, ViewportConfig> = {

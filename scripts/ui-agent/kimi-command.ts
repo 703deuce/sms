@@ -58,7 +58,10 @@ async function collectCurrentMediaForKimi(
   return buildLabeledMedia(labeled);
 }
 
-export async function runKimiCommand(provider: UiVisionProvider, options: CliOptions): Promise<void> {
+export async function runKimiCommand(
+  provider: UiVisionProvider,
+  options: CliOptions,
+): Promise<{ sessionId: string; target: string; fileCount: number }> {
   let session: UiAgentSession;
 
   if (options.sessionId && options.revise) {
@@ -89,7 +92,7 @@ export async function runKimiCommand(provider: UiVisionProvider, options: CliOpt
     writeHandoff(session);
     printKimiTimingReport(session.id);
     printKimiReady(session, build.summary, build.files.length);
-    return;
+    return { sessionId: session.id, target: session.target, fileCount: build.files.length };
   }
 
   if (!options.target) throw new Error("--target is required for ui:kimi");
@@ -206,6 +209,7 @@ export async function runKimiCommand(provider: UiVisionProvider, options: CliOpt
     printKimiReady(session, build.summary, files.length);
     log("preview", kimiUiPreviewPath(session.id));
     log("approve", `npm run ui:approve -- --session ${session.id}`);
+    return { sessionId: session.id, target: session.target, fileCount: files.length };
   } catch (error) {
     session.status = "error";
     updateSession(session);

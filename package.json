@@ -10,6 +10,7 @@
     "ui:analyze": "tsx scripts/ui-agent/index.ts improve",
     "ui:improve": "tsx scripts/ui-agent/index.ts improve",
     "ui:kimi": "tsx scripts/ui-agent/index.ts kimi",
+    "ui:kimi-batch": "tsx scripts/ui-agent/kimi-batch-pages.ts",
     "ui:kimi-benchmark": "tsx scripts/ui-agent/kimi-reasoning-benchmark.ts",
     "ui:refs": "tsx scripts/ui-agent/index.ts refs",
     "ui:approve": "tsx scripts/ui-agent/index.ts approve",

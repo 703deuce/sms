@@ -9,6 +9,8 @@ export type UiReferenceEntry = {
   bucket?: string;
   path: string;
   description?: string;
+  /** Target Transovo route for Kimi batch generation */
+  transovoRoute?: string;
   createdAt: string;
   updatedAt?: string;
 };
