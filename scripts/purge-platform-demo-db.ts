@@ -40,13 +40,23 @@ async function main() {
     if (phone.id === STALE_DEMO_ROW_ID) {
       settings.archivedPlatformDemoRow = true;
       settings.mctbRole = "archived";
+      delete settings.mctbSipIngress;
       const telephony =
         settings.telephony && typeof settings.telephony === "object"
           ? { ...(settings.telephony as Record<string, unknown>) }
           : {};
       telephony.routingMode = "archived";
       settings.telephony = telephony;
-    } else if (settings.mctbRole === "platform_demo") {
+      await prisma.phoneNumber.update({
+        where: { id: phone.id },
+        data: { settingsJson: settings, status: "Released" },
+      });
+      updated += 1;
+      console.log("archived+released", phone.id, phone.e164, phone.workspaceId);
+      continue;
+    }
+
+    if (settings.mctbRole === "platform_demo") {
       settings.mctbRole = "customer_mctb";
     }
 

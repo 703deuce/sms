@@ -6,7 +6,7 @@ import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 import { isMctbTexmlVoiceIngress } from "@/lib/mctb/sip-ingress/sync";
 import { traceMctbDebug } from "@/lib/mctb/debug";
 import { mctbTexmlE164Variants } from "./e164-lookup";
-import { MCTB_TEXML_ROUTING_MODE } from "./constants";
+import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "./constants";
 
 type PhoneRow = {
   id: string;
@@ -17,14 +17,30 @@ type PhoneRow = {
   status: string | null;
 };
 
+function readSettings(settingsJson: unknown): Record<string, unknown> {
+  return settingsJson && typeof settingsJson === "object" && !Array.isArray(settingsJson)
+    ? (settingsJson as Record<string, unknown>)
+    : {};
+}
+
 function telephonyRoutingMode(settingsJson: unknown): string {
-  const settings =
-    settingsJson && typeof settingsJson === "object" && !Array.isArray(settingsJson)
-      ? (settingsJson as Record<string, unknown>)
-      : {};
+  const settings = readSettings(settingsJson);
   const telephony = settings.telephony as Record<string, unknown> | undefined;
   const provisioning = settings.provisioning as Record<string, unknown> | undefined;
-  return String(telephony?.routingMode || provisioning?.routingMode || "").toLowerCase();
+  return String(
+    telephony?.routingMode ||
+      provisioning?.routingMode ||
+      settings.routingOwner ||
+      "",
+  ).toLowerCase();
+}
+
+export function isArchivedIngressRow(settingsJson: unknown): boolean {
+  const settings = readSettings(settingsJson);
+  if (settings.archivedPlatformDemoRow === true) return true;
+  const role = String(settings.mctbRole || "").toLowerCase();
+  if (role === "archived" || role === "platform_demo") return true;
+  return telephonyRoutingMode(settingsJson) === "archived";
 }
 
 function isReleased(status: string | null | undefined): boolean {
@@ -41,6 +57,7 @@ function isBlockedIngressRoutingMode(routingMode: string): boolean {
 
 async function scoreIngressPhoneRow(phone: PhoneRow): Promise<number> {
   if (isReleased(phone.status)) return -1000;
+  if (isArchivedIngressRow(phone.settingsJson)) return -1000;
 
   const routingMode = telephonyRoutingMode(phone.settingsJson);
   const caps = readPhoneCapabilities({ settingsJson: phone.settingsJson });
@@ -48,7 +65,10 @@ async function scoreIngressPhoneRow(phone: PhoneRow): Promise<number> {
 
   if (routingMode === MCTB_TEXML_ROUTING_MODE) score += 200;
   if (isMctbTexmlVoiceIngress(phone.settingsJson)) score += 100;
+  const settings = readSettings(phone.settingsJson);
+  if (settings.routingOwner === MCTB_TEXML_ROUTING_OWNER) score += 80;
   if (caps.mctbEnabled) score += 40;
+  if (phone.providerNumberId) score += 60;
   if (isBlockedIngressRoutingMode(routingMode)) score -= 500;
 
   const ownerConfig = await loadMissedCallTextConfig(phone.workspaceId);
@@ -56,7 +76,6 @@ async function scoreIngressPhoneRow(phone: PhoneRow): Promise<number> {
     score += 150;
   }
 
-  const settings = (phone.settingsJson || {}) as Record<string, unknown>;
   if (settings.platformDemo === true) score -= 300;
   if (String(settings.mctbRole || "").toLowerCase() === "platform_demo") score -= 100;
 
@@ -93,7 +112,13 @@ export async function resolveBestMctbIngressPhoneRow(
     })),
   );
 
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const aLive = Boolean(a.phone.providerNumberId);
+    const bLive = Boolean(b.phone.providerNumberId);
+    if (aLive !== bLive) return aLive ? -1 : 1;
+    return 0;
+  });
   const best = scored[0];
   if (!best || best.score < 0) return null;
 

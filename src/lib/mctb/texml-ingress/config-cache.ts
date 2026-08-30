@@ -11,7 +11,7 @@ import {
   type MctbTexmlIngressBranch,
 } from "./constants";
 import { mctbTexmlE164Variants } from "./e164-lookup";
-import { resolveBestMctbIngressPhoneRow } from "./resolve-phone-row";
+import { resolveBestMctbIngressPhoneRow, isArchivedIngressRow } from "./resolve-phone-row";
 
 export type MctbTexmlIngressConfig = {
   workspaceId: string;
@@ -35,7 +35,12 @@ function telephonyRoutingMode(settingsJson: unknown): string {
       : {};
   const telephony = settings.telephony as Record<string, unknown> | undefined;
   const provisioning = settings.provisioning as Record<string, unknown> | undefined;
-  return String(telephony?.routingMode || provisioning?.routingMode || "").toLowerCase();
+  return String(
+    telephony?.routingMode ||
+      provisioning?.routingMode ||
+      settings.routingOwner ||
+      "",
+  ).toLowerCase();
 }
 
 function resolveBranch(routingMode: string, mctbEnabled: boolean): MctbTexmlIngressBranch | null {
@@ -66,6 +71,7 @@ export async function resolveMctbTexmlIngressConfig(
   const prisma = getPrisma();
   const phone = await resolveBestMctbIngressPhoneRow(toE164);
   if (!phone?.e164) return null;
+  if (isArchivedIngressRow(phone.settingsJson)) return null;
 
   const caps = readPhoneCapabilities({ settingsJson: phone.settingsJson });
   const routingMode = telephonyRoutingMode(phone.settingsJson);
