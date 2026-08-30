@@ -2,7 +2,10 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
-import { unroutePhoneFromMctbTexmlIngress } from "./texml-route";
+import {
+  isMctbTexmlIngressConnection,
+  unroutePhoneFromMctbTexmlIngress,
+} from "./texml-route";
 
 function telephonyRecord(settingsJson: unknown): Record<string, unknown> {
   const settings =
@@ -13,6 +16,10 @@ function telephonyRecord(settingsJson: unknown): Record<string, unknown> {
   return telephony && typeof telephony === "object" && !Array.isArray(telephony)
     ? (telephony as Record<string, unknown>)
     : {};
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
 /** Clear MCTB TeXML ingress metadata and restore Telnyx routing when possible. */
@@ -35,20 +42,59 @@ export async function releaseMctbTexmlIngressFromPhone(input: {
   if (!phone) return { ok: false, e164: null, error: "phone_not_found" };
 
   const telephony = telephonyRecord(phone.settingsJson);
-  const restoreConnectionId = String(telephony.mctbTexmlPreviousConnectionId || "").trim();
+  let restoreConnectionId = String(telephony.mctbTexmlPreviousConnectionId || "").trim();
+  let liveConnectionId: string | null = null;
   let telnyxRestored = false;
 
-  if (phone.providerNumberId && restoreConnectionId) {
-    try {
-      const unrouted = await unroutePhoneFromMctbTexmlIngress({
+  if (phone.providerNumberId) {
+    const { telnyxRequest } = await import("@/lib/messaging/telnyx/client");
+    const before = await telnyxRequest<{ data?: Record<string, unknown> }>(
+      `/phone_numbers/${encodeURIComponent(phone.providerNumberId)}`,
+    );
+    liveConnectionId =
+      String((asRecord(before.data) || asRecord(before) || {}).connection_id || "") || null;
+
+    if (
+      !restoreConnectionId &&
+      liveConnectionId &&
+      !isMctbTexmlIngressConnection(liveConnectionId)
+    ) {
+      telnyxRestored = true;
+    }
+
+    if (
+      !restoreConnectionId &&
+      liveConnectionId &&
+      isMctbTexmlIngressConnection(liveConnectionId)
+    ) {
+      return {
+        ok: false,
         e164: phone.e164,
-        providerNumberId: phone.providerNumberId,
-        restoreConnectionId,
-      });
-      telnyxRestored = unrouted.ok;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, e164: phone.e164, error: message || "telnyx_unroute_failed" };
+        telnyxRestored: false,
+        error: "missing_restore_connection_id",
+      };
+    }
+
+    if (restoreConnectionId) {
+      try {
+        const unrouted = await unroutePhoneFromMctbTexmlIngress({
+          e164: phone.e164,
+          providerNumberId: phone.providerNumberId,
+          restoreConnectionId,
+        });
+        telnyxRestored = unrouted.ok;
+        if (!unrouted.ok) {
+          return {
+            ok: false,
+            e164: phone.e164,
+            telnyxRestored: false,
+            error: "telnyx_unroute_failed",
+          };
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, e164: phone.e164, telnyxRestored: false, error: message || "telnyx_unroute_failed" };
+      }
     }
   }
 

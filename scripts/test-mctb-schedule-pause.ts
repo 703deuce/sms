@@ -8,7 +8,9 @@ import {
   buildMctbPauseMutation,
   isMctbSchedulePaused,
   isPauseUntilActive,
+  isWithinMctbSendWindow,
   normalizeMctbPauseState,
+  previewMctbPauseState,
   resolveMctbPauseKind,
   type MctbScheduleSettings,
 } from "../src/lib/mctb/schedule";
@@ -108,6 +110,53 @@ assert.equal(
   resolveMctbPauseKind({ ...base, pauseUntil: futurePause }, { enabled: true }, now),
   "timed",
   "resolve timed pause kind",
+);
+
+const previewExpired = previewMctbPauseState(
+  { ...base, pauseUntil: pastPause },
+  { enabled: true },
+  now,
+);
+assert.equal(previewExpired.pauseUntil, null, "preview clears expired pauseUntil without persisting");
+assert.equal(previewExpired.manuallyPaused, false, "preview does not migrate enabled=false on read");
+
+const afterHoursWeekly = {
+  scheduleMode: "after_hours" as const,
+  weeklySchedule: {
+    timezone: "America/New_York",
+    days: [
+      { day: 0, enabled: true, startTime: "09:00", endTime: "17:00" },
+      { day: 1, enabled: true, startTime: "09:00", endTime: "17:00" },
+      { day: 2, enabled: true, startTime: "09:00", endTime: "17:00" },
+      { day: 3, enabled: true, startTime: "09:00", endTime: "17:00" },
+      { day: 4, enabled: true, startTime: "09:00", endTime: "17:00" },
+      { day: 5, enabled: true, startTime: "09:00", endTime: "17:00" },
+      { day: 6, enabled: true, startTime: "09:00", endTime: "17:00" },
+    ],
+  },
+  pauseUntil: null,
+  manuallyPaused: false,
+};
+const runtimeConfig = {
+  enabled: true,
+  businessHoursOnly: false,
+  allowedStartTime: "22:00",
+  allowedEndTime: "23:00",
+  timezone: "America/New_York",
+} as import("../src/lib/agents/missed-call-text-back/types").MissedCallTextConfigRecord;
+
+// Wednesday 10:00 ET — inside weekly 09-17 business window → after_hours blocks send
+assert.equal(
+  isWithinMctbSendWindow(new Date("2026-08-26T14:00:00.000Z"), runtimeConfig, afterHoursWeekly),
+  false,
+  "after_hours blocks send during weekly business window",
+);
+
+// Wednesday 20:00 ET — outside weekly 09-17 → after_hours allows send
+assert.equal(
+  isWithinMctbSendWindow(new Date("2026-08-27T00:00:00.000Z"), runtimeConfig, afterHoursWeekly),
+  true,
+  "after_hours allows send outside weekly business window",
 );
 
 console.log("test-mctb-schedule-pause: ok");

@@ -208,6 +208,24 @@ export function normalizeMctbPauseState(
   return { settings: nextSettings, config: nextConfig, changed };
 }
 
+/** Read-only pause/schedule view for GET — never persists side effects. */
+export function previewMctbPauseState(
+  settings: MctbScheduleSettings,
+  config: Pick<MissedCallTextConfigRecord, "enabled">,
+  now = new Date(),
+): MctbScheduleSettings {
+  let pauseUntil = settings.pauseUntil;
+  if (pauseUntil && !isPauseUntilActive(pauseUntil, now)) {
+    pauseUntil = null;
+  }
+  return {
+    scheduleMode: settings.scheduleMode,
+    weeklySchedule: settings.weeklySchedule,
+    pauseUntil,
+    manuallyPaused: settings.manuallyPaused || (!config.enabled && !pauseUntil),
+  };
+}
+
 export function isMctbSchedulePaused(
   settings: MctbScheduleSettings,
   config: Pick<MissedCallTextConfigRecord, "enabled">,
@@ -233,7 +251,10 @@ export function isWithinMctbSendWindow(
   if (settings.scheduleMode === "always_on") return true;
 
   const weekly =
-    settings.scheduleMode === "custom" && settings.weeklySchedule
+    settings.weeklySchedule &&
+    (settings.scheduleMode === "custom" ||
+      settings.scheduleMode === "business_hours" ||
+      settings.scheduleMode === "after_hours")
       ? settings.weeklySchedule
       : deriveWeeklyFromConfig(config);
 

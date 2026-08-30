@@ -30,6 +30,7 @@ import {
   defaultWeeklySchedule,
   readMctbScheduleFromCustomFields,
   isMctbSchedulePaused,
+  previewMctbPauseState,
   normalizeMctbPauseState,
   buildMctbPauseMutation,
   isMctbSetupPausing,
@@ -136,35 +137,7 @@ export async function GET() {
       : {};
 
   const scheduleSettings = readMctbScheduleFromCustomFields(customCfg, runtime);
-  const normalizedPause = normalizeMctbPauseState(scheduleSettings, runtime);
-  if (normalizedPause.changed) {
-    const mctb =
-      customCfg.mctb && typeof customCfg.mctb === "object"
-        ? (customCfg.mctb as Record<string, unknown>)
-        : {};
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        customFieldsConfig: {
-          ...customCfg,
-          mctb: {
-            ...mctb,
-            pauseUntil: normalizedPause.settings.pauseUntil,
-            manuallyPaused: normalizedPause.settings.manuallyPaused,
-          },
-        },
-      },
-    });
-    if (normalizedPause.config.enabled !== runtime.enabled) {
-      await updateMissedCallTextConfig({
-        workspaceId,
-        patch: { enabled: normalizedPause.config.enabled },
-        source: "mctb_schedule_normalize",
-      });
-      runtime.enabled = normalizedPause.config.enabled;
-    }
-  }
-  const effectiveSchedule = normalizedPause.settings;
+  const effectiveSchedule = previewMctbPauseState(scheduleSettings, runtime);
   const pauseKind = resolveMctbPauseKind(effectiveSchedule, runtime);
 
   return NextResponse.json({
@@ -389,19 +362,33 @@ export async function POST(req: Request) {
     previousPhoneId &&
     (body.phoneNumberId === null ||
       (body.phoneNumberId && body.phoneNumberId !== previousPhoneId));
+  let deprovision: { ok: boolean; e164: string | null; error?: string; telnyxRestored?: boolean } | null =
+    null;
   if (releasingPreviousPhone) {
     const { releaseMctbTexmlIngressFromPhone } = await import(
       "@/lib/mctb/texml-ingress/deprovision"
     );
     const released = await releaseMctbTexmlIngressFromPhone({
       phoneNumberId: previousPhoneId,
+      workspaceId,
     }).catch((err) => ({
       ok: false,
       e164: null,
       error: err instanceof Error ? err.message : String(err),
     }));
+    deprovision = released;
     if (!released.ok) {
       console.error("[mctb/setup] deprovision previous phone failed", released);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "deprovision_failed",
+          message:
+            "Could not release the previous number from MCTB routing. The old number may still receive MCTB calls.",
+          deprovision: released,
+        },
+        { status: 409 },
+      );
     }
   }
   if (phoneId) {
@@ -612,6 +599,7 @@ export async function POST(req: Request) {
       },
       solution: saved,
       sipProvision,
+      deprovision,
       tenantBinding,
       consentSync,
       attestation,
