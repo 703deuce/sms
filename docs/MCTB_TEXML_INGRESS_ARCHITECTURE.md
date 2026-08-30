@@ -149,10 +149,10 @@ Re-assigns Amy via `restoreTexmlInboundRoute` + `publishVoiceAgent`. Does not de
 
 | Test | Status | Notes |
 |------|--------|-------|
-| A — Say/Pause/Hangup | **Ready for PSTN** | Hotfix: `mctb-consent?say-only` on Telnyx; post-deploy: `mctb-entry` + `MCTB_TEXML_CERT_MODE=MINIMAL` |
-| B — Gather no SMS | Pending PSTN | After A passes |
+| A — Say/Pause/Hangup | **PASS (PSTN)** | Interim `mctb-consent?say-only` on Telnyx — caller heard diagnostic Say on conditional forward (~01:54 UTC) |
+| B — Gather no SMS | Pending PSTN | After deploy: `MCTB_TEXML_CERT_MODE=B` on `mctb-entry` |
 | C — Consent + SMS enqueue | Pending PSTN | After B passes |
-| D — Full production | Pending PSTN | Default |
+| D — Full production | Pending PSTN | Default `existing_consent` on ws_1 |
 
 _Update this table after real conditional-forward calls._
 
