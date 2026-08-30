@@ -77,6 +77,8 @@ export function buildMctbConsentInboundTexml(
     promptMode?: MctbConsentTexmlPromptMode;
     /** Original ?prompt= query value (cert-minimal, say-only, etc.). */
     requestPrompt?: string | null;
+    /** Cert stage — appended to Gather callback (?cert=B) so no env/redeploy needed. */
+    certMode?: string | null;
     /** Gather callback route segment (default mctb-consent). */
     gatherBasePath?: "mctb-consent" | "mctb-entry";
   },
@@ -108,6 +110,8 @@ export function buildMctbConsentInboundTexml(
   actionUrl.searchParams.set("event", "gather");
   actionUrl.searchParams.set("path", "texml_mctb_ingress");
   if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
+  const cert = options?.certMode?.trim();
+  if (cert && cert !== "D") actionUrl.searchParams.set("cert", cert);
   const gatherActionUrl = actionUrl.toString();
 
   const promptInner =

@@ -105,6 +105,7 @@ function scheduleDemoCallDetect(input: {
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
+    const certMode = resolveMctbTexmlCertMode(url.searchParams.get("cert"));
     const event = url.searchParams.get("event") || "inbound";
     const fields = await parseFields(request);
 
@@ -138,13 +139,11 @@ export async function POST(request: Request) {
           forwardedFrom: forwardedFrom || null,
           hasDiversionHeader,
           consentPath,
-          certMode: resolveMctbTexmlCertMode(),
+          certMode,
         }),
       );
 
-      const certMode = resolveMctbTexmlCertMode();
-
-      if (!certModeSkipsSms()) {
+      if (!certModeSkipsSms(certMode)) {
         try {
           const target = await resolveInboundTarget({ from, to, forwardedFrom });
           const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
@@ -197,7 +196,7 @@ export async function POST(request: Request) {
               eventMetadata: {
                 ...consentMetadata,
                 certMode,
-                testSms: certModeUsesTestSms(),
+                testSms: certModeUsesTestSms(certMode),
               },
             });
             traceMctbTexml("MCTB_SMS_ACCEPTED", {

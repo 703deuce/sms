@@ -7,6 +7,7 @@ import {
 } from "@/lib/mctb/consent-prompt/texml-response";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import {
+  certModeForcesPress1Gather,
   certModeSkipsConsentBackend,
   isMinimalCertMode,
   resolveMctbTexmlCertMode,
@@ -72,13 +73,14 @@ function pick(fields: Record<string, string>, ...keys: string[]): string {
  */
 export async function POST(request: Request) {
   const started = Date.now();
+  const requestUrl = new URL(request.url);
   try {
     const fields = await parseFields(request);
     const from = pick(fields, "From", "from", "Caller");
     const to = pick(fields, "To", "to", "Called");
     const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
     const connectionId = pick(fields, "ConnectionId", "connection_id");
-    const certMode = resolveMctbTexmlCertMode();
+    const certMode = resolveMctbTexmlCertMode(requestUrl.searchParams.get("cert"));
 
     traceMctbTexml("MCTB_INGRESS", {
       to,
@@ -124,7 +126,7 @@ export async function POST(request: Request) {
 
     const consentMode = config?.consentMode || "press_1";
 
-    if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
+    if (consentMode === MCTB_CONSENT_MODE_EXISTING && !certModeForcesPress1Gather(certMode)) {
       traceMctbTexml("MCTB_TEXML_RETURNED", {
         branch: "existing_consent",
         latencyMs: Date.now() - started,
@@ -153,6 +155,7 @@ export async function POST(request: Request) {
     const built = buildMctbConsentInboundTexml(forwardedFrom, {
       promptMode,
       gatherBasePath: "mctb-consent",
+      certMode: certMode === "D" ? null : certMode,
     });
 
     traceMctbTexml("MCTB_TEXML_RETURNED", {
@@ -167,7 +170,7 @@ export async function POST(request: Request) {
       routingMode: config?.routingMode,
     });
 
-    if (!certModeSkipsConsentBackend() && from && config?.workspaceId) {
+    if (!certModeSkipsConsentBackend(certMode) && from && config?.workspaceId) {
       void import("@/lib/mctb/consent-prompt/texml-inbound-call-event").then(
         ({ runMctbConsentTexmlDemoCallDetect }) =>
           runMctbConsentTexmlDemoCallDetect({

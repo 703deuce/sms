@@ -78,14 +78,23 @@ Branch at ingress:
 
 ---
 
-## 6. Certification modes (`MCTB_TEXML_CERT_MODE`)
+## 6. Certification modes (`?cert=` on Telnyx voice_url)
+
+**No env vars or redeploy needed** after this code is live. Patch Telnyx only:
+
+```bash
+npx tsx scripts/set-866-mctb-cert-mode.ts A   # Say "Test successful."
+npx tsx scripts/set-866-mctb-cert-mode.ts B   # Gather + press 1, no SMS
+npx tsx scripts/set-866-mctb-cert-mode.ts C   # Gather + consent + enqueue SMS
+npx tsx scripts/set-866-mctb-cert-mode.ts D   # Full production (default)
+```
 
 | Mode | Behavior |
 |------|----------|
 | **A** | Say + Pause + Hangup (no Gather, no SMS) |
 | **B** | Gather + press 1 + "Thank you" (no SMS backend) |
 | **C** | Gather + consent + enqueue SMS (production pipeline) |
-| **D** | Full production (default) |
+| **D** | Full production (default when no `?cert=`) |
 
 Run real PSTN conditional-forward tests for each mode before declaring pass.
 
@@ -150,9 +159,9 @@ Re-assigns Amy via `restoreTexmlInboundRoute` + `publishVoiceAgent`. Does not de
 | Test | Status | Notes |
 |------|--------|-------|
 | A — Say/Pause/Hangup | **PASS (PSTN)** | `mctb-entry` on prod — caller heard "Test successful." on conditional forward (~02:05 UTC) |
-| B — Gather no SMS | Pending PSTN | After deploy: `MCTB_TEXML_CERT_MODE=B` on `mctb-entry` |
-| C — Consent + SMS enqueue | Pending PSTN | After B passes |
-| D — Full production | Pending PSTN | Default `existing_consent` on ws_1 |
+| B — Gather no SMS | Pending PSTN | `npx tsx scripts/set-866-mctb-cert-mode.ts B` (no rebuild) |
+| C — Consent + SMS enqueue | Pending PSTN | `set-866-mctb-cert-mode.ts C` |
+| D — Full production | Pending PSTN | `set-866-mctb-cert-mode.ts D` |
 
 _Update this table after real conditional-forward calls._
 
