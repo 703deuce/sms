@@ -170,7 +170,7 @@ export function buildMctbCertPlayOnlyTexml(): string {
   return `<Play>${escapeXml(audioUrl)}</Play><Pause length="2"/><Hangup/>`;
 }
 
-/** existing_consent / paused — voicemail greeting then Record (SMS only after recording saved). */
+/** existing_consent / paused — voicemail greeting then Record (SMS on hangup when active; recording optional). */
 export function buildMctbVoicemailGreetingTexml(input: {
   playUrl: string | null;
   sayText: string | null;

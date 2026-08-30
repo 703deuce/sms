@@ -198,33 +198,13 @@ export async function handleTexmlStatusCallback(request: Request) {
         const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
         const mode = await loadMctbConsentMode(pnMctb.workspaceId).catch(() => "press_1" as const);
         if (mode === MCTB_CONSENT_MODE_EXISTING) {
-          const callSid = pick(
-            eventPayload.call_control_id,
-            eventPayload.CallSid,
-            eventPayload.call_sid,
+          const { scheduleMctbTexmlExistingConsentCapture } = await import(
+            "@/lib/mctb/texml-ingress/existing-consent-capture"
           );
-          const { wasMctbTexmlVoicemailRecorded } = await import(
-            "@/lib/mctb/texml-ingress/voicemail-session"
-          );
-          if (callSid && wasMctbTexmlVoicemailRecorded(callSid)) {
-            const { scheduleMctbTexmlExistingConsentCapture } = await import(
-              "@/lib/mctb/texml-ingress/existing-consent-capture"
-            );
-            scheduleMctbTexmlExistingConsentCapture({
-              eventPayload,
-              workspaceId: pnMctb.workspaceId,
-            });
-          } else {
-            console.log(
-              JSON.stringify({
-                source: "texml-status",
-                event: "existing_consent_sms_skipped",
-                reason: "voicemail_not_recorded",
-                callSid: callSid || null,
-                workspaceId: pnMctb.workspaceId,
-              }),
-            );
-          }
+          scheduleMctbTexmlExistingConsentCapture({
+            eventPayload,
+            workspaceId: pnMctb.workspaceId,
+          });
         }
       }
       await prisma.providerWebhookEvent.update({

@@ -37,7 +37,7 @@ Carrier CFNA → customer DID (e.g. +18663464256)
         └── existing_consent → <Play voicemail greeting> + <Record>
                                → POST /api/telnyx/voice/mctb-texml-voicemail (recording saved)
                                → POST /api/telnyx/voice/texml-status (hangup)
-                               → existing-consent capture → MCTB SMS (only if recording saved)
+                               → existing-consent capture → MCTB SMS (any completed call; eligibility may block if paused)
 ```
 
 **Not in this pipeline:** LiveKit SIP, FQDN ingress, AI receptionist on the MCTB DID, Smart Routing after-hours steal, Press-1-only removal.
@@ -69,8 +69,8 @@ Carrier CFNA → customer DID (e.g. +18663464256)
 | Gather | None — no press 1 |
 | Record | `<Record>` collects caller voicemail → transcribe + AI summary |
 | Hangup | After greeting + optional message |
-| SMS | `texml-status` terminal hangup → capture **only if** `wasMctbTexmlVoicemailRecorded` |
-| Paused schedule | Voicemail still plays; SMS blocked by eligibility (same as Call Control path) |
+| SMS | `texml-status` terminal hangup → `scheduleMctbTexmlExistingConsentCapture` → auto SMS (missed call = text; voicemail optional) |
+| Paused schedule | Voicemail still plays; SMS blocked by eligibility |
 | Cert replay | `cert=D` + `consentMode=existing_consent` on workspace |
 
 **PSTN cert:** PASS — conditional forward, heard voicemail greeting, hangup, SMS auto-sent.
