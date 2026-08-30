@@ -13,6 +13,7 @@ import {
   VOICE_RESOURCE_TYPES,
 } from "@/lib/voice/sms/voice-resource-config";
 import { persistCallSessionFlags } from "@/lib/voice/call-session-context";
+import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
 import {
   workflowToolResponse,
   type WorkflowToolResponse,
@@ -45,7 +46,7 @@ export async function executeSendResource(input: {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findFirst({
     where: { id: input.callId, workspaceId: input.workspaceId },
-    select: { fromE164: true, agentId: true, metadata: true },
+    select: { fromE164: true, toE164: true, agentId: true, metadata: true },
   });
   if (!call?.fromE164 || call.fromE164 === "unknown") {
     return workflowToolResponse({
@@ -129,9 +130,14 @@ export async function executeSendResource(input: {
   });
 
   try {
+    const fromE164 = await resolveVoiceOutboundSmsFrom({
+      workspaceId: input.workspaceId,
+      calledE164: call.toE164,
+    });
     await sendQuickSms({
       workspaceId: input.workspaceId,
       to: call.fromE164,
+      from: fromE164,
       body: resolved.body,
       idempotencyKey: resolved.idempotencyKey,
     });

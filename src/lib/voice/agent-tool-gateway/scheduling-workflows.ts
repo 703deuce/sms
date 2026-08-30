@@ -362,11 +362,14 @@ export async function runSendSms(ctx: AgentToolContext, raw: Record<string, unkn
   let body = String(raw.body || "").trim();
   let idempotencyKey = `sms-${operationId}`;
 
+  const call = ctx.callId
+    ? await getPrisma().voiceCall.findFirst({
+        where: { id: ctx.callId, workspaceId: ctx.workspaceId },
+        select: { fromE164: true, toE164: true, agentId: true },
+      })
+    : null;
+
   if (raw.template_id && ctx.callId) {
-    const call = await getPrisma().voiceCall.findFirst({
-      where: { id: ctx.callId, workspaceId: ctx.workspaceId },
-      select: { fromE164: true, agentId: true },
-    });
     const agent = call?.agentId
       ? await getPrisma().voiceAgent.findFirst({
           where: { id: call.agentId },
@@ -399,9 +402,15 @@ export async function runSendSms(ctx: AgentToolContext, raw: Record<string, unkn
   }
 
   try {
+    const { resolveVoiceOutboundSmsFrom } = await import("@/lib/voice/sms/voice-outbound-sms-from");
+    const fromE164 = await resolveVoiceOutboundSmsFrom({
+      workspaceId: ctx.workspaceId,
+      calledE164: call?.toE164,
+    });
     const result = await sendQuickSms({
       workspaceId: ctx.workspaceId,
       to,
+      from: fromE164,
       body,
       idempotencyKey,
     });

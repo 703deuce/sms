@@ -130,7 +130,7 @@ Backend handlers preserved for rollback and non-workflow agents.
 
 | Tool | Model provides | Runtime owns |
 |------|----------------|--------------|
-| `send_resource` | `resource_type` | `workspace_id`, `call_id`, `caller_phone`, `sender_number`, approved URL, template, idempotency key |
+| `send_resource` | `resource_type` | `workspace_id`, `call_id`, `caller_phone`, **`from` = +15714073615 (571)**, approved URL, template, idempotency key |
 | `search_business_details` | `query` | `workspace_id`, `agent_id`, RAG buckets, auth |
 | `transfer` | target selection (if multiple) | destination numbers, hours policy |
 | `hangup` | — | call control |
@@ -302,6 +302,12 @@ Live call certification (26-scenario suite) requires production republish + real
 2. Run `amy-minimum-side-effect-republish.ts` (flat v54 surface).
 3. Verify audit with `AMY_CONVERSATION_WORKFLOW` unset (expects flat minimum tools).
 4. Telnyx assistant snapshot (model, tools, instructions) recorded before workflow republish.
+
+---
+
+## SMS sender (866 inbound → 571 outbound)
+
+Inbound calls on **+18663464256**; outbound resource texts send from **+15714073615** (HP-certified 571 A2P). Runtime resolves this via `resolveVoiceOutboundSmsFrom` — never exposed to the model. Override: `VOICE_OUTBOUND_SMS_FROM_E164`.
 
 ---
 
