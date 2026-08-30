@@ -52,7 +52,7 @@ public/voicemail/
 .livekit-fqdn-direct-mctb-backup.json
 .ui-agent/references/**
 .ui-agent/sessions/**
-# Kimi generated sandboxes are committed (batch output) — do not ignore generated/**
+.ui-agent/generated/**
 .ui-agent/uploads/**
 .ui-agent/cache/**
 !.ui-agent/references.json
@@ -60,3 +60,4 @@ public/voicemail/
 !.ui-agent/sessions/.gitkeep
 !.ui-agent/generated/.gitkeep
 !.ui-agent/batch/**
+# Kimi source drafts in src/kimi-drafts/ are tracked (not ignored)

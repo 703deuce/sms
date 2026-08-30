@@ -9,6 +9,8 @@ export const UI_AGENT_REFERENCES_DIR = join(UI_AGENT_DIR, "references");
 export const UI_AGENT_REPORTS_DIR = join(UI_AGENT_DIR, "reports");
 export const UI_AGENT_SESSIONS_DIR = join(UI_AGENT_DIR, "sessions");
 export const UI_AGENT_GENERATED_DIR = join(UI_AGENT_DIR, "generated");
+/** Git-tracked Kimi source — survives ephemeral Cloud Agent VMs. */
+export const KIMI_DRAFTS_DIR = join(REPO_ROOT, "src", "kimi-drafts");
 export const UI_AGENT_CURRENT_DIR = join(UI_AGENT_DIR, "current");
 export const UI_AGENT_UPLOADS_DIR = join(UI_AGENT_DIR, "uploads");
 export const UI_AGENT_CACHE_DIR = join(UI_AGENT_DIR, "cache");

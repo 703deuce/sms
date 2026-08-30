@@ -21,11 +21,28 @@ import {
   readAllGeneratedSources,
   writeGeneratedFiles,
 } from "./generated-sandbox";
+import { assertKimiOutputPersisted, persistKimiGeneratedSource } from "./kimi-persist";
 import { log } from "./logger";
 import { initProgress, markProgressError, markProgressReady, progressTailPath, updateProgress } from "./progress";
 import { startKimiTiming, markKimiTiming, printKimiTimingReport } from "./kimi-timing";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
+
+function finishKimiSession(
+  session: UiAgentSession,
+  referenceVideoNames: string[],
+  build: { summary?: string; files: { path: string }[] },
+): { sessionId: string; target: string; fileCount: number } {
+  persistKimiGeneratedSource({
+    sessionId: session.id,
+    targetRoute: session.target,
+    referenceNames: referenceVideoNames,
+    status: "generated",
+  });
+  assertKimiOutputPersisted(session.id, session.target);
+  printKimiReady(session, build.summary, build.files.length);
+  return { sessionId: session.id, target: session.target, fileCount: build.files.length };
+}
 
 function sessionReferenceVideoNames(sessionId: string): string[] {
   const inputPath = join(sessionDir(sessionId), "input.json");
@@ -124,8 +141,7 @@ export async function runKimiCommand(
     updateSession(session);
     writeHandoff(session);
     printKimiTimingReport(session.id);
-    printKimiReady(session, build.summary, build.files.length);
-    return { sessionId: session.id, target: session.target, fileCount: build.files.length };
+    return finishKimiSession(session, referenceVideoNames, build);
   }
 
   if (options.sessionId && options.revise) {
@@ -155,8 +171,7 @@ export async function runKimiCommand(
     updateSession(session);
     writeHandoff(session);
     printKimiTimingReport(session.id);
-    printKimiReady(session, build.summary, build.files.length);
-    return { sessionId: session.id, target: session.target, fileCount: build.files.length };
+    return finishKimiSession(session, sessionReferenceVideoNames(session.id), build);
   }
 
   if (!options.target) throw new Error("--target is required for ui:kimi");
@@ -270,10 +285,10 @@ export async function runKimiCommand(
     printKimiTimingReport(session.id);
 
     const files = listGeneratedFiles(session.id);
-    printKimiReady(session, build.summary, files.length);
     log("preview", kimiUiPreviewPath(session.id));
     log("approve", `npm run ui:approve -- --session ${session.id}`);
-    return { sessionId: session.id, target: session.target, fileCount: files.length };
+    log("draft", `src/kimi-drafts/${session.target.replace(/^\//, "").replace(/\//g, "-")}/${session.id}/`);
+    return finishKimiSession(session, options.referenceVideoNames, build);
   } catch (error) {
     session.status = "error";
     updateSession(session);
