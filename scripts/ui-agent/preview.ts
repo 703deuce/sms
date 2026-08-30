@@ -34,14 +34,29 @@ export function bundleReferencePreview(sessionId: string): string {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Kimi Reference Preview</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react-dom": "https://esm.sh/react-dom@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+      "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime"
+    }
+  }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="./reference.css" />
 </head>
 <body class="bg-background text-foreground">
   <div id="root"></div>
-  <script type="module" src="./preview.bundle.js"></script>
+  <script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import ReferencePage from "./preview.bundle.js";
+    const root = document.getElementById("root");
+    const Page = ReferencePage.default || ReferencePage;
+    if (root) createRoot(root).render(React.createElement(Page));
+  </script>
 </body>
 </html>`;
 
