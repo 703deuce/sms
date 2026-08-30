@@ -96,7 +96,8 @@ npx tsx scripts/set-866-mctb-cert-mode.ts D   # Full production (default)
 | **B2** | `<Play>` production consent audio only + Pause + Hangup (media cert) |
 | **B3** | Gather + `<Play>` + press 1 + thank you (no SMS) |
 | **C** | Gather + consent + enqueue SMS (production pipeline) |
-| **D** | Full production (default when no `?cert=`) |
+| **C3** | Gather + **press-1 consent audio** + press 1 + SMS |
+| **D** | Full production: `press_1` = consent audio + gather; `existing_consent` = **voicemail greeting** + auto SMS |
 
 ```bash
 npx tsx scripts/set-866-mctb-cert-mode.ts B2   # Play-only media cert
