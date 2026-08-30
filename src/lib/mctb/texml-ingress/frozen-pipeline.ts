@@ -18,10 +18,14 @@ export const MCTB_FINAL_PRODUCTION_ENTRY_PATH = "/api/telnyx/voice/mctb-entry" a
 export const MCTB_FINAL_PRODUCTION_CONSENT_PATH = "/api/telnyx/voice/mctb-consent" as const;
 export const MCTB_FINAL_PRODUCTION_CERT_MODE = "D" as const;
 
+/** PSTN-certified reference (866 cert run). */
 export const MCTB_FINAL_REFERENCE_DID = "+18663464256";
 export const MCTB_FINAL_REFERENCE_PHONE_ID = "cmsc3numa1j17084g391t2z5l";
 export const MCTB_FINAL_REFERENCE_WORKSPACE_ID = "ws_1";
 export const MCTB_FINAL_REFERENCE_SMS_PHONE_ID = "cmsgtjms84g6l2h0o255w1e3v";
+/** ws_1 production MCTB voice DID — must use identical Telnyx binding as reference 866. */
+export const MCTB_WS1_PRODUCTION_VOICE_DID = "+15714073615";
+export const MCTB_WS1_PRODUCTION_VOICE_PHONE_ID = "cmsgtjms84g6l2h0o255w1e3v";
 export const MCTB_FINAL_TEXML_APP_ID = MCTB_TEXML_DEFAULT_APP_ID;
 
 /** Sole supported MCTB voice provision entry — TeXML pipeline only. */

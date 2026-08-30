@@ -2,10 +2,12 @@ import "server-only";
 
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
+import { mctbEntryVoiceUrlWithCert } from "./cert-mode";
 import {
   MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
   MCTB_TEXML_DEFAULT_APP_ID,
+  resolveFrozenMctbTexmlAppId,
 } from "./constants";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
 import { preflightTexmlVoiceUrl } from "./preflight";
@@ -112,18 +114,27 @@ export async function routePhoneToTexmlApp(input: {
   invalidateMctbTexmlIngressCache(input.e164);
 }
 
-export async function ensureMctbTexmlApplication(input?: {
+/** Production cert=D voice_url — identical to set-866-mctb-cert-mode.ts D. */
+export function frozenMctbTexmlProductionVoiceUrl(): string {
+  return mctbEntryVoiceUrlWithCert(mctbTexmlEntryVoiceUrl(), "D");
+}
+
+export async function ensureFrozenMctbTexmlApplication(input?: {
   friendlyName?: string;
   preferredAppId?: string | null;
 }): Promise<string> {
   return ensureMctbTexmlApplicationAtVoiceUrl({
-    voiceUrl: mctbTexmlEntryVoiceUrl(),
+    voiceUrl: frozenMctbTexmlProductionVoiceUrl(),
     friendlyName: input?.friendlyName || "MCTB TeXML Ingress",
-    preferredAppId:
-      input?.preferredAppId?.trim() ||
-      process.env.MCTB_TEXML_APP_ID?.trim() ||
-      MCTB_TEXML_DEFAULT_APP_ID,
+    preferredAppId: resolveFrozenMctbTexmlAppId(input?.preferredAppId),
   });
+}
+
+export async function ensureMctbTexmlApplication(input?: {
+  friendlyName?: string;
+  preferredAppId?: string | null;
+}): Promise<string> {
+  return ensureFrozenMctbTexmlApplication(input);
 }
 
 export async function routePhoneToMctbTexmlIngress(input: {
@@ -140,11 +151,11 @@ export async function routePhoneToMctbTexmlIngress(input: {
   matched: boolean;
   path: string;
 }> {
-  const texmlAppId = await ensureMctbTexmlApplication({
+  const voiceUrl = frozenMctbTexmlProductionVoiceUrl();
+  const texmlAppId = await ensureFrozenMctbTexmlApplication({
     friendlyName: input.friendlyName,
     preferredAppId: input.preferredTexmlAppId,
   });
-  const voiceUrl = mctbTexmlEntryVoiceUrl();
 
   const before = await telnyxRequest<{ data?: Record<string, unknown> }>(
     `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
