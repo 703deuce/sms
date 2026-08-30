@@ -17,5 +17,10 @@
  * Number switching updates runtime config (which DID John points at). Sibling
  * numbers remain dual-provisioned; do not call `releaseMctbTexmlIngressFromPhone`
  * on switch.
+ *
+ * **Runtime gates (app only — carrier stays wired):**
+ * - `config.enabled` + `getMctbEntitlement().canSendAutomaticRecovery` → MCTB SMS
+ * - `config.phoneNumberId` must match called DID (`TRIGGER_DISABLED` otherwise)
+ * - `isMessagingReady()` / product entitlements → campaign / blast SMS
  */
 export const MCTB_CARRIER_DUAL_CHANNEL_POLICY_ID = "mctb_carrier_dual_channel_v1" as const;

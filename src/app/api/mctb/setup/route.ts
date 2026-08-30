@@ -358,6 +358,20 @@ export async function POST(req: Request) {
   let consentSync: { ok: boolean; action?: string; error?: string } | null = null;
   let attestation: { ok: boolean; error?: string } | null = null;
   const phoneId = body.phoneNumberId ?? runtimeResult.config.phoneNumberId;
+
+  // Carrier: keep all workspace numbers dual-wired. Switching active DID is config-only.
+  if (phoneNumberChanged && previousPhoneId) {
+    const { ensureDefaultTelnyxMctbAndSmsProvision } = await import(
+      "@/lib/mctb/provisioning/dual-channel-repair"
+    );
+    void ensureDefaultTelnyxMctbAndSmsProvision({
+      workspaceId,
+      phoneNumberId: previousPhoneId,
+    }).catch((err) => {
+      console.warn("[mctb/setup] heal previous number dual-channel provision", err);
+    });
+  }
+
   if (phoneId) {
     let pn = await prisma.phoneNumber.findFirst({
       where: { id: phoneId, workspaceId },
