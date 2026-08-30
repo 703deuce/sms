@@ -41,7 +41,8 @@ export const KIMI_COMPLETENESS_REQUIREMENTS = `COMPLETENESS (non-negotiable):
 - If the video has a list page AND a builder/editor, generate BOTH and wire navigation (CTA → builder, back → list).
 - If the video shows configuration panels for workflow steps, generate them AND the canvas they attach to.
 - Use KIMI_MANIFEST_BEGIN to declare the full file list up front before emitting code.
-- Do not stop after the first page — partial output is a failure.`;
+- Do not stop after the first page — partial output is a failure.
+- Import paths in page.tsx must use ./components/ and ./reference.css (same directory as page.tsx).`;
 
 /** Default Kimi batch instruction — preserve visual fidelity from reference videos. */
 export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate this SlickText screen faithfully in a Transovo-branded sandbox.
