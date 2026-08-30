@@ -69,9 +69,12 @@ async function main() {
     detail: mctb.phoneNumberId || "null",
   });
   checks.push({
-    name: "mctb_sms_sender_571",
-    ok: mctb.smsPhoneNumberId === MCTB_FINAL_REFERENCE_SMS_PHONE_ID,
-    detail: mctb.smsPhoneNumberId || "null",
+    name: "mctb_sms_sender_matches_voice",
+    ok:
+      Boolean(mctb.phoneNumberId) &&
+      (mctb.smsPhoneNumberId === mctb.phoneNumberId ||
+        mctb.smsPhoneNumberId === MCTB_FINAL_REFERENCE_SMS_PHONE_ID),
+    detail: `voice=${mctb.phoneNumberId || "null"} sms=${mctb.smsPhoneNumberId || "null"}`,
   });
 
   const consentMode = await loadMctbConsentMode(WS);

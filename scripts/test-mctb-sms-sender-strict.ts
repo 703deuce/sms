@@ -28,7 +28,7 @@ async function main() {
   });
   assert.ok(sender, "sender should resolve from setup config");
   assert.equal(sender?.e164, "+15714073615");
-  assert.equal(sender?.source, "sms_phone_number_id");
+  assert.equal(sender?.source, "phone_number_id");
 
   const blocked = await resolveMctbSmsSender({
     workspaceId: WS_1,

@@ -248,6 +248,13 @@ export async function POST(req: Request) {
         ? body.enabled
         : undefined;
 
+  const smsPhoneNumberIdForPatch =
+    body.smsPhoneNumberId !== undefined
+      ? body.smsPhoneNumberId
+      : body.phoneNumberId !== undefined
+        ? body.phoneNumberId
+        : undefined;
+
   const runtimeResult = await updateMissedCallTextConfig({
     workspaceId,
     patch: {
@@ -257,7 +264,9 @@ export async function POST(req: Request) {
       message_template_business_hours: body.messageTemplateBusinessHours,
       message_template_after_hours: body.messageTemplateAfterHours,
       phone_number_id: body.phoneNumberId,
-      sms_phone_number_id: body.smsPhoneNumberId,
+      ...(smsPhoneNumberIdForPatch !== undefined
+        ? { sms_phone_number_id: smsPhoneNumberIdForPatch }
+        : {}),
       cooldown_minutes: body.cooldownMinutes,
       trigger_rules: body.triggerRules
         ? {

@@ -86,8 +86,8 @@ Carrier CFNA → customer DID (e.g. +18663464256)
 | TeXML app | `3037587396909598261` |
 | Production `voice_url` | `{APP_URL}/api/telnyx/voice/mctb-entry` (no `?cert=`) |
 | DB routing | `telephony.routingMode=mctb_texml`, `routingOwner=mctb_texml` |
-| Voice trigger | 866 (`config.phoneNumberId`) |
-| SMS sender | 571 `cmsgtjms84g6l2h0o255w1e3v` |
+| Voice + SMS sender | Same DID as Setup (`config.phoneNumberId`) when A2P-approved |
+| Cert note | ws_1 historically used 571 for SMS while 866 was voice-only — not production default |
 | `aiAfterHoursEnabled` | `false` on 866 |
 
 ---

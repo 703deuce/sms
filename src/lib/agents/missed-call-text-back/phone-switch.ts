@@ -67,7 +67,7 @@ export async function activateJohnOnPhoneNumber(input: {
       delay_seconds: delaySeconds,
       initial_message: message,
       phone_number_id: input.phoneNumberId,
-      sms_phone_number_id: input.smsPhoneNumberId ?? undefined,
+      sms_phone_number_id: input.smsPhoneNumberId ?? input.phoneNumberId,
     },
     source: "john_activation",
   });

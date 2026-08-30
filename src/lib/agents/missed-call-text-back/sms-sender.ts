@@ -43,26 +43,27 @@ export async function resolveConfiguredMctbPhoneForWorkspace(
 
 /**
  * Resolve the SMS sender for MCTB using only numbers saved in setup config.
- * Never falls back to messagingRegistration or other workspace inventory.
+ * Production: the voice/setup DID is the A2P sender (`phoneNumberId` wins).
+ * `smsPhoneNumberId` is a legacy override when voice and SMS DIDs were split (cert only).
  */
 export async function resolveMctbSmsSender(input: {
   workspaceId: string;
   config: Pick<MissedCallTextConfigRecord, "phoneNumberId" | "smsPhoneNumberId">;
 }): Promise<MctbSmsSender | null> {
-  const fromSms = await resolveConfiguredMctbPhoneForWorkspace(
-    input.workspaceId,
-    input.config.smsPhoneNumberId,
-  );
-  if (fromSms) {
-    return { ...fromSms, source: "sms_phone_number_id" };
-  }
-
   const fromVoice = await resolveConfiguredMctbPhoneForWorkspace(
     input.workspaceId,
     input.config.phoneNumberId,
   );
   if (fromVoice) {
     return { ...fromVoice, source: "phone_number_id" };
+  }
+
+  const fromSms = await resolveConfiguredMctbPhoneForWorkspace(
+    input.workspaceId,
+    input.config.smsPhoneNumberId,
+  );
+  if (fromSms) {
+    return { ...fromSms, source: "sms_phone_number_id" };
   }
 
   return null;

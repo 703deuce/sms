@@ -62,7 +62,7 @@ export async function resolveInboundPhoneNumberId(input: {
   });
 }
 
-/** MCTB setup sender/trigger line (e.g. A2P 571) — not the voice-only ingress DID. */
+/** MCTB setup voice + SMS line — same DID in production when A2P-approved. */
 export async function resolveMctbConfiguredTriggerPhoneNumberId(
   workspaceId: string,
 ): Promise<string | null> {
@@ -70,7 +70,7 @@ export async function resolveMctbConfiguredTriggerPhoneNumberId(
     "@/lib/agents/missed-call-text-back/config"
   );
   const config = await loadMissedCallTextConfig(workspaceId);
-  return config.smsPhoneNumberId || config.phoneNumberId || null;
+  return config.phoneNumberId || config.smsPhoneNumberId || null;
 }
 
 export function normalizeBusinessE164ForStorage(
