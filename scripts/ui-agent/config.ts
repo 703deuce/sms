@@ -34,10 +34,21 @@ export const MINIMAL_UI_STACK_CONTEXT = `UI STACK (existing app — do NOT scaff
 - Sandbox only: page.tsx, components/**, mock-data.ts, reference.css
 - Use mock data in mock-data.ts; Cursor integrates into production later`;
 
+/** Every reference video may include multiple screens — list + builder + modals + wizards. */
+export const KIMI_COMPLETENESS_REQUIREMENTS = `COMPLETENESS (non-negotiable):
+- Watch the ENTIRE reference video — not just the opening screen.
+- Generate EVERY distinct screen, view, modal, drawer, wizard step, and builder canvas shown.
+- If the video has a list page AND a builder/editor, generate BOTH and wire navigation (CTA → builder, back → list).
+- If the video shows configuration panels for workflow steps, generate them AND the canvas they attach to.
+- Use KIMI_MANIFEST_BEGIN to declare the full file list up front before emitting code.
+- Do not stop after the first page — partial output is a failure.`;
+
 /** Default Kimi batch instruction — preserve visual fidelity from reference videos. */
 export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate this SlickText screen faithfully in a Transovo-branded sandbox.
 Preserve icons, colors, images/MMS previews, spacing, and interaction patterns from the reference video.
-Keep the Transovo sidebar with all nav links. Use mock data. Do not scaffold a new Next.js project.`;
+Keep the Transovo sidebar with all nav links. Use mock data. Do not scaffold a new Next.js project.
+
+${KIMI_COMPLETENESS_REQUIREMENTS}`;
 export const DEFAULT_KIMI_BASE_URL = KIMI_BASE_URL;
 
 export const VIEWPORT_PRESETS: Record<ViewportPreset, ViewportConfig> = {

@@ -30,6 +30,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     approve: false,
     integrate: false,
     revise: false,
+    complete: false,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop", "mobile"],
     maxPasses: 2,
@@ -112,6 +113,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--revise":
         options.revise = true;
         break;
+      case "--complete":
+        options.complete = true;
+        break;
       default:
         if (arg.startsWith("--")) throw new Error(`Unknown argument: ${arg}`);
     }
@@ -131,6 +135,9 @@ PRIMARY (Cursor-controlled):
 
   npm run ui:kimi -- --session <id> --revise --instruction "Tighten row spacing"
 
+  npm run ui:kimi -- --session <id> --complete
+  npm run ui:kimi -- --session <id> --complete --instruction "Focus on workflow builder canvas"
+
 REFERENCE LIBRARY:
   npm run ui:refs
   npm run ui:refs -- --show slicktext-inbox
@@ -144,7 +151,7 @@ WORKFLOW:
 LEGACY ALIASES: ui:improve (= ui:kimi), ui:preview, ui:capture, ui:reference
 
 OPTIONS:
-  --target, --session, --instruction, --revise
+  --target, --session, --instruction, --revise, --complete
   --video, --image (named references from .ui-agent/references.json)
   --video-file, --image-file, --reference-video, --reference-image (local paths)
   --reference-url, --reference-name, --capture-current

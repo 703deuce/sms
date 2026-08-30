@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildReferenceImplementation } from "./reference-builder";
 import { refineReferenceImplementation, screenshotGeneratedReference } from "./refine-reference";
@@ -9,6 +10,7 @@ import {
   writeSessionInput,
 } from "./environment-manifest";
 import { resolveAllReferenceMediaForKimi } from "./reference-resolve";
+import { auditSandboxCompleteness, printCompletenessReport } from "./kimi-completeness";
 import { writeHandoff } from "./handoff";
 import { buildLabeledMedia } from "./reference-media";
 import { captureCurrentSite } from "./capture-current";
@@ -24,6 +26,15 @@ import { initProgress, markProgressError, markProgressReady, progressTailPath, u
 import { startKimiTiming, markKimiTiming, printKimiTimingReport } from "./kimi-timing";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
+
+function sessionReferenceVideoNames(sessionId: string): string[] {
+  const inputPath = join(sessionDir(sessionId), "input.json");
+  if (existsSync(inputPath)) {
+    const input = JSON.parse(readFileSync(inputPath, "utf8")) as { referenceVideoNames?: string[] };
+    if (input.referenceVideoNames?.length) return input.referenceVideoNames;
+  }
+  return [];
+}
 
 async function collectCurrentMediaForKimi(
   options: CliOptions,
@@ -63,6 +74,59 @@ export async function runKimiCommand(
   options: CliOptions,
 ): Promise<{ sessionId: string; target: string; fileCount: number }> {
   let session: UiAgentSession;
+
+  if (options.sessionId && options.complete) {
+    session = loadSession(options.sessionId);
+    session.status = "generating";
+    updateSession(session);
+
+    const report = auditSandboxCompleteness(session.id, session.target);
+    printCompletenessReport(report);
+
+    const referenceVideoNames = sessionReferenceVideoNames(session.id);
+    if (referenceVideoNames.length === 0) {
+      throw new Error(`No referenceVideoNames in session input.json — cannot run completeness pass`);
+    }
+    const referenceMedia = await resolveAllReferenceMediaForKimi({
+      videoNames: referenceVideoNames,
+      imageNames: [],
+      videoFiles: [],
+      imageFiles: [],
+      legacyNames: [],
+    });
+
+    const currentMedia = await collectCurrentMediaForKimi(options, session);
+    const instruction =
+      options.instruction?.trim() ||
+      report.instruction ||
+      "Generate all missing screens from the reference video.";
+
+    log("Kimi completeness pass", session.id);
+    startKimiTiming(session.id);
+    const build = await buildReferenceImplementation(provider, {
+      sessionId: session.id,
+      target: session.target,
+      manifest: session.manifest,
+      referenceMedia,
+      currentMedia,
+      instruction,
+      isCompletenessPass: true,
+    });
+
+    await screenshotGeneratedReference(session.id);
+    markKimiTiming(session.id, "previewRenderedMs");
+
+    const after = auditSandboxCompleteness(session.id, session.target);
+    printCompletenessReport(after);
+
+    session.status = "ready";
+    session.refinementPasses = (session.refinementPasses || 0) + 1;
+    updateSession(session);
+    writeHandoff(session);
+    printKimiTimingReport(session.id);
+    printKimiReady(session, build.summary, build.files.length);
+    return { sessionId: session.id, target: session.target, fileCount: build.files.length };
+  }
 
   if (options.sessionId && options.revise) {
     session = loadSession(options.sessionId);

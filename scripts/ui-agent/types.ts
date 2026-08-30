@@ -232,6 +232,8 @@ export type CliOptions = {
   approve: boolean;
   integrate: boolean;
   revise: boolean;
+  /** Run completeness pass — re-watch video, fill missing screens/builders */
+  complete: boolean;
   baseUrl: string;
   viewports: ViewportPreset[];
   maxPasses: number;

@@ -1,4 +1,4 @@
-import { MINIMAL_UI_STACK_CONTEXT } from "./config";
+import { KIMI_COMPLETENESS_REQUIREMENTS, MINIMAL_UI_STACK_CONTEXT } from "./config";
 import { INCREMENTAL_FILE_PROTOCOL } from "./kimi-incremental-files";
 import { listGeneratedFiles, readAllGeneratedSources, writeGeneratedFiles } from "./generated-sandbox";
 import type { LabeledMedia, ProjectManifest, UiVisionProvider } from "./types";
@@ -12,9 +12,20 @@ const REFERENCE_BUILD_SYSTEM = `You are a visual UI builder. Recreate the refere
 Do NOT scaffold a new Next.js project. Generate ONLY: page.tsx, components/**, mock-data.ts, reference.css.
 Start emitting code files quickly — do not over-plan in prose.
 
+${KIMI_COMPLETENESS_REQUIREMENTS}
+
 ${INCREMENTAL_FILE_PROTOCOL}
 
 Match layout, spacing, interactions, modals, and states visible in the reference.`;
+
+const COMPLETENESS_SYSTEM = `You complete a PARTIAL Kimi sandbox UI. The reference video was already used for an initial pass but screens are missing.
+Generate ONLY the missing views/components and update page.tsx wiring. Preserve existing files unless they must change to wire new views.
+
+${KIMI_COMPLETENESS_REQUIREMENTS}
+
+${INCREMENTAL_FILE_PROTOCOL}
+
+Re-watch the reference video focusing on builder canvases, wizards, modals, and secondary pages not yet in the sandbox.`;
 
 const REVISE_SYSTEM = `Revise the Kimi sandbox UI only. Do not touch production.
 The reference video was already analyzed in the initial build — do NOT require re-watching it.
@@ -41,13 +52,30 @@ export async function buildReferenceImplementation(
     instruction: string;
     feedback?: string;
     isRevision?: boolean;
+    isCompletenessPass?: boolean;
   },
 ): Promise<ReferenceBuildResult> {
   const isRevision = Boolean(input.isRevision);
+  const isCompletenessPass = Boolean(input.isCompletenessPass);
 
   const result = await provider.analyze({
-    systemPrompt: isRevision ? REVISE_SYSTEM : REFERENCE_BUILD_SYSTEM,
-    userPrompt: isRevision
+    systemPrompt: isCompletenessPass
+      ? COMPLETENESS_SYSTEM
+      : isRevision
+        ? REVISE_SYSTEM
+        : REFERENCE_BUILD_SYSTEM,
+    userPrompt: isCompletenessPass
+      ? `COMPLETENESS PASS — MISSING UI
+
+TARGET ROUTE: ${input.target}
+INSTRUCTION:
+${input.instruction || "Generate all missing screens from the reference video."}
+
+EXISTING SANDBOX FILES (extend — do not discard):
+${formatExistingSources(input.sessionId)}
+
+Watch the reference video. Emit missing files and updated wiring using KIMI_FILE_BEGIN/END.`
+      : isRevision
       ? `REVISE GENERATED REFERENCE
 
 TARGET ROUTE: ${input.target}
@@ -76,13 +104,13 @@ MEDIA:
 - CURRENT_TRANSOVO_* = our page today (brand shell reference)
 
 Watch the reference video. Then emit sandbox files incrementally with KIMI_FILE_BEGIN/END.`,
-    labeledMedia: isRevision
+    labeledMedia: isRevision && !isCompletenessPass
       ? input.currentMedia
       : [...input.referenceMedia, ...input.currentMedia],
     expectJson: false,
     useIncrementalFiles: true,
-    skipReferenceVideo: isRevision,
-    leanPrompt: !isRevision,
+    skipReferenceVideo: isRevision && !isCompletenessPass,
+    leanPrompt: !isRevision && !isCompletenessPass,
     sessionId: input.sessionId,
     phaseLabel: input.feedback ? "Kimi refinement" : "Kimi initial build",
   });

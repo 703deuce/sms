@@ -9,6 +9,7 @@
  *   npm run ui:kimi-batch -- --concurrency 5 --stagger-ms 10000
  *   npm run ui:kimi-batch -- --force
  *   npm run ui:kimi-batch -- --only "contacts"
+ *   npm run ui:kimi-batch -- --no-complete-pass
  *   npm run ui:kimi-batch -- --status
  *
  * Env: KIMI_BATCH_CONCURRENCY, KIMI_BATCH_STAGGER_MS
@@ -18,6 +19,7 @@ import { join } from "node:path";
 import { loadReferencesManifest } from "@/lib/ui-agent/references-manifest";
 import { KimiVisionProvider } from "./kimi-client";
 import { runKimiCommand } from "./kimi-command";
+import { auditSandboxCompleteness } from "./kimi-completeness";
 import { KIMI_BATCH_PAGE_INSTRUCTION, UI_AGENT_DIR, ensureUiAgentDirs } from "./config";
 import { log } from "./logger";
 import type { CliOptions } from "./types";
@@ -164,7 +166,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildOptions(job: BatchJobState): CliOptions {
+function buildOptions(job: BatchJobState, overrides: Partial<CliOptions> = {}): CliOptions {
   return {
     target: job.route,
     referenceImages: [],
@@ -186,11 +188,13 @@ function buildOptions(job: BatchJobState): CliOptions {
     approve: false,
     integrate: false,
     revise: false,
+    complete: false,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop"],
     maxPasses: 0,
     reasoningEffort: "low",
     instruction: KIMI_BATCH_PAGE_INSTRUCTION,
+    ...overrides,
   };
 }
 
@@ -198,6 +202,7 @@ async function runOneJob(
   job: BatchJobState,
   jobIndex: number,
   total: number,
+  skipCompletePass: boolean,
 ): Promise<void> {
   await updateJob(job.videoName, {
     status: "running",
@@ -213,6 +218,16 @@ async function runOneJob(
 
   try {
     const result = await runKimiCommand(provider, buildOptions(job));
+    if (!skipCompletePass) {
+      const gaps = auditSandboxCompleteness(result.sessionId, job.route);
+      if (!gaps.complete) {
+        console.log(`  completeness pass (${gaps.gaps.filter((g) => g.severity === "required").length} required gap(s))…`);
+        await runKimiCommand(
+          provider,
+          buildOptions(job, { sessionId: result.sessionId, complete: true, maxPasses: 0 }),
+        );
+      }
+    }
     await updateJob(job.videoName, {
       status: "complete",
       sessionId: result.sessionId,
@@ -240,6 +255,7 @@ async function runConcurrentBatch(
   pending: BatchJobState[],
   concurrency: number,
   staggerMs: number,
+  skipCompletePass: boolean,
 ): Promise<void> {
   let nextLaunchAt = Date.now();
   let launchCursor = 0;
@@ -264,7 +280,7 @@ async function runConcurrentBatch(
           nextLaunchAt = Date.now() + staggerMs;
 
           try {
-            await runOneJob(job, launchCursor - 1, total);
+            await runOneJob(job, launchCursor - 1, total, skipCompletePass);
           } finally {
             active--;
             done++;
@@ -288,6 +304,7 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
   const statusOnly = args.includes("--status");
+  const skipCompletePass = args.includes("--no-complete-pass");
   const onlyName = parseArg(args, "--only");
   const requestedConcurrency = Math.max(1, Number(parseArg(args, "--concurrency") || DEFAULT_CONCURRENCY));
   const staggerMs = Math.max(0, Number(parseArg(args, "--stagger-ms") || DEFAULT_STAGGER_MS));
@@ -337,7 +354,7 @@ async function main(): Promise<void> {
   state.staggerMs = staggerMs;
   saveState(state);
 
-  await runConcurrentBatch(state, pending, concurrency, staggerMs);
+  await runConcurrentBatch(state, pending, concurrency, staggerMs, skipCompletePass);
   printStatus(state);
 }
 
