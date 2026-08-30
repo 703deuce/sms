@@ -1,12 +1,12 @@
 import { voice, type AgentCreateOptions } from "@livekit/agents";
 import type { AgentContext } from "@livekit/agents";
-import { maybeNormalizeForElevenLabsModel } from "@/lib/voice/elevenlabs/normalize-tts-text";
-import { RECEPTIONIST_TTS_MODEL } from "@/lib/voice/elevenlabs/receptionist-voice-catalog";
-import { phraseBufferStream } from "./phrase-text-buffer";
+import { maybeNormalizeForElevenLabsModel } from "@/lib/voice/tts/normalize-tts-text";
+import { phraseBufferStream } from "@/lib/voice/tts/phrase-text-buffer";
 import {
   markHybridLlmFirstTextDelta,
   markHybridTtsFirstTextSent,
 } from "./hybrid-streaming-telemetry";
+import { nextTtsGenerationId } from "@/lib/voice/tts/pipeline-diagnostics";
 import {
   resolveOutboundRealtimeOutputMode,
   type OutboundRealtimeOutputMode,
@@ -22,6 +22,7 @@ export function createHybridStreamingTtsNode<TUserData = unknown>(): NonNullable
   AgentCreateOptions<TUserData>["ttsNode"]
 > {
   return async (ctx: AgentHookContext<TUserData>, text, modelSettings) => {
+    const generationId = nextTtsGenerationId("hybrid");
     const bufferedText = phraseBufferStream(
       (async function* () {
         for await (const chunk of text) {
@@ -33,8 +34,18 @@ export function createHybridStreamingTtsNode<TUserData = unknown>(): NonNullable
 
     const monitoredText = (async function* () {
       for await (const phrase of bufferedText) {
-        const spoken = maybeNormalizeForElevenLabsModel(phrase, RECEPTIONIST_TTS_MODEL);
+        const spoken = maybeNormalizeForElevenLabsModel(phrase, process.env.ELEVENLABS_TTS_MODEL);
         markHybridTtsFirstTextSent(spoken);
+        if (process.env.VOICE_TTS_PIPELINE_DEBUG === "1") {
+          console.log(
+            JSON.stringify({
+              source: "voice.tts_pipeline",
+              event: "hybrid_tts_chunk",
+              generationId,
+              ttsChunkPreview: spoken.slice(0, 120),
+            }),
+          );
+        }
         yield spoken;
       }
     })();

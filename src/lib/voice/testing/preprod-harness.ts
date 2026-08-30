@@ -5,9 +5,17 @@ import { getPrisma } from "@/lib/db";
 import { POST as toolWebhookPost } from "@/app/api/telnyx/voice/tools/route";
 import { buildTelnyxToolWebhookRequest } from "./telnyx-fixtures";
 
-export const EXPECTED_MODEL_WEBHOOK_TOOLS = ["runtime_turn"] as const;
+export const EXPECTED_MODEL_WEBHOOK_TOOLS = [
+  "lookup_customer",
+  "take_structured_message",
+  "record_current_field",
+  "continue_workflow",
+  "get_runtime_context",
+  "escalate_human",
+] as const;
 
 export const FORBIDDEN_MODEL_TOOLS = [
+  "runtime_turn",
   "calendar_availability",
   "book_appointment",
   "resolve_datetime",
@@ -16,14 +24,6 @@ export const FORBIDDEN_MODEL_TOOLS = [
   "save_collected_fields",
   "get_workflow_requirements",
   "check_availability",
-  "record_current_field",
-  "continue_workflow",
-  "get_runtime_context",
-  "lookup_customer",
-  "take_structured_message",
-  "escalate_human",
-  "transfer",
-  "hangup",
 ] as const;
 
 export type PreprodContext = {

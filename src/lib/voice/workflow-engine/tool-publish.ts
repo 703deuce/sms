@@ -7,8 +7,19 @@ export const CALLER_AMY_WORKFLOW_TOOL_UNION: readonly string[] = [
   ),
 ];
 
-/** Tools never published to Telnyx — runtime invokes these internally via continue_workflow. */
+/** Model-facing webhook tools published to Telnyx for Caller Amy. */
+export const CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS = [
+  "lookup_customer",
+  "take_structured_message",
+  "record_current_field",
+  "continue_workflow",
+  "get_runtime_context",
+  "escalate_human",
+] as const;
+
+/** Scheduling + gateway tools kept internal — invoked by continue_workflow / runtime only. */
 export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
+  "runtime_turn",
   "resolve_datetime",
   "calendar_availability",
   "check_availability",
@@ -35,26 +46,16 @@ export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
   "end_call",
   "send_sms",
   "confirm_booking",
-  "check_availability",
-  // Model-facing tools moved behind runtime_turn
-  "record_current_field",
-  "continue_workflow",
-  "get_runtime_context",
-  "lookup_customer",
-  "take_structured_message",
-  "escalate_human",
-  "transfer",
-  "hangup",
 ]);
 
-/** Small stable model-facing surface for Caller Amy on Telnyx. */
-export const CALLER_AMY_MODEL_TOOLS = ["runtime_turn"] as const;
+/** @deprecated Use CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS — runtime_turn gateway retired. */
+export const CALLER_AMY_MODEL_TOOLS = CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS;
 
-/** @deprecated Use CALLER_AMY_MODEL_TOOLS */
+/** @deprecated Use CALLER_AMY_INTERNAL_ONLY_TOOLS */
 export const CALLER_AMY_PUBLISH_EXCLUDED = CALLER_AMY_INTERNAL_ONLY_TOOLS;
 
-/** @deprecated Scheduling tools removed — use continue_workflow */
-export const CALLER_AMY_PUBLISH_REQUIRED = [...CALLER_AMY_MODEL_TOOLS] as const;
+/** @deprecated */
+export const CALLER_AMY_PUBLISH_REQUIRED = [...CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS] as const;
 
 /** Domain-level aliases — not published to model */
 export const DOMAIN_TOOL_ALIASES: Record<string, string> = {
@@ -64,24 +65,17 @@ export const DOMAIN_TOOL_ALIASES: Record<string, string> = {
 };
 
 /**
- * Filter enabled catalog keys for Telnyx publish — runtime-owned orchestration surface.
- * Only CALLER_AMY_MODEL_TOOLS are exposed; scheduling primitives stay internal.
+ * Filter enabled catalog keys for Telnyx publish — direct webhook surface only.
+ * Scheduling primitives and the retired runtime_turn gateway stay internal.
  */
 export function filterToolsForCallerAmyPublish(enabledKeys: string[]): string[] {
-  const modelSurface = new Set<string>(CALLER_AMY_MODEL_TOOLS);
   const published = new Set<string>();
-
-  for (const key of CALLER_AMY_MODEL_TOOLS) {
-    published.add(key);
-  }
-
-  // Honor agent config for optional escape hatches only (never internal/scheduling tools).
   for (const key of enabledKeys) {
-    if (modelSurface.has(key) && !CALLER_AMY_INTERNAL_ONLY_TOOLS.has(key)) {
+    if (!CALLER_AMY_INTERNAL_ONLY_TOOLS.has(key)) {
       published.add(key);
     }
   }
-
+  published.delete("runtime_turn");
   return [...published];
 }
 

@@ -87,24 +87,24 @@ async function main() {
   check("gateway routes hold", isGatewayRoutedTool("hold_appointment_slot"));
   check("gateway routes cancel", isGatewayRoutedTool("cancel_appointment"));
   check(
-    "publish filter excludes save_caller_info",
-    !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("save_caller_info"),
+    "publish filter excludes record_current_field when not enabled",
+    !filterToolsForCallerAmyPublish(["runtime_turn", "hangup"]).includes("record_current_field"),
   );
   check(
-    "publish filter excludes record_current_field (internal)",
-    !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("record_current_field"),
+    "publish filter includes record_current_field when enabled",
+    filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("record_current_field"),
   );
   check(
     "publish filter excludes calendar_availability",
     !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("calendar_availability"),
   );
   check(
-    "publish filter excludes continue_workflow (internal)",
-    !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("continue_workflow"),
+    "publish filter includes continue_workflow when enabled",
+    filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("continue_workflow"),
   );
   check(
-    "publish filter includes runtime_turn",
-    filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS]).includes("runtime_turn"),
+    "publish filter excludes runtime_turn",
+    !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS, "runtime_turn"]).includes("runtime_turn"),
   );
 
   await dbIntegration();

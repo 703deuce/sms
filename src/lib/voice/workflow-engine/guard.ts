@@ -25,24 +25,17 @@ export async function assertToolAllowed(input: {
   const canonical = canonicalToolType(input.toolType);
 
   if (canonical === "runtime_turn" || input.toolType === "runtime_turn") {
-    if (!input.callId) {
-      return {
-        allowed: false,
-        state: "INTENT_DISCOVERY",
-        allowed_tools: toolsForState("INTENT_DISCOVERY"),
-        error_code: "CALL_CONTEXT_REQUIRED",
-        speak: "I'm still connecting your call. One moment please.",
-        retryable: true,
-      };
-    }
-    const { state } = await computeWorkflowState({
-      callId: input.callId,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      workflow: input.workflow,
-      serviceName: input.serviceName,
-    });
-    return { allowed: true, state, allowed_tools: toolsForState(state) };
+    return {
+      allowed: false,
+      state: "INTENT_DISCOVERY",
+      allowed_tools: toolsForState("INTENT_DISCOVERY"),
+      error_code: "TOOL_RETIRED",
+      speak:
+        "Answer from your Business knowledge section or use continue_workflow, record_current_field, or get_runtime_context as appropriate.",
+      retryable: false,
+      next_action:
+        "Do not call runtime_turn — it is retired. Use direct tools from allowed_tools.",
+    };
   }
 
   const preprodInternalOk = process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS === "1";

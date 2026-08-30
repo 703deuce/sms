@@ -44,7 +44,7 @@ function check(name: string, fn: () => void) {
 
 check("legacy workflow tools blocked in production", () => {
   assert.equal(isLegacyWorkflowVoicePathEnabled(), false);
-  assert.throws(() => assertLegacyWorkflowVoiceToolAllowed("continue_workflow"));
+  assert.doesNotThrow(() => assertLegacyWorkflowVoiceToolAllowed("continue_workflow"));
   assert.throws(() => assertLegacyWorkflowVoiceToolAllowed("runtime_turn"));
 });
 
@@ -287,15 +287,8 @@ check("booking uses inline email gate and LiveKit end call", () => {
 });
 
 check("legacy tool set is complete", () => {
-  for (const tool of [
-    "runtime_turn",
-    "continue_workflow",
-    "get_runtime_context",
-    "get_workflow_requirements",
-    "check_field_requirements",
-  ]) {
-    assert(LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has(tool), tool);
-  }
+  assert(LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has("runtime_turn"));
+  assert.equal(LEGACY_WORKFLOW_VOICE_TOOL_TYPES.size, 1);
 });
 
 if (process.exitCode) {

@@ -27,21 +27,18 @@ export const BOOKING_TOOL_CHAIN = [
   "DEPRECATED — workflow sequence is determined by runtime state, not a fixed tool chain.",
 ].join("\n");
 
-/** Permanent workflow authority — injected instead of BOOKING_TOOL_CHAIN. */
+/** Direct tool workflow authority — injected instead of runtime_turn gateway copy. */
 export const RUNTIME_WORKFLOW_AUTHORITY = [
   "WORKFLOW ORCHESTRATION (runtime is authoritative):",
   "You are Amy, Transovo's realtime appointment receptionist.",
-  "You converse naturally with callers.",
-  "You have one orchestration capability: runtime_turn.",
-  "After every caller turn, call runtime_turn with utterance, interpreted_intent, and extracted_information.",
-  "Do not invent workflow state, calendar availability, appointment status, holds, customer records, or action results.",
-  "Do not independently decide which backend business operation should run — the server owns workflow state.",
-  "When runtime_turn returns speak, communicate that meaning naturally and faithfully.",
-  "If runtime returns slots, only offer those slots.",
-  "If runtime says an operation is pending, acknowledge naturally and wait according to the tool response.",
-  "Never use another business tool to bypass runtime_turn.",
-  "Only say an action completed after runtime_turn returns success.",
-  "If runtime_turn returns end_call: true, give a brief closing line and end the conversation.",
+  "Answer company FAQ (hours, services, pricing, policies) directly from the Business knowledge section — never call a tool for those.",
+  "For booking and workflow actions, use the direct tools published to you: get_runtime_context, record_current_field, continue_workflow, lookup_customer, take_structured_message, escalate_human.",
+  "Do not invent workflow state, calendar availability, appointment status, holds, or action results.",
+  "Call get_runtime_context when unsure of workflow_state, missing_fields, or allowed_tools.",
+  "During field collection, prefer record_current_field({ value }) for the active field.",
+  "For scheduling and booking steps, call continue_workflow with the caller's words — never call calendar_availability or book_appointment directly.",
+  "Only say an action completed after the tool returns success.",
+  "Never call runtime_turn — it is retired.",
 ].join("\n");
 
 export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [

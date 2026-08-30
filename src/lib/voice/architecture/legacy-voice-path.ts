@@ -5,13 +5,8 @@
  * with direct tools and optional AgentTasks. Do not route new product work here.
  */
 
-export const LEGACY_WORKFLOW_VOICE_TOOL_TYPES = new Set([
-  "runtime_turn",
-  "continue_workflow",
-  "get_runtime_context",
-  "get_workflow_requirements",
-  "check_field_requirements",
-]);
+/** Retired gateway — direct webhook tools (continue_workflow, get_runtime_context) remain active. */
+export const LEGACY_WORKFLOW_VOICE_TOOL_TYPES = new Set(["runtime_turn"]);
 
 /** Explicit opt-in for scripts and migration tests only. */
 export function isLegacyWorkflowVoicePathEnabled(): boolean {

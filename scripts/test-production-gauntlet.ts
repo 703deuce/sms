@@ -46,8 +46,8 @@ async function agentDecisionTests() {
   );
   record(
     "AGENT_DECISION",
-    "READY allows runtime_turn",
-    isToolAllowedForState("READY_TO_BOOK", "runtime_turn"),
+    "READY allows continue_workflow",
+    isToolAllowedForState("READY_TO_BOOK", "continue_workflow"),
   );
   record(
     "AGENT_DECISION",

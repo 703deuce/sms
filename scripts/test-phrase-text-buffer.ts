@@ -3,7 +3,8 @@
  * Run: npx tsx scripts/test-phrase-text-buffer.ts
  */
 import assert from "node:assert/strict";
-import { phraseBufferStream } from "../voice-runtime/src/phrase-text-buffer";
+import { phraseBufferStream } from "../src/lib/voice/tts/phrase-text-buffer";
+import { normalizeTtsText } from "../src/lib/voice/tts/normalize-tts-text";
 
 async function collect(source: AsyncIterable<string>): Promise<string[]> {
   const out: string[] = [];
