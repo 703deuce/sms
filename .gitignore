@@ -52,5 +52,7 @@ public/voicemail/
 .livekit-fqdn-direct-mctb-backup.json
 .ui-agent/references/**
 .ui-agent/sessions/**
+.ui-agent/generated/**
 !.ui-agent/references/.gitkeep
 !.ui-agent/sessions/.gitkeep
+!.ui-agent/generated/.gitkeep

@@ -192,3 +192,27 @@ export function manifestToPromptContext(manifest: ProjectManifest): string {
 
   return chunks.join("\n\n");
 }
+
+/** Compact brand + design-system context for Kimi reference builds (no backend). */
+export function designContextForKimi(manifest: ProjectManifest): string {
+  const chunks: string[] = [
+    "BRAND: Transovo",
+    `TARGET ROUTE: ${manifest.targetRoute}`,
+    `COMPONENTS IN SCOPE: ${manifest.currentComponents.join(", ") || "unknown"}`,
+    `DESIGN SYSTEM FILES: ${manifest.designSystemFiles.join(", ")}`,
+  ];
+
+  for (const file of manifest.designSystemFiles.slice(0, 5)) {
+    const source = readFileSync(join(REPO_ROOT, file), "utf8");
+    chunks.push(`\n--- ${file} ---\n${source.slice(0, 2500)}`);
+  }
+
+  for (const file of ["src/components/layout/sidebar.tsx", "src/components/layout/header.tsx"]) {
+    const abs = join(REPO_ROOT, file);
+    if (existsSync(abs)) {
+      chunks.push(`\n--- APP SHELL: ${file} ---\n${readFileSync(abs, "utf8").slice(0, 2000)}`);
+    }
+  }
+
+  return chunks.join("\n");
+}

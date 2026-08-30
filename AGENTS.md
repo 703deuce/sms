@@ -139,21 +139,23 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 ## Visual UI Agent
 
-When the user supplies a screenshot, design reference, or screen recording and asks to recreate/improve an existing Transovo page:
+When the user supplies a screenshot, design reference, or screen recording and asks to improve an existing Transovo page:
 
-1. Identify the exact target route/component.
-2. Use the repo UI Agent (`npm run ui:improve`, `npm run ui:analyze`) rather than blindly recreating the page.
-3. Analyze the existing implementation first (`scripts/ui-agent/project-context.ts`).
-4. Preserve existing APIs, backend logic, database behavior, auth, integrations, consent/compliance logic, and production functionality.
-5. Use Kimi multimodal analysis for reference image/video (`KIMI_API_KEY`, model `kimi-k3` for video).
-6. Capture the **rendered** current Transovo page (`--capture-current`) — do not rely on source code alone.
-7. Modify the existing page instead of creating a duplicate implementation.
-8. Reuse existing Transovo design-system components (`src/components/ui/*`).
-9. Default to **plan-only**; apply only after human review (`--apply`).
-10. If the reference needs unsupported backend behavior, document the gap in the report — do not fake it with mock data.
-11. Validate with `npm run ui:validate` and `npm run test:ui-agent-cert`.
-12. Do not push/deploy automatically.
+### Workflow (reference implementation mode)
 
-Treat Kimi as the **visual/UI specialist**. Treat the existing repository as the authoritative source for functionality.
+1. **Kimi builds** a complete visual reference in `.ui-agent/generated/<session>/` (mock data allowed in sandbox only).
+2. **Preview** with `npm run ui:preview -- --session <id>` — inspect before touching production.
+3. **Approve** with `npm run ui:approve -- --session <id>` — freezes `APPROVED.json` as visual source of truth.
+4. **Integrate** with `npm run ui:integrate` — Cursor transplants presentation into real `src/` components using existing hooks/APIs.
+5. **Never** let Kimi edit `src/` directly during the build phase.
 
-See `scripts/ui-agent/README.md` for full workflow.
+### Rules
+
+- Kimi owns the **visual implementation** in the sandbox.
+- Cursor owns **production integration** — reproduce Kimi's layout/classNames/hierarchy faithfully while preserving real data, handlers, auth, and APIs.
+- Do **not** copy `mock-data.ts` or `MOCK_*` constants into production.
+- Capture the **rendered** current page (`--capture-current`), not just source code.
+- Default to plan-only for `ui:integrate`; apply only with `--apply`.
+- If backend work is required, document in `backendChangesRequired` — do not fake it.
+
+See `scripts/ui-agent/README.md`.

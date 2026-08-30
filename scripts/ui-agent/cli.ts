@@ -25,6 +25,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
     apply: false,
     dryRun: false,
     analyzeOnly: false,
+    approve: false,
+    integrate: false,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop", "mobile"],
     maxPasses: 2,
@@ -89,12 +91,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--dry-run":
         options.dryRun = true;
         break;
-      case "--analyze-only":
-        options.analyzeOnly = true;
-        break;
-      case "--base-url":
-        options.baseUrl = nextValue(args, i++).replace(/\/$/, "");
-        break;
       case "--max-passes":
         options.maxPasses = Number(nextValue(args, i++));
         break;
@@ -103,37 +99,40 @@ export function parseCliArgs(argv: string[]): CliOptions {
     }
   }
 
-  if (!options.apply && !options.dryRun) {
-    options.planOnly = true;
-  }
-
   return options;
 }
 
 export function printUsage(): void {
-  console.log(`Usage:
-  npm run ui:analyze -- --target "/conversations" --reference-image ./ref.png
-  npm run ui:improve -- --target "/conversations" --reference-video ./ref.mov --capture-current --plan-only
-  npm run ui:improve -- --session <id> --apply
-  npm run ui:capture -- --target "/conversations" --screenshots --video-capture
-  npm run ui:validate -- --session <id>
+  console.log(`Visual UI Agent — Kimi builds reference, Cursor integrates production
 
-Options:
-  --target <route|component-path>   Required for new sessions
-  --reference-image <path>          Reference screenshot (repeatable)
-  --reference-video <path>          Reference screen recording (repeatable)
-  --reference-url <url>             Capture public reference website
-  --reference-name <name>           Reuse saved reference from .ui-agent/references/
-  --current-image <path>            Manual current-site screenshot
-  --current-video <path>            Manual current-site recording
-  --capture-current                 Auto-capture current Transovo page
-  --screenshots / --no-screenshots
-  --video-capture                   Capture walkthrough video
-  --instruction <text>              Additional direction
-  --plan-only                       Default — analyze/plan only
-  --apply                           Apply validated UI changes
-  --dry-run                         Show apply actions without writing
-  --session <id>                    Resume a saved session
-  --base-url <url>                  App URL for capture (default localhost:3000)
+WORKFLOW:
+  1. ui:improve     Kimi builds reference in .ui-agent/generated/<session>/
+  2. ui:preview     Inspect the reference page locally
+  3. ui:approve     Freeze APPROVED.json when satisfied
+  4. ui:integrate   Transplant presentation into real src/ (plan-only default)
+  5. ui:integrate --apply   Apply production changes
+
+COMMANDS:
+  npm run ui:improve -- \\
+    --target "/conversations" \\
+    --reference-video "./ref.mov" \\
+    --capture-current \\
+    --instruction "Match inbox layout; keep Transovo sidebar"
+
+  npm run ui:preview -- --session <session-id>
+  npm run ui:approve -- --session <session-id>
+  npm run ui:integrate -- --session <session-id>          # plan only
+  npm run ui:integrate -- --session <session-id> --apply  # transplant to src/
+
+  npm run ui:capture -- --target "/conversations" --screenshots --video-capture
+  npm run ui:reference -- --reference-url "https://example.com/inbox"
+  npm run ui:validate -- --session <session-id>
+
+OPTIONS:
+  --target, --session, --instruction
+  --reference-image, --reference-video, --reference-url, --reference-name
+  --current-image, --current-video, --capture-current
+  --apply, --dry-run, --max-passes (default 2 Kimi refinement passes)
+  --base-url http://localhost:3000
 `);
 }

@@ -112,6 +112,31 @@ export type ImplementationPlan = {
   notes: string[];
 };
 
+export type ApprovedReference = {
+  approved: true;
+  sessionId: string;
+  target: string;
+  generatedFiles: string[];
+  referenceSources: string[];
+  approvedAt: string;
+  notes: string;
+};
+
+export type FunctionalMappingItem = {
+  kimiComponent: string;
+  productionEquivalent: string;
+  visualChanges: string[];
+  realBehaviorToPreserve: string[];
+};
+
+export type FunctionalMappingReport = {
+  target: string;
+  mappings: FunctionalMappingItem[];
+  backendChangesRequired: BackendGap[];
+  mockDataMustNotCopy: string[];
+  notes: string[];
+};
+
 export type VisualVerificationScores = {
   visualMatch: number;
   layoutMatch: number;
@@ -141,6 +166,9 @@ export type UiAgentSession = {
   referenceMedia: Array<{ label: string; purpose: string; path: string; source: string }>;
   currentMedia: Array<{ label: string; path: string; viewport?: string }>;
   manifest: ProjectManifest;
+  generatedDir?: string;
+  refinementPasses?: number;
+  approved?: boolean;
   referenceAnalysis?: ReferenceAnalysis;
   differencePlan?: DifferencePlan;
   implementationPlan?: ImplementationPlan;
@@ -165,6 +193,8 @@ export type CliOptions = {
   apply: boolean;
   dryRun: boolean;
   analyzeOnly: boolean;
+  approve: boolean;
+  integrate: boolean;
   baseUrl: string;
   viewports: ViewportPreset[];
   maxPasses: number;

@@ -1,102 +1,80 @@
 # Visual UI Agent (Kimi)
 
-Repo-local development tool that compares **reference screenshots/videos** and **current Transovo rendered UI** against existing page code, then proposes or applies **UI-only** changes.
+Repo-local tool: **Kimi builds a complete visual reference** → **you approve it** → **Cursor integrates into production**.
 
-Kimi is the visual reasoning layer. Cursor/the repo scripts are the engineering layer.
-
-## Requirements
-
-```bash
-export KIMI_API_KEY=your_key
-export KIMI_API_BASE_URL=https://api.moonshot.ai/v1   # optional
-export KIMI_UI_MODEL=kimi-k3                          # optional; must support video for video jobs
+```
+Reference media + current Transovo capture
+              ↓
+         KIMI builds
+              ↓
+.ui-agent/generated/<session>/   ← sandbox (mock data OK)
+              ↓
+    preview → approve → integrate
+              ↓
+         src/ (real hooks/APIs)
 ```
 
-Optional capture auth (dev/test only):
+## Architecture
 
-```bash
-export UI_AGENT_SMOKE_EMAIL=...
-export UI_AGENT_SMOKE_PASSWORD=...
-export UI_AGENT_BASE_URL=http://localhost:3000
-```
+| Layer | Responsibility |
+|-------|----------------|
+| **Kimi** | Builds runnable React reference in `.ui-agent/generated/` |
+| **You** | Preview + approve when it looks right |
+| **Cursor / integrate** | Transplants presentation into `src/` with real data |
 
-Never commit API keys or reference media.
+Kimi **never** edits `src/` directly. Integration is a separate `ui:integrate` step.
 
 ## Commands
 
 ```bash
-# Analyze only — no file changes (default for improve is plan-only)
-npm run ui:analyze -- \
-  --target "/conversations" \
-  --reference-image "./ui-reference/inbox.png"
+export KIMI_API_KEY=...
+export KIMI_UI_MODEL=kimi-k3   # video-capable; not k3-256k
 
-# Plan improvements (default — does not apply)
+# 1. Kimi builds reference (auto-captures current page)
 npm run ui:improve -- \
   --target "/conversations" \
   --reference-video "./ui-reference/inbox.mov" \
   --capture-current \
-  --instruction "Match layout polish but keep Transovo branding and functionality"
+  --instruction "Match inbox layout; keep Transovo branding"
 
-# Apply after reviewing .ui-agent/reports/latest.md
-npm run ui:improve -- \
-  --session "<session-id>" \
-  --apply
+# 2. Preview sandbox reference (local only, port 5174)
+npm run ui:preview -- --session "<session-id>"
 
-# Capture current Transovo page and/or reference URL
+# 3. Freeze when satisfied
+npm run ui:approve -- --session "<session-id>"
+
+# 4. Plan production integration (functional mapping report)
+npm run ui:integrate -- --session "<session-id>"
+
+# 5. Apply to production src/
+npm run ui:integrate -- --session "<session-id>" --apply
+```
+
+### Capture helpers
+
+```bash
 npm run ui:capture -- --target "/conversations" --screenshots --video-capture
-
-# Validate a session's touched files
-npm run ui:validate -- --session "<session-id>"
-
-# Certification (no API key required for structural checks)
-npm run test:ui-agent-cert
+npm run ui:reference -- --reference-url "https://example.com/inbox"
 ```
 
-## Workflow
-
-1. Put reference media locally (gitignored): `ui-reference/conversations.mov`
-2. Run plan-only improve with `--capture-current`
-3. Review `.ui-agent/reports/latest.md`
-4. Apply with `--session <id> --apply`
-5. Tool validates protected paths, runs lint/tsc, and records the session
-
-## Architecture
-
-| Module | Role |
-|--------|------|
-| `kimi-client.ts` | `UiVisionProvider` — Kimi multimodal API (images base64, videos via Files API `ms://`) |
-| `project-context.ts` | Resolve route → files, compact manifest |
-| `capture-current.ts` | Playwright screenshots/video of current Transovo or reference URLs |
-| `visual-analysis.ts` | Pass 1 reference analysis, Pass 2 difference plan |
-| `change-plan.ts` | Validate plans, write reports |
-| `apply-plan.ts` | Apply only allowed presentation paths |
-| `path-guards.ts` | Protected vs allowed paths |
-| `git-safety.ts` | Dirty tree detection, snapshots, rollback |
-
-## Safety boundaries
-
-**May modify:** `src/app/**` pages, `src/components/**`, styles, presentation state
-
-**Must NOT modify:** `src/lib/**`, `src/app/api/**`, `prisma/**`, providers, auth, billing, MCTB runtime, etc.
-
-If backend work is needed, Kimi reports `backendChangesRequired` — the agent does not fake it.
-
-## Video support
-
-- Uses native Kimi video via Files API when `KIMI_UI_MODEL` supports video (e.g. `kimi-k3`)
-- Fails clearly for models that do not support video (e.g. `k3-256k`)
-- Does **not** silently substitute frame sampling as full-video understanding
-
-## Reference library
+## Sandbox structure
 
 ```
-.ui-agent/
-  references/<name>/metadata.json
-  sessions/<session-id>/
-  reports/latest.md
+.ui-agent/generated/<session-id>/
+  page.tsx              # ReferencePage — mock data OK
+  components/
+  mock-data.ts          # NEVER copy to src/
+  reference.css
+  screenshot.png        # after refinement
+  APPROVED.json         # frozen visual source of truth
 ```
 
-Use `--reference-name slicktext-inbox` to reuse saved references.
+## Safety
+
+- **Sandbox** (`.ui-agent/generated/**`): mock data, fake handlers allowed
+- **Production** (`src/`): real hooks/APIs only; integration rejects `mock-data` imports
+- Protected: `src/lib/**`, `src/app/api/**`, `prisma/**`, providers, auth, billing
+- No auto-commit, push, or deploy
 
 ## Certification
 
@@ -104,6 +82,6 @@ Use `--reference-name slicktext-inbox` to reuse saved references.
 npm run test:ui-agent-cert
 ```
 
-Verifies path guards, protected-path rejection, dry-run apply, and manifest resolution.
+## Env
 
-Do **not** use major production pages for the first destructive apply test — use `src/components/ui-agent-cert/SafePresentationDemo.tsx`.
+See `.env.example` — `KIMI_API_KEY`, `KIMI_UI_MODEL`, `UI_AGENT_SMOKE_EMAIL` (capture auth).

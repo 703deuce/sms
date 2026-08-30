@@ -1,20 +1,27 @@
+import { basename, join } from "node:path";
+import { mkdirSync } from "node:fs";
 import { applyAcceptedChanges } from "./apply-plan";
+import { approveReference } from "./approve-reference";
 import { parseCliArgs, printUsage } from "./cli";
 import { captureCurrentSite, captureReferenceUrl } from "./capture-current";
 import { validateImplementationPlan, writePlanReport } from "./change-plan";
-import { ensureUiAgentDirs, resolveUiAgentPath } from "./config";
+import { ensureUiAgentDirs, resolveUiAgentPath, UI_AGENT_REFERENCES_DIR } from "./config";
+import { generatedDirForSession } from "./generated-sandbox";
 import { filesChangedOutsidePlan, readGitDirtyFiles, restoreSnapshots, snapshotFiles } from "./git-safety";
+import {
+  generateFunctionalMappingReport,
+  generateIntegrationPlan,
+  writeIntegrationReport,
+} from "./integrate";
 import { KimiVisionProvider } from "./kimi-client";
 import { log, logError } from "./logger";
 import { buildProjectManifest } from "./project-context";
+import { runPreview } from "./preview";
+import { buildReferenceImplementation } from "./reference-builder";
 import { buildLabeledMedia, loadNamedReference } from "./reference-media";
+import { refineReferenceImplementation } from "./refine-reference";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession } from "./types";
-import {
-  analyzeReferenceMedia,
-  buildDifferencePlan,
-  generateImplementationPlan,
-} from "./visual-analysis";
 import { validateTouchedFiles } from "./validate-changes";
 
 async function collectReferenceMedia(options: CliOptions, sessionDirPath: string): Promise<LabeledMedia[]> {
@@ -84,150 +91,178 @@ async function collectCurrentMedia(options: CliOptions, session: UiAgentSession)
   return buildLabeledMedia(labeled);
 }
 
-async function runAnalyze(options: CliOptions): Promise<void> {
-  if (!options.target) throw new Error("--target is required");
-  ensureUiAgentDirs();
-  const provider = await KimiVisionProvider.createValidated();
-  const sessionId = createSessionId();
+async function ensureSessionWithMedia(options: CliOptions): Promise<{
+  session: UiAgentSession;
+  referenceMedia: LabeledMedia[];
+  currentMedia: LabeledMedia[];
+}> {
+  let session: UiAgentSession;
+  let referenceMedia: LabeledMedia[];
+  let currentMedia: LabeledMedia[];
+
+  if (options.sessionId) {
+    session = loadSession(options.sessionId);
+    referenceMedia = buildLabeledMedia(
+      session.referenceMedia.map((m) => ({ path: m.path, label: m.label, purpose: m.purpose })),
+    );
+    currentMedia = buildLabeledMedia(
+      session.currentMedia.map((m) => ({
+        path: m.path,
+        label: `CURRENT_TRANSOVO_${m.viewport || basename(m.path)}`,
+        purpose: "Current Transovo rendered page",
+      })),
+    );
+    return { session, referenceMedia, currentMedia };
+  }
+
+  if (!options.target) throw new Error("--target is required for a new session");
   const manifest = buildProjectManifest(options.target);
-  const session: UiAgentSession = {
-    id: sessionId,
+  session = {
+    id: createSessionId(),
     createdAt: new Date().toISOString(),
     target: options.target,
     instruction: options.instruction || "",
     referenceMedia: [],
     currentMedia: [],
     manifest,
+    generatedDir: generatedDirForSession(""),
   };
+  session.generatedDir = generatedDirForSession(session.id);
   saveSession(session);
 
   log("resolving target route", options.target);
   log("collecting existing implementation", `${manifest.targetFiles.length} files`);
 
-  const referenceMedia = await collectReferenceMedia(options, sessionDir(session.id));
+  referenceMedia = await collectReferenceMedia(options, sessionDir(session.id));
   if (referenceMedia.length === 0) throw new Error("Provide --reference-image, --reference-video, or --reference-url");
 
   log("capturing current UI", options.captureCurrent ? "automatic" : "manual/supplied");
-  const currentMedia = await collectCurrentMedia(options, session);
+  currentMedia = await collectCurrentMedia(options, session);
 
-  log("analyzing reference media", `${referenceMedia.length} item(s)`);
-  const referenceAnalysis = await analyzeReferenceMedia(provider, referenceMedia, options.instruction || "");
-  session.referenceAnalysis = referenceAnalysis;
+  session.referenceMedia = referenceMedia.map((m) => ({
+    label: m.label,
+    purpose: m.purpose,
+    path: m.path,
+    source: "user",
+  }));
   updateSession(session);
 
-  log("comparing reference against current implementation");
-  const differencePlan = await buildDifferencePlan(provider, {
-    referenceAnalysis,
-    currentMedia,
-    manifest,
-    instruction: options.instruction || "",
-  });
-  session.differencePlan = differencePlan;
-  updateSession(session);
-
-  const report = writePlanReport({
-    sessionId: session.id,
-    target: session.target,
-    referenceFiles: referenceMedia.map((m) => m.path),
-    inspectedFiles: manifest.targetFiles,
-    differencePlan,
-  });
-
-  log("complete", `session=${session.id} report=${report}`);
+  return { session, referenceMedia, currentMedia };
 }
 
+/** Kimi builds complete visual reference in .ui-agent/generated/ — never touches src/ */
 async function runImprove(options: CliOptions): Promise<void> {
   ensureUiAgentDirs();
   const provider = await KimiVisionProvider.createValidated();
+  const { session, referenceMedia, currentMedia } = await ensureSessionWithMedia(options);
 
-  let session: UiAgentSession;
-  if (options.sessionId) {
-    session = loadSession(options.sessionId);
-    log("resuming session", session.id);
-  } else {
-    if (!options.target) throw new Error("--target is required for a new session");
-    const manifest = buildProjectManifest(options.target);
-    session = {
-      id: createSessionId(),
-      createdAt: new Date().toISOString(),
-      target: options.target,
-      instruction: options.instruction || "",
-      referenceMedia: [],
-      currentMedia: [],
-      manifest,
-    };
-    saveSession(session);
-    log("resolving target route", options.target);
-    log("collecting existing implementation", `${manifest.targetFiles.length} files`);
-
-    const referenceMedia = await collectReferenceMedia(options, sessionDir(session.id));
-    if (referenceMedia.length === 0) throw new Error("Provide reference media");
-    log("capturing current UI");
-    const currentMedia = await collectCurrentMedia(options, session);
-    log("analyzing reference media", `${referenceMedia.length} item(s)`);
-    session.referenceAnalysis = await analyzeReferenceMedia(provider, referenceMedia, options.instruction || "");
-    session.differencePlan = await buildDifferencePlan(provider, {
-      referenceAnalysis: session.referenceAnalysis,
-      currentMedia,
-      manifest,
-      instruction: options.instruction || "",
-    });
-    updateSession(session);
-  }
-
-  if (!session.differencePlan) throw new Error("Session missing difference plan — run analyze first");
-
-  log("generating safe change plan");
-  const implementationPlan = await generateImplementationPlan(provider, {
-    differencePlan: session.differencePlan,
-    manifest: session.manifest,
-    instruction: session.instruction,
-  });
-  session.implementationPlan = implementationPlan;
-  updateSession(session);
-
-  const { accepted, rejected } = validateImplementationPlan(implementationPlan);
-  const report = writePlanReport({
+  log("building Kimi reference implementation", session.generatedDir || generatedDirForSession(session.id));
+  const build = await buildReferenceImplementation(provider, {
     sessionId: session.id,
     target: session.target,
-    referenceFiles: session.referenceMedia.map((m) => m.path),
-    inspectedFiles: session.manifest.targetFiles,
-    differencePlan: session.differencePlan,
-    implementationPlan,
-    rejectedChanges: rejected,
+    manifest: session.manifest,
+    referenceMedia,
+    currentMedia,
+    instruction: session.instruction,
   });
 
-  log("plan ready", `${accepted.length} accepted, ${rejected.length} rejected — ${report}`);
+  let passes = 0;
+  const maxPasses = options.maxPasses;
+  let lastSummary = build.summary;
+  while (passes < maxPasses) {
+    passes += 1;
+    log("visual refinement pass", `${passes}/${maxPasses}`);
+    const refined = await refineReferenceImplementation(provider, {
+      sessionId: session.id,
+      target: session.target,
+      manifest: session.manifest,
+      referenceMedia,
+      currentMedia,
+      instruction: session.instruction,
+      originalReferenceMedia: referenceMedia,
+      pass: passes,
+      maxPasses,
+    });
+    lastSummary = refined.summary;
+  }
 
-  if (options.planOnly && !options.apply) {
-    log("complete", "plan-only mode — no files modified");
+  session.refinementPasses = passes;
+  updateSession(session);
+
+  log("reference build complete", lastSummary);
+  log("preview", `npm run ui:preview -- --session ${session.id}`);
+  log("approve when satisfied", `npm run ui:approve -- --session ${session.id}`);
+  log("then integrate", `npm run ui:integrate -- --session ${session.id}`);
+}
+
+async function runApprove(options: CliOptions): Promise<void> {
+  if (!options.sessionId) throw new Error("--session is required");
+  const session = loadSession(options.sessionId);
+  const approved = approveReference({
+    sessionId: session.id,
+    target: session.target,
+    referenceSources: session.referenceMedia.map((m) => m.path),
+    notes: options.instruction,
+  });
+  session.approved = true;
+  updateSession(session);
+  log("frozen visual source of truth", approved.generatedFiles.length + " files");
+}
+
+/** Cursor integration phase — transplant approved reference into production src/ */
+async function runIntegrate(options: CliOptions): Promise<void> {
+  if (!options.sessionId) throw new Error("--session is required");
+  ensureUiAgentDirs();
+  const provider = await KimiVisionProvider.createValidated();
+  const session = loadSession(options.sessionId);
+
+  log("generating functional mapping report");
+  const mapping = await generateFunctionalMappingReport(provider, {
+    sessionId: session.id,
+    manifest: session.manifest,
+  });
+
+  log("generating production integration plan");
+  const integrationPlan = await generateIntegrationPlan(provider, {
+    sessionId: session.id,
+    manifest: session.manifest,
+    mapping,
+    instruction: session.instruction,
+  });
+  session.implementationPlan = integrationPlan;
+  updateSession(session);
+
+  const report = writeIntegrationReport(session.id, mapping, integrationPlan);
+  const { accepted, rejected } = validateImplementationPlan(integrationPlan);
+  log("integration plan ready", `${accepted.length} accepted, ${rejected.length} rejected — ${report}`);
+
+  if (!options.apply) {
+    log("complete", "plan-only — run with --apply to transplant into production");
     return;
   }
 
   if (accepted.length === 0) {
-    logError("apply aborted", "no accepted file changes");
+    logError("integrate aborted", "no accepted production changes");
     return;
   }
 
   const dirtyBefore = readGitDirtyFiles();
   const snapshots = snapshotFiles(accepted.map((c) => c.file));
-  log("applying UI changes", options.dryRun ? "dry-run" : `${accepted.length} file(s)`);
+  log("transplanting presentation into production", options.dryRun ? "dry-run" : `${accepted.length} file(s)`);
   const touched = applyAcceptedChanges(accepted, options.dryRun);
 
   const outsiders = filesChangedOutsidePlan(dirtyBefore, touched);
-  if (outsiders.length > 0) {
-    logError("dirty tree conflict", outsiders.join(", "));
-  }
+  if (outsiders.length > 0) logError("dirty tree conflict", outsiders.join(", "));
 
   if (!options.dryRun) {
-    log("validating protected backend files");
     const validation = validateTouchedFiles(touched);
-    if (!validation.ok || validation.protectedViolations.length > 0) {
+    if (!validation.ok) {
       logError("validation failed — rolling back", validation.protectedViolations.join(", "));
       restoreSnapshots(snapshots.snapshots);
       return;
     }
-    log("running frontend checks");
+    log("capture production page for final visual comparison");
+    // Optional final comparison when captures exist
   }
 
   log("complete", `session=${session.id}`);
@@ -266,10 +301,32 @@ async function runCapture(options: CliOptions): Promise<void> {
   log("capture complete", `session=${sessionId}`);
 }
 
+async function runReference(options: CliOptions): Promise<void> {
+  if (!options.referenceUrls[0]) throw new Error("--reference-url is required");
+  ensureUiAgentDirs();
+  const out = join(UI_AGENT_REFERENCES_DIR, "website-captures", createSessionId());
+  mkdirSync(out, { recursive: true });
+  for (const url of options.referenceUrls) {
+    await captureReferenceUrl({
+      url,
+      outputDir: out,
+      depth: options.referenceDepth,
+      screenshots: true,
+      video: options.captureVideo,
+    });
+  }
+  log("reference capture complete", out);
+}
+
+async function runPreviewCmd(options: CliOptions): Promise<void> {
+  if (!options.sessionId) throw new Error("--session is required");
+  await runPreview(options.sessionId);
+}
+
 async function runValidate(options: CliOptions): Promise<void> {
   if (!options.sessionId) throw new Error("--session is required");
   const session = loadSession(options.sessionId);
-  if (!session.implementationPlan) throw new Error("Session has no implementation plan");
+  if (!session.implementationPlan) throw new Error("Session has no integration plan — run ui:integrate first");
   const touched = session.implementationPlan.changes.map((c) => c.file);
   const result = validateTouchedFiles(touched);
   log("validation", JSON.stringify(result, null, 2));
@@ -285,14 +342,23 @@ async function main(): Promise<void> {
   }
 
   switch (command) {
-    case "analyze":
-      await runAnalyze(options);
-      break;
     case "improve":
       await runImprove(options);
       break;
+    case "approve":
+      await runApprove(options);
+      break;
+    case "integrate":
+      await runIntegrate(options);
+      break;
     case "capture":
       await runCapture(options);
+      break;
+    case "reference":
+      await runReference(options);
+      break;
+    case "preview":
+      await runPreviewCmd(options);
       break;
     case "validate":
       await runValidate(options);

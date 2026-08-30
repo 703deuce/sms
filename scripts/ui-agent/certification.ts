@@ -75,6 +75,36 @@ gate("dry-run apply does not require Kimi", () => {
   assert.equal(touched.length, 1);
 });
 
+gate("integration plan rejects mock-data imports", () => {
+  const { validateIntegrationPlan } = require("./integrate") as typeof import("./integrate");
+  assert.throws(() =>
+    validateIntegrationPlan({
+      summary: "bad",
+      notes: [],
+      changes: [
+        {
+          file: "src/components/ui-agent-cert/SafePresentationDemo.tsx",
+          action: "modify",
+          reason: "mock",
+          content: `import { MOCK } from '../../.ui-agent/generated/x/mock-data'`,
+        },
+      ],
+    }),
+  );
+});
+
+gate("generated sandbox path isolation", () => {
+  const { writeGeneratedFiles, listGeneratedFiles } = require("./generated-sandbox") as typeof import("./generated-sandbox");
+  const sid = "cert-test-session";
+  writeGeneratedFiles(sid, [{ path: "page.tsx", content: "export default function ReferencePage() { return null }" }]);
+  const files = listGeneratedFiles(sid);
+  assert.ok(files.includes("page.tsx"));
+  assert.throws(() => {
+    const { assertGeneratedSandboxPath } = require("./generated-sandbox") as typeof import("./generated-sandbox");
+    assertGeneratedSandboxPath(sid, "../../../etc/passwd");
+  });
+});
+
 if (!quick) {
   gate("project manifest resolves conversations route", () => {
     const manifest = buildProjectManifest("/conversations");
