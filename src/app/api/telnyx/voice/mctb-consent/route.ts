@@ -137,6 +137,13 @@ export async function POST(request: Request) {
         ? MCTB_TEXML_CONSENT_PATH
         : "texml_mctb_consent";
 
+    if (event === "gather" && digits && digits !== "1" && from) {
+      return texml(
+        buildMctbConsentControlledHangupTexml("Thank you. Goodbye."),
+        "gather_press_1",
+      );
+    }
+
     if (event === "gather" && digits === "1" && from) {
       if (!to) {
         return texml(
@@ -164,14 +171,21 @@ export async function POST(request: Request) {
       if (!certModeSkipsSms(certMode)) {
         let gatherSucceeded = false;
         try {
-          const { resolveMctbSipIngressByDid } = await import("@/lib/mctb/sip-ingress/resolver");
-          const ingress = await resolveMctbSipIngressByDid(to);
+          const { resolveMctbTexmlIngressConfig } = await import(
+            "@/lib/mctb/texml-ingress/config-cache"
+          );
+          const ingressConfig = await resolveMctbTexmlIngressConfig(to).catch(() => null);
+          if (!ingressConfig?.workspaceId) {
+            return texml(
+              buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."),
+              "gather_press_1",
+            );
+          }
+
           const certIngressWorkspaceId =
-            consentPath === MCTB_TEXML_CONSENT_PATH && ingress.workspaceId
-              ? ingress.workspaceId
-              : null;
+            consentPath === MCTB_TEXML_CONSENT_PATH ? ingressConfig.workspaceId : null;
           const certIngressPhoneNumberId =
-            consentPath === MCTB_TEXML_CONSENT_PATH ? ingress.phoneNumberId : null;
+            consentPath === MCTB_TEXML_CONSENT_PATH ? ingressConfig.phoneNumberId : null;
 
           const target = certIngressWorkspaceId
             ? {

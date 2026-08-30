@@ -209,6 +209,8 @@ function buildEventMetadata(
     connectionId: event.connectionId || null,
     transovoNumberE164: transovo,
     businessForwardedFromE164: business,
+    forwardedFromE164: business,
+    forwardedFrom: business,
     diversionHeader: event.diversionHeader || null,
     inboundReceivedAt: event.receivedAt.toISOString(),
     consentMode: eligibility.consentMode,

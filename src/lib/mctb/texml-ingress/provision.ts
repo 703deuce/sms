@@ -31,6 +31,7 @@ export async function switchDidToMctbTexmlIngress(input: {
   unassignAgentId?: string | null;
   friendlyName?: string;
   preferredTexmlAppId?: string | null;
+  mctbRole?: "platform_demo" | "customer_mctb";
 }): Promise<SwitchDidToMctbTexmlResult> {
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
@@ -77,7 +78,7 @@ export async function switchDidToMctbTexmlIngress(input: {
   settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
   settings.routingOwner = MCTB_TEXML_ROUTING_OWNER;
   settings.mctbSipIngress = true;
-  settings.mctbRole = "customer_mctb";
+  settings.mctbRole = input.mctbRole || "customer_mctb";
 
   const texmlRoute = await routePhoneToMctbTexmlIngress({
     e164: phone.e164,
@@ -90,6 +91,9 @@ export async function switchDidToMctbTexmlIngress(input: {
   });
 
   telephony.telnyxTexmlAppId = texmlRoute.texmlAppId;
+  if (texmlRoute.previousConnectionId) {
+    telephony.mctbTexmlPreviousConnectionId = texmlRoute.previousConnectionId;
+  }
   settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
 
   await prisma.phoneNumber.update({

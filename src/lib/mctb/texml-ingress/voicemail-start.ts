@@ -40,6 +40,21 @@ export async function ensureMctbTexmlVoicemailSession(input: {
     return { messageId: dbExisting.messageId };
   }
 
+  const humanCallId = mctbTexmlVoicemailHumanCallId(callSid);
+  const prisma = getPrisma();
+  const raced = await prisma.voicemailMessage.findFirst({
+    where: { humanCallId },
+    select: { id: true, workspaceId: true },
+  });
+  if (raced) {
+    startMctbTexmlVoicemailSession({
+      callSid,
+      workspaceId: raced.workspaceId,
+      messageId: raced.id,
+    });
+    return { messageId: raced.id };
+  }
+
   const started = await startMctbSipVoicemailForPython({
     workspaceId: input.workspaceId,
     callerE164: input.callerE164,
@@ -50,10 +65,14 @@ export async function ensureMctbTexmlVoicemailSession(input: {
   });
   if (!started.ok || !started.messageId) return null;
 
-  const prisma = getPrisma();
   await prisma.voicemailMessage.update({
     where: { id: started.messageId },
-    data: { humanCallId: mctbTexmlVoicemailHumanCallId(callSid) },
+    data: {
+      humanCallId,
+      ...(input.forwardedFromE164?.trim()
+        ? { forwardedTo: input.forwardedFromE164.trim() }
+        : {}),
+    },
   });
 
   startMctbTexmlVoicemailSession({

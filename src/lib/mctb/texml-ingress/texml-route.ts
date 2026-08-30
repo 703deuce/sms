@@ -112,6 +112,7 @@ export async function routePhoneToMctbTexmlIngress(input: {
   texmlAppId: string;
   voiceUrl: string;
   liveConnectionId: string | null;
+  previousConnectionId: string | null;
   matched: boolean;
   path: string;
 }> {
@@ -120,6 +121,13 @@ export async function routePhoneToMctbTexmlIngress(input: {
     preferredAppId: input.preferredTexmlAppId,
   });
   const voiceUrl = mctbTexmlEntryVoiceUrl();
+
+  const before = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
+  );
+  const previousConnectionId = String(
+    (asRecord(before.data) || asRecord(before) || {}).connection_id || "",
+  );
 
   await telnyxRequest(`/phone_numbers/${encodeURIComponent(input.providerNumberId)}`, {
     method: "PATCH",
@@ -139,6 +147,7 @@ export async function routePhoneToMctbTexmlIngress(input: {
     texmlAppId,
     voiceUrl,
     liveConnectionId: liveConnectionId || null,
+    previousConnectionId: previousConnectionId || null,
     matched,
     path: matched
       ? `${input.e164} → TeXML ${texmlAppId} → MCTB ingress (Call Control bypassed)`
@@ -210,6 +219,32 @@ export async function verifyMctbTexmlIngressRoute(input: {
     voiceUrl,
     failReason: ok ? undefined : `Expected TeXML ${texmlAppId}, live ${liveConnectionId || "(none)"}`,
   };
+}
+
+/** Restore a DID off the MCTB TeXML app (e.g. number switch or MCTB disable). */
+export async function unroutePhoneFromMctbTexmlIngress(input: {
+  e164?: string | null;
+  providerNumberId: string;
+  restoreConnectionId: string;
+}): Promise<{ ok: boolean; liveConnectionId: string | null }> {
+  const restoreConnectionId = input.restoreConnectionId.trim();
+  if (!restoreConnectionId) {
+    return { ok: false, liveConnectionId: null };
+  }
+
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(input.providerNumberId)}`, {
+    method: "PATCH",
+    body: { connection_id: restoreConnectionId },
+  });
+
+  const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
+  );
+  const liveConnectionId = String((asRecord(verify.data) || asRecord(verify) || {}).connection_id || "");
+
+  if (input.e164) invalidateMctbTexmlIngressCache(input.e164);
+
+  return { ok: liveConnectionId === restoreConnectionId, liveConnectionId: liveConnectionId || null };
 }
 
 export { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER };

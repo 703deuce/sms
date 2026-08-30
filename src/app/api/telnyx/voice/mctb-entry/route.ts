@@ -228,14 +228,34 @@ export async function POST(request: Request) {
         voicemailBody = buildMctbVoicemailGreetingTexml(pausedVoicemailPlayback);
       }
 
-      if (from && callSid) {
-        void ensureMctbTexmlVoicemailSession({
+      if (!callSid) {
+        traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_call_sid_voicemail" });
+        return texmlResponse(CONTROLLED_HANGUP, { branch: "error_missing_call_sid" });
+      }
+
+      if (from) {
+        const vmSession = await ensureMctbTexmlVoicemailSession({
           callSid,
           workspaceId,
           callerE164: from,
           transovoNumberE164: resolvedTo,
           forwardedFromE164: forwardedFrom || null,
-        }).catch(() => undefined);
+        }).catch((err) => {
+          console.error(
+            JSON.stringify({
+              source: "mctb-entry",
+              event: "voicemail_session_failed",
+              callSid,
+              workspaceId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+          return null;
+        });
+        if (!vmSession) {
+          traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "voicemail_session_failed", callSid });
+          return texmlResponse(CONTROLLED_HANGUP, { branch: "voicemail_session_failed" });
+        }
       }
 
       traceMctbTexml("MCTB_TEXML_RETURNED", {

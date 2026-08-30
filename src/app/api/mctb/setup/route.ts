@@ -250,6 +250,16 @@ export async function POST(req: Request) {
         ? body.enabled
         : undefined;
 
+  if (
+    body.consentMode === "existing_consent" &&
+    body.existingConsentAttested !== true
+  ) {
+    return NextResponse.json(
+      { error: "Existing consent attestation is required" },
+      { status: 400 },
+    );
+  }
+
   if (body.activate === true && body.phoneNumberId) {
     const [phoneNumbers, compliance, reg, adminFlags] = await Promise.all([
       loadWorkspaceAccessiblePhoneNumbers(workspaceId),
@@ -280,10 +290,12 @@ export async function POST(req: Request) {
         ? "always_on"
         : undefined);
 
+  const phoneNumberChanged =
+    body.phoneNumberId !== undefined && body.phoneNumberId !== previousPhoneId;
   const smsPhoneNumberIdForPatch =
     body.smsPhoneNumberId !== undefined
       ? body.smsPhoneNumberId
-      : body.phoneNumberId !== undefined
+      : phoneNumberChanged && body.phoneNumberId !== undefined
         ? body.phoneNumberId
         : undefined;
 
@@ -380,7 +392,6 @@ export async function POST(req: Request) {
       "@/lib/mctb/texml-ingress/deprovision"
     );
     await releaseMctbTexmlIngressFromPhone({
-      workspaceId,
       phoneNumberId: previousPhoneId,
     }).catch(() => undefined);
   }
@@ -408,6 +419,7 @@ export async function POST(req: Request) {
         phoneNumberId: pn.id,
         messageTemplate: body.messageTemplate,
         delaySeconds: body.delaySeconds,
+        activate: body.activate === true,
       });
     }
   }
@@ -435,18 +447,6 @@ export async function POST(req: Request) {
       customCfg.mctb && typeof customCfg.mctb === "object"
         ? (customCfg.mctb as Record<string, unknown>)
         : {};
-
-    if (body.consentMode) {
-      if (
-        body.consentMode === "existing_consent" &&
-        body.existingConsentAttested !== true
-      ) {
-        return NextResponse.json(
-          { error: "Existing consent attestation is required" },
-          { status: 400 },
-        );
-      }
-    }
 
     if (scheduleModePatch !== undefined) {
       mctb.scheduleMode = scheduleModePatch;

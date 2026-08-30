@@ -42,6 +42,8 @@ export async function provisionMctbTelnyxSipIngress(input: {
   delaySeconds?: number;
   /** platform_demo = shared Try It DID; customer_mctb = paid production DID */
   mctbRole?: "platform_demo" | "customer_mctb";
+  /** When false, route TeXML but do not force-enable runtime (number switch). */
+  activate?: boolean;
 }): Promise<ProvisionMctbTelnyxSipIngressResult> {
   const prisma = getPrisma();
   let phone = await prisma.phoneNumber.findFirst({
@@ -122,6 +124,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
       workspaceId: provisionWorkspaceId,
       phoneNumberId: phone.id,
       friendlyName: role === "platform_demo" ? "MCTB Platform Demo" : `MCTB ${phone.e164}`,
+      mctbRole: role,
     });
     actions.push(
       `mctb_texml_app:${String((routed.texmlRoute as { texmlAppId?: string }).texmlAppId || "")}`,
@@ -161,6 +164,8 @@ export async function provisionMctbTelnyxSipIngress(input: {
   const scheduleSettings = await loadMctbScheduleSettings(input.workspaceId, runtimeConfig);
   const paused = isMctbSchedulePaused(scheduleSettings, runtimeConfig);
 
+  const shouldActivate = input.activate === true && !paused;
+
   await activateJohnOnPhoneNumber({
     workspaceId: input.workspaceId,
     phoneNumberId: phone.id,
@@ -168,7 +173,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     delaySeconds: input.delaySeconds ?? 0,
     messageTemplate: input.messageTemplate,
     skipGenericVoiceProvision: true,
-    activate: !paused,
+    activate: shouldActivate,
   }).catch(() => undefined);
 
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);

@@ -13,6 +13,11 @@ import { getTelnyxApiKey, getTelnyxPublicKey } from "@/lib/messaging/telnyx/conf
 import { telnyxProvider } from "@/lib/messaging/telnyx/provider";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  normalizeForwardedFromE164,
+  parseTelnyxForwardedFrom,
+} from "@/lib/voice/telnyx/forwarded-from";
+import { resolveMctbTexmlCallLegContext } from "@/lib/mctb/texml-ingress/call-leg-context";
 
 function formToRecord(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -195,22 +200,44 @@ export async function handleTexmlStatusCallback(request: Request) {
     if (pnMctb && isMctbTexmlVoiceIngress(pnMctb.settingsJson)) {
       const terminal = eventType === "call.hangup";
       if (terminal) {
-        const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
-        const { resolveMctbTexmlIngressConfig } = await import(
-          "@/lib/mctb/texml-ingress/config-cache"
+        const fromEarly = pick(eventPayload.from, eventPayload.From, eventPayload.Caller);
+        const callSidEarly = pick(
+          eventPayload.CallSid,
+          eventPayload.call_sid,
+          eventPayload.call_control_id,
         );
-        const ingressConfig = await resolveMctbTexmlIngressConfig(toEarly).catch(() => null);
-        const mode =
-          (await loadMctbConsentMode(pnMctb.workspaceId).catch(() => null)) ||
-          ingressConfig?.consentMode ||
-          "press_1";
+        let forwardedFrom =
+          normalizeForwardedFromE164(pick(eventPayload.ForwardedFrom, eventPayload.forwarded_from)) ||
+          parseTelnyxForwardedFrom(eventPayload) ||
+          "";
+        if (!forwardedFrom && callSidEarly) {
+          const leg = await resolveMctbTexmlCallLegContext(callSidEarly).catch(() => null);
+          if (leg?.forwardedFromE164) forwardedFrom = leg.forwardedFromE164;
+        }
+
+        const { resolveMctbTargetWorkspaceForInboundCall } = await import(
+          "@/lib/mctb/onboarding/demo-workspace-target"
+        );
+        const target = await resolveMctbTargetWorkspaceForInboundCall({
+          callerE164: fromEarly || "",
+          businessE164: toEarly,
+          fallbackWorkspaceId: pnMctb.workspaceId,
+          forwardedFrom: forwardedFrom || null,
+        });
+
+        const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
+        const mode = await loadMctbConsentMode(target.workspaceId).catch(() => "press_1");
         if (mode === MCTB_CONSENT_MODE_EXISTING) {
           const { scheduleMctbTexmlExistingConsentCapture } = await import(
             "@/lib/mctb/texml-ingress/existing-consent-capture"
           );
           scheduleMctbTexmlExistingConsentCapture({
-            eventPayload,
-            workspaceId: pnMctb.workspaceId,
+            eventPayload: {
+              ...eventPayload,
+              ...(forwardedFrom ? { ForwardedFrom: forwardedFrom, forwarded_from: forwardedFrom } : {}),
+            },
+            workspaceId: target.workspaceId,
+            forwardedFromE164: forwardedFrom || null,
           });
         }
       }

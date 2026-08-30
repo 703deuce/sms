@@ -32,6 +32,7 @@ export const MCTB_FINAL_PIPELINE_SOURCE_FILES = [
   "src/lib/mctb/consent-prompt/texml-response.ts",
   "src/lib/mctb/texml-ingress/frozen-pipeline.ts",
   "src/lib/mctb/texml-ingress/existing-consent-capture.ts",
+  "src/lib/mctb/texml-ingress/call-leg-context.ts",
   "src/lib/mctb/texml-ingress/deprovision.ts",
   "src/lib/mctb/texml-ingress/e164-lookup.ts",
   "src/lib/mctb/texml-ingress/voicemail-lookup.ts",

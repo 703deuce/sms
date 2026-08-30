@@ -2,18 +2,55 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
+import { unroutePhoneFromMctbTexmlIngress } from "./texml-route";
 
-/** Clear MCTB TeXML ingress metadata from a phone row (e.g. when switching DIDs). */
+function telephonyRecord(settingsJson: unknown): Record<string, unknown> {
+  const settings =
+    settingsJson && typeof settingsJson === "object" && !Array.isArray(settingsJson)
+      ? (settingsJson as Record<string, unknown>)
+      : {};
+  const telephony = settings.telephony;
+  return telephony && typeof telephony === "object" && !Array.isArray(telephony)
+    ? (telephony as Record<string, unknown>)
+    : {};
+}
+
+/** Clear MCTB TeXML ingress metadata and restore Telnyx routing when possible. */
 export async function releaseMctbTexmlIngressFromPhone(input: {
-  workspaceId: string;
+  workspaceId?: string;
   phoneNumberId: string;
-}): Promise<{ ok: boolean; e164: string | null }> {
+}): Promise<{ ok: boolean; e164: string | null; telnyxRestored?: boolean; error?: string }> {
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
-    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
-    select: { id: true, e164: true, settingsJson: true },
+    where: input.workspaceId
+      ? { id: input.phoneNumberId, workspaceId: input.workspaceId }
+      : { id: input.phoneNumberId },
+    select: {
+      id: true,
+      e164: true,
+      providerNumberId: true,
+      settingsJson: true,
+    },
   });
-  if (!phone) return { ok: false, e164: null };
+  if (!phone) return { ok: false, e164: null, error: "phone_not_found" };
+
+  const telephony = telephonyRecord(phone.settingsJson);
+  const restoreConnectionId = String(telephony.mctbTexmlPreviousConnectionId || "").trim();
+  let telnyxRestored = false;
+
+  if (phone.providerNumberId && restoreConnectionId) {
+    try {
+      const unrouted = await unroutePhoneFromMctbTexmlIngress({
+        e164: phone.e164,
+        providerNumberId: phone.providerNumberId,
+        restoreConnectionId,
+      });
+      telnyxRestored = unrouted.ok;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, e164: phone.e164, error: message || "telnyx_unroute_failed" };
+    }
+  }
 
   const settings =
     phone.settingsJson && typeof phone.settingsJson === "object" && !Array.isArray(phone.settingsJson)
@@ -24,15 +61,16 @@ export async function releaseMctbTexmlIngressFromPhone(input: {
   settings.routingOwner = null;
   delete settings.mctbRole;
 
-  const telephony =
+  const nextTelephony =
     settings.telephony && typeof settings.telephony === "object" && !Array.isArray(settings.telephony)
       ? { ...(settings.telephony as Record<string, unknown>) }
       : {};
-  delete telephony.routingMode;
-  delete telephony.routingOwner;
-  delete telephony.telnyxTexmlAppId;
-  delete telephony.state;
-  settings.telephony = telephony;
+  delete nextTelephony.routingMode;
+  delete nextTelephony.routingOwner;
+  delete nextTelephony.telnyxTexmlAppId;
+  delete nextTelephony.mctbTexmlPreviousConnectionId;
+  delete nextTelephony.state;
+  settings.telephony = nextTelephony;
 
   await prisma.phoneNumber.update({
     where: { id: phone.id },
@@ -41,5 +79,5 @@ export async function releaseMctbTexmlIngressFromPhone(input: {
 
   if (phone.e164) invalidateMctbTexmlIngressCache(phone.e164);
 
-  return { ok: true, e164: phone.e164 };
+  return { ok: true, e164: phone.e164, telnyxRestored };
 }
