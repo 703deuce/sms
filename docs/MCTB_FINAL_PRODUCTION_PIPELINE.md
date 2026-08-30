@@ -18,7 +18,9 @@ This document is the **only** canonical description of Missed Call Text Back inb
 - Remove either `press_1` or `existing_consent` mode
 - Add env-var cert switches that alter production `cert=D` behavior without review
 
-Verification: `npm run verify:mctb-final-pipeline`
+Verification:
+- `npm run test:mctb-final-pipeline-contract` — unit lock on both mode TeXML shapes (no HTTP)
+- `npm run verify:mctb-final-pipeline` — live DB + Telnyx + entry webhook checks
 
 ---
 
@@ -132,4 +134,4 @@ Any PR that edits frozen files above must:
 1. State why the frozen spec is insufficient
 2. Update this document only with explicit approval
 3. Re-run PSTN cert on **both** modes
-4. Pass `npm run verify:mctb-final-pipeline`
+4. Pass `npm run test:mctb-final-pipeline-contract` and `npm run verify:mctb-final-pipeline`

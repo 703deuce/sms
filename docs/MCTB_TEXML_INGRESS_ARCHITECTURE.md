@@ -1,5 +1,7 @@
 # MCTB TeXML Ingress Architecture
 
+> **FROZEN PRODUCTION PIPELINE:** `docs/MCTB_FINAL_PRODUCTION_PIPELINE.md` (`mctb_texml_final_v1`) — PSTN certified 2026-08-30. Do not change ingress behavior without updating that doc and re-certifying both modes. Verify: `npm run verify:mctb-final-pipeline`.
+
 **Status:** Implemented — TeXML-first MCTB on shared DID pattern  
 **Production test DID:** `+18663464256` (`cmsc3numa1j17084g391t2z5l`)  
 **Switch script:** `scripts/switch-866-amy-to-mctb-texml.ts`  

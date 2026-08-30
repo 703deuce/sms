@@ -51,7 +51,8 @@ export function isMctbTexmlVoiceIngress(settingsJson: unknown): boolean {
   return (telephony as Record<string, unknown>).routingMode === MCTB_TEXML_ROUTING_MODE;
 }
 
-/** DID is locked to MCTB TeXML — refuse LiveKit FQDN / agent reprovision steals. */
+/** DID is locked to MCTB TeXML — refuse LiveKit FQDN / agent reprovision steals.
+ *  See docs/MCTB_FINAL_PRODUCTION_PIPELINE.md (mctb_texml_final_v1). */
 export function isMctbTexmlIngressLocked(settingsJson: unknown): boolean {
   const settings = readPhoneMctbSettings(settingsJson);
   if (settings.routingOwner === MCTB_TEXML_ROUTING_OWNER) return true;

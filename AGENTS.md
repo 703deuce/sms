@@ -15,6 +15,17 @@ Before creating replacements, **audit** existing routes, pages, components, APIs
 ### Non-negotiables
 
 - Keep **both MCTB modes**: Press-1 consent (`press_1`) and automatic text-back (`existing_consent`). Never make Press-1 the only option.
+
+### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
+
+**Read:** `docs/MCTB_FINAL_PRODUCTION_PIPELINE.md`
+
+PSTN-certified TeXML ingress for CFNA. **Do not change** these behaviors without explicit sign-off and re-cert on both modes:
+
+- **`press_1`:** `<Play>` press-1 consent audio → `<Gather>` DTMF 1 → SMS
+- **`existing_consent`:** `<Play>` voicemail greeting → `<Hangup>` → auto SMS on `texml-status`
+
+Do not route certified MCTB DIDs back to LiveKit FQDN, Call Control-only ingress, or AI assistant TeXML. Guards: `isMctbTexmlIngressLocked()`. Verify: `npm run verify:mctb-final-pipeline`.
 - **Smart Routing** is a standalone purchasable product as well as a bundle with MCTB. Do not require MCTB to use Smart Routing.
 - Customer keeps their **existing business number** — inbound layer only; no port-required launch.
 - Do not turn this into a PBX, softphone, CRM, SMS marketing platform, AI receptionist, or vanity-number marketplace.
