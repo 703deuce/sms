@@ -180,7 +180,7 @@ export async function triggerMissedCallTextFromConsent(input: {
   const certMode =
     typeof input.eventMetadata?.certMode === "string" ? input.eventMetadata.certMode : null;
   const lockWorkspaceForTexmlIngress =
-    path === "texml_mctb_ingress" || certMode === "C" || input.eventMetadata?.testSms === true;
+    path === "texml_mctb_ingress" || certMode === "C" || certMode === "C3" || input.eventMetadata?.testSms === true;
 
   const session = await prisma.smartRoutingCallSession.findUnique({
     where: { id: input.callSessionId },

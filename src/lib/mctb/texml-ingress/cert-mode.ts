@@ -7,7 +7,7 @@ export function resolveMctbTexmlCertMode(override?: string | null): ResolvedMctb
   const raw = (override?.trim() || process.env.MCTB_TEXML_CERT_MODE?.trim() || "D")
     .toUpperCase();
   if (raw === "MINIMAL" || raw === "0") return "MINIMAL";
-  if (raw === "A" || raw === "B" || raw === "B2" || raw === "B3" || raw === "C") return raw;
+  if (raw === "A" || raw === "B" || raw === "B2" || raw === "B3" || raw === "C" || raw === "C3") return raw;
   return "D";
 }
 
@@ -23,7 +23,7 @@ export function isPlayOnlyCertMode(mode?: ResolvedMctbTexmlCertMode): boolean {
 
 export function certModeForcesPress1Gather(mode?: ResolvedMctbTexmlCertMode): boolean {
   const m = mode ?? resolveMctbTexmlCertMode();
-  return m === "B" || m === "B3" || m === "C";
+  return m === "B" || m === "B3" || m === "C" || m === "C3";
 }
 
 export function certModeSkipsSms(mode?: ResolvedMctbTexmlCertMode): boolean {
@@ -38,12 +38,12 @@ export function certModeSkipsConsentBackend(mode?: ResolvedMctbTexmlCertMode): b
 
 export function certModeUsesTestSms(mode?: ResolvedMctbTexmlCertMode): boolean {
   const m = mode ?? resolveMctbTexmlCertMode();
-  return m === "C";
+  return m === "C" || m === "C3";
 }
 
 export function certModeUsesPlayGather(mode?: ResolvedMctbTexmlCertMode): boolean {
   const m = mode ?? resolveMctbTexmlCertMode();
-  return m === "B3";
+  return m === "B3" || m === "C3";
 }
 
 export function mctbEntryVoiceUrlWithCert(baseEntryUrl: string, cert?: string | null): string {

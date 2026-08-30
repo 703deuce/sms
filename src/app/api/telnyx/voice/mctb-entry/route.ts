@@ -148,6 +148,7 @@ export async function POST(request: Request) {
     const consentMode = config?.consentMode || "press_1";
 
     if (consentMode === MCTB_CONSENT_MODE_EXISTING && !certModeForcesPress1Gather(certMode)) {
+      const audioUrl = getMctbConsentPlaybackUrl();
       traceMctbTexml("MCTB_TEXML_RETURNED", {
         branch: "existing_consent",
         latencyMs: Date.now() - started,
@@ -156,12 +157,12 @@ export async function POST(request: Request) {
         routingMode: config?.routingMode || MCTB_TEXML_ROUTING_MODE,
         consentMode,
         workspaceId: config?.workspaceId,
+        audioUrl,
       });
-      return texmlResponse(
-        `<Say voice="female">Thank you for calling. We will text you shortly.</Say><Pause length="1"/><Hangup/>`,
-        {
+      return texmlResponse(buildMctbCertPlayOnlyTexml(), {
         branch: "existing_consent",
         consentMode,
+        audioUrl,
       });
     }
 
@@ -174,7 +175,9 @@ export async function POST(request: Request) {
       ? resolveMctbConsentTexmlPromptMode("play-gather")
       : certMode === "B" || certMode === "C"
         ? resolveMctbConsentTexmlPromptMode("say-gather")
-        : resolveMctbConsentTexmlPromptMode(null);
+        : certMode === "D"
+          ? resolveMctbConsentTexmlPromptMode("play-gather")
+          : resolveMctbConsentTexmlPromptMode(null);
 
     const built = buildMctbConsentInboundTexml(forwardedFrom, {
       promptMode,

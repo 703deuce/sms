@@ -6,7 +6,8 @@
  *   npx tsx scripts/set-866-mctb-cert-mode.ts B    # Gather + Say + press 1
  *   npx tsx scripts/set-866-mctb-cert-mode.ts B2   # Play consent audio only (media cert)
  *   npx tsx scripts/set-866-mctb-cert-mode.ts B3   # Gather + Play + press 1
- *   npx tsx scripts/set-866-mctb-cert-mode.ts C    # Gather + press 1 + test SMS
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts C    # Gather + Say + press 1 + test SMS
+ *   npx tsx scripts/set-866-mctb-cert-mode.ts C3   # Gather + Play audio + press 1 + SMS
  *   npx tsx scripts/set-866-mctb-cert-mode.ts D    # production (no ?cert= on URL)
  *
  * Requires: TELNYX_API_KEY, APP_URL (or NEXT_PUBLIC_APP_URL)
@@ -28,7 +29,7 @@ async function main() {
   const pre = await preflightTexmlVoiceUrl(voiceUrl);
   console.log(JSON.stringify({ cert, voiceUrl, preflight: pre }, null, 2));
 
-  if (!pre.ok) {
+  if (!pre.ok && process.env.SKIP_TEXML_PREFLIGHT !== "1") {
     throw new Error(`Preflight failed for ${voiceUrl}: ${pre.error}`);
   }
 

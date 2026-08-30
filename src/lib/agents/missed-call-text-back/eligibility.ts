@@ -157,7 +157,9 @@ export async function evaluateMissedCallTextEligibility(input: {
   const cooldownSince = new Date(Date.now() - config.cooldownMinutes * 60_000);
   const skipCooldown =
     input.eventMetadata?.testSms === true ||
-    input.eventMetadata?.certMode === "C";
+    input.eventMetadata?.certMode === "C" ||
+    input.eventMetadata?.certMode === "C3" ||
+    config.cooldownMinutes <= 0;
   if (!skipCooldown) {
     const recentSent = await prisma.missedCallEvent.count({
       where: {
