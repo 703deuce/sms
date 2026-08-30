@@ -4,6 +4,7 @@ import { buildMctbEventTimeline } from "@/lib/mctb/timeline";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
 import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,6 +13,7 @@ export async function GET(_request: Request, { params }: Params) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workspaceId = await getActiveWorkspaceId();
   const { id } = await params;
+  traceMctbDebug("missed-call-detail", "get_start", { workspaceId, eventId: id });
 
   try {
     const timeline = await buildMctbEventTimeline(id);
@@ -21,6 +23,7 @@ export async function GET(_request: Request, { params }: Params) {
       where: { id, workspaceId },
     });
     if (!event) {
+      traceMctbDebug("missed-call-detail", "not_found", { workspaceId, eventId: id });
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -44,6 +47,14 @@ export async function GET(_request: Request, { params }: Params) {
       loadConsentForMissedCallEvent({ workspaceId, missedCallEventId: id }),
     ]);
 
+    traceMctbDebug("missed-call-detail", "get_complete", {
+      workspaceId,
+      eventId: id,
+      status: event.status,
+      callerE164: event.callerE164,
+      timelineSteps: timeline.length,
+    });
+
     return NextResponse.json({
       ok: true,
       event,
@@ -60,7 +71,8 @@ export async function GET(_request: Request, { params }: Params) {
       leadCaptureEnabled: config.leadCaptureEnabled,
       consent,
     });
-  } catch {
+  } catch (err) {
+    traceMctbDebugError("missed-call-detail", "get_failed", err, { workspaceId, eventId: id });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 }

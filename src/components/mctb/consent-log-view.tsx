@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { traceMctbClient } from "@/lib/mctb/debug-client";
 
 type ConsentLogEvent = {
   id: string;
@@ -95,6 +96,7 @@ export function MctbConsentLogView() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    traceMctbClient("consent-log", "load_start", { callerFilter: callerFilter.trim() || null });
     try {
       const params = new URLSearchParams();
       if (callerFilter.trim()) params.set("caller", callerFilter.trim());
@@ -108,7 +110,12 @@ export function MctbConsentLogView() {
       }
       setEvents(json.data?.events || []);
       setSummary(json.data?.summary || null);
+      traceMctbClient("consent-log", "load_complete", {
+        eventCount: (json.data?.events || []).length,
+        summary: json.data?.summary ?? null,
+      });
     } catch {
+      traceMctbClient("consent-log", "load_failed");
       setError("Could not load consent log");
       setEvents([]);
       setSummary(null);

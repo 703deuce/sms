@@ -41,6 +41,12 @@ import {
   isMctbSetupPausing,
   resolveMctbPauseKind,
 } from "@/lib/mctb/schedule";
+import {
+  isMctbDebugEnabled,
+  summarizeMctbPhoneOptions,
+  traceMctbDebug,
+  traceMctbDebugError,
+} from "@/lib/mctb/debug";
 
 export type MctbConsentMode = "press_1" | "existing_consent";
 
@@ -92,6 +98,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workspaceId = await getActiveWorkspaceId();
+  traceMctbDebug("setup", "get_start", { workspaceId, userId: session.userId });
   const prisma = getPrisma();
 
   const ws = await prisma.workspace.findUnique({
@@ -167,6 +174,13 @@ export async function GET() {
     (sanitizedPhoneNumberId !== runtime.phoneNumberId ||
       sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId)
   ) {
+    traceMctbDebug("setup", "stale_phone_repair", {
+      workspaceId,
+      beforePhoneNumberId: runtime.phoneNumberId,
+      afterPhoneNumberId: sanitizedPhoneNumberId,
+      beforeSmsPhoneNumberId: runtime.smsPhoneNumberId,
+      afterSmsPhoneNumberId: sanitizedSmsPhoneNumberId,
+    });
     void updateMissedCallTextConfig({
       workspaceId,
       patch: {
@@ -175,9 +189,23 @@ export async function GET() {
       },
       source: "mctb_setup_stale_phone_repair",
     }).catch((err) => {
-      console.warn("[mctb/setup] stale phone id repair", err);
+      traceMctbDebugError("setup", "stale_phone_repair_failed", err, { workspaceId });
     });
   }
+
+  traceMctbDebug("setup", "get_complete", {
+    workspaceId,
+    runtimePhoneNumberId: runtimeForClient.phoneNumberId,
+    runtimeSmsPhoneNumberId: runtimeForClient.smsPhoneNumberId,
+    consentMode:
+      (mctbSettings.consentMode as MctbConsentMode | undefined) ||
+      (setupMeta.consentMode as MctbConsentMode | undefined) ||
+      "press_1",
+    enabled: runtimeForClient.enabled,
+    paused: isMctbSchedulePaused(effectiveSchedule, runtime),
+    phoneOptions: summarizeMctbPhoneOptions(phoneNumbersWithStatus),
+    messagingReady,
+  });
 
   return NextResponse.json({
     data: {
@@ -241,16 +269,40 @@ export async function POST(req: Request) {
   const priorRuntime = await loadMissedCallTextConfig(workspaceId);
   const previousPhoneId = priorRuntime.phoneNumberId;
 
+  traceMctbDebug("setup", "post_start", {
+    workspaceId,
+    userId: session.userId,
+    previousPhoneNumberId: previousPhoneId,
+    requestedPhoneNumberId: body.phoneNumberId ?? null,
+    requestedSmsPhoneNumberId: body.smsPhoneNumberId ?? null,
+    consentMode: body.consentMode ?? null,
+    activate: body.activate ?? null,
+    enabled: body.enabled ?? null,
+    pauseUntil: body.pauseUntil ?? null,
+  });
+
   if (body.phoneNumberId !== undefined && body.phoneNumberId !== null) {
+    const requestedPhoneId = body.phoneNumberId;
     const canonicalPhoneId = await resolveCanonicalMctbSetupPhoneId(
       workspaceId,
       body.phoneNumberId,
     );
     if (!canonicalPhoneId) {
+      traceMctbDebug("setup", "phone_rejected", {
+        workspaceId,
+        requestedPhoneNumberId: requestedPhoneId,
+      });
       return NextResponse.json(
         { error: "Selected number is not available for this workspace." },
         { status: 400 },
       );
+    }
+    if (canonicalPhoneId !== requestedPhoneId) {
+      traceMctbDebug("setup", "phone_canonicalized", {
+        workspaceId,
+        requestedPhoneNumberId: requestedPhoneId,
+        canonicalPhoneNumberId: canonicalPhoneId,
+      });
     }
     body.phoneNumberId = canonicalPhoneId;
   }
@@ -332,6 +384,14 @@ export async function POST(req: Request) {
 
   const phoneNumberChanged =
     body.phoneNumberId !== undefined && body.phoneNumberId !== previousPhoneId;
+  if (phoneNumberChanged) {
+    traceMctbDebug("setup", "phone_switch", {
+      workspaceId,
+      fromPhoneNumberId: previousPhoneId,
+      toPhoneNumberId: body.phoneNumberId ?? null,
+      activate: body.activate ?? null,
+    });
+  }
   const smsPhoneNumberIdForPatch =
     body.smsPhoneNumberId !== undefined
       ? body.smsPhoneNumberId
@@ -435,7 +495,10 @@ export async function POST(req: Request) {
       workspaceId,
       phoneNumberId: previousPhoneId,
     }).catch((err) => {
-      console.warn("[mctb/setup] heal previous number dual-channel provision", err);
+      traceMctbDebugError("setup", "heal_previous_number_failed", err, {
+        workspaceId,
+        phoneNumberId: previousPhoneId,
+      });
     });
   }
 
@@ -464,6 +527,11 @@ export async function POST(req: Request) {
           phoneNumberId: pn.id,
         });
         sipProvision = { ok: true, actions: ["carrier_dual_channel_mctb_sms"] };
+        traceMctbDebug("setup", "sip_provision_ok", {
+          workspaceId,
+          phoneNumberId: pn.id,
+          actions: sipProvision.actions,
+        });
 
         if (body.activate === true) {
           const { activateJohnOnPhoneNumber } = await import(
@@ -483,6 +551,10 @@ export async function POST(req: Request) {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         sipProvision = { ok: false, error: message || "carrier_dual_channel_failed" };
+        traceMctbDebugError("setup", "sip_provision_failed", err, {
+          workspaceId,
+          phoneNumberId: pn.id,
+        });
       }
     }
   }
@@ -585,6 +657,11 @@ export async function POST(req: Request) {
           assignedPhoneNumberId: phoneId ?? undefined,
         });
         consentSync = { ok: true, action: syncResult.action };
+        traceMctbDebug("setup", "consent_sync_ok", {
+          workspaceId,
+          action: syncResult.action,
+          phoneNumberId: phoneId,
+        });
         if (body.consentMode) {
           await invalidateMctbTexmlIngressCacheForWorkspace(workspaceId);
         }
@@ -593,6 +670,10 @@ export async function POST(req: Request) {
           ok: false,
           error: err instanceof Error ? err.message : String(err),
         };
+        traceMctbDebugError("setup", "consent_sync_failed", err, {
+          workspaceId,
+          phoneNumberId: phoneId,
+        });
       }
     }
 
@@ -653,6 +734,20 @@ export async function POST(req: Request) {
   );
   const normalizedAfter = normalizeMctbPauseState(scheduleAfter, runtimeResult.config);
   const pauseKind = resolveMctbPauseKind(normalizedAfter.settings, runtimeResult.config);
+
+  traceMctbDebug("setup", "post_complete", {
+    workspaceId,
+    phoneNumberId: runtimeResult.config.phoneNumberId,
+    smsPhoneNumberId: runtimeResult.config.smsPhoneNumberId,
+    phoneNumberChanged,
+    sipProvision,
+    tenantBinding,
+    consentSync,
+    attestation,
+    paused: isMctbSchedulePaused(normalizedAfter.settings, runtimeResult.config),
+    pauseKind,
+    debugEnabled: isMctbDebugEnabled(),
+  });
 
   return NextResponse.json({
     ok: true,

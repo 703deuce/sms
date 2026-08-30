@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { MctbVoicemailSetupSection } from "@/components/mctb/voicemail-setup-section";
+import { traceMctbClient } from "@/lib/mctb/debug-client";
 
 type PhoneOption = {
   id: string;
@@ -180,11 +181,17 @@ export function MctbSetupView() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    traceMctbClient("setup", "load_start");
     try {
       const res = await fetch("/api/mctb/setup", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load setup");
       const payload = json.data as SetupData;
+      traceMctbClient("setup", "load_complete", {
+        phoneNumberId: payload.runtime.phoneNumberId,
+        consentMode: payload.consentMode,
+        phoneOptionCount: payload.phoneNumbers.length,
+      });
       setData(payload);
       const r = payload.runtime;
       setPhoneNumberId(r.phoneNumberId);
@@ -222,7 +229,9 @@ export function MctbSetupView() {
         "";
       if (line) setBusinessLineE164(line);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      const message = err instanceof Error ? err.message : "Failed to load";
+      traceMctbClient("setup", "load_failed", { error: message });
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -270,6 +279,10 @@ export function MctbSetupView() {
 
   async function switchMctbNumber(nextId: string | null) {
     const previousId = phoneNumberId;
+    traceMctbClient("setup", "number_switch_start", {
+      fromPhoneNumberId: previousId,
+      toPhoneNumberId: nextId,
+    });
     setPhoneNumberId(nextId);
     if (!nextId || nextId === previousId) return;
 
@@ -287,12 +300,24 @@ export function MctbSetupView() {
       if (json.data?.sipProvision && !json.data.sipProvision.ok) {
         throw new Error(json.data.sipProvision.error || "Voice/SIP provisioning failed");
       }
+      traceMctbClient("setup", "number_switch_complete", {
+        fromPhoneNumberId: previousId,
+        toPhoneNumberId: nextId,
+        sipProvision: json.data?.sipProvision ?? null,
+        tenantBinding: json.data?.tenantBinding ?? null,
+      });
       setSaved(true);
       setSavedWhilePaused(Boolean(json.data?.schedule?.paused));
       await load();
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not switch number";
+      traceMctbClient("setup", "number_switch_failed", {
+        fromPhoneNumberId: previousId,
+        toPhoneNumberId: nextId,
+        error: message,
+      });
       setPhoneNumberId(previousId);
-      setError(err instanceof Error ? err.message : "Could not switch number");
+      setError(message);
     } finally {
       setSwitchingNumber(false);
     }
@@ -303,6 +328,11 @@ export function MctbSetupView() {
     setError(null);
     setSaved(false);
     setSavedWhilePaused(false);
+    traceMctbClient("setup", "save_start", {
+      phoneNumberId,
+      consentMode,
+      activate,
+    });
     try {
       const res = await fetch("/api/mctb/setup", {
         method: "POST",
@@ -337,11 +367,21 @@ export function MctbSetupView() {
         throw new Error(json.data.sipProvision.error || "Voice/SIP provisioning failed");
       }
       const stillPaused = Boolean(json.data?.schedule?.paused);
+      traceMctbClient("setup", "save_complete", {
+        phoneNumberId,
+        activate,
+        paused: stillPaused,
+        sipProvision: json.data?.sipProvision ?? null,
+        tenantBinding: json.data?.tenantBinding ?? null,
+        consentSync: json.data?.consentSync ?? null,
+      });
       setSaved(true);
       setSavedWhilePaused(stillPaused);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      const message = err instanceof Error ? err.message : "Save failed";
+      traceMctbClient("setup", "save_failed", { phoneNumberId, activate, error: message });
+      setError(message);
     } finally {
       setSaving(false);
     }

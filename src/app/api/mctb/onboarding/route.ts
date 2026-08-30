@@ -45,11 +45,13 @@ import {
   type MctbForwardingCarrier,
   type MctbOnboardingStep,
 } from "@/lib/mctb/onboarding/types";
+import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 
 export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    traceMctbDebug("onboarding", "get_start", { workspaceId: auth.workspaceId });
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
@@ -65,6 +67,13 @@ export async function GET() {
       getForwardingVerificationStatus(auth.workspaceId).catch(() => null),
       getOnboardingForwardTargetE164ForWorkspace(auth.workspaceId),
     ]);
+
+    traceMctbDebug("onboarding", "get_complete", {
+      workspaceId: auth.workspaceId,
+      currentStep: state.currentStep,
+      consentMode: state.consentMode,
+      completedSteps: state.completedSteps,
+    });
 
     return NextResponse.json({
       state,
@@ -104,6 +113,7 @@ export async function GET() {
       defaultBusinessLineE164: getMctbDefaultBusinessLineE164(),
     });
   } catch (err) {
+    traceMctbDebugError("onboarding", "get_failed", err);
     return jsonError(err, 500);
   }
 }
@@ -128,6 +138,14 @@ export async function POST(req: Request) {
       /** @deprecated Use start_forwarding_test + Twilio verification */
       forwardingConnected?: boolean;
     };
+
+    traceMctbDebug("onboarding", "post_start", {
+      workspaceId: auth.workspaceId,
+      action: body.action ?? null,
+      step: body.step ?? null,
+      consentMode: body.consentMode ?? null,
+      businessNumberE164: body.businessNumberE164 ?? null,
+    });
 
     const prisma = getPrisma();
     let state = await loadMctbOnboardingState(auth.workspaceId);
@@ -341,12 +359,20 @@ export async function POST(req: Request) {
       auth.workspaceId,
     ).catch(() => null);
 
+    traceMctbDebug("onboarding", "post_complete", {
+      workspaceId: auth.workspaceId,
+      action: body.action ?? null,
+      currentStep: state.currentStep,
+      forwardingVerified: forwardingVerification?.verified ?? null,
+    });
+
     return NextResponse.json({
       ok: true,
       state: state.version ? state : defaultMctbOnboardingState(),
       forwardingVerification,
     });
   } catch (err) {
+    traceMctbDebugError("onboarding", "post_failed", err);
     return jsonError(err, 500);
   }
 }

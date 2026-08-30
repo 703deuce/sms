@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { traceMctbDebug } from "@/lib/mctb/debug";
 import {
   loadMctbSetupPhoneOptions,
   loadWorkspaceAccessiblePhoneNumbers,
@@ -37,22 +38,51 @@ export async function resolveCanonicalMctbSetupPhoneId(
 
   const options = await loadMctbSetupPhoneOptions(workspaceId);
   const direct = options.find((p) => p.id === phoneNumberId);
-  if (direct) return direct.id;
+  if (direct) {
+    traceMctbDebug("phone-validation", "canonical_direct", {
+      workspaceId,
+      requestedId: phoneNumberId,
+      canonicalId: direct.id,
+      e164: direct.e164,
+    });
+    return direct.id;
+  }
 
   const prisma = getPrisma();
   const row = await prisma.phoneNumber.findUnique({
     where: { id: phoneNumberId },
     select: { e164: true },
   });
-  if (!row?.e164) return null;
+  if (!row?.e164) {
+    traceMctbDebug("phone-validation", "canonical_not_found", {
+      workspaceId,
+      requestedId: phoneNumberId,
+    });
+    return null;
+  }
 
   const owned = options.find(
     (p) => p.source === "owned" && sameE164(p.e164, row.e164),
   );
-  if (owned) return owned.id;
+  if (owned) {
+    traceMctbDebug("phone-validation", "canonical_owned_remap", {
+      workspaceId,
+      requestedId: phoneNumberId,
+      canonicalId: owned.id,
+      e164: row.e164,
+    });
+    return owned.id;
+  }
 
   const anyMatch = options.find((p) => sameE164(p.e164, row.e164));
-  return anyMatch?.id ?? null;
+  const canonicalId = anyMatch?.id ?? null;
+  traceMctbDebug("phone-validation", canonicalId ? "canonical_e164_remap" : "canonical_unresolved", {
+    workspaceId,
+    requestedId: phoneNumberId,
+    canonicalId,
+    e164: row.e164,
+  });
+  return canonicalId;
 }
 
 /** Drop stale ids; resolve duplicate E.164 rows to the canonical workspace DID. */

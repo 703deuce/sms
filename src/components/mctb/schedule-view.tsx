@@ -13,6 +13,7 @@ import {
 } from "@/lib/mctb/schedule-shared";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { traceMctbClient } from "@/lib/mctb/debug-client";
 
 type SchedulePayload = {
   scheduleMode: MctbScheduleMode;
@@ -40,12 +41,18 @@ export function MctbScheduleView() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    traceMctbClient("schedule", "load_start");
     try {
       const res = await fetch("/api/mctb/setup", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok || !json.data?.runtime) return;
       const r = json.data.runtime;
       const sch = json.data.schedule as SchedulePayload | undefined;
+      traceMctbClient("schedule", "load_complete", {
+        scheduleMode: sch?.scheduleMode ?? null,
+        paused: sch?.paused ?? false,
+        pauseKind: sch?.pauseKind ?? null,
+      });
       setPauseKind(sch?.pauseKind ?? (sch?.paused ? "manual" : null));
       setTimezone(r.timezone || "America/New_York");
       setAllowedStartTime(r.allowedStartTime || "09:00");
@@ -86,6 +93,7 @@ export function MctbScheduleView() {
     setSaving(true);
     setMessage("");
     setSavedWhilePaused(false);
+    traceMctbClient("schedule", "save_start", { scheduleMode, pauseUntil });
     const wasPaused =
       pauseKind === "manual" ||
       Boolean(pauseKind === "timed" && pauseUntil && new Date(pauseUntil) > new Date());
@@ -126,6 +134,10 @@ export function MctbScheduleView() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
+      traceMctbClient("schedule", "save_complete", {
+        scheduleMode,
+        paused: json.data?.schedule?.paused ?? null,
+      });
       if (wasPaused || json.data?.schedule?.paused) {
         setSavedWhilePaused(true);
       } else {
@@ -133,6 +145,9 @@ export function MctbScheduleView() {
       }
       await load();
     } catch (err) {
+      traceMctbClient("schedule", "save_failed", {
+        error: err instanceof Error ? err.message : "Save failed",
+      });
       setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
@@ -142,6 +157,7 @@ export function MctbScheduleView() {
   async function pauseFor(duration: "1h" | "4h" | "tomorrow") {
     setSaving(true);
     setMessage("");
+    traceMctbClient("schedule", "pause_timed_start", { duration });
     try {
       const until = addPauseUntil(duration, timezone);
       const res = await fetch("/api/mctb/setup", {
@@ -164,6 +180,7 @@ export function MctbScheduleView() {
   async function pauseManual() {
     setSaving(true);
     setMessage("");
+    traceMctbClient("schedule", "pause_manual_start");
     try {
       const res = await fetch("/api/mctb/setup", {
         method: "POST",
@@ -185,6 +202,7 @@ export function MctbScheduleView() {
   async function resume() {
     setSaving(true);
     setMessage("");
+    traceMctbClient("schedule", "resume_start");
     try {
       const res = await fetch("/api/mctb/setup", {
         method: "POST",

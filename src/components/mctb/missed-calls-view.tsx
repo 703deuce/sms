@@ -6,6 +6,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { traceMctbClient } from "@/lib/mctb/debug-client";
 
 type MissedCallEvent = {
   id: string;
@@ -58,12 +59,17 @@ export function MctbMissedCallsView() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    traceMctbClient("missed-calls", "load_start");
     try {
       const res = await fetch("/api/mctb/missed-calls", { cache: "no-store" });
       const json = await res.json();
       if (res.ok && json.data) {
         setEvents(json.data.events || []);
         setSummary(json.data.summary || null);
+        traceMctbClient("missed-calls", "load_complete", {
+          eventCount: (json.data.events || []).length,
+          summary: json.data.summary ?? null,
+        });
       }
     } finally {
       setLoading(false);

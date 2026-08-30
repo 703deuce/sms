@@ -15,6 +15,7 @@ import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { saveMctbOnboardingState, parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
 import { resolveMctbPhoneNumberIdForWorkspace } from "@/lib/mctb/platform-production-routing";
+import { traceMctbDebug } from "@/lib/mctb/debug";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -176,13 +177,25 @@ export async function ensureMctbTenantProductionBinding(input: {
     });
   }
 
-  return {
+  const result: MctbTenantProductionBindingResult = {
     ok: true,
     platformDemoLinked,
     phoneNumberId,
     businessLineE164: businessLineE164 || null,
     forwardingConnected,
   };
+
+  traceMctbDebug("tenant-binding", "binding_applied", {
+    workspaceId: input.workspaceId,
+    inputPhoneNumberId: input.phoneNumberId ?? null,
+    runtimePhoneNumberId: runtime.phoneNumberId,
+    workspaceOwnsSelectedPhone,
+    selectedIsPlatformDemo,
+    usesPlatformDemoTenant,
+    ...result,
+  });
+
+  return result;
 }
 
 /**

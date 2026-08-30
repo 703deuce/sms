@@ -7,12 +7,19 @@ import {
   syncMctbConsentRouting,
 } from "@/lib/mctb/consent-prompt/service";
 import { saveMctbConsentPrompt } from "@/lib/mctb/consent-prompt/store";
+import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workspaceId = await getActiveWorkspaceId();
+  traceMctbDebug("consent-prompt", "get_start", { workspaceId });
   const status = await getMctbConsentPromptStatus(workspaceId);
+  traceMctbDebug("consent-prompt", "get_complete", {
+    workspaceId,
+    published: status.published,
+    hasAudio: Boolean(status.audioUrl),
+  });
   return NextResponse.json({ data: status });
 }
 
@@ -27,6 +34,12 @@ export async function POST(req: Request) {
     speed?: number;
     phoneNumberId?: string | null;
   };
+
+  traceMctbDebug("consent-prompt", "post_start", {
+    workspaceId,
+    action: body.action || "save",
+    phoneNumberId: body.phoneNumberId ?? null,
+  });
 
   try {
     if (body.action === "generate") {
@@ -62,6 +75,10 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ ok: true, data: config });
   } catch (err) {
+    traceMctbDebugError("consent-prompt", "post_failed", err, {
+      workspaceId,
+      action: body.action || "save",
+    });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Consent prompt action failed" },
       { status: 400 },

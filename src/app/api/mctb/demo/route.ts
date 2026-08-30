@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { getDemoStatus, startDemoSession } from "@/lib/mctb/onboarding/demo";
 import type { MctbConsentMode } from "@/lib/mctb/onboarding/types";
+import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 
 async function applyDemoConsentMode(
   workspaceId: string,
@@ -72,10 +73,16 @@ export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-
+    traceMctbDebug("demo", "get_start", { workspaceId: auth.workspaceId });
     const status = await getDemoStatus(auth.workspaceId);
+    traceMctbDebug("demo", "get_complete", {
+      workspaceId: auth.workspaceId,
+      sessionActive: Boolean(status.session),
+      completed: status.completed,
+    });
     return NextResponse.json({ data: status });
   } catch (err) {
+    traceMctbDebugError("demo", "get_failed", err);
     return jsonError(err, 500);
   }
 }
@@ -92,6 +99,11 @@ export async function POST(req: Request) {
     };
 
     const context = body.context === "onboarding" ? "onboarding" : "try_it";
+    traceMctbDebug("demo", "post_start", {
+      workspaceId: auth.workspaceId,
+      consentMode: body.consentMode ?? null,
+      context,
+    });
 
     const prisma = getPrisma();
     const user = await prisma.user.findUnique({
@@ -143,6 +155,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err) {
+    traceMctbDebugError("demo", "post_failed", err);
     return jsonError(err, 500);
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { traceMctbDebug } from "@/lib/mctb/debug";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -9,6 +10,7 @@ export async function GET(req: Request) {
   const prisma = getPrisma();
   const { searchParams } = new URL(req.url);
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") || 50)));
+  traceMctbDebug("missed-calls", "get_start", { workspaceId, limit });
 
   const events = await prisma.missedCallEvent.findMany({
     where: { workspaceId },
@@ -36,6 +38,13 @@ export async function GET(req: Request) {
       },
     }),
   ]);
+
+  traceMctbDebug("missed-calls", "get_complete", {
+    workspaceId,
+    limit,
+    eventCount: events.length,
+    summary: { missedToday, sentToday, repliedToday },
+  });
 
   return NextResponse.json({
     data: {

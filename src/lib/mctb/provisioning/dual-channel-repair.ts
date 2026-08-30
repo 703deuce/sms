@@ -18,6 +18,7 @@ import {
   verifyAndPersistNumber,
   type NumberDiagnostics,
 } from "@/lib/phone/telnyx-dual-provision";
+import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 
 function mergeSettings(
   current: unknown,
@@ -47,6 +48,11 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
   workspaceId: string;
   phoneNumberId: string;
 }): Promise<NumberDiagnostics> {
+  traceMctbDebug("provision", "dual_channel_start", {
+    workspaceId: input.workspaceId,
+    phoneNumberId: input.phoneNumberId,
+  });
+
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
     where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
@@ -91,7 +97,15 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
   }
 
   await repairMessagingOnWorkspaceNumber(input);
-  return verifyAndPersistNumber(input);
+  const diagnostics = await verifyAndPersistNumber(input);
+  traceMctbDebug("provision", "dual_channel_complete", {
+    workspaceId: input.workspaceId,
+    phoneNumberId: input.phoneNumberId,
+    e164: phone.e164,
+    mctbRole,
+    diagnostics,
+  });
+  return diagnostics;
 }
 
 /**
