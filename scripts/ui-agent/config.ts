@@ -50,6 +50,26 @@ Preserve icons, colors, images/MMS previews, spacing, and interaction patterns f
 Keep the Transovo sidebar with all nav links. Use mock data. Do not scaffold a new Next.js project.
 
 ${KIMI_COMPLETENESS_REQUIREMENTS}`;
+
+/** Kimi sidebar-only pass — watch video, generate nav shell only (no page content). */
+export const KIMI_SIDEBAR_ONLY_INSTRUCTION = `SIDEBAR ONLY — navigation shell from the reference video.
+
+Watch the video for the LEFT SIDE MENU / navigation. Generate ONLY the sidebar — no page tables, builders, inbox panes, forms, or main content.
+
+Required files:
+- components/TransovoSidebar.tsx — Transovo-branded sidebar with:
+  • Collapsed mode: compact icon rail (~56px) like SlickText inbox — logo, icon nav buttons, badge on Inbox, bottom notifications/support/avatar
+  • Expanded mode: full text menu (~200–240px) — brand row, nav links with lucide icons, chevrons on expandable items, Notifications, Support, Message Credits progress widget, user profile row
+  • Built-in collapse/expand toggle (user can always toggle)
+  • Props or internal state for collapsed + active route
+- mock-data.ts — nav items only (labels, icons, hrefs, optional children)
+- reference.css — sidebar-specific styles (optional)
+- page.tsx — minimal demo: sidebar + empty gray main placeholder only
+
+Match SlickText visual design: compact, clean spacing, indigo active states, NOT bulky.
+Use Transovo branding (not SlickText). Mock nav: Home, Audience, Campaigns, Inbox, Automations, Analytics, Tools.
+
+Do NOT generate any main-page UI beyond a placeholder div.`;
 export const DEFAULT_KIMI_BASE_URL = KIMI_BASE_URL;
 
 export const VIEWPORT_PRESETS: Record<ViewportPreset, ViewportConfig> = {
