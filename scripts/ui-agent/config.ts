@@ -96,6 +96,34 @@ FINAL VISUAL CHECK:
 Compare the APPROVED Kimi sandbox render (screenshot.png / preview) against production AFTER integration.
 Do NOT compare production against the original competitor reference video — the approved Kimi render is the target.`;
 
+/**
+ * Video must use Kimi Files API + ms:// native multimodal delivery.
+ * Never base64-embed full video files into prompt text.
+ */
+export const VIDEO_DELIVERY_PRINCIPLES = `VIDEO DELIVERY REQUIREMENT
+
+Do NOT base64-embed full video files into ordinary prompt text.
+Do NOT automatically convert videos into large sets of screenshots unless native video delivery is unavailable.
+
+Use Kimi's supported native video/media-upload mechanism for the configured video-capable model (e.g. kimi-k3).
+
+Expected pipeline:
+  Supabase Storage reference (or local file)
+    → temporary authenticated retrieval / local cache
+    → POST /v1/files (purpose=video)
+    → ms://<file_id> in video_url content part
+    → Kimi video-capable model
+
+Keep the textual request lightweight. The prompt references attached native video and provides:
+- target Transovo route
+- user instruction
+- current-page screenshots (images only — compact data URLs OK)
+- relevant frontend context / environment manifest
+
+Do not waste model context by serializing video bytes into text.
+
+File size: default API limit 100MB (configurable via KIMI_MAX_VIDEO_BYTES). Do not assume VS Code's 20MB UI picker limit applies to the API.`;
+
 export type KimiRuntimeConfig = {
   apiKey: string;
   baseUrl: string;

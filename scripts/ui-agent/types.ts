@@ -29,11 +29,23 @@ export type UiAnalysisInput = {
   expectJson?: boolean;
 };
 
+export type KimiMediaDelivery = {
+  kind: "video" | "image";
+  label: string;
+  localPath: string;
+  mimeType: string;
+  bytes: number;
+  delivery: "native_ms" | "image_data_url";
+  reference: string;
+  kimiFileId?: string;
+};
+
 export type UiAnalysisResult = {
   rawText: string;
   parsedJson: unknown | null;
   model: string;
   analysisMode: AnalysisMode;
+  mediaDeliveries?: KimiMediaDelivery[];
   usage?: { promptTokens?: number; completionTokens?: number };
 };
 

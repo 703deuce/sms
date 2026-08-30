@@ -141,6 +141,19 @@ gate("handoff writer creates json", () => {
   assert.ok(path.endsWith("HANDOFF.json"));
 });
 
+gate("video delivery uses native ms:// not base64", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const mediaSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/kimi-media.ts"), "utf8");
+  const clientSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/kimi-client.ts"), "utf8");
+  assert.ok(mediaSrc.includes("purpose\", \"video\"") || mediaSrc.includes('purpose", "video"'));
+  assert.ok(mediaSrc.includes("ms://"));
+  assert.ok(!/video.*toString\("base64"\)/i.test(mediaSrc));
+  assert.ok(clientSrc.includes("uploadVideoForNativeKimi"));
+  const { VIDEO_DELIVERY_PRINCIPLES } = require("./config") as typeof import("./config");
+  assert.ok(VIDEO_DELIVERY_PRINCIPLES.toLowerCase().includes("do not base64-embed"));
+});
+
 gate("generated sandbox path isolation", () => {
   const { writeGeneratedFiles, listGeneratedFiles } = require("./generated-sandbox") as typeof import("./generated-sandbox");
   const sid = "cert-test-session";

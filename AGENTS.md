@@ -183,6 +183,16 @@ Kimi's generated UI is the **starting frontend implementation**, not merely a de
 - **Do not** copy `mock-data.ts`, `MOCK_*`, or imports from `.ui-agent/generated/` into production.
 - **Goal:** Kimi-created visual result + Transovo production functionality — NOT line-for-line source preservation.
 
+### Video delivery (native multimodal)
+
+Videos use Kimi's **Files API + `ms://` reference** — never base64 in prompt text, never auto-convert to screenshot sequences.
+
+```
+Supabase reference → local cache → POST /v1/files (purpose=video) → ms://<id> → kimi-k3
+```
+
+Screenshots (current Transovo captures) stay as compact image data URLs. See `VIDEO_DELIVERY_PRINCIPLES` in `scripts/ui-agent/config.ts`.
+
 ### Dev routes (disabled in production)
 
 - `/dev/ui-references` — upload/name reference videos and images

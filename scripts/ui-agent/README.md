@@ -103,6 +103,23 @@ Kimi output = starting frontend implementation. Reuse 80–90% presentation; ref
 
 Final visual check: **approved Kimi screenshot** vs **production** — not the original competitor video.
 
+## Video delivery
+
+Videos are **never** base64-embedded in prompts. Pipeline:
+
+```
+Supabase ui-references → download to .ui-agent/cache/
+  → Kimi POST /v1/files (purpose=video)
+  → ms://<file_id> in chat request
+  → kimi-k3 (video-capable)
+```
+
+- Default max: **100MB** (`KIMI_MAX_VIDEO_BYTES` env override)
+- Upload cache avoids re-uploading the same file during refinement passes
+- Screenshots only for current-page captures (compact data URLs)
+
+See `VIDEO_DELIVERY_PRINCIPLES` in `scripts/ui-agent/config.ts`.
+
 ## Certification
 
 ```bash

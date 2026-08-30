@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { uploadVideoForNativeKimi, buildImageDataUrlDelivery } from "./kimi-media";
 import { loadKimiConfig } from "./config";
 import { log } from "./logger";
 import type {
   AnalysisMode,
+  KimiMediaDelivery,
   LabeledMedia,
   UiAnalysisInput,
   UiAnalysisResult,
@@ -14,56 +14,6 @@ type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string | Array<Record<string, unknown>>;
 };
-
-function redactSecrets(text: string): string {
-  return text.replace(/sk-[A-Za-z0-9_-]{10,}/g, "[REDACTED_API_KEY]");
-}
-
-async function fetchJson(url: string, init: RequestInit, apiKey: string): Promise<unknown> {
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(init.headers || {}),
-    },
-  });
-  const body = await res.text();
-  if (!res.ok) {
-    throw new Error(`Kimi API ${res.status}: ${redactSecrets(body.slice(0, 500))}`);
-  }
-  return JSON.parse(body) as unknown;
-}
-
-async function uploadVideoFile(
-  baseUrl: string,
-  apiKey: string,
-  filePath: string,
-  mimeType: string,
-): Promise<string> {
-  const fileBuffer = readFileSync(filePath);
-  const form = new FormData();
-  form.append("purpose", "video");
-  form.append("file", new Blob([fileBuffer], { type: mimeType }), basename(filePath));
-
-  const res = await fetch(`${baseUrl}/files`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Kimi file upload failed ${res.status}: ${redactSecrets(text.slice(0, 500))}`);
-  }
-  const json = JSON.parse(text) as { id?: string; data?: { id?: string } };
-  const id = json.id || json.data?.id;
-  if (!id) throw new Error("Kimi file upload did not return a file id");
-  return id;
-}
-
-function imageToDataUrl(filePath: string, mimeType: string): string {
-  const b64 = readFileSync(filePath).toString("base64");
-  return `data:${mimeType};base64,${b64}`;
-}
 
 export class KimiVisionProvider implements UiVisionProvider {
   readonly model: string;
@@ -88,12 +38,15 @@ export class KimiVisionProvider implements UiVisionProvider {
 
   async validateModel(): Promise<void> {
     try {
-      const models = (await fetchJson(`${this.baseUrl}/models`, { method: "GET" }, this.apiKey)) as {
-        data?: Array<{ id?: string }>;
-      };
-      const ids = (models.data || []).map((m) => m.id).filter(Boolean);
-      if (ids.length > 0 && !ids.includes(this.model)) {
-        log("model warning", `configured model "${this.model}" not in /models list; proceeding anyway`);
+      const res = await fetch(`${this.baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+      });
+      if (res.ok) {
+        const models = (await res.json()) as { data?: Array<{ id?: string }> };
+        const ids = (models.data || []).map((m) => m.id).filter(Boolean);
+        if (ids.length > 0 && !ids.includes(this.model)) {
+          log("model warning", `configured model "${this.model}" not in /models list; proceeding anyway`);
+        }
       }
     } catch (err) {
       log("model validation skipped", err instanceof Error ? err.message : String(err));
@@ -102,41 +55,59 @@ export class KimiVisionProvider implements UiVisionProvider {
     if (!this.supportsVideo) {
       log("model capability", `${this.model} configured without native video support`);
     } else {
-      log("model capability", `${this.model} supports native video via Files API`);
+      log("model capability", `${this.model} — video via Files API + ms:// (never base64 video)`);
     }
   }
 
   async analyze(input: UiAnalysisInput): Promise<UiAnalysisResult> {
-    const hasVideo = input.labeledMedia.some((m) => m.kind === "video");
-    if (hasVideo && !this.supportsVideo) {
+    const videos = input.labeledMedia.filter((m) => m.kind === "video");
+    const images = input.labeledMedia.filter((m) => m.kind === "image");
+
+    if (videos.length > 0 && !this.supportsVideo) {
       throw new Error(
         `Configured model "${this.model}" does not support native video. Use a video-capable model such as kimi-k3 (not k3-256k).`,
       );
     }
 
-    const contentParts: Array<Record<string, unknown>> = [{ type: "text", text: input.userPrompt }];
+    const deliveries: KimiMediaDelivery[] = [];
+    const contentParts: Array<Record<string, unknown>> = [
+      { type: "text", text: input.userPrompt },
+    ];
 
-    for (const media of input.labeledMedia) {
-      if (media.kind === "image") {
-        contentParts.push({
-          type: "image_url",
-          image_url: { url: imageToDataUrl(media.path, media.mimeType) },
-        });
-        contentParts.push({
-          type: "text",
-          text: `[${media.label}] ${media.purpose}`,
-        });
-      } else if (media.kind === "video") {
-        const fileId = await uploadVideoFile(this.baseUrl, this.apiKey, media.path, media.mimeType);
-        contentParts.push({
-          type: "video_url",
-          video_url: { url: `ms://${fileId}` },
-        });
-        contentParts.push({
-          type: "text",
-          text: `[${media.label}] ${media.purpose}`,
-        });
-      }
+    for (const media of videos) {
+      const delivery = await uploadVideoForNativeKimi({
+        baseUrl: this.baseUrl,
+        apiKey: this.apiKey,
+        filePath: media.path,
+        mimeType: media.mimeType,
+        label: media.label,
+      });
+      deliveries.push(delivery);
+      contentParts.push({
+        type: "video_url",
+        video_url: { url: delivery.reference },
+      });
+      contentParts.push({
+        type: "text",
+        text: `[${media.label}] ${media.purpose} — attached as native Kimi video (ms://), not serialized into prompt text.`,
+      });
+    }
+
+    for (const media of images) {
+      const delivery = buildImageDataUrlDelivery({
+        filePath: media.path,
+        mimeType: media.mimeType,
+        label: media.label,
+      });
+      deliveries.push(delivery);
+      contentParts.push({
+        type: "image_url",
+        image_url: { url: delivery.reference },
+      });
+      contentParts.push({
+        type: "text",
+        text: `[${media.label}] ${media.purpose}`,
+      });
     }
 
     const messages: ChatMessage[] = [
@@ -153,15 +124,20 @@ export class KimiVisionProvider implements UiVisionProvider {
       body.response_format = { type: "json_object" };
     }
 
-    const completion = (await fetchJson(
-      `${this.baseUrl}/chat/completions`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
       },
-      this.apiKey,
-    )) as {
+      body: JSON.stringify(body),
+    });
+    const rawBody = await res.text();
+    if (!res.ok) {
+      throw new Error(`Kimi API ${res.status}: ${rawBody.slice(0, 500)}`);
+    }
+
+    const completion = JSON.parse(rawBody) as {
       choices?: Array<{ message?: { content?: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
@@ -177,13 +153,14 @@ export class KimiVisionProvider implements UiVisionProvider {
       }
     }
 
-    const analysisMode: AnalysisMode = hasVideo ? "native_multimodal" : "native_multimodal";
+    const analysisMode: AnalysisMode = videos.length > 0 ? "native_multimodal" : "native_multimodal";
 
     return {
       rawText,
       parsedJson,
       model: this.model,
       analysisMode,
+      mediaDeliveries: deliveries,
       usage: {
         promptTokens: completion.usage?.prompt_tokens,
         completionTokens: completion.usage?.completion_tokens,
