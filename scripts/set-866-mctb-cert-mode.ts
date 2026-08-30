@@ -38,6 +38,11 @@ async function main() {
     },
   });
 
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(PROVIDER_NUMBER_ID)}`, {
+    method: "PATCH",
+    body: { connection_id: TEXML_APP_ID },
+  });
+
   const verify = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>(
     "/phone_numbers",
     { query: { "filter[phone_number]": E164 } },
