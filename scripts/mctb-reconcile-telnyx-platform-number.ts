@@ -16,15 +16,23 @@ import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-s
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const e164 = args.includes("--e164") ? args[args.indexOf("--e164") + 1]! : MCTB_PLATFORM_DEMO_E164;
+const workspaceIdArg = args.includes("--workspace")
+  ? args[args.indexOf("--workspace") + 1]!
+  : null;
 
 async function main() {
   console.log(`\n── Telnyx local number reconciliation: ${e164} ──\n`);
 
   const prisma = getPrisma();
-  const pn = await prisma.phoneNumber.findFirst({
-    where: { e164 },
-    select: { id: true, workspaceId: true, e164: true, providerNumberId: true },
-  });
+  const pn = workspaceIdArg
+    ? await prisma.phoneNumber.findFirst({
+        where: { e164, workspaceId: workspaceIdArg },
+        select: { id: true, workspaceId: true, e164: true, providerNumberId: true },
+      })
+    : await prisma.phoneNumber.findFirst({
+        where: { e164 },
+        select: { id: true, workspaceId: true, e164: true, providerNumberId: true },
+      });
   if (!pn) {
     console.error(`❌ No PhoneNumber row for ${e164}`);
     process.exit(1);

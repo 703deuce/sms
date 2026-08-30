@@ -252,7 +252,7 @@ export async function reconcileTelnyxLocalNumberToWorkspace(input: {
     a2pStatus: ready ? ("APPROVED" as const) : ("PENDING" as const),
     status: "Active",
     settingsJson: telnyxLocalA2pSettings({
-      role: "platform_demo",
+      role: "customer_production",
       a2pApproved: ready,
     }),
   };

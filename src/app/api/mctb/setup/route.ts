@@ -17,6 +17,7 @@ import {
   enrichWorkspacePhoneWithMessagingStatus,
   loadMctbSetupPhoneOptions,
 } from "@/lib/numbers/workspace-accessible-numbers";
+import { loadMctbSetupPhoneOptionsWithTelnyxSync } from "@/lib/mctb/setup-telnyx-messaging-sync";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
@@ -113,7 +114,7 @@ export async function GET() {
     await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMissedCallTextBack(workspaceId),
-    loadMctbSetupPhoneOptions(workspaceId),
+    loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadAdminMctbTestFlags(workspaceId),
@@ -343,7 +344,7 @@ export async function POST(req: Request) {
 
   if (body.activate === true && body.phoneNumberId) {
     const [phoneNumbers, compliance, reg, adminFlags] = await Promise.all([
-      loadMctbSetupPhoneOptions(workspaceId),
+      loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
       loadComplianceOverview(workspaceId),
       loadPhoneNumbers(workspaceId, { includeLinked: true }),
       loadAdminMctbTestFlags(workspaceId),

@@ -63,6 +63,18 @@ async function testProductionForwardRouting() {
 }
 
 async function main() {
+  test("test:stale-compliance-trusts-a2p-status", () => {
+    const status = getPhoneMessagingStatus({
+      e164: "+15714073615",
+      provider: "telnyx",
+      type: "local",
+      a2pStatus: "APPROVED",
+      settingsJson: telnyxLocalA2pSettings({ a2pApproved: false }),
+    });
+    assert.equal(status.approved, true);
+    assert.equal(status.label, "A2P approved");
+  });
+
   test("test:a2p-approved-number-detected", () => {
     const status = getPhoneMessagingStatus({
       e164: "+15714073615",

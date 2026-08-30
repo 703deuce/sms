@@ -141,7 +141,14 @@ export function isPhoneMessagingApproved(input: {
     return isTfvApproved(compliance.status as TollFreeVerificationStatus);
   }
   if (compliance?.type === "A2P_10DLC") {
-    return String(compliance.status).toUpperCase() === "APPROVED";
+    if (String(compliance.status).toUpperCase() === "APPROVED") return true;
+    if (String(input.a2pStatus || "").toLowerCase() === "approved") return true;
+    const settings = asRecord(input.settingsJson);
+    const provisioning = asRecord(settings.provisioning);
+    if (String(provisioning.a2pRegistrationStatus || "").toLowerCase() === "approved") {
+      return true;
+    }
+    return false;
   }
   const type = String(input.type || "").toLowerCase();
   if (type.includes("toll")) {
