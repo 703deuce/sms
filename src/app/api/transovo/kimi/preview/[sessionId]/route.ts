@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
-import { bundleReferencePreview } from "../../../../../../../scripts/ui-agent/preview";
+import { bundleReferencePreview } from "@/lib/ui-agent/preview-bundle";
 
 export const runtime = "nodejs";
 
