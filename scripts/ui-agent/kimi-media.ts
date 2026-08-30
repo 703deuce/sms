@@ -96,7 +96,6 @@ async function uploadBytesToKimi(input: {
 }): Promise<{ fileId: string; status: string; uploadMs: number }> {
   const uploadStarted = Date.now();
   if (input.sessionId) {
-    markKimiTiming(input.sessionId, "kimiUploadStartedMs");
     updateProgress(input.sessionId, {
       phase: "uploading_video",
       message: `Uploading ${input.filename} to Kimi (${(input.bytes.length / 1024 / 1024).toFixed(1)} MB)…`,
@@ -128,8 +127,8 @@ async function uploadBytesToKimi(input: {
   const uploadMs = Date.now() - uploadStarted;
   const status = (json.status || "ready").toLowerCase();
   if (input.sessionId) {
-    markKimiTiming(input.sessionId, "kimiUploadCompletedMs", uploadMs);
-    markKimiTiming(input.sessionId, "kimiFileStatus", status);
+    markKimiTiming(input.sessionId, "videoUploadCompleteMs", uploadMs);
+    markKimiTiming(input.sessionId, "kimiFileId", fileId);
     appendProgressLog(input.sessionId, `kimi_upload_completed_ms=${uploadMs} kimi_file_status=${status} file_id=${fileId}`);
   }
 
@@ -204,6 +203,9 @@ async function tryCachedKimiFile(input: {
     }
     touchKimiFileCacheVerified(supabase.bucket, supabase.path);
     if (input.sessionId) {
+      markKimiTiming(input.sessionId, "videoUploadCompleteMs", 0);
+      markKimiTiming(input.sessionId, "kimiFileId", cached.kimi.fileId);
+      markKimiTiming(input.sessionId, "kimiFileFromCache", true);
       appendProgressLog(
         input.sessionId,
         `kimi_file_cache_hit file_id=${cached.kimi.fileId} (skip Supabase download + Kimi upload)`,
@@ -285,6 +287,11 @@ export async function deliverVideoForKimi(input: {
         lastVerifiedAt: new Date().toISOString(),
       },
     });
+  }
+
+  if (input.sessionId) {
+    markKimiTiming(input.sessionId, "kimiFileId", fileId);
+    markKimiTiming(input.sessionId, "kimiFileFromCache", false);
   }
 
   log("video delivery", `POST /v1/files → ms://${fileId} (${(bytes.length / 1024 / 1024).toFixed(1)}MB, ${uploadMs}ms) [${input.media.label}]`);

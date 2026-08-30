@@ -21,7 +21,7 @@ import {
 } from "./generated-sandbox";
 import { log } from "./logger";
 import { initProgress, markProgressError, markProgressReady, progressTailPath, updateProgress } from "./progress";
-import { startKimiTiming, markKimiTiming } from "./kimi-timing";
+import { startKimiTiming, markKimiTiming, printKimiTimingReport } from "./kimi-timing";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
 
@@ -66,38 +66,29 @@ export async function runKimiCommand(provider: UiVisionProvider, options: CliOpt
     session.status = "generating";
     updateSession(session);
 
-    const referenceMedia = buildLabeledMedia(
-      session.referenceMedia.map((m) => ({ path: m.path, label: m.label, purpose: m.purpose })),
-    );
     const currentMedia = await collectCurrentMediaForKimi(options, session);
-    const generated = readAllGeneratedSources(session.id);
 
-    log("revising Kimi sandbox", options.instruction || "(no instruction)");
-    const result = await provider.analyze({
-      systemPrompt: `Revise the Kimi sandbox UI only. Do not touch production. Return JSON with files[].`,
-      userPrompt: `Revise generated reference.
-
-INSTRUCTION: ${options.instruction || ""}
-
-EXISTING GENERATED FILES:
-${generated.map((f) => `\n--- ${f.path} ---\n${f.content.slice(0, 5000)}`).join("\n")}
-
-Return updated files[] with same schema as original build.`,
-      labeledMedia: referenceMedia,
-      expectJson: true,
+    log("revising Kimi sandbox (no video re-analysis)", options.instruction || "(no instruction)");
+    startKimiTiming(session.id);
+    const build = await buildReferenceImplementation(provider, {
+      sessionId: session.id,
+      target: session.target,
+      manifest: session.manifest,
+      referenceMedia: [],
+      currentMedia,
+      instruction: options.instruction || "",
+      isRevision: true,
     });
 
-    const parsed = result.parsedJson as { files?: Array<{ path: string; content: string }>; summary?: string };
-    if (!parsed.files?.length) throw new Error("Kimi revision returned no files");
-
-    writeGeneratedFiles(session.id, parsed.files);
     await screenshotGeneratedReference(session.id);
+    markKimiTiming(session.id, "previewRenderedMs");
 
     session.status = "ready";
     session.refinementPasses = (session.refinementPasses || 0) + 1;
     updateSession(session);
     writeHandoff(session);
-    printKimiReady(session);
+    printKimiTimingReport(session.id);
+    printKimiReady(session, build.summary, build.files.length);
     return;
   }
 
@@ -177,6 +168,13 @@ Return updated files[] with same schema as original build.`,
       instruction: [session.instruction, envPrompt].filter(Boolean).join("\n\n"),
     });
 
+    try {
+      await screenshotGeneratedReference(session.id);
+      markKimiTiming(session.id, "previewRenderedMs");
+    } catch (err) {
+      log("preview screenshot skipped", err instanceof Error ? err.message : String(err));
+    }
+
     let passes = 0;
     while (passes < options.maxPasses) {
       passes += 1;
@@ -203,6 +201,7 @@ Return updated files[] with same schema as original build.`,
     updateSession(session);
     writeHandoff(session);
     markProgressReady(session.id, `Kimi sandbox ready (${listGeneratedFiles(session.id).length} files). Open preview to compare.`);
+    printKimiTimingReport(session.id);
 
     const files = listGeneratedFiles(session.id);
     printKimiReady(session, build.summary, files.length);

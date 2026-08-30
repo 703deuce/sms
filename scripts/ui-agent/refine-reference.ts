@@ -51,18 +51,19 @@ export async function refineReferenceImplementation(
     },
   ]);
 
-  const feedback = `Pass ${input.pass}: Compare GENERATED_REFERENCE against original REFERENCE media and CURRENT_TRANSOVO.
+  const feedback = `Pass ${input.pass}: Compare GENERATED_REFERENCE against CURRENT_TRANSOVO screenshots.
 Fix layout, spacing, hierarchy, components, modals, and interactions in the sandbox files.
-Output the full updated files JSON again.`;
+Emit updated files with KIMI_FILE_BEGIN/END — do not return one giant JSON object.`;
 
   const build = await buildReferenceImplementation(provider, {
     sessionId: input.sessionId,
     target: input.target,
     manifest: input.manifest,
-    referenceMedia: [...input.originalReferenceMedia, ...generatedShot],
+    referenceMedia: generatedShot,
     currentMedia: input.currentMedia,
     instruction: input.instruction,
     feedback,
+    isRevision: true,
   });
 
   const finalShot = await screenshotGeneratedReference(input.sessionId);

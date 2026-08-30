@@ -1,9 +1,10 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Agent, fetch as undiciFetch } from "undici";
-import { KIMI_CHAT_TIMEOUT_MS } from "./config";
+import { KIMI_CHAT_TIMEOUT_MS, UI_AGENT_SESSIONS_DIR } from "./config";
+import { KimiIncrementalFileWriter, writeIncrementalMetadata } from "./kimi-incremental-files";
+import { markKimiTiming } from "./kimi-timing";
 import { appendProgressLog, updateProgress } from "./progress";
-import { UI_AGENT_SESSIONS_DIR } from "./config";
 import { log } from "./logger";
 
 const kimiHttpAgent = new Agent({
@@ -14,9 +15,11 @@ const kimiHttpAgent = new Agent({
 
 export type KimiStreamResult = {
   rawText: string;
-  firstTokenMs: number;
+  firstReasoningMs: number;
+  firstContentMs: number;
   totalMs: number;
   charCount: number;
+  completedFiles: string[];
 };
 
 function sessionDir(sessionId: string): string {
@@ -64,18 +67,24 @@ export async function streamKimiChatCompletion(input: {
   sessionId?: string;
   label: string;
   timeoutMs?: number;
+  useIncrementalFiles?: boolean;
 }): Promise<KimiStreamResult> {
   const timeoutMs = input.timeoutMs ?? KIMI_CHAT_TIMEOUT_MS;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const started = Date.now();
-  let firstTokenMs = 0;
+  let firstReasoningMs = 0;
+  let firstContentMs = 0;
   let rawText = "";
   let reasoningText = "";
   let lastProgressAt = 0;
   let lastConsoleAt = 0;
   let lastHeartbeatAt = started;
   const seenPaths = new Set<string>();
+  const incremental =
+    input.sessionId && input.useIncrementalFiles
+      ? new KimiIncrementalFileWriter(input.sessionId)
+      : null;
 
   if (input.sessionId) {
     ensureSessionDir(input.sessionId);
@@ -109,6 +118,11 @@ export async function streamKimiChatCompletion(input: {
       throw new Error(`Kimi stream ${res.status}: ${errText.slice(0, 500)}`);
     }
 
+    if (input.sessionId) {
+      markKimiTiming(input.sessionId, "modelRequestAcceptedMs", Date.now() - started);
+      appendProgressLog(input.sessionId, `kimi_model_request_accepted_ms=${Date.now() - started}`);
+    }
+
     if (!res.body) throw new Error("Kimi stream returned no body");
 
     const reader = res.body as unknown as AsyncIterable<Uint8Array>;
@@ -122,7 +136,7 @@ export async function streamKimiChatCompletion(input: {
       }
 
       const now = Date.now();
-      if (!firstTokenMs && now - lastHeartbeatAt > 10000) {
+      if (!firstReasoningMs && !firstContentMs && now - lastHeartbeatAt > 10000) {
         lastHeartbeatAt = now;
         const waitSec = Math.round((now - started) / 1000);
         const msg = `kimi_waiting_for_tokens… ${waitSec}s (video analysis / reasoning before code)`;
@@ -157,13 +171,14 @@ export async function streamKimiChatCompletion(input: {
           const reasoning = delta?.reasoning_content ?? json.choices?.[0]?.message?.reasoning_content ?? "";
 
           if (reasoning) {
-            if (!firstTokenMs) {
-              firstTokenMs = Date.now() - started;
+            if (!firstReasoningMs) {
+              firstReasoningMs = Date.now() - started;
               if (input.sessionId) {
-                appendProgressLog(input.sessionId, `kimi_first_reasoning_token_ms=${firstTokenMs}`);
+                markKimiTiming(input.sessionId, "firstReasoningTokenMs", firstReasoningMs);
+                appendProgressLog(input.sessionId, `kimi_first_reasoning_token_ms=${firstReasoningMs}`);
                 updateProgress(input.sessionId, {
                   phase: "generating_ui",
-                  message: `Kimi reasoning… first activity in ${(firstTokenMs / 1000).toFixed(1)}s`,
+                  message: `Kimi reasoning… first activity in ${(firstReasoningMs / 1000).toFixed(1)}s`,
                 });
               }
             }
@@ -175,23 +190,45 @@ export async function streamKimiChatCompletion(input: {
               process.stdout.write(reasoning);
               lastConsoleAt = Date.now();
             }
+            if (input.sessionId && Date.now() - lastProgressAt > 5000) {
+              lastProgressAt = Date.now();
+              const tail = reasoningText.slice(-100).replace(/\s+/g, " ");
+              appendProgressLog(
+                input.sessionId,
+                `kimi_reasoning ${reasoningText.length} chars (${((Date.now() - started) / 1000).toFixed(0)}s) — …${tail}`,
+              );
+              updateProgress(input.sessionId, {
+                phase: "generating_ui",
+                message: `Kimi reasoning… ${reasoningText.length.toLocaleString()} chars (${((Date.now() - started) / 1000).toFixed(0)}s)`,
+              });
+            }
           }
 
           if (!content) continue;
 
-          if (!firstTokenMs) {
-            firstTokenMs = Date.now() - started;
+          if (!firstContentMs) {
+            firstContentMs = Date.now() - started;
             if (input.sessionId) {
-              appendProgressLog(input.sessionId, `kimi_first_code_token_ms=${firstTokenMs}`);
+              markKimiTiming(input.sessionId, "firstContentTokenMs", firstContentMs);
+              appendProgressLog(input.sessionId, `kimi_first_content_token_ms=${firstContentMs}`);
               updateProgress(input.sessionId, {
                 phase: "generating_ui",
-                message: `Kimi streaming UI code… first tokens in ${(firstTokenMs / 1000).toFixed(1)}s`,
+                message: `Kimi streaming UI code… first tokens in ${(firstContentMs / 1000).toFixed(1)}s`,
               });
             }
-            log("kimi stream", `first code token after ${firstTokenMs}ms`);
+            log("kimi stream", `first code token after ${firstContentMs}ms`);
           }
 
           rawText += content;
+          const fileEvents = incremental?.feed(content) ?? [];
+          for (const event of fileEvents) {
+            if (event.type === "file_complete" && input.sessionId) {
+              updateProgress(input.sessionId, {
+                phase: "generating_ui",
+                message: `Wrote ${event.path} (${event.bytes.toLocaleString()} bytes) — streaming…`,
+              });
+            }
+          }
 
           if (input.sessionId) {
             appendFileSync(kimiStreamLogPath(input.sessionId), content, "utf8");
@@ -230,15 +267,32 @@ export async function streamKimiChatCompletion(input: {
 
     process.stdout.write("\n");
 
+    const completedFiles = incremental ? incremental.flush() : [];
     const totalMs = Date.now() - started;
+
+    if (input.sessionId && completedFiles.length > 0) {
+      writeIncrementalMetadata(input.sessionId, completedFiles);
+      markKimiTiming(input.sessionId, "allFilesCompleteMs", totalMs);
+      markKimiTiming(input.sessionId, "completedFiles", completedFiles);
+      appendProgressLog(input.sessionId, `kimi_all_files_complete: ${completedFiles.join(", ")}`);
+    }
+
     if (input.sessionId) {
+      markKimiTiming(input.sessionId, "generationTotalMs", totalMs);
       appendProgressLog(
         input.sessionId,
-        `kimi_stream_complete chars=${rawText.length} first_token_ms=${firstTokenMs} total_ms=${totalMs}`,
+        `kimi_stream_complete code_chars=${rawText.length} reasoning_chars=${reasoningText.length} first_content_ms=${firstContentMs} total_ms=${totalMs} files=${completedFiles.length}`,
       );
     }
 
-    return { rawText, firstTokenMs, totalMs, charCount: rawText.length };
+    return {
+      rawText,
+      firstReasoningMs,
+      firstContentMs,
+      totalMs,
+      charCount: rawText.length,
+      completedFiles,
+    };
   } finally {
     clearTimeout(timeout);
   }

@@ -36,6 +36,10 @@ export type UiAnalysisInput = {
   userPrompt: string;
   labeledMedia: LabeledMedia[];
   expectJson?: boolean;
+  /** Emit KIMI_FILE_BEGIN/END protocol and write files during stream */
+  useIncrementalFiles?: boolean;
+  /** Revision pass — do not re-attach reference video */
+  skipReferenceVideo?: boolean;
   sessionId?: string;
   phaseLabel?: string;
 };

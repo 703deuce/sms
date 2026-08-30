@@ -65,8 +65,11 @@ export class KimiVisionProvider implements UiVisionProvider {
   }
 
   async analyze(input: UiAnalysisInput): Promise<UiAnalysisResult> {
-    const videos = input.labeledMedia.filter((m) => m.kind === "video");
-    const images = input.labeledMedia.filter((m) => m.kind === "image");
+    const media = input.skipReferenceVideo
+      ? input.labeledMedia.filter((m) => m.kind !== "video")
+      : input.labeledMedia;
+    const videos = media.filter((m) => m.kind === "video");
+    const images = media.filter((m) => m.kind === "image");
     const sessionId = input.sessionId;
     const phaseLabel = input.phaseLabel || "Kimi generation";
 
@@ -126,7 +129,7 @@ export class KimiVisionProvider implements UiVisionProvider {
       messages,
       temperature: 1,
     };
-    if (input.expectJson) {
+    if (input.expectJson && !input.useIncrementalFiles) {
       body.response_format = { type: "json_object" };
     }
 
@@ -155,10 +158,16 @@ export class KimiVisionProvider implements UiVisionProvider {
         sessionId,
         label: phaseLabel,
         timeoutMs: KIMI_CHAT_TIMEOUT_MS,
+        useIncrementalFiles: input.useIncrementalFiles,
       });
       rawText = streamed.rawText.trim();
-      markKimiTiming(sessionId, "kimiFirstResponseMs", streamed.firstTokenMs);
-      markKimiTiming(sessionId, "kimiGenerationCompletedMs", streamed.totalMs);
+      if (streamed.firstContentMs) {
+        markKimiTiming(sessionId, "firstContentTokenMs", streamed.firstContentMs);
+      }
+      if (streamed.firstReasoningMs) {
+        markKimiTiming(sessionId, "firstReasoningTokenMs", streamed.firstReasoningMs);
+      }
+      markKimiTiming(sessionId, "generationTotalMs", streamed.totalMs);
     } else {
       const res = await kimiFetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",

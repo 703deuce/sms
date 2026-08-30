@@ -171,6 +171,42 @@ gate("video delivery uses native ms:// not base64", () => {
   assert.ok(VIDEO_DELIVERY_PRINCIPLES.toLowerCase().includes("do not base64-embed"));
 });
 
+gate("incremental file protocol writes files during stream", () => {
+  const { KimiIncrementalFileWriter } = require("./kimi-incremental-files") as typeof import("./kimi-incremental-files");
+  const { listGeneratedFiles } = require("./generated-sandbox") as typeof import("./generated-sandbox");
+  const sid = "cert-incremental-session";
+  const writer = new KimiIncrementalFileWriter(sid);
+  const chunk = `KIMI_MANIFEST_BEGIN
+page.tsx
+mock-data.ts
+KIMI_MANIFEST_END
+KIMI_FILE_BEGIN page.tsx
+export default function ReferencePage() { return <div>cert</div>; }
+KIMI_FILE_END
+KIMI_FILE_BEGIN mock-data.ts
+export const MOCK = [];
+KIMI_FILE_END
+`;
+  const events = writer.feed(chunk);
+  assert.equal(events.length, 3);
+  assert.equal(events[2].type, "file_complete");
+  writer.flush();
+  const files = listGeneratedFiles(sid);
+  assert.ok(files.includes("page.tsx"));
+  assert.ok(files.includes("mock-data.ts"));
+});
+
+gate("reference builder uses incremental protocol not json_object", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const builderSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/reference-builder.ts"), "utf8");
+  const streamSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/kimi-stream.ts"), "utf8");
+  assert.ok(builderSrc.includes("KIMI_FILE_BEGIN"));
+  assert.ok(builderSrc.includes("useIncrementalFiles: true"));
+  assert.ok(builderSrc.includes("skipReferenceVideo: isRevision"));
+  assert.ok(streamSrc.includes("KimiIncrementalFileWriter"));
+});
+
 gate("generated sandbox path isolation", () => {
   const { writeGeneratedFiles, listGeneratedFiles } = require("./generated-sandbox") as typeof import("./generated-sandbox");
   const sid = "cert-test-session";

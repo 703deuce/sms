@@ -1,5 +1,6 @@
 import { DESIGN_REFERENCE_DEFAULT_INSTRUCTION } from "./config";
-import { writeGeneratedFiles } from "./generated-sandbox";
+import { INCREMENTAL_FILE_PROTOCOL } from "./kimi-incremental-files";
+import { listGeneratedFiles, readAllGeneratedSources, writeGeneratedFiles } from "./generated-sandbox";
 import { designContextForKimi } from "./project-context";
 import type { LabeledMedia, ProjectManifest, UiVisionProvider } from "./types";
 
@@ -25,22 +26,23 @@ Use lucide-react icons if needed — do not add new icon libraries.
 Preserve Transovo brand name and terminology where shown in current Transovo captures.
 Do NOT copy competitor trademarks, logos, or proprietary copy.
 
-Return JSON only:
-{
-  "summary": "...",
-  "files": [
-    { "path": "page.tsx", "content": "..." },
-    { "path": "components/ConversationList.tsx", "content": "..." },
-    { "path": "mock-data.ts", "content": "..." },
-    { "path": "reference.css", "content": "..." }
-  ],
-  "mockDataFiles": ["mock-data.ts"],
-  "notes": ["..."],
-  "backendAssumptions": ["..."]
-}
+${INCREMENTAL_FILE_PROTOCOL}
 
-Required files at minimum: page.tsx (default export ReferencePage), mock-data.ts, reference.css.
 Implement modals, dropdowns, tabs, responsive layouts, hover/selected states when visible in reference.`;
+
+const REVISE_SYSTEM = `Revise the Kimi sandbox UI only. Do not touch production.
+The reference video was already analyzed in the initial build — do NOT require re-watching it.
+Use the existing generated files as the source of truth.
+
+${INCREMENTAL_FILE_PROTOCOL}
+
+Emit only files that changed, or the full set if easier. Use KIMI_FILE_BEGIN/END for each file.`;
+
+function formatExistingSources(sessionId: string): string {
+  const sources = readAllGeneratedSources(sessionId);
+  if (sources.length === 0) return "(no existing sandbox files)";
+  return sources.map((s) => `--- ${s.path} ---\n${s.content}`).join("\n\n");
+}
 
 export async function buildReferenceImplementation(
   provider: UiVisionProvider,
@@ -52,13 +54,28 @@ export async function buildReferenceImplementation(
     currentMedia: LabeledMedia[];
     instruction: string;
     feedback?: string;
+    isRevision?: boolean;
   },
 ): Promise<ReferenceBuildResult> {
   const designContext = designContextForKimi(input.manifest);
+  const isRevision = Boolean(input.isRevision);
 
   const result = await provider.analyze({
-    systemPrompt: REFERENCE_BUILD_SYSTEM,
-    userPrompt: `BUILD VISUAL REFERENCE IMPLEMENTATION
+    systemPrompt: isRevision ? REVISE_SYSTEM : REFERENCE_BUILD_SYSTEM,
+    userPrompt: isRevision
+      ? `REVISE GENERATED REFERENCE
+
+TARGET ROUTE: ${input.target}
+INSTRUCTION: ${input.instruction || "(none)"}
+
+The reference video was already analyzed — revise the EXISTING sandbox code below.
+Do not re-plan from scratch unless the instruction requires it.
+
+EXISTING SANDBOX FILES:
+${formatExistingSources(input.sessionId)}
+
+Apply the instruction. Emit updated files using KIMI_FILE_BEGIN/END.`
+      : `BUILD VISUAL REFERENCE IMPLEMENTATION
 
 TARGET PRODUCTION ROUTE (for context only — do NOT edit production): ${input.target}
 
@@ -76,23 +93,38 @@ Labelled media:
 - REFERENCE_* = competitor/inspiration screenshots or videos
 - CURRENT_TRANSOVO_* = what our page looks like today
 
-Build the complete sandbox reference page under the file paths listed in the JSON schema.
-Use mock data freely in mock-data.ts. Export ReferencePage from page.tsx.`,
-    labeledMedia: [...input.referenceMedia, ...input.currentMedia],
-    expectJson: true,
+Build the complete sandbox reference page. Use mock data in mock-data.ts. Export ReferencePage from page.tsx.
+Emit files incrementally with KIMI_FILE_BEGIN/END — do not buffer one giant JSON object.`,
+    labeledMedia: isRevision
+      ? input.currentMedia
+      : [...input.referenceMedia, ...input.currentMedia],
+    expectJson: false,
+    useIncrementalFiles: true,
+    skipReferenceVideo: isRevision,
     sessionId: input.sessionId,
     phaseLabel: input.feedback ? "Kimi refinement" : "Kimi initial build",
   });
+
+  const incrementalFiles = listGeneratedFiles(input.sessionId).filter(
+    (f) => f !== "metadata.json" && !f.endsWith("APPROVED.json"),
+  );
+
+  if (incrementalFiles.length > 0) {
+    return {
+      files: incrementalFiles,
+      summary: `Incremental build: ${incrementalFiles.length} file(s) materialized during stream`,
+    };
+  }
 
   const parsed = (result.parsedJson || {}) as {
     summary?: string;
     files?: Array<{ path: string; content: string }>;
   };
 
-  if (!parsed.files?.length) {
-    throw new Error("Kimi did not return generated files — expected JSON with files[]");
+  if (parsed.files?.length) {
+    const written = writeGeneratedFiles(input.sessionId, parsed.files);
+    return { files: written, summary: parsed.summary || "Reference implementation generated" };
   }
 
-  const written = writeGeneratedFiles(input.sessionId, parsed.files);
-  return { files: written, summary: parsed.summary || "Reference implementation generated" };
+  throw new Error("Kimi did not return generated files — expected KIMI_FILE_BEGIN/END blocks or JSON files[]");
 }
