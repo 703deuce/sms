@@ -73,8 +73,8 @@ function pick(fields: Record<string, string>, ...keys: string[]): string {
 }
 
 /**
- * TeXML-first MCTB ingress — same Telnyx front door as proven AI path.
- * Certification modes return XML immediately with zero DB.
+ * TeXML-first MCTB ingress — FROZEN pipeline mctb_texml_final_v1
+ * @see docs/MCTB_FINAL_PRODUCTION_PIPELINE.md — do not change behavior without re-cert.
  */
 export async function POST(request: Request) {
   const started = Date.now();
