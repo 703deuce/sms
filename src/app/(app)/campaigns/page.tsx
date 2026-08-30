@@ -1,7 +1,7 @@
 "use client";
 
-import { CampaignListView } from "@/components/campaigns/broadcast/campaign-list";
+import { CampaignsFlow } from "@/components/kimi/campaigns/CampaignsFlow";
 
 export default function CampaignsPage() {
-  return <CampaignListView />;
+  return <CampaignsFlow />;
 }

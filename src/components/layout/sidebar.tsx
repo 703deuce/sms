@@ -26,7 +26,8 @@ import { useProductShell, ProductShellSwitcher } from "@/components/products/pro
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
-import { cn } from "@/lib/utils";
+import { TransovoSidebar } from "@/components/kimi/sidebar/TransovoSidebar";
+import { initialsForName, mapProductionNavToKimi } from "@/components/kimi/sidebar/map-nav";
 import {
   Bell,
   ChevronDown,
@@ -413,6 +414,82 @@ export function Sidebar({
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  const homeHref = realtorMode
+    ? "/realtor/dashboard"
+    : isLauncher
+      ? "/app"
+      : currentProduct === "numbers"
+        ? productLogoHome("numbers")
+        : multiProduct
+          ? shellHomePath(productShell)
+          : hasMassSms
+            ? massSmsShellHome()
+            : hasAiAfterHours
+              ? aiAfterHoursShellHome()
+              : hasMctb
+                ? mctbShellHome()
+                : "/app";
+
+  const useKimiSidebar = !realtorMode && !isLauncher && currentProduct !== "numbers";
+
+  if (useKimiSidebar) {
+    const planLabel =
+      multiProduct
+        ? productShellLabel(productShell)
+        : hasMassSms
+          ? productShellLabel("mass_sms")
+          : hasAiAfterHours
+            ? productShellLabel("ai_after_hours")
+            : hasMctb
+              ? productShellLabel("mctb")
+              : workspaceName || "Account";
+
+    const kimiAside = (
+      <TransovoSidebar
+        navItems={mapProductionNavToKimi(navItems)}
+        activeRoute={pathname}
+        collapsed={collapsed}
+        onToggleCollapse={onToggleCollapse}
+        homeHref={homeHref}
+        credits={{
+          label: "Message Credits",
+          remaining:
+            typeof creditsRemaining === "number" ? creditsRemaining : PLAN_BALANCE_LIMIT,
+          total: PLAN_BALANCE_LIMIT,
+        }}
+        user={{
+          name: userName,
+          initials: initialsForName(userName),
+          plan: planLabel,
+        }}
+      />
+    );
+
+    return (
+      <>
+        <div
+          className={cn(
+            "hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex",
+            collapsed ? "lg:w-[56px]" : "lg:w-[224px]",
+          )}
+        >
+          {kimiAside}
+        </div>
+        {open ? (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/50"
+              onClick={onClose}
+              aria-label="Close menu"
+            />
+            <div className="absolute inset-y-0 left-0 shadow-2xl">{kimiAside}</div>
+          </div>
+        ) : null}
+      </>
+    );
   }
 
   const content = (
