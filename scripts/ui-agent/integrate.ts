@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { UI_AGENT_REPORTS_DIR } from "./config";
+import { INTEGRATION_PRINCIPLES, UI_AGENT_REPORTS_DIR } from "./config";
 import { readAllGeneratedSources } from "./generated-sandbox";
 import { loadApprovedReference } from "./approve-reference";
 import { manifestToPromptContext } from "./project-context";
@@ -12,14 +12,14 @@ import type {
   UiVisionProvider,
 } from "./types";
 
-const INTEGRATION_SYSTEM = `You are integrating an APPROVED Kimi visual reference into Transovo PRODUCTION code.
+const INTEGRATION_SYSTEM = `You are integrating an APPROVED Kimi sandbox UI into Transovo PRODUCTION code.
 
-CRITICAL RULES:
-- The Kimi sandbox (.ui-agent/generated/) is the VISUAL SOURCE OF TRUTH.
-- Reproduce Kimi's layout, spacing, classNames, component hierarchy, modals, and visual states faithfully.
-- Connect to EXISTING production hooks, API calls, handlers, and real data.
-- NEVER copy mock-data.ts, MOCK_* constants, or fake handlers from the sandbox into production.
-- NEVER modify src/lib, src/app/api, prisma, or backend logic.
+${INTEGRATION_PRINCIPLES}
+
+When planning changes:
+- Treat Kimi files as the primary starting point for presentation — inspect concrete values (widths, max-widths, transition durations, classNames).
+- Prefer modifying existing production components over creating duplicates.
+- List state/handler swaps explicitly (Kimi mock → production hook/API).
 - If new backend capability is required, list it under backendChangesRequired — do not fake it.
 
 Return JSON only.`;
@@ -36,13 +36,19 @@ export async function generateFunctionalMappingReport(
     systemPrompt: INTEGRATION_SYSTEM,
     userPrompt: `Create a FUNCTIONAL MAPPING REPORT before integration.
 
-APPROVED REFERENCE TARGET: ${approved.target}
+APPROVED KIMI TARGET (visual source of truth): ${approved.target}
+Compare production against this approved render — NOT the original competitor reference.
 
-KIMI GENERATED FILES:
+KIMI GENERATED FILES (starting implementation — reuse presentation, refactor wiring):
 ${generated.map((f) => `\n--- ${f.path} ---\n${f.content.slice(0, 4000)}`).join("\n")}
 
-PRODUCTION FILES:
+PRODUCTION FILES (existing hooks, components, APIs to preserve):
 ${productionContext}
+
+For each Kimi component/section, identify:
+1. Existing production component to merge into (if any)
+2. Presentation to carry over (JSX, classNames, layout)
+3. Production state/handlers/APIs to wire instead of Kimi mocks
 
 Return JSON:
 {
@@ -51,8 +57,8 @@ Return JSON:
     {
       "kimiComponent": "ConversationList",
       "productionEquivalent": "src/components/...",
-      "visualChanges": ["..."],
-      "realBehaviorToPreserve": ["pagination", "search", "..."]
+      "visualChanges": ["carry over Kimi sidebar width 316px", "..."],
+      "realBehaviorToPreserve": ["useConversationFilters()", "pagination", "..."]
     }
   ],
   "backendChangesRequired": [{ "feature": "...", "reason": "..." }],
@@ -81,14 +87,14 @@ export async function generateIntegrationPlan(
 
   const result = await provider.analyze({
     systemPrompt: INTEGRATION_SYSTEM,
-    userPrompt: `Generate PRODUCTION INTEGRATION PLAN (presentation transplant only).
+    userPrompt: `Generate PRODUCTION INTEGRATION PLAN.
 
 USER INSTRUCTION: ${input.instruction || ""}
 
 FUNCTIONAL MAPPING:
 ${JSON.stringify(input.mapping, null, 2)}
 
-KIMI REFERENCE (visual source of truth):
+KIMI STARTING IMPLEMENTATION (reuse 80–90% presentation; refactor state/handlers/components as needed):
 ${generated.map((f) => `\n--- ${f.path} ---\n${f.content.slice(0, 5000)}`).join("\n")}
 
 PRODUCTION CONTEXT:
@@ -97,14 +103,15 @@ ${productionContext}
 Return JSON:
 {
   "summary": "...",
-  "notes": ["..."],
+  "notes": ["which Kimi presentation was preserved", "which production hooks replaced Kimi state", "..."],
   "changes": [
-    { "file": "src/components/...", "action": "modify", "reason": "...", "content": "FULL FILE with real hooks/APIs" }
+    { "file": "src/components/...", "action": "modify", "reason": "merge Kimi JSX into existing ConversationRow", "content": "FULL FILE with real hooks/APIs" }
   ],
   "backendChangesRequired": [...]
 }
 
-Each production file must use real data hooks — no imports from .ui-agent/generated or mock-data.`,
+Each production file must use real data hooks — no imports from .ui-agent/generated or mock-data.
+Preserve approved visual appearance; do not preserve Kimi implementation details when production equivalents exist.`,
     labeledMedia: [],
     expectJson: true,
   });
@@ -132,6 +139,9 @@ export function writeIntegrationReport(sessionId: string, mapping: FunctionalMap
   const path = join(UI_AGENT_REPORTS_DIR, `${sessionId}-integration.md`);
   const lines = [
     `# Integration Report — ${mapping.target}`,
+    "",
+    "## Integration principles",
+    INTEGRATION_PRINCIPLES,
     "",
     "## Functional mapping",
     "```json",

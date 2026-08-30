@@ -1,10 +1,10 @@
 import { basename, join } from "node:path";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { applyAcceptedChanges } from "./apply-plan";
 import { approveReference } from "./approve-reference";
 import { parseCliArgs, printUsage } from "./cli";
 import { captureCurrentSite, captureReferenceUrl } from "./capture-current";
-import { validateImplementationPlan, writePlanReport } from "./change-plan";
+import { validateImplementationPlan } from "./change-plan";
 import { ensureUiAgentDirs, resolveUiAgentPath, UI_AGENT_REFERENCES_DIR } from "./config";
 import { generatedDirForSession } from "./generated-sandbox";
 import { filesChangedOutsidePlan, readGitDirtyFiles, restoreSnapshots, snapshotFiles } from "./git-safety";
@@ -23,6 +23,7 @@ import { refineReferenceImplementation } from "./refine-reference";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession } from "./types";
 import { validateTouchedFiles } from "./validate-changes";
+import { compareApprovedReferenceToProduction, writeVisualComparisonReport } from "./visual-comparison";
 
 async function collectReferenceMedia(options: CliOptions, sessionDirPath: string): Promise<LabeledMedia[]> {
   const labeled: Array<{ path: string; label: string; purpose: string }> = [];
@@ -261,8 +262,40 @@ async function runIntegrate(options: CliOptions): Promise<void> {
       restoreSnapshots(snapshots.snapshots);
       return;
     }
-    log("capture production page for final visual comparison");
-    // Optional final comparison when captures exist
+
+    const approvedScreenshot = join(generatedDirForSession(session.id), "screenshot.png");
+    if (!existsSync(approvedScreenshot)) {
+      logError("visual comparison skipped", "no approved Kimi screenshot.png — run ui:improve refinement first");
+    } else {
+      log("capturing production page for final visual comparison");
+      const afterDir = join(sessionDir(session.id), "after-integrate");
+      const productionShots = await captureCurrentSite({
+        baseUrl: options.baseUrl,
+        targetPath: session.target,
+        outputDir: afterDir,
+        viewports: ["desktop"],
+        screenshots: true,
+        video: false,
+        email: process.env.UI_AGENT_SMOKE_EMAIL || process.env.SMOKE_EMAIL,
+        password: process.env.UI_AGENT_SMOKE_PASSWORD || process.env.SMOKE_PASSWORD,
+      });
+      const productionScreenshot = productionShots[0];
+      if (productionScreenshot) {
+        const comparison = await compareApprovedReferenceToProduction(provider, {
+          approvedScreenshotPath: approvedScreenshot,
+          productionScreenshotPath: productionScreenshot,
+          target: session.target,
+          instruction: session.instruction,
+        });
+        session.verification = comparison;
+        updateSession(session);
+        const comparisonReport = writeVisualComparisonReport(session.id, comparison);
+        log(
+          "visual comparison",
+          `faithful=${comparison.faithful} visual=${comparison.visualMatch}/100 — ${comparisonReport}`,
+        );
+      }
+    }
   }
 
   log("complete", `session=${session.id}`);

@@ -60,6 +60,39 @@ Do NOT copy trademarks, company names, logos, proprietary text, illustrations/as
 Do not blindly duplicate the entire reference application.
 Adapt useful ideas to Transovo's existing product, branding, and functionality.`;
 
+/**
+ * Shared integration philosophy for ui:integrate prompts and Cursor agents.
+ * Kimi delivers 0→85–95% visual implementation; integration delivers 85–95%→production.
+ */
+export const INTEGRATION_PRINCIPLES = `Kimi's generated UI is not merely a design reference — it is the STARTING FRONTEND IMPLEMENTATION.
+
+ROLE SPLIT:
+- Kimi: reference video/screenshots → runnable sandbox UI (mock data OK in .ui-agent/generated/)
+- Cursor/integration: approved Kimi visual result + Transovo production functionality
+
+REUSE STRATEGY:
+- Reuse 80–90% of Kimi's presentation code where practical (JSX structure, classNames, layout, spacing, transitions, modals, visual states).
+- Visual fidelity matters MORE than preserving exact generated source code.
+- Do NOT feel obligated to preserve Kimi's code line-for-line.
+
+REFACTOR FREELY when integrating:
+- Replace Kimi local state (e.g. useState("all")) with existing production hooks (e.g. useConversationFilters()).
+- Merge Kimi JSX/classes into EXISTING production components when one already exists — do not create parallel Reference* components unless necessary.
+- Swap in real data, handlers, APIs, routing, design-system primitives, accessibility fixes, and performance improvements.
+- Refactoring must NOT materially degrade the approved visual result.
+
+NEVER INTO PRODUCTION:
+- mock-data.ts, MOCK_* constants, fake handlers, or imports from .ui-agent/generated/
+- Changes to src/lib, src/app/api, prisma, providers, auth, or billing
+
+GOAL:
+Kimi-created visual result + Transovo production functionality.
+NOT exact source-code preservation.
+
+FINAL VISUAL CHECK:
+Compare the APPROVED Kimi sandbox render (screenshot.png / preview) against production AFTER integration.
+Do NOT compare production against the original competitor reference video — the approved Kimi render is the target.`;
+
 export type KimiRuntimeConfig = {
   apiKey: string;
   baseUrl: string;

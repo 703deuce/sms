@@ -1,3 +1,6 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { INTEGRATION_PRINCIPLES, UI_AGENT_REPORTS_DIR } from "./config";
 import { buildLabeledMedia } from "./reference-media";
 import type { LabeledMedia, UiVisionProvider, VisualVerificationScores } from "./types";
 
@@ -24,13 +27,17 @@ export async function compareApprovedReferenceToProduction(
   ]);
 
   const result = await provider.analyze({
-    systemPrompt: `You compare screenshots. Do NOT redesign. Only evaluate fidelity of production vs approved reference.`,
+    systemPrompt: `You compare screenshots for post-integration fidelity. Do NOT redesign.
+The APPROVED KIMI sandbox render is the target — NOT the original competitor reference.`,
     userPrompt: `FINAL VISUAL COMPARISON — integration fidelity check
 
-TARGET: ${input.target}
+${INTEGRATION_PRINCIPLES}
+
+TARGET ROUTE: ${input.target}
 INSTRUCTION: ${input.instruction || ""}
 
-Did Cursor reproduce the approved Kimi reference faithfully in production?
+Compare PRODUCTION_TRANSOVO_AFTER against APPROVED_KIMI_REFERENCE.
+Did integration preserve the approved Kimi visual result while using real production data?
 
 Return JSON:
 {
@@ -57,4 +64,35 @@ Return JSON:
     majorDifferences: ["Parse failed"],
     faithful: false,
   }) as VisualVerificationScores & { majorDifferences: string[]; faithful: boolean };
+}
+
+export function writeVisualComparisonReport(
+  sessionId: string,
+  scores: VisualVerificationScores & { majorDifferences: string[]; faithful: boolean },
+): string {
+  const path = join(UI_AGENT_REPORTS_DIR, `${sessionId}-visual-comparison.md`);
+  const lines = [
+    `# Visual Comparison — ${sessionId}`,
+    "",
+    "Target: **approved Kimi sandbox render** vs **production after integration**",
+    "",
+    `- Faithful: **${scores.faithful ? "yes" : "no"}**`,
+    `- Visual match: ${scores.visualMatch}/100`,
+    `- Layout match: ${scores.layoutMatch}/100`,
+    `- Interaction match: ${scores.interactionMatch}/100`,
+    `- Brand preservation: ${scores.brandPreservation}/100`,
+    `- Functionality risk: ${scores.functionalityRisk}`,
+    "",
+    "## Major differences",
+    ...(scores.majorDifferences.length ? scores.majorDifferences.map((d) => `- ${d}`) : ["- (none noted)"]),
+    "",
+    "## Remaining differences",
+    ...(scores.remainingDifferences.length ? scores.remainingDifferences.map((d) => `- ${d}`) : ["- (none noted)"]),
+    "",
+    "```json",
+    JSON.stringify(scores, null, 2),
+    "```",
+  ];
+  writeFileSync(path, lines.join("\n"), "utf8");
+  return path;
 }

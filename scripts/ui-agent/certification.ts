@@ -75,6 +75,13 @@ gate("dry-run apply does not require Kimi", () => {
   assert.equal(touched.length, 1);
 });
 
+gate("integration principles constant defined", () => {
+  const { INTEGRATION_PRINCIPLES } = require("./config") as typeof import("./config");
+  const lower = INTEGRATION_PRINCIPLES.toLowerCase();
+  assert.ok(lower.includes("starting frontend implementation"));
+  assert.ok(lower.includes("approved kimi"));
+});
+
 gate("integration plan rejects mock-data imports", () => {
   const { validateIntegrationPlan } = require("./integrate") as typeof import("./integrate");
   assert.throws(() =>

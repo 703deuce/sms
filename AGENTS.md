@@ -143,17 +143,39 @@ When the user supplies a screenshot, design reference, or screen recording and a
 
 ### Workflow (reference implementation mode)
 
+```
+Reference media + current Transovo capture
+        ↓
+Kimi builds UI in .ui-agent/generated/<session>/  (0 → 85–95% visual)
+        ↓
+Preview → approve (APPROVED.json + screenshot.png)
+        ↓
+Cursor integrates into src/  (85–95% → production)
+        ↓
+Final check: approved Kimi render vs production result
+```
+
 1. **Kimi builds** a complete visual reference in `.ui-agent/generated/<session>/` (mock data allowed in sandbox only).
 2. **Preview** with `npm run ui:preview -- --session <id>` — inspect before touching production.
-3. **Approve** with `npm run ui:approve -- --session <id>` — freezes `APPROVED.json` as visual source of truth.
-4. **Integrate** with `npm run ui:integrate` — Cursor transplants presentation into real `src/` components using existing hooks/APIs.
+3. **Approve** with `npm run ui:approve -- --session <id>` — freezes the approved Kimi render as the visual target.
+4. **Integrate** with `npm run ui:integrate` — transplant presentation into real `src/` components using existing hooks/APIs.
 5. **Never** let Kimi edit `src/` directly during the build phase.
 
-### Rules
+### Integration rules (Cursor / Composer)
 
-- Kimi owns the **visual implementation** in the sandbox.
-- Cursor owns **production integration** — reproduce Kimi's layout/classNames/hierarchy faithfully while preserving real data, handlers, auth, and APIs.
-- Do **not** copy `mock-data.ts` or `MOCK_*` constants into production.
+Kimi's generated UI is the **starting frontend implementation**, not merely a design reference.
+
+- **Reuse 80–90%** of Kimi's presentation code where practical (JSX, classNames, layout, spacing, transitions).
+- **Visual fidelity** matters more than preserving exact generated source code.
+- **Refactor freely** for production: swap Kimi `useState` for existing hooks, merge JSX into existing components (e.g. put Kimi's row layout into `ConversationRow.tsx`), use design-system primitives, routing, a11y.
+- **Do not** copy `mock-data.ts`, `MOCK_*`, or imports from `.ui-agent/generated/` into production.
+- **Goal:** Kimi-created visual result + Transovo production functionality — NOT line-for-line source preservation.
+- **Final visual check:** compare **approved Kimi sandbox render** vs **production after integration** — NOT the original competitor video.
+
+Shared prompt text: `INTEGRATION_PRINCIPLES` in `scripts/ui-agent/config.ts`.
+
+### Safety
+
 - Capture the **rendered** current page (`--capture-current`), not just source code.
 - Default to plan-only for `ui:integrate`; apply only with `--apply`.
 - If backend work is required, document in `backendChangesRequired` — do not fake it.
