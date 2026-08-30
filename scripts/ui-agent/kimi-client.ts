@@ -1,6 +1,7 @@
 import { deliverVideoForKimi, buildImageDataUrlDelivery } from "./kimi-media";
 import { KIMI_CHAT_TIMEOUT_MS } from "./config";
 import { kimiFetch } from "./kimi-http";
+import { kimiStreamLogPath, streamKimiChatCompletion } from "./kimi-stream";
 import { loadKimiConfig } from "./config";
 import { log } from "./logger";
 import { appendProgressLog, updateProgress } from "./progress";
@@ -133,47 +134,59 @@ export class KimiVisionProvider implements UiVisionProvider {
       markKimiTiming(sessionId, "kimiGenerationStartedMs");
       updateProgress(sessionId, {
         phase: "generating_ui",
-        message: `${phaseLabel}: Kimi is analyzing the video and writing UI code…`,
+        message: `${phaseLabel}: Kimi streaming UI code (live)…`,
       });
       appendProgressLog(
         sessionId,
-        `kimi_generation_started (timeout ${Math.round(KIMI_CHAT_TIMEOUT_MS / 60000)} min)`,
+        `kimi_generation_started stream=true timeout=${Math.round(KIMI_CHAT_TIMEOUT_MS / 60000)}min log=${kimiStreamLogPath(sessionId)}`,
       );
+      console.log(`\n[ui-agent] Kimi live stream → tail -f ${kimiStreamLogPath(sessionId)}\n`);
     }
 
     const generationStarted = Date.now();
-    const res = await kimiFetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      timeoutMs: KIMI_CHAT_TIMEOUT_MS,
-      label: phaseLabel,
-      sessionId,
-    });
-    const rawBody = await res.text();
+    let rawText = "";
+    let usage: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+
     if (sessionId) {
-      markKimiTiming(sessionId, "kimiFirstResponseMs", Date.now() - generationStarted);
-    }
-    if (!res.ok) {
-      throw new Error(`Kimi API ${res.status}: ${rawBody.slice(0, 500)}`);
+      const streamed = await streamKimiChatCompletion({
+        baseUrl: this.baseUrl,
+        apiKey: this.apiKey,
+        body,
+        sessionId,
+        label: phaseLabel,
+        timeoutMs: KIMI_CHAT_TIMEOUT_MS,
+      });
+      rawText = streamed.rawText.trim();
+      markKimiTiming(sessionId, "kimiFirstResponseMs", streamed.firstTokenMs);
+      markKimiTiming(sessionId, "kimiGenerationCompletedMs", streamed.totalMs);
+    } else {
+      const res = await kimiFetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        timeoutMs: KIMI_CHAT_TIMEOUT_MS,
+        label: phaseLabel,
+      });
+      const rawBody = await res.text();
+      if (!res.ok) {
+        throw new Error(`Kimi API ${res.status}: ${rawBody.slice(0, 500)}`);
+      }
+      const completion = JSON.parse(rawBody) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      rawText = completion.choices?.[0]?.message?.content?.trim() || "";
+      usage = completion.usage;
     }
 
-    const completion = JSON.parse(rawBody) as {
-      choices?: Array<{ message?: { content?: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-
-    const rawText = completion.choices?.[0]?.message?.content?.trim() || "";
     if (sessionId) {
-      const tokens = completion.usage?.completion_tokens;
-      markKimiTiming(sessionId, "kimiGenerationCompletedMs", Date.now() - generationStarted);
       logKimiTiming(sessionId, "generation_complete");
       appendProgressLog(
         sessionId,
-        `Kimi response received${tokens ? ` (${tokens} completion tokens)` : ""}. Parsing generated files…`,
+        `Kimi stream finished (${rawText.length} chars). Parsing generated files…`,
       );
     }
 
@@ -196,8 +209,8 @@ export class KimiVisionProvider implements UiVisionProvider {
       analysisMode,
       mediaDeliveries: deliveries,
       usage: {
-        promptTokens: completion.usage?.prompt_tokens,
-        completionTokens: completion.usage?.completion_tokens,
+        promptTokens: usage?.prompt_tokens,
+        completionTokens: usage?.completion_tokens,
       },
     };
   }
