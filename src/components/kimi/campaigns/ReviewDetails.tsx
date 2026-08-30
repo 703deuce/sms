@@ -9,13 +9,24 @@ export default function ReviewDetails({
   reviewSummary,
   onPrev,
   onDone,
+  error,
 }: {
   message: string;
   reviewSummary: KimiReviewSummary;
   onPrev: () => void;
-  onDone: (action: "draft" | "send") => void;
+  onDone: (action: "draft" | "send") => void | Promise<void>;
+  error?: string | null;
 }) {
   const [sending, setSending] = useState(false);
+
+  async function handleDone(action: "draft" | "send") {
+    setSending(true);
+    try {
+      await onDone(action);
+    } finally {
+      setSending(false);
+    }
+  }
   const rows = [
     ["Credits Available", reviewSummary.creditsAvailable],
     ["Credits Required", reviewSummary.creditsRequired],
@@ -61,16 +72,29 @@ export default function ReviewDetails({
           <div className="flex items-center justify-between">
             <button onClick={onPrev} className="border border-border rounded-lg px-4 py-2 text-[13px] text-gray-600 hover:bg-gray-50 bg-card">← Prev</button>
             <div className="flex gap-2">
-              <button onClick={() => onDone("draft")} className="text-[13px] text-gray-500 px-4 py-2 hover:text-gray-700">Save Draft</button>
               <button
-                onClick={() => { setSending(true); setTimeout(() => onDone("send"), 900); }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg px-4 py-2 flex items-center gap-1.5"
+                type="button"
+                onClick={() => void handleDone("draft")}
+                disabled={sending}
+                className="text-[13px] text-gray-500 px-4 py-2 hover:text-gray-700 disabled:opacity-50"
+              >
+                Save Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDone("send")}
+                disabled={sending || reviewSummary.canSend === false}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg px-4 py-2 flex items-center gap-1.5 disabled:opacity-50"
               >
                 {sending ? <Loader2 size={14} className="animate-spin" /> : null}
                 {sending ? "Sending…" : "Send Now"} <ChevronDown size={13} />
               </button>
             </div>
           </div>
+          {error ? <p className="mt-3 text-[13px] text-red-600">{error}</p> : null}
+          {reviewSummary.blockReason && reviewSummary.canSend === false ? (
+            <p className="mt-3 text-[13px] text-amber-700">{reviewSummary.blockReason}</p>
+          ) : null}
         </div>
         <div className="pt-2">
           <PhonePreview message={message} title="Campaign Preview" />

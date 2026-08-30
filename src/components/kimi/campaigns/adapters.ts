@@ -22,16 +22,13 @@ function formatSavedAt(value?: string | null): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const formatted = date.toLocaleString(undefined, {
+  return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
-  const isSent =
-    value === value; // placeholder — caller sets prefix via status
-  return formatted;
 }
 
 export function apiCampaignToKimi(row: ApiCampaign): KimiCampaign {

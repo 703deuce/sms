@@ -5,15 +5,18 @@ import PhonePreview from "./PhonePreview";
 import RecurringModal from "./RecurringModal";
 import LinkTracker from "./LinkTracker";
 import { lists as defaultLists, segments as defaultSegments, aiMessages, aiFunMessages, tones, mergeTags } from "./kimi-defaults";
+import type { KimiComposeSnapshot } from "./types";
 
 export default function CreateCampaign({
   onCancel,
   onReview,
+  onSaveDraft,
   lists = defaultLists,
   segments = defaultSegments,
 }: {
   onCancel: () => void;
-  onReview: (msg: string) => void;
+  onReview: (snapshot: KimiComposeSnapshot) => void;
+  onSaveDraft?: (snapshot: KimiComposeSnapshot) => Promise<void>;
   lists?: string[];
   segments?: string[];
 }) {
@@ -33,6 +36,25 @@ export default function CreateCampaign({
   const [showTest, setShowTest] = useState(false);
   const [testSent, setTestSent] = useState(false);
   const [testSending, setTestSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  const composeSnapshot = (): KimiComposeSnapshot => ({
+    name,
+    message,
+    chips,
+    when,
+    recurringSummary,
+  });
+
+  async function handleSaveDraft() {
+    if (!onSaveDraft) return;
+    setSavingDraft(true);
+    try {
+      await onSaveDraft(composeSnapshot());
+    } finally {
+      setSavingDraft(false);
+    }
+  }
 
   const limit = 402;
   const count = useMemo(() => message.length, [message]);
@@ -180,8 +202,21 @@ export default function CreateCampaign({
           <div className="flex items-center justify-between mt-10">
             <button onClick={onCancel} className="border border-border rounded-lg px-4 py-2 text-[13px] text-gray-600 hover:bg-gray-50 bg-card">Cancel</button>
             <div className="flex gap-2">
-              <button className="text-[13px] text-gray-500 px-4 py-2 hover:text-gray-700">Save Draft</button>
-              <button onClick={() => onReview(message)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg px-4 py-2">Review →</button>
+              <button
+                type="button"
+                onClick={() => void handleSaveDraft()}
+                disabled={!onSaveDraft || savingDraft}
+                className="text-[13px] text-gray-500 px-4 py-2 hover:text-gray-700 disabled:opacity-50"
+              >
+                {savingDraft ? "Saving…" : "Save Draft"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onReview(composeSnapshot())}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-medium rounded-lg px-4 py-2"
+              >
+                Review →
+              </button>
             </div>
           </div>
         </div>

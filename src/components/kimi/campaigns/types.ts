@@ -12,6 +12,18 @@ export interface KimiCampaign {
   status: "Draft" | "Sent";
 }
 
+/** API shape from GET /api/mass-texting/campaigns/:id/launch-review */
+export interface KimiLaunchReview {
+  campaignId: string;
+  campaignName: string;
+  listNames: string[];
+  finalRecipientCount: number;
+  availableSegments: number;
+  requiredSegments: number;
+  canSend: boolean;
+  blockReason: string | null;
+}
+
 export interface KimiReviewSummary {
   audience: string[];
   count: string;
@@ -19,4 +31,15 @@ export interface KimiReviewSummary {
   creditsAvailable: string;
   creditsRequired: string;
   creditsRemaining: string;
+  canSend?: boolean;
+  blockReason?: string | null;
+}
+
+/** Snapshot passed from Kimi CreateCampaign → API wiring layer. */
+export interface KimiComposeSnapshot {
+  name: string;
+  message: string;
+  chips: string[];
+  when: string;
+  recurringSummary: string | null;
 }
