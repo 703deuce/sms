@@ -348,6 +348,35 @@ export async function deleteAssistantTool(id: string, toolId: string) {
   });
 }
 
+// ── Shared tools library ────────────────────────────────────────────────────
+
+export async function listSharedTools(query?: TelnyxAiQuery) {
+  return telnyxRequest("/ai/tools", { query });
+}
+
+export async function createSharedTool(body: TelnyxAiBody) {
+  return telnyxRequest("/ai/tools", { method: "POST", body });
+}
+
+export async function getSharedTool(toolId: string) {
+  return telnyxRequest(`/ai/tools/${enc(toolId)}`);
+}
+
+export async function updateSharedTool(toolId: string, body: TelnyxAiBody) {
+  return telnyxRequest(`/ai/tools/${enc(toolId)}`, { method: "PUT", body });
+}
+
+export async function deleteSharedTool(toolId: string) {
+  return telnyxRequest(`/ai/tools/${enc(toolId)}`, { method: "DELETE" });
+}
+
+export async function addAssistantSharedTool(assistantId: string, toolId: string) {
+  return telnyxRequest(`/ai/assistants/${enc(assistantId)}/tools/${enc(toolId)}`, {
+    method: "PUT",
+    body: {},
+  });
+}
+
 // ── Conversations ───────────────────────────────────────────────────────────
 
 export async function listConversations(query?: TelnyxAiQuery) {

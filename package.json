@@ -172,7 +172,7 @@
     "test:realtor-full": "tsx scripts/test-realtor-full.ts",
     "test:realtor-release-gate": "tsx scripts/test-realtor-release-gate.ts",
     "seed:frontdesk-voice-knowledge": "tsx scripts/seed-frontdesk-voice-knowledge.ts",
-    "test:caller-amy": "tsx scripts/test-caller-amy-orchestration.ts && tsx scripts/caller-amy-preprod-suite.ts",
+    "test:caller-amy": "tsx scripts/test-caller-amy-orchestration.ts && tsx scripts/test-conversation-workflow.ts && tsx scripts/caller-amy-preprod-suite.ts",
     "test:john-preprod": "tsx scripts/john-preprod-suite.ts",
     "test:platform-runtime": "tsx scripts/test-owner-amy-runtime.ts && tsx scripts/test-workflow-architect-runtime.ts",
     "test:production-gauntlet": "tsx scripts/test-production-gauntlet.ts",

@@ -80,7 +80,18 @@ async function main() {
   if (draftConfig.model?.modelId !== AMY_MINIMUM_SIDE_EFFECT_MODEL) {
     throw new Error(`Model not set to ${AMY_MINIMUM_SIDE_EFFECT_MODEL}`);
   }
-  if (!publishedTools.includes("send_sms") || !publishedTools.includes("record_call_fact")) {
+  const workflowMode =
+    (draftConfig.advanced as Record<string, unknown>)?.conversationWorkflowMode === true;
+  if (workflowMode) {
+    for (const tool of ["send_resource", "search_business_details"]) {
+      if (!publishedTools.includes(tool)) throw new Error(`Published tools missing ${tool}`);
+    }
+    for (const retired of ["send_sms", "record_call_fact", "continue_workflow"]) {
+      if (publishedTools.includes(retired)) {
+        throw new Error(`${retired} should not be published in workflow mode`);
+      }
+    }
+  } else if (!publishedTools.includes("send_sms") || !publishedTools.includes("record_call_fact")) {
     throw new Error("Published tools missing send_sms or record_call_fact");
   }
   if (publishedTools.includes("continue_workflow")) {

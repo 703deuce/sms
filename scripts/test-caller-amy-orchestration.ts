@@ -8,8 +8,14 @@ import {
   CALLER_AMY_INTERNAL_ONLY_TOOLS,
   CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS,
   CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS,
+  WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
   filterToolsForCallerAmyPublish,
 } from "../src/lib/voice/workflow-engine/tool-publish";
+import {
+  buildAmyConversationWorkflow,
+  workflowNodeExpectedTools,
+  WORKFLOW_NODE_IDS,
+} from "../src/lib/voice/telnyx/conversation-workflow";
 import {
   deriveNextAction,
   schedulingDoNotAdvanceHint,
@@ -66,16 +72,49 @@ const legacyTelnyxNames = telnyxToolNames({
   voiceConfig: legacyConfig,
 });
 
-const minimumEnabled = minimumConfig.enabledBuiltinTools || [];
-const minimumPublished = filterToolsForCallerAmyPublish(minimumEnabled, minimumConfig);
-const minimumTelnyxNames = telnyxToolNames({
+const flatMinimumConfig: VoiceAgentConfig = {
+  ...minimumConfig,
+  enabledBuiltinTools: [
+    "hangup",
+    "transfer",
+    "send_sms",
+    "record_call_fact",
+    "take_structured_message",
+    "lookup_customer",
+    "escalate_human",
+  ],
+  advanced: {
+    ...(minimumConfig.advanced || {}),
+    conversationWorkflowMode: false,
+    minimumSideEffectMode: true,
+  },
+} as VoiceAgentConfig;
+
+const workflowEnabled = minimumConfig.enabledBuiltinTools || [];
+const workflowPublished = filterToolsForCallerAmyPublish(workflowEnabled, minimumConfig);
+const workflowTelnyxNames = telnyxToolNames({
   workspaceId: "ws_test",
   agentId: "agent_test",
   bucketIds: [],
   tools: [],
-  enabledBuiltinTools: minimumEnabled,
+  enabledBuiltinTools: workflowEnabled,
   agentType: "appointment_booking",
   voiceConfig: minimumConfig,
+});
+
+const flatMinimumEnabled = flatMinimumConfig.enabledBuiltinTools || [];
+const flatMinimumPublished = filterToolsForCallerAmyPublish(
+  flatMinimumEnabled,
+  flatMinimumConfig,
+);
+const flatMinimumTelnyxNames = telnyxToolNames({
+  workspaceId: "ws_test",
+  agentId: "agent_test",
+  bucketIds: [],
+  tools: [],
+  enabledBuiltinTools: flatMinimumEnabled,
+  agentType: "appointment_booking",
+  voiceConfig: flatMinimumConfig,
 });
 
 check(
@@ -106,32 +145,36 @@ for (const forbidden of [
 }
 
 check(
-  "minimum publish includes send_sms",
-  minimumPublished.includes("send_sms"),
+  "workflow publish includes send_resource",
+  workflowPublished.includes("send_resource"),
 );
 check(
-  "minimum publish includes record_call_fact",
-  minimumPublished.includes("record_call_fact"),
+  "workflow publish includes search_business_details",
+  workflowPublished.includes("search_business_details"),
 );
 check(
-  "minimum publish excludes continue_workflow",
-  !minimumPublished.includes("continue_workflow"),
+  "workflow publish excludes send_sms",
+  !workflowPublished.includes("send_sms"),
 );
 check(
-  "minimum publish excludes record_current_field",
-  !minimumPublished.includes("record_current_field"),
+  "workflow publish excludes record_call_fact",
+  !workflowPublished.includes("record_call_fact"),
 );
 check(
-  "minimum Telnyx build includes send_sms",
-  minimumTelnyxNames.includes("send_sms"),
+  "workflow publish excludes continue_workflow",
+  !workflowPublished.includes("continue_workflow"),
 );
 check(
-  "minimum Telnyx build includes record_call_fact",
-  minimumTelnyxNames.includes("record_call_fact"),
+  "workflow Telnyx build includes send_resource",
+  workflowTelnyxNames.includes("send_resource"),
+);
+check(
+  "workflow Telnyx build includes search_business_details",
+  workflowTelnyxNames.includes("search_business_details"),
 );
 
-for (const name of [...CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS, "hangup"] as const) {
-  check(`minimum catalog includes ${name}`, minimumTelnyxNames.includes(name));
+for (const name of [...WORKFLOW_PUBLISHED_WEBHOOK_TOOLS, "hangup"] as const) {
+  check(`workflow catalog includes ${name}`, workflowTelnyxNames.includes(name));
 }
 for (const forbidden of [
   "calendar_availability",
@@ -139,15 +182,37 @@ for (const forbidden of [
   "continue_workflow",
   "get_runtime_context",
   "record_current_field",
+  "send_sms",
+  "record_call_fact",
+  "lookup_customer",
 ]) {
-  check(`minimum catalog excludes ${forbidden}`, !minimumTelnyxNames.includes(forbidden));
+  check(`workflow catalog excludes ${forbidden}`, !workflowTelnyxNames.includes(forbidden));
 }
 
 check(
-  "minimum Telnyx tool count is small (<=8)",
-  minimumTelnyxNames.length <= 8,
-  `got ${minimumTelnyxNames.length}: ${minimumTelnyxNames.join(", ")}`,
+  "flat minimum publish includes send_sms",
+  flatMinimumPublished.includes("send_sms"),
 );
+check(
+  "flat minimum publish includes record_call_fact",
+  flatMinimumPublished.includes("record_call_fact"),
+);
+check(
+  "flat minimum publish excludes continue_workflow",
+  !flatMinimumPublished.includes("continue_workflow"),
+);
+check(
+  "flat minimum Telnyx build includes send_sms",
+  flatMinimumTelnyxNames.includes("send_sms"),
+);
+check(
+  "flat minimum Telnyx build includes record_call_fact",
+  flatMinimumTelnyxNames.includes("record_call_fact"),
+);
+
+for (const name of [...CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS, "hangup"] as const) {
+  check(`flat minimum catalog includes ${name}`, flatMinimumTelnyxNames.includes(name));
+}
 
 for (const internal of [
   "calendar_availability",
@@ -165,16 +230,49 @@ check(
   ),
 );
 check(
-  "minimum playbook injects text-first authority",
+  "workflow playbook injects conversation workflow authority",
+  compileCallerToolPlaybookForPrompt(["send_resource"], {
+    conversationWorkflow: true,
+  }).includes("TELNYX CONVERSATION WORKFLOW"),
+);
+check(
+  "flat minimum playbook injects text-first authority",
   compileCallerToolPlaybookForPrompt(["send_sms", "record_call_fact"], {
     minimumSideEffect: true,
+    conversationWorkflow: false,
   }).includes("MINIMUM-SIDE-EFFECT"),
 );
 check(
-  "minimum playbook does not inject runtime authority",
-  !compileCallerToolPlaybookForPrompt(["send_sms"], { minimumSideEffect: true }).includes(
-    "runtime is authoritative",
-  ),
+  "workflow playbook does not inject runtime authority",
+  !compileCallerToolPlaybookForPrompt(["send_resource"], {
+    conversationWorkflow: true,
+  }).includes("runtime is authoritative"),
+);
+
+const workflowGraph = buildAmyConversationWorkflow({
+  sendResource: "tool_send",
+  searchDetails: "tool_search",
+  hangup: "tool_hangup",
+  transfer: "tool_transfer",
+});
+check("workflow graph has 6 nodes", (workflowGraph.nodes as unknown[]).length === 6);
+check(
+  "GENERAL node has zero scoped tools",
+  workflowNodeExpectedTools(WORKFLOW_NODE_IDS.GENERAL, {
+    sendResource: "tool_send",
+    searchDetails: "tool_search",
+  }).length === 0,
+);
+check(
+  "ACTION node exposes send_resource only",
+  workflowNodeExpectedTools(WORKFLOW_NODE_IDS.ACTION, { sendResource: "tool_send" }).join() ===
+    "send_resource",
+);
+check(
+  "DETAILED_LOOKUP exposes search_business_details",
+  workflowNodeExpectedTools(WORKFLOW_NODE_IDS.DETAILED_LOOKUP, {
+    searchDetails: "tool_search",
+  }).includes("search_business_details"),
 );
 
 check(
@@ -272,7 +370,8 @@ async function main() {
   }
   console.log("\nCaller Amy orchestration checks passed.");
   console.log("Legacy Telnyx tools:", legacyTelnyxNames.join(", "));
-  console.log("Minimum Telnyx tools:", minimumTelnyxNames.join(", "));
+  console.log("Workflow Telnyx tools:", workflowTelnyxNames.join(", "));
+  console.log("Flat minimum Telnyx tools:", flatMinimumTelnyxNames.join(", "));
 }
 
 main().catch((err) => {

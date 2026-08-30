@@ -22,8 +22,13 @@ export const MINIMUM_SIDE_EFFECT_WEBHOOK_TOOLS = [
   "escalate_human",
 ] as const;
 
-/** Production Amy 866 publish surface (minimum-side-effect). */
-export const EXPECTED_MODEL_WEBHOOK_TOOLS = MINIMUM_SIDE_EFFECT_WEBHOOK_TOOLS;
+export const CONVERSATION_WORKFLOW_WEBHOOK_TOOLS = [
+  "send_resource",
+  "search_business_details",
+] as const;
+
+/** Production Amy 866 publish surface (conversation workflow). */
+export const EXPECTED_MODEL_WEBHOOK_TOOLS = CONVERSATION_WORKFLOW_WEBHOOK_TOOLS;
 
 export const FORBIDDEN_MODEL_TOOLS = [
   "runtime_turn",

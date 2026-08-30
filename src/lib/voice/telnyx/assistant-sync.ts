@@ -16,7 +16,10 @@ import { TELNYX_SPEECH_PROMPT_GUIDANCE } from "./speech-prompt-guidance";
 import {
   isMinimumSideEffectMode,
   MINIMUM_SIDE_EFFECT_PROMPT,
+  CONVERSATION_WORKFLOW_PROMPT,
 } from "./amy-minimum-side-effect";
+import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
+import { syncConversationWorkflowToTelnyx } from "./workflow-sync";
 import {
   LOW_LATENCY_CONVERSATION_GUIDANCE,
   buildFluxTranscriptionSettings,
@@ -304,6 +307,7 @@ export async function syncTelnyxAssistant(
     .join(" ");
 
   const minimumSideEffect = isMinimumSideEffectMode(config);
+  const conversationWorkflow = isConversationWorkflowMode(config);
   const enabledToolIds = resolveEnabledBuiltinTools({
     enabledBuiltinTools: config.enabledBuiltinTools,
     agentType: agent.agentType,
@@ -331,6 +335,7 @@ export async function syncTelnyxAssistant(
     CONVERSATIONAL_PROMPT_GUIDANCE,
     TELNYX_SPEECH_PROMPT_GUIDANCE,
     minimumSideEffect ? MINIMUM_SIDE_EFFECT_PROMPT : "",
+    conversationWorkflow ? CONVERSATION_WORKFLOW_PROMPT : "",
     isDeepgramFluxModel(
       config.transcription?.sttModel || process.env.VOICE_TRANSCRIPTION_MODEL,
     ) || isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
@@ -495,6 +500,31 @@ export async function syncTelnyxAssistant(
   }
 
   async function pushTools(assistantId: string) {
+    if (conversationWorkflow) {
+      const workflowResult = await syncConversationWorkflowToTelnyx({
+        assistantId,
+        workspaceId,
+        agentId: agent.id,
+        config,
+        transferTargets,
+      });
+      if (workflowResult.ok) {
+        return {
+          ok: true as const,
+          label: "conversation_workflow",
+          remoteToolCount: workflowResult.toolIds?.length || 0,
+          remoteTypes: ["shared_tool_ids", "conversation_flow"],
+          hasTransfer: Boolean(workflowResult.toolIds?.length),
+          hasWebhook: true,
+          workflowNodes: workflowResult.workflowNodes,
+        };
+      }
+      console.warn(
+        "[assistant-sync] conversation workflow push failed — falling back to inline tools",
+        workflowResult.error,
+      );
+    }
+
     const attempts: Array<{ label: string; tools: Record<string, unknown>[] }> = [
       { label: "all", tools: tools as Record<string, unknown>[] },
     ];

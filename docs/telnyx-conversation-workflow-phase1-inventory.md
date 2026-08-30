@@ -1,10 +1,10 @@
 # Phase 1 — Telnyx AI Receptionist Inventory (Amy 866)
 
-**Status:** Inventory only — no architecture changes in this phase.  
+**Status:** Superseded by implementation — see `docs/TELNYX_AI_ASSISTANT_TOOL_ARCHITECTURE.md` for current architecture.  
 **Production path:** +18663464256 → TeXML direct → Telnyx AI Assistant (not LiveKit).  
 **Agent ID:** `cmshz2lc25c622c4i58303501`  
 **Telnyx assistant:** `assistant-197f496d-d98a-4995-ad0e-a10aca90951d`  
-**Published version:** v54+ (minimum-side-effect + Flux balanced)
+**Published version:** v55+ (conversation workflow + Flux balanced)
 
 ---
 

@@ -171,7 +171,42 @@ export async function resolveCallDynamicVariables(input: {
 
   if (input.callId) set("workflow_session_id", input.callId);
 
-  if (input.callId && input.agentId) {
+  let conversationWorkflowMode = false;
+  if (input.agentId) {
+    try {
+      const agent = await prisma.voiceAgent.findFirst({
+        where: { id: input.agentId, workspaceId: input.workspaceId },
+        select: { draftConfig: true },
+      });
+      if (agent) {
+        const cfg = parseVoiceAgentConfig(agent.draftConfig);
+        conversationWorkflowMode =
+          (cfg.advanced as Record<string, unknown> | undefined)?.conversationWorkflowMode ===
+          true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (conversationWorkflowMode) {
+    try {
+      const { resolveCallSessionContext } = await import("./call-session-context");
+      const session = await resolveCallSessionContext({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        fromE164: input.fromE164,
+      });
+      for (const [key, value] of Object.entries(session)) {
+        set(key, value);
+      }
+    } catch {
+      // session context is best-effort
+    }
+  }
+
+  if (input.callId && input.agentId && !conversationWorkflowMode) {
     try {
       const { buildRuntimeFieldManifest } = await import("@/lib/voice/field-runtime/requirements");
       const { buildRuntimeContext } = await import("@/lib/voice/workflow-engine/engine");

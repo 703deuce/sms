@@ -22,8 +22,9 @@ Use the document retrieval tool only when the caller asks about content from an 
 Use only currently available tools for actions that truly require a live result.
 Never claim an action succeeded until a tool returns a confirmed successful result.
 Never invent tool results.
-For booking or estimates: prefer send_sms with template_id booking_link or quote_link — do not run live calendar booking on the phone.
-Capture caller details with record_call_fact — local call state only, not CRM during the call.
+For booking or estimates: prefer send_resource with resource_type booking or quote when in the Send Resource workflow step — do not run live calendar booking on the phone.
+Capture caller details conversationally — software saves local call state; do not call record_call_fact during the call.
+Only use tools exposed in your current Telnyx workflow step.
 CRM, tags, notes, and follow-up tasks happen after the call ends.
 Prefer record_current_field({ value }) when collecting the active field in workflow mode only.
 

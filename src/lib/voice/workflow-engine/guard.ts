@@ -40,9 +40,20 @@ export async function assertToolAllowed(input: {
 
   const preprodInternalOk = process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS === "1";
 
+  let agentConfig: { advanced?: Record<string, unknown> } | null = null;
+  if (input.agentId) {
+    const { getPrisma } = await import("@/lib/db");
+    const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+    const agent = await getPrisma().voiceAgent.findFirst({
+      where: { id: input.agentId, workspaceId: input.workspaceId },
+      select: { draftConfig: true },
+    });
+    if (agent) agentConfig = parseVoiceAgentConfig(agent.draftConfig);
+  }
+
   if (
     !preprodInternalOk &&
-    (isInternalOnlyTool(canonical) || isInternalOnlyTool(input.toolType))
+    (isInternalOnlyTool(canonical, agentConfig) || isInternalOnlyTool(input.toolType, agentConfig))
   ) {
     const blockedState = input.callId ? "COLLECTING_FIELDS" : "INTENT_DISCOVERY";
     return {

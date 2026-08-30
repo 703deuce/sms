@@ -27,6 +27,19 @@ export const BOOKING_TOOL_CHAIN = [
   "DEPRECATED — workflow sequence is determined by runtime state, not a fixed tool chain.",
 ].join("\n");
 
+/** Telnyx Conversation Workflow authority — scoped nodes, minimal live tools. */
+export const CONVERSATION_WORKFLOW_AUTHORITY = [
+  "TELNYX CONVERSATION WORKFLOW RECEPTIONIST:",
+  "Answer company FAQ from the Business knowledge section in General — zero tools for hours, services, pricing, or policies.",
+  "Only use tools exposed in your current workflow step.",
+  "In Send Resource: use send_resource({ resource_type }) once when the caller agrees to receive a text link.",
+  "In Detailed Lookup: use search_business_details({ query }) only for long-tail technical or document-based questions.",
+  "In Human: use native Transfer when the caller needs a person.",
+  "Capture caller information conversationally — software saves it; do not call record_call_fact.",
+  "Only claim an SMS was sent after send_resource returns success.",
+  "CRM updates, tags, and follow-up tasks happen after the call.",
+].join("\n");
+
 /** Minimum-side-effect workflow authority — text-first, local facts, no live CRM. */
 export const MINIMUM_SIDE_EFFECT_AUTHORITY = [
   "MINIMUM-SIDE-EFFECT RECEPTIONIST:",
@@ -474,6 +487,45 @@ export const CALLER_AMY_TOOL_PLAYBOOK: CallerToolPlaybookEntry[] = [
     ],
   },
   {
+    toolId: "send_resource",
+    summary: "Text an approved resource link to the caller.",
+    whenToCall:
+      "Only in the Send Resource workflow step when the caller explicitly wants booking, quote, financing, directions, or photo upload by text.",
+    parameters: [
+      {
+        name: "resource_type",
+        required: true,
+        type: "string",
+        instruction: "booking | quote | financing | directions | photo_upload",
+        example: "booking",
+      },
+    ],
+    never: [
+      "Invent URLs",
+      "Claim success before the tool returns success",
+      "Call twice for the same resource unless the caller asks to resend",
+    ],
+  },
+  {
+    toolId: "search_business_details",
+    summary: "Look up detailed long-tail business or product information.",
+    whenToCall:
+      "Only in Detailed Lookup when the caller asks specific technical, warranty, or document-based questions not in the base prompt.",
+    parameters: [
+      {
+        name: "query",
+        required: true,
+        type: "string",
+        instruction: "The caller's specific detailed question.",
+        example: "What are the dimensions of the walk-in tub model?",
+      },
+    ],
+    never: [
+      "Use for basic company overview, hours, or services",
+      "Read URLs aloud",
+    ],
+  },
+  {
     toolId: "escalate_human",
     summary: "Transfer to a human phone destination.",
     whenToCall: "Caller asks for a person; policy requires human handoff.",
@@ -516,14 +568,22 @@ function formatParameterBlock(entry: CallerToolPlaybookEntry): string {
 /** Full playbook section for system prompt (enabled tools only). */
 export function compileCallerToolPlaybookForPrompt(
   enabledToolIds: string[],
-  options?: { minimumSideEffect?: boolean },
+  options?: { minimumSideEffect?: boolean; conversationWorkflow?: boolean },
 ): string {
+  const conversationWorkflow =
+    options?.conversationWorkflow ?? enabledToolIds.includes("send_resource");
   const minimumSideEffect =
-    options?.minimumSideEffect ?? enabledToolIds.includes("record_call_fact");
+    options?.minimumSideEffect ??
+    (!conversationWorkflow && enabledToolIds.includes("record_call_fact"));
+  const authority = conversationWorkflow
+    ? CONVERSATION_WORKFLOW_AUTHORITY
+    : minimumSideEffect
+      ? MINIMUM_SIDE_EFFECT_AUTHORITY
+      : RUNTIME_WORKFLOW_AUTHORITY;
   const lines = [
     "TOOL PARAMETER PLAYBOOK — follow exactly:",
     "",
-    minimumSideEffect ? MINIMUM_SIDE_EFFECT_AUTHORITY : RUNTIME_WORKFLOW_AUTHORITY,
+    authority,
     "",
   ];
   for (const id of enabledToolIds) {

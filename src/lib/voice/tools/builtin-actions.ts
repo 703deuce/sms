@@ -766,6 +766,29 @@ export async function executeBuiltinVoiceAction(input: {
         raw: args,
       });
     }
+    case "send_resource": {
+      const { executeSendResource } = await import("./send-resource");
+      const { telnyxToolJsonBody } = await import("./workflow-tool-contract");
+      const result = await executeSendResource({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        resourceType: String(args.resource_type || args.resourceType || ""),
+        forceResend: Boolean(args.force_resend || args.resend),
+      });
+      return telnyxToolJsonBody(result);
+    }
+    case "search_business_details": {
+      const { executeSearchBusinessDetails } = await import("./search-business-details");
+      const { telnyxToolJsonBody } = await import("./workflow-tool-contract");
+      const result = await executeSearchBusinessDetails({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        query: String(args.query || args.question || args.topic || ""),
+      });
+      return telnyxToolJsonBody(result);
+    }
     case "find_appointments":
     case "hold_appointment_slot":
     case "release_appointment_hold":

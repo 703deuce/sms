@@ -106,6 +106,25 @@ async function main() {
     "publish filter excludes runtime_turn",
     !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS, "runtime_turn"]).includes("runtime_turn"),
   );
+  const workflowConfig = { advanced: { conversationWorkflowMode: true, minimumSideEffectMode: true } };
+  const workflowTools = [
+    ...FULL_RECEPTIONIST_TOOLS,
+    "send_resource",
+    "search_business_details",
+  ];
+  check(
+    "workflow mode publishes send_resource",
+    filterToolsForCallerAmyPublish(workflowTools, workflowConfig).includes("send_resource"),
+  );
+  check(
+    "workflow mode excludes send_sms",
+    !filterToolsForCallerAmyPublish(workflowTools, workflowConfig).includes("send_sms"),
+  );
+  check(
+    "workflow mode excludes record_call_fact",
+    !filterToolsForCallerAmyPublish(workflowTools, workflowConfig).includes("record_call_fact"),
+  );
+
   const minimumConfig = { advanced: { minimumSideEffectMode: true } };
   const minimumTools = [
     ...FULL_RECEPTIONIST_TOOLS,

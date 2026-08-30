@@ -79,19 +79,18 @@ function section(title: string) {
 // ── 1. Architecture / catalog ───────────────────────────────────────────────
 
 function testCatalogRegression() {
-  section("1. Model-visible catalog (production minimum-side-effect)");
+  section("1. Model-visible catalog (conversation workflow)");
   const catalogFailuresBefore = failures.length;
-  const minimumEnabled = [
+  const workflowEnabled = [
     "hangup",
-    "send_sms",
-    "record_call_fact",
-    "take_structured_message",
-    "lookup_customer",
-    "escalate_human",
+    "send_resource",
+    "search_business_details",
     "transfer",
   ];
-  const minimumConfig = { advanced: { minimumSideEffectMode: true } };
-  const published = filterToolsForCallerAmyPublish(minimumEnabled, minimumConfig);
+  const workflowConfig = {
+    advanced: { minimumSideEffectMode: true, conversationWorkflowMode: true },
+  };
+  const published = filterToolsForCallerAmyPublish(workflowEnabled, workflowConfig);
   for (const forbidden of FORBIDDEN_MODEL_TOOLS) {
     check(`publish excludes ${forbidden}`, !published.includes(forbidden));
     check(`internal-only ${forbidden}`, CALLER_AMY_INTERNAL_ONLY_TOOLS.has(forbidden));
@@ -99,15 +98,18 @@ function testCatalogRegression() {
   for (const required of EXPECTED_MODEL_WEBHOOK_TOOLS) {
     check(`publish includes ${required}`, published.includes(required));
   }
+  for (const retired of ["send_sms", "record_call_fact", "lookup_customer"]) {
+    check(`publish excludes retired ${retired}`, !published.includes(retired));
+  }
 
   const telnyxTools = buildAssistantTools({
     workspaceId: "ws_test",
     agentId: "agent_test",
     bucketIds: [],
     tools: [],
-    enabledBuiltinTools: minimumEnabled,
+    enabledBuiltinTools: workflowEnabled,
     agentType: "appointment_booking",
-    voiceConfig: minimumConfig as never,
+    voiceConfig: workflowConfig as never,
   });
   const names = telnyxTools
     .map((t) => {
@@ -125,13 +127,7 @@ function testCatalogRegression() {
     check(`Telnyx build includes ${required}`, names.includes(required));
   }
   check("Telnyx build includes hangup (when enabled)", names.includes("hangup"));
-  check("Telnyx webhook count <= 8", names.length <= 8, `got ${names.join(", ")}`);
-
-  const runtimeTurnUrl = telnyxTools.find(
-    (t) => (t as { webhook?: { name?: string } }).webhook?.name === "runtime_turn",
-  ) as { webhook?: { url?: string; method?: string; timeout_ms?: number } } | undefined;
-  check("runtime_turn has webhook URL", Boolean(runtimeTurnUrl?.webhook?.url?.includes("/api/telnyx/voice/tools")));
-  check("runtime_turn method POST", runtimeTurnUrl?.webhook?.method === "POST");
+  check("Telnyx webhook count <= 6", names.length <= 6, `got ${names.join(", ")}`);
 
   gates.CATALOG.pass = failures.length === catalogFailuresBefore;
   gates.CATALOG.detail = `webhooks=${names.filter((n) => n !== "hangup").join(",")}`;

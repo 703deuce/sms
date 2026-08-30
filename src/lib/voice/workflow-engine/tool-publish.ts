@@ -1,3 +1,4 @@
+import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { STATE_ALLOWED_TOOLS } from "./states";
 
 /** Union of all tools the runtime may invoke internally during a booking call. */
@@ -7,14 +8,23 @@ export const CALLER_AMY_WORKFLOW_TOOL_UNION: readonly string[] = [
   ),
 ];
 
-/** Model-facing webhook tools published to Telnyx for Caller Amy (minimum side-effect). */
-export const CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS = [
+/** Telnyx Conversation Workflow — model-facing custom webhooks (per-node scoped). */
+export const WORKFLOW_PUBLISHED_WEBHOOK_TOOLS = [
+  "send_resource",
+  "search_business_details",
+] as const;
+
+/** Minimum side-effect flat surface (pre-workflow). */
+export const CALLER_AMY_MINIMUM_WEBHOOK_TOOLS = [
   "send_sms",
   "record_call_fact",
   "take_structured_message",
   "lookup_customer",
   "escalate_human",
 ] as const;
+
+/** @deprecated alias */
+export const CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS = CALLER_AMY_MINIMUM_WEBHOOK_TOOLS;
 
 /** Legacy workflow surface — used only when minimumSideEffectMode is false. */
 export const CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS = [
@@ -26,12 +36,22 @@ export const CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS = [
   "escalate_human",
 ] as const;
 
+export function isConversationWorkflowMode(
+  config?: VoiceAgentConfig | { advanced?: Record<string, unknown> } | null,
+): boolean {
+  const advanced = (config?.advanced || {}) as Record<string, unknown>;
+  return advanced.conversationWorkflowMode === true;
+}
+
 export function resolveCallerAmyPublishedWebhookTools(
   config?: { advanced?: Record<string, unknown> } | null,
 ): readonly string[] {
   const advanced = config?.advanced || {};
+  if (advanced.conversationWorkflowMode === true) {
+    return WORKFLOW_PUBLISHED_WEBHOOK_TOOLS;
+  }
   if (advanced.minimumSideEffectMode === true) {
-    return CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS;
+    return CALLER_AMY_MINIMUM_WEBHOOK_TOOLS;
   }
   return CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS;
 }
@@ -69,8 +89,17 @@ export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
   "confirm_booking",
 ]);
 
-/** @deprecated Use CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS — runtime_turn gateway retired. */
-export const CALLER_AMY_MODEL_TOOLS = CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS;
+/** Retired from model surface when conversationWorkflowMode is on. */
+export const WORKFLOW_RETIRED_FLAT_TOOLS = new Set([
+  "send_sms",
+  "record_call_fact",
+  "take_structured_message",
+  "lookup_customer",
+  "escalate_human",
+]);
+
+/** @deprecated Use WORKFLOW_PUBLISHED_WEBHOOK_TOOLS or CALLER_AMY_MINIMUM_WEBHOOK_TOOLS */
+export const CALLER_AMY_MODEL_TOOLS = WORKFLOW_PUBLISHED_WEBHOOK_TOOLS;
 
 /** @deprecated Use CALLER_AMY_INTERNAL_ONLY_TOOLS */
 export const CALLER_AMY_PUBLISH_EXCLUDED = CALLER_AMY_INTERNAL_ONLY_TOOLS;
@@ -97,6 +126,9 @@ export function filterToolsForCallerAmyPublish(
   const published = new Set<string>();
   for (const key of enabledKeys) {
     if (CALLER_AMY_INTERNAL_ONLY_TOOLS.has(key)) continue;
+    if (isConversationWorkflowMode(config) && WORKFLOW_RETIRED_FLAT_TOOLS.has(key)) {
+      continue;
+    }
     if (allowed.has(key)) published.add(key);
   }
   published.delete("runtime_turn");
@@ -110,6 +142,12 @@ export function isCallerAmyAgent(agentType?: string | null): boolean {
   return agentType === "receptionist" || agentType === "appointment_booking" || !agentType;
 }
 
-export function isInternalOnlyTool(toolType: string): boolean {
+export function isInternalOnlyTool(
+  toolType: string,
+  config?: { advanced?: Record<string, unknown> } | null,
+): boolean {
+  if (isConversationWorkflowMode(config) && WORKFLOW_RETIRED_FLAT_TOOLS.has(toolType)) {
+    return true;
+  }
   return CALLER_AMY_INTERNAL_ONLY_TOOLS.has(toolType);
 }

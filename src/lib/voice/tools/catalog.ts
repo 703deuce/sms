@@ -115,6 +115,27 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     risk: "low",
   },
   {
+    key: "send_resource",
+    name: "Send resource",
+    description: "Text an approved resource link (booking, quote, financing) to the caller.",
+    category: "communications",
+    provider: "transovo_builtin",
+    toolType: "send_resource",
+    access: "write",
+    risk: "medium",
+    requiresIntegration: "sms",
+  },
+  {
+    key: "search_business_details",
+    name: "Search business details",
+    description: "Look up detailed long-tail business or product information.",
+    category: "data",
+    provider: "transovo_builtin",
+    toolType: "search_business_details",
+    access: "read",
+    risk: "low",
+  },
+  {
     key: "send_sms",
     name: "Send SMS",
     description: "Send an approved SMS (links, confirmations, callbacks) to the caller.",
@@ -880,6 +901,34 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         reason: { type: "string" },
       },
       required: ["appointmentId"],
+    },
+  },
+  send_resource: {
+    name: "send_resource",
+    toolType: "send_resource",
+    description:
+      "Send an approved resource link to the caller by SMS. Provide only resource_type.",
+    body: {
+      type: "object",
+      properties: {
+        resource_type: {
+          type: "string",
+          enum: ["booking", "quote", "financing", "directions", "photo_upload"],
+        },
+      },
+      required: ["resource_type"],
+    },
+  },
+  search_business_details: {
+    name: "search_business_details",
+    toolType: "search_business_details",
+    description: "Search detailed documentation for a specific long-tail business question.",
+    body: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "The specific question to look up." },
+      },
+      required: ["query"],
     },
   },
   send_sms: {
