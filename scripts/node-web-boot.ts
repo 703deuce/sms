@@ -69,6 +69,25 @@ export async function registerNodeWebBoot(): Promise<void> {
     "@/lib/voice/outbound/auto-smoke"
   );
   scheduleOutboundAutoSmokeCall();
+
+  const ws = process.env.MCTB_WARM_ROUTING_WORKSPACE_ID?.trim() || "ws_1";
+  void import("@/lib/mctb/texml-ingress/routing-profile")
+    .then(({ warmMctbInboundRoutingProfileForWorkspace }) =>
+      warmMctbInboundRoutingProfileForWorkspace(ws),
+    )
+    .then(() => {
+      console.log(
+        JSON.stringify({
+          service: "transovo-web",
+          event: "mctb_inbound_routing_warmed",
+          workspaceId: ws,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    })
+    .catch((err) => {
+      console.warn("[node-web-boot] mctb routing warm failed", err);
+    });
 }
 
 const isMain =

@@ -3,13 +3,10 @@ import {
   buildMctbCertPlayOnlyTexml,
   buildMctbConsentControlledHangupTexml,
   buildMctbConsentInboundTexml,
-  buildMctbVoicemailGreetingTexml,
   getMctbConsentPlaybackUrl,
   resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
-import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
-import { ensureMctbTexmlVoicemailSession } from "@/lib/mctb/texml-ingress/voicemail-start";
 import {
   certModeForcesPress1Gather,
   certModeSkipsConsentBackend,
@@ -18,15 +15,20 @@ import {
   isPlayOnlyCertMode,
   resolveMctbTexmlCertMode,
 } from "@/lib/mctb/texml-ingress/cert-mode";
-import { resolveMctbTexmlIngressConfig } from "@/lib/mctb/texml-ingress/config-cache";
-import { MCTB_TEXML_ROUTING_MODE } from "@/lib/mctb/texml-ingress/constants";
+import { buildInstantMctbInboundTexml } from "@/lib/mctb/texml-ingress/inbound-texml";
 import { buildMinimalCertTexml } from "@/lib/mctb/texml-ingress/minimal-texml";
 import {
   parseMctbTexmlFields,
   pickMctbTexmlField,
 } from "@/lib/mctb/texml-ingress/parse-texml-fields";
+import {
+  buildFailOpenInboundRoutingProfile,
+  peekMctbInboundRoutingProfileByE164,
+  peekMctbInboundRoutingProfileByToken,
+  warmMctbInboundRoutingProfileForE164,
+} from "@/lib/mctb/texml-ingress/routing-profile";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
-import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
+import { normalizeForwardedFromE164, parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 
 export const runtime = "nodejs";
 
@@ -34,7 +36,6 @@ const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
 const CONTROLLED_HANGUP = buildMctbConsentControlledHangupTexml(
   "We are unable to complete your call. Goodbye.",
 );
-const PAUSED_VOICEMAIL_SAY = "Please leave a message after the tone.";
 
 function texmlResponse(body: string, meta?: Record<string, unknown>) {
   const xml = wrapMctbConsentTexmlBody(body);
@@ -59,9 +60,42 @@ function pickTexmlCallSid(fields: Record<string, string>): string {
   return pickMctbTexmlField(fields, "CallSid", "call_sid");
 }
 
+function scheduleInboundWarm(e164: string): void {
+  void warmMctbInboundRoutingProfileForE164(e164).catch((err) => {
+    console.error(
+      JSON.stringify({
+        source: "mctb-entry",
+        event: "routing_profile_warm_failed",
+        e164,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  });
+}
+
+function scheduleDemoCallDetect(input: {
+  from: string;
+  to: string;
+  forwardedFrom: string | null;
+  callSid: string | null;
+  callStatus: string | null;
+}): void {
+  void import("@/lib/mctb/consent-prompt/texml-inbound-call-event").then(
+    ({ runMctbConsentTexmlDemoCallDetect }) =>
+      runMctbConsentTexmlDemoCallDetect({
+        from: input.from,
+        to: input.to,
+        forwardedFrom: input.forwardedFrom,
+        callSid: input.callSid,
+        callStatus: input.callStatus,
+      }).catch(() => undefined),
+  );
+}
+
 /**
  * TeXML-first MCTB ingress — FROZEN pipeline mctb_texml_final_v1
- * @see docs/MCTB_FINAL_PRODUCTION_PIPELINE.md — do not change behavior without re-cert.
+ * Production cert=D returns XML immediately from setup-time routing profile (no DB).
+ * @see docs/MCTB_FINAL_PRODUCTION_PIPELINE.md
  */
 export async function POST(request: Request) {
   const started = Date.now();
@@ -73,6 +107,7 @@ export async function POST(request: Request) {
     const callSid = pickTexmlCallSid(fields);
     const connectionId = pickMctbTexmlField(fields, "ConnectionId", "connection_id");
     const certMode = resolveMctbTexmlCertMode(requestUrl.searchParams.get("cert"));
+    const routingTokenParam = requestUrl.searchParams.get("r");
 
     traceMctbTexml("MCTB_INGRESS", {
       to,
@@ -80,6 +115,7 @@ export async function POST(request: Request) {
       callSid,
       connectionId,
       certMode,
+      routingToken: routingTokenParam || null,
     });
 
     if (isMinimalCertMode(certMode)) {
@@ -113,6 +149,79 @@ export async function POST(request: Request) {
       return texmlResponse(CONTROLLED_HANGUP, { branch: "error_missing_to" });
     }
 
+    const forwardedFrom =
+      normalizeForwardedFromE164(pickMctbTexmlField(fields, "ForwardedFrom", "forwarded_from")) ||
+      parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
+      "";
+
+    // ── Instant path (cert=D): zero DB before first audio ──────────────────
+    if (certMode === "D") {
+      let profile =
+        peekMctbInboundRoutingProfileByToken(routingTokenParam) ||
+        peekMctbInboundRoutingProfileByE164(to);
+
+      let cacheHit = Boolean(profile);
+      if (!profile) {
+        profile = buildFailOpenInboundRoutingProfile(to);
+        scheduleInboundWarm(to);
+      }
+
+      const instant = buildInstantMctbInboundTexml({ profile, fields, certMode });
+      if (instant) {
+        traceMctbTexml("MCTB_TEXML_RETURNED", {
+          branch: instant.branch,
+          latencyMs: Date.now() - started,
+          to: profile.e164 || to,
+          callSid,
+          certMode,
+          cacheHit,
+          routingToken: instant.routingToken,
+          workspaceId: profile.workspaceId || null,
+          press1PlayUrl: instant.press1PlayUrl ?? null,
+          voicemailPlayUrl: instant.voicemailPlayUrl ?? null,
+          instant: true,
+        });
+
+        if (!cacheHit) {
+          console.log(
+            JSON.stringify({
+              source: "mctb-entry",
+              event: "routing_profile_cache_miss_fail_open",
+              to,
+              callSid,
+            }),
+          );
+        }
+
+        if (!certModeSkipsConsentBackend(certMode) && from && profile.workspaceId) {
+          scheduleDemoCallDetect({
+            from,
+            to: profile.e164 || to,
+            forwardedFrom: forwardedFrom || null,
+            callSid: callSid || null,
+            callStatus: pickMctbTexmlField(fields, "CallStatus", "call_status") || null,
+          });
+        }
+
+        return texmlResponse(instant.body, {
+          branch: instant.branch,
+          certMode,
+          consentMode: profile.consentMode,
+          instant: true,
+          cacheHit,
+        });
+      }
+    }
+
+    // ── Cert / legacy slow path (B, C, C3, cache-miss non-D) ───────────────
+    const { resolveMctbTexmlIngressConfig } = await import("@/lib/mctb/texml-ingress/config-cache");
+    const { MCTB_CONSENT_MODE_EXISTING } = await import("@/lib/mctb/consent-mode");
+    const { MCTB_TEXML_ROUTING_MODE } = await import("@/lib/mctb/texml-ingress/constants");
+    const { buildMctbVoicemailGreetingTexml } = await import("@/lib/mctb/consent-prompt/texml-response");
+    const { getMctbVoicemailRecordCallbackWithRoutingToken } = await import(
+      "@/lib/mctb/texml-ingress/routing-profile"
+    );
+
     let config: Awaited<ReturnType<typeof resolveMctbTexmlIngressConfig>> | null = null;
     try {
       config = await resolveMctbTexmlIngressConfig(to);
@@ -144,10 +253,6 @@ export async function POST(request: Request) {
     const consentMode = config.consentMode;
     const workspaceId = config.workspaceId;
     const resolvedTo = config.e164;
-    const forwardedFrom =
-      normalizeForwardedFromE164(pickMctbTexmlField(fields, "ForwardedFrom", "forwarded_from")) ||
-      parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
-      "";
 
     const routeToVoicemailInitial =
       consentMode === MCTB_CONSENT_MODE_EXISTING || certModeForcesPress1Gather(certMode);
@@ -171,63 +276,16 @@ export async function POST(request: Request) {
     }
 
     if (routeToVoicemail && !certModeForcesPress1Gather(certMode)) {
-      let voicemailPlayUrl: string | null = null;
-      let voicemailSayText: string | null = PAUSED_VOICEMAIL_SAY;
-      if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
-        const { getPrisma } = await import("@/lib/db");
-        const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
-        const { resolveVoicemailGreetingPlayback } = await import(
-          "@/lib/phone/voicemail-greeting-playback"
-        );
-        const prisma = getPrisma();
-        const phone = await prisma.phoneNumber.findFirst({
-          where: { workspaceId, e164: resolvedTo },
-          select: { id: true },
-        });
-        const box = phone
-          ? await ensureNumberVoicemailBox(workspaceId, phone.id)
-          : { greetingUrl: null, greetingText: null };
-        const vmPlayback = await resolveVoicemailGreetingPlayback(workspaceId, box);
-        voicemailPlayUrl = vmPlayback.playUrl;
-        voicemailSayText = vmPlayback.sayText;
-      }
+      const cachedProfile = peekMctbInboundRoutingProfileByE164(resolvedTo);
+      const voicemailPlayUrl =
+        cachedProfile?.voicemail.playUrl ||
+        (await import("@/lib/mctb/texml-ingress/routing-profile")).platformVoicemailPlayUrl();
+      const recordToken = cachedProfile?.routingToken || "r_failopen";
       const voicemailBody = buildMctbVoicemailGreetingTexml({
         playUrl: voicemailPlayUrl,
-        sayText: voicemailPlayUrl ? null : voicemailSayText,
+        sayText: null,
+        recordCallbackUrl: getMctbVoicemailRecordCallbackWithRoutingToken(recordToken),
       });
-
-      if (!callSid) {
-        traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_call_sid_voicemail" });
-        return texmlResponse(CONTROLLED_HANGUP, { branch: "error_missing_call_sid" });
-      }
-
-      if (!from) {
-        traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_from_voicemail" });
-        return texmlResponse(CONTROLLED_HANGUP, { branch: "error_missing_from" });
-      }
-
-      const vmSession = await ensureMctbTexmlVoicemailSession({
-        callSid,
-        workspaceId,
-        callerE164: from,
-        transovoNumberE164: resolvedTo,
-        forwardedFromE164: forwardedFrom || null,
-      }).catch((err) => {
-        console.error(
-          JSON.stringify({
-            source: "mctb-entry",
-            event: "voicemail_session_failed",
-            callSid,
-            workspaceId,
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        );
-        return null;
-      });
-      if (!vmSession) {
-        traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "voicemail_session_failed", callSid });
-        return texmlResponse(CONTROLLED_HANGUP, { branch: "voicemail_session_failed" });
-      }
 
       traceMctbTexml("MCTB_TEXML_RETURNED", {
         branch: consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "paused_voicemail",
@@ -238,6 +296,7 @@ export async function POST(request: Request) {
         consentMode,
         workspaceId,
         voicemailPlayUrl,
+        instant: false,
       });
       return texmlResponse(voicemailBody, {
         branch: consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "paused_voicemail",
@@ -282,19 +341,17 @@ export async function POST(request: Request) {
       routingMode: config.routingMode,
       press1PlayUrl: playback.playUrl,
       press1SayFallback: Boolean(playback.sayText),
+      instant: false,
     });
 
     if (!certModeSkipsConsentBackend(certMode) && from) {
-      void import("@/lib/mctb/consent-prompt/texml-inbound-call-event").then(
-        ({ runMctbConsentTexmlDemoCallDetect }) =>
-          runMctbConsentTexmlDemoCallDetect({
-            from,
-            to: resolvedTo,
-            forwardedFrom: forwardedFrom || null,
-            callSid: callSid || null,
-            callStatus: pickMctbTexmlField(fields, "CallStatus", "call_status") || null,
-          }).catch(() => undefined),
-      );
+      scheduleDemoCallDetect({
+        from,
+        to: resolvedTo,
+        forwardedFrom: forwardedFrom || null,
+        callSid: callSid || null,
+        callStatus: pickMctbTexmlField(fields, "CallStatus", "call_status") || null,
+      });
     }
 
     return texmlResponse(built.body, { branch: "press_1_gather", certMode, consentMode });

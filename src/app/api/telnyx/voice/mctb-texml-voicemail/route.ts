@@ -66,21 +66,55 @@ export async function POST(request: Request) {
 
     let session = getMctbTexmlVoicemailSession(callSid);
     if (!session) {
-      const { resolveMctbTexmlIngressConfig } = await import(
-        "@/lib/mctb/texml-ingress/config-cache"
+      const requestUrl = new URL(request.url);
+      const routingToken = requestUrl.searchParams.get("r");
+      const { peekMctbInboundRoutingProfileByToken, peekMctbInboundRoutingProfileByE164 } =
+        await import("@/lib/mctb/texml-ingress/routing-profile");
+      const { ensureMctbTexmlVoicemailSession } = await import(
+        "@/lib/mctb/texml-ingress/voicemail-start"
       );
-      const ingressConfig = to ? await resolveMctbTexmlIngressConfig(to).catch(() => null) : null;
-      const resolved = await resolveMctbTexmlVoicemailMessage({
-        callSid,
-        workspaceId: ingressConfig?.workspaceId || null,
-      });
-      if (!resolved) return texmlHangup();
-      session = {
-        workspaceId: resolved.workspaceId,
-        messageId: resolved.messageId,
-        phase: "recording",
-        recordingSaved: false,
-      };
+      const { normalizeForwardedFromE164, parseTelnyxForwardedFrom } = await import(
+        "@/lib/voice/telnyx/forwarded-from"
+      );
+
+      const profile =
+        peekMctbInboundRoutingProfileByToken(routingToken) ||
+        (to ? peekMctbInboundRoutingProfileByE164(to) : null);
+
+      if (profile?.workspaceId && from && to) {
+        const forwardedFrom =
+          normalizeForwardedFromE164(
+            pickMctbTexmlField(fields, "ForwardedFrom", "forwarded_from"),
+          ) || parseTelnyxForwardedFrom(fields as Record<string, unknown>) || null;
+        const created = await ensureMctbTexmlVoicemailSession({
+          callSid,
+          workspaceId: profile.workspaceId,
+          callerE164: from,
+          transovoNumberE164: to,
+          forwardedFromE164: forwardedFrom,
+        });
+        if (created) {
+          session = getMctbTexmlVoicemailSession(callSid);
+        }
+      }
+
+      if (!session) {
+        const { resolveMctbTexmlIngressConfig } = await import(
+          "@/lib/mctb/texml-ingress/config-cache"
+        );
+        const ingressConfig = to ? await resolveMctbTexmlIngressConfig(to).catch(() => null) : null;
+        const resolved = await resolveMctbTexmlVoicemailMessage({
+          callSid,
+          workspaceId: ingressConfig?.workspaceId || null,
+        });
+        if (!resolved) return texmlHangup();
+        session = {
+          workspaceId: resolved.workspaceId,
+          messageId: resolved.messageId,
+          phase: "recording",
+          recordingSaved: false,
+        };
+      }
     }
 
     if (recordingStatus && recordingStatus !== "completed") {

@@ -132,10 +132,31 @@ export async function POST(request: Request) {
         let gatherSucceeded = false;
         let consentRecorded = false;
         try {
+          const routingToken = url.searchParams.get("r");
+          const { peekMctbInboundRoutingProfileByToken, peekMctbInboundRoutingProfileByE164 } =
+            await import("@/lib/mctb/texml-ingress/routing-profile");
+          const cachedProfile =
+            peekMctbInboundRoutingProfileByToken(routingToken) ||
+            (to ? peekMctbInboundRoutingProfileByE164(to) : null);
+
           const { resolveMctbTexmlIngressConfig } = await import(
             "@/lib/mctb/texml-ingress/config-cache"
           );
-          const ingressConfig = await resolveMctbTexmlIngressConfig(to).catch(() => null);
+          const ingressConfig =
+            cachedProfile && cachedProfile.workspaceId
+              ? {
+                  workspaceId: cachedProfile.workspaceId,
+                  phoneNumberId: cachedProfile.phoneNumberId,
+                  e164: cachedProfile.e164,
+                  consentMode: cachedProfile.consentMode,
+                  branch: "mctb" as const,
+                  routingMode: "mctb_texml",
+                  mctbEnabled: true,
+                  providerNumberId: null,
+                  texmlAppId: null,
+                  automationActive: cachedProfile.automationActive,
+                }
+              : await resolveMctbTexmlIngressConfig(to).catch(() => null);
           if (!ingressConfig?.workspaceId) {
             return texml(
               buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."),

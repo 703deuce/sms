@@ -116,6 +116,10 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
     mctbRole,
     diagnostics,
   });
+  const { warmMctbInboundRoutingProfileForE164 } = await import(
+    "@/lib/mctb/texml-ingress/routing-profile"
+  );
+  void warmMctbInboundRoutingProfileForE164(phone.e164).catch(() => undefined);
   return diagnostics;
 }
 

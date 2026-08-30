@@ -199,6 +199,18 @@ export async function POST(request: Request) {
       const updated = await getPrisma().voicemailBox.findFirst({
         where: { id: body.boxId, workspaceId: auth.workspaceId },
       });
+      if (updated?.phoneNumberId) {
+        const phone = await getPrisma().phoneNumber.findFirst({
+          where: { id: updated.phoneNumberId, workspaceId: auth.workspaceId },
+          select: { e164: true },
+        });
+        if (phone?.e164) {
+          const { warmMctbInboundRoutingProfileForE164 } = await import(
+            "@/lib/mctb/texml-ingress/routing-profile"
+          );
+          void warmMctbInboundRoutingProfileForE164(phone.e164).catch(() => undefined);
+        }
+      }
       return NextResponse.json({ data: updated });
     }
 

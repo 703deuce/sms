@@ -629,8 +629,8 @@ export async function POST(req: Request) {
 
     if (body.consentMode || phoneId) {
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
-      const { invalidateMctbTexmlIngressCacheForWorkspace } = await import(
-        "@/lib/mctb/texml-ingress/config-cache"
+      const { warmMctbInboundRoutingProfileForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/routing-profile"
       );
       try {
         const syncResult = await syncMctbConsentRouting(workspaceId, session.userId, {
@@ -642,9 +642,7 @@ export async function POST(req: Request) {
           action: syncResult.action,
           phoneNumberId: phoneId,
         });
-        if (body.consentMode) {
-          await invalidateMctbTexmlIngressCacheForWorkspace(workspaceId);
-        }
+        await warmMctbInboundRoutingProfileForWorkspace(workspaceId);
       } catch (err) {
         consentSync = {
           ok: false,
