@@ -27,6 +27,7 @@ import {
   isMctbTexmlIngressLocked,
   MctbTexmlProvisionLockedError,
 } from "../src/lib/mctb/sip-ingress/sync";
+import { DEFAULT_NUMBER_CAPABILITY_PATCH } from "../src/lib/mctb/provisioning/default-number-capabilities";
 import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -122,12 +123,11 @@ test("canonical MCTB provision entry is provisionMctbCustomerVoice", () => {
   assert.equal(MCTB_CANONICAL_PROVISION_ENTRY, "provisionMctbCustomerVoice");
 });
 
-test("MCTB dual-channel repair module exists for voice+SMS coexistence", () => {
-  const repairPath = join(
-    process.cwd(),
-    "src/lib/mctb/provisioning/dual-channel-repair.ts",
-  );
-  assert.equal(existsSync(repairPath), true);
+test("every number defaults to dual-channel MCTB+SMS capability flags", () => {
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.smsEnabled, true);
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.mctbEnabled, true);
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.voiceEnabled, true);
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.aiAfterHoursEnabled, false);
 });
 
 console.log("test-mctb-final-pipeline-contract: ok");

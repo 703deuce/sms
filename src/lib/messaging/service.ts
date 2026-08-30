@@ -13,6 +13,11 @@ import { getMessagingProviderName } from "./provider-config";
 import { isLiveMessagingAdapter } from "./twilio-config";
 import { twilioAdapter } from "./twilio-adapter";
 import { normalizeE164 } from "./twilio-mappings";
+import { MCTB_TEXML_ROUTING_OWNER } from "@/lib/mctb/texml-ingress/constants";
+import {
+  telnyxLocalA2pSettings,
+  tollFreeComplianceSettings,
+} from "@/lib/messaging/compliance/phone-number-class";
 import type {
   BusinessDetailsInput,
   NumberSearchOptions,
@@ -360,6 +365,30 @@ export const messagingOnboarding = {
     const digits = purchased.phoneNumber.replace(/\D/g, "");
     const npa = digits.slice(1, 4);
     const isTollFree = /^(800|833|844|855|866|877|888)$/.test(npa);
+    const defaultNumberSettings =
+      effectiveProvider === "telnyx"
+        ? {
+            ...telnyxLocalA2pSettings({ role: "customer_production" }),
+            routingOwner: MCTB_TEXML_ROUTING_OWNER,
+            smsEnabled: true,
+            mctbEnabled: true,
+            voiceEnabled: true,
+          }
+        : effectiveProvider === "twilio"
+          ? {
+              ...tollFreeComplianceSettings(),
+              routingOwner: MCTB_TEXML_ROUTING_OWNER,
+              smsEnabled: true,
+              mctbEnabled: true,
+              voiceEnabled: true,
+            }
+          : {
+              routingOwner: MCTB_TEXML_ROUTING_OWNER,
+              smsEnabled: true,
+              mctbEnabled: true,
+              voiceEnabled: true,
+              mctbSipIngress: true,
+            };
     const phoneRow = await getPrisma().phoneNumber.upsert({
       where: { workspaceId_e164: { workspaceId, e164: purchased.phoneNumber } },
       create: {
@@ -379,6 +408,7 @@ export const messagingOnboarding = {
               ? "pending_activation"
               : "purchased",
           },
+          ...defaultNumberSettings,
         },
         capabilitiesJson: {
           voice: true,

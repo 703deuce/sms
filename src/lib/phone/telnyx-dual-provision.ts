@@ -240,7 +240,7 @@ async function fetchMessagingAssignment(providerNumberId: string) {
   }
 }
 
-async function persistProvisioning(
+export async function persistProvisioning(
   phoneNumberId: string,
   patch: {
     state?: ProvisionState;
@@ -472,98 +472,16 @@ export async function enableVoiceOnWorkspaceNumber(input: {
     where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
   });
   if (!row) throw new Error("Number not found in workspace");
-  if (!row.providerNumberId || row.providerNumberId.startsWith("ORDER:")) {
-    throw new Error("Telnyx phone number id not ready yet — wait for order activation");
-  }
-
-  const before = await fetchTelnyxNumber(row.providerNumberId);
-  if (!before) throw new Error("Could not load number from Telnyx");
-
-  const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
-  if (isMctbVoiceRouteLocked(row.settingsJson)) {
-    const { repairMctbDualChannelNumber } = await import(
+  if (String(row.provider || "").toLowerCase() === "telnyx") {
+    const { ensureDefaultTelnyxMctbAndSmsProvision } = await import(
       "@/lib/mctb/provisioning/dual-channel-repair"
     );
-    return repairMctbDualChannelNumber({
-      workspaceId: input.workspaceId,
-      phoneNumberId: input.phoneNumberId,
-    });
+    return ensureDefaultTelnyxMctbAndSmsProvision(input);
   }
-
-  if (!before.capabilities.voice && before.capabilities.sms === false) {
-    await persistProvisioning(row.id, {
-      state: "capability_unsupported",
-      lastError: "Number does not report voice capability",
-      capabilities: before.capabilities,
-    });
-    throw new Error(
-      "This number does not support voice. Buy a voice-capable number instead.",
-    );
-  }
-
-  // Preserve any existing messaging profile before voice attach.
-  const existingProfile =
-    before.messagingProfileId ||
-    (await fetchMessagingAssignment(row.providerNumberId));
-
-  const connectionId = await resolveVoiceConnectionId();
-  const { workspaceNumberUsesTexmlDirect } = await import(
-    "@/lib/voice/telnyx/texml-direct-route"
+  const { ensureDefaultNonTelnyxNumberProvision } = await import(
+    "@/lib/mctb/provisioning/dual-channel-repair"
   );
-  const texmlDirect = await workspaceNumberUsesTexmlDirect({
-    workspaceId: input.workspaceId,
-    phoneNumberId: row.id,
-  });
-  if (!texmlDirect) {
-    await assignVoiceConnection(row.providerNumberId, connectionId);
-  }
-
-  try {
-    const { ensureTelnyxOutboundVoiceReady } = await import(
-      "@/lib/phone/telnyx-outbound-voice"
-    );
-    await ensureTelnyxOutboundVoiceReady({
-      connectionId,
-      callerIdE164: row.e164,
-    });
-  } catch (err) {
-    console.error("[dual-provision] outbound voice ensure", err);
-  }
-
-  // Messaging: keep existing, or create workspace profile (best-effort).
-  let profileId = existingProfile;
-  try {
-    if (!profileId) {
-      profileId = await ensureWorkspaceMessagingProfileId(input.workspaceId);
-    }
-  } catch (err) {
-    console.error("[dual-provision] ensure messaging profile", err);
-  }
-
-  const after = await fetchTelnyxNumber(row.providerNumberId);
-  const afterMsg =
-    after?.messagingProfileId ||
-    (await fetchMessagingAssignment(row.providerNumberId));
-  if (profileId && afterMsg !== profileId) {
-    try {
-      await assignMessagingProfile(row.providerNumberId, profileId);
-    } catch (err) {
-      console.error("[dual-provision] restore messaging profile", err);
-    }
-  }
-
-  await persistProvisioning(row.id, {
-    state: "voice_configured",
-    lastError: null,
-    capabilities: after?.capabilities || before.capabilities,
-    telnyxConnectionId: connectionId,
-    messagingProfileId: profileId || afterMsg,
-  });
-
-  return verifyAndPersistNumber({
-    workspaceId: input.workspaceId,
-    phoneNumberId: input.phoneNumberId,
-  });
+  return ensureDefaultNonTelnyxNumberProvision(input);
 }
 
 export async function repairMessagingOnWorkspaceNumber(input: {
@@ -662,131 +580,18 @@ export async function repairNumberConfiguration(input: {
     where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
   });
   if (!row) throw new Error("Number not found");
-  if (!row.providerNumberId || row.providerNumberId.startsWith("ORDER:")) {
-    await persistProvisioning(row.id, { state: "pending_activation" });
-    return diagnoseWorkspaceNumber(input);
-  }
 
-  const before = await fetchTelnyxNumber(row.providerNumberId);
-  if (!before) {
-    await persistProvisioning(row.id, {
-      state: "configuration_failed",
-      lastError: "Could not load number from Telnyx",
-    });
-    return diagnoseWorkspaceNumber(input);
-  }
-
-  if (!before.capabilities.voice && !before.capabilities.sms) {
-    await persistProvisioning(row.id, {
-      state: "capability_unsupported",
-      lastError: "Number reports neither voice nor SMS capability",
-      capabilities: before.capabilities,
-    });
-    return diagnoseWorkspaceNumber(input);
-  }
-
-  // Preserve existing messaging profile before voice attach.
-  const existingProfile =
-    before.messagingProfileId ||
-    (await fetchMessagingAssignment(row.providerNumberId));
-
-  let connectionId: string | null = null;
-  const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
-  const mctbVoiceLocked = isMctbVoiceRouteLocked(row.settingsJson);
-  if (mctbVoiceLocked && before.capabilities.voice !== false) {
-    try {
-      const { reassertMctbTexmlVoiceRoute } = await import(
-        "@/lib/mctb/provisioning/dual-channel-repair"
-      );
-      await reassertMctbTexmlVoiceRoute({
-        workspaceId: input.workspaceId,
-        phoneNumberId: row.id,
-      });
-    } catch (err) {
-      console.error("[dual-provision] mctb texml voice reassert", err);
-    }
-  } else if (before.capabilities.voice !== false && !mctbVoiceLocked) {
-    try {
-      const { workspaceNumberUsesTexmlDirect } = await import(
-        "@/lib/voice/telnyx/texml-direct-route"
-      );
-      const texmlDirect = await workspaceNumberUsesTexmlDirect({
-        workspaceId: input.workspaceId,
-        phoneNumberId: row.id,
-      });
-      if (texmlDirect) {
-        // Keep existing TeXML app attachment — do not force Call Control.
-        connectionId = before.connectionId;
-      } else {
-        connectionId = await resolveVoiceConnectionId();
-        if (connectionId && before.connectionId !== connectionId) {
-          await assignVoiceConnection(row.providerNumberId, connectionId);
-        }
-        const { ensureTelnyxOutboundVoiceReady } = await import(
-          "@/lib/phone/telnyx-outbound-voice"
-        );
-        await ensureTelnyxOutboundVoiceReady({
-          connectionId,
-          callerIdE164: row.e164,
-        });
-      }
-    } catch (err) {
-      console.error("[dual-provision] voice/outbound repair", err);
-    }
-  }
-
-  // Messaging profile — prefer workspace profile; never clear an existing one
-  // if workspace profile create fails (keeps campaign assignment possible).
-  let profileId: string | null = existingProfile;
-  try {
-    const workspaceProfile = await ensureWorkspaceMessagingProfileId(
-      input.workspaceId,
+  if (String(row.provider || "").toLowerCase() === "telnyx") {
+    const { ensureDefaultTelnyxMctbAndSmsProvision } = await import(
+      "@/lib/mctb/provisioning/dual-channel-repair"
     );
-    if (workspaceProfile) {
-      profileId = workspaceProfile;
-      const liveMsg =
-        (await fetchMessagingAssignment(row.providerNumberId)) ||
-        (await fetchTelnyxNumber(row.providerNumberId))?.messagingProfileId ||
-        null;
-      if (liveMsg !== workspaceProfile) {
-        await assignMessagingProfile(row.providerNumberId, workspaceProfile);
-      }
-    }
-  } catch (err) {
-    console.error("[dual-provision] messaging attach", err);
+    return ensureDefaultTelnyxMctbAndSmsProvision(input);
   }
 
-  // If voice attach cleared messaging, restore.
-  if (profileId) {
-    const afterVoice = await fetchTelnyxNumber(row.providerNumberId);
-    const afterMsg =
-      afterVoice?.messagingProfileId ||
-      (await fetchMessagingAssignment(row.providerNumberId));
-    if (afterMsg !== profileId) {
-      try {
-        await assignMessagingProfile(row.providerNumberId, profileId);
-      } catch (err) {
-        console.error("[dual-provision] restore messaging profile", err);
-      }
-    }
-  }
-
-  // Keep registration phoneAttached in sync when this DID is the reg number.
-  // Do not set overallStatus/messagingEnabled — A2P gates sending separately.
-  const reg = await getRegistrationByWorkspace(input.workspaceId);
-  if (reg?.phoneE164 === row.e164 && profileId) {
-    await prisma.messagingRegistration.updateMany({
-      where: { workspaceId: input.workspaceId },
-      data: {
-        phoneAttached: true,
-        phoneNumberId: row.providerNumberId,
-        phoneSid: row.providerNumberId,
-        messagingProfileId: profileId,
-      },
-    });
-  }
-
-  return verifyAndPersistNumber(input);
+  const { ensureDefaultNonTelnyxNumberProvision } = await import(
+    "@/lib/mctb/provisioning/dual-channel-repair"
+  );
+  return ensureDefaultNonTelnyxNumberProvision(input);
 }
 
 export async function diagnoseWorkspaceNumber(input: {

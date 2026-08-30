@@ -1,13 +1,35 @@
 import "server-only";
 
+import { getPrisma } from "@/lib/db";
+import {
+  telnyxLocalA2pSettings,
+  tollFreeComplianceSettings,
+} from "@/lib/messaging/compliance/phone-number-class";
+import { mergePhoneCapabilitySettings } from "@/lib/numbers/phone-capabilities";
 import { assertMctbProvisionPhoneInWorkspace } from "@/lib/mctb/provision-policy";
 import { readPhoneMctbSettings } from "@/lib/mctb/sip-ingress/sync";
+import { MCTB_TEXML_ROUTING_OWNER } from "@/lib/mctb/texml-ingress/constants";
 import { switchDidToMctbTexmlIngress } from "@/lib/mctb/texml-ingress/provision";
 import {
+  diagnoseWorkspaceNumber,
+  persistProvisioning,
   repairMessagingOnWorkspaceNumber,
   verifyAndPersistNumber,
   type NumberDiagnostics,
 } from "@/lib/phone/telnyx-dual-provision";
+
+function mergeSettings(
+  current: unknown,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const base =
+    current && typeof current === "object" && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
+  return { ...base, ...patch };
+}
+
+import { DEFAULT_NUMBER_CAPABILITY_PATCH } from "@/lib/mctb/provisioning/default-number-capabilities";
 
 export type ReassertMctbTexmlVoiceRouteResult = {
   ok: boolean;
@@ -18,8 +40,63 @@ export type ReassertMctbTexmlVoiceRouteResult = {
 };
 
 /**
+ * Every Telnyx workspace number ships dual-channel from day one:
+ * frozen MCTB TeXML voice + workspace SMS (campaigns, drip, MCTB texts).
+ * Switching the active MCTB number is config-only — channels are pre-wired.
+ */
+export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+}): Promise<NumberDiagnostics> {
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+  });
+  if (!phone?.e164) throw new Error("Number not found");
+  if (String(phone.provider || "").toLowerCase() !== "telnyx") {
+    throw new Error("Telnyx number required for default MCTB+SMS provision");
+  }
+  if (!phone.providerNumberId || phone.providerNumberId.startsWith("ORDER:")) {
+    await persistProvisioning(phone.id, { state: "pending_activation" });
+    return diagnoseWorkspaceNumber(input);
+  }
+
+  const settings = readPhoneMctbSettings(phone.settingsJson);
+  const roleRaw = String(settings.mctbRole || "customer_mctb").toLowerCase();
+  const mctbRole =
+    roleRaw === "platform_demo" ? ("platform_demo" as const) : ("customer_mctb" as const);
+
+  const taggedSettings = mergePhoneCapabilitySettings(
+    mergeSettings(phone.settingsJson, {
+      ...telnyxLocalA2pSettings({
+        role: mctbRole === "platform_demo" ? "platform_demo" : "customer_production",
+      }),
+      routingOwner: MCTB_TEXML_ROUTING_OWNER,
+    }),
+    DEFAULT_NUMBER_CAPABILITY_PATCH,
+  );
+
+  await prisma.phoneNumber.update({
+    where: { id: phone.id },
+    data: { settingsJson: taggedSettings as object },
+  });
+
+  const routed = await switchDidToMctbTexmlIngress({
+    workspaceId: phone.workspaceId,
+    phoneNumberId: phone.id,
+    friendlyName: mctbRole === "platform_demo" ? "MCTB Platform Demo" : `MCTB ${phone.e164}`,
+    mctbRole,
+  });
+  if (!routed.ok || !routed.verify.ok) {
+    throw new Error(routed.verify.failReason || "mctb_texml_route_failed");
+  }
+
+  await repairMessagingOnWorkspaceNumber(input);
+  return verifyAndPersistNumber(input);
+}
+
+/**
  * Re-point voice at the frozen MCTB TeXML pipeline without touching runtime config.
- * SMS / messaging profile is unchanged — pair with repairMessagingOnWorkspaceNumber.
  */
 export async function reassertMctbTexmlVoiceRoute(input: {
   workspaceId: string;
@@ -64,17 +141,48 @@ export async function reassertMctbTexmlVoiceRoute(input: {
   }
 }
 
-/**
- * MCTB numbers are dual-channel: frozen TeXML voice + workspace SMS (campaigns, drip, MCTB texts).
- */
+/** @deprecated Use ensureDefaultTelnyxMctbAndSmsProvision */
 export async function repairMctbDualChannelNumber(input: {
   workspaceId: string;
   phoneNumberId: string;
 }): Promise<NumberDiagnostics> {
-  const voice = await reassertMctbTexmlVoiceRoute(input);
-  if (!voice.ok) {
-    throw new Error(voice.error || "mctb_texml_voice_reassert_failed");
+  return ensureDefaultTelnyxMctbAndSmsProvision(input);
+}
+
+/** Twilio and other providers: stamp MCTB+SMS capability flags and ensure voice webhook. */
+export async function ensureDefaultNonTelnyxNumberProvision(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+}): Promise<NumberDiagnostics> {
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+  });
+  if (!phone?.e164) throw new Error("Number not found");
+
+  const provider = String(phone.provider || "").toLowerCase();
+  const compliance =
+    provider === "twilio" ? tollFreeComplianceSettings() : {};
+  const taggedSettings = mergePhoneCapabilitySettings(
+    mergeSettings(phone.settingsJson, {
+      ...compliance,
+      mctbSipIngress: true,
+      routingOwner: MCTB_TEXML_ROUTING_OWNER,
+    }),
+    DEFAULT_NUMBER_CAPABILITY_PATCH,
+  );
+
+  await prisma.phoneNumber.update({
+    where: { id: phone.id },
+    data: { settingsJson: taggedSettings as object },
+  });
+
+  if (provider === "twilio" && phone.twilioSid) {
+    const { twilioNumberProvider } = await import(
+      "@/lib/numbers/providers/twilio-number-provider"
+    );
+    await twilioNumberProvider.configureVoiceWebhook(phone.twilioSid, input.workspaceId);
   }
-  await repairMessagingOnWorkspaceNumber(input);
-  return verifyAndPersistNumber(input);
+
+  return diagnoseWorkspaceNumber(input);
 }
