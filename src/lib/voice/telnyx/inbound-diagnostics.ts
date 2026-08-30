@@ -60,6 +60,8 @@ function routingModeForPhone(settingsJson: unknown): string {
   const telephony = settings.telephony || settings.provisioning;
   return String(telephony?.routingMode || "").toLowerCase();
 }
+
+function isCredentialLike(app: Record<string, unknown> | null): boolean {
   if (!app) return false;
   const source = String(app._source || "");
   const connType = String(
