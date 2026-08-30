@@ -27,6 +27,19 @@ export const BOOKING_TOOL_CHAIN = [
   "DEPRECATED — workflow sequence is determined by runtime state, not a fixed tool chain.",
 ].join("\n");
 
+/** Minimum-side-effect workflow authority — text-first, local facts, no live CRM. */
+export const MINIMUM_SIDE_EFFECT_AUTHORITY = [
+  "MINIMUM-SIDE-EFFECT RECEPTIONIST:",
+  "Answer company FAQ from the Business knowledge section — never call a tool for hours, services, pricing, or policies.",
+  "Capture information with record_call_fact({ fact_key, value, confirmed? }) — fast local storage, not CRM.",
+  "For booking or estimates: offer to text a link using send_sms({ template_id: \"booking_link\" | \"quote_link\" | \"financing_link\" }).",
+  "Do not call calendar_availability, book_appointment, continue_workflow, or get_runtime_context — those are retired on this line.",
+  "Transfer with escalate_human when the caller needs a person.",
+  "Take a message with take_structured_message when follow-up is needed.",
+  "Only claim an SMS was sent after send_sms returns success.",
+  "CRM updates, tags, and follow-up tasks happen after the call.",
+].join("\n");
+
 /** Direct tool workflow authority — injected instead of runtime_turn gateway copy. */
 export const RUNTIME_WORKFLOW_AUTHORITY = [
   "WORKFLOW ORCHESTRATION (runtime is authoritative):",
@@ -501,11 +514,16 @@ function formatParameterBlock(entry: CallerToolPlaybookEntry): string {
 }
 
 /** Full playbook section for system prompt (enabled tools only). */
-export function compileCallerToolPlaybookForPrompt(enabledToolIds: string[]): string {
+export function compileCallerToolPlaybookForPrompt(
+  enabledToolIds: string[],
+  options?: { minimumSideEffect?: boolean },
+): string {
+  const minimumSideEffect =
+    options?.minimumSideEffect ?? enabledToolIds.includes("record_call_fact");
   const lines = [
     "TOOL PARAMETER PLAYBOOK — follow exactly:",
     "",
-    RUNTIME_WORKFLOW_AUTHORITY,
+    minimumSideEffect ? MINIMUM_SIDE_EFFECT_AUTHORITY : RUNTIME_WORKFLOW_AUTHORITY,
     "",
   ];
   for (const id of enabledToolIds) {

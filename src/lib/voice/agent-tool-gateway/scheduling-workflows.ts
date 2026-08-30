@@ -354,31 +354,92 @@ export async function runCancelAppointment(
 
 export async function runSendSms(ctx: AgentToolContext, raw: Record<string, unknown>) {
   const operationId = deriveOperationId(raw, ctx, "sms");
-  const { enqueueVoiceOutbox } = await import("@/lib/voice/outbox/voice-outbox");
-  await enqueueVoiceOutbox({
-    workspaceId: ctx.workspaceId,
-    callId: ctx.callId,
-    jobType: "voice_send_sms",
-    payload: {
-      workspaceId: ctx.workspaceId,
-      to: String(raw.to || raw.phone || ""),
-      body: String(raw.body || ""),
-      operationId,
-    },
-    idempotencyKey: `sms-${operationId}`,
-  });
-  if (ctx.callId) {
-    await recordOperationReceipt(ctx.callId, {
+  const { getPrisma } = await import("@/lib/db");
+  const { resolveVoiceSmsTemplate } = await import("@/lib/voice/sms/voice-sms-templates");
+  const { sendQuickSms } = await import("@/lib/sms/send-quick");
+
+  let to = String(raw.to || raw.phone || "").trim();
+  let body = String(raw.body || "").trim();
+  let idempotencyKey = `sms-${operationId}`;
+
+  if (raw.template_id && ctx.callId) {
+    const call = await getPrisma().voiceCall.findFirst({
+      where: { id: ctx.callId, workspaceId: ctx.workspaceId },
+      select: { fromE164: true, agentId: true },
+    });
+    const agent = call?.agentId
+      ? await getPrisma().voiceAgent.findFirst({
+          where: { id: call.agentId },
+          select: { draftConfig: true },
+        })
+      : null;
+    const cfg = agent?.draftConfig as Record<string, unknown> | undefined;
+    const wizard = (cfg?.advanced as Record<string, unknown> | undefined)
+      ?.appointmentReceptionistWizard as { businessName?: string; websiteUrl?: string } | undefined;
+    const resolved = resolveVoiceSmsTemplate({
+      templateId: String(raw.template_id),
+      callId: ctx.callId,
+      businessName: wizard?.businessName,
+      websiteUrl: wizard?.websiteUrl,
+    });
+    body = resolved.body;
+    idempotencyKey = resolved.idempotencyKey;
+    if (!to && call?.fromE164 && call.fromE164 !== "unknown") {
+      to = call.fromE164;
+    }
+  }
+
+  if (!to || !body) {
+    return toolSuccess({
+      status: "failed",
       operation_id: operationId,
-      type: "SEND_SMS",
-      status: "pending",
-      provider: "twilio",
+      user_message: "I need a valid number to send that text.",
+      data: { ok: false, may_confirm_to_caller: false },
     });
   }
-  return toolSuccess({
-    status: "pending",
-    operation_id: operationId,
-    user_message: "I'll send that text message.",
-    data: { queued: true, may_confirm_to_caller: false },
-  });
+
+  try {
+    const result = await sendQuickSms({
+      workspaceId: ctx.workspaceId,
+      to,
+      body,
+      idempotencyKey,
+    });
+    if (ctx.callId) {
+      await recordOperationReceipt(ctx.callId, {
+        operation_id: operationId,
+        type: "SEND_SMS",
+        status: "confirmed",
+        provider: "twilio",
+        provider_reference: result.sid,
+      });
+    }
+    return toolSuccess({
+      status: "confirmed",
+      operation_id: operationId,
+      user_message: "I just texted that to you.",
+      data: {
+        ok: true,
+        messageId: result.sid,
+        may_confirm_to_caller: true,
+        template_id: raw.template_id || null,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (ctx.callId) {
+      await recordOperationReceipt(ctx.callId, {
+        operation_id: operationId,
+        type: "SEND_SMS",
+        status: "failed",
+        provider: "twilio",
+      });
+    }
+    return toolSuccess({
+      status: "failed",
+      operation_id: operationId,
+      user_message: "I'm having trouble sending that text right now.",
+      data: { ok: false, error: message, may_confirm_to_caller: false },
+    });
+  }
 }

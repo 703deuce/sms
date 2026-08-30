@@ -126,6 +126,16 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     requiresIntegration: "sms",
   },
   {
+    key: "record_call_fact",
+    name: "Record call fact",
+    description: "Save caller information to local call state during the conversation (not CRM).",
+    category: "data",
+    provider: "transovo_builtin",
+    toolType: "record_call_fact",
+    access: "write",
+    risk: "low",
+  },
+  {
     key: "start_automation",
     name: "Start automation",
     description:
@@ -875,14 +885,36 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
   send_sms: {
     name: "send_sms",
     toolType: "send_sms",
-    description: "Send an SMS to the caller or another number.",
+    description:
+      "Send an approved SMS template to the caller. Prefer template_id over free-form body.",
     body: {
       type: "object",
       properties: {
-        to: { type: "string" },
-        body: { type: "string" },
+        template_id: {
+          type: "string",
+          enum: ["booking_link", "quote_link", "financing_link", "directions", "callback_confirmation"],
+          description: "Approved template — runtime composes the message.",
+        },
+        to: { type: "string", description: "Optional E.164; defaults to caller ANI." },
+        body: { type: "string", description: "Discouraged — use template_id." },
       },
-      required: ["to", "body"],
+    },
+  },
+  record_call_fact: {
+    name: "record_call_fact",
+    toolType: "record_call_fact",
+    description: "Save a fact learned during the call to local call state (not CRM).",
+    body: {
+      type: "object",
+      properties: {
+        fact_key: {
+          type: "string",
+          description: "e.g. name, service_interest, zip, preferred_time, callback_requested",
+        },
+        value: { type: "string" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["fact_key", "value"],
     },
   },
   send_dtmf: {

@@ -5,7 +5,7 @@ import { getPrisma } from "@/lib/db";
 import { POST as toolWebhookPost } from "@/app/api/telnyx/voice/tools/route";
 import { buildTelnyxToolWebhookRequest } from "./telnyx-fixtures";
 
-export const EXPECTED_MODEL_WEBHOOK_TOOLS = [
+export const LEGACY_MODEL_WEBHOOK_TOOLS = [
   "lookup_customer",
   "take_structured_message",
   "record_current_field",
@@ -13,6 +13,17 @@ export const EXPECTED_MODEL_WEBHOOK_TOOLS = [
   "get_runtime_context",
   "escalate_human",
 ] as const;
+
+export const MINIMUM_SIDE_EFFECT_WEBHOOK_TOOLS = [
+  "send_sms",
+  "record_call_fact",
+  "take_structured_message",
+  "lookup_customer",
+  "escalate_human",
+] as const;
+
+/** Production Amy 866 publish surface (minimum-side-effect). */
+export const EXPECTED_MODEL_WEBHOOK_TOOLS = MINIMUM_SIDE_EFFECT_WEBHOOK_TOOLS;
 
 export const FORBIDDEN_MODEL_TOOLS = [
   "runtime_turn",

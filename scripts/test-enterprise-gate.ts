@@ -106,6 +106,24 @@ async function main() {
     "publish filter excludes runtime_turn",
     !filterToolsForCallerAmyPublish([...FULL_RECEPTIONIST_TOOLS, "runtime_turn"]).includes("runtime_turn"),
   );
+  const minimumConfig = { advanced: { minimumSideEffectMode: true } };
+  const minimumTools = [
+    ...FULL_RECEPTIONIST_TOOLS,
+    "send_sms",
+    "record_call_fact",
+  ];
+  check(
+    "minimum mode publishes send_sms",
+    filterToolsForCallerAmyPublish(minimumTools, minimumConfig).includes("send_sms"),
+  );
+  check(
+    "minimum mode publishes record_call_fact",
+    filterToolsForCallerAmyPublish(minimumTools, minimumConfig).includes("record_call_fact"),
+  );
+  check(
+    "minimum mode excludes continue_workflow",
+    !filterToolsForCallerAmyPublish(minimumTools, minimumConfig).includes("continue_workflow"),
+  );
 
   await dbIntegration();
 

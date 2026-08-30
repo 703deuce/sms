@@ -7,8 +7,17 @@ export const CALLER_AMY_WORKFLOW_TOOL_UNION: readonly string[] = [
   ),
 ];
 
-/** Model-facing webhook tools published to Telnyx for Caller Amy. */
+/** Model-facing webhook tools published to Telnyx for Caller Amy (minimum side-effect). */
 export const CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS = [
+  "send_sms",
+  "record_call_fact",
+  "take_structured_message",
+  "lookup_customer",
+  "escalate_human",
+] as const;
+
+/** Legacy workflow surface — used only when minimumSideEffectMode is false. */
+export const CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS = [
   "lookup_customer",
   "take_structured_message",
   "record_current_field",
@@ -16,6 +25,16 @@ export const CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS = [
   "get_runtime_context",
   "escalate_human",
 ] as const;
+
+export function resolveCallerAmyPublishedWebhookTools(
+  config?: { advanced?: Record<string, unknown> } | null,
+): readonly string[] {
+  const advanced = config?.advanced || {};
+  if (advanced.minimumSideEffectMode === true) {
+    return CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS;
+  }
+  return CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS;
+}
 
 /** Scheduling + gateway tools kept internal — invoked by continue_workflow / runtime only. */
 export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
@@ -29,6 +48,9 @@ export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
   "find_appointments",
   "reschedule_appointment",
   "cancel_appointment",
+  "continue_workflow",
+  "get_runtime_context",
+  "record_current_field",
   "save_collected_fields",
   "get_workflow_requirements",
   "save_caller_info",
@@ -44,7 +66,6 @@ export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
   "send_dtmf",
   "create_task",
   "end_call",
-  "send_sms",
   "confirm_booking",
 ]);
 
@@ -68,14 +89,20 @@ export const DOMAIN_TOOL_ALIASES: Record<string, string> = {
  * Filter enabled catalog keys for Telnyx publish — direct webhook surface only.
  * Scheduling primitives and the retired runtime_turn gateway stay internal.
  */
-export function filterToolsForCallerAmyPublish(enabledKeys: string[]): string[] {
+export function filterToolsForCallerAmyPublish(
+  enabledKeys: string[],
+  config?: { advanced?: Record<string, unknown> } | null,
+): string[] {
+  const allowed = new Set(resolveCallerAmyPublishedWebhookTools(config));
   const published = new Set<string>();
   for (const key of enabledKeys) {
-    if (!CALLER_AMY_INTERNAL_ONLY_TOOLS.has(key)) {
-      published.add(key);
-    }
+    if (CALLER_AMY_INTERNAL_ONLY_TOOLS.has(key)) continue;
+    if (allowed.has(key)) published.add(key);
   }
   published.delete("runtime_turn");
+  for (const required of allowed) {
+    if (enabledKeys.includes(required)) published.add(required);
+  }
   return [...published];
 }
 

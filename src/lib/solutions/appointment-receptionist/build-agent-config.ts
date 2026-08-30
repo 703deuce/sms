@@ -9,7 +9,7 @@ import {
 } from "./transfer-utils";
 import { resolveWizardRoutingMode } from "./routing-mode";
 import { buildCallerAmyPromptFromModules } from "@/lib/agents/appointment-booking/intelligence/caller-prompt";
-import { applyAmyProductionVoiceTuning } from "@/lib/voice/telnyx/amy-production-voice-tuning";
+import { applyAmyMinimumSideEffectConfig } from "@/lib/voice/telnyx/amy-minimum-side-effect";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "Answer hours, services, pricing ranges, policies, and FAQs directly from the Business knowledge section below — do not call any tool for those topics. " +
@@ -404,7 +404,7 @@ export function buildWizardAgentConfig(
   const keyterms = buildTranscriptionKeyterms(state);
   const recordingOn = state.callRecording !== "off";
 
-  return applyAmyProductionVoiceTuning({
+  return applyAmyMinimumSideEffectConfig({
     ...base,
     identity: {
       ...base.identity,

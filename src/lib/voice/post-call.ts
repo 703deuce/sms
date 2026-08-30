@@ -64,10 +64,26 @@ export async function processPostCall(callId: string) {
   const insight = await generateCallInsights(call, config);
   const extractionFields = config?.postCall?.extractionFields || [];
 
+  const callMeta =
+    call.metadata && typeof call.metadata === "object" && !Array.isArray(call.metadata)
+      ? (call.metadata as Record<string, unknown>)
+      : {};
+  const callFactStore = callMeta.callFactStore as { facts?: Record<string, unknown> } | undefined;
+  const callFacts =
+    callFactStore?.facts && typeof callFactStore.facts === "object"
+      ? Object.fromEntries(
+          Object.entries(callFactStore.facts).map(([key, fact]) => {
+            const row = fact as { normalized_value?: string; raw_value?: string; confirmed?: boolean };
+            return [key, row.confirmed ? row.normalized_value || row.raw_value : row.raw_value];
+          }),
+        )
+      : {};
+
   if (insight) {
     const extractedCustom: Record<string, unknown> = {
       urgency: insight.urgency,
       ...(insight.extractedFields || {}),
+      ...(Object.keys(callFacts).length ? { call_facts: callFacts } : {}),
     };
     // Always surface configured extraction field keys, even when null.
     for (const key of extractionFields) {

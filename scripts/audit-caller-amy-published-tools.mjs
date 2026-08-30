@@ -20,7 +20,15 @@ const BOOTSTRAP = process.env.SMOKE_BOOTSTRAP || "transovo-smoke-bootstrap-b56f-
 const EMAIL = (process.env.OWNER_EMAIL || process.env.AMY_EMAIL || "").trim().toLowerCase();
 const AGENT_ID = process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501";
 
-const EXPECTED_WEBHOOK_TOOLS = [
+const MINIMUM_SIDE_EFFECT_TOOLS = [
+  "send_sms",
+  "record_call_fact",
+  "take_structured_message",
+  "lookup_customer",
+  "escalate_human",
+];
+
+const LEGACY_WORKFLOW_TOOLS = [
   "lookup_customer",
   "take_structured_message",
   "record_current_field",
@@ -29,12 +37,19 @@ const EXPECTED_WEBHOOK_TOOLS = [
   "escalate_human",
 ];
 
+const EXPECTED_WEBHOOK_TOOLS =
+  process.env.AMY_LEGACY_WORKFLOW === "1" ? LEGACY_WORKFLOW_TOOLS : MINIMUM_SIDE_EFFECT_TOOLS;
+
 const FORBIDDEN_WEBHOOK_TOOLS = [
   "calendar_availability",
   "book_appointment",
   "resolve_datetime",
   "check_availability",
   "hold_appointment_slot",
+  "runtime_turn",
+  ...(process.env.AMY_LEGACY_WORKFLOW === "1"
+    ? ["send_sms", "record_call_fact"]
+    : ["continue_workflow", "get_runtime_context", "record_current_field"]),
 ];
 
 function fail(msg) {

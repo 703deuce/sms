@@ -79,10 +79,19 @@ function section(title: string) {
 // ── 1. Architecture / catalog ───────────────────────────────────────────────
 
 function testCatalogRegression() {
-  section("1. Model-visible catalog");
+  section("1. Model-visible catalog (production minimum-side-effect)");
   const catalogFailuresBefore = failures.length;
-  const enabled = resolveEnabledBuiltinTools({ agentType: "appointment_booking" });
-  const published = filterToolsForCallerAmyPublish(enabled);
+  const minimumEnabled = [
+    "hangup",
+    "send_sms",
+    "record_call_fact",
+    "take_structured_message",
+    "lookup_customer",
+    "escalate_human",
+    "transfer",
+  ];
+  const minimumConfig = { advanced: { minimumSideEffectMode: true } };
+  const published = filterToolsForCallerAmyPublish(minimumEnabled, minimumConfig);
   for (const forbidden of FORBIDDEN_MODEL_TOOLS) {
     check(`publish excludes ${forbidden}`, !published.includes(forbidden));
     check(`internal-only ${forbidden}`, CALLER_AMY_INTERNAL_ONLY_TOOLS.has(forbidden));
@@ -96,8 +105,9 @@ function testCatalogRegression() {
     agentId: "agent_test",
     bucketIds: [],
     tools: [],
-    enabledBuiltinTools: enabled,
+    enabledBuiltinTools: minimumEnabled,
     agentType: "appointment_booking",
+    voiceConfig: minimumConfig as never,
   });
   const names = telnyxTools
     .map((t) => {
@@ -114,8 +124,8 @@ function testCatalogRegression() {
   for (const required of EXPECTED_MODEL_WEBHOOK_TOOLS) {
     check(`Telnyx build includes ${required}`, names.includes(required));
   }
-  check("Telnyx build includes hangup (when enabled)", names.includes("hangup") || names.includes("runtime_turn"));
-  check("Telnyx webhook count <= 2 + hangup", names.length <= 4, `got ${names.join(", ")}`);
+  check("Telnyx build includes hangup (when enabled)", names.includes("hangup"));
+  check("Telnyx webhook count <= 8", names.length <= 8, `got ${names.join(", ")}`);
 
   const runtimeTurnUrl = telnyxTools.find(
     (t) => (t as { webhook?: { name?: string } }).webhook?.name === "runtime_turn",

@@ -755,11 +755,6 @@ export async function executeBuiltinVoiceAction(input: {
         raw: args,
       });
     }
-    case "find_appointments":
-    case "hold_appointment_slot":
-    case "release_appointment_hold":
-    case "reschedule_appointment":
-    case "cancel_appointment":
     case "send_sms": {
       return executeAgentTool({
         toolType: input.toolType,
@@ -770,6 +765,45 @@ export async function executeBuiltinVoiceAction(input: {
         },
         raw: args,
       });
+    }
+    case "find_appointments":
+    case "hold_appointment_slot":
+    case "release_appointment_hold":
+    case "reschedule_appointment":
+    case "cancel_appointment": {
+      return executeAgentTool({
+        toolType: input.toolType,
+        context: {
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          callId: input.callId,
+        },
+        raw: args,
+      });
+    }
+    case "record_call_fact": {
+      if (!input.callId) {
+        return { ok: false, error: "callId required", speak: "I couldn't save that yet." };
+      }
+      const { upsertCallFact } = await import("@/lib/voice/call-fact-store");
+      const factKey = String(args.fact_key || args.key || "").trim();
+      const value = String(args.value || args.raw_value || "").trim();
+      if (!factKey || !value) {
+        return { ok: false, error: "fact_key and value required" };
+      }
+      await upsertCallFact({
+        callId: input.callId,
+        key: factKey,
+        rawValue: value,
+        confirmed: Boolean(args.confirmed),
+        source: "tool",
+      });
+      return {
+        ok: true,
+        saved: true,
+        fact_key: factKey,
+        speak: `Got it — ${factKey.replaceAll("_", " ")}.`,
+      };
     }
     case "book_appointment": {
       return executeAgentTool({

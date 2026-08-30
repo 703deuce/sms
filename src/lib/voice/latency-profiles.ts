@@ -387,7 +387,6 @@ export const ASYNC_TOOL_TYPES = new Set([
   "save_caller_info",
   "update_contact_tags",
   "upsert_crm_contact",
-  "send_sms",
 ]);
 
 /** Immediate request_start line for sync tools. */

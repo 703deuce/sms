@@ -309,6 +309,54 @@ Items L through X (fast/reasoning path routing, structured state, conversation r
 
 ---
 
+## Section 25 — Minimum-Side-Effect Voice Architecture (Amy 866 production)
+
+**Goal:** The live voice agent does the minimum external work necessary for a good phone conversation.
+
+| Class | During call | Examples |
+|-------|-------------|----------|
+| **A — Local knowledge** | Prompt only | Hours, services, service area, FAQs |
+| **B — Required live action** | Narrow tool surface | `send_sms` (template link), `escalate_human`, `lookup_customer` |
+| **C — Deferred** | Post-call worker | CRM sync, tags, notes, lead scoring, analytics |
+
+### Production configuration (866)
+
+- **Model:** `openai/gpt-5.4-mini` (Telnyx BYOK)
+- **STT:** `deepgram/flux` with `flux_b_fast` latency profile
+- **Published tools:** `send_sms`, `record_call_fact`, `take_structured_message`, `lookup_customer`, `escalate_human`, native `hangup`
+- **Retired on this line:** `continue_workflow`, `record_current_field`, `get_runtime_context`, live calendar booking
+
+### Key modules
+
+| Module | Path |
+|--------|------|
+| Config | `src/lib/voice/telnyx/amy-minimum-side-effect.ts` |
+| CallFactStore | `src/lib/voice/call-fact-store.ts` |
+| SMS templates | `src/lib/voice/sms/voice-sms-templates.ts` |
+| Tool publish gate | `src/lib/voice/workflow-engine/tool-publish.ts` |
+| Republish script | `scripts/amy-minimum-side-effect-republish.ts` |
+
+### Reliability rules
+
+1. Answer locally when possible — no tool for FAQ.
+2. Capture facts with `record_call_fact` — local DB, not CRM.
+3. Text-first completion — `send_sms({ template_id: "booking_link" })` instead of live calendar booking.
+4. Confirm SMS only after provider acknowledgment.
+5. Target 0–2 live external tool calls per ordinary call.
+6. Post-call merges CallFactStore + transcript for structured extraction.
+
+### Tests
+
+```bash
+npx tsx scripts/test-caller-amy-orchestration.ts
+npx tsx scripts/test-call-fact-store.ts
+npx tsx scripts/test-voice-sms-templates.ts
+npx tsx scripts/amy-minimum-side-effect-republish.ts   # requires DB + Telnyx
+node scripts/audit-caller-amy-published-tools.mjs      # live catalog gate
+```
+
+---
+
 ## Tests
 
 ```bash

@@ -6,7 +6,8 @@ import { buildAssistantTools } from "../src/lib/voice/telnyx/assistant-tools";
 import { resolveEnabledBuiltinTools } from "../src/lib/voice/tools/catalog";
 import {
   CALLER_AMY_INTERNAL_ONLY_TOOLS,
-  CALLER_AMY_MODEL_TOOLS,
+  CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS,
+  CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS,
   filterToolsForCallerAmyPublish,
 } from "../src/lib/voice/workflow-engine/tool-publish";
 import {
@@ -22,6 +23,8 @@ import {
 import { compileCallerToolPlaybookForPrompt } from "../src/lib/agents/appointment-booking/intelligence/caller-tool-playbook";
 import { assertToolAllowed } from "../src/lib/voice/workflow-engine/guard";
 import { isToolAllowedForState } from "../src/lib/voice/workflow-engine/states";
+import { applyAmyMinimumSideEffectConfig } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
+import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const failures: string[] = [];
 function check(name: string, cond: boolean, detail?: string) {
@@ -29,95 +32,151 @@ function check(name: string, cond: boolean, detail?: string) {
   else console.log("✓", name);
 }
 
-const enabled = resolveEnabledBuiltinTools({ agentType: "appointment_booking" });
-const published = filterToolsForCallerAmyPublish(enabled);
-const telnyxTools = buildAssistantTools({
+function telnyxToolNames(
+  input: Parameters<typeof buildAssistantTools>[0],
+): string[] {
+  return buildAssistantTools(input)
+    .map((t) => {
+      const w = (t as { webhook?: { name?: string } }).webhook;
+      const h = (t as { hangup?: unknown }).hangup;
+      if (w) return w.name;
+      if (h) return "hangup";
+      return null;
+    })
+    .filter(Boolean) as string[];
+}
+
+const legacyConfig: VoiceAgentConfig = {
+  advanced: { minimumSideEffectMode: false },
+} as VoiceAgentConfig;
+
+const minimumConfig = applyAmyMinimumSideEffectConfig({
+  enabledBuiltinTools: [],
+} as VoiceAgentConfig);
+
+const legacyEnabled = resolveEnabledBuiltinTools({ agentType: "appointment_booking" });
+const legacyPublished = filterToolsForCallerAmyPublish(legacyEnabled, legacyConfig);
+const legacyTelnyxNames = telnyxToolNames({
   workspaceId: "ws_test",
   agentId: "agent_test",
   bucketIds: [],
   tools: [],
-  enabledBuiltinTools: enabled,
+  enabledBuiltinTools: legacyEnabled,
   agentType: "appointment_booking",
+  voiceConfig: legacyConfig,
 });
 
-const telnyxNames = telnyxTools
-  .map((t) => {
-    const w = (t as { webhook?: { name?: string } }).webhook;
-    const h = (t as { hangup?: unknown }).hangup;
-    if (w) return w.name;
-    if (h) return "hangup";
-    return null;
-  })
-  .filter(Boolean) as string[];
+const minimumEnabled = minimumConfig.enabledBuiltinTools || [];
+const minimumPublished = filterToolsForCallerAmyPublish(minimumEnabled, minimumConfig);
+const minimumTelnyxNames = telnyxToolNames({
+  workspaceId: "ws_test",
+  agentId: "agent_test",
+  bucketIds: [],
+  tools: [],
+  enabledBuiltinTools: minimumEnabled,
+  agentType: "appointment_booking",
+  voiceConfig: minimumConfig,
+});
 
 check(
-  "publish filter excludes calendar_availability",
-  !published.includes("calendar_availability"),
+  "legacy publish excludes calendar_availability",
+  !legacyPublished.includes("calendar_availability"),
 );
-check("publish filter excludes book_appointment", !published.includes("book_appointment"));
-check("publish filter excludes resolve_datetime", !published.includes("resolve_datetime"));
-check("publish filter includes continue_workflow", published.includes("continue_workflow"));
-check("publish filter includes record_current_field", published.includes("record_current_field"));
+check("legacy publish excludes book_appointment", !legacyPublished.includes("book_appointment"));
+check("legacy publish includes continue_workflow", legacyPublished.includes("continue_workflow"));
 check(
-  "Telnyx build excludes calendar_availability",
-  !telnyxNames.includes("calendar_availability"),
+  "legacy publish includes record_current_field",
+  legacyPublished.includes("record_current_field"),
 );
-check("Telnyx build excludes book_appointment", !telnyxNames.includes("book_appointment"));
-check("Telnyx build includes continue_workflow", telnyxNames.includes("continue_workflow"));
+check(
+  "legacy Telnyx build includes continue_workflow",
+  legacyTelnyxNames.includes("continue_workflow"),
+);
 
-const EXPECTED_EXACT = [
-  "lookup_customer",
-  "take_structured_message",
-  "record_current_field",
-  "continue_workflow",
-  "get_runtime_context",
-  "escalate_human",
-  "hangup",
-];
-for (const name of EXPECTED_EXACT) {
-  check(`exact catalog includes ${name}`, telnyxNames.includes(name));
+for (const name of [...CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS, "hangup"] as const) {
+  check(`legacy catalog includes ${name}`, legacyTelnyxNames.includes(name));
 }
 for (const forbidden of [
   "calendar_availability",
   "book_appointment",
-  "resolve_datetime",
-  "hold_appointment_slot",
-  "save_collected_fields",
-  "get_workflow_requirements",
+  "send_sms",
+  "record_call_fact",
 ]) {
-  check(`exact catalog excludes ${forbidden}`, !telnyxNames.includes(forbidden));
+  check(`legacy catalog excludes ${forbidden}`, !legacyTelnyxNames.includes(forbidden));
 }
 
 check(
-  "Telnyx tool count is small (<=10)",
-  telnyxNames.length <= 10,
-  `got ${telnyxNames.length}: ${telnyxNames.join(", ")}`,
+  "minimum publish includes send_sms",
+  minimumPublished.includes("send_sms"),
+);
+check(
+  "minimum publish includes record_call_fact",
+  minimumPublished.includes("record_call_fact"),
+);
+check(
+  "minimum publish excludes continue_workflow",
+  !minimumPublished.includes("continue_workflow"),
+);
+check(
+  "minimum publish excludes record_current_field",
+  !minimumPublished.includes("record_current_field"),
+);
+check(
+  "minimum Telnyx build includes send_sms",
+  minimumTelnyxNames.includes("send_sms"),
+);
+check(
+  "minimum Telnyx build includes record_call_fact",
+  minimumTelnyxNames.includes("record_call_fact"),
+);
+
+for (const name of [...CALLER_AMY_PUBLISHED_WEBHOOK_TOOLS, "hangup"] as const) {
+  check(`minimum catalog includes ${name}`, minimumTelnyxNames.includes(name));
+}
+for (const forbidden of [
+  "calendar_availability",
+  "book_appointment",
+  "continue_workflow",
+  "get_runtime_context",
+  "record_current_field",
+]) {
+  check(`minimum catalog excludes ${forbidden}`, !minimumTelnyxNames.includes(forbidden));
+}
+
+check(
+  "minimum Telnyx tool count is small (<=8)",
+  minimumTelnyxNames.length <= 8,
+  `got ${minimumTelnyxNames.length}: ${minimumTelnyxNames.join(", ")}`,
 );
 
 for (const internal of [
   "calendar_availability",
   "book_appointment",
   "hold_appointment_slot",
+  "continue_workflow",
 ]) {
   check(`internal only: ${internal}`, CALLER_AMY_INTERNAL_ONLY_TOOLS.has(internal));
 }
 
-for (const model of CALLER_AMY_MODEL_TOOLS) {
-  check(`model surface includes ${model}`, published.includes(model));
-}
-
 check(
-  "playbook does not inject BOOKING_TOOL_CHAIN step 2 calendar",
-  !compileCallerToolPlaybookForPrompt(["continue_workflow"]).includes(
-    "2. calendar_availability",
-  ),
-);
-check(
-  "playbook injects runtime authority",
+  "legacy playbook injects runtime authority",
   compileCallerToolPlaybookForPrompt(["continue_workflow"]).includes(
     "runtime is authoritative",
   ),
 );
+check(
+  "minimum playbook injects text-first authority",
+  compileCallerToolPlaybookForPrompt(["send_sms", "record_call_fact"], {
+    minimumSideEffect: true,
+  }).includes("MINIMUM-SIDE-EFFECT"),
+);
+check(
+  "minimum playbook does not inject runtime authority",
+  !compileCallerToolPlaybookForPrompt(["send_sms"], { minimumSideEffect: true }).includes(
+    "runtime is authoritative",
+  ),
+);
+
 check(
   "COLLECTING_FIELDS next_action is collect",
   deriveNextAction({
@@ -169,7 +228,7 @@ const partial = requirementsToToolResponse(
 check("partial save returns ok:true", partial.ok === true);
 check("partial save workflow_complete:false", partial.workflow_complete === false);
 
-check("normalizeCallerAni E.164", normalizeCallerAni("+15714776175") === "+15714776175");
+check("normalizeCallerAni E.164", normalizeCallerAni("[REDACTED]") === "[REDACTED]");
 check("unknown ANI rejected", normalizeCallerAni("unknown") === null);
 check("isUnknownCallerId", isUnknownCallerId("unknown") && !isUnknownCallerId("+15551234567"));
 
@@ -212,7 +271,8 @@ async function main() {
     process.exit(1);
   }
   console.log("\nCaller Amy orchestration checks passed.");
-  console.log("Telnyx-visible tools:", telnyxNames.join(", "));
+  console.log("Legacy Telnyx tools:", legacyTelnyxNames.join(", "));
+  console.log("Minimum Telnyx tools:", minimumTelnyxNames.join(", "));
 }
 
 main().catch((err) => {

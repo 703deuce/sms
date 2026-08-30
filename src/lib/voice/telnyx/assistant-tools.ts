@@ -25,6 +25,7 @@ import {
 import {
   filterToolsForCallerAmyPublish,
 } from "@/lib/voice/workflow-engine/tool-publish";
+import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { strictWebhookBodyParameters } from "@/lib/voice/schema/strict-tool-schema";
 
 type ToolRow = {
@@ -76,15 +77,21 @@ export function buildAssistantTools(input: {
   /** Catalog keys enabled for this agent. */
   enabledBuiltinTools?: string[];
   agentType?: string | null;
+  voiceConfig?: VoiceAgentConfig;
   /** Version B/C: async nonessential tools + sync request_start fillers. */
   optimizeToolLatency?: boolean;
 }) {
-  const enabled = filterToolsForCallerAmyPublish(
-    resolveEnabledBuiltinTools({
-      enabledBuiltinTools: input.enabledBuiltinTools,
-      agentType: input.agentType,
-    }),
-  );
+  const resolved = resolveEnabledBuiltinTools({
+    enabledBuiltinTools: input.enabledBuiltinTools,
+    agentType: input.agentType,
+  });
+  const nativePassthrough = new Set(["hangup", "transfer", "handoff", "send_dtmf", "end_call"]);
+  const enabled = [
+    ...new Set([
+      ...filterToolsForCallerAmyPublish(resolved, input.voiceConfig),
+      ...resolved.filter((key) => nativePassthrough.has(key)),
+    ]),
+  ];
   const optimize = Boolean(input.optimizeToolLatency);
 
   const tools: Record<string, unknown>[] = [];
