@@ -95,17 +95,30 @@ export async function ensureMctbTenantProductionBinding(input: {
   }
 
   let phoneNumberId = input.phoneNumberId ?? runtime.phoneNumberId ?? null;
+
+  const workspaceOwnsSelectedPhone = phoneNumberId
+    ? Boolean(
+        await prisma.phoneNumber.findFirst({
+          where: {
+            id: phoneNumberId,
+            workspaceId: input.workspaceId,
+            status: { not: "Released" },
+          },
+          select: { id: true },
+        }),
+      )
+    : false;
+
+  // Platform demo path only when the tenant explicitly uses the shared linked row —
+  // never when they own a dedicated DID on the same E.164 (ws_1 Main Line vs demo row).
   const selectedIsPlatformDemo = Boolean(
     demo?.phoneNumberId &&
       phoneNumberId &&
-      (phoneNumberId === demo.phoneNumberId ||
-        (await prisma.phoneNumber.findFirst({
-          where: { id: phoneNumberId, e164: demo.e164 },
-          select: { id: true },
-        }))),
+      !workspaceOwnsSelectedPhone &&
+      phoneNumberId === demo.phoneNumberId,
   );
 
-  // Shared 571 is opt-in only: explicit selection in Setup (or admin bootstrap).
+  // Shared 571 is opt-in only: explicit selection of the platform-demo phone row in Setup.
   // Never overwrite a customer's own provisioned DID because Try It linked them once.
   const usesPlatformDemoTenant = Boolean(demo) && selectedIsPlatformDemo;
 

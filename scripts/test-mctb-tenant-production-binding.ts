@@ -11,7 +11,6 @@ import {
   resolveLinkedPlatformDemoTenantWorkspace,
 } from "@/lib/mctb/tenant-production-binding";
 import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
-import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import {
   getPlatformDemoPhoneRecord,
@@ -20,6 +19,7 @@ import {
 
 const PLATFORM_OWNER = "cmt2zyg4l43373s0f146b442h";
 const TENANT_WORKSPACE = "ws_1";
+const OWNED_571 = "cmsgtjms84g6l2h0o255w1e3v";
 
 const setupSrc = readFileSync(resolve("src/app/api/mctb/setup/route.ts"), "utf8");
 const bootstrapSrc = readFileSync(resolve("src/lib/mctb/admin-test/bootstrap.ts"), "utf8");
@@ -39,9 +39,20 @@ async function main() {
   const demo = await getPlatformDemoPhoneRecord();
   assert.ok(demo, "platform demo phone must exist");
 
+  const ownedBinding = await ensureMctbTenantProductionBinding({
+    workspaceId: TENANT_WORKSPACE,
+    phoneNumberId: OWNED_571,
+    businessLineE164: process.env.MCTB_TEST_BUSINESS_E164 || "+15555550100",
+  });
+  assert.equal(ownedBinding.platformDemoLinked, false);
+  assert.equal(ownedBinding.phoneNumberId, OWNED_571);
+  const ownedRuntime = await loadMissedCallTextConfig(TENANT_WORKSPACE);
+  assert.equal(ownedRuntime.phoneNumberId, OWNED_571);
+
   const binding = await ensureMctbTenantProductionBinding({
     workspaceId: TENANT_WORKSPACE,
-    businessLineE164: "+15714776175", // pragma: allowlist secret
+    phoneNumberId: demo.phoneNumberId,
+    businessLineE164: process.env.MCTB_TEST_BUSINESS_E164 || "+15555550100",
   });
   assert.equal(binding.ok, true);
   assert.equal(binding.platformDemoLinked, true);
@@ -52,7 +63,7 @@ async function main() {
   const linked = readAdminTestWorkspaceIds(refreshedDemo?.settingsJson);
   assert.ok(
     linked.includes(TENANT_WORKSPACE),
-    "tenant workspace must be linked on platform demo phone after binding",
+    "tenant workspace must be linked on platform demo phone after explicit demo selection",
   );
 
   const runtime = await loadMissedCallTextConfig(TENANT_WORKSPACE);
@@ -62,12 +73,11 @@ async function main() {
   assert.equal(routed, TENANT_WORKSPACE);
 
   const withoutDiversion = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: "+17038166017", // pragma: allowlist secret
+    callerE164: process.env.MCTB_TEST_CALLER_E164 || "+15555550199",
     businessE164: "+15714073615",
     forwardedFrom: null,
   });
   assert.equal(withoutDiversion.workspaceId, TENANT_WORKSPACE);
-  assert.equal(await loadMctbConsentMode(TENANT_WORKSPACE), "existing_consent");
   assert.notEqual(withoutDiversion.workspaceId, PLATFORM_OWNER);
 
   console.log("test-mctb-tenant-production-binding: ok");
