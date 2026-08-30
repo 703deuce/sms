@@ -118,3 +118,145 @@ h3,
   background: rgb(148 163 184 / 0.35);
   border-radius: 999px;
 }
+
+/* Kimi sidebar — from .ui-agent/generated/2026-08-30T22-24-04-122Z-b95821/reference.css */
+.transovo-sidebar {
+  transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.transovo-nav-item {
+  position: relative;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.transovo-nav-item:hover {
+  background-color: rgb(79 70 229 / 0.06);
+}
+
+.transovo-nav-item[data-active="true"] {
+  background-color: rgb(79 70 229 / 0.1);
+  color: #4f46e5;
+  font-weight: 500;
+}
+
+.transovo-nav-item[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 9999px;
+  background-color: #4f46e5;
+}
+
+.transovo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 9999px;
+  background-color: #4f46e5;
+  color: #ffffff;
+}
+
+.transovo-badge-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 9999px;
+  background-color: #4f46e5;
+  color: #ffffff;
+}
+
+.transovo-credits-bar {
+  height: 5px;
+  border-radius: 9999px;
+  background-color: rgb(79 70 229 / 0.12);
+  overflow: hidden;
+}
+
+.transovo-credits-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #6366f1, #4f46e5);
+}
+
+.transovo-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.12) transparent;
+}
+
+.transovo-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.transovo-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(0 0 0 / 0.12);
+  border-radius: 9999px;
+}
+
+/* Kimi campaigns — from .ui-agent/generated/2026-08-30T21-40-34-537Z-32b6ff/reference.css */
+.st-row:hover {
+  background: #f9fafb;
+}
+
+.st-row.selected {
+  box-shadow: inset 0 0 0 2px #c7d2fe;
+  border-radius: 8px;
+}
+
+.st-fade {
+  animation: st-fade 0.2s ease-out;
+}
+
+@keyframes st-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.st-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef2ff;
+  color: #4f46e5;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.st-toast {
+  animation: st-toast-in 0.25s ease-out;
+}
+
+@keyframes st-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -21,7 +21,7 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
 
@@ -82,18 +82,34 @@ export function AppShell({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const prevPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     setSidebarCollapsed(readSidebarCollapsedPreference());
   }, []);
 
   useEffect(() => {
+    const prev = prevPathRef.current;
+    const isConversations = pathname.startsWith("/conversations");
+    const wasConversations = prev?.startsWith("/conversations") ?? false;
+
+    if (!wasConversations && isConversations) {
+      setSidebarCollapsed(true);
+    } else if (wasConversations && !isConversations) {
+      setSidebarCollapsed(readSidebarCollapsedPreference());
+    }
+
+    prevPathRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname.startsWith("/conversations")) return;
     try {
       window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
     } catch {
       // ignore storage errors
     }
-  }, [sidebarCollapsed]);
+  }, [sidebarCollapsed, pathname]);
   const resolvedProduct = getCurrentProduct(pathname);
   const currentProduct: CurrentProduct =
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
@@ -151,7 +167,7 @@ export function AppShell({
           productFeatures={productFeatures}
         />
       </Suspense>
-      <div className={sidebarCollapsed ? "lg:pl-[56px]" : "lg:pl-[220px]"}>
+      <div className={sidebarCollapsed ? "lg:pl-[56px]" : "lg:pl-[224px]"}>
         {realtorMode ? (
           <RealtorHeader
             userName={userName}

@@ -15,7 +15,7 @@ export const campaignUi = {
   textarea:
     "min-h-[140px] w-full resize-y rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-[14px] text-[#111827] outline-none placeholder:text-[#9ca3af] focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]/30",
   primaryBtn:
-    "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#6366f1] px-5 text-[14px] font-semibold text-white shadow-sm hover:bg-[#4f46e5] disabled:opacity-50",
+    "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-[13px] font-medium text-white hover:bg-indigo-700 disabled:opacity-50",
   outlineBtn:
     "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 text-[14px] font-semibold text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50",
   ghostBtn:
@@ -30,25 +30,29 @@ export function CampaignPageShell({
   children,
   right,
 }: {
-  title: string;
+  title?: string;
   subtitle?: string;
   breadcrumb?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   right?: ReactNode;
 }) {
+  const hasHeader = Boolean(title || subtitle || actions || breadcrumb);
+
   return (
     <div className={campaignUi.page}>
       {breadcrumb ? (
         <nav className="mb-4 text-[13px] text-[#6b7280]">{breadcrumb}</nav>
       ) : null}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className={campaignUi.title}>{title}</h1>
-          {subtitle ? <p className={campaignUi.subtitle}>{subtitle}</p> : null}
+      {hasHeader ? (
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            {title ? <h1 className={campaignUi.title}>{title}</h1> : null}
+            {subtitle ? <p className={campaignUi.subtitle}>{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
-      </div>
+      ) : null}
       <div className={cn(right ? "grid gap-6 lg:grid-cols-[1fr_340px]" : "")}>
         <div className="min-w-0">{children}</div>
         {right ? <aside className="hidden lg:block">{right}</aside> : null}

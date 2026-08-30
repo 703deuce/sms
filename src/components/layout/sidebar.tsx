@@ -27,12 +27,20 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronLeft, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  LifeBuoy,
+  LogOut,
+  MessageSquare,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-export const SIDEBAR_WIDTH_PX = 220;
+export const SIDEBAR_WIDTH_PX = 224;
 export const SIDEBAR_COLLAPSED_WIDTH_PX = 56;
 
 const PLAN_BALANCE_LIMIT = 100;
@@ -238,32 +246,31 @@ function NavLinkRow({
   );
 }
 
-function PlanBalanceCard({ creditsRemaining }: { creditsRemaining?: number }) {
-  // Wallet credits (header) are separate from plan balance in the mockup sidebar widget.
-  const used =
-    typeof creditsRemaining === "number" && creditsRemaining <= PLAN_BALANCE_LIMIT
-      ? PLAN_BALANCE_LIMIT - creditsRemaining
-      : 90;
-  const pct = Math.min(100, Math.round((used / PLAN_BALANCE_LIMIT) * 100));
+function MessageCreditsCard({ creditsRemaining }: { creditsRemaining?: number }) {
+  const total = PLAN_BALANCE_LIMIT;
+  const remaining =
+    typeof creditsRemaining === "number"
+      ? Math.max(0, Math.min(creditsRemaining, total))
+      : Math.round(total * 0.15);
+  const pct = total > 0 ? Math.min(100, Math.round((remaining / total) * 100)) : 0;
 
   return (
-    <div className="mx-1 rounded-xl border border-[#e6e8ef] bg-[#f8f9fc] p-3">
-      <div className="flex items-center justify-between text-[11px] font-semibold text-[#374151]">
-        <span>Plan Balance</span>
-        <span className="text-[#6b7280]">{used}/{PLAN_BALANCE_LIMIT}</span>
+    <div className="mx-1 rounded-lg border border-[#e6e8ef] bg-muted/40 px-3 py-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-medium text-[#111827]">Message Credits</span>
+        <Link
+          href="/settings/billing"
+          className="text-[11px] font-medium text-[#6366f1] hover:text-[#4f46e5]"
+        >
+          Upgrade
+        </Link>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e6e8ef]">
-        <div
-          className="h-full rounded-full bg-primary transition-[width]"
-          style={{ width: `${pct}%` }}
-        />
+      <div className="transovo-credits-bar mt-2">
+        <div className="transovo-credits-fill" style={{ width: `${pct}%` }} />
       </div>
-      <Link
-        href="/settings/billing"
-        className="mt-2 inline-block text-[11px] font-semibold text-primary hover:text-primary-hover"
-      >
-        Upgrade Plan
-      </Link>
+      <p className="mt-1.5 text-[11px] text-sidebar-muted whitespace-nowrap">
+        {remaining.toLocaleString()} Credits Remaining
+      </p>
     </div>
   );
 }
@@ -393,24 +400,6 @@ export function Sidebar({
     productShell,
   ]);
 
-  const sidebarProductLabel = useMemo(() => {
-    if (realtorMode || isLauncher || currentProduct === "numbers") return null;
-    if (multiProduct) return productShellLabel(productShell);
-    if (hasMassSms) return productShellLabel("mass_sms");
-    if (hasAiAfterHours) return productShellLabel("ai_after_hours");
-    if (hasMctb) return productShellLabel("mctb");
-    return "Transovo";
-  }, [
-    realtorMode,
-    isLauncher,
-    currentProduct,
-    multiProduct,
-    productShell,
-    hasMassSms,
-    hasAiAfterHours,
-    hasMctb,
-  ]);
-
   useEffect(() => {
     setExpanded(bestExpandedKey(navItems, pathname, search));
   }, [pathname, search, navItems]);
@@ -429,78 +418,47 @@ export function Sidebar({
   const content = (
     <aside
       className={cn(
-        "flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
-        collapsed ? "w-[56px]" : "w-[220px]",
+        "transovo-sidebar flex h-dvh flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        collapsed ? "w-[56px]" : "w-[224px]",
       )}
     >
-      <div className="shrink-0 px-2 pb-2 pt-3">
-        <div className={cn("flex items-center gap-1", collapsed ? "flex-col" : "justify-between")}>
-          <Link
-            href={
-              realtorMode
-                ? "/realtor/dashboard"
-                : isLauncher
-                  ? "/app"
-                  : currentProduct === "numbers"
-                    ? productLogoHome("numbers")
-                    : multiProduct
-                      ? shellHomePath(productShell)
-                      : hasMassSms
-                        ? massSmsShellHome()
-                        : hasAiAfterHours
-                          ? aiAfterHoursShellHome()
-                          : hasMctb
-                            ? mctbShellHome()
-                            : "/app"
-            }
-            className={cn("flex min-w-0 items-start gap-2", collapsed && "justify-center")}
-            onClick={onClose}
-            title={collapsed ? "Transovo" : undefined}
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#6366f1] text-white shadow-[0_8px_18px_rgba(99,102,241,0.35)]">
-              <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center border-b border-sidebar-border",
+          collapsed ? "justify-center px-0" : "px-4",
+        )}
+      >
+        <Link
+          href={
+            realtorMode
+              ? "/realtor/dashboard"
+              : isLauncher
+                ? "/app"
+                : currentProduct === "numbers"
+                  ? productLogoHome("numbers")
+                  : multiProduct
+                    ? shellHomePath(productShell)
+                    : hasMassSms
+                      ? massSmsShellHome()
+                      : hasAiAfterHours
+                        ? aiAfterHoursShellHome()
+                        : hasMctb
+                          ? mctbShellHome()
+                          : "/app"
+          }
+          className={cn("flex min-w-0 items-center gap-2", collapsed && "justify-center")}
+          onClick={onClose}
+          title={collapsed ? "Transovo" : undefined}
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#6366f1] text-white">
+            <MessageSquare className="h-3.5 w-3.5" fill="currentColor" />
+          </span>
+          {!collapsed ? (
+            <span className="truncate text-[15px] font-semibold tracking-tight text-[#111827]">
+              {realtorMode ? "TRANSOVO" : "Transovo"}
             </span>
-            {!collapsed ? (
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-bold tracking-[0.02em] text-[#111827]">
-                  {realtorMode ? "TRANSOVO" : "Transovo"}
-                </span>
-                {!realtorMode && sidebarProductLabel && !isLauncher && !multiProduct ? (
-                  <span className="mt-0.5 block truncate text-[10px] leading-tight text-sidebar-muted">
-                    {sidebarProductLabel}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
-          </Link>
-          {onToggleCollapse ? (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              className={cn(
-                "shrink-0 rounded-md p-1.5 text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
-                collapsed && "mt-1",
-              )}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </button>
           ) : null}
-        </div>
-        {currentProduct === "numbers" && !collapsed ? (
-          <Link
-            href="/personal/numbers/premium"
-            onClick={onClose}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
-          >
-            + Add Line
-          </Link>
-        ) : null}
+        </Link>
       </div>
 
       {multiProduct && !realtorMode && !isLauncher && currentProduct !== "numbers" ? (
@@ -513,7 +471,24 @@ export function Sidebar({
         />
       ) : null}
 
-      <nav className="sidebar-nav min-h-0 flex-1 space-y-px overflow-y-auto overscroll-contain px-2 pb-1.5">
+      {currentProduct === "numbers" && !collapsed ? (
+        <div className="px-3 pb-2">
+          <Link
+            href="/personal/numbers/premium"
+            onClick={onClose}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#5558e8]"
+          >
+            + Add Line
+          </Link>
+        </div>
+      ) : null}
+
+      <nav
+        className={cn(
+          "transovo-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain py-2",
+          collapsed ? "flex flex-col items-center gap-0.5 px-2" : "space-y-0.5 px-2",
+        )}
+      >
         {navItems.map((item) => {
           const Icon = item.icon;
           const childActive = sectionHasActiveChild(item.children, pathname, search);
@@ -602,71 +577,41 @@ export function Sidebar({
               ) : null}
               <div
                 className={cn(
-                  "group relative flex items-center rounded-[10px] transition",
-                  active
-                    ? currentProduct === "numbers"
-                      ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
-                      : item.label === "Calls" || realtorMode
-                        ? "bg-[#6366f1] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
-                        : "bg-primary/10 text-primary"
-                    : "text-sidebar-foreground hover:bg-[#f3f4f6]",
+                  "group relative flex items-center rounded-md transition",
+                  collapsed ? "w-full justify-center" : "",
                 )}
               >
-                {active && !realtorMode && currentProduct !== "numbers" && item.label !== "Calls" ? (
-                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
-                ) : null}
                 <Link
                   href={item.href}
                   title={collapsed ? item.label : undefined}
+                  data-active={active ? "true" : undefined}
                   onClick={() => {
                     if (item.children?.length && !collapsed) setExpanded(expandKey);
                     onClose?.();
                   }}
                   className={cn(
-                    "flex min-w-0 flex-1 items-center gap-2 py-1.5 text-[12px] font-medium",
-                    collapsed ? "justify-center px-0" : "pl-2.5 pr-1",
+                    "transovo-nav-item flex min-w-0 flex-1 items-center gap-2.5 text-[13px] text-sidebar-muted hover:text-sidebar-foreground",
+                    collapsed
+                      ? "h-10 w-10 justify-center rounded-md px-0"
+                      : "rounded-md px-3 py-[7px]",
+                    active && "text-[#4f46e5]",
                   )}
                 >
                   <span className="relative shrink-0">
-                    <Icon
-                      className={cn(
-                        "h-4 w-4 shrink-0",
-                        active
-                          ? currentProduct === "numbers" || item.label === "Calls" || realtorMode
-                            ? "text-white"
-                            : "text-primary"
-                          : "text-sidebar-muted group-hover:text-sidebar-foreground",
-                      )}
-                    />
+                    <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                     {collapsed && item.badge != null ? (
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger ring-2 ring-sidebar" />
+                      <span className="transovo-badge-dot">{item.badge}</span>
                     ) : null}
                   </span>
-                  {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                  {!collapsed ? <span className="flex-1 truncate text-left">{item.label}</span> : null}
                   {!collapsed && item.badge != null ? (
-                    <span
-                      className={cn(
-                        "ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
-                        active && realtorMode
-                          ? "bg-white text-[#6366f1]"
-                          : "bg-danger text-white",
-                      )}
-                    >
-                      {item.badge}
-                    </span>
+                    <span className="transovo-badge">{item.badge}</span>
                   ) : null}
                 </Link>
                 {item.children && !collapsed ? (
                   <button
                     type="button"
-                    className={cn(
-                      "mr-1.5 rounded-md p-1.5 transition",
-                      active
-                        ? currentProduct === "numbers" || item.label === "Calls" || realtorMode
-                          ? "text-white hover:bg-white/15"
-                          : "text-primary hover:bg-primary/10"
-                        : "text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground",
-                    )}
+                    className="mr-1 rounded-md p-1.5 text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground"
                     onClick={() =>
                       setExpanded((current) =>
                         current === expandKey ? null : expandKey,
@@ -795,18 +740,90 @@ export function Sidebar({
           </div>
         ) : null}
 
-        <div className="mt-3 border-t border-[#e6e8ef] px-1 pb-3 pt-3">
-          <div className="flex items-center gap-2 rounded-[12px] bg-[#f8f9fc] px-2 py-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/avatars/alex.svg"
-              alt={userName}
-              className="h-7 w-7 shrink-0 rounded-full object-cover ring-2 ring-[#e6e8ef]"
-            />
-            {!collapsed ? (
+      </nav>
+
+      <div
+        className={cn(
+          "shrink-0 border-t border-sidebar-border",
+          collapsed ? "flex flex-col items-center gap-1 py-3" : "space-y-0.5 px-2 py-2",
+        )}
+      >
+        {collapsed ? (
+          <>
+            <Link
+              href="/settings/notifications"
+              title="Notifications"
+              onClick={onClose}
+              className="transovo-nav-item flex h-10 w-10 items-center justify-center rounded-md text-sidebar-muted hover:text-sidebar-foreground"
+            >
+              <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </Link>
+            <Link
+              href="/getting-started"
+              title="Support"
+              onClick={onClose}
+              className="transovo-nav-item flex h-10 w-10 items-center justify-center rounded-md text-sidebar-muted hover:text-sidebar-foreground"
+            >
+              <LifeBuoy className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </Link>
+            <button
+              type="button"
+              title={userName}
+              className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700"
+            >
+              {userName
+                .split(" ")
+                .map((part) => part[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()}
+            </button>
+            {onToggleCollapse ? (
+              <button
+                type="button"
+                title="Expand sidebar"
+                onClick={onToggleCollapse}
+                className="transovo-nav-item mt-1 flex h-10 w-10 items-center justify-center rounded-md text-sidebar-muted hover:text-sidebar-foreground"
+              >
+                <ChevronsRight className="h-[18px] w-[18px]" strokeWidth={1.75} />
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Link
+              href="/settings/notifications"
+              onClick={onClose}
+              className="transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-sidebar-muted hover:text-sidebar-foreground"
+            >
+              <Bell className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              <span className="flex-1 text-left whitespace-nowrap">Notifications</span>
+            </Link>
+            <Link
+              href="/getting-started"
+              onClick={onClose}
+              className="transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-sidebar-muted hover:text-sidebar-foreground"
+            >
+              <LifeBuoy className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              <span className="flex-1 text-left whitespace-nowrap">Support</span>
+            </Link>
+
+            {!realtorMode && currentProduct !== "numbers" ? (
+              <MessageCreditsCard creditsRemaining={creditsRemaining} />
+            ) : null}
+
+            <div className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-muted/60">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/avatars/alex.svg"
+                alt={userName}
+                className="h-7 w-7 shrink-0 rounded-full object-cover ring-2 ring-[#e6e8ef]"
+              />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12px] font-semibold text-[#111827]">{userName}</p>
-                <p className="truncate text-[10px] text-sidebar-muted">
+                <p className="truncate text-[13px] font-medium text-[#111827] leading-tight">
+                  {userName}
+                </p>
+                <p className="truncate text-[11px] text-sidebar-muted leading-tight">
                   {currentProduct === "numbers"
                     ? "Numbers"
                     : multiProduct
@@ -822,35 +839,31 @@ export function Sidebar({
                               : "Account"}
                 </p>
               </div>
-            ) : null}
-            {!collapsed && !realtorMode ? (
-              <button
-                type="button"
-                onClick={logout}
-                className="rounded-md p-1.5 text-sidebar-muted hover:bg-[#eef0f5] hover:text-sidebar-foreground"
-                aria-label="Log out"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            ) : !collapsed ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" aria-hidden />
-            ) : null}
-          </div>
-          {onToggleCollapse ? (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              className={cn(
-                "mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-medium text-sidebar-muted hover:bg-[#f3f4f6] hover:text-sidebar-foreground lg:hidden",
-                collapsed && "justify-center px-0",
+              {onToggleCollapse ? (
+                <button
+                  type="button"
+                  title="Collapse sidebar"
+                  onClick={onToggleCollapse}
+                  className="transovo-nav-item flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-muted hover:text-sidebar-foreground"
+                >
+                  <ChevronsLeft className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+              ) : !realtorMode ? (
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="rounded-md p-1.5 text-sidebar-muted hover:bg-[#eef0f5] hover:text-sidebar-foreground"
+                  aria-label="Log out"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" aria-hidden />
               )}
-            >
-              <ChevronLeft className={cn("h-4 w-4", collapsed && "rotate-180")} />
-              {!collapsed ? "Collapse" : null}
-            </button>
-          ) : null}
-        </div>
-      </nav>
+            </div>
+          </>
+        )}
+      </div>
     </aside>
   );
 
@@ -859,7 +872,7 @@ export function Sidebar({
       <div
         className={cn(
           "hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex",
-          collapsed ? "lg:w-[56px]" : "lg:w-[220px]",
+          collapsed ? "lg:w-[56px]" : "lg:w-[224px]",
         )}
       >
         {content}

@@ -25,6 +25,7 @@ import {
   ChevronDown,
   Image as ImageIcon,
   Link2,
+  Megaphone,
   Paperclip,
   Smile,
   Sparkles,
@@ -367,7 +368,6 @@ export function CampaignComposeView() {
   return (
     <>
       <CampaignPageShell
-        title="Create Campaign"
         breadcrumb={
           <>
             <Link href="/campaigns" className="hover:text-[#6366f1]">
@@ -384,6 +384,17 @@ export function CampaignComposeView() {
           />
         }
       >
+        <div className="mb-6">
+          <div className="mb-1 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50">
+              <Megaphone className="h-[18px] w-[18px] text-indigo-600" />
+            </div>
+            <h1 className="text-[22px] font-semibold text-[#111827]">Create Campaign</h1>
+          </div>
+          <p className="ml-12 text-[13.5px] text-[#6b7280]">
+            Create a campaign to reach your contacts at scale.
+          </p>
+        </div>
         <div className={cn(campaignUi.card, "space-y-6 p-6")}>
           <div>
             <label className={campaignUi.label}>Campaign Name</label>
@@ -420,7 +431,7 @@ export function CampaignComposeView() {
                 {draft.audience.map((a) => (
                   <span
                     key={a.id}
-                    className="inline-flex items-center gap-1 rounded-full bg-[#eef2ff] px-3 py-1 text-[12px] font-semibold text-[#6366f1]"
+                    className="st-chip"
                   >
                     {a.name}
                     <button type="button" onClick={() => removeAudience(a.id)}>
