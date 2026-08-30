@@ -125,11 +125,33 @@ Re-assigns Amy via `restoreTexmlInboundRoute` + `publishVoiceAgent`. Does not de
 
 ## 10. Test results
 
+### 2026-08-30 — First conditional-forward test (application error)
+
+**Symptom:** Caller heard Telnyx *"We're sorry, an application error has occurred. Goodbye."* after ~1 ring.
+
+| Field | Value |
+|-------|-------|
+| **Root cause** | TeXML `voice_url` pointed at `POST /api/telnyx/voice/mctb-entry`, but that route is **not deployed to production** (404 Next.js HTML page). |
+| **Failed request** | `POST /api/telnyx/voice/mctb-entry` (Telnyx TeXML app `3037587396909598261`) |
+| **HTTP status** | `404` |
+| **Content-Type** | `text/html; charset=utf-8` |
+| **Returned body** | Next.js HTML 404 page (`<!DOCTYPE html>…`) — not TeXML |
+| **CallSid** | `v3:88eBN6WgHyUdseQI_QczBp1j_v_ahSV16CUee0zIo5dSevyuhqnl5A` |
+| **VoiceCall id** | `cmtf5fw8t6a141y3a52243o3c` |
+| **From / To** | PSTN caller → `+18663464256` |
+| **ConnectionId** | `3037587396909598261` |
+| **Workspace** | `ws_1` (`existing_consent` mode) |
+| **routingMode** | `mctb_texml` (DB) |
+| **Telnyx termination** | `texml.call.hangup` — `HangupCause: normal_clearing`, 4s duration |
+| **mctb-entry server log** | None — route does not exist in prod build |
+
+**Interim hotfix (no carrier change):** `scripts/hotfix-866-mctb-texml-voice-url.ts` repointed TeXML `voice_url` to `mctb-consent?prompt=say-only` (returns valid XML on prod today). **Permanent fix:** deploy PR #304 so `mctb-entry` exists, then repoint with preflight gate.
+
 | Test | Status | Notes |
 |------|--------|-------|
-| A — Say/Pause/Hangup | Pending PSTN | Set `MCTB_TEXML_CERT_MODE=A` |
-| B — Gather no SMS | Pending PSTN | Set `MCTB_TEXML_CERT_MODE=B` |
-| C — Consent + SMS enqueue | Pending PSTN | Set `MCTB_TEXML_CERT_MODE=C` |
+| A — Say/Pause/Hangup | **Ready for PSTN** | Hotfix: `mctb-consent?say-only` on Telnyx; post-deploy: `mctb-entry` + `MCTB_TEXML_CERT_MODE=MINIMAL` |
+| B — Gather no SMS | Pending PSTN | After A passes |
+| C — Consent + SMS enqueue | Pending PSTN | After B passes |
 | D — Full production | Pending PSTN | Default |
 
 _Update this table after real conditional-forward calls._

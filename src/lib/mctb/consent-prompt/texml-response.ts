@@ -45,6 +45,7 @@ export function resolveMctbConsentTexmlPromptMode(
     process.env.MCTB_CONSENT_TEXML_PROMPT?.trim() ||
     (process.env.MCTB_CONSENT_TEXML_SAY_ONLY === "1" ? "say-only" : "")
   ).toLowerCase();
+  if (raw === "cert-minimal" || raw === "minimal" || raw === "test") return "say-only";
   if (raw === "say-only" || raw === "say") return "say-only";
   if (raw === "play-gather" || raw === "play") return "play-gather";
   return "say-gather";
@@ -67,22 +68,32 @@ const DEFAULT_SAY =
 export const MCTB_CONSENT_TEXML_SAY_ONLY_DIAGNOSTIC =
   "Transovo test. Your forwarded call reached us successfully.";
 
+export const MCTB_CONSENT_TEXML_CERT_MINIMAL_SAY = "Test successful.";
+
 /** Build inbound Press-1 TeXML without awaiting DB (safe for carrier forward hot path). */
 export function buildMctbConsentInboundTexml(
   forwardedFrom: string,
   options?: {
     promptMode?: MctbConsentTexmlPromptMode;
+    /** Original ?prompt= query value (cert-minimal, say-only, etc.). */
+    requestPrompt?: string | null;
     /** Gather callback route segment (default mctb-consent). */
     gatherBasePath?: "mctb-consent" | "mctb-entry";
   },
 ): MctbConsentInboundTexmlBuild {
-  const promptMode = options?.promptMode ?? resolveMctbConsentTexmlPromptMode();
+  const requestPrompt = options?.requestPrompt ?? null;
+  const promptMode = options?.promptMode ?? resolveMctbConsentTexmlPromptMode(requestPrompt);
   const gatherBasePath = options?.gatherBasePath || "mctb-consent";
   const audioUrl = consentPlaybackUrl();
 
   if (promptMode === "say-only") {
+    const rawPrompt = (requestPrompt || process.env.MCTB_CONSENT_TEXML_PROMPT || "").toLowerCase();
+    const sayText =
+      rawPrompt === "cert-minimal" || rawPrompt === "minimal" || rawPrompt === "test"
+        ? MCTB_CONSENT_TEXML_CERT_MINIMAL_SAY
+        : MCTB_CONSENT_TEXML_SAY_ONLY_DIAGNOSTIC;
     return {
-      body: `<Say voice="female">${escapeXml(MCTB_CONSENT_TEXML_SAY_ONLY_DIAGNOSTIC)}</Say><Hangup/>`,
+      body: `<Say voice="female">${escapeXml(sayText)}</Say><Pause length="5"/><Hangup/>`,
       promptMode,
       gatherActionUrl: null,
       audioUrl,

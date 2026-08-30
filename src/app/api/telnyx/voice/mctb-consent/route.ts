@@ -286,14 +286,15 @@ export async function POST(request: Request) {
         }),
       );
 
-      const promptMode = resolveMctbConsentTexmlPromptMode(url.searchParams.get("prompt"));
+      const promptParam = url.searchParams.get("prompt");
+      const promptMode = resolveMctbConsentTexmlPromptMode(promptParam);
 
       // say-only diagnostic: no Gather/DTMF/DB — isolate Telnyx voice execution on forwarded legs.
       if (promptMode !== "say-only" && from) {
         scheduleDemoCallDetect({ from, to, callSid, callStatus, forwardedFrom });
       }
 
-      const built = buildMctbConsentInboundTexml(forwardedFrom, { promptMode });
+      const built = buildMctbConsentInboundTexml(forwardedFrom, { promptMode, requestPrompt: promptParam });
       console.log(
         JSON.stringify({
           source: "mctb-consent-texml",

@@ -7,6 +7,7 @@ import {
   MCTB_TEXML_ROUTING_OWNER,
 } from "./constants";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
+import { preflightTexmlVoiceUrl } from "./preflight";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -29,6 +30,13 @@ export async function ensureMctbTexmlApplication(input?: {
   preferredAppId?: string | null;
 }): Promise<string> {
   const voiceUrl = mctbTexmlEntryVoiceUrl();
+  const preflight = await preflightTexmlVoiceUrl(voiceUrl);
+  if (!preflight.ok) {
+    throw new Error(
+      `mctb-entry preflight failed (${preflight.status}): ${preflight.error} — deploy route before pointing Telnyx. body=${preflight.bodyPreview.slice(0, 120)}`,
+    );
+  }
+
   const preferred =
     input?.preferredAppId?.trim() ||
     process.env.MCTB_TEXML_APP_ID?.trim() ||

@@ -8,17 +8,33 @@ import {
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import {
   certModeSkipsConsentBackend,
+  isMinimalCertMode,
   resolveMctbTexmlCertMode,
 } from "@/lib/mctb/texml-ingress/cert-mode";
 import { resolveMctbTexmlIngressConfig } from "@/lib/mctb/texml-ingress/config-cache";
 import { MCTB_TEXML_ROUTING_MODE } from "@/lib/mctb/texml-ingress/constants";
+import { buildMinimalCertTexml } from "@/lib/mctb/texml-ingress/minimal-texml";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164 } from "@/lib/voice/telnyx/forwarded-from";
 
+export const runtime = "nodejs";
+
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
 
-function texml(body: string) {
-  return new NextResponse(wrapMctbConsentTexmlBody(body), {
+function texmlResponse(body: string, meta?: Record<string, unknown>) {
+  const xml = wrapMctbConsentTexmlBody(body);
+  console.log(
+    JSON.stringify({
+      source: "mctb-entry",
+      event: "texml_response",
+      status: 200,
+      contentType: TEXML_CONTENT_TYPE,
+      xmlBytes: Buffer.byteLength(xml, "utf8"),
+      xmlPreview: xml.slice(0, 400),
+      ...meta,
+    }),
+  );
+  return new NextResponse(xml, {
     status: 200,
     headers: { "Content-Type": TEXML_CONTENT_TYPE },
   });
@@ -50,120 +66,129 @@ function pick(fields: Record<string, string>, ...keys: string[]): string {
   return "";
 }
 
-function buildCertModeATexml(): string {
-  return `<Say voice="female">Transovo MCTB test A. Your forwarded call reached TeXML.</Say><Pause length="1"/><Hangup/>`;
-}
-
 /**
  * TeXML-first MCTB ingress — same Telnyx front door as proven AI path.
- * MUST return XML immediately; no DB before response on press_1 inbound.
+ * Certification modes return XML immediately with zero DB.
  */
 export async function POST(request: Request) {
   const started = Date.now();
-  const fields = await parseFields(request);
-  const from = pick(fields, "From", "from", "Caller");
-  const to = pick(fields, "To", "to", "Called");
-  const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
-  const connectionId = pick(fields, "ConnectionId", "connection_id");
-  const forwardedFrom =
-    normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
-    parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
-    "";
+  try {
+    const fields = await parseFields(request);
+    const from = pick(fields, "From", "from", "Caller");
+    const to = pick(fields, "To", "to", "Called");
+    const callSid = pick(fields, "CallSid", "call_sid", "CallControlId");
+    const connectionId = pick(fields, "ConnectionId", "connection_id");
+    const certMode = resolveMctbTexmlCertMode();
 
-  traceMctbTexml("MCTB_INGRESS", {
-    to,
-    from: from ? "[present]" : "[missing]",
-    callSid,
-    connectionId,
-    certMode: resolveMctbTexmlCertMode(),
-  });
-
-  if (!to) {
-    traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_to_did" });
-    return texml(buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."));
-  }
-
-  const config = await resolveMctbTexmlIngressConfig(to).catch(() => null);
-
-  if (config?.branch === "ai_assistant" && config.routingMode === "telnyx_assistant") {
-    traceMctbTexml("MCTB_ROUTING_FAIL", {
+    traceMctbTexml("MCTB_INGRESS", {
       to,
-      reason: "did_still_on_ai_assistant_routing",
-      routingMode: config.routingMode,
-    });
-    return texml(
-      buildMctbConsentControlledHangupTexml(
-        "This line is configured for AI receptionist routing. Goodbye.",
-      ),
-    );
-  }
-
-  const certMode = resolveMctbTexmlCertMode();
-
-  if (certMode === "A") {
-    traceMctbTexml("MCTB_TEXML_RETURNED", {
-      branch: "cert_a",
-      latencyMs: Date.now() - started,
-      to,
+      from: from ? "[present]" : "[missing]",
       callSid,
+      connectionId,
+      certMode,
     });
-    return texml(buildCertModeATexml());
-  }
 
-  const consentMode = config?.consentMode || "press_1";
-
-  if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
-    traceMctbTexml("MCTB_TEXML_RETURNED", {
-      branch: "existing_consent",
-      latencyMs: Date.now() - started,
-      to,
-      callSid,
-      routingMode: config?.routingMode || MCTB_TEXML_ROUTING_MODE,
-    });
-    return texml(`<Say voice="female">Thank you for calling.</Say><Hangup/>`);
-  }
-
-  const promptMode =
-    certMode === "B" || certMode === "C" || certMode === "D"
-      ? resolveMctbConsentTexmlPromptMode("say-gather")
-      : resolveMctbConsentTexmlPromptMode(null);
-
-  const built = buildMctbConsentInboundTexml(forwardedFrom, {
-    promptMode,
-    gatherBasePath: "mctb-consent",
-  });
-
-  traceMctbTexml("MCTB_TEXML_RETURNED", {
-    branch: "press_1_gather",
-    latencyMs: Date.now() - started,
-    to,
-    callSid,
-    certMode,
-    usesGather: built.usesGather,
-    consentMode,
-  });
-
-  if (built.usesGather) {
-    traceMctbTexml("MCTB_GATHER_STARTED", { to, callSid, gatherActionUrl: built.gatherActionUrl });
-  } else {
-    traceMctbTexml("MCTB_PROMPT_STARTED", { to, callSid, promptMode: built.promptMode });
-  }
-
-  if (!certModeSkipsConsentBackend() && from && config?.workspaceId) {
-    void import("@/lib/mctb/consent-prompt/texml-inbound-call-event").then(({ runMctbConsentTexmlDemoCallDetect }) =>
-      runMctbConsentTexmlDemoCallDetect({
-        from,
+    // MINIMAL / A — zero DB, zero branching. Proves TeXML ingress only.
+    if (isMinimalCertMode(certMode)) {
+      traceMctbTexml("MCTB_TEXML_RETURNED", {
+        branch: "cert_minimal",
+        latencyMs: Date.now() - started,
         to,
-        forwardedFrom: forwardedFrom || null,
-        callSid: callSid || null,
-        callStatus: pick(fields, "CallStatus", "call_status") || null,
-      }).catch(() => undefined),
-    );
-  }
+        callSid,
+      });
+      return texmlResponse(buildMinimalCertTexml(), { branch: "cert_minimal", certMode });
+    }
 
-  return texml(built.body);
+    if (!to) {
+      traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_to_did" });
+      return texmlResponse(buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."), {
+        branch: "error_missing_to",
+      });
+    }
+
+    const config = await resolveMctbTexmlIngressConfig(to).catch(() => null);
+
+    if (config?.branch === "ai_assistant" && config.routingMode === "telnyx_assistant") {
+      traceMctbTexml("MCTB_ROUTING_FAIL", {
+        to,
+        reason: "did_still_on_ai_assistant_routing",
+        routingMode: config.routingMode,
+      });
+      return texmlResponse(
+        buildMctbConsentControlledHangupTexml(
+          "This line is configured for AI receptionist routing. Goodbye.",
+        ),
+        { branch: "ai_assistant_blocked" },
+      );
+    }
+
+    const consentMode = config?.consentMode || "press_1";
+
+    if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
+      traceMctbTexml("MCTB_TEXML_RETURNED", {
+        branch: "existing_consent",
+        latencyMs: Date.now() - started,
+        to,
+        callSid,
+        routingMode: config?.routingMode || MCTB_TEXML_ROUTING_MODE,
+        consentMode,
+        workspaceId: config?.workspaceId,
+      });
+      return texmlResponse(`<Say voice="female">Thank you for calling.</Say><Hangup/>`, {
+        branch: "existing_consent",
+        consentMode,
+      });
+    }
+
+    const forwardedFrom =
+      normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
+      parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
+      "";
+
+    const promptMode =
+      certMode === "B" || certMode === "C" || certMode === "D"
+        ? resolveMctbConsentTexmlPromptMode("say-gather")
+        : resolveMctbConsentTexmlPromptMode(null);
+
+    const built = buildMctbConsentInboundTexml(forwardedFrom, {
+      promptMode,
+      gatherBasePath: "mctb-consent",
+    });
+
+    traceMctbTexml("MCTB_TEXML_RETURNED", {
+      branch: "press_1_gather",
+      latencyMs: Date.now() - started,
+      to,
+      callSid,
+      certMode,
+      usesGather: built.usesGather,
+      consentMode,
+      workspaceId: config?.workspaceId,
+      routingMode: config?.routingMode,
+    });
+
+    if (!certModeSkipsConsentBackend() && from && config?.workspaceId) {
+      void import("@/lib/mctb/consent-prompt/texml-inbound-call-event").then(
+        ({ runMctbConsentTexmlDemoCallDetect }) =>
+          runMctbConsentTexmlDemoCallDetect({
+            from,
+            to,
+            forwardedFrom: forwardedFrom || null,
+            callSid: callSid || null,
+            callStatus: pick(fields, "CallStatus", "call_status") || null,
+          }).catch(() => undefined),
+      );
+    }
+
+    return texmlResponse(built.body, { branch: "press_1_gather", certMode, consentMode });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({ source: "mctb-entry", event: "handler_error", error: message }));
+    traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "handler_exception", error: message });
+    return texmlResponse(buildMinimalCertTexml(), { branch: "error_fallback" });
+  }
 }
 
 export async function GET() {
-  return texml(`<Say voice="female">MCTB TeXML ingress ready.</Say><Hangup/>`);
+  return texmlResponse(buildMinimalCertTexml(), { branch: "health" });
 }
