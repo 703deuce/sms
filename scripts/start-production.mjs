@@ -64,10 +64,16 @@ const baseEnv = productionEnv();
 
 function runNodeWebBoot() {
   console.log("[start] running node web boot (scripts/node-web-boot.ts)");
+  const nodeOpts = [
+    process.env.NODE_OPTIONS,
+    "--import ./scripts/preload-server-only.mjs",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const result = spawnSync(
     "npx",
     ["tsx", "scripts/node-web-boot.ts"],
-    { cwd: repoRoot, stdio: "inherit", env: baseEnv },
+    { cwd: repoRoot, stdio: "inherit", env: { ...baseEnv, NODE_OPTIONS: nodeOpts } },
   );
   if (result.status !== 0) {
     console.error("[start] node-web-boot exited with status", result.status ?? "null");

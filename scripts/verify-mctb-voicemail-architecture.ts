@@ -78,21 +78,11 @@ async function main() {
     "utf8",
   );
   check(
-    "6. Save-time mode provision builds dedicated handler URLs",
-    /buildMctbTexmlVoiceUrlForHandler/.test(modeSrc) &&
-      /mctbVoicemail/.test(modeSrc) &&
-      /mctbPress1/.test(modeSrc),
-    "missing mode URL builder",
-  );
-
-  const press1Src = await readFile(
-    path.join(process.cwd(), "src/app/api/telnyx/voice/mctb-press-1/route.ts"),
-    "utf8",
-  );
-  check(
-    "6. mctb-press-1 route has no DB/profile before audio",
-    !/getPrisma|prisma\.|peekMctbInboundRoutingProfile/.test(press1Src),
-    "found lookup in press-1 ingress",
+    "6. Save-time provision uses frozen mctb-entry (866 parity)",
+    /mctbTexmlEntryVoiceUrl/.test(modeSrc) &&
+      /MCTB_TEXML_DEFAULT_APP_ID/.test(modeSrc) &&
+      !/mctbPress1|mctbVoicemail/.test(modeSrc),
+    "mode provision must not point Telnyx at dedicated handler URLs",
   );
 
   console.log("\nAll voicemail architecture checks passed.");

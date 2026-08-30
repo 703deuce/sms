@@ -5,13 +5,17 @@ import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import { greetingTokenForE164 } from "@/lib/phone/voicemail-active-greeting";
 import { routingTokenForE164 } from "@/lib/mctb/texml-ingress/routing-profile";
-import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
+import { MCTB_TEXML_DEFAULT_APP_ID } from "./constants";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
-import { ensureMctbTexmlApplicationAtVoiceUrl, routePhoneToTexmlApp } from "./texml-route";
+import {
+  ensureMctbTexmlApplication,
+  mctbTexmlEntryVoiceUrl,
+  routePhoneToTexmlApp,
+} from "./texml-route";
 
 export type MctbTexmlHandlerMode = "press_1" | "voicemail";
 
-/** Which dedicated TeXML handler the DID should hit — decided at Save, not on ring. */
+/** Runtime branch inside mctb-entry — not a separate Telnyx voice_url. */
 export function resolveMctbTexmlHandlerMode(input: {
   consentMode: MctbConsentMode;
   automationActive: boolean;
@@ -21,35 +25,9 @@ export function resolveMctbTexmlHandlerMode(input: {
   return "press_1";
 }
 
-export function buildMctbTexmlVoiceUrlForHandler(
-  mode: MctbTexmlHandlerMode,
-  e164: string,
-): string {
-  const urls = getTelnyxWebhookUrls();
-  const g = greetingTokenForE164(e164);
-  const r = routingTokenForE164(e164);
-
-  if (mode === "voicemail") {
-    const url = new URL(urls.mctbVoicemail);
-    url.searchParams.set("g", g);
-    url.searchParams.set("r", r);
-    return url.toString();
-  }
-
-  const url = new URL(urls.mctbPress1);
-  url.searchParams.set("r", r);
-  return url.toString();
-}
-
-function preferredAppIdForMode(mode: MctbTexmlHandlerMode): string | null {
-  if (mode === "voicemail") {
-    return process.env.MCTB_TEXML_VOICEMAIL_APP_ID?.trim() || null;
-  }
-  return process.env.MCTB_TEXML_PRESS1_APP_ID?.trim() || null;
-}
-
 /**
- * Save-time: point DID at dedicated press-1 or voicemail TeXML app (not shared mctb-entry).
+ * Save-time: point DID at the **frozen** certified MCTB TeXML ingress (same as 866).
+ * @see docs/MCTB_FINAL_PRODUCTION_PIPELINE.md — app 3037587396909598261 + mctb-entry
  */
 export async function provisionMctbPhoneTexmlIngressMode(input: {
   workspaceId: string;
@@ -75,14 +53,11 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
     consentMode: input.consentMode,
     automationActive: input.automationActive,
   });
-  const voiceUrl = buildMctbTexmlVoiceUrlForHandler(handlerMode, phone.e164);
-  const friendlyName =
-    handlerMode === "voicemail" ? "MCTB Voicemail TeXML" : "MCTB Press-1 TeXML";
-
-  const texmlAppId = await ensureMctbTexmlApplicationAtVoiceUrl({
-    voiceUrl,
-    friendlyName,
-    preferredAppId: preferredAppIdForMode(handlerMode),
+  const voiceUrl = mctbTexmlEntryVoiceUrl();
+  const texmlAppId = await ensureMctbTexmlApplication({
+    friendlyName: "MCTB TeXML Ingress",
+    preferredAppId:
+      process.env.MCTB_TEXML_APP_ID?.trim() || MCTB_TEXML_DEFAULT_APP_ID,
   });
 
   await routePhoneToTexmlApp({
@@ -122,13 +97,14 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
   console.log(
     JSON.stringify({
       source: "mctb-texml-mode-provision",
-      event: "handler_routed",
+      event: "frozen_ingress_routed",
       workspaceId: input.workspaceId,
       phoneNumberId: phone.id,
       e164: phone.e164,
       handlerMode,
       voiceUrl,
       texmlAppId,
+      pipeline: "mctb_texml_final_v1",
     }),
   );
 
