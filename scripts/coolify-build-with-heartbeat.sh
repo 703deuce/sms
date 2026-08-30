@@ -245,12 +245,12 @@ print_full_memory_snapshot() {
 }
 # ============================================================================ END TEMPORARY OOM DIAG
 
-# Coolify: 4GB V8 heap (fixed earlier JS heap OOM). Use webpack — Turbopack hits ~6GB RSS + oom_kill.
-# instrumentation.ts is empty of app imports; Node boot runs from scripts/node-web-boot.ts at start.
+# Coolify: 6GB V8 heap — 4GB worker OOM on 8GB VMs (see jest-worker/processChild.js in build logs).
+# webpackBuildWorker disabled in next.config when COOLIFY_RESOURCE_UUID is set.
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
-  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
+  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}"
   build_cmd=(npx next build --webpack)
-  build_mode="webpack (Coolify 4GB heap)"
+  build_mode="webpack (Coolify 6GB heap, no build worker)"
 else
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
   build_cmd=(npm run build)

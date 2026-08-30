@@ -9,6 +9,29 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: isCoolifyBuild,
   },
+  // Coolify 8GB VMs: skip source maps during build to lower webpack peak RSS.
+  ...(isCoolifyBuild
+    ? {
+        productionBrowserSourceMaps: false,
+        experimental: {
+          cpus: 1,
+          webpackMemoryOptimizations: true,
+          webpackBuildWorker: false,
+          serverSourceMaps: false,
+        },
+        webpack: (config, { dev }) => {
+          if (!dev) {
+            config.cache = false;
+          }
+          return config;
+        },
+      }
+    : {
+        experimental: {
+          cpus: 1,
+          webpackMemoryOptimizations: true,
+        },
+      }),
   async redirects() {
     return [
       { source: "/inbox", destination: "/conversations", permanent: false },
@@ -23,11 +46,6 @@ const nextConfig: NextConfig = {
     "@livekit/rtc-node",
     "@livekit/protocol",
   ],
-  // Coolify build VMs: limit parallel compile workers to reduce Turbopack peak RAM.
-  experimental: {
-    cpus: 1,
-    webpackMemoryOptimizations: true,
-  },
 };
 
 export default nextConfig;
