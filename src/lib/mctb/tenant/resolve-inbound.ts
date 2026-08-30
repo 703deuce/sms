@@ -168,21 +168,13 @@ export async function resolveMctbTexmlTenant(input: {
   ingressConfig: MctbTexmlIngressConfig;
   callerE164: string;
   forwardedFrom?: string | null;
-}): Promise<{ workspaceId: string; demoMode: boolean; isPlatformDemo: boolean }> {
+}): Promise<{ workspaceId: string | null; demoMode: boolean; isPlatformDemo: boolean }> {
   const tenant = await resolveMctbInboundTenant({
     callerE164: input.callerE164,
     transovoE164: input.ingressConfig.e164,
     forwardedFrom: input.forwardedFrom,
     ingressConfig: input.ingressConfig,
   });
-
-  if (!tenant.workspaceId) {
-    return {
-      workspaceId: input.ingressConfig.workspaceId,
-      demoMode: false,
-      isPlatformDemo: false,
-    };
-  }
 
   return {
     workspaceId: tenant.workspaceId,

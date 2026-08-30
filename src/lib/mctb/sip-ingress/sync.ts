@@ -1,5 +1,4 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
 import {
   MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
@@ -26,23 +25,6 @@ export function isPhoneMctbSipIngress(settingsJson: unknown): boolean {
   return role === "platform_demo" || role === "customer_mctb" || role === "mctb_sip";
 }
 
-/** MCTB owns inbound voice on the Event Only Call Control app — not Transovo Voice / LiveKit. */
-export function isMctbCallControlVoiceIngress(settingsJson: unknown): boolean {
-  if (!isPhoneMctbSipIngress(settingsJson)) return false;
-  const settings = readPhoneMctbSettings(settingsJson);
-  if (settings.routingOwner === "mctb_call_control") return true;
-  const telephony = settings.telephony;
-  if (telephony && typeof telephony === "object" && !Array.isArray(telephony)) {
-    return (telephony as Record<string, unknown>).routingMode === "call_control_event_only";
-  }
-  return false;
-}
-
-/** MCTB-dedicated Telnyx voice routing (Call Control only) — do not steal to Transovo Voice. */
-export function isMctbDedicatedVoiceIngress(settingsJson: unknown): boolean {
-  return isMctbCallControlVoiceIngress(settingsJson);
-}
-
 /** TeXML-first MCTB ingress (carrier → DID → TeXML → Gather). */
 export function isMctbTexmlVoiceIngress(settingsJson: unknown): boolean {
   const settings = readPhoneMctbSettings(settingsJson);
@@ -59,6 +41,24 @@ export function isMctbTexmlIngressLocked(settingsJson: unknown): boolean {
   return isMctbTexmlVoiceIngress(settingsJson);
 }
 
+export class MctbTexmlProvisionLockedError extends Error {
+  readonly code = "mctb_texml_locked";
+
+  constructor(operation: string) {
+    super(`${operation}: number is locked to MCTB TeXML ingress — generic voice provision refused`);
+    this.name = "MctbTexmlProvisionLockedError";
+  }
+}
+
+/** Refuse generic Transovo Voice / LiveKit reprovision on MCTB TeXML-locked DIDs. */
+export function assertNotMctbLockedForGenericVoiceProvision(
+  settingsJson: unknown,
+  operation: string,
+): void {
+  if (!isMctbTexmlIngressLocked(settingsJson)) return;
+  throw new MctbTexmlProvisionLockedError(operation);
+}
+
 function envAllowlist(): Set<string> {
   const raw = process.env.MCTB_SIP_INGRESS_E164S?.trim();
   const values = new Set<string>();
@@ -70,8 +70,6 @@ function envAllowlist(): Set<string> {
   }
   const platform = normalizeDid(MCTB_PLATFORM_DEMO_E164);
   if (platform) values.add(platform);
-  const fqdnDirect = normalizeDid(MCTB_FQDN_DIRECT_TEST_E164);
-  if (fqdnDirect) values.add(fqdnDirect);
   return values;
 }
 

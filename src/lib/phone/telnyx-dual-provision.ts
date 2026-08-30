@@ -481,10 +481,10 @@ export async function enableVoiceOnWorkspaceNumber(input: {
 
   const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
   if (isMctbVoiceRouteLocked(row.settingsJson)) {
-    return verifyAndPersistNumber({
-      workspaceId: input.workspaceId,
-      phoneNumberId: input.phoneNumberId,
-    });
+    const { assertNotMctbLockedForGenericVoiceProvision } = await import(
+      "@/lib/mctb/provision-policy"
+    );
+    assertNotMctbLockedForGenericVoiceProvision(row.settingsJson, "enable_voice");
   }
 
   if (!before.capabilities.voice && before.capabilities.sms === false) {
@@ -689,7 +689,8 @@ export async function repairNumberConfiguration(input: {
 
   let connectionId: string | null = null;
   const { isMctbVoiceRouteLocked } = await import("@/lib/mctb/voice-ingress-guard");
-  if (before.capabilities.voice !== false && !isMctbVoiceRouteLocked(row.settingsJson)) {
+  const mctbVoiceLocked = isMctbVoiceRouteLocked(row.settingsJson);
+  if (before.capabilities.voice !== false && !mctbVoiceLocked) {
     try {
       const { workspaceNumberUsesTexmlDirect } = await import(
         "@/lib/voice/telnyx/texml-direct-route"

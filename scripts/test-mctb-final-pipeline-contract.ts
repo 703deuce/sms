@@ -14,6 +14,7 @@ import {
   buildMctbTexmlTerminalCallInput,
 } from "../src/lib/mctb/texml-ingress/texml-call-classification";
 import {
+  MCTB_CANONICAL_PROVISION_ENTRY,
   MCTB_FINAL_PIPELINE_ID,
   MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID,
   MCTB_FINAL_PRODUCTION_CERT_MODE,
@@ -21,6 +22,12 @@ import {
   MCTB_FINAL_PRODUCTION_ENTRY_PATH,
   MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID,
 } from "../src/lib/mctb/texml-ingress/frozen-pipeline";
+import {
+  assertNotMctbLockedForGenericVoiceProvision,
+  isMctbTexmlIngressLocked,
+  MctbTexmlProvisionLockedError,
+} from "../src/lib/mctb/sip-ingress/sync";
+import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -94,6 +101,25 @@ test("legacy ingress routes are removed from the codebase", () => {
   for (const rel of removed) {
     assert.equal(existsSync(join(process.cwd(), rel)), false, `legacy path still exists: ${rel}`);
   }
+});
+
+test("MCTB TeXML-locked numbers refuse generic voice provision", () => {
+  const lockedSettings = {
+    routingOwner: MCTB_TEXML_ROUTING_OWNER,
+    telephony: { routingMode: MCTB_TEXML_ROUTING_MODE },
+  };
+  assert.equal(isMctbTexmlIngressLocked(lockedSettings), true);
+  try {
+    assertNotMctbLockedForGenericVoiceProvision(lockedSettings, "test_enable_voice");
+    assert.fail("expected mctb_texml_locked throw");
+  } catch (err) {
+    assert.ok(err instanceof MctbTexmlProvisionLockedError);
+    assert.equal(err.code, "mctb_texml_locked");
+  }
+});
+
+test("canonical MCTB provision entry is provisionMctbCustomerVoice", () => {
+  assert.equal(MCTB_CANONICAL_PROVISION_ENTRY, "provisionMctbCustomerVoice");
 });
 
 console.log("test-mctb-final-pipeline-contract: ok");

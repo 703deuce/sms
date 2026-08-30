@@ -4,9 +4,12 @@ import { getPrisma } from "@/lib/db";
 import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/phone-switch";
 import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
+import {
+  assertMctbProvisionPhoneInWorkspace,
+  MCTB_CANONICAL_PROVISION_ENTRY,
+} from "@/lib/mctb/provision-policy";
 import { clearMctbSipIngressCache } from "@/lib/mctb/sip-ingress/resolver";
 import { invalidateMctbTexmlIngressCache } from "@/lib/mctb/texml-ingress/config-cache";
-import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import {
   MCTB_TEXML_ROUTING_OWNER,
 } from "@/lib/mctb/texml-ingress/constants";
@@ -32,10 +35,11 @@ export type ProvisionMctbTelnyxSipIngressResult = {
 };
 
 /**
- * Idempotent Telnyx voice ingress for MCTB — frozen TeXML pipeline (mctb_texml_final_v1):
- * route DID → shared TeXML app → POST /api/telnyx/voice/mctb-entry
+ * Canonical MCTB voice provision — frozen TeXML pipeline (mctb_texml_final_v1).
+ * Route DID → shared TeXML app → POST /api/telnyx/voice/mctb-entry.
+ * This is the only supported MCTB voice provision entry point.
  */
-export async function provisionMctbTelnyxSipIngress(input: {
+export async function provisionMctbCustomerVoice(input: {
   workspaceId: string;
   phoneNumberId: string;
   messageTemplate?: string;
@@ -46,47 +50,20 @@ export async function provisionMctbTelnyxSipIngress(input: {
   activate?: boolean;
 }): Promise<ProvisionMctbTelnyxSipIngressResult> {
   const prisma = getPrisma();
-  let phone = await prisma.phoneNumber.findFirst({
-    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
-    select: {
-      id: true,
-      e164: true,
-      provider: true,
-      providerNumberId: true,
-      settingsJson: true,
-      status: true,
-      workspaceId: true,
-    },
-  });
-
-  if (!phone) {
-    const candidate = await prisma.phoneNumber.findFirst({
-      where: { id: input.phoneNumberId },
-      select: {
-        id: true,
-        e164: true,
-        provider: true,
-        providerNumberId: true,
-        settingsJson: true,
-        status: true,
-        workspaceId: true,
-      },
+  let phone;
+  try {
+    phone = await assertMctbProvisionPhoneInWorkspace({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
     });
-    if (
-      candidate &&
-      (await isWorkspaceAuthorizedForPlatformDemoNumber(input.workspaceId))
-    ) {
-      phone = candidate;
-    }
-  }
-
-  if (!phone?.e164) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
       phoneNumberId: input.phoneNumberId,
       e164: "",
       actions: [],
-      error: "phone_not_found",
+      error: message || "phone_not_found",
     };
   }
 
@@ -116,7 +93,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     data: { settingsJson: nextSettings as object },
   });
 
-  const actions = ["mctb_texml_ingress_tagged"];
+  const actions = [MCTB_CANONICAL_PROVISION_ENTRY, "mctb_texml_ingress_tagged"];
 
   try {
     const provisionWorkspaceId = phone.workspaceId;
@@ -189,3 +166,6 @@ export async function provisionMctbTelnyxSipIngress(input: {
     actions,
   };
 }
+
+/** @deprecated Use provisionMctbCustomerVoice — sole supported MCTB voice provision path. */
+export const provisionMctbTelnyxSipIngress = provisionMctbCustomerVoice;
