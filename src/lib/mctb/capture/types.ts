@@ -1,11 +1,15 @@
-export const MCTB_EVENT_ONLY_LOG_SOURCE = "mctb-event-only";
+export const MCTB_CAPTURE_LOG_SOURCE = "mctb-capture";
 
-export type MctbInboundProvider = "TELNYX" | "TELNYX_SIP" | "TWILIO";
+/** @deprecated Use MCTB_CAPTURE_LOG_SOURCE */
+export const MCTB_EVENT_ONLY_LOG_SOURCE = MCTB_CAPTURE_LOG_SOURCE;
 
-/** captureMode values for MCTB metadata (EVENT_ONLY = Call Control webhook; SIP_INGRESS = LiveKit/FQDN). */
-export type MctbCaptureMode = "EVENT_ONLY" | "SIP_INGRESS";
+export type MctbInboundProvider = "TELNYX";
 
-/** Normalized provider-agnostic inbound call event for MCTB. */
+export type MctbCaptureMode = "TEXML";
+
+export type MctbIngressPath = "texml";
+
+/** Normalized TeXML terminal call event for MCTB missed-call capture. */
 export type MctbInboundCallEvent = {
   provider: MctbInboundProvider;
   providerCallId: string;
@@ -24,9 +28,10 @@ export type MctbInboundCallEvent = {
   /** TeXML status_callback CallStatus (completed, busy, no-answer, …). */
   texmlCallStatus?: string | null;
   callDurationSeconds?: number | null;
+  ingressPath?: MctbIngressPath | null;
 };
 
-export type MctbEventOnlyEligibilityStatus =
+export type MctbCaptureEligibilityStatus =
   | "ELIGIBLE"
   | "NOT_EXISTING_CONSENT"
   | "MISSING_ATTESTATION"
@@ -47,6 +52,9 @@ export type MctbEventOnlyEligibilityStatus =
   | "OUTSIDE_SEND_WINDOW"
   | "SPAM"
   | "INVALID_PHONE";
+
+/** @deprecated Use MctbCaptureEligibilityStatus */
+export type MctbEventOnlyEligibilityStatus = MctbCaptureEligibilityStatus;
 
 export const MCTB_RECOVERY_DELAY_MIN_SECONDS = 5;
 export const MCTB_RECOVERY_DELAY_DEFAULT_SECONDS = 20;

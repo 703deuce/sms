@@ -1,12 +1,4 @@
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import {
-  MCTB_SIP_DIAGNOSTIC_LOG_SOURCE,
-  MCTB_SIP_E2E_AGENT_NAME,
-} from "@/lib/mctb/sip-diagnostic/constants";
-import { isMctbSipIngressTarget } from "@/lib/mctb/sip-ingress/resolver";
-import {
-  logLivekitDispatchEvaluated,
-} from "@/lib/mctb/sip-diagnostic/e2e-trace";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { isRealEstateFrontDeskProfile } from "@/lib/voice/frontdesk/agent-config";
 import { resolveInboundFrontDeskRouting } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
@@ -224,29 +216,6 @@ export async function bootstrapInboundForPython(
       parseMediaBackend(jobMetaRaw?.mediaBackend) ||
       parseMediaBackend((roomMeta as { mediaBackend?: unknown } | null)?.mediaBackend),
   });
-
-  if (await isMctbSipIngressTarget(normalizedTo || toE164)) {
-    logLivekitDispatchEvaluated({
-      toE164: normalizedTo || toE164,
-      fromE164,
-      matched: true,
-      dispatchTarget: MCTB_SIP_E2E_AGENT_NAME,
-      agentName: MCTB_SIP_E2E_AGENT_NAME,
-      reasonIfNotMatched: null,
-    });
-    logBootstrapProfile(input.predeterminedCallId, steps, Date.now() - started, {
-      source: MCTB_SIP_DIAGNOSTIC_LOG_SOURCE,
-      event: "bootstrap_skipped_mctb_sip_diagnostic",
-      toE164: normalizedTo || toE164,
-      fromE164,
-      mctb_sip_route_selected: true,
-    });
-    return {
-      ok: false,
-      error: "mctb_sip_diagnostic_handled_in_worker",
-      code: "MCTB_SIP_DIAGNOSTIC",
-    };
-  }
 
   let t = Date.now();
   const didDispatch = normalizedTo ? await loadExplicitDispatchForDid(normalizedTo) : null;

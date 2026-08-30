@@ -57,7 +57,7 @@ async function applyDemoConsentMode(
   });
   if (consentMode === "existing_consent") {
     const { recordWorkspaceExistingConsentAttestation } = await import(
-      "@/lib/mctb/event-only/attestation"
+      "@/lib/mctb/capture/attestation"
     );
     await recordWorkspaceExistingConsentAttestation({
       workspaceId,

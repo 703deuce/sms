@@ -60,7 +60,7 @@ export async function executeMissedCallTextSend(input: {
 
   if (requiresExistingConsentAttestation) {
     const { validateExistingConsentAttestation } = await import(
-      "@/lib/mctb/event-only/attestation"
+      "@/lib/mctb/capture/attestation"
     );
     const attestation = await validateExistingConsentAttestation(input.workspaceId);
     if (!attestation.valid) {
@@ -267,7 +267,7 @@ export async function executeMissedCallTextSend(input: {
 
     console.log(
       JSON.stringify({
-        source: "mctb-event-only",
+        source: "mctb-capture",
         event: "mctb_sms_sent",
         timestamp: new Date().toISOString(),
         workspaceId: input.workspaceId,

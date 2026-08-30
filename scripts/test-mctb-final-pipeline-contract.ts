@@ -14,6 +14,7 @@ import {
   buildMctbTexmlTerminalCallInput,
 } from "../src/lib/mctb/texml-ingress/texml-call-classification";
 import {
+  MCTB_CANONICAL_PROVISION_ENTRY,
   MCTB_FINAL_PIPELINE_ID,
   MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID,
   MCTB_FINAL_PRODUCTION_CERT_MODE,
@@ -21,6 +22,16 @@ import {
   MCTB_FINAL_PRODUCTION_ENTRY_PATH,
   MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID,
 } from "../src/lib/mctb/texml-ingress/frozen-pipeline";
+import {
+  assertNotMctbLockedForGenericVoiceProvision,
+  isMctbTexmlIngressLocked,
+  MctbTexmlProvisionLockedError,
+} from "../src/lib/mctb/sip-ingress/sync";
+import { MCTB_CARRIER_DUAL_CHANNEL_POLICY_ID } from "../src/lib/mctb/provisioning/carrier-provision-policy";
+import { DEFAULT_NUMBER_CAPABILITY_PATCH } from "../src/lib/mctb/provisioning/default-number-capabilities";
+import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 process.env.APP_URL = "https://app.example.com";
 process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
@@ -80,6 +91,48 @@ test("existing_consent TeXML completed status is missed (not human answered)", (
   assert.equal(result.status, "NO_ANSWER");
   assert.equal(result.disposition, "missed_no_answer");
   assert.equal(result.answeredAt, null);
+});
+
+test("legacy ingress routes are removed from the codebase", () => {
+  const removed = [
+    "src/app/api/telnyx/voice/mctb-event-only/route.ts",
+    "src/app/api/telnyx/voice/mctb-voice-bridge/route.ts",
+    "src/lib/mctb/voice-bridge/first-hop.ts",
+    "mctb-sip-adapter/agi/mctb_inbound.py",
+  ];
+  for (const rel of removed) {
+    assert.equal(existsSync(join(process.cwd(), rel)), false, `legacy path still exists: ${rel}`);
+  }
+});
+
+test("MCTB TeXML-locked numbers refuse generic voice provision", () => {
+  const lockedSettings = {
+    routingOwner: MCTB_TEXML_ROUTING_OWNER,
+    telephony: { routingMode: MCTB_TEXML_ROUTING_MODE },
+  };
+  assert.equal(isMctbTexmlIngressLocked(lockedSettings), true);
+  try {
+    assertNotMctbLockedForGenericVoiceProvision(lockedSettings, "test_enable_voice");
+    assert.fail("expected mctb_texml_locked throw");
+  } catch (err) {
+    assert.ok(err instanceof MctbTexmlProvisionLockedError);
+    assert.equal(err.code, "mctb_texml_locked");
+  }
+});
+
+test("canonical MCTB provision entry is provisionMctbCustomerVoice", () => {
+  assert.equal(MCTB_CANONICAL_PROVISION_ENTRY, "provisionMctbCustomerVoice");
+});
+
+test("carrier provision is always dual-channel; app entitlements gate usage", () => {
+  assert.equal(MCTB_CARRIER_DUAL_CHANNEL_POLICY_ID, "mctb_carrier_dual_channel_v1");
+});
+
+test("every number defaults to dual-channel MCTB+SMS capability flags", () => {
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.smsEnabled, true);
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.mctbEnabled, true);
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.voiceEnabled, true);
+  assert.equal(DEFAULT_NUMBER_CAPABILITY_PATCH.aiAfterHoursEnabled, false);
 });
 
 console.log("test-mctb-final-pipeline-contract: ok");

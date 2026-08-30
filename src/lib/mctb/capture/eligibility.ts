@@ -3,21 +3,24 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { evaluateMissedCallTextEligibility } from "@/lib/agents/missed-call-text-back/eligibility";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { isExistingConsentMode, isVerifiedCallConsentMode } from "@/lib/mctb/consent-mode";
-import { validateExistingConsentAttestation } from "@/lib/mctb/event-only/attestation";
-import type { MctbEventOnlyEligibilityStatus, MctbInboundCallEvent } from "@/lib/mctb/event-only/types";
+import { validateExistingConsentAttestation } from "@/lib/mctb/capture/attestation";
+import type { MctbCaptureEligibilityStatus, MctbInboundCallEvent } from "@/lib/mctb/capture/types";
 import { buildMctbTexmlTerminalCallInput } from "@/lib/mctb/texml-ingress/texml-call-classification";
-import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
+import { logMctbCapture } from "@/lib/mctb/capture/logging";
 
 export type MctbRecoveryEligibilityResult = {
   eligible: boolean;
-  status: MctbEventOnlyEligibilityStatus;
+  status: MctbCaptureEligibilityStatus;
   consentMode: string;
   existingConsentValid: boolean;
 };
 
-function buildEventOnlyIdempotencyKey(workspaceId: string, event: MctbInboundCallEvent): string {
+export function buildMctbCaptureIdempotencyKey(workspaceId: string, event: MctbInboundCallEvent): string {
   return `missed-call-text:${workspaceId}:telnyx:${event.providerCallId}`;
 }
+
+/** @deprecated Use buildMctbCaptureIdempotencyKey */
+export const buildEventOnlyIdempotencyKey = buildMctbCaptureIdempotencyKey;
 
 export async function resolveMctbConsentMode(workspaceId: string): Promise<string> {
   return loadMctbConsentMode(workspaceId);
@@ -49,12 +52,12 @@ export async function evaluateMctbRecoveryEligibility(input: {
   }
 
   const attestation = await validateExistingConsentAttestation(input.workspaceId);
-  logMctbEventOnly("consent_mode_resolved", {
+  logMctbCapture("consent_mode_resolved", {
     consentMode: "EXISTING_CONSENT",
     existingConsentValid: attestation.existingConsentValid,
     workspaceId: input.workspaceId,
   });
-  logMctbEventOnly("mctb_existing_consent_resolved", {
+  logMctbCapture("mctb_existing_consent_resolved", {
     workspaceId: input.workspaceId,
     existingConsentValid: attestation.existingConsentValid,
     attestationReason: attestation.reason || null,
@@ -63,7 +66,7 @@ export async function evaluateMctbRecoveryEligibility(input: {
   if (!attestation.valid) {
     return {
       eligible: false,
-      status: (attestation.reason as MctbEventOnlyEligibilityStatus) || "MISSING_ATTESTATION",
+      status: (attestation.reason as MctbCaptureEligibilityStatus) || "MISSING_ATTESTATION",
       consentMode,
       existingConsentValid: false,
     };
@@ -125,7 +128,7 @@ export async function evaluateMctbRecoveryEligibility(input: {
     });
   })();
 
-  const idempotencyKey = buildEventOnlyIdempotencyKey(input.workspaceId, input.event);
+  const idempotencyKey = buildMctbCaptureIdempotencyKey(input.workspaceId, input.event);
   const existing = await prisma.missedCallEvent.findUnique({ where: { idempotencyKey } });
   if (existing) {
     return {
@@ -157,7 +160,7 @@ export async function evaluateMctbRecoveryEligibility(input: {
     call: texmlCall,
   });
 
-  const statusMap: Record<string, MctbEventOnlyEligibilityStatus> = {
+  const statusMap: Record<string, MctbCaptureEligibilityStatus> = {
     FEATURE_DISABLED: "MCTB_DISABLED",
     COOLDOWN_ACTIVE: "COOLDOWN",
     OPTED_OUT: "SUPPRESSED",
@@ -185,5 +188,3 @@ export async function evaluateMctbRecoveryEligibility(input: {
     existingConsentValid: true,
   };
 }
-
-export { buildEventOnlyIdempotencyKey };

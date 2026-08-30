@@ -1,7 +1,11 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { isPhoneMctbSipIngress, readPhoneMctbSettings } from "@/lib/mctb/sip-ingress/sync";
+import {
+  isMctbTexmlIngressLocked,
+  isPhoneMctbSipIngress,
+  readPhoneMctbSettings,
+} from "@/lib/mctb/sip-ingress/sync";
 import {
   MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
@@ -25,9 +29,9 @@ export function isMctbTexmlRoutingMode(settingsJson: unknown): boolean {
   return (telephony as Record<string, unknown>).routingMode === MCTB_TEXML_ROUTING_MODE;
 }
 
-/** MCTB Call Control numbers must not use generic AI TeXML; mctb_texml TeXML ingress is allowed. */
+/** MCTB-dedicated DIDs must not be stolen to generic Transovo Voice / LiveKit routing. */
 export function isMctbVoiceRouteLocked(settingsJson: unknown): boolean {
-  if (isMctbTexmlRoutingMode(settingsJson)) return false;
+  if (isMctbTexmlIngressLocked(settingsJson)) return true;
   return isPhoneMctbSipIngress(settingsJson);
 }
 

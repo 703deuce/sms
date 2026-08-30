@@ -99,6 +99,7 @@ export async function evaluateMissedCallTextEligibility(input: {
     }
 
     if (config.phoneNumberId && input.phoneNumberId && config.phoneNumberId !== input.phoneNumberId) {
+      // Inactive sibling DID (e.g. 866 provisioned but 571 is active) — no SMS.
       return { eligible: false, reason: "TRIGGER_DISABLED", classification };
     }
 

@@ -24,6 +24,9 @@ export const MCTB_FINAL_REFERENCE_WORKSPACE_ID = "ws_1";
 export const MCTB_FINAL_REFERENCE_SMS_PHONE_ID = "cmsgtjms84g6l2h0o255w1e3v";
 export const MCTB_FINAL_TEXML_APP_ID = MCTB_TEXML_DEFAULT_APP_ID;
 
+/** Sole supported MCTB voice provision entry — TeXML pipeline only. */
+export const MCTB_CANONICAL_PROVISION_ENTRY = "provisionMctbCustomerVoice" as const;
+
 /** Files that implement the frozen pipeline — CI/verify script uses this list. */
 export const MCTB_FINAL_PIPELINE_SOURCE_FILES = [
   "src/app/api/telnyx/voice/mctb-entry/route.ts",
@@ -34,6 +37,15 @@ export const MCTB_FINAL_PIPELINE_SOURCE_FILES = [
   "src/lib/mctb/texml-ingress/parse-texml-fields.ts",
   "src/lib/mctb/texml-ingress/texml-call-classification.ts",
   "src/lib/mctb/texml-ingress/existing-consent-capture.ts",
+  "src/lib/mctb/capture/handle.ts",
+  "src/lib/mctb/capture/eligibility.ts",
+  "src/lib/mctb/capture/normalize.ts",
+  "src/lib/mctb/capture/types.ts",
+  "src/lib/mctb/tenant/resolve-inbound.ts",
+  "src/lib/mctb/provision-policy.ts",
+  "src/lib/mctb/provisioning/carrier-provision-policy.ts",
+  "src/lib/mctb/provisioning/default-number-capabilities.ts",
+  "src/lib/mctb/provisioning/dual-channel-repair.ts",
   "src/lib/mctb/texml-ingress/call-leg-context.ts",
   "src/lib/mctb/texml-ingress/deprovision.ts",
   "src/lib/mctb/texml-ingress/e164-lookup.ts",

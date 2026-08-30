@@ -358,39 +358,20 @@ export async function POST(req: Request) {
   let consentSync: { ok: boolean; action?: string; error?: string } | null = null;
   let attestation: { ok: boolean; error?: string } | null = null;
   const phoneId = body.phoneNumberId ?? runtimeResult.config.phoneNumberId;
-  const releasingPreviousPhone =
-    previousPhoneId &&
-    (body.phoneNumberId === null ||
-      (body.phoneNumberId && body.phoneNumberId !== previousPhoneId));
-  let deprovision: { ok: boolean; e164: string | null; error?: string; telnyxRestored?: boolean } | null =
-    null;
-  if (releasingPreviousPhone) {
-    const { releaseMctbTexmlIngressFromPhone } = await import(
-      "@/lib/mctb/texml-ingress/deprovision"
+
+  // Carrier: keep all workspace numbers dual-wired. Switching active DID is config-only.
+  if (phoneNumberChanged && previousPhoneId) {
+    const { ensureDefaultTelnyxMctbAndSmsProvision } = await import(
+      "@/lib/mctb/provisioning/dual-channel-repair"
     );
-    const released = await releaseMctbTexmlIngressFromPhone({
-      phoneNumberId: previousPhoneId,
+    void ensureDefaultTelnyxMctbAndSmsProvision({
       workspaceId,
-    }).catch((err) => ({
-      ok: false,
-      e164: null,
-      error: err instanceof Error ? err.message : String(err),
-    }));
-    deprovision = released;
-    if (!released.ok) {
-      console.error("[mctb/setup] deprovision previous phone failed", released);
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "deprovision_failed",
-          message:
-            "Could not release the previous number from MCTB routing. The old number may still receive MCTB calls.",
-          deprovision: released,
-        },
-        { status: 409 },
-      );
-    }
+      phoneNumberId: previousPhoneId,
+    }).catch((err) => {
+      console.warn("[mctb/setup] heal previous number dual-channel provision", err);
+    });
   }
+
   if (phoneId) {
     let pn = await prisma.phoneNumber.findFirst({
       where: { id: phoneId, workspaceId },
@@ -407,16 +388,35 @@ export async function POST(req: Request) {
       }
     }
     if (pn && String(pn.provider || "").toLowerCase() === "telnyx") {
-      const { provisionMctbTelnyxSipIngress } = await import(
-        "@/lib/mctb/provisioning/telnyx-sip-ingress"
-      );
-      sipProvision = await provisionMctbTelnyxSipIngress({
-        workspaceId,
-        phoneNumberId: pn.id,
-        messageTemplate: body.messageTemplate,
-        delaySeconds: body.delaySeconds,
-        activate: body.activate === true,
-      });
+      try {
+        const { ensureDefaultTelnyxMctbAndSmsProvision } = await import(
+          "@/lib/mctb/provisioning/dual-channel-repair"
+        );
+        await ensureDefaultTelnyxMctbAndSmsProvision({
+          workspaceId,
+          phoneNumberId: pn.id,
+        });
+        sipProvision = { ok: true, actions: ["carrier_dual_channel_mctb_sms"] };
+
+        if (body.activate === true) {
+          const { activateJohnOnPhoneNumber } = await import(
+            "@/lib/agents/missed-call-text-back/phone-switch"
+          );
+          await activateJohnOnPhoneNumber({
+            workspaceId,
+            phoneNumberId: pn.id,
+            smsPhoneNumberId: phoneId,
+            delaySeconds: body.delaySeconds,
+            messageTemplate: body.messageTemplate,
+            skipGenericVoiceProvision: true,
+            activate: true,
+          });
+          sipProvision.actions?.push("mctb_runtime_activated");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sipProvision = { ok: false, error: message || "carrier_dual_channel_failed" };
+      }
     }
   }
 
@@ -531,7 +531,7 @@ export async function POST(req: Request) {
 
     if (body.consentMode === "existing_consent") {
       const { recordWorkspaceExistingConsentAttestation } = await import(
-        "@/lib/mctb/event-only/attestation"
+        "@/lib/mctb/capture/attestation"
       );
       try {
         await recordWorkspaceExistingConsentAttestation({
@@ -599,7 +599,6 @@ export async function POST(req: Request) {
       },
       solution: saved,
       sipProvision,
-      deprovision,
       tenantBinding,
       consentSync,
       attestation,

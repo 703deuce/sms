@@ -5,18 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type VoiceRuntimeAction =
-  | "check_mctb_sip_ingress"
   | "bootstrap_inbound"
   | "resolve_dispatch_snapshot"
-  | "capture_mctb_sip_inbound"
-  | "resolve_mctb_sip_session"
-  | "resolve_mctb_direct_dial_prompt"
-  | "resolve_mctb_direct_dial_transfer"
-  | "record_mctb_sip_press_1_consent"
-  | "start_mctb_sip_voicemail"
-  | "complete_mctb_sip_voicemail"
-  | "persist_mctb_voicemail_lifecycle"
-  | "mctb_sip_e2e_trace"
   | "persist_inbound_call"
   | "persist_intake_fields"
   | "persist_message"
@@ -100,13 +90,6 @@ export async function POST(request: Request) {
     let result: unknown;
 
     switch (action) {
-      case "check_mctb_sip_ingress": {
-        const { isMctbSipIngressTarget } = await import("@/lib/mctb/sip-ingress/resolver");
-        const toE164 = String(payload.toE164 || "").trim();
-        result = { route: await isMctbSipIngressTarget(toE164), toE164 };
-        break;
-      }
-
       case "bootstrap_inbound": {
         const { bootstrapInboundForPython } = await import(
           "@/lib/voice/python-runtime-bridge/bootstrap-inbound"
@@ -120,95 +103,6 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/resolve-dispatch-snapshot"
         );
         result = await resolveDispatchSnapshotForPython(payload as never);
-        break;
-      }
-
-      case "capture_mctb_sip_inbound": {
-        const { captureMctbSipInboundForPython } = await import(
-          "@/lib/mctb/event-only/sip-capture"
-        );
-        result = await captureMctbSipInboundForPython(payload as never);
-        break;
-      }
-
-      case "resolve_mctb_sip_session": {
-        const { resolveMctbSipSessionForPython } = await import(
-          "@/lib/voice/python-runtime-bridge/mctb-sip-session"
-        );
-        result = await resolveMctbSipSessionForPython(payload as never);
-        break;
-      }
-
-      case "resolve_mctb_direct_dial_prompt": {
-        const { loadMissedCallTextConfig } = await import(
-          "@/lib/agents/missed-call-text-back/config"
-        );
-        const { buildDirectDialForwardPromptText, resolveMctbDirectDialForwardE164 } =
-          await import("@/lib/mctb/direct-dial-prompt");
-        const workspaceId = String(payload.workspaceId || "").trim();
-        if (!workspaceId) {
-          result = { ok: false, error: "workspaceId required" };
-          break;
-        }
-        const config = await loadMissedCallTextConfig(workspaceId);
-        result = {
-          ok: true,
-          directDialForwardE164: resolveMctbDirectDialForwardE164(config),
-          promptText: buildDirectDialForwardPromptText(config),
-        };
-        break;
-      }
-
-      case "resolve_mctb_direct_dial_transfer": {
-        const { resolveMctbDirectDialTransferForPython } = await import(
-          "@/lib/voice/python-runtime-bridge/mctb-direct-dial-transfer"
-        );
-        result = await resolveMctbDirectDialTransferForPython({
-          workspaceId: String(payload.workspaceId || ""),
-          destinationE164: String(payload.destinationE164 || ""),
-          callerNumberE164:
-            typeof payload.callerNumberE164 === "string" ? payload.callerNumberE164 : null,
-        });
-        break;
-      }
-
-      case "record_mctb_sip_press_1_consent": {
-        const { recordMctbSipPress1ConsentForPython } = await import(
-          "@/lib/voice/python-runtime-bridge/mctb-sip-session"
-        );
-        result = await recordMctbSipPress1ConsentForPython(payload as never);
-        break;
-      }
-
-      case "start_mctb_sip_voicemail": {
-        const { startMctbSipVoicemailForPython } = await import(
-          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-record"
-        );
-        result = await startMctbSipVoicemailForPython(payload as never);
-        break;
-      }
-
-      case "complete_mctb_sip_voicemail": {
-        const { completeMctbSipVoicemailForPython } = await import(
-          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-record"
-        );
-        result = await completeMctbSipVoicemailForPython(payload as never);
-        break;
-      }
-
-      case "persist_mctb_voicemail_lifecycle": {
-        const { appendMctbVoicemailLifecycleEvent } = await import(
-          "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-lifecycle"
-        );
-        result = await appendMctbVoicemailLifecycleEvent(payload as never);
-        break;
-      }
-
-      case "mctb_sip_e2e_trace": {
-        const { logMctbSipE2eMirror } = await import("@/lib/mctb/sip-diagnostic/e2e-trace");
-        const tracePayload = (payload.payload || payload) as Record<string, unknown>;
-        logMctbSipE2eMirror(tracePayload);
-        result = { ok: true, mirrored: true };
         break;
       }
 

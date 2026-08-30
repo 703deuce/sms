@@ -2,7 +2,7 @@ import { getPrisma } from "@/lib/db";
 import {
   clampMctbRecoveryDelaySeconds,
   MCTB_RECOVERY_DELAY_DEFAULT_SECONDS,
-} from "@/lib/mctb/event-only/types";
+} from "@/lib/mctb/capture/types";
 import {
   DEFAULT_MCTB_CONFIG,
   DEFAULT_MCTB_MESSAGE,
