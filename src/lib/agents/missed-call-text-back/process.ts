@@ -141,6 +141,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
       typeof input.eventMetadata?.transovoNumberE164 === "string"
         ? input.eventMetadata.transovoNumberE164
         : businessE164,
+    eventMetadata: input.eventMetadata,
     call: input.call,
   });
 

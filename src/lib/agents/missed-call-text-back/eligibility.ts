@@ -51,6 +51,7 @@ export async function evaluateMissedCallTextEligibility(input: {
   eventOnly?: boolean;
   forwardedFromE164?: string | null;
   transovoNumberE164?: string | null;
+  eventMetadata?: Record<string, unknown>;
 }): Promise<EligibilityResult> {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   const classification = classifyInboundCallOutcome(input.call);
@@ -154,15 +155,20 @@ export async function evaluateMissedCallTextEligibility(input: {
   }
 
   const cooldownSince = new Date(Date.now() - config.cooldownMinutes * 60_000);
-  const recentSent = await prisma.missedCallEvent.count({
-    where: {
-      workspaceId: input.workspaceId,
-      callerE164: caller,
-      smsSentAt: { gte: cooldownSince },
-    },
-  });
-  if (recentSent >= config.maxMessagesPerCaller) {
-    return { eligible: false, reason: "COOLDOWN_ACTIVE", classification };
+  const skipCooldown =
+    input.eventMetadata?.testSms === true ||
+    input.eventMetadata?.certMode === "C";
+  if (!skipCooldown) {
+    const recentSent = await prisma.missedCallEvent.count({
+      where: {
+        workspaceId: input.workspaceId,
+        callerE164: caller,
+        smsSentAt: { gte: cooldownSince },
+      },
+    });
+    if (recentSent >= config.maxMessagesPerCaller) {
+      return { eligible: false, reason: "COOLDOWN_ACTIVE", classification };
+    }
   }
 
   if (!input.demoMode) {

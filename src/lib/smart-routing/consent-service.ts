@@ -47,6 +47,9 @@ export async function recordSmsConsent(input: {
       ? input.metadata.transovoNumberE164
       : input.businessNumber);
   const path = typeof input.metadata?.path === "string" ? input.metadata.path : null;
+  const certMode = typeof input.metadata?.certMode === "string" ? input.metadata.certMode : null;
+  const lockWorkspaceForTexmlIngress =
+    path === "texml_mctb_ingress" || certMode === "C";
 
   const identity = resolveConsentIdentity({
     signalingFrom: input.callerNumber,
@@ -64,12 +67,18 @@ export async function recordSmsConsent(input: {
     transovoNumberE164: identity.transovoIngressNumber,
   };
 
-  const target = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: identity.consentingCallerNumber || input.callerNumber,
-    businessE164: businessNumber,
-    fallbackWorkspaceId: input.workspaceId,
-    forwardedFrom: customerBusinessE164,
-  });
+  const target = lockWorkspaceForTexmlIngress
+    ? {
+        workspaceId: input.workspaceId,
+        isPlatformDemo: false,
+        demoMode: false,
+      }
+    : await resolveMctbTargetWorkspaceForInboundCall({
+        callerE164: identity.consentingCallerNumber || input.callerNumber,
+        businessE164: businessNumber,
+        fallbackWorkspaceId: input.workspaceId,
+        forwardedFrom: customerBusinessE164,
+      });
   const workspaceId = target.workspaceId;
 
   const providerCallId =
@@ -167,17 +176,29 @@ export async function triggerMissedCallTextFromConsent(input: {
 
   const prisma = getPrisma();
 
+  const path = typeof input.eventMetadata?.path === "string" ? input.eventMetadata.path : null;
+  const certMode =
+    typeof input.eventMetadata?.certMode === "string" ? input.eventMetadata.certMode : null;
+  const lockWorkspaceForTexmlIngress =
+    path === "texml_mctb_ingress" || certMode === "C" || input.eventMetadata?.testSms === true;
+
   const session = await prisma.smartRoutingCallSession.findUnique({
     where: { id: input.callSessionId },
     select: { forwardedFromNumber: true },
   });
 
-  const target = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: input.callerNumber,
-    businessE164: input.businessNumber,
-    fallbackWorkspaceId: input.workspaceId,
-    forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber,
-  });
+  const target = lockWorkspaceForTexmlIngress
+    ? {
+        workspaceId: input.workspaceId,
+        isPlatformDemo: false,
+        demoMode: false,
+      }
+    : await resolveMctbTargetWorkspaceForInboundCall({
+        callerE164: input.callerNumber,
+        businessE164: input.businessNumber,
+        fallbackWorkspaceId: input.workspaceId,
+        forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber,
+      });
 
   await emitSmartRoutingEvent({
     workspaceId: target.workspaceId,

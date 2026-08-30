@@ -145,7 +145,22 @@ export async function POST(request: Request) {
 
       if (!certModeSkipsSms(certMode)) {
         try {
-          const target = await resolveInboundTarget({ from, to, forwardedFrom });
+          const { resolveMctbSipIngressByDid } = await import("@/lib/mctb/sip-ingress/resolver");
+          const ingress = await resolveMctbSipIngressByDid(to);
+          const certIngressWorkspaceId =
+            consentPath === MCTB_TEXML_CONSENT_PATH && ingress.workspaceId
+              ? ingress.workspaceId
+              : null;
+          const certIngressPhoneNumberId =
+            consentPath === MCTB_TEXML_CONSENT_PATH ? ingress.phoneNumberId : null;
+
+          const target = certIngressWorkspaceId
+            ? {
+                workspaceId: certIngressWorkspaceId,
+                isPlatformDemo: false,
+                demoMode: false,
+              }
+            : await resolveInboundTarget({ from, to, forwardedFrom });
           const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
             "@/lib/smart-routing/consent-service"
           );
@@ -193,6 +208,7 @@ export async function POST(request: Request) {
               callSessionId: callSid || `texml:${Date.now()}`,
               forwardedFrom: forwardedFrom || null,
               consentIdentityVerified: true,
+              phoneNumberId: certIngressPhoneNumberId,
               eventMetadata: {
                 ...consentMetadata,
                 certMode,
