@@ -57,13 +57,14 @@ test("press_1 uses consent audio asset inside Gather (play-gather)", () => {
   assert.match(built.gatherActionUrl || "", /path=texml_mctb_ingress/);
 });
 
-test("existing_consent uses voicemail greeting asset with Play+Hangup (no Gather)", () => {
+test("existing_consent uses voicemail greeting asset with Play+Record (no Gather)", () => {
   const playUrl = `https://app.example.com/api/public/smart-routing-audio/${MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID}`;
   const body = buildMctbVoicemailGreetingTexml({ playUrl, sayText: null });
 
   assert.match(body, /<Play>/);
   assert.match(body, new RegExp(MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID));
-  assert.match(body, /<Hangup\/>/);
+  assert.match(body, /<Record[^>]*recordingStatusCallback=/);
+  assert.match(body, /mctb-texml-voicemail/);
   assert.doesNotMatch(body, /<Gather/);
   assert.doesNotMatch(body, new RegExp(MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID));
 });

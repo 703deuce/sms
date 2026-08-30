@@ -8,7 +8,9 @@ function appBaseUrl(): string {
   );
 }
 
-function consentTexmlVoiceUrl(segment: "mctb-consent" | "mctb-entry" = "mctb-consent"): string {
+function consentTexmlVoiceUrl(
+  segment: "mctb-consent" | "mctb-entry" | "mctb-texml-voicemail" = "mctb-consent",
+): string {
   const base = appBaseUrl();
   if (!base) {
     throw new Error(
@@ -16,6 +18,11 @@ function consentTexmlVoiceUrl(segment: "mctb-consent" | "mctb-entry" = "mctb-con
     );
   }
   return `${base}/api/telnyx/voice/${segment}`;
+}
+
+/** TeXML &lt;Record&gt; recordingStatusCallback for MCTB voicemail collection. */
+export function getMctbTexmlVoicemailRecordCallbackUrl(): string {
+  return consentTexmlVoiceUrl("mctb-texml-voicemail");
 }
 
 /** Production MCTB Press-1 prerecorded prompt URL (Telnyx &lt;Play&gt;). */
@@ -86,6 +93,9 @@ export function buildMctbConsentInboundTexml(
     certMode?: string | null;
     /** Gather callback route segment (default mctb-consent). */
     gatherBasePath?: "mctb-consent" | "mctb-entry";
+    /** Workspace Press-1 audio (overrides platform consent asset when set). */
+    press1PlayUrl?: string | null;
+    press1SayText?: string | null;
   },
 ): MctbConsentInboundTexmlBuild {
   const requestPrompt = options?.requestPrompt ?? null;
@@ -119,10 +129,18 @@ export function buildMctbConsentInboundTexml(
   if (cert && cert !== "D") actionUrl.searchParams.set("cert", cert);
   const gatherActionUrl = actionUrl.toString();
 
+  const press1PlayUrl = options?.press1PlayUrl?.trim() || null;
+  const press1SayText = options?.press1SayText?.trim() || null;
   const promptInner =
     promptMode === "play-gather"
-      ? `<Play>${escapeXml(audioUrl)}</Play>`
-      : `<Say voice="female">${escapeXml(DEFAULT_SAY)}</Say>`;
+      ? press1PlayUrl
+        ? `<Play>${escapeXml(press1PlayUrl)}</Play>`
+        : press1SayText
+          ? `<Say voice="female">${escapeXml(press1SayText)}</Say>`
+          : `<Play>${escapeXml(audioUrl)}</Play>`
+      : press1SayText
+        ? `<Say voice="female">${escapeXml(press1SayText)}</Say>`
+        : `<Say voice="female">${escapeXml(DEFAULT_SAY)}</Say>`;
 
   return {
     body:
@@ -152,17 +170,21 @@ export function buildMctbCertPlayOnlyTexml(): string {
   return `<Play>${escapeXml(audioUrl)}</Play><Pause length="2"/><Hangup/>`;
 }
 
-/** existing_consent — voicemail greeting only (not press-1 consent audio), then hangup → auto SMS. */
+/** existing_consent / paused — voicemail greeting then Record (SMS only after recording saved). */
 export function buildMctbVoicemailGreetingTexml(input: {
   playUrl: string | null;
   sayText: string | null;
+  recordCallbackUrl?: string | null;
 }): string {
   const fallbackSay = "Please leave a message after the tone.";
+  const recordCallback =
+    input.recordCallbackUrl?.trim() || getMctbTexmlVoicemailRecordCallbackUrl();
+  const recordVerb = `<Record maxLength="180" playBeep="true" recordingStatusCallback="${escapeXml(recordCallback)}" recordingStatusCallbackMethod="POST"/>`;
   if (input.playUrl?.trim()) {
-    return `<Play>${escapeXml(input.playUrl.trim())}</Play><Pause length="1"/><Hangup/>`;
+    return `<Play>${escapeXml(input.playUrl.trim())}</Play>${recordVerb}`;
   }
   const say = input.sayText?.trim() || fallbackSay;
-  return `<Say voice="female">${escapeXml(say)}</Say><Pause length="1"/><Hangup/>`;
+  return `<Say voice="female">${escapeXml(say)}</Say>${recordVerb}`;
 }
 
 export function wrapMctbConsentTexmlBody(body: string): string {

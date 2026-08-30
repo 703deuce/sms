@@ -34,9 +34,10 @@ Carrier CFNA → customer DID (e.g. +18663464256)
         ├── press_1        → <Play consent audio> + <Gather> press 1
         │                      → POST /api/telnyx/voice/mctb-consent (gather)
         │                      → record consent → MCTB SMS pipeline
-        └── existing_consent → <Play voicemail greeting> + <Hangup>
+        └── existing_consent → <Play voicemail greeting> + <Record>
+                               → POST /api/telnyx/voice/mctb-texml-voicemail (recording saved)
                                → POST /api/telnyx/voice/texml-status (hangup)
-                               → existing-consent capture → MCTB SMS pipeline
+                               → existing-consent capture → MCTB SMS (only if recording saved)
 ```
 
 **Not in this pipeline:** LiveKit SIP, FQDN ingress, AI receptionist on the MCTB DID, Smart Routing after-hours steal, Press-1-only removal.
@@ -66,8 +67,10 @@ Carrier CFNA → customer DID (e.g. +18663464256)
 | Audio | **Voicemail greeting** via `<Play>` — **not** the press-1 consent clip |
 | Voicemail asset | `cmt8pz72y1o096i6y3c24383j` (`resolveMctbVoicemailFallbackPlayback`) |
 | Gather | None — no press 1 |
-| Hangup | Caller hears greeting → hangup |
-| SMS | `texml-status` terminal hangup → `scheduleMctbTexmlExistingConsentCapture` → auto SMS |
+| Record | `<Record>` collects caller voicemail → transcribe + AI summary |
+| Hangup | After greeting + optional message |
+| SMS | `texml-status` terminal hangup → capture **only if** `wasMctbTexmlVoicemailRecorded` |
+| Paused schedule | Voicemail still plays; SMS blocked by eligibility (same as Call Control path) |
 | Cert replay | `cert=D` + `consentMode=existing_consent` on workspace |
 
 **PSTN cert:** PASS — conditional forward, heard voicemail greeting, hangup, SMS auto-sent.
@@ -110,6 +113,7 @@ Carrier CFNA → customer DID (e.g. +18663464256)
 |------|------|
 | Ingress | `src/app/api/telnyx/voice/mctb-entry/route.ts` |
 | Gather / SMS trigger | `src/app/api/telnyx/voice/mctb-consent/route.ts` |
+| Voicemail Record callback | `src/app/api/telnyx/voice/mctb-texml-voicemail/route.ts` |
 | TeXML builders | `src/lib/mctb/consent-prompt/texml-response.ts` |
 | Frozen constants | `src/lib/mctb/texml-ingress/frozen-pipeline.ts` |
 | Status / existing consent SMS | `src/lib/voice/telnyx/texml-status-callback.ts` |

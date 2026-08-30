@@ -5,16 +5,12 @@ import { activateJohnOnPhoneNumber } from "@/lib/agents/missed-call-text-back/ph
 import { telnyxLocalA2pSettings } from "@/lib/messaging/compliance/phone-number-class";
 import { enqueueMessagingRegistrationAdvance } from "@/lib/messaging/enqueue-advance";
 import { clearMctbSipIngressCache } from "@/lib/mctb/sip-ingress/resolver";
+import { invalidateMctbTexmlIngressCache } from "@/lib/mctb/texml-ingress/config-cache";
 import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import {
-  assignPhoneNumberToEventOnlyConnection,
-} from "@/lib/mctb/consent-prompt/telnyx-event-only-route";
-import { prepareFqdnForDirectMctb } from "@/lib/mctb/sip-diagnostic/fqdn-direct-setup";
-import {
-  MCTB_CANONICAL_ROUTING_MODE,
-  MCTB_CANONICAL_ROUTING_OWNER,
-  scrubLegacyMctbTelephonyFields,
-} from "@/lib/mctb/voice-ingress-guard";
+  MCTB_TEXML_ROUTING_OWNER,
+} from "@/lib/mctb/texml-ingress/constants";
+import { switchDidToMctbTexmlIngress } from "@/lib/mctb/texml-ingress/provision";
 
 function mergeSettings(
   current: unknown,
@@ -36,9 +32,8 @@ export type ProvisionMctbTelnyxSipIngressResult = {
 };
 
 /**
- * Idempotent Telnyx voice ingress for MCTB — same path as the working 866 forward test:
- * prepareFqdnForDirectMctb (3PCC Call Control app + reference FQDN late-media flags)
- * → assign DID to shared Call Control app → /api/telnyx/voice/mctb-event-only
+ * Idempotent Telnyx voice ingress for MCTB — frozen TeXML pipeline (mctb_texml_final_v1):
+ * route DID → shared TeXML app → POST /api/telnyx/voice/mctb-entry
  */
 export async function provisionMctbTelnyxSipIngress(input: {
   workspaceId: string;
@@ -111,7 +106,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
     ...mctbSettings,
     mctbSipIngress: true,
     mctbRole: role,
-    routingOwner: MCTB_CANONICAL_ROUTING_OWNER,
+    routingOwner: MCTB_TEXML_ROUTING_OWNER,
   });
 
   await prisma.phoneNumber.update({
@@ -119,48 +114,23 @@ export async function provisionMctbTelnyxSipIngress(input: {
     data: { settingsJson: nextSettings as object },
   });
 
-  const actions = ["mctb_sip_ingress_tagged"];
+  const actions = ["mctb_texml_ingress_tagged"];
 
   try {
-    const prepared = await prepareFqdnForDirectMctb();
-    actions.push(
-      `call_control_app:${prepared.callControlAppId}`,
-      `reference_fqdn:${prepared.referenceFqdnConnectionId}`,
-      `late_media_ready:${prepared.media.lateMediaReady}`,
-      `3pcc:${prepared.media.thirdPartyControlEnabled}`,
-    );
-
-    if (!prepared.media.lateMediaReady) {
-      throw new Error("mctb_late_media_not_ready_after_prepare");
-    }
-
-    const assigned = await assignPhoneNumberToEventOnlyConnection(phone.e164);
-    actions.push(
-      `call_control_event_only_assigned:${assigned.callControlAppId}`,
-      `telnyx_connection:${assigned.liveConnectionId}`,
-    );
-
-    const settings =
-      nextSettings && typeof nextSettings === "object"
-        ? { ...nextSettings }
-        : ({} as Record<string, unknown>);
-    const telephony = scrubLegacyMctbTelephonyFields(
-      settings.telephony && typeof settings.telephony === "object"
-        ? { ...(settings.telephony as Record<string, unknown>) }
-        : {},
-    );
-    telephony.routingMode = MCTB_CANONICAL_ROUTING_MODE;
-    telephony.telnyxCallControlAppId = assigned.callControlAppId;
-    telephony.telnyxReferenceFqdnConnectionId = prepared.referenceFqdnConnectionId;
-    telephony.lastProvisionedAt = new Date().toISOString();
-    telephony.state = "active";
-    telephony.lastError = null;
-    settings.telephony = telephony;
-
-    await prisma.phoneNumber.update({
-      where: { id: phone.id },
-      data: { settingsJson: settings as object },
+    const routed = await switchDidToMctbTexmlIngress({
+      workspaceId: input.workspaceId,
+      phoneNumberId: phone.id,
+      friendlyName: role === "platform_demo" ? "MCTB Platform Demo" : `MCTB ${phone.e164}`,
     });
+    actions.push(
+      `mctb_texml_app:${String((routed.texmlRoute as { texmlAppId?: string }).texmlAppId || "")}`,
+      `mctb_texml_route:${routed.verify.ok ? "verified" : "unverified"}`,
+      routed.e164,
+    );
+
+    if (!routed.ok || !routed.verify.ok) {
+      throw new Error(routed.verify.failReason || "mctb_texml_route_failed");
+    }
 
     await prisma.voiceAgent.updateMany({
       where: { phoneNumberId: phone.id, status: "ACTIVE" },
@@ -180,7 +150,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
       phoneNumberId: phone.id,
       e164: phone.e164,
       actions,
-      error: message || "call_control_provision_failed",
+      error: message || "mctb_texml_provision_failed",
     };
   }
 
@@ -195,6 +165,7 @@ export async function provisionMctbTelnyxSipIngress(input: {
 
   await enqueueMessagingRegistrationAdvance(input.workspaceId).catch(() => undefined);
   clearMctbSipIngressCache();
+  invalidateMctbTexmlIngressCache(phone.e164);
 
   actions.push("mctb_john_activated");
 

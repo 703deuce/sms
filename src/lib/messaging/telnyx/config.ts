@@ -56,6 +56,8 @@ export function getTelnyxWebhookUrls() {
     mctbEntry: `${base}/api/telnyx/voice/mctb-entry`,
     /** MCTB Press-1 Gather callback (DTMF consent — keep separate from ingress) */
     mctbConsentTexml: `${base}/api/telnyx/voice/mctb-consent`,
+    /** MCTB TeXML voicemail Record callback */
+    mctbTexmlVoicemail: `${base}/api/telnyx/voice/mctb-texml-voicemail`,
     /** MCTB platform 571 Call Control diagnostic (separate app — do not mix with TeXML) */
     mctbCallControlDiagnostic: `${base}/api/telnyx/voice/mctb-call-control`,
     /** MCTB Telnyx EVENT_ONLY — Existing Consent capture (571 + FQDN direct SIP bypass) */

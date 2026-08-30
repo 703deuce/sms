@@ -9,6 +9,8 @@ import {
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
+import { resolveMctbPress1TexmlPlayback } from "@/lib/mctb/texml-ingress/press1-playback";
+import { ensureMctbTexmlVoicemailSession } from "@/lib/mctb/texml-ingress/voicemail-start";
 import {
   certModeForcesPress1Gather,
   certModeSkipsConsentBackend,
@@ -147,12 +149,43 @@ export async function POST(request: Request) {
     }
 
     const consentMode = config?.consentMode || "press_1";
+    const workspaceId = config?.workspaceId;
+    const forwardedFrom =
+      normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
+      parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
+      "";
 
-    if (consentMode === MCTB_CONSENT_MODE_EXISTING && !certModeForcesPress1Gather(certMode)) {
-      const workspaceId = config?.workspaceId;
+    let routeToVoicemail = consentMode === MCTB_CONSENT_MODE_EXISTING;
+    if (
+      workspaceId &&
+      consentMode !== MCTB_CONSENT_MODE_EXISTING &&
+      !certModeForcesPress1Gather(certMode)
+    ) {
+      const { loadMissedCallTextConfig } = await import(
+        "@/lib/agents/missed-call-text-back/config"
+      );
+      const { loadMctbScheduleSettings, isMctbAutomationActive } = await import(
+        "@/lib/mctb/schedule"
+      );
+      const runtimeConfig = await loadMissedCallTextConfig(workspaceId);
+      const scheduleSettings = await loadMctbScheduleSettings(workspaceId, runtimeConfig);
+      if (!isMctbAutomationActive(scheduleSettings, runtimeConfig)) {
+        routeToVoicemail = true;
+      }
+    }
+
+    if (routeToVoicemail && !certModeForcesPress1Gather(certMode)) {
       let voicemailBody = buildMctbVoicemailGreetingTexml({ playUrl: null, sayText: null });
       let voicemailPlayUrl: string | null = null;
-      if (workspaceId) {
+      if (workspaceId && from) {
+        await ensureMctbTexmlVoicemailSession({
+          callSid: callSid || `texml:${to}:${from}:${Date.now()}`,
+          workspaceId,
+          callerE164: from,
+          transovoNumberE164: to,
+          forwardedFromE164: forwardedFrom || null,
+        }).catch(() => null);
+
         const { resolveMctbVoicemailFallbackPlayback } = await import(
           "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-fallback"
         );
@@ -161,7 +194,7 @@ export async function POST(request: Request) {
         voicemailBody = buildMctbVoicemailGreetingTexml(playback);
       }
       traceMctbTexml("MCTB_TEXML_RETURNED", {
-        branch: "existing_consent",
+        branch: consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "paused_voicemail",
         latencyMs: Date.now() - started,
         to,
         callSid,
@@ -171,16 +204,22 @@ export async function POST(request: Request) {
         voicemailPlayUrl,
       });
       return texmlResponse(voicemailBody, {
-        branch: "existing_consent",
+        branch: consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "paused_voicemail",
         consentMode,
         voicemailPlayUrl,
       });
     }
 
-    const forwardedFrom =
-      normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
-      parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
-      "";
+    const press1Playback =
+      workspaceId && !certModeSkipsConsentBackend(certMode)
+        ? await resolveMctbPress1TexmlPlayback({ workspaceId }).catch(() => null)
+        : null;
+    if (press1Playback?.failClosed) {
+      return texmlResponse(
+        buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."),
+        { branch: "press1_playback_fail_closed" },
+      );
+    }
 
     const promptMode = certModeUsesPlayGather(certMode)
       ? resolveMctbConsentTexmlPromptMode("play-gather")
@@ -194,6 +233,8 @@ export async function POST(request: Request) {
       promptMode,
       gatherBasePath: "mctb-consent",
       certMode: certMode === "D" ? null : certMode,
+      press1PlayUrl: press1Playback?.playUrl ?? null,
+      press1SayText: press1Playback?.sayText ?? null,
     });
 
     traceMctbTexml("MCTB_TEXML_RETURNED", {
