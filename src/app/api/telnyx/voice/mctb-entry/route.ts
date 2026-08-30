@@ -5,7 +5,6 @@ import {
   buildMctbConsentInboundTexml,
   buildMctbVoicemailGreetingTexml,
   getMctbConsentPlaybackUrl,
-  getMctbVoicemailGreetingPlaybackUrl,
   resolveMctbConsentTexmlPromptMode,
   wrapMctbConsentTexmlBody,
 } from "@/lib/mctb/consent-prompt/texml-response";
@@ -172,10 +171,18 @@ export async function POST(request: Request) {
     }
 
     if (routeToVoicemail && !certModeForcesPress1Gather(certMode)) {
-      const voicemailPlayUrl =
-        consentMode === MCTB_CONSENT_MODE_EXISTING
-          ? getMctbVoicemailGreetingPlaybackUrl()
-          : null;
+      let voicemailPlayUrl: string | null = null;
+      if (consentMode === MCTB_CONSENT_MODE_EXISTING) {
+        const { isConsentAudioAssetReachable } = await import(
+          "@/lib/mctb/consent-prompt/audio-reachability"
+        );
+        const { getMctbVoicemailGreetingAudioAssetId, getMctbVoicemailGreetingPlaybackUrl } =
+          await import("@/lib/mctb/consent-prompt/texml-response");
+        const greetingAssetId = getMctbVoicemailGreetingAudioAssetId();
+        if (await isConsentAudioAssetReachable(greetingAssetId)) {
+          voicemailPlayUrl = getMctbVoicemailGreetingPlaybackUrl();
+        }
+      }
       const voicemailBody = buildMctbVoicemailGreetingTexml({
         playUrl: voicemailPlayUrl,
         sayText: voicemailPlayUrl ? null : PAUSED_VOICEMAIL_SAY,
@@ -265,6 +272,8 @@ export async function POST(request: Request) {
       consentMode,
       workspaceId,
       routingMode: config.routingMode,
+      press1PlayUrl: playback.playUrl,
+      press1SayFallback: Boolean(playback.sayText),
     });
 
     if (!certModeSkipsConsentBackend(certMode) && from) {

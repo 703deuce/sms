@@ -36,12 +36,17 @@ export function getMctbConsentPlaybackUrl(): string {
 
 /** Production existing-consent voicemail greeting (&lt;Play&gt; before &lt;Record&gt;). */
 export function getMctbVoicemailGreetingPlaybackUrl(): string {
-  const assetId =
-    process.env.MCTB_VOICEMAIL_GREETING_AUDIO_ASSET_ID?.trim() ||
-    "cmt8pz72y1o096i6y3c24383j";
+  const assetId = getMctbVoicemailGreetingAudioAssetId();
   const base = appBaseUrl();
   const path = `/api/public/smart-routing-audio/${assetId}`;
   return base ? `${base}${path}` : path;
+}
+
+export function getMctbVoicemailGreetingAudioAssetId(): string {
+  return (
+    process.env.MCTB_VOICEMAIL_GREETING_AUDIO_ASSET_ID?.trim() ||
+    "cmt8pz72y1o096i6y3c24383j"
+  );
 }
 
 export function getMctbConsentAudioAssetId(): string {
