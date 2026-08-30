@@ -60,10 +60,14 @@ LLM token stream
 ## Tests
 
 ```bash
+npx tsx scripts/test-generation-context.ts
+npx tsx scripts/test-speech-compiler.ts
 npx tsx scripts/test-phrase-text-buffer.ts
 npx tsx scripts/test-tts-phrase-pipeline.ts
 npx tsx scripts/test-caller-amy-orchestration.ts
 ```
+
+See also: **`docs/VOICE_AGENT_AUDIT.md`** (sections 23–24 advanced architecture).
 
 ## Recommendations
 
