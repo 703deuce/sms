@@ -12,6 +12,13 @@ import {
 import { parseTelnyxForwardedFrom, normalizeForwardedFromE164, hasDiversionHeaderInPayload } from "@/lib/voice/telnyx/forwarded-from";
 import { businessNumberForConsentStorage } from "@/lib/mctb/consent-identity";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
+import { MCTB_TEXML_CONSENT_PATH } from "@/lib/mctb/texml-ingress/constants";
+import {
+  certModeSkipsSms,
+  certModeUsesTestSms,
+  resolveMctbTexmlCertMode,
+} from "@/lib/mctb/texml-ingress/cert-mode";
+import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
 
@@ -113,7 +120,14 @@ export async function POST(request: Request) {
       "";
     const hasDiversionHeader = hasDiversionHeaderInPayload(fields as Record<string, unknown>);
 
+    const consentPath =
+      url.searchParams.get("path") === MCTB_TEXML_CONSENT_PATH
+        ? MCTB_TEXML_CONSENT_PATH
+        : "texml_mctb_consent";
+
     if (event === "gather" && digits === "1" && from) {
+      traceMctbTexml("MCTB_DTMF_RECEIVED", { from: "[present]", to, callSid, digit: digits });
+
       console.log(
         JSON.stringify({
           source: "mctb-consent-texml",
@@ -123,87 +137,129 @@ export async function POST(request: Request) {
           callSid,
           forwardedFrom: forwardedFrom || null,
           hasDiversionHeader,
+          consentPath,
+          certMode: resolveMctbTexmlCertMode(),
         }),
       );
 
-      try {
-        const target = await resolveInboundTarget({ from, to, forwardedFrom });
-        const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
-          "@/lib/smart-routing/consent-service"
-        );
+      const certMode = resolveMctbTexmlCertMode();
 
-        const consentMetadata = {
-          path: "texml_mctb_consent",
-          callSid,
-          forwardedFrom,
-          transovoNumberE164: to,
-        };
+      if (!certModeSkipsSms()) {
+        try {
+          const target = await resolveInboundTarget({ from, to, forwardedFrom });
+          const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
+            "@/lib/smart-routing/consent-service"
+          );
 
-        const consent = await recordSmsConsent({
-          workspaceId: target.workspaceId,
-          callerNumber: from,
-          businessNumber: to,
-          transovoIngressE164: to,
-          affirmativeInput: "1",
-          consentScope: "CUSTOMER_CARE_SMS",
-          forwardedFrom: forwardedFrom || null,
-          hasDiversionHeader,
-          callSessionId: callSid || undefined,
-          metadata: consentMetadata,
-        });
+          const consentMetadata = {
+            path: consentPath,
+            callSid,
+            forwardedFrom,
+            transovoNumberE164: to,
+            providerCallId: callSid,
+          };
 
-        if (
-          consent.identity?.consentIdentityVerified &&
-          (target.demoMode || forwardedFrom)
-        ) {
-          const sms = await triggerMissedCallTextFromConsent({
+          const consent = await recordSmsConsent({
             workspaceId: target.workspaceId,
-            callerNumber: consent.identity.consentingCallerNumber || from,
-            businessNumber: businessNumberForConsentStorage(consent.identity),
-            callSessionId: callSid || `texml:${Date.now()}`,
+            callerNumber: from,
+            businessNumber: to,
+            transovoIngressE164: to,
+            affirmativeInput: "1",
+            consentScope: "CUSTOMER_CARE_SMS",
             forwardedFrom: forwardedFrom || null,
-            consentIdentityVerified: true,
-            eventMetadata: consentMetadata,
+            hasDiversionHeader,
+            callSessionId: callSid || undefined,
+            metadata: consentMetadata,
           });
-          console.log(
-            JSON.stringify({
-              source: "mctb-consent-texml",
-              event: "sms_triggered",
+
+          traceMctbTexml("MCTB_CONSENT_RECORDED", {
+            workspaceId: target.workspaceId,
+            callSid,
+            duplicate: consent.duplicate,
+            verified: consent.identity?.consentIdentityVerified,
+          });
+
+          const allowSms =
+            consent.identity?.consentIdentityVerified &&
+            (target.demoMode ||
+              forwardedFrom ||
+              consentPath === MCTB_TEXML_CONSENT_PATH);
+
+          if (allowSms && !consent.duplicate) {
+            traceMctbTexml("MCTB_SMS_QUEUED", { workspaceId: target.workspaceId, callSid });
+            const sms = await triggerMissedCallTextFromConsent({
               workspaceId: target.workspaceId,
-              demoMode: target.demoMode,
+              callerNumber: consent.identity.consentingCallerNumber || from,
+              businessNumber: businessNumberForConsentStorage(consent.identity),
+              callSessionId: callSid || `texml:${Date.now()}`,
+              forwardedFrom: forwardedFrom || null,
+              consentIdentityVerified: true,
+              eventMetadata: {
+                ...consentMetadata,
+                certMode,
+                testSms: certModeUsesTestSms(),
+              },
+            });
+            traceMctbTexml("MCTB_SMS_ACCEPTED", {
+              workspaceId: target.workspaceId,
+              callSid,
               result: sms,
-            }),
-          );
-        } else if (!consent.identity?.consentIdentityVerified) {
-          console.log(
-            JSON.stringify({
-              source: "mctb-consent-texml",
-              event: "sms_skipped",
-              workspaceId: target.workspaceId,
-              reason: "consent_identity_unverified",
-              identityReason: consent.identity?.identityReason ?? null,
-              from,
-              to,
-            }),
-          );
-        } else {
-          console.log(
-            JSON.stringify({
-              source: "mctb-consent-texml",
-              event: "sms_skipped",
-              workspaceId: target.workspaceId,
-              demoMode: target.demoMode,
-              reason: "start_try_it_before_calling",
-              from,
-              to,
-            }),
-          );
+            });
+            console.log(
+              JSON.stringify({
+                source: "mctb-consent-texml",
+                event: "sms_triggered",
+                workspaceId: target.workspaceId,
+                demoMode: target.demoMode,
+                consentPath,
+                result: sms,
+              }),
+            );
+          } else if (!consent.identity?.consentIdentityVerified) {
+            console.log(
+              JSON.stringify({
+                source: "mctb-consent-texml",
+                event: "sms_skipped",
+                workspaceId: target.workspaceId,
+                reason: "consent_identity_unverified",
+                identityReason: consent.identity?.identityReason ?? null,
+                from,
+                to,
+              }),
+            );
+          } else if (consent.duplicate) {
+            console.log(
+              JSON.stringify({
+                source: "mctb-consent-texml",
+                event: "sms_skipped",
+                workspaceId: target.workspaceId,
+                reason: "duplicate_consent",
+                callSid,
+              }),
+            );
+          } else {
+            console.log(
+              JSON.stringify({
+                source: "mctb-consent-texml",
+                event: "sms_skipped",
+                workspaceId: target.workspaceId,
+                demoMode: target.demoMode,
+                reason: "start_try_it_before_calling",
+                from,
+                to,
+              }),
+            );
+          }
+        } catch (err) {
+          console.error("[mctb-consent-texml] gather handler failed", err);
         }
-      } catch (err) {
-        console.error("[mctb-consent-texml] gather handler failed", err);
       }
 
-      return texml(buildMctbConsentGatherSuccessTexml(), "gather_press_1");
+      const successBody =
+        certMode === "B"
+          ? `<Say voice="female">Thank you. Press 1 was received.</Say><Hangup/>`
+          : buildMctbConsentGatherSuccessTexml();
+      return texml(successBody, "gather_press_1");
     }
 
     console.log(

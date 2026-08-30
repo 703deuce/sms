@@ -1,0 +1,190 @@
+import "server-only";
+
+import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
+import {
+  MCTB_TEXML_ROUTING_MODE,
+  MCTB_TEXML_ROUTING_OWNER,
+} from "./constants";
+import { invalidateMctbTexmlIngressCache } from "./config-cache";
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+
+function texmlStatusCallbackBody() {
+  const urls = getTelnyxWebhookUrls();
+  return {
+    status_callback: urls.texmlStatus,
+    status_callback_method: "POST" as const,
+  };
+}
+
+export function mctbTexmlEntryVoiceUrl(): string {
+  return getTelnyxWebhookUrls().mctbEntry;
+}
+
+export async function ensureMctbTexmlApplication(input?: {
+  friendlyName?: string;
+  preferredAppId?: string | null;
+}): Promise<string> {
+  const voiceUrl = mctbTexmlEntryVoiceUrl();
+  const preferred =
+    input?.preferredAppId?.trim() ||
+    process.env.MCTB_TEXML_APP_ID?.trim() ||
+    "";
+
+  if (preferred) {
+    try {
+      await telnyxRequest(`/texml_applications/${encodeURIComponent(preferred)}`, {
+        method: "PATCH",
+        body: {
+          friendly_name: input?.friendlyName || "MCTB TeXML Ingress",
+          voice_url: voiceUrl,
+          voice_method: "POST",
+          active: true,
+          ...texmlStatusCallbackBody(),
+        },
+      });
+      return preferred;
+    } catch {
+      // create below
+    }
+  }
+
+  const listed = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>(
+    "/texml_applications",
+    { query: { "page[size]": 50 } },
+  );
+  const rows = Array.isArray(listed.data) ? listed.data : [];
+  const existing = rows.find(
+    (row) => String(row.voice_url || "").replace(/\/$/, "") === voiceUrl.replace(/\/$/, ""),
+  );
+  if (existing?.id) return String(existing.id);
+
+  const created = await telnyxRequest<{ data?: Record<string, unknown> }>("/texml_applications", {
+    method: "POST",
+    body: {
+      friendly_name: input?.friendlyName || "MCTB TeXML Ingress",
+      voice_url: voiceUrl,
+      voice_method: "POST",
+      active: true,
+      ...texmlStatusCallbackBody(),
+    },
+  });
+  const app = asRecord(created.data) || asRecord(created) || {};
+  const id = String(app.id || "");
+  if (!id) throw new Error("Failed to create MCTB TeXML ingress application");
+  return id;
+}
+
+export async function routePhoneToMctbTexmlIngress(input: {
+  e164: string;
+  providerNumberId: string;
+  friendlyName?: string;
+  preferredTexmlAppId?: string | null;
+}): Promise<{
+  e164: string;
+  texmlAppId: string;
+  voiceUrl: string;
+  liveConnectionId: string | null;
+  matched: boolean;
+  path: string;
+}> {
+  const texmlAppId = await ensureMctbTexmlApplication({
+    friendlyName: input.friendlyName,
+    preferredAppId: input.preferredTexmlAppId,
+  });
+  const voiceUrl = mctbTexmlEntryVoiceUrl();
+
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(input.providerNumberId)}`, {
+    method: "PATCH",
+    body: { connection_id: texmlAppId },
+  });
+
+  const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
+  );
+  const liveConnectionId = String((asRecord(verify.data) || asRecord(verify) || {}).connection_id || "");
+  const matched = liveConnectionId === texmlAppId;
+
+  invalidateMctbTexmlIngressCache(input.e164);
+
+  return {
+    e164: input.e164,
+    texmlAppId,
+    voiceUrl,
+    liveConnectionId: liveConnectionId || null,
+    matched,
+    path: matched
+      ? `${input.e164} → TeXML ${texmlAppId} → MCTB ingress (Call Control bypassed)`
+      : `${input.e164} → TeXML route mismatch (expected ${texmlAppId}, live ${liveConnectionId || "none"})`,
+  };
+}
+
+export function isMctbTexmlIngressConnection(connectionId: string | null | undefined): boolean {
+  if (!connectionId) return false;
+  const envId = process.env.MCTB_TEXML_APP_ID?.trim();
+  if (envId && connectionId === envId) return true;
+  return false;
+}
+
+export async function verifyMctbTexmlIngressRoute(input: {
+  e164: string;
+  providerNumberId: string;
+}): Promise<{
+  ok: boolean;
+  routingMode: string | null;
+  texmlAppId: string | null;
+  liveConnectionId: string | null;
+  voiceUrl: string;
+  failReason?: string;
+}> {
+  const voiceUrl = mctbTexmlEntryVoiceUrl();
+  let texmlAppId: string | null = null;
+  try {
+    texmlAppId = await ensureMctbTexmlApplication();
+  } catch (err) {
+    return {
+      ok: false,
+      routingMode: null,
+      texmlAppId: null,
+      liveConnectionId: null,
+      voiceUrl,
+      failReason: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
+  );
+  const liveConnectionId = String((asRecord(verify.data) || asRecord(verify) || {}).connection_id || "");
+  const connectionName = String((asRecord(verify.data) || asRecord(verify) || {}).connection_name || "");
+
+  const blockedPatterns = ["fqdn", "livekit", "sip", "assistant", "ai direct"];
+  const nameLower = connectionName.toLowerCase();
+  for (const pat of blockedPatterns) {
+    if (nameLower.includes(pat) && liveConnectionId !== texmlAppId) {
+      return {
+        ok: false,
+        routingMode: null,
+        texmlAppId,
+        liveConnectionId,
+        voiceUrl,
+        failReason: `DID on wrong connection type: ${connectionName} (${liveConnectionId})`,
+      };
+    }
+  }
+
+  const ok = liveConnectionId === texmlAppId;
+  return {
+    ok,
+    routingMode: ok ? MCTB_TEXML_ROUTING_MODE : null,
+    texmlAppId,
+    liveConnectionId: liveConnectionId || null,
+    voiceUrl,
+    failReason: ok ? undefined : `Expected TeXML ${texmlAppId}, live ${liveConnectionId || "(none)"}`,
+  };
+}
+
+export { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER };

@@ -1,5 +1,6 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
+import { MCTB_TEXML_ROUTING_MODE } from "@/lib/mctb/texml-ingress/constants";
 
 function normalizeDid(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -39,9 +40,12 @@ export function isMctbDedicatedVoiceIngress(settingsJson: unknown): boolean {
   return isMctbCallControlVoiceIngress(settingsJson);
 }
 
-/** @deprecated TeXML is not a supported MCTB production path. */
-export function isMctbTexmlVoiceIngress(_settingsJson: unknown): boolean {
-  return false;
+/** TeXML-first MCTB ingress (carrier → DID → TeXML → Gather). */
+export function isMctbTexmlVoiceIngress(settingsJson: unknown): boolean {
+  const settings = readPhoneMctbSettings(settingsJson);
+  const telephony = settings.telephony;
+  if (!telephony || typeof telephony !== "object" || Array.isArray(telephony)) return false;
+  return (telephony as Record<string, unknown>).routingMode === MCTB_TEXML_ROUTING_MODE;
 }
 
 function envAllowlist(): Set<string> {

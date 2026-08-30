@@ -5,6 +5,7 @@ import {
   isPhoneMctbSipIngress,
   readPhoneMctbSettings,
 } from "@/lib/mctb/sip-ingress/sync";
+import { MCTB_TEXML_ROUTING_MODE } from "@/lib/mctb/texml-ingress/constants";
 
 /** Canonical MCTB voice path — same as the working 866 forward test. */
 export const MCTB_CANONICAL_ROUTING_MODE = "call_control_event_only" as const;
@@ -20,8 +21,16 @@ export function isMctbCanonicalVoiceSettings(settingsJson: unknown): boolean {
   return (telephony as Record<string, unknown>).routingMode === MCTB_CANONICAL_ROUTING_MODE;
 }
 
-/** MCTB numbers must never be pointed at Transovo Voice, TeXML, or LiveKit ingress. */
+export function isMctbTexmlRoutingMode(settingsJson: unknown): boolean {
+  const settings = readPhoneMctbSettings(settingsJson);
+  const telephony = settings.telephony;
+  if (!telephony || typeof telephony !== "object" || Array.isArray(telephony)) return false;
+  return (telephony as Record<string, unknown>).routingMode === MCTB_TEXML_ROUTING_MODE;
+}
+
+/** MCTB Call Control numbers must not use generic AI TeXML; mctb_texml TeXML ingress is allowed. */
 export function isMctbVoiceRouteLocked(settingsJson: unknown): boolean {
+  if (isMctbTexmlRoutingMode(settingsJson)) return false;
   return isPhoneMctbSipIngress(settingsJson);
 }
 

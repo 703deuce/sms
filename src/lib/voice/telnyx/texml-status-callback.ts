@@ -185,6 +185,36 @@ export async function handleTexmlStatusCallback(request: Request) {
     return NextResponse.json({ ok: true, skipped: "mctb_texml_consent" });
   }
 
+  if (toEarly) {
+    const pnMctb = await prisma.phoneNumber.findFirst({
+      where: { e164: toEarly },
+      select: { workspaceId: true, settingsJson: true },
+    });
+    const { isMctbTexmlVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
+    const { MCTB_CONSENT_MODE_EXISTING } = await import("@/lib/mctb/consent-mode");
+    if (pnMctb && isMctbTexmlVoiceIngress(pnMctb.settingsJson)) {
+      const terminal = eventType === "call.hangup";
+      if (terminal) {
+        const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
+        const mode = await loadMctbConsentMode(pnMctb.workspaceId).catch(() => "press_1" as const);
+        if (mode === MCTB_CONSENT_MODE_EXISTING) {
+          const { scheduleMctbTexmlExistingConsentCapture } = await import(
+            "@/lib/mctb/texml-ingress/existing-consent-capture"
+          );
+          scheduleMctbTexmlExistingConsentCapture({
+            eventPayload,
+            workspaceId: pnMctb.workspaceId,
+          });
+        }
+      }
+      await prisma.providerWebhookEvent.update({
+        where: { providerEventId },
+        data: { status: "processed", processedAt: new Date() },
+      });
+      return NextResponse.json({ ok: true, skipped: "mctb_texml_ingress" });
+    }
+  }
+
   if (
     toEarly &&
     (eventType === "call.initiated" || eventType === "call.ringing")

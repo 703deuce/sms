@@ -52,7 +52,9 @@ export function getTelnyxWebhookUrls() {
     voice: `${base}/api/telnyx/voice`,
     /** TeXML application status_callback (form or JSON call progress) */
     texmlStatus: `${base}/api/telnyx/voice/texml-status`,
-    /** MCTB platform 571 Press-1 TeXML voice_url (instant answer for carrier forwards) */
+    /** MCTB TeXML-first ingress (carrier → DID → TeXML → MCTB branch) */
+    mctbEntry: `${base}/api/telnyx/voice/mctb-entry`,
+    /** MCTB Press-1 Gather callback (DTMF consent — keep separate from ingress) */
     mctbConsentTexml: `${base}/api/telnyx/voice/mctb-consent`,
     /** MCTB platform 571 Call Control diagnostic (separate app — do not mix with TeXML) */
     mctbCallControlDiagnostic: `${base}/api/telnyx/voice/mctb-call-control`,

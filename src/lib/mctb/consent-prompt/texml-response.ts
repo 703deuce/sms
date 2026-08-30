@@ -8,14 +8,14 @@ function appBaseUrl(): string {
   );
 }
 
-function consentTexmlVoiceUrl(): string {
+function consentTexmlVoiceUrl(segment: "mctb-consent" | "mctb-entry" = "mctb-consent"): string {
   const base = appBaseUrl();
   if (!base) {
     throw new Error(
       "MCTB TeXML requires APP_URL or NEXT_PUBLIC_APP_URL for Gather action URLs",
     );
   }
-  return `${base}/api/telnyx/voice/mctb-consent`;
+  return `${base}/api/telnyx/voice/${segment}`;
 }
 
 function consentPlaybackUrl(): string {
@@ -70,9 +70,14 @@ export const MCTB_CONSENT_TEXML_SAY_ONLY_DIAGNOSTIC =
 /** Build inbound Press-1 TeXML without awaiting DB (safe for carrier forward hot path). */
 export function buildMctbConsentInboundTexml(
   forwardedFrom: string,
-  options?: { promptMode?: MctbConsentTexmlPromptMode },
+  options?: {
+    promptMode?: MctbConsentTexmlPromptMode;
+    /** Gather callback route segment (default mctb-consent). */
+    gatherBasePath?: "mctb-consent" | "mctb-entry";
+  },
 ): MctbConsentInboundTexmlBuild {
   const promptMode = options?.promptMode ?? resolveMctbConsentTexmlPromptMode();
+  const gatherBasePath = options?.gatherBasePath || "mctb-consent";
   const audioUrl = consentPlaybackUrl();
 
   if (promptMode === "say-only") {
@@ -87,9 +92,10 @@ export function buildMctbConsentInboundTexml(
     };
   }
 
-  const voiceUrl = consentTexmlVoiceUrl();
+  const voiceUrl = consentTexmlVoiceUrl(gatherBasePath);
   const actionUrl = new URL(voiceUrl);
   actionUrl.searchParams.set("event", "gather");
+  actionUrl.searchParams.set("path", "texml_mctb_ingress");
   if (forwardedFrom) actionUrl.searchParams.set("forwardedFrom", forwardedFrom);
   const gatherActionUrl = actionUrl.toString();
 

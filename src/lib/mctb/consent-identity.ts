@@ -46,7 +46,7 @@ export function resolveConsentIdentity(input: {
   const transovoIngressNumber = String(input.transovoIngressE164 || "").trim();
   const customerBusinessNumber = String(input.customerBusinessE164 || "").trim() || null;
   const path = String(input.path || "").trim();
-  const isTexmlPath = path === "texml_mctb_consent";
+  const isTexmlPath = path === "texml_mctb_consent" || path === "texml_mctb_ingress";
   const hasDiversion = Boolean(input.hasDiversionHeader);
 
   const base = {
@@ -82,6 +82,16 @@ export function resolveConsentIdentity(input: {
       callerIdentityStatus: "unavailable",
       consentIdentityVerified: false,
       identityReason: "signaling_from_matches_customer_business_line",
+    };
+  }
+
+  if (path === "texml_mctb_ingress") {
+    return {
+      ...base,
+      consentingCallerNumber: signalingFrom,
+      callerIdentityStatus: "verified",
+      consentIdentityVerified: true,
+      identityReason: "texml_mctb_ingress_ani_preserved",
     };
   }
 
