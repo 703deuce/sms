@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { mapPhoneNumber } from "@/lib/mappers";
 import {
   getPlatformDemoPhoneRecord,
@@ -38,6 +39,46 @@ const phoneSelect = {
   provider: true,
   workspaceId: true,
 } as const;
+
+function e164Key(e164: string | null | undefined): string | null {
+  if (!e164?.trim()) return null;
+  try {
+    return normalizeE164(e164);
+  } catch {
+    const digits = e164.replace(/\D/g, "");
+    return digits || null;
+  }
+}
+
+function isReleasedPhoneStatus(status: string | null | undefined): boolean {
+  return String(status || "").toLowerCase() === "released";
+}
+
+/** Prefer owned workspace DID over linked platform-demo row for the same E.164. */
+function dedupeAccessiblePhonesByE164(
+  rows: WorkspaceAccessiblePhoneRow[],
+): WorkspaceAccessiblePhoneRow[] {
+  const byE164 = new Map<string, WorkspaceAccessiblePhoneRow>();
+  const withoutE164: WorkspaceAccessiblePhoneRow[] = [];
+
+  for (const row of rows) {
+    const key = e164Key(row.e164);
+    if (!key) {
+      withoutE164.push(row);
+      continue;
+    }
+    const existing = byE164.get(key);
+    if (!existing) {
+      byE164.set(key, row);
+      continue;
+    }
+    if (existing.source === "linked" && row.source === "owned") {
+      byE164.set(key, row);
+    }
+  }
+
+  return [...byE164.values(), ...withoutE164].sort((a, b) => a.e164.localeCompare(b.e164));
+}
 
 function buildLinkedPlatformDemoRow(
   platformDemoPhone: NonNullable<Awaited<ReturnType<typeof getPlatformDemoPhoneRecord>>>,
@@ -92,16 +133,28 @@ export async function loadWorkspaceAccessiblePhoneNumbers(
     }),
   );
 
-  if (
-    platformDemoAuthorized &&
-    platformDemoPhone &&
-    !rows.some((n) => n.id === platformDemoPhone.phoneNumberId)
-  ) {
-    rows.push(buildLinkedPlatformDemoRow(platformDemoPhone));
-    rows.sort((a, b) => a.e164.localeCompare(b.e164));
+  const ownedE164Keys = new Set(
+    rows.map((n) => e164Key(n.e164)).filter((k): k is string => Boolean(k)),
+  );
+
+  if (platformDemoAuthorized && platformDemoPhone) {
+    const demoKey = e164Key(platformDemoPhone.e164);
+    const alreadyHasId = rows.some((n) => n.id === platformDemoPhone.phoneNumberId);
+    const workspaceOwnsDemoE164 = demoKey ? ownedE164Keys.has(demoKey) : false;
+    if (!alreadyHasId && !workspaceOwnsDemoE164) {
+      rows.push(buildLinkedPlatformDemoRow(platformDemoPhone));
+    }
   }
 
-  return rows;
+  return dedupeAccessiblePhonesByE164(rows);
+}
+
+/** MCTB setup dropdown — active numbers only (no Released rows). */
+export async function loadMctbSetupPhoneOptions(
+  workspaceId: string,
+): Promise<WorkspaceAccessiblePhoneRow[]> {
+  const rows = await loadWorkspaceAccessiblePhoneNumbers(workspaceId);
+  return rows.filter((n) => !isReleasedPhoneStatus(n.status));
 }
 
 export function enrichWorkspacePhoneWithMessagingStatus<T extends WorkspaceAccessiblePhoneRow>(

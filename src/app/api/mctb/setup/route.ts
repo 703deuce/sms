@@ -16,6 +16,7 @@ import {
 import {
   enrichWorkspacePhoneWithMessagingStatus,
   loadWorkspaceAccessiblePhoneNumbers,
+  loadMctbSetupPhoneOptions,
 } from "@/lib/numbers/workspace-accessible-numbers";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import {
@@ -25,7 +26,7 @@ import {
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import {
-  isMctbSetupPhoneAccessible,
+  resolveCanonicalMctbSetupPhoneId,
   sanitizeMctbSetupPhoneNumberId,
 } from "@/lib/mctb/setup-phone-validation";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
@@ -110,7 +111,7 @@ export async function GET() {
     await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMissedCallTextBack(workspaceId),
-    loadWorkspaceAccessiblePhoneNumbers(workspaceId),
+    loadMctbSetupPhoneOptions(workspaceId),
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadAdminMctbTestFlags(workspaceId),
@@ -160,6 +161,23 @@ export async function GET() {
           smsPhoneNumberId: sanitizedSmsPhoneNumberId,
         }
       : runtime;
+
+  if (
+    sanitizedPhoneNumberId &&
+    (sanitizedPhoneNumberId !== runtime.phoneNumberId ||
+      sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId)
+  ) {
+    void updateMissedCallTextConfig({
+      workspaceId,
+      patch: {
+        phone_number_id: sanitizedPhoneNumberId,
+        sms_phone_number_id: sanitizedSmsPhoneNumberId || sanitizedPhoneNumberId,
+      },
+      source: "mctb_setup_stale_phone_repair",
+    }).catch((err) => {
+      console.warn("[mctb/setup] stale phone id repair", err);
+    });
+  }
 
   return NextResponse.json({
     data: {
@@ -223,6 +241,34 @@ export async function POST(req: Request) {
   const priorRuntime = await loadMissedCallTextConfig(workspaceId);
   const previousPhoneId = priorRuntime.phoneNumberId;
 
+  if (body.phoneNumberId !== undefined && body.phoneNumberId !== null) {
+    const canonicalPhoneId = await resolveCanonicalMctbSetupPhoneId(
+      workspaceId,
+      body.phoneNumberId,
+    );
+    if (!canonicalPhoneId) {
+      return NextResponse.json(
+        { error: "Selected number is not available for this workspace." },
+        { status: 400 },
+      );
+    }
+    body.phoneNumberId = canonicalPhoneId;
+  }
+
+  if (body.smsPhoneNumberId !== undefined && body.smsPhoneNumberId !== null) {
+    const canonicalSmsId = await resolveCanonicalMctbSetupPhoneId(
+      workspaceId,
+      body.smsPhoneNumberId,
+    );
+    if (!canonicalSmsId) {
+      return NextResponse.json(
+        { error: "Selected SMS number is not available for this workspace." },
+        { status: 400 },
+      );
+    }
+    body.smsPhoneNumberId = canonicalSmsId;
+  }
+
   const sessionUser = await prisma.user.findUnique({
     where: { id: session.userId },
     select: { phone: true },
@@ -254,29 +300,9 @@ export async function POST(req: Request) {
     );
   }
 
-  if (body.phoneNumberId !== undefined && body.phoneNumberId !== null) {
-    const phoneOk = await isMctbSetupPhoneAccessible(workspaceId, body.phoneNumberId);
-    if (!phoneOk) {
-      return NextResponse.json(
-        { error: "Selected number is not available for this workspace." },
-        { status: 400 },
-      );
-    }
-  }
-
-  if (body.smsPhoneNumberId !== undefined && body.smsPhoneNumberId !== null) {
-    const smsOk = await isMctbSetupPhoneAccessible(workspaceId, body.smsPhoneNumberId);
-    if (!smsOk) {
-      return NextResponse.json(
-        { error: "Selected SMS number is not available for this workspace." },
-        { status: 400 },
-      );
-    }
-  }
-
   if (body.activate === true && body.phoneNumberId) {
     const [phoneNumbers, compliance, reg, adminFlags] = await Promise.all([
-      loadWorkspaceAccessiblePhoneNumbers(workspaceId),
+      loadMctbSetupPhoneOptions(workspaceId),
       loadComplianceOverview(workspaceId),
       loadPhoneNumbers(workspaceId, { includeLinked: true }),
       loadAdminMctbTestFlags(workspaceId),

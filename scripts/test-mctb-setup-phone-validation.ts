@@ -5,14 +5,25 @@
 import assert from "node:assert/strict";
 import {
   isMctbSetupPhoneAccessible,
+  resolveCanonicalMctbSetupPhoneId,
   sanitizeMctbSetupPhoneNumberId,
 } from "../src/lib/mctb/setup-phone-validation";
 
 const WS = "ws_1";
 const PHONE_571 = "cmsgtjms84g6l2h0o255w1e3v";
+const LINKED_DUPLICATE_571 = "cmte8laci4o021u5q46723128";
 
 async function main() {
   assert.equal(await isMctbSetupPhoneAccessible(WS, PHONE_571), true);
+  assert.equal(await isMctbSetupPhoneAccessible(WS, LINKED_DUPLICATE_571), true);
+  assert.equal(
+    await resolveCanonicalMctbSetupPhoneId(WS, LINKED_DUPLICATE_571),
+    PHONE_571,
+  );
+  assert.equal(
+    await sanitizeMctbSetupPhoneNumberId(WS, LINKED_DUPLICATE_571),
+    PHONE_571,
+  );
   assert.equal(await isMctbSetupPhoneAccessible(WS, "cmte8laci4o021u5q46723128_deleted"), false);
   assert.equal(
     await sanitizeMctbSetupPhoneNumberId(WS, "cmte8laci4o021u5q46723128_deleted"),
