@@ -142,19 +142,6 @@ export async function invalidateMctbTexmlIngressCacheForWorkspace(workspaceId: s
     if (assigned?.e164) e164s.add(assigned.e164);
   }
 
-  const { readAdminTestWorkspaceIds } = await import("@/lib/mctb/platform-demo-access-shared");
-  const linkedOwners = await prisma.phoneNumber.findMany({
-    where: { NOT: { settingsJson: null } },
-    select: { e164: true, settingsJson: true },
-    take: 500,
-  });
-  for (const phone of linkedOwners) {
-    if (!phone.e164) continue;
-    if (readAdminTestWorkspaceIds(phone.settingsJson).includes(workspaceId)) {
-      e164s.add(phone.e164);
-    }
-  }
-
   for (const e164 of e164s) {
     invalidateMctbTexmlIngressCache(e164);
   }

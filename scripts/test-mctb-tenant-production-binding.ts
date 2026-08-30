@@ -1,5 +1,5 @@
 /**
- * Tenant production binding + platform demo routing contracts.
+ * Tenant production binding contracts — platform demo removed.
  *
  * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-tenant-production-binding.ts
  */
@@ -10,14 +10,9 @@ import {
   ensureMctbTenantProductionBinding,
   resolveLinkedPlatformDemoTenantWorkspace,
 } from "@/lib/mctb/tenant-production-binding";
-import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/demo-workspace-target";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
-import {
-  getPlatformDemoPhoneRecord,
-  readAdminTestWorkspaceIds,
-} from "@/lib/mctb/platform-demo-access";
+import { getPlatformDemoPhoneRecord } from "@/lib/mctb/platform-demo-access";
 
-const PLATFORM_OWNER = "cmt2zyg4l43373s0f146b442h";
 const TENANT_WORKSPACE = "ws_1";
 const OWNED_571 = "cmsgtjms84g6l2h0o255w1e3v";
 
@@ -36,8 +31,7 @@ assert.match(
 );
 
 async function main() {
-  const demo = await getPlatformDemoPhoneRecord();
-  assert.ok(demo, "platform demo phone must exist");
+  assert.equal(await getPlatformDemoPhoneRecord(), null, "platform demo phone must be removed");
 
   const ownedBinding = await ensureMctbTenantProductionBinding({
     workspaceId: TENANT_WORKSPACE,
@@ -49,36 +43,8 @@ async function main() {
   const ownedRuntime = await loadMissedCallTextConfig(TENANT_WORKSPACE);
   assert.equal(ownedRuntime.phoneNumberId, OWNED_571);
 
-  const binding = await ensureMctbTenantProductionBinding({
-    workspaceId: TENANT_WORKSPACE,
-    phoneNumberId: demo.phoneNumberId,
-    businessLineE164: process.env.MCTB_TEST_BUSINESS_E164 || "+15555550100",
-  });
-  assert.equal(binding.ok, true);
-  assert.equal(binding.platformDemoLinked, true);
-  assert.equal(binding.phoneNumberId, demo.phoneNumberId);
-  assert.equal(binding.forwardingConnected, true);
-
-  const refreshedDemo = await getPlatformDemoPhoneRecord();
-  const linked = readAdminTestWorkspaceIds(refreshedDemo?.settingsJson);
-  assert.ok(
-    linked.includes(TENANT_WORKSPACE),
-    "tenant workspace must be linked on platform demo phone after explicit demo selection",
-  );
-
-  const runtime = await loadMissedCallTextConfig(TENANT_WORKSPACE);
-  assert.equal(runtime.phoneNumberId, demo.phoneNumberId);
-
   const routed = await resolveLinkedPlatformDemoTenantWorkspace("+15714073615");
-  assert.equal(routed, TENANT_WORKSPACE);
-
-  const withoutDiversion = await resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: process.env.MCTB_TEST_CALLER_E164 || "+15555550199",
-    businessE164: "+15714073615",
-    forwardedFrom: null,
-  });
-  assert.equal(withoutDiversion.workspaceId, TENANT_WORKSPACE);
-  assert.notEqual(withoutDiversion.workspaceId, PLATFORM_OWNER);
+  assert.equal(routed, null, "platform demo tenant routing must be disabled");
 
   console.log("test-mctb-tenant-production-binding: ok");
 }

@@ -97,7 +97,7 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
   const routed = await switchDidToMctbTexmlIngress({
     workspaceId: phone.workspaceId,
     phoneNumberId: phone.id,
-    friendlyName: mctbRole === "platform_demo" ? "MCTB Platform Demo" : `MCTB ${phone.e164}`,
+    friendlyName: `MCTB ${phone.e164}`,
     mctbRole,
   });
   if (!routed.ok || !routed.verify.ok) {
@@ -131,7 +131,7 @@ export async function reassertMctbTexmlVoiceRoute(input: {
     const routed = await switchDidToMctbTexmlIngress({
       workspaceId: phone.workspaceId,
       phoneNumberId: phone.id,
-      friendlyName: mctbRole === "platform_demo" ? "MCTB Platform Demo" : `MCTB ${phone.e164}`,
+      friendlyName: `MCTB ${phone.e164}`,
       mctbRole,
     });
     actions.push(

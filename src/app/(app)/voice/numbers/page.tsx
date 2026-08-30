@@ -4,7 +4,6 @@ import {
   enrichWorkspacePhoneWithMessagingStatus,
   loadWorkspaceAccessiblePhoneNumbers,
 } from "@/lib/numbers/workspace-accessible-numbers";
-import { getPlatformDemoPhoneRecord, isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import Link from "next/link";
 
 function fmtPhone(e164: string) {
@@ -17,15 +16,8 @@ function fmtPhone(e164: string) {
 
 export default async function VoiceNumbersPage() {
   const { workspaceId } = await requireWorkspaceContext();
-  const [numbers, platformDemoAuthorized, platformDemoPhone] = await Promise.all([
-    loadWorkspaceAccessiblePhoneNumbers(workspaceId),
-    isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId),
-    getPlatformDemoPhoneRecord(),
-  ]);
-  const numbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(
-    numbers,
-    platformDemoAuthorized ? platformDemoPhone?.phoneNumberId : null,
-  );
+  const numbers = await loadWorkspaceAccessiblePhoneNumbers(workspaceId);
+  const numbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(numbers);
 
   return (
     <div>

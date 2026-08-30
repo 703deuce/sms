@@ -1,5 +1,4 @@
 import { getPrisma } from "@/lib/db";
-import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import {
   assertNotMctbLockedForGenericVoiceProvision,
   isMctbTexmlIngressLocked,
@@ -49,24 +48,7 @@ export async function resolveMctbProvisionPhone(input: {
   });
   if (owned) return owned;
 
-  if (!(await isWorkspaceAuthorizedForPlatformDemoNumber(input.workspaceId))) {
-    return null;
-  }
-
-  const shared = await prisma.phoneNumber.findFirst({
-    where: { id: input.phoneNumberId },
-    select: {
-      id: true,
-      e164: true,
-      provider: true,
-      providerNumberId: true,
-      settingsJson: true,
-      status: true,
-      workspaceId: true,
-    },
-  });
-  if (!shared) return null;
-  return shared;
+  return null;
 }
 
 export async function assertMctbProvisionPhoneInWorkspace(input: {

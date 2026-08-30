@@ -3,7 +3,6 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
-import { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
 import { isMctbTexmlVoiceIngress } from "@/lib/mctb/sip-ingress/sync";
 import { traceMctbDebug } from "@/lib/mctb/debug";
 import { mctbTexmlE164Variants } from "./e164-lookup";
@@ -57,16 +56,9 @@ async function scoreIngressPhoneRow(phone: PhoneRow): Promise<number> {
     score += 150;
   }
 
-  for (const linkedWorkspaceId of readAdminTestWorkspaceIds(phone.settingsJson)) {
-    const linkedConfig = await loadMissedCallTextConfig(linkedWorkspaceId);
-    if (linkedConfig.enabled && linkedConfig.phoneNumberId === phone.id) {
-      score += 140;
-    }
-  }
-
   const settings = (phone.settingsJson || {}) as Record<string, unknown>;
-  if (settings.platformDemo === true) score += 30;
-  if (String(settings.mctbRole || "").toLowerCase() === "platform_demo") score += 10;
+  if (settings.platformDemo === true) score -= 300;
+  if (String(settings.mctbRole || "").toLowerCase() === "platform_demo") score -= 100;
 
   return score;
 }

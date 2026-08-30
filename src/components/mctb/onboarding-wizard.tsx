@@ -164,21 +164,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   useEffect(() => {
     if (step !== "demo") return;
     const timer = setInterval(() => {
-      void fetch("/api/mctb/demo", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((j) => {
-          if (!j.data) return;
-          setData((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  demo: { ...prev.demo, ...j.data },
-                }
-              : prev,
-          );
-          if (j.data.completed) void load();
-        })
-        .catch(() => undefined);
+      void load();
     }, 2500);
     return () => clearInterval(timer);
   }, [step, load]);
@@ -263,10 +249,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/mctb/demo", {
+      const res = await fetch("/api/mctb/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "start_demo",
           consentMode,
           existingConsentAttested:
             consentMode === "existing_consent" ? existingConsentAttested : undefined,

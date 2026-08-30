@@ -1,20 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { loadMissedCallTextConfig, updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { isAdminMctbTestWorkspace, loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
-import {
-  getPlatformDemoPhoneRecord,
-  isWorkspaceAuthorizedForPlatformDemoNumber,
-  linkWorkspaceToPlatformDemoNumber,
-  unlinkWorkspaceFromPlatformDemoNumber,
-  readAdminTestWorkspaceIds,
-} from "@/lib/mctb/platform-demo-access";
-import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { saveMctbOnboardingState, parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
-import { resolveMctbPhoneNumberIdForWorkspace } from "@/lib/mctb/platform-production-routing";
 import { traceMctbDebug } from "@/lib/mctb/debug";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -34,27 +24,6 @@ function readBusinessLineE164(
   return fromMctb || fromOnboarding || null;
 }
 
-async function isAdminProductionMctbActive(workspaceId: string): Promise<boolean> {
-  const [flags, runtime] = await Promise.all([
-    loadAdminMctbTestFlags(workspaceId),
-    loadMissedCallTextConfig(workspaceId),
-  ]);
-  if (!isAdminMctbTestWorkspace(flags)) return false;
-  return runtime.enabled && Boolean(runtime.phoneNumberId);
-}
-
-function productionForwardActive(
-  state: MctbOnboardingState,
-  customFieldsConfig: unknown,
-  adminProduction: boolean,
-): boolean {
-  if (adminProduction) return true;
-  if (state.forwardingConnectedAt) return true;
-  if (state.forwardingTestStartedAt) return true;
-  if (state.liveTestSession?.startedAt) return true;
-  return state.currentStep === "connect" || state.currentStep === "live_test";
-}
-
 export type MctbTenantProductionBindingResult = {
   ok: boolean;
   platformDemoLinked: boolean;
@@ -64,9 +33,8 @@ export type MctbTenantProductionBindingResult = {
 };
 
 /**
- * Idempotent production binding for a tenant workspace.
- * - Platform-demo forward tests: link tenant, bind runtime to shared 571 DID, mark forwarding ready.
- * - Dedicated DID customers: persist business line + forwarding only.
+ * Persist business line + forwarding for tenant workspaces.
+ * Platform demo linking removed — only workspace-owned DIDs.
  */
 export async function ensureMctbTenantProductionBinding(input: {
   workspaceId: string;
@@ -75,7 +43,6 @@ export async function ensureMctbTenantProductionBinding(input: {
   businessLineE164?: string | null;
 }): Promise<MctbTenantProductionBindingResult> {
   const prisma = getPrisma();
-  const demo = await getPlatformDemoPhoneRecord();
   const runtime = await loadMissedCallTextConfig(input.workspaceId);
 
   const ws = await prisma.workspace.findUnique({
@@ -95,63 +62,7 @@ export async function ensureMctbTenantProductionBinding(input: {
     }
   }
 
-  let phoneNumberId = input.phoneNumberId ?? runtime.phoneNumberId ?? null;
-
-  const workspaceOwnsSelectedPhone = phoneNumberId
-    ? Boolean(
-        await prisma.phoneNumber.findFirst({
-          where: {
-            id: phoneNumberId,
-            workspaceId: input.workspaceId,
-            status: { not: "Released" },
-          },
-          select: { id: true },
-        }),
-      )
-    : false;
-
-  // Platform demo path only when the tenant explicitly uses the shared linked row —
-  // never when they own a dedicated DID on the same E.164 (ws_1 Main Line vs demo row).
-  const selectedIsPlatformDemo = Boolean(
-    demo?.phoneNumberId &&
-      phoneNumberId &&
-      !workspaceOwnsSelectedPhone &&
-      phoneNumberId === demo.phoneNumberId,
-  );
-
-  // Shared 571 is opt-in only: explicit selection of the platform-demo phone row in Setup.
-  // Never overwrite a customer's own provisioned DID because Try It linked them once.
-  const usesPlatformDemoTenant = Boolean(demo) && selectedIsPlatformDemo;
-
-  let platformDemoLinked = false;
-  if (!usesPlatformDemoTenant && demo && phoneNumberId && phoneNumberId !== demo.phoneNumberId) {
-    await unlinkWorkspaceFromPlatformDemoNumber({ workspaceId: input.workspaceId }).catch(
-      () => undefined,
-    );
-  }
-
-  if (usesPlatformDemoTenant && demo) {
-    await linkWorkspaceToPlatformDemoNumber({
-      workspaceId: input.workspaceId,
-      userEmail: input.userEmail,
-    });
-    phoneNumberId = demo.phoneNumberId;
-    platformDemoLinked = true;
-
-    await updateMissedCallTextConfig({
-      workspaceId: input.workspaceId,
-      patch: {
-        phone_number_id: demo.phoneNumberId,
-        sms_phone_number_id: demo.phoneNumberId,
-      },
-      source: "mctb_tenant_production_binding",
-    });
-
-    await prisma.workspace.update({
-      where: { id: input.workspaceId },
-      data: { activeFromNumberId: demo.phoneNumberId },
-    });
-  }
+  const phoneNumberId = input.phoneNumberId ?? runtime.phoneNumberId ?? null;
 
   let forwardingConnected = Boolean(state.forwardingConnectedAt);
   if (businessLineE164) {
@@ -179,7 +90,7 @@ export async function ensureMctbTenantProductionBinding(input: {
 
   const result: MctbTenantProductionBindingResult = {
     ok: true,
-    platformDemoLinked,
+    platformDemoLinked: false,
     phoneNumberId,
     businessLineE164: businessLineE164 || null,
     forwardingConnected,
@@ -189,65 +100,15 @@ export async function ensureMctbTenantProductionBinding(input: {
     workspaceId: input.workspaceId,
     inputPhoneNumberId: input.phoneNumberId ?? null,
     runtimePhoneNumberId: runtime.phoneNumberId,
-    workspaceOwnsSelectedPhone,
-    selectedIsPlatformDemo,
-    usesPlatformDemoTenant,
     ...result,
   });
 
   return result;
 }
 
-/**
- * Resolve the tenant workspace for inbound calls to the shared platform demo DID
- * when no Diversion header is present. Uses explicit phone→tenant links from Setup,
- * not heuristics.
- */
+/** @deprecated Platform demo removed. */
 export async function resolveLinkedPlatformDemoTenantWorkspace(
-  transovoE164: string,
+  _transovoE164: string,
 ): Promise<string | null> {
-  if (!isPlatformDemoNumber(transovoE164)) return null;
-
-  const demo = await getPlatformDemoPhoneRecord();
-  if (!demo) return null;
-
-  const linkedIds = readAdminTestWorkspaceIds(demo.settingsJson).filter(
-    (id) => id !== demo.ownerWorkspaceId,
-  );
-  if (!linkedIds.length) return null;
-
-  const prisma = getPrisma();
-  const candidates: string[] = [];
-
-  for (const workspaceId of linkedIds) {
-    const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
-    if (!authorized) continue;
-
-    const [runtime, ws] = await Promise.all([
-      loadMissedCallTextConfig(workspaceId),
-      prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { customFieldsConfig: true },
-      }),
-    ]);
-    if (!ws || !runtime.enabled) continue;
-
-    const boundPhoneId = await resolveMctbPhoneNumberIdForWorkspace({
-      workspaceId,
-      phoneNumberId: runtime.phoneNumberId,
-      transovoE164: demo.e164,
-    });
-    if (boundPhoneId !== demo.phoneNumberId) continue;
-
-    const tenantState = parseMctbOnboardingState(ws.customFieldsConfig);
-    const businessLine = readBusinessLineE164(tenantState, ws.customFieldsConfig);
-    const adminProduction = await isAdminProductionMctbActive(workspaceId);
-    if (!businessLine && !adminProduction) continue;
-    if (!productionForwardActive(tenantState, ws.customFieldsConfig, adminProduction)) continue;
-
-    candidates.push(workspaceId);
-  }
-
-  if (candidates.length === 1) return candidates[0]!;
   return null;
 }

@@ -1,21 +1,4 @@
-import "server-only";
-
-import { getPrisma } from "@/lib/db";
-import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import { getPlatformDemoNumberE164 } from "@/lib/mctb/onboarding/demo";
-import {
-  isWorkspaceListedForPlatformDemoAccess,
-  readAdminTestWorkspaceIds,
-} from "@/lib/mctb/platform-demo-access-shared";
-
-export { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
+/** @deprecated Platform demo retired — owned workspace DIDs only. */
 export type PlatformDemoPhoneLink = {
   phoneNumberId: string;
   e164: string;
@@ -23,48 +6,22 @@ export type PlatformDemoPhoneLink = {
   settingsJson: Record<string, unknown>;
 };
 
+export { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
+
+/** Platform demo removed — always null. */
 export async function getPlatformDemoPhoneRecord(): Promise<PlatformDemoPhoneLink | null> {
-  const e164 = getPlatformDemoNumberE164();
-  const prisma = getPrisma();
-  const matches = await prisma.phoneNumber.findMany({
-    where: { e164 },
-    select: {
-      id: true,
-      e164: true,
-      workspaceId: true,
-      settingsJson: true,
-      status: true,
-    },
-  });
-  const active = matches.filter((row) => String(row.status || "").toLowerCase() !== "released");
-  if (!active.length) return null;
-
-  const pn =
-    active.find((row) => asRecord(row.settingsJson).platformDemo === true) ??
-    active.find((row) => readAdminTestWorkspaceIds(row.settingsJson).length > 0) ??
-    active[0]!;
-  return {
-    phoneNumberId: pn.id,
-    e164: pn.e164,
-    ownerWorkspaceId: pn.workspaceId,
-    settingsJson: asRecord(pn.settingsJson),
-  };
+  return null;
 }
 
-/** Workspace may use 571 for production/setup testing without owning the DID row. */
+/** Platform demo removed — never authorized. */
 export async function isWorkspaceAuthorizedForPlatformDemoNumber(
-  workspaceId: string,
+  _workspaceId: string,
 ): Promise<boolean> {
-  const pn = await getPlatformDemoPhoneRecord();
-  if (!pn) return false;
-  return isWorkspaceListedForPlatformDemoAccess(
-    workspaceId,
-    pn.settingsJson,
-    pn.ownerWorkspaceId,
-  );
+  return false;
 }
 
-export async function linkWorkspaceToPlatformDemoNumber(input: {
+/** Platform demo removed — no-op. */
+export async function linkWorkspaceToPlatformDemoNumber(_input: {
   workspaceId: string;
   userEmail?: string | null;
 }): Promise<{
@@ -74,68 +31,12 @@ export async function linkWorkspaceToPlatformDemoNumber(input: {
   linkedWorkspaceId: string;
   alreadyLinked: boolean;
 }> {
-  const pn = await getPlatformDemoPhoneRecord();
-  if (!pn) {
-    throw new Error(`Platform demo number ${MCTB_PLATFORM_DEMO_E164} not found in phone_numbers`);
-  }
-
-  const existing = readAdminTestWorkspaceIds(pn.settingsJson);
-  const alreadyLinked =
-    pn.ownerWorkspaceId === input.workspaceId || existing.includes(input.workspaceId);
-
-  if (!alreadyLinked) {
-    const prisma = getPrisma();
-    const nextSettings = {
-      ...pn.settingsJson,
-      mctbRole: pn.settingsJson.mctbRole || "platform_demo",
-      platformDemo: true,
-      adminTestWorkspaceIds: [...new Set([...existing, input.workspaceId])],
-      ...(input.userEmail ? { lastAdminLinkEmail: input.userEmail.toLowerCase() } : {}),
-      lastAdminLinkAt: new Date().toISOString(),
-    };
-    await prisma.phoneNumber.update({
-      where: { id: pn.phoneNumberId },
-      data: { settingsJson: nextSettings },
-    });
-  }
-
-  return {
-    phoneNumberId: pn.phoneNumberId,
-    e164: pn.e164,
-    ownerWorkspaceId: pn.ownerWorkspaceId,
-    linkedWorkspaceId: input.workspaceId,
-    alreadyLinked,
-  };
+  throw new Error("Platform demo has been removed. Use your workspace-owned MCTB number.");
 }
 
-/** Remove a tenant from shared 571 access when they move to a dedicated MCTB DID. */
-export async function unlinkWorkspaceFromPlatformDemoNumber(input: {
+/** Platform demo removed — no-op. */
+export async function unlinkWorkspaceFromPlatformDemoNumber(_input: {
   workspaceId: string;
 }): Promise<{ unlinked: boolean; remainingLinked: number }> {
-  const pn = await getPlatformDemoPhoneRecord();
-  if (!pn) return { unlinked: false, remainingLinked: 0 };
-
-  const existing = readAdminTestWorkspaceIds(pn.settingsJson);
-  if (!existing.includes(input.workspaceId) && pn.ownerWorkspaceId !== input.workspaceId) {
-    return { unlinked: false, remainingLinked: existing.length };
-  }
-
-  const nextIds = existing.filter((id) => id !== input.workspaceId);
-  if (nextIds.length === existing.length && pn.ownerWorkspaceId !== input.workspaceId) {
-    return { unlinked: false, remainingLinked: existing.length };
-  }
-
-  const prisma = getPrisma();
-  const nextSettings = {
-    ...pn.settingsJson,
-    adminTestWorkspaceIds: nextIds,
-    lastUnlinkAt: new Date().toISOString(),
-    lastUnlinkedWorkspaceId: input.workspaceId,
-  };
-  await prisma.phoneNumber.update({
-    where: { id: pn.phoneNumberId },
-    data: { settingsJson: nextSettings },
-  });
-
-  return { unlinked: true, remainingLinked: nextIds.length };
+  return { unlinked: false, remainingLinked: 0 };
 }

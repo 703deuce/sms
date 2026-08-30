@@ -28,12 +28,8 @@ export function formatDemoPhoneDisplay(e164: string): string {
   return e164;
 }
 
-export function isPlatformDemoNumber(businessE164: string): boolean {
-  try {
-    return normalizeE164(businessE164) === getPlatformDemoNumberE164();
-  } catch {
-    return false;
-  }
+export function isPlatformDemoNumber(_businessE164: string): boolean {
+  return false;
 }
 
 function isActiveDemoStatus(status: MctbDemoSessionStatus | undefined): boolean {
@@ -150,8 +146,13 @@ export async function startDemoSession(input: {
   callerE164: string;
   context?: "try_it" | "onboarding";
   userEmail?: string | null;
+  demoNumberE164?: string;
+  phoneNumberId?: string;
 }): Promise<{ demoNumberE164: string; session: MctbDemoSession }> {
-  const demoNumberE164 = getPlatformDemoNumberE164();
+  const demoNumberE164 = input.demoNumberE164 || (await resolveWorkspaceDemoNumberE164(input.workspaceId));
+  if (!demoNumberE164) {
+    throw new Error("No workspace MCTB number configured for Try It.");
+  }
   const startedAt = new Date().toISOString();
   const context = input.context || "onboarding";
 
@@ -174,30 +175,6 @@ export async function startDemoSession(input: {
   }
 
   await saveMctbOnboardingState(input.workspaceId, statePatch);
-
-  const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
-  const { syncPlatformDemoConsentRuntime } = await import(
-    "@/lib/mctb/onboarding/platform-demo"
-  );
-  const consentMode = await loadMctbConsentMode(input.workspaceId);
-  await syncPlatformDemoConsentRuntime(consentMode).catch((err) => {
-    console.error("[demo] syncPlatformDemoConsentRuntime", err);
-  });
-
-  if (context === "try_it") {
-    const { ensureTryItDemoVoiceReady, ensureTryItMctbRuntimeReady } = await import(
-      "@/lib/mctb/try-it/demo-voice"
-    );
-    await ensureTryItMctbRuntimeReady({
-      workspaceId: input.workspaceId,
-      userEmail: input.userEmail,
-    }).catch((err) => {
-      console.error("[demo] ensureTryItMctbRuntimeReady", err);
-    });
-    await ensureTryItDemoVoiceReady(input.workspaceId).catch((err) => {
-      console.error("[demo] ensureTryItDemoVoiceReady", err);
-    });
-  }
 
   await recordFunnelEvent(input.workspaceId, "MCTB_DEMO_STARTED", {
     demoNumberE164,
@@ -327,15 +304,22 @@ export function isDemoModeForWorkspace(
   }
 }
 
+async function resolveWorkspaceDemoNumberE164(workspaceId: string): Promise<string | null> {
+  const { resolveWorkspaceTryItPhone } = await import("@/lib/mctb/try-it/workspace-phone");
+  const phone = await resolveWorkspaceTryItPhone(workspaceId);
+  return phone?.e164 || null;
+}
+
 export async function getDemoStatus(workspaceId: string) {
   const state = await loadMctbOnboardingState(workspaceId);
   const session = state.demoSession;
-  const demoNumberE164 = getPlatformDemoNumberE164();
+  const demoNumberE164 =
+    session?.demoNumberE164 || (await resolveWorkspaceDemoNumberE164(workspaceId)) || "";
 
   return {
-    configured: true,
+    configured: Boolean(demoNumberE164),
     demoNumberE164,
-    demoNumberDisplay: formatDemoPhoneDisplay(demoNumberE164),
+    demoNumberDisplay: demoNumberE164 ? formatDemoPhoneDisplay(demoNumberE164) : null,
     session,
     checks: {
       callDetected: Boolean(session?.callDetectedAt),

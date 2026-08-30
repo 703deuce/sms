@@ -1,5 +1,4 @@
 import { getPrisma } from "@/lib/db";
-import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import type { MissedCallTextConfigRecord } from "./types";
 
 export type MctbSmsSender = {
@@ -9,8 +8,7 @@ export type MctbSmsSender = {
 };
 
 /**
- * Resolve a phone number saved in MCTB setup for this workspace.
- * Includes workspace-owned DIDs and platform-demo lines assigned to the workspace.
+ * Resolve a workspace-owned phone number saved in MCTB setup.
  */
 export async function resolveConfiguredMctbPhoneForWorkspace(
   workspaceId: string,
@@ -25,17 +23,6 @@ export async function resolveConfiguredMctbPhoneForWorkspace(
   });
   if (owned?.e164) {
     return { phoneNumberId: owned.id, e164: owned.e164 };
-  }
-
-  const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
-  if (!authorized) return null;
-
-  const linked = await prisma.phoneNumber.findFirst({
-    where: { id: phoneNumberId },
-    select: { id: true, e164: true },
-  });
-  if (linked?.e164) {
-    return { phoneNumberId: linked.id, e164: linked.e164 };
   }
 
   return null;

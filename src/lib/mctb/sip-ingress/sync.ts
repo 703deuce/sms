@@ -1,6 +1,4 @@
-import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import {
-  MCTB_TEXML_ROUTING_MODE,
+import { MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
 } from "@/lib/mctb/texml-ingress/constants";
 
@@ -68,8 +66,6 @@ function envAllowlist(): Set<string> {
       if (normalized) values.add(normalized);
     }
   }
-  const platform = normalizeDid(MCTB_PLATFORM_DEMO_E164);
-  if (platform) values.add(platform);
   return values;
 }
 

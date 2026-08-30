@@ -4,11 +4,9 @@ import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
-  isMctbSipIngressTargetSync,
   isMctbTexmlVoiceIngress,
   isPhoneMctbSipIngress,
 } from "@/lib/mctb/sip-ingress/sync";
-import { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
 import { resolveBestMctbIngressPhoneRow } from "@/lib/mctb/texml-ingress/resolve-phone-row";
 
 export type MctbSipIngressResolution = {
@@ -16,13 +14,7 @@ export type MctbSipIngressResolution = {
   workspaceId: string | null;
   phoneNumberId: string | null;
   e164: string | null;
-  source:
-    | "platform_demo_e164"
-    | "phone_settings"
-    | "mctb_config_assignment"
-    | "linked_workspace_assignment"
-    | "env_allowlist"
-    | "none";
+  source: "phone_settings" | "mctb_config_assignment" | "none";
 };
 
 /**
@@ -46,16 +38,6 @@ async function resolveWorkspaceForMctbPhoneAssignment(input: {
   if (ownerConfig.phoneNumberId === input.phoneNumberId) {
     return input.ownerWorkspaceId;
   }
-
-  for (const linkedWorkspaceId of readAdminTestWorkspaceIds(input.settingsJson)) {
-    const linkedConfig = await loadMissedCallTextConfig(linkedWorkspaceId);
-    if (linkedConfig.phoneNumberId === input.phoneNumberId) {
-      return linkedWorkspaceId;
-    }
-  }
-
-  // Inbound hit this PhoneNumber row — owner workspace is the tenant unless a linked
-  // workspace explicitly claimed the number above.
   return input.ownerWorkspaceId;
 }
 
@@ -105,16 +87,6 @@ export async function resolveMctbSipIngressByDid(
     source: "none",
   };
 
-  if (isMctbSipIngressTargetSync(e164)) {
-    resolution = {
-      isMctbSipIngress: true,
-      workspaceId: null,
-      phoneNumberId: null,
-      e164,
-      source: "platform_demo_e164",
-    };
-  }
-
   const pn = await resolveBestMctbIngressPhoneRow(e164);
 
   if (pn && String(pn.status || "").toLowerCase() !== "released") {
@@ -134,7 +106,7 @@ export async function resolveMctbSipIngressByDid(
         workspaceId: tenantWorkspaceId,
         phoneNumberId: pn.id,
         e164,
-        source: texmlIngress ? "phone_settings" : "phone_settings",
+        source: "phone_settings",
       };
     } else if (tenantWorkspaceId) {
       resolution = {
@@ -142,10 +114,7 @@ export async function resolveMctbSipIngressByDid(
         workspaceId: tenantWorkspaceId,
         phoneNumberId: pn.id,
         e164,
-        source:
-          tenantWorkspaceId === pn.workspaceId
-            ? "mctb_config_assignment"
-            : "linked_workspace_assignment",
+        source: "mctb_config_assignment",
       };
     }
   }
@@ -157,7 +126,6 @@ export async function resolveMctbSipIngressByDid(
 export async function isMctbSipIngressTarget(
   toE164: string | null | undefined,
 ): Promise<boolean> {
-  if (isMctbSipIngressTargetSync(toE164)) return true;
   const resolved = await resolveMctbSipIngressByDid(toE164);
   return resolved.isMctbSipIngress;
 }

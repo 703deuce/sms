@@ -62,7 +62,7 @@ export function MctbTryItView() {
     setStarting(true);
     setError(null);
     try {
-      const res = await fetch("/api/mctb/demo", {
+      const res = await fetch("/api/mctb/try-it", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -100,8 +100,8 @@ export function MctbTryItView() {
           <h1 className="text-2xl font-semibold tracking-tight">Try Missed Call Text Back</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          Same Telnyx Call Control path as production — call the shared demo number directly
-          instead of forwarding your business line. No carrier setup required before A2P approval.
+          Same Telnyx Call Control path as production — call your workspace MCTB number directly
+          to test Press 1 or Existing Consent before forwarding your business line.
         </p>
       </div>
 

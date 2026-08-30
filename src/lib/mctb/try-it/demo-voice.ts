@@ -137,25 +137,26 @@ export async function ensureTryItDemoVoiceReady(
 }
 
 /**
- * Wire tenant workspace for Try It: platform demo DID + enabled MCTB runtime.
- * Without this, inbound calls can fall through to legacy voicemail (LiveKit bridge).
+ * Wire tenant workspace for Try It using the workspace-owned MCTB DID.
  */
 export async function ensureTryItMctbRuntimeReady(input: {
   workspaceId: string;
+  phoneNumberId: string;
   userEmail?: string | null;
 }): Promise<{ phoneNumberId: string; e164: string }> {
-  const { getPlatformDemoPhoneRecord } = await import("@/lib/mctb/platform-demo-access");
   const { updateMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
   const { saveMissedCallTextBack } = await import("@/lib/solutions/missed-call-text-back/save");
-
-  const demo = await getPlatformDemoPhoneRecord();
-  if (!demo?.phoneNumberId) {
-    throw new Error("platform_demo_number_missing");
+  const prisma = getPrisma();
+  const pn = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+    select: { id: true, e164: true },
+  });
+  if (!pn?.e164) {
+    throw new Error("workspace_mctb_number_missing");
   }
 
-  // Try It uses an active demo session for routing — do NOT add permanent 571 tenant links.
   await saveMissedCallTextBack(input.workspaceId, {
-    phoneNumberId: demo.phoneNumberId,
+    phoneNumberId: pn.id,
     initialDelaySeconds: 0,
     initialDelayMinutes: 0,
     activate: true,
@@ -165,12 +166,12 @@ export async function ensureTryItMctbRuntimeReady(input: {
     workspaceId: input.workspaceId,
     patch: {
       enabled: true,
-      phone_number_id: demo.phoneNumberId,
-      sms_phone_number_id: demo.phoneNumberId,
+      phone_number_id: pn.id,
+      sms_phone_number_id: pn.id,
       delay_seconds: 0,
     },
     source: "try_it_start",
   });
 
-  return { phoneNumberId: demo.phoneNumberId, e164: demo.e164 };
+  return { phoneNumberId: pn.id, e164: pn.e164 };
 }

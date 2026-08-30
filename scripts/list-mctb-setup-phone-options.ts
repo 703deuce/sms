@@ -1,45 +1,18 @@
 /**
- * List accessible MCTB setup numbers for a workspace (dropdown source).
+ * List MCTB setup phone options for a workspace (owned numbers only).
  */
-import { loadWorkspaceAccessiblePhoneNumbers } from "../src/lib/numbers/workspace-accessible-numbers";
-import { loadMctbSetupPhoneOptions } from "../src/lib/numbers/workspace-accessible-numbers";
-import { getPlatformDemoPhoneRecord } from "../src/lib/mctb/platform-demo-access";
+import { getPrisma } from "../src/lib/db";
+import { listWorkspaceAccessiblePhoneNumbers } from "../src/lib/numbers/workspace-accessible-numbers";
 
-const WS = process.env.WORKSPACE_ID || "ws_1";
+const workspaceId = process.argv[2] || "ws_1";
 
 async function main() {
-  const [accessible, demo] = await Promise.all([
-    loadWorkspaceAccessiblePhoneNumbers(WS),
-    getPlatformDemoPhoneRecord(),
-  ]);
-  console.log(
-    JSON.stringify(
-      {
-        workspaceId: WS,
-        platformDemo: demo,
-        accessible: accessible.map((n) => ({
-          id: n.id,
-          e164: n.e164,
-          source: n.source,
-          status: n.status,
-          friendlyName: n.friendlyName,
-        })),
-        duplicateE164: Object.entries(
-          accessible.reduce<Record<string, string[]>>((acc, n) => {
-            const k = n.e164;
-            acc[k] = acc[k] || [];
-            acc[k].push(`${n.source}:${n.id}`);
-            return acc;
-          }, {}),
-        ).filter(([, ids]) => ids.length > 1),
-      },
-      null,
-      2,
-    ),
-  );
+  const prisma = getPrisma();
+  const phones = await listWorkspaceAccessiblePhoneNumbers(workspaceId);
+  console.log(JSON.stringify({ workspaceId, count: phones.length, phones }, null, 2));
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((err) => {
+  console.error(err);
   process.exit(1);
 });

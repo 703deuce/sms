@@ -15,14 +15,9 @@ import {
 } from "@/lib/compliance-helpers";
 import {
   enrichWorkspacePhoneWithMessagingStatus,
-  loadWorkspaceAccessiblePhoneNumbers,
   loadMctbSetupPhoneOptions,
 } from "@/lib/numbers/workspace-accessible-numbers";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
-import {
-  getPlatformDemoPhoneRecord,
-  isWorkspaceAuthorizedForPlatformDemoNumber,
-} from "@/lib/mctb/platform-demo-access";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import {
@@ -127,16 +122,11 @@ export async function GET() {
   ]);
 
   const requiredActions = deriveRequiredActions(compliance.registration, reg);
-  const platformDemoAuthorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
-  const platformDemoPhone = platformDemoAuthorized ? await getPlatformDemoPhoneRecord() : null;
   const businessLineE164 =
     (typeof mctbSettings.businessLineE164 === "string" ? mctbSettings.businessLineE164 : null) ||
     onboarding.businessNumberE164 ||
     null;
-  const phoneNumbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(
-    phoneNumbers,
-    platformDemoPhone?.phoneNumberId,
-  );
+  const phoneNumbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(phoneNumbers);
   const messagingReady = isMctbSetupMessagingReady({
     phoneNumbers,
     requiredActions,
@@ -241,7 +231,6 @@ export async function GET() {
           adminFlags.adminTestAccount ||
           adminFlags.unlimitedMctbTesting ||
           adminFlags.adminUnlimitedMctb,
-        platformDemoLinked: platformDemoAuthorized,
         canBootstrap: session.isAdmin,
         productionForwardTargetE164: productionForwardE164,
         businessLineE164,
@@ -503,20 +492,10 @@ export async function POST(req: Request) {
   }
 
   if (phoneId) {
-    let pn = await prisma.phoneNumber.findFirst({
+    const pn = await prisma.phoneNumber.findFirst({
       where: { id: phoneId, workspaceId },
       select: { id: true, provider: true },
     });
-    if (!pn) {
-      const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
-      const demo = authorized ? await getPlatformDemoPhoneRecord() : null;
-      if (demo?.phoneNumberId === phoneId) {
-        pn = await prisma.phoneNumber.findFirst({
-          where: { id: phoneId },
-          select: { id: true, provider: true },
-        });
-      }
-    }
     if (pn && String(pn.provider || "").toLowerCase() === "telnyx") {
       try {
         const { ensureDefaultTelnyxMctbAndSmsProvision } = await import(
@@ -705,15 +684,6 @@ export async function POST(req: Request) {
     phoneNumberId: body.phoneNumberId ?? runtimeResult.config.phoneNumberId,
     businessLineE164: businessLineForBinding,
   });
-
-  if (body.consentMode && tenantBinding.platformDemoLinked) {
-    const { syncPlatformDemoConsentRuntime } = await import(
-      "@/lib/mctb/onboarding/platform-demo"
-    );
-    await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
-      console.error("[mctb/setup] syncPlatformDemoConsentRuntime", err);
-    });
-  }
 
   if (sipProvision?.ok && phoneId) {
     const { pauseLegacyMctbSmartRoutingFlows } = await import(

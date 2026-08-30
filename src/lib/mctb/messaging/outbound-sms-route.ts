@@ -153,17 +153,8 @@ export async function resolveMctbOutboundSmsRoute(input: {
   /** Explicit certification run on platform 571 (same adapter path, not customer TFN). */
   certificationMode?: boolean;
 }): Promise<MctbOutboundSmsRoute | null> {
-  if (input.demoMode) {
-    return resolvePlatformTelnyxSmsRoute({
-      customerWorkspaceId: input.workspaceId,
-      trafficMode: "PLATFORM_DEMO",
-    });
-  }
-  if (input.certificationMode) {
-    return resolvePlatformTelnyxSmsRoute({
-      customerWorkspaceId: input.workspaceId,
-      trafficMode: "CERTIFICATION",
-    });
+  if (input.demoMode || input.certificationMode) {
+    // Platform demo retired — certification and Try It use workspace-owned numbers.
   }
 
   const senderCandidates: MctbSmsSender[] = [];

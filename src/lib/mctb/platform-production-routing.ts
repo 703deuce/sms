@@ -5,7 +5,6 @@ import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/con
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
-import { isWorkspaceAuthorizedForPlatformDemoNumber } from "@/lib/mctb/platform-demo-access";
 import { isAdminMctbTestWorkspace, loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -153,15 +152,6 @@ export async function resolveMctbPhoneNumberIdForWorkspace(input: {
       select: { id: true },
     });
     if (owned?.id) return owned.id;
-
-    const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(input.workspaceId);
-    if (authorized) {
-      const demo = await prisma.phoneNumber.findFirst({
-        where: { id: input.phoneNumberId },
-        select: { id: true, e164: true },
-      });
-      if (demo?.id) return demo.id;
-    }
   }
 
   if (input.transovoE164) {
@@ -170,15 +160,6 @@ export async function resolveMctbPhoneNumberIdForWorkspace(input: {
       select: { id: true },
     });
     if (owned?.id) return owned.id;
-
-    const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(input.workspaceId);
-    if (authorized) {
-      const demo = await prisma.phoneNumber.findFirst({
-        where: { e164: input.transovoE164 },
-        select: { id: true },
-      });
-      if (demo?.id) return demo.id;
-    }
   }
 
   const runtime = await loadMissedCallTextConfig(input.workspaceId);

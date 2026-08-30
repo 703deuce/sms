@@ -2,10 +2,6 @@ import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { isExistingConsentMode } from "@/lib/mctb/consent-mode";
-import {
-  getPlatformDemoPhoneRecord,
-  isWorkspaceAuthorizedForPlatformDemoNumber,
-} from "@/lib/mctb/platform-demo-access";
 
 export type MctbSetupTestChecks = {
   transovoDidReceived: boolean;
@@ -101,14 +97,6 @@ export async function getMctbSetupTestStatus(workspaceId: string): Promise<MctbS
     });
     if (pn?.e164) {
       assignedNumberE164 = pn.e164;
-    } else {
-      const authorized = await isWorkspaceAuthorizedForPlatformDemoNumber(workspaceId);
-      if (authorized) {
-        const demo = await getPlatformDemoPhoneRecord();
-        if (demo?.phoneNumberId === runtime.phoneNumberId) {
-          assignedNumberE164 = demo.e164;
-        }
-      }
     }
   }
 

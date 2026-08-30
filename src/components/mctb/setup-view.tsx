@@ -70,7 +70,6 @@ type SetupData = {
   adminTest?: {
     isPlatformAdmin: boolean;
     isAdminTestWorkspace: boolean;
-    platformDemoLinked: boolean;
     canBootstrap: boolean;
     productionForwardTargetE164?: string | null;
     businessLineE164?: string | null;
@@ -468,11 +467,6 @@ export function MctbSetupView() {
             />
           </label>
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#4b5563]">
-            <span>
-              Assigned MCTB number linked:{" "}
-              <strong>{data.adminTest.platformDemoLinked ? "Yes" : "No"}</strong>
-            </span>
-            <span>·</span>
             <span>
               Admin test mode:{" "}
               <strong>{data.adminTest.isAdminTestWorkspace ? "Active" : "Not set"}</strong>

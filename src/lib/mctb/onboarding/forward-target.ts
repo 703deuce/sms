@@ -1,24 +1,16 @@
 import { formatDemoPhoneDisplay } from "./demo";
-import {
-  getMctbDemoIngressE164,
-  getProductionMctbForwardTargetE164,
-} from "./phone-numbers";
-import { MCTB_PLATFORM_DEMO_DISPLAY } from "./constants";
+import { getProductionMctbForwardTargetE164 } from "./phone-numbers";
 
-/** @deprecated Demo only — use getMctbDemoIngressE164() */
-export function getOnboardingForwardTargetE164(): string {
-  return getMctbDemoIngressE164();
+/** @deprecated Use getOnboardingForwardTargetE164ForWorkspace(workspaceId). */
+export async function getOnboardingForwardTargetE164(workspaceId: string): Promise<string | null> {
+  return getProductionMctbForwardTargetE164(workspaceId);
 }
 
-/** Production forward target — customer's assigned MCTB DID (not the demo line). */
+/** Production forward target — customer's assigned MCTB DID. */
 export async function getOnboardingForwardTargetE164ForWorkspace(
   workspaceId: string,
 ): Promise<string | null> {
   return getProductionMctbForwardTargetE164(workspaceId);
-}
-
-export function getOnboardingForwardTargetDisplay(): string {
-  return MCTB_PLATFORM_DEMO_DISPLAY;
 }
 
 export function formatOnboardingForwardTarget(e164: string): string {

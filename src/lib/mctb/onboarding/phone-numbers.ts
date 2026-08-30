@@ -1,5 +1,4 @@
-import { getPlatformDemoNumberE164 } from "./demo";
-import { MCTB_PLATFORM_DEMO_E164 } from "./constants";
+import { resolveWorkspaceTryItPhone } from "./workspace-phone";
 
 export {
   getMctbProductionForwardTestE164,
@@ -7,17 +6,12 @@ export {
   getProductionMctbForwardTargetE164,
 } from "@/lib/mctb/production-forward-target";
 
-/** Platform demo DID — Try It / trial direct-call only (env: MCTB_PLATFORM_DEMO_E164). */
-export function getMctbDemoIngressE164(): string {
-  return getPlatformDemoNumberE164();
+/** Workspace-owned MCTB DID for Try It / onboarding direct-call test. */
+export async function getMctbDemoIngressE164(workspaceId: string): Promise<string | null> {
+  const phone = await resolveWorkspaceTryItPhone(workspaceId);
+  return phone?.e164 || null;
 }
 
-export function isPlatformDemoIngressE164(e164: string): boolean {
-  try {
-    const normalized = e164.replace(/\D/g, "");
-    const demo = getMctbDemoIngressE164().replace(/\D/g, "");
-    return normalized === demo || e164 === MCTB_PLATFORM_DEMO_E164;
-  } catch {
-    return false;
-  }
+export function isPlatformDemoIngressE164(_e164: string): boolean {
+  return false;
 }

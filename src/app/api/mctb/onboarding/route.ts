@@ -24,7 +24,7 @@ import {
 } from "@/lib/mctb/onboarding/trial-number";
 import { provisionMctbCustomerTelnyxLocalNumber } from "@/lib/mctb/provisioning/provision-customer-local";
 import { getOnboardingForwardTargetE164ForWorkspace } from "@/lib/mctb/onboarding/forward-target";
-import { getMctbDefaultBusinessLineE164, getMctbDemoIngressE164 } from "@/lib/mctb/onboarding/phone-numbers";
+import { getMctbDefaultBusinessLineE164 } from "@/lib/mctb/onboarding/phone-numbers";
 import {
   getTfvStatusForWorkspace,
   syncTrialTollFreeVerification,
@@ -35,10 +35,6 @@ import {
   startForwardingVerificationTest,
 } from "@/lib/mctb/onboarding/forwarding-verification";
 import {
-  MCTB_PLATFORM_DEMO_DISPLAY,
-  MCTB_PLATFORM_DEMO_LABEL,
-} from "@/lib/mctb/onboarding/constants";
-import {
   MCTB_ONBOARDING_STEP_LABELS,
   MCTB_ONBOARDING_STEP_ORDER,
   type MctbConsentMode,
@@ -46,6 +42,7 @@ import {
   type MctbOnboardingStep,
 } from "@/lib/mctb/onboarding/types";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
+import { startMctbTryItSession } from "@/lib/mctb/try-it/start-session";
 
 export async function GET() {
   try {
@@ -81,9 +78,8 @@ export async function GET() {
       stepLabels: MCTB_ONBOARDING_STEP_LABELS,
       demo: {
         ...demo,
-        label: MCTB_PLATFORM_DEMO_LABEL,
         description:
-          "Call Transovo's demo line directly from your verified mobile — no forwarding or carrier setup. Experience Press 1 or Existing Consent exactly as configured above.",
+          "Call your workspace MCTB number directly from your verified mobile — no forwarding required for this test.",
         consentMode: state.consentMode || "press_1",
         requiresForwarding: false,
       },
@@ -106,8 +102,7 @@ export async function GET() {
       },
       carriers: MCTB_CARRIER_GUIDES,
       forwardingVerification,
-      platformDemoDisplay: MCTB_PLATFORM_DEMO_DISPLAY,
-      demoIngressE164: getMctbDemoIngressE164(),
+      demoIngressE164: demo.demoNumberE164 || null,
       forwardTargetE164,
       productionForwardE164: forwardTargetE164,
       defaultBusinessLineE164: getMctbDefaultBusinessLineE164(),
@@ -149,6 +144,37 @@ export async function POST(req: Request) {
 
     const prisma = getPrisma();
     let state = await loadMctbOnboardingState(auth.workspaceId);
+
+    if (body.action === "start_demo") {
+      const user = await prisma.user.findUnique({
+        where: { id: auth.session.userId },
+        select: { phone: true, email: true },
+      });
+      if (!user?.phone) {
+        return NextResponse.json(
+          { error: "Verify your mobile number before starting the demo." },
+          { status: 400 },
+        );
+      }
+      const result = await startMctbTryItSession({
+        workspaceId: auth.workspaceId,
+        userId: auth.session.userId,
+        callerE164: user.phone,
+        userEmail: user.email,
+        consentMode: body.consentMode,
+        existingConsentAttested: body.existingConsentAttested,
+        context: "onboarding",
+      });
+      state = await loadMctbOnboardingState(auth.workspaceId);
+      return NextResponse.json({
+        ok: true,
+        state,
+        data: {
+          demoNumberE164: result.demoNumberE164,
+          session: result.session,
+        },
+      });
+    }
 
     if (body.action === "provision_trial_number") {
       const result = await provisionTrialMctbNumber(auth.workspaceId);
@@ -261,12 +287,6 @@ export async function POST(req: Request) {
       });
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
       await syncMctbConsentRouting(auth.workspaceId, auth.session.userId).catch(() => undefined);
-      const { syncPlatformDemoConsentRuntime } = await import(
-        "@/lib/mctb/onboarding/platform-demo"
-      );
-      await syncPlatformDemoConsentRuntime(body.consentMode).catch((err) => {
-        console.error("[mctb/onboarding] syncPlatformDemoConsentRuntime", err);
-      });
       if (body.consentMode === "existing_consent") {
         const { recordWorkspaceExistingConsentAttestation } = await import(
           "@/lib/mctb/capture/attestation"
