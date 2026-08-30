@@ -263,7 +263,8 @@ export const FLUX_EAGER_LOW_LATENCY_PROFILE: LatencyProfileDefinition = {
 };
 
 /**
- * B_FAST — aggressive eager EOT (0.75 / 0.35). Test only; do not auto-promote.
+ * B_FAST — aggressive eager EOT (0.75 / 0.35). Lab / A-B only.
+ * EOT tunes end-of-turn, not barge-in (StartOfTurn). Amy production uses flux_b_balanced.
  */
 export const FLUX_B_FAST_PROFILE: LatencyProfileDefinition = {
   id: "flux_b_fast",

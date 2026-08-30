@@ -1,14 +1,22 @@
 /**
  * Minimum-side-effect configuration for Amy on Telnyx (866 production).
- * GPT-5.4-mini + Flux fast STT + narrow live tool surface.
+ * GPT-5.4-mini + Flux balanced STT + narrow live tool surface.
+ *
+ * Telnyx tuning surface: docs/telnyx-assistant-optimization-surface.md
+ * Barge-in = Flux StartOfTurn (vendor). Endpointing = Flux EOT settings.
+ * Do not tune eot_threshold aggressively to fix barge-in.
  */
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { OPENAI_API_KEY_REF } from "@/lib/voice/telnyx/official-baseline";
 import { applyAmyProductionVoiceTuning } from "./amy-production-voice-tuning";
+import { applyLatencyProfileToConfig } from "@/lib/voice/latency-profiles";
 
 export const AMY_MINIMUM_SIDE_EFFECT_MODEL = "openai/gpt-5.4-mini";
-export const AMY_FLUX_FAST_PROFILE = "flux_b_fast";
+/** Production Flux profile — balanced EOT (not flux_b_fast lab variant). */
+export const AMY_FLUX_PROFILE = "flux_b_balanced";
+/** @deprecated Use AMY_FLUX_PROFILE */
+export const AMY_FLUX_FAST_PROFILE = AMY_FLUX_PROFILE;
 
 export const MINIMUM_SIDE_EFFECT_PROMPT = [
   "MINIMUM-SIDE-EFFECT RELIABILITY:",
@@ -37,7 +45,18 @@ export function applyAmyMinimumSideEffectConfig(
   ]);
 
   return {
-    ...tuned,
+    ...applyLatencyProfileToConfig(
+      {
+        ...tuned,
+        enabledBuiltinTools: Array.from(minimalTools),
+        advanced: {
+          ...(tuned.advanced || {}),
+          minimumSideEffectMode: true,
+          voiceArchitectureVersion: "telnyx-minimum-side-effect-v1",
+        },
+      },
+      AMY_FLUX_PROFILE,
+    ),
     model: {
       ...(tuned.model || {}),
       provider: "telnyx",
@@ -45,27 +64,6 @@ export function applyAmyMinimumSideEffectConfig(
       customApiKeyRef: OPENAI_API_KEY_REF,
       temperature: tuned.model?.temperature ?? 0.35,
       maxTokens: tuned.model?.maxTokens ?? 800,
-    },
-    voiceTiming: {
-      ...(tuned.voiceTiming || {}),
-      activeProfile: AMY_FLUX_FAST_PROFILE,
-    },
-    transcription: {
-      ...(tuned.transcription || {}),
-      enabled: true,
-      sttProvider: "deepgram",
-      sttModel: "deepgram/flux",
-      settings: {
-        eot_threshold: 0.75,
-        eager_eot_threshold: 0.35,
-        eot_timeout_ms: 4500,
-      },
-    },
-    enabledBuiltinTools: Array.from(minimalTools),
-    advanced: {
-      ...(tuned.advanced || {}),
-      minimumSideEffectMode: true,
-      voiceArchitectureVersion: "telnyx-minimum-side-effect-v1",
     },
   };
 }

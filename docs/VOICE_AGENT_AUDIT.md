@@ -38,7 +38,9 @@ Applied on the **live TeXML → Telnyx assistant** path (not LiveKit):
 | Failure taxonomy / repair | Prompt rules in constitution + Telnyx speech guidance |
 | Republish script | `scripts/amy-apply-telnyx-voice-architecture.ts` |
 
-**Still Telnyx-internal (we cannot control):** generation IDs, TTS chunking, `previous_text` continuity, audio queue depth.
+**Still Telnyx-internal (we cannot control):** generation IDs, TTS chunking, `previous_text` continuity, audio queue depth, custom barge-in playback cancellation, ElevenLabs WebSocket lifecycle.
+
+**Telnyx controls we do use:** Flux EOT settings, Start Speaking Plan (`wait_seconds` on Flux), tool webhooks, prompt, pronunciation, voice settings. See `docs/telnyx-assistant-optimization-surface.md`.
 
 ---
 
@@ -48,12 +50,13 @@ Applied on the **live TeXML → Telnyx assistant** path (not LiveKit):
 |-------|-------|
 | Agent ID | `cmshz2lc25c622c4i58303501` |
 | Telnyx assistant | `assistant-197f496d-d98a-4995-ad0e-a10aca90951d` |
-| Published version | v51 (no `runtime_turn`) |
-| LLM | `anthropic/claude-haiku-4-5` (Telnyx-managed) |
-| STT | `deepgram/nova-3` |
+| Published version | v53+ (minimum-side-effect) |
+| LLM | `openai/gpt-5.4-mini` (Telnyx BYOK) |
+| STT | `deepgram/flux` + `flux_b_balanced` (EOT 0.80 / eager 0.40) |
+| Route | TeXML direct (not LiveKit) |
 
-Transovo controls: tool webhooks, prompt content, pronunciation dictionary, interruption settings.  
-Transovo does **not** control: token→TTS chunking, generation isolation, SpeechCompiler on this path.
+Transovo controls: tool webhooks, prompt, pronunciation, Flux `transcription.settings`, `start_speaking_plan.wait_seconds`, minimum-side-effect tool surface.  
+Transovo does **not** control on this path: token→TTS chunking, generation isolation, SpeechCompiler, custom audio queue.
 
 ---
 
@@ -322,7 +325,7 @@ Items L through X (fast/reasoning path routing, structured state, conversation r
 ### Production configuration (866)
 
 - **Model:** `openai/gpt-5.4-mini` (Telnyx BYOK)
-- **STT:** `deepgram/flux` with `flux_b_fast` latency profile
+- **STT:** `deepgram/flux` with `flux_b_balanced` latency profile (EOT 0.80 / eager 0.40)
 - **Published tools:** `send_sms`, `record_call_fact`, `take_structured_message`, `lookup_customer`, `escalate_human`, native `hangup`
 - **Retired on this line:** `continue_workflow`, `record_current_field`, `get_runtime_context`, live calendar booking
 
@@ -354,6 +357,23 @@ npx tsx scripts/test-voice-sms-templates.ts
 npx tsx scripts/amy-minimum-side-effect-republish.ts   # requires DB + Telnyx
 node scripts/audit-caller-amy-published-tools.mjs      # live catalog gate
 ```
+
+---
+
+## Section 26 — Telnyx vs LiveKit optimization surface
+
+**Authoritative doc:** `docs/telnyx-assistant-optimization-surface.md`
+
+| Concern | Telnyx Assistant (866) | LiveKit hybrid |
+|---------|------------------------|----------------|
+| Barge-in stop-playback | Flux StartOfTurn + Telnyx interruption (vendor) | `cancelActiveGeneration` + hybrid TTS node |
+| Turn end / agent start | Flux `eot_threshold`, `eager_eot_threshold`, `start_speaking_plan.wait_seconds` | STT endpointing + our pipeline |
+| TTS chunking | Telnyx-managed | SpeechCompiler + ElevenLabs plugin |
+| Tool orchestration | Published webhooks only | `runtime_turn` + gateway (optional) |
+
+**Do not** tune `eot_threshold` aggressively to improve barge-in — that knob is for end-of-turn, not StartOfTurn.
+
+Sections 23–24 (generation context, SpeechCompiler, semantic commit gate) are **LiveKit-only** unless we migrate 866 off Telnyx Assistant.
 
 ---
 

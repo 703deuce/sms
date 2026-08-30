@@ -13,7 +13,7 @@ import { createDefaultWizardState } from "../src/lib/solutions/appointment-recep
 import type { AppointmentReceptionistWizardState } from "../src/lib/solutions/appointment-receptionist/types";
 import { applyHarborDrainProsWizardKnowledge } from "../src/lib/receptionist-wizard/harbor-drain-pros-config";
 import {
-  AMY_FLUX_FAST_PROFILE,
+  AMY_FLUX_PROFILE,
   AMY_MINIMUM_SIDE_EFFECT_MODEL,
 } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
 import {
@@ -68,7 +68,7 @@ async function main() {
         expectedModel: AMY_MINIMUM_SIDE_EFFECT_MODEL,
         sttModel: draftConfig.transcription?.sttModel,
         latencyProfile: draftConfig.voiceTiming?.activeProfile,
-        expectedProfile: AMY_FLUX_FAST_PROFILE,
+        expectedProfile: AMY_FLUX_PROFILE,
         minimumSideEffect: (draftConfig.advanced as Record<string, unknown>)?.minimumSideEffectMode,
         publishedTools,
       },
@@ -92,7 +92,7 @@ async function main() {
   const published = await publishVoiceAgent(
     WORKSPACE_ID,
     AMY_AGENT_ID,
-    "minimum-side-effect-gpt54mini-flux-fast",
+    "minimum-side-effect-gpt54mini-flux-balanced",
   );
 
   if (agent.telnyxAssistantId && ai.isTelnyxAiConfigured()) {
@@ -128,7 +128,7 @@ async function main() {
       2,
     ),
   );
-  console.log(`\nDone — call ${PHONE_E164} (GPT-5.4-mini, Flux fast, text-first booking).`);
+  console.log(`\nDone — call ${PHONE_E164} (GPT-5.4-mini, Flux balanced, text-first booking).`);
 }
 
 main().catch((err) => {
