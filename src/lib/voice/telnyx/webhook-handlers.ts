@@ -35,7 +35,12 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
   const eventPayload = (body.data?.payload || {}) as Record<string, unknown>;
 
   // Carrier-forwarded legs to platform 571 expire in ~5s. Answer + gather before ANY DB.
+  // LEGACY fast path — disabled when TeXML-only production policy is active.
   if (eventType === "call.initiated") {
+    const { isMctbLegacyIngressEnabled } = await import("@/lib/mctb/ingress-policy");
+    if (!isMctbLegacyIngressEnabled()) {
+      // TeXML-only production — no Call Control gather on 571.
+    } else {
     const callControlId = String(eventPayload.call_control_id || "");
     const to = String(eventPayload.to || "");
     const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
@@ -73,6 +78,7 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
       await answerCall(callControlId).catch((err) => {
         console.error("[telnyx/voice] early answer (571) failed", { callControlId, err });
       });
+    }
     }
   }
 

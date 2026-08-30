@@ -21,6 +21,7 @@ import {
   MCTB_FINAL_PRODUCTION_ENTRY_PATH,
   MCTB_FINAL_VOICEMAIL_GREETING_AUDIO_ASSET_ID,
 } from "../src/lib/mctb/texml-ingress/frozen-pipeline";
+import { checkMctbLegacyIngressBlocked } from "../src/lib/mctb/ingress-policy";
 
 process.env.APP_URL = "https://app.example.com";
 process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
@@ -80,6 +81,16 @@ test("existing_consent TeXML completed status is missed (not human answered)", (
   assert.equal(result.status, "NO_ANSWER");
   assert.equal(result.disposition, "missed_no_answer");
   assert.equal(result.answeredAt, null);
+});
+
+test("production ingress policy blocks legacy by default", () => {
+  const saved = process.env.MCTB_LEGACY_INGRESS_ENABLED;
+  delete process.env.MCTB_LEGACY_INGRESS_ENABLED;
+  const blocked = checkMctbLegacyIngressBlocked("call_control_event_only");
+  assert.ok(blocked);
+  assert.equal(blocked.canonicalIngress, "texml");
+  if (saved === undefined) delete process.env.MCTB_LEGACY_INGRESS_ENABLED;
+  else process.env.MCTB_LEGACY_INGRESS_ENABLED = saved;
 });
 
 console.log("test-mctb-final-pipeline-contract: ok");

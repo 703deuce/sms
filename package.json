@@ -88,6 +88,7 @@
     "mctb:deploy-sip-adapter": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-deploy-sip-adapter-production.ts",
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",
     "test:mctb-final-pipeline-contract": "tsx scripts/test-mctb-final-pipeline-contract.ts",
+    "test:mctb-ingress-policy": "tsx scripts/test-mctb-ingress-policy.ts",
     "verify:mctb-final-pipeline": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-mctb-final-pipeline.ts",
     "inventory:voice-lines": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/inventory-voice-lines.ts",
     "cleanup:orphan-texml-apps": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cleanup-orphan-texml-apps.ts",

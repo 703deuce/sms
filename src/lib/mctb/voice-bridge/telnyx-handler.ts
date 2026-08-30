@@ -2,6 +2,7 @@ import {
   MCTB_PLATFORM_DEMO_E164,
   MCTB_TWILIO_VOICE_INGRESS_E164,
 } from "@/lib/mctb/onboarding/constants";
+import { checkMctbLegacyIngressBlocked } from "@/lib/mctb/ingress-policy";
 import {
   captureMctbVoiceBridgeFirstHop,
   isMctb571InboundTarget,
@@ -39,6 +40,9 @@ export async function handleMctbVoiceBridgeTelnyxEvent(input: {
   eventType: string;
   eventPayload: MctbVoiceBridgeTelnyxPayload;
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
+  const blocked = checkMctbLegacyIngressBlocked("voice_bridge");
+  if (blocked) return { handled: false, action: "legacy_ingress_disabled" };
+
   const { eventType, eventPayload } = input;
   const callControlId = String(eventPayload.call_control_id || "");
   const to = String(eventPayload.to || "");

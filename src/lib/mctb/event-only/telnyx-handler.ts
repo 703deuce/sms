@@ -1,5 +1,6 @@
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
 import { MCTB_FQDN_DIRECT_TEST_E164 } from "@/lib/mctb/sip-diagnostic/constants";
+import { checkMctbLegacyIngressBlocked } from "@/lib/mctb/ingress-policy";
 import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
 import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
@@ -152,6 +153,9 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
   eventType: string;
   eventPayload: TelnyxPayload;
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
+  const blocked = checkMctbLegacyIngressBlocked("call_control_event_only");
+  if (blocked) return { handled: false, action: "legacy_ingress_disabled" };
+
   const { eventType, eventPayload } = input;
   const callControlId = String(eventPayload.call_control_id || "");
   const inbound = isInbound(eventPayload);

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { handleMctbVoiceBridgeTelnyxEvent } from "@/lib/mctb/voice-bridge/telnyx-handler";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
+import {
+  checkMctbLegacyIngressBlocked,
+  logMctbLegacyIngressBlocked,
+} from "@/lib/mctb/ingress-policy";
 
 type TelnyxPayload = {
   data?: {
@@ -13,8 +17,15 @@ type TelnyxPayload = {
 
 /**
  * Telnyx first-hop MCTB voice bridge: capture metadata on 571, transfer voice to Twilio 855.
+ * LEGACY — disabled in production; use mctb-entry (TeXML) instead.
  */
 export async function POST(request: Request) {
+  const blocked = checkMctbLegacyIngressBlocked("voice_bridge");
+  if (blocked) {
+    logMctbLegacyIngressBlocked("voice_bridge");
+    return NextResponse.json(blocked, { status: 410 });
+  }
+
   const verified = await readTelnyxWebhook(request);
   if (!verified.ok) return verified.response;
 

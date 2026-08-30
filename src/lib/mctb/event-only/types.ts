@@ -2,8 +2,11 @@ export const MCTB_EVENT_ONLY_LOG_SOURCE = "mctb-event-only";
 
 export type MctbInboundProvider = "TELNYX" | "TELNYX_SIP" | "TWILIO";
 
-/** captureMode values for MCTB metadata (EVENT_ONLY = Call Control webhook; SIP_INGRESS = LiveKit/FQDN). */
-export type MctbCaptureMode = "EVENT_ONLY" | "SIP_INGRESS";
+/** captureMode values for MCTB metadata (TEXML = frozen production path; legacy = EVENT_ONLY / SIP_INGRESS). */
+export type MctbCaptureMode = "TEXML" | "EVENT_ONLY" | "SIP_INGRESS";
+
+/** Ingress path that produced this event — used for observability and captureMode resolution. */
+export type MctbIngressPath = "texml" | "call_control" | "sip" | "voice_bridge" | "twilio";
 
 /** Normalized provider-agnostic inbound call event for MCTB. */
 export type MctbInboundCallEvent = {
@@ -24,6 +27,8 @@ export type MctbInboundCallEvent = {
   /** TeXML status_callback CallStatus (completed, busy, no-answer, …). */
   texmlCallStatus?: string | null;
   callDurationSeconds?: number | null;
+  /** Which ingress path normalized this event. */
+  ingressPath?: MctbIngressPath | null;
 };
 
 export type MctbEventOnlyEligibilityStatus =

@@ -103,10 +103,8 @@ function testSetupRollbackScripts() {
   const setupFqdn = join(process.cwd(), "scripts/mctb-setup-fqdn-direct-mctb.ts");
   const rollbackFqdn = join(process.cwd(), "scripts/mctb-rollback-fqdn-direct-mctb.ts");
   const sipIngress = join(process.cwd(), "src/lib/mctb/provisioning/telnyx-sip-ingress.ts");
-  const eventOnlyRoute = join(
-    process.cwd(),
-    "src/lib/mctb/consent-prompt/telnyx-event-only-route.ts",
-  );
+  const ingressPolicy = join(process.cwd(), "src/lib/mctb/ingress-policy.ts");
+  const tenantResolver = join(process.cwd(), "src/lib/mctb/tenant/resolve-inbound.ts");
   assert.ok(existsSync(setup571));
   assert.ok(existsSync(rollback571));
   assert.ok(existsSync(setupFqdn));
@@ -116,9 +114,12 @@ function testSetupRollbackScripts() {
   assert.match(rollbackSource, /\.mctb-571-event-only-backup\.json/);
   const ingressSource = readFileSync(sipIngress, "utf8");
   assert.doesNotMatch(ingressSource, /livekit_sip/);
-  assert.match(ingressSource, /assignPhoneNumberToEventOnlyConnection/);
-  const routeSource = readFileSync(eventOnlyRoute, "utf8");
-  assert.match(routeSource, /assignPhoneNumberToEventOnlyConnection/);
+  assert.match(ingressSource, /switchDidToMctbTexmlIngress/);
+  const policySource = readFileSync(ingressPolicy, "utf8");
+  assert.match(policySource, /MCTB_CANONICAL_PRODUCTION_INGRESS/);
+  assert.match(policySource, /legacy_ingress_disabled/);
+  const tenantSource = readFileSync(tenantResolver, "utf8");
+  assert.match(tenantSource, /resolveMctbInboundTenant/);
 }
 
 function testCallControlVoicemailState() {

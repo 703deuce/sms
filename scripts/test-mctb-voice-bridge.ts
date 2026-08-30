@@ -88,6 +88,8 @@ function testRollbackScriptConfig() {
 }
 
 async function main() {
+  process.env.MCTB_LEGACY_INGRESS_ENABLED = "1";
+
   const TEST_CALLER_E164 = uniqueCallerE164();
   const telnyxPayload = baseTelnyxPayload(TEST_CALLER_E164);
 

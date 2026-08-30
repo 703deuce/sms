@@ -1,6 +1,6 @@
 import "server-only";
 
-import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
+import { captureMctbMissedCall } from "@/lib/mctb/capture/missed-call";
 import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { traceMctbTexml } from "./trace";
@@ -45,6 +45,8 @@ export async function runMctbTexmlExistingConsentCapture(
   });
   if (!normalized) return { ok: false, reason: "normalize_failed" };
 
+  normalized.ingressPath = "texml";
+
   if (!normalized.forwardedFromE164 && input.forwardedFromE164) {
     normalized.forwardedFromE164 = input.forwardedFromE164;
   }
@@ -59,7 +61,7 @@ export async function runMctbTexmlExistingConsentCapture(
     texmlCallStatus: normalized.texmlCallStatus || null,
   });
 
-  const result = await handleMctbInboundEvent(normalized, {
+  const result = await captureMctbMissedCall(normalized, {
     lockWorkspaceId: input.workspaceId,
   });
 

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { verifyVoiceRuntimeInternalAuth } from "@/lib/voice/python-runtime-bridge/auth";
+import {
+  checkMctbLegacyIngressBlocked,
+  isMctbLegacyVoiceRuntimeAction,
+  logMctbLegacyIngressBlocked,
+} from "@/lib/mctb/ingress-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,6 +100,21 @@ export async function POST(request: Request) {
   }
 
   const payload = body.payload || {};
+
+  if (isMctbLegacyVoiceRuntimeAction(action)) {
+    const blocked = checkMctbLegacyIngressBlocked("sip_livekit");
+    if (blocked) {
+      logMctbLegacyIngressBlocked("sip_livekit", { action });
+      logInternalVoice("internal_voice_response", {
+        action,
+        auth_valid: true,
+        status: 410,
+        duration_ms: Date.now() - started,
+        error: blocked.reason,
+      });
+      return NextResponse.json(blocked, { status: 410 });
+    }
+  }
 
   try {
     let result: unknown;

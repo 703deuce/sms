@@ -1,6 +1,7 @@
 import "server-only";
 
-import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
+import { checkMctbLegacyIngressBlocked } from "@/lib/mctb/ingress-policy";
+import { captureMctbMissedCall } from "@/lib/mctb/capture/missed-call";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
 import { normalizeSipMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
 
@@ -26,6 +27,11 @@ export type CaptureMctbSipInboundInput = {
  * SMS scheduling is independent of voice/media success.
  */
 export async function captureMctbSipInboundForPython(input: CaptureMctbSipInboundInput) {
+  const blocked = checkMctbLegacyIngressBlocked("sip_livekit");
+  if (blocked) {
+    return { ok: false, error: "legacy_ingress_disabled", ...blocked };
+  }
+
   const normalized = normalizeSipMctbInboundEvent({
     providerCallId: input.providerCallId,
     callerE164: input.callerE164,
@@ -42,6 +48,8 @@ export async function captureMctbSipInboundForPython(input: CaptureMctbSipInboun
     return { ok: false, error: "invalid_sip_mctb_payload" };
   }
 
+  normalized.ingressPath = "sip";
+
   logMctbEventOnly("mctb_sip_inbound_captured", {
     providerCallId: normalized.providerCallId,
     caller: normalized.callerE164,
@@ -53,7 +61,7 @@ export async function captureMctbSipInboundForPython(input: CaptureMctbSipInboun
     capturePath: input.capturePath || "livekit_sip_mctb",
   });
 
-  const result = await handleMctbInboundEvent(normalized, {
+  const result = await captureMctbMissedCall(normalized, {
     lockWorkspaceId: input.lockWorkspaceId,
   });
 

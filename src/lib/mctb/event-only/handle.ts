@@ -193,7 +193,9 @@ export async function handleMctbInboundEvent(
 }
 
 function resolveCaptureMode(event: MctbInboundCallEvent): MctbCaptureMode {
-  return event.provider === "TELNYX_SIP" ? "SIP_INGRESS" : "EVENT_ONLY";
+  if (event.ingressPath === "texml" || event.texmlCallStatus) return "TEXML";
+  if (event.provider === "TELNYX_SIP" || event.ingressPath === "sip") return "SIP_INGRESS";
+  return "EVENT_ONLY";
 }
 
 function buildEventMetadata(
@@ -213,6 +215,7 @@ function buildEventMetadata(
 
   return {
     captureMode: resolveCaptureMode(event),
+    ingressPath: event.ingressPath || null,
     provider: event.provider,
     providerCallId: event.providerCallId,
     providerSessionId: event.providerSessionId || null,

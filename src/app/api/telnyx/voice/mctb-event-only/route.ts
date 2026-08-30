@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { handleMctbEventOnlyTelnyxWebhook } from "@/lib/mctb/event-only/telnyx-handler";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
+import {
+  checkMctbLegacyIngressBlocked,
+  logMctbLegacyIngressBlocked,
+} from "@/lib/mctb/ingress-policy";
 
 type TelnyxPayload = {
   data?: {
@@ -13,9 +17,15 @@ type TelnyxPayload = {
 
 /**
  * Telnyx EVENT_ONLY MCTB: Call Control voice for 571 + FQDN direct 866 (no LiveKit).
- * FQDN path answers via Call Control so forwarded calls stay connected.
+ * LEGACY — disabled in production; use mctb-entry (TeXML) instead.
  */
 export async function POST(request: Request) {
+  const blocked = checkMctbLegacyIngressBlocked("call_control_event_only");
+  if (blocked) {
+    logMctbLegacyIngressBlocked("call_control_event_only");
+    return NextResponse.json(blocked, { status: 410 });
+  }
+
   const verified = await readTelnyxWebhook(request);
   if (!verified.ok) {
     console.error(
