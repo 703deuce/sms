@@ -227,14 +227,15 @@ gate("reference builder uses incremental protocol not json_object", () => {
   assert.ok(streamSrc.includes("KimiIncrementalFileWriter"));
 });
 
-gate("batch page runner registered", () => {
+gate("batch page runner supports concurrent launches", () => {
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { scripts?: Record<string, string> };
   assert.ok(pkg.scripts?.["ui:kimi-batch"]);
   const batchSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/kimi-batch-pages.ts"), "utf8");
   assert.ok(batchSrc.includes("KIMI_BATCH_PAGE_INSTRUCTION"));
-  assert.ok(batchSrc.includes("reasoningEffort: \"low\""));
+  assert.ok(batchSrc.includes("runConcurrentBatch"));
+  assert.ok(batchSrc.includes("--concurrency"));
 });
 
 gate("generated sandbox path isolation", () => {

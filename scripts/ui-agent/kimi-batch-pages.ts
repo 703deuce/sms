@@ -2,10 +2,16 @@
  * Batch-generate Kimi sandbox pages for every video in .ui-agent/references.json
  * that has a transovoRoute. Uses K3 + reasoning_effort=low (default).
  *
+ * Runs jobs CONCURRENTLY with staggered launches (Kimi API supports multi-request
+ * concurrency per account tier — default 3 parallel, 10s between starts).
+ *
  *   npm run ui:kimi-batch
+ *   npm run ui:kimi-batch -- --concurrency 5 --stagger-ms 10000
  *   npm run ui:kimi-batch -- --force
- *   npm run ui:kimi-batch -- --only "Navigating the SlickText Inbox..."
+ *   npm run ui:kimi-batch -- --only "contacts"
  *   npm run ui:kimi-batch -- --status
+ *
+ * Env: KIMI_BATCH_CONCURRENCY, KIMI_BATCH_STAGGER_MS
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,6 +24,9 @@ import type { CliOptions } from "./types";
 
 const BATCH_DIR = join(UI_AGENT_DIR, "batch");
 const STATE_PATH = join(BATCH_DIR, "kimi-slicktext-pages.json");
+
+const DEFAULT_CONCURRENCY = Number(process.env.KIMI_BATCH_CONCURRENCY || 3);
+const DEFAULT_STAGGER_MS = Number(process.env.KIMI_BATCH_STAGGER_MS || 10_000);
 
 /** Inbox already approved-quality from benchmark B — skip unless --force */
 const PRECOMPLETED: Record<string, string> = {
@@ -33,17 +42,51 @@ export type BatchJobState = {
   error?: string;
   startedAt?: string;
   completedAt?: string;
+  pid?: number;
 };
 
 export type BatchState = {
   updatedAt: string;
   reasoningEffort: string;
+  concurrency: number;
+  staggerMs: number;
   jobs: BatchJobState[];
 };
 
+let stateLock: Promise<void> = Promise.resolve();
+
+function withStateLock<T>(fn: () => T | Promise<T>): Promise<T> {
+  const run = stateLock.then(fn);
+  stateLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function updateJob(
+  videoName: string,
+  patch: Partial<BatchJobState>,
+): Promise<BatchState> {
+  return withStateLock(() => {
+    const current = loadState();
+    const idx = current.jobs.findIndex((j) => j.videoName === videoName);
+    if (idx < 0) return current;
+    current.jobs[idx] = { ...current.jobs[idx], ...patch };
+    saveState(current);
+    return current;
+  });
+}
+
 function loadState(): BatchState {
   if (!existsSync(STATE_PATH)) {
-    return { updatedAt: new Date().toISOString(), reasoningEffort: "low", jobs: [] };
+    return {
+      updatedAt: new Date().toISOString(),
+      reasoningEffort: "low",
+      concurrency: DEFAULT_CONCURRENCY,
+      staggerMs: DEFAULT_STAGGER_MS,
+      jobs: [],
+    };
   }
   return JSON.parse(readFileSync(STATE_PATH, "utf8")) as BatchState;
 }
@@ -66,7 +109,13 @@ function mergeJobs(state: BatchState, videos: Array<{ videoName: string; route: 
   const byVideo = new Map(state.jobs.map((j) => [j.videoName, j]));
   const jobs: BatchJobState[] = videos.map(({ videoName, route }) => {
     const existing = byVideo.get(videoName);
-    if (existing) return { ...existing, route };
+    if (existing) {
+      // Recover interrupted runs from a killed batch orchestrator
+      if (existing.status === "running" && !existing.sessionId) {
+        return { ...existing, route, status: "pending", pid: undefined };
+      }
+      return { ...existing, route };
+    }
     const pre = PRECOMPLETED[videoName];
     if (pre) {
       return {
@@ -83,8 +132,11 @@ function mergeJobs(state: BatchState, videos: Array<{ videoName: string; route: 
 }
 
 function printStatus(state: BatchState): void {
+  const running = state.jobs.filter((j) => j.status === "running").length;
   console.log("\nKimi batch — SlickText pages (reasoning_effort=low)\n");
-  console.log(`State: ${STATE_PATH}\n`);
+  console.log(`State: ${STATE_PATH}`);
+  console.log(`Concurrency: ${state.concurrency ?? DEFAULT_CONCURRENCY} | Stagger: ${state.staggerMs ?? DEFAULT_STAGGER_MS}ms`);
+  console.log(`Running now: ${running}\n`);
   for (const job of state.jobs) {
     const mark =
       job.status === "complete" ? "✓" : job.status === "failed" ? "✗" : job.status === "running" ? "…" : "○";
@@ -98,22 +150,185 @@ function printStatus(state: BatchState): void {
   console.log(`${done}/${state.jobs.length} complete\n`);
 }
 
+function parseArg(args: string[], flag: string): string | undefined {
+  const eq = args.find((a) => a.startsWith(`${flag}=`));
+  if (eq) return eq.split("=").slice(1).join("=");
+  const idx = args.indexOf(flag);
+  if (idx >= 0 && args[idx + 1] && !args[idx + 1].startsWith("--")) return args[idx + 1];
+  return undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildOptions(job: BatchJobState): CliOptions {
+  return {
+    target: job.route,
+    referenceImages: [],
+    referenceVideos: [],
+    referenceUrls: [],
+    referenceNames: [],
+    referenceVideoNames: [job.videoName],
+    referenceImageNames: [],
+    currentImages: [],
+    currentVideos: [],
+    captureCurrent: false,
+    captureScreenshots: true,
+    captureVideo: false,
+    referenceDepth: "page",
+    planOnly: true,
+    apply: false,
+    dryRun: false,
+    analyzeOnly: false,
+    approve: false,
+    integrate: false,
+    revise: false,
+    baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
+    viewports: ["desktop"],
+    maxPasses: 0,
+    reasoningEffort: "low",
+    instruction: KIMI_BATCH_PAGE_INSTRUCTION,
+  };
+}
+
+async function runOneJob(
+  state: BatchState,
+  job: BatchJobState,
+  jobIndex: number,
+  total: number,
+): Promise<void> {
+  const idx = state.jobs.findIndex((j) => j.videoName === job.videoName);
+  if (idx < 0) return;
+
+  await withStateLock(() => {
+    state.jobs[idx] = {
+      ...job,
+      status: "running",
+      startedAt: new Date().toISOString(),
+      error: undefined,
+      pid: process.pid,
+    };
+    saveState(state);
+  });
+
+  console.log(`\n[launch ${jobIndex + 1}/${total}] ${job.route}`);
+  console.log(`  video: ${job.videoName}`);
+
+  const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
+
+  try {
+    const result = await runKimiCommand(provider, buildOptions(job));
+    await withStateLock(() => {
+      state.jobs[idx] = {
+        ...state.jobs[idx],
+        status: "complete",
+        sessionId: result.sessionId,
+        completedAt: new Date().toISOString(),
+        pid: undefined,
+      };
+      saveState(state);
+    });
+    log("batch complete", `${job.route} → ${result.sessionId}`);
+    console.log(`✓ ${job.route} → ${result.sessionId}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const is429 = /429|rate limit/i.test(message);
+    await withStateLock(() => {
+      state.jobs[idx] = {
+        ...state.jobs[idx],
+        status: "failed",
+        error: message,
+        completedAt: new Date().toISOString(),
+        pid: undefined,
+      };
+      saveState(state);
+    });
+    log("batch failed", `${job.route}: ${message}`);
+    console.error(`✗ ${job.route}: ${message}${is429 ? " (rate limit — lower --concurrency)" : ""}`);
+  }
+}
+
+async function runConcurrentBatch(
+  state: BatchState,
+  pending: BatchJobState[],
+  concurrency: number,
+  staggerMs: number,
+): Promise<void> {
+  let nextLaunchAt = Date.now();
+  let launchCursor = 0;
+  let active = 0;
+  let done = 0;
+  const total = pending.length;
+
+  console.log(
+    `\nKimi batch: ${total} video(s) | concurrency=${concurrency} | stagger=${staggerMs}ms\n` +
+      `(Kimi API concurrency is per-account tier — Tier1≈50, Tier0≈1. Tune with --concurrency / KIMI_BATCH_CONCURRENCY)\n`,
+  );
+
+  await new Promise<void>((resolve) => {
+    const pump = (): void => {
+      while (active < concurrency && launchCursor < total) {
+        const job = pending[launchCursor++];
+        active++;
+
+        const launch = async (): Promise<void> => {
+          const wait = Math.max(0, nextLaunchAt - Date.now());
+          if (wait > 0) await sleep(wait);
+          nextLaunchAt = Date.now() + staggerMs;
+
+          try {
+            await runOneJob(state, job, launchCursor - 1, total);
+          } finally {
+            active--;
+            done++;
+            if (done >= total && active === 0) {
+              resolve();
+            } else {
+              pump();
+            }
+          }
+        };
+
+        void launch();
+      }
+    };
+
+    pump();
+  });
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
   const statusOnly = args.includes("--status");
-  const onlyIdx = args.indexOf("--only");
-  const onlyName = onlyIdx >= 0 ? args[onlyIdx + 1] : undefined;
+  const onlyName = parseArg(args, "--only");
+  const concurrency = Math.max(1, Number(parseArg(args, "--concurrency") || DEFAULT_CONCURRENCY));
+  const staggerMs = Math.max(0, Number(parseArg(args, "--stagger-ms") || DEFAULT_STAGGER_MS));
 
   ensureUiAgentDirs();
   let state = mergeJobs(loadState(), listVideoJobs());
+  state.concurrency = concurrency;
+  state.staggerMs = staggerMs;
+
+  // Mark auto-replies complete if it finished while sequential batch was running
+  const autoRepliesSession = "2026-08-30T21-31-49-644Z-f833cc";
+  const autoIdx = state.jobs.findIndex((j) => j.route === "/auto-replies");
+  if (autoIdx >= 0 && existsSync(join(UI_AGENT_DIR, "generated", autoRepliesSession, "page.tsx"))) {
+    state.jobs[autoIdx] = {
+      ...state.jobs[autoIdx],
+      status: "complete",
+      sessionId: autoRepliesSession,
+      completedAt: state.jobs[autoIdx].completedAt || new Date().toISOString(),
+    };
+    saveState(state);
+  }
 
   if (statusOnly) {
     printStatus(state);
     return;
   }
 
-  const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
   let jobs = state.jobs;
   if (onlyName) {
     jobs = jobs.filter((j) => j.videoName === onlyName || j.videoName.includes(onlyName));
@@ -123,82 +338,17 @@ async function main(): Promise<void> {
   const pending = jobs.filter((j) => {
     if (j.status === "complete" && !force) return false;
     if (j.status === "skipped") return false;
+    if (j.status === "running" && j.sessionId) return false;
     return true;
   });
 
-  console.log(`\nKimi batch: ${pending.length} video(s) to generate (reasoning_effort=low)\n`);
-
-  for (let i = 0; i < pending.length; i++) {
-    const job = pending[i];
-    const idx = state.jobs.findIndex((j) => j.videoName === job.videoName);
-    if (idx < 0) continue;
-
-    console.log(`\n[${i + 1}/${pending.length}] ${job.route}`);
-    console.log(`  video: ${job.videoName}\n`);
-
-    state.jobs[idx] = {
-      ...job,
-      status: "running",
-      startedAt: new Date().toISOString(),
-      error: undefined,
-    };
-    saveState(state);
-
-    const options: CliOptions = {
-      target: job.route,
-      referenceImages: [],
-      referenceVideos: [],
-      referenceUrls: [],
-      referenceNames: [],
-      referenceVideoNames: [job.videoName],
-      referenceImageNames: [],
-      currentImages: [],
-      currentVideos: [],
-      captureCurrent: false,
-      captureScreenshots: true,
-      captureVideo: false,
-      referenceDepth: "page",
-      planOnly: true,
-      apply: false,
-      dryRun: false,
-      analyzeOnly: false,
-      approve: false,
-      integrate: false,
-      revise: false,
-      baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
-      viewports: ["desktop"],
-      maxPasses: 0,
-      reasoningEffort: "low",
-    };
-
-    try {
-      const result = await runKimiCommand(provider, {
-        ...options,
-        instruction: options.instruction || KIMI_BATCH_PAGE_INSTRUCTION,
-      });
-
-      state.jobs[idx] = {
-        ...state.jobs[idx],
-        status: "complete",
-        sessionId: result.sessionId,
-        completedAt: new Date().toISOString(),
-      };
-      log("batch complete", `${job.route} → ${result.sessionId}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      state.jobs[idx] = {
-        ...state.jobs[idx],
-        status: "failed",
-        error: message,
-        completedAt: new Date().toISOString(),
-      };
-      log("batch failed", `${job.route}: ${message}`);
-      console.error(`FAILED ${job.route}: ${message}`);
-    }
-
-    saveState(state);
+  if (pending.length === 0) {
+    console.log("\nNothing pending — all jobs complete.\n");
+    printStatus(state);
+    return;
   }
 
+  await runConcurrentBatch(state, pending, concurrency, staggerMs);
   printStatus(state);
 }
 
