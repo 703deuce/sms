@@ -632,6 +632,9 @@ export async function POST(req: Request) {
       const { warmMctbInboundRoutingProfileForWorkspace } = await import(
         "@/lib/mctb/texml-ingress/routing-profile"
       );
+      const { provisionMctbPhoneTexmlIngressModeForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/texml-mode-provision"
+      );
       try {
         const syncResult = await syncMctbConsentRouting(workspaceId, session.userId, {
           assignedPhoneNumberId: phoneId ?? undefined,
@@ -642,6 +645,9 @@ export async function POST(req: Request) {
           action: syncResult.action,
           phoneNumberId: phoneId,
         });
+        if (phoneId) {
+          await provisionMctbPhoneTexmlIngressModeForWorkspace(workspaceId, phoneId);
+        }
         await warmMctbInboundRoutingProfileForWorkspace(workspaceId);
       } catch (err) {
         consentSync = {

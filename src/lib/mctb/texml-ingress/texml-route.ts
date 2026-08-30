@@ -26,22 +26,20 @@ export function mctbTexmlEntryVoiceUrl(): string {
   return getTelnyxWebhookUrls().mctbEntry;
 }
 
-export async function ensureMctbTexmlApplication(input?: {
-  friendlyName?: string;
+export async function ensureMctbTexmlApplicationAtVoiceUrl(input: {
+  voiceUrl: string;
+  friendlyName: string;
   preferredAppId?: string | null;
 }): Promise<string> {
-  const voiceUrl = mctbTexmlEntryVoiceUrl();
+  const voiceUrl = input.voiceUrl.replace(/\/$/, "");
   const preflight = await preflightTexmlVoiceUrl(voiceUrl);
   if (!preflight.ok) {
     throw new Error(
-      `mctb-entry preflight failed (${preflight.status}): ${preflight.error} — deploy route before pointing Telnyx. body=${preflight.bodyPreview.slice(0, 120)}`,
+      `TeXML preflight failed (${preflight.status}): ${preflight.error} — deploy route before pointing Telnyx. url=${voiceUrl} body=${preflight.bodyPreview.slice(0, 120)}`,
     );
   }
 
-  const preferred =
-    input?.preferredAppId?.trim() ||
-    process.env.MCTB_TEXML_APP_ID?.trim() ||
-    MCTB_TEXML_DEFAULT_APP_ID;
+  const preferred = input.preferredAppId?.trim() || null;
 
   const patchBody: Record<string, unknown> = {
     voice_url: voiceUrl,
@@ -49,7 +47,7 @@ export async function ensureMctbTexmlApplication(input?: {
     active: true,
     ...texmlStatusCallbackBody(),
   };
-  if (input?.friendlyName?.trim()) {
+  if (input.friendlyName.trim()) {
     patchBody.friendly_name = input.friendlyName.trim();
   }
 
@@ -70,7 +68,7 @@ export async function ensureMctbTexmlApplication(input?: {
       } catch {
         // fall through
       }
-      if (!input?.friendlyName?.trim()) {
+      if (!input.friendlyName.trim()) {
         throw patchErr;
       }
     }
@@ -82,14 +80,14 @@ export async function ensureMctbTexmlApplication(input?: {
   );
   const rows = Array.isArray(listed.data) ? listed.data : [];
   const existing = rows.find(
-    (row) => String(row.voice_url || "").replace(/\/$/, "") === voiceUrl.replace(/\/$/, ""),
+    (row) => String(row.voice_url || "").replace(/\/$/, "") === voiceUrl,
   );
   if (existing?.id) return String(existing.id);
 
   const created = await telnyxRequest<{ data?: Record<string, unknown> }>("/texml_applications", {
     method: "POST",
     body: {
-      friendly_name: input?.friendlyName || "MCTB TeXML Ingress",
+      friendly_name: input.friendlyName.trim() || "MCTB TeXML",
       voice_url: voiceUrl,
       voice_method: "POST",
       active: true,
@@ -98,8 +96,34 @@ export async function ensureMctbTexmlApplication(input?: {
   });
   const app = asRecord(created.data) || asRecord(created) || {};
   const id = String(app.id || "");
-  if (!id) throw new Error("Failed to create MCTB TeXML ingress application");
+  if (!id) throw new Error("Failed to create MCTB TeXML application");
   return id;
+}
+
+export async function routePhoneToTexmlApp(input: {
+  e164: string;
+  providerNumberId: string;
+  texmlAppId: string;
+}): Promise<void> {
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(input.providerNumberId)}`, {
+    method: "PATCH",
+    body: { connection_id: input.texmlAppId },
+  });
+  invalidateMctbTexmlIngressCache(input.e164);
+}
+
+export async function ensureMctbTexmlApplication(input?: {
+  friendlyName?: string;
+  preferredAppId?: string | null;
+}): Promise<string> {
+  return ensureMctbTexmlApplicationAtVoiceUrl({
+    voiceUrl: mctbTexmlEntryVoiceUrl(),
+    friendlyName: input?.friendlyName || "MCTB TeXML Ingress",
+    preferredAppId:
+      input?.preferredAppId?.trim() ||
+      process.env.MCTB_TEXML_APP_ID?.trim() ||
+      MCTB_TEXML_DEFAULT_APP_ID,
+  });
 }
 
 export async function routePhoneToMctbTexmlIngress(input: {
@@ -157,15 +181,21 @@ export async function routePhoneToMctbTexmlIngress(input: {
 
 export function isMctbTexmlIngressConnection(connectionId: string | null | undefined): boolean {
   if (!connectionId) return false;
-  const envId = process.env.MCTB_TEXML_APP_ID?.trim();
-  if (envId && connectionId === envId) return true;
-  if (connectionId === MCTB_TEXML_DEFAULT_APP_ID) return true;
-  return false;
+  const ids = [
+    process.env.MCTB_TEXML_APP_ID?.trim(),
+    process.env.MCTB_TEXML_PRESS1_APP_ID?.trim(),
+    process.env.MCTB_TEXML_VOICEMAIL_APP_ID?.trim(),
+    MCTB_TEXML_DEFAULT_APP_ID,
+  ].filter(Boolean);
+  return ids.includes(connectionId);
 }
 
 export async function verifyMctbTexmlIngressRoute(input: {
   e164: string;
   providerNumberId: string;
+  /** When set (Save-time mode routing), verify DID points at dedicated handler app. */
+  expectedTexmlAppId?: string | null;
+  expectedVoiceUrl?: string | null;
 }): Promise<{
   ok: boolean;
   routingMode: string | null;
@@ -174,11 +204,12 @@ export async function verifyMctbTexmlIngressRoute(input: {
   voiceUrl: string;
   failReason?: string;
 }> {
-  const voiceUrl = mctbTexmlEntryVoiceUrl();
-  let texmlAppId: string | null = null;
-  try {
-    texmlAppId = await ensureMctbTexmlApplication();
-  } catch (err) {
+  const voiceUrl = input.expectedVoiceUrl?.trim() || mctbTexmlEntryVoiceUrl();
+  let texmlAppId: string | null = input.expectedTexmlAppId?.trim() || null;
+  if (!texmlAppId) {
+    try {
+      texmlAppId = await ensureMctbTexmlApplication();
+    } catch (err) {
     return {
       ok: false,
       routingMode: null,
@@ -187,6 +218,7 @@ export async function verifyMctbTexmlIngressRoute(input: {
       voiceUrl,
       failReason: err instanceof Error ? err.message : String(err),
     };
+    }
   }
 
   const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(

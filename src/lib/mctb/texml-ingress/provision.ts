@@ -8,7 +8,6 @@ import { invalidateMctbTexmlIngressCache } from "./config-cache";
 import {
   MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
-  routePhoneToMctbTexmlIngress,
   verifyMctbTexmlIngressRoute,
 } from "./texml-route";
 
@@ -109,20 +108,29 @@ export async function switchDidToMctbTexmlIngress(input: {
   settings.mctbSipIngress = true;
   settings.mctbRole = input.mctbRole || "customer_mctb";
 
-  const texmlRoute = await routePhoneToMctbTexmlIngress({
-    e164: phone.e164,
-    providerNumberId: phone.providerNumberId,
-    friendlyName: input.friendlyName,
-    preferredTexmlAppId:
-      input.preferredTexmlAppId ||
-      String(telephony.telnyxTexmlAppId || "") ||
-      null,
-  });
-
-  telephony.telnyxTexmlAppId = texmlRoute.texmlAppId;
-  if (texmlRoute.previousConnectionId) {
-    telephony.mctbTexmlPreviousConnectionId = texmlRoute.previousConnectionId;
+  const { provisionMctbPhoneTexmlIngressModeForWorkspace } = await import(
+    "./texml-mode-provision"
+  );
+  const modeProvision = await provisionMctbPhoneTexmlIngressModeForWorkspace(
+    input.workspaceId,
+    phone.id,
+  );
+  if (!modeProvision) {
+    throw new Error("MCTB mode TeXML provision failed: no assigned phone");
   }
+
+  const texmlRoute = {
+    e164: phone.e164,
+    texmlAppId: modeProvision.texmlAppId,
+    voiceUrl: modeProvision.voiceUrl,
+    handlerMode: modeProvision.handlerMode,
+    liveConnectionId: modeProvision.texmlAppId,
+    previousConnectionId: null as string | null,
+    matched: true,
+    path: `${phone.e164} → ${modeProvision.handlerMode} TeXML ${modeProvision.texmlAppId}`,
+  };
+
+  telephony.telnyxTexmlAppId = modeProvision.texmlAppId;
   settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
 
   await prisma.phoneNumber.update({
@@ -135,6 +143,8 @@ export async function switchDidToMctbTexmlIngress(input: {
   const verify = await verifyMctbTexmlIngressRoute({
     e164: phone.e164,
     providerNumberId: phone.providerNumberId,
+    expectedTexmlAppId: modeProvision.texmlAppId,
+    expectedVoiceUrl: modeProvision.voiceUrl,
   });
 
   if (!verify.ok) {

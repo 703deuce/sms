@@ -56,6 +56,8 @@ export function getTelnyxWebhookUrls() {
     mctbEntry: `${base}/api/telnyx/voice/mctb-entry`,
     /** MCTB Press-1 Gather callback (DTMF consent — keep separate from ingress) */
     mctbConsentTexml: `${base}/api/telnyx/voice/mctb-consent`,
+    /** MCTB TeXML press-1-only ingress */
+    mctbPress1: `${base}/api/telnyx/voice/mctb-press-1`,
     /** MCTB TeXML voicemail-only ingress (play active.mp3 → record) */
     mctbVoicemail: `${base}/api/telnyx/voice/mctb-voicemail`,
     /** MCTB TeXML voicemail Record callback */

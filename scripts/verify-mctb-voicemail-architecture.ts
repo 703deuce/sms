@@ -73,6 +73,28 @@ async function main() {
     built.playUrl,
   );
 
+  const modeSrc = await readFile(
+    path.join(process.cwd(), "src/lib/mctb/texml-ingress/texml-mode-provision.ts"),
+    "utf8",
+  );
+  check(
+    "6. Save-time mode provision builds dedicated handler URLs",
+    /buildMctbTexmlVoiceUrlForHandler/.test(modeSrc) &&
+      /mctbVoicemail/.test(modeSrc) &&
+      /mctbPress1/.test(modeSrc),
+    "missing mode URL builder",
+  );
+
+  const press1Src = await readFile(
+    path.join(process.cwd(), "src/app/api/telnyx/voice/mctb-press-1/route.ts"),
+    "utf8",
+  );
+  check(
+    "6. mctb-press-1 route has no DB/profile before audio",
+    !/getPrisma|prisma\.|peekMctbInboundRoutingProfile/.test(press1Src),
+    "found lookup in press-1 ingress",
+  );
+
   console.log("\nAll voicemail architecture checks passed.");
 }
 
