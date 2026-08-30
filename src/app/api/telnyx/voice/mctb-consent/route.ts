@@ -19,6 +19,10 @@ import {
   resolveMctbTexmlCertMode,
 } from "@/lib/mctb/texml-ingress/cert-mode";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
+import {
+  parseMctbTexmlFields,
+  pickMctbTexmlField,
+} from "@/lib/mctb/texml-ingress/parse-texml-fields";
 
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
 
@@ -34,32 +38,6 @@ function texml(body: string, branch: Parameters<typeof logMctbConsentTexmlRespon
     status: 200,
     headers: { "Content-Type": TEXML_CONTENT_TYPE },
   });
-}
-
-async function parseFields(request: Request): Promise<Record<string, string>> {
-  const contentType = (request.headers.get("content-type") || "").toLowerCase();
-  if (contentType.includes("application/json")) {
-    const json = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(json)) {
-      if (typeof v === "string") out[k] = v;
-    }
-    return out;
-  }
-  const form = await request.formData().catch(() => new FormData());
-  const out: Record<string, string> = {};
-  form.forEach((value, key) => {
-    out[key] = String(value);
-  });
-  return out;
-}
-
-function pick(fields: Record<string, string>, ...keys: string[]): string {
-  for (const key of keys) {
-    const val = fields[key];
-    if (val?.trim()) return val.trim();
-  }
-  return "";
 }
 
 function mctbConsentSmsTriggerSucceeded(sms: unknown): boolean {
@@ -118,16 +96,16 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
     const certMode = resolveMctbTexmlCertMode(url.searchParams.get("cert"));
     const event = url.searchParams.get("event") || "inbound";
-    const fields = await parseFields(request);
+    const fields = await parseMctbTexmlFields(request);
 
-    const from = pick(fields, "From", "from", "Caller");
-    const to = pick(fields, "To", "to", "Called");
-    const digits = pick(fields, "Digits", "digits");
-    const callSid = pick(fields, "CallSid", "call_sid");
-    const callStatus = pick(fields, "CallStatus", "CallStatus", "call_status");
+    const from = pickMctbTexmlField(fields, "From", "from", "Caller");
+    const to = pickMctbTexmlField(fields, "To", "to", "Called");
+    const digits = pickMctbTexmlField(fields, "Digits", "digits");
+    const callSid = pickMctbTexmlField(fields, "CallSid", "call_sid");
+    const callStatus = pickMctbTexmlField(fields, "CallStatus", "call_status");
     const forwardedFrom =
       normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
-      normalizeForwardedFromE164(pick(fields, "ForwardedFrom", "forwarded_from")) ||
+      normalizeForwardedFromE164(pickMctbTexmlField(fields, "ForwardedFrom", "forwarded_from")) ||
       parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
       "";
     const hasDiversionHeader = hasDiversionHeaderInPayload(fields as Record<string, unknown>);
@@ -170,6 +148,7 @@ export async function POST(request: Request) {
 
       if (!certModeSkipsSms(certMode)) {
         let gatherSucceeded = false;
+        let consentRecorded = false;
         try {
           const { resolveMctbTexmlIngressConfig } = await import(
             "@/lib/mctb/texml-ingress/config-cache"
@@ -225,6 +204,7 @@ export async function POST(request: Request) {
             duplicate: consent.duplicate,
             verified: consent.identity?.consentIdentityVerified,
           });
+          consentRecorded = Boolean(consent.identity?.consentIdentityVerified);
 
           const allowSms =
             consent.identity?.consentIdentityVerified &&
@@ -305,7 +285,7 @@ export async function POST(request: Request) {
           console.error("[mctb-consent-texml] gather handler failed", err);
         }
 
-        if (!gatherSucceeded) {
+        if (!gatherSucceeded && !consentRecorded) {
           return texml(
             buildMctbConsentControlledHangupTexml("Thank you. Goodbye."),
             "gather_press_1",

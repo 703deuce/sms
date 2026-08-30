@@ -92,9 +92,8 @@ export async function evaluateMissedCallTextEligibility(input: {
     }
 
     if (
-      !input.eventOnly &&
-      (classification === "unknown" ||
-        !classificationTriggersMctb(classification, config))
+      classification === "unknown" ||
+      !classificationTriggersMctb(classification, config)
     ) {
       return { eligible: false, reason: "NOT_MISSED", classification };
     }

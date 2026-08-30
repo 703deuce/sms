@@ -21,6 +21,9 @@ export type MctbInboundCallEvent = {
   hangupCause?: string | null;
   sipHangupCause?: string | null;
   voiceCaptureStatus?: "EVENT_CAPTURED" | "VOICE_TERMINATION_FAILED";
+  /** TeXML status_callback CallStatus (completed, busy, no-answer, …). */
+  texmlCallStatus?: string | null;
+  callDurationSeconds?: number | null;
 };
 
 export type MctbEventOnlyEligibilityStatus =

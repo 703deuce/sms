@@ -5,6 +5,7 @@ import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { isExistingConsentMode, isVerifiedCallConsentMode } from "@/lib/mctb/consent-mode";
 import { validateExistingConsentAttestation } from "@/lib/mctb/event-only/attestation";
 import type { MctbEventOnlyEligibilityStatus, MctbInboundCallEvent } from "@/lib/mctb/event-only/types";
+import { buildMctbTexmlTerminalCallInput } from "@/lib/mctb/texml-ingress/texml-call-classification";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
 
 export type MctbRecoveryEligibilityResult = {
@@ -131,11 +132,15 @@ export async function evaluateMctbRecoveryEligibility(input: {
       eligible: false,
       status: "DUPLICATE",
       consentMode,
-      existingConsentValid: true,
+      existingConsentValid: attestation.valid,
     };
   }
 
-  const businessE164 = input.event.forwardedFromE164 || input.event.transovoNumberE164;
+  const texmlCall = buildMctbTexmlTerminalCallInput({
+    texmlCallStatus: input.event.texmlCallStatus,
+    callDuration: input.event.callDurationSeconds,
+    hangupCause: input.event.hangupCause,
+  });
 
   const base = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
@@ -147,13 +152,7 @@ export async function evaluateMctbRecoveryEligibility(input: {
     eventOnly: true,
     forwardedFromE164: input.event.forwardedFromE164,
     transovoNumberE164: input.event.transovoNumberE164,
-    call: {
-      direction: "inbound",
-      status: "NO_ANSWER",
-      disposition: "missed_no_answer",
-      answeredAt: null,
-      hangupCause: input.event.hangupCause,
-    },
+    call: texmlCall,
   });
 
   const statusMap: Record<string, MctbEventOnlyEligibilityStatus> = {

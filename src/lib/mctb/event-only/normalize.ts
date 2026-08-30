@@ -24,12 +24,22 @@ export function normalizeTelnyxMctbInboundEvent(
   payload: Record<string, unknown>,
   input?: { receivedAt?: Date; voiceCaptureStatus?: MctbInboundCallEvent["voiceCaptureStatus"] },
 ): MctbInboundCallEvent | null {
-  const callControlId = String(payload.call_control_id || "");
-  const caller = String(payload.from || "");
-  const transovoNumber = String(payload.to || "");
+  const callControlId = String(
+    payload.call_control_id || payload.CallSid || payload.call_sid || "",
+  );
+  const caller = String(payload.from || payload.From || payload.Caller || "");
+  const transovoNumber = String(payload.to || payload.To || payload.Called || "");
   if (!callControlId || !caller || !transovoNumber) return null;
 
   const forwardedFrom = parseTelnyxForwardedFrom(payload) || null;
+  const texmlCallStatus = String(
+    payload.texml_call_status || payload.CallStatus || payload.call_status || "",
+  ).trim() || null;
+  const durationRaw = payload.call_duration ?? payload.CallDuration ?? payload.Duration;
+  const callDurationSeconds =
+    durationRaw != null && String(durationRaw).trim() !== ""
+      ? Number(durationRaw) || null
+      : null;
 
   return {
     provider: "TELNYX",
@@ -42,10 +52,14 @@ export function normalizeTelnyxMctbInboundEvent(
     forwardedFromE164: forwardedFrom,
     diversionHeader: summarizeDiversionHeader(payload),
     receivedAt: input?.receivedAt || new Date(),
-    rawDisposition: payload.state ? String(payload.state) : null,
-    hangupCause: payload.hangup_cause ? String(payload.hangup_cause) : null,
+    rawDisposition: payload.state ? String(payload.state) : texmlCallStatus,
+    hangupCause: payload.hangup_cause
+      ? String(payload.hangup_cause)
+      : texmlCallStatus,
     sipHangupCause: payload.sip_hangup_cause ? String(payload.sip_hangup_cause) : null,
     voiceCaptureStatus: input?.voiceCaptureStatus || "EVENT_CAPTURED",
+    texmlCallStatus,
+    callDurationSeconds,
   };
 }
 

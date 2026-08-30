@@ -382,18 +382,27 @@ export async function POST(req: Request) {
   });
 
   let sipProvision: { ok: boolean; actions?: string[]; error?: string } | null = null;
+  let consentSync: { ok: boolean; action?: string; error?: string } | null = null;
+  let attestation: { ok: boolean; error?: string } | null = null;
   const phoneId = body.phoneNumberId ?? runtimeResult.config.phoneNumberId;
-  if (
-    body.phoneNumberId &&
+  const releasingPreviousPhone =
     previousPhoneId &&
-    body.phoneNumberId !== previousPhoneId
-  ) {
+    (body.phoneNumberId === null ||
+      (body.phoneNumberId && body.phoneNumberId !== previousPhoneId));
+  if (releasingPreviousPhone) {
     const { releaseMctbTexmlIngressFromPhone } = await import(
       "@/lib/mctb/texml-ingress/deprovision"
     );
-    await releaseMctbTexmlIngressFromPhone({
+    const released = await releaseMctbTexmlIngressFromPhone({
       phoneNumberId: previousPhoneId,
-    }).catch(() => undefined);
+    }).catch((err) => ({
+      ok: false,
+      e164: null,
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    if (!released.ok) {
+      console.error("[mctb/setup] deprovision previous phone failed", released);
+    }
   }
   if (phoneId) {
     let pn = await prisma.phoneNumber.findFirst({
@@ -514,19 +523,41 @@ export async function POST(req: Request) {
 
     if (body.consentMode || phoneId) {
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
-      await syncMctbConsentRouting(workspaceId, session.userId, {
-        assignedPhoneNumberId: phoneId ?? undefined,
-      }).catch(() => undefined);
+      const { invalidateMctbTexmlIngressCacheForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/config-cache"
+      );
+      try {
+        const syncResult = await syncMctbConsentRouting(workspaceId, session.userId, {
+          assignedPhoneNumberId: phoneId ?? undefined,
+        });
+        consentSync = { ok: true, action: syncResult.action };
+        if (body.consentMode) {
+          await invalidateMctbTexmlIngressCacheForWorkspace(workspaceId);
+        }
+      } catch (err) {
+        consentSync = {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
 
     if (body.consentMode === "existing_consent") {
       const { recordWorkspaceExistingConsentAttestation } = await import(
         "@/lib/mctb/event-only/attestation"
       );
-      await recordWorkspaceExistingConsentAttestation({
-        workspaceId,
-        attestedByUserId: session.userId,
-      }).catch(() => undefined);
+      try {
+        await recordWorkspaceExistingConsentAttestation({
+          workspaceId,
+          attestedByUserId: session.userId,
+        });
+        attestation = { ok: true };
+      } catch (err) {
+        attestation = {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
   }
 
@@ -582,6 +613,8 @@ export async function POST(req: Request) {
       solution: saved,
       sipProvision,
       tenantBinding,
+      consentSync,
+      attestation,
     },
   });
 }

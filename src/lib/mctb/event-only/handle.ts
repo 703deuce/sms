@@ -7,10 +7,33 @@ import {
   evaluateMctbRecoveryEligibility,
 } from "@/lib/mctb/event-only/eligibility";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
+import { buildMctbTexmlTerminalCallInput } from "@/lib/mctb/texml-ingress/texml-call-classification";
 import type { MctbCaptureMode, MctbInboundCallEvent } from "@/lib/mctb/event-only/types";
 
-const FALLBACK_WORKSPACE_ID =
-  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
+function resolveFallbackWorkspaceId(explicit?: string): string | null {
+  return (
+    explicit?.trim() ||
+    process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() ||
+    null
+  );
+}
+
+function buildCallInput(event: MctbInboundCallEvent) {
+  if (event.texmlCallStatus || event.callDurationSeconds != null) {
+    return buildMctbTexmlTerminalCallInput({
+      texmlCallStatus: event.texmlCallStatus,
+      callDuration: event.callDurationSeconds,
+      hangupCause: event.hangupCause,
+    });
+  }
+  return {
+    direction: "inbound" as const,
+    status: "NO_ANSWER",
+    disposition: "missed_no_answer",
+    answeredAt: null,
+    hangupCause: event.hangupCause,
+  };
+}
 
 export type HandleMctbInboundEventResult = {
   ok: boolean;
@@ -43,16 +66,21 @@ export async function handleMctbInboundEvent(
   event: MctbInboundCallEvent,
   input?: { fallbackWorkspaceId?: string; lockWorkspaceId?: string },
 ): Promise<HandleMctbInboundEventResult> {
-  const fallbackWorkspaceId = input?.fallbackWorkspaceId || FALLBACK_WORKSPACE_ID;
+  const fallbackWorkspaceId = resolveFallbackWorkspaceId(input?.fallbackWorkspaceId);
+  if (!fallbackWorkspaceId && !input?.lockWorkspaceId) {
+    return { ok: false, reason: "missing_fallback_workspace" };
+  }
 
   const target = input?.lockWorkspaceId
     ? { workspaceId: input.lockWorkspaceId, isPlatformDemo: false, demoMode: false }
     : await resolveMctbTargetWorkspaceForInboundCall({
         callerE164: event.callerE164,
         businessE164: event.transovoNumberE164,
-        fallbackWorkspaceId,
+        fallbackWorkspaceId: fallbackWorkspaceId!,
         forwardedFrom: event.forwardedFromE164,
       });
+
+  const callInput = buildCallInput(event);
 
   const businessE164 = event.forwardedFromE164 || event.transovoNumberE164;
   const phoneNumberId = await resolvePhoneNumberId(
@@ -117,13 +145,7 @@ export async function handleMctbInboundEvent(
       eventOnly: true,
       forceEligibilityStatus: eligibility.status,
       eventMetadata: buildEventMetadata(event, eligibility),
-      call: {
-        direction: "inbound",
-        status: "NO_ANSWER",
-        disposition: "missed_no_answer",
-        answeredAt: null,
-        hangupCause: event.hangupCause,
-      },
+      call: callInput,
     });
     return {
       ok: true,
@@ -145,13 +167,7 @@ export async function handleMctbInboundEvent(
     demoMode: target.demoMode,
     eventOnly: true,
     eventMetadata: buildEventMetadata(event, eligibility),
-    call: {
-      direction: "inbound",
-      status: "NO_ANSWER",
-      disposition: "missed_no_answer",
-      answeredAt: null,
-      hangupCause: event.hangupCause,
-    },
+    call: callInput,
   });
 
   logMctbEventOnly("recovery_sms_queued", {

@@ -231,7 +231,7 @@ export async function handleTexmlStatusCallback(request: Request) {
           const { scheduleMctbTexmlExistingConsentCapture } = await import(
             "@/lib/mctb/texml-ingress/existing-consent-capture"
           );
-          scheduleMctbTexmlExistingConsentCapture({
+          await scheduleMctbTexmlExistingConsentCapture({
             eventPayload: {
               ...eventPayload,
               ...(forwardedFrom ? { ForwardedFrom: forwardedFrom, forwarded_from: forwardedFrom } : {}),

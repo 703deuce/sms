@@ -7,37 +7,15 @@ import {
   wasMctbTexmlVoicemailRecorded,
 } from "@/lib/mctb/texml-ingress/voicemail-session";
 import { resolveMctbTexmlVoicemailMessage } from "@/lib/mctb/texml-ingress/voicemail-lookup";
+import {
+  parseMctbTexmlFields,
+  pickMctbTexmlField,
+} from "@/lib/mctb/texml-ingress/parse-texml-fields";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 
 export const runtime = "nodejs";
 
 const TEXML_CONTENT_TYPE = "text/xml; charset=utf-8";
-
-async function parseFields(request: Request): Promise<Record<string, string>> {
-  const contentType = (request.headers.get("content-type") || "").toLowerCase();
-  if (contentType.includes("application/json")) {
-    const json = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(json)) {
-      if (typeof v === "string") out[k] = v;
-    }
-    return out;
-  }
-  const form = await request.formData().catch(() => new FormData());
-  const out: Record<string, string> = {};
-  form.forEach((value, key) => {
-    out[key] = String(value);
-  });
-  return out;
-}
-
-function pick(fields: Record<string, string>, ...keys: string[]): string {
-  for (const key of keys) {
-    const val = fields[key];
-    if (val?.trim()) return val.trim();
-  }
-  return "";
-}
 
 function texmlHangup() {
   const xml = wrapMctbConsentTexmlBody("<Hangup/>");
@@ -50,13 +28,22 @@ function texmlHangup() {
 /** TeXML &lt;Record&gt; recordingStatusCallback — attach voicemail + transcription. */
 export async function POST(request: Request) {
   try {
-    const fields = await parseFields(request);
-    const callSid = pick(fields, "CallSid", "call_sid");
-    const recordingStatus = pick(fields, "RecordingStatus", "recording_status").toLowerCase();
-    const recordingUrl = pick(fields, "RecordingUrl", "recording_url");
-    const durationRaw = pick(fields, "RecordingDuration", "recording_duration", "Duration");
-    const from = pick(fields, "From", "from", "Caller");
-    const to = pick(fields, "To", "to", "Called");
+    const fields = await parseMctbTexmlFields(request);
+    const callSid = pickMctbTexmlField(fields, "CallSid", "call_sid");
+    const recordingStatus = pickMctbTexmlField(
+      fields,
+      "RecordingStatus",
+      "recording_status",
+    ).toLowerCase();
+    const recordingUrl = pickMctbTexmlField(fields, "RecordingUrl", "recording_url");
+    const durationRaw = pickMctbTexmlField(
+      fields,
+      "RecordingDuration",
+      "recording_duration",
+      "Duration",
+    );
+    const from = pickMctbTexmlField(fields, "From", "from", "Caller");
+    const to = pickMctbTexmlField(fields, "To", "to", "Called");
 
     traceMctbTexml("MCTB_VOICEMAIL_RECORD", {
       callSid,
@@ -107,12 +94,22 @@ export async function POST(request: Request) {
     }
 
     const prisma = (await import("@/lib/db")).getPrisma();
-    const existing = await prisma.voicemailMessage.findFirst({
-      where: { id: session.messageId, workspaceId: session.workspaceId },
-      select: { recordingUrl: true },
+    const claimed = await prisma.voicemailMessage.updateMany({
+      where: {
+        id: session.messageId,
+        workspaceId: session.workspaceId,
+        recordingUrl: null,
+      },
+      data: { transcriptStatus: "processing" },
     });
-    if (existing?.recordingUrl) {
-      markMctbTexmlVoicemailRecorded(callSid);
+    if (claimed.count === 0) {
+      const existing = await prisma.voicemailMessage.findFirst({
+        where: { id: session.messageId, workspaceId: session.workspaceId },
+        select: { recordingUrl: true },
+      });
+      if (existing?.recordingUrl) {
+        markMctbTexmlVoicemailRecorded(callSid);
+      }
       return texmlHangup();
     }
 

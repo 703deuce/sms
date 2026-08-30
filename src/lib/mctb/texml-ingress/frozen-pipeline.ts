@@ -31,6 +31,8 @@ export const MCTB_FINAL_PIPELINE_SOURCE_FILES = [
   "src/app/api/telnyx/voice/mctb-texml-voicemail/route.ts",
   "src/lib/mctb/consent-prompt/texml-response.ts",
   "src/lib/mctb/texml-ingress/frozen-pipeline.ts",
+  "src/lib/mctb/texml-ingress/parse-texml-fields.ts",
+  "src/lib/mctb/texml-ingress/texml-call-classification.ts",
   "src/lib/mctb/texml-ingress/existing-consent-capture.ts",
   "src/lib/mctb/texml-ingress/call-leg-context.ts",
   "src/lib/mctb/texml-ingress/deprovision.ts",

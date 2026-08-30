@@ -905,6 +905,19 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return reconcileTwilioTollFreeInventory(Number(payload.limit || 100));
     }
+    case "mctb_texml_existing_consent_capture": {
+      const { runMctbTexmlExistingConsentCapture } = await import(
+        "@/lib/mctb/texml-ingress/existing-consent-capture"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      if (!workspaceId) throw new Error("workspaceId required");
+      return runMctbTexmlExistingConsentCapture({
+        workspaceId,
+        eventPayload: (payload.eventPayload as Record<string, unknown>) || payload,
+        forwardedFromE164:
+          typeof payload.forwardedFromE164 === "string" ? payload.forwardedFromE164 : null,
+      });
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }

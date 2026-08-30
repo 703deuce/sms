@@ -50,7 +50,15 @@ export async function resolveMctbTexmlIngressConfig(
 
   const key = variants[0]!.replace(/\D/g, "");
   const hit = cache.get(key);
-  if (hit && hit.expires > Date.now()) return hit.config;
+  if (hit && hit.expires > Date.now()) {
+    let consentMode: MctbConsentMode = hit.config.consentMode;
+    try {
+      consentMode = await loadMctbConsentMode(hit.config.workspaceId);
+    } catch {
+      // keep cached consent mode
+    }
+    return { ...hit.config, consentMode };
+  }
 
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
@@ -106,5 +114,17 @@ export function invalidateMctbTexmlIngressCache(e164?: string): void {
   }
   for (const variant of mctbTexmlE164Variants(e164)) {
     cache.delete(variant.replace(/\D/g, ""));
+  }
+}
+
+/** Invalidate ingress cache for every DID owned by a workspace (consent mode / setup changes). */
+export async function invalidateMctbTexmlIngressCacheForWorkspace(workspaceId: string): Promise<void> {
+  const prisma = getPrisma();
+  const phones = await prisma.phoneNumber.findMany({
+    where: { workspaceId },
+    select: { e164: true },
+  });
+  for (const phone of phones) {
+    if (phone.e164) invalidateMctbTexmlIngressCache(phone.e164);
   }
 }

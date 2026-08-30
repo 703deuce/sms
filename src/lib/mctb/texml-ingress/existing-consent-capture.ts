@@ -2,18 +2,48 @@ import "server-only";
 
 import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
 import { normalizeTelnyxMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
+import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { traceMctbTexml } from "./trace";
 
-/** Async existing_consent capture for TeXML MCTB legs (post-call, not blocking voice). */
-export function scheduleMctbTexmlExistingConsentCapture(input: {
+export type MctbTexmlExistingConsentCaptureInput = {
   eventPayload: Record<string, unknown>;
   workspaceId: string;
   forwardedFromE164?: string | null;
-}): void {
+};
+
+/** Durable existing_consent capture — enqueued with idempotency per CallSid. */
+export async function scheduleMctbTexmlExistingConsentCapture(
+  input: MctbTexmlExistingConsentCaptureInput,
+): Promise<{ queued: boolean; callSid?: string }> {
+  const callSid = String(
+    input.eventPayload.CallSid ||
+      input.eventPayload.call_sid ||
+      input.eventPayload.call_control_id ||
+      "",
+  ).trim();
+  if (!callSid) return { queued: false };
+
+  await enqueueJob({
+    jobType: "mctb_texml_existing_consent_capture",
+    queueName: "voice-calls",
+    workspaceId: input.workspaceId,
+    payload: input as unknown as Record<string, unknown>,
+    idempotencyKey: `mctb-texml-capture:${input.workspaceId}:${callSid}`,
+    priority: 20,
+    maxAttempts: 8,
+  });
+
+  return { queued: true, callSid };
+}
+
+/** Worker entry — runs MCTB existing_consent SMS capture for one TeXML leg. */
+export async function runMctbTexmlExistingConsentCapture(
+  input: MctbTexmlExistingConsentCaptureInput,
+): Promise<{ ok: boolean; reason?: string }> {
   const normalized = normalizeTelnyxMctbInboundEvent(input.eventPayload, {
     voiceCaptureStatus: "EVENT_CAPTURED",
   });
-  if (!normalized) return;
+  if (!normalized) return { ok: false, reason: "normalize_failed" };
 
   if (!normalized.forwardedFromE164 && input.forwardedFromE164) {
     normalized.forwardedFromE164 = input.forwardedFromE164;
@@ -26,11 +56,15 @@ export function scheduleMctbTexmlExistingConsentCapture(input: {
     callSid: normalized.providerCallId,
     consentMode: "existing_consent",
     forwardedFrom: normalized.forwardedFromE164 || null,
+    texmlCallStatus: normalized.texmlCallStatus || null,
   });
 
-  void handleMctbInboundEvent(normalized, {
+  const result = await handleMctbInboundEvent(normalized, {
     fallbackWorkspaceId: input.workspaceId,
-  }).catch((err) => {
-    console.error("[mctb-texml-ingress] existing_consent capture failed", err);
   });
+
+  return {
+    ok: result.ok,
+    reason: result.reason || result.eligibilityStatus,
+  };
 }
