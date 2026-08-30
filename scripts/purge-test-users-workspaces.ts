@@ -1,7 +1,7 @@
 /**
  * Purge automated test users and workspaces from the database.
  *
- * Preserves only production accounts (ws_1 + platform demo 571 workspace).
+ * Preserves only ws_1 (production admin workspace) and its owner accounts.
  *
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
  *     npx tsx scripts/purge-test-users-workspaces.ts
@@ -32,10 +32,8 @@ async function resolvePreserveUserEmails(prisma: ReturnType<typeof getPrisma>): 
   return new Set(owners.map((m) => m.user.email.toLowerCase()));
 }
 
-const PRESERVE_WORKSPACE_IDS = new Set([
-  "ws_1",
-  "cmt2zyg4l43373s0f146b442h", // platform demo +15714073615
-]);
+const PRESERVE_WORKSPACE_IDS = new Set(["ws_1"]);
+const WS_1_CANONICAL_571_PHONE_ID = "cmsgtjms84g6l2h0o255w1e3v";
 
 function isTestEmail(email: string, preserveUserEmails: Set<string>): boolean {
   const e = email.trim().toLowerCase();
@@ -162,6 +160,21 @@ async function main() {
     workspacesToDelete.map((w) => w.id),
   );
 
+  console.log("Healing ws_1 references...");
+  await prisma.workspace.update({
+    where: { id: "ws_1" },
+    data: { activeFromNumberId: WS_1_CANONICAL_571_PHONE_ID },
+  });
+  const orphan571 = await prisma.phoneNumber.deleteMany({
+    where: {
+      e164: "+15714073615",
+      workspaceId: { not: "ws_1" },
+    },
+  });
+  if (orphan571.count > 0) {
+    console.log(`  removed ${orphan571.count} orphan +15714073615 phone row(s)`);
+  }
+
   console.log("Deleting test users...");
   const deletedUsers = await deleteUsersInBatches(
     prisma,
@@ -178,6 +191,11 @@ async function main() {
     include: { user: { select: { email: true, role: true } } },
   });
 
+  const remaining571 = await prisma.phoneNumber.findMany({
+    where: { e164: "+15714073615" },
+    select: { id: true, workspaceId: true, status: true },
+  });
+
   console.log(
     JSON.stringify(
       {
@@ -189,6 +207,7 @@ async function main() {
           email: m.user.email,
           role: m.role,
         })),
+        remaining571Rows: remaining571,
       },
       null,
       2,
