@@ -1,4 +1,4 @@
-import { resolveWorkspaceTryItPhone } from "./workspace-phone";
+import { resolveWorkspaceTryItPhone } from "@/lib/mctb/try-it/workspace-phone";
 
 export {
   getMctbProductionForwardTestE164,
