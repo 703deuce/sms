@@ -136,3 +136,24 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 **Reuse:** `voice-runtime/src/inbound-session-pipeline.ts`, `booking-tools.ts`, `transfer-tool.ts`, `agent-service.ts` publish/versioning, telephony provisioning.
 
 **LiveKit examples (reference):** `/agent/repos/agents/examples/survey/`, `hotel_receptionist/`, `warm-transfer/`, SDK `beta/workflows/task_group.py`.
+
+## Visual UI Agent
+
+When the user supplies a screenshot, design reference, or screen recording and asks to recreate/improve an existing Transovo page:
+
+1. Identify the exact target route/component.
+2. Use the repo UI Agent (`npm run ui:improve`, `npm run ui:analyze`) rather than blindly recreating the page.
+3. Analyze the existing implementation first (`scripts/ui-agent/project-context.ts`).
+4. Preserve existing APIs, backend logic, database behavior, auth, integrations, consent/compliance logic, and production functionality.
+5. Use Kimi multimodal analysis for reference image/video (`KIMI_API_KEY`, model `kimi-k3` for video).
+6. Capture the **rendered** current Transovo page (`--capture-current`) — do not rely on source code alone.
+7. Modify the existing page instead of creating a duplicate implementation.
+8. Reuse existing Transovo design-system components (`src/components/ui/*`).
+9. Default to **plan-only**; apply only after human review (`--apply`).
+10. If the reference needs unsupported backend behavior, document the gap in the report — do not fake it with mock data.
+11. Validate with `npm run ui:validate` and `npm run test:ui-agent-cert`.
+12. Do not push/deploy automatically.
+
+Treat Kimi as the **visual/UI specialist**. Treat the existing repository as the authoritative source for functionality.
+
+See `scripts/ui-agent/README.md` for full workflow.

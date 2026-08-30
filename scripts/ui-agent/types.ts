@@ -1,0 +1,171 @@
+export type AnalysisMode = "native_multimodal" | "sampled_frames";
+
+export type UiAgentMode = "analyze" | "improve" | "validate" | "capture";
+
+export type MediaKind = "image" | "video";
+
+export type LabeledMedia = {
+  label: string;
+  purpose: string;
+  path: string;
+  kind: MediaKind;
+  mimeType: string;
+};
+
+export type ReferenceDepth = "page" | "flow";
+
+export type ViewportPreset = "desktop" | "mobile" | "tablet";
+
+export type ViewportConfig = {
+  name: ViewportPreset;
+  width: number;
+  height: number;
+};
+
+export type UiAnalysisInput = {
+  systemPrompt: string;
+  userPrompt: string;
+  labeledMedia: LabeledMedia[];
+  expectJson?: boolean;
+};
+
+export type UiAnalysisResult = {
+  rawText: string;
+  parsedJson: unknown | null;
+  model: string;
+  analysisMode: AnalysisMode;
+  usage?: { promptTokens?: number; completionTokens?: number };
+};
+
+export interface UiVisionProvider {
+  readonly model: string;
+  readonly supportsImage: boolean;
+  readonly supportsVideo: boolean;
+  analyze(input: UiAnalysisInput): Promise<UiAnalysisResult>;
+}
+
+export type ReferenceAnalysis = {
+  pagesSeen: string[];
+  layout: Record<string, unknown>;
+  navigation: string[];
+  components: string[];
+  typography: Record<string, unknown>;
+  spacing: Record<string, unknown>;
+  hierarchy: Record<string, unknown>;
+  tables: string[];
+  cards: string[];
+  forms: string[];
+  modals: string[];
+  dropdowns: string[];
+  tabs: string[];
+  filters: string[];
+  emptyStates: string[];
+  loadingStates: string[];
+  interactions: string[];
+  transitions: string[];
+  responsiveBehavior: string[];
+  visualPatterns: string[];
+  assets: string[];
+  uncertainObservations: string[];
+  videoSequence?: string[];
+};
+
+export type DifferencePlanItem = {
+  area: string;
+  current: string;
+  reference: string;
+  change: string;
+  priority: "high" | "medium" | "low";
+};
+
+export type BackendGap = {
+  feature: string;
+  reason: string;
+};
+
+export type DifferencePlan = {
+  target: string;
+  preserve: string[];
+  modify: DifferencePlanItem[];
+  add: string[];
+  remove: string[];
+  reuseComponents: string[];
+  newPresentationComponents: string[];
+  interactionChanges: string[];
+  responsiveChanges: string[];
+  backendChangesRequired: BackendGap[];
+  outOfScope: string[];
+  uncertainties: string[];
+  inScope: string[];
+};
+
+export type ProposedFileChange = {
+  file: string;
+  action: "modify" | "create";
+  reason: string;
+  content: string;
+};
+
+export type ImplementationPlan = {
+  changes: ProposedFileChange[];
+  summary: string;
+  notes: string[];
+};
+
+export type VisualVerificationScores = {
+  visualMatch: number;
+  layoutMatch: number;
+  interactionMatch: number;
+  brandPreservation: number;
+  functionalityRisk: "low" | "medium" | "high";
+  remainingDifferences: string[];
+};
+
+export type ProjectManifest = {
+  targetRoute: string;
+  targetFiles: string[];
+  sharedUiFiles: string[];
+  protectedDependencies: string[];
+  apiContracts: string[];
+  currentComponents: string[];
+  designSystemFiles: string[];
+  inScope: string[];
+  outOfScope: string[];
+};
+
+export type UiAgentSession = {
+  id: string;
+  createdAt: string;
+  target: string;
+  instruction: string;
+  referenceMedia: Array<{ label: string; purpose: string; path: string; source: string }>;
+  currentMedia: Array<{ label: string; path: string; viewport?: string }>;
+  manifest: ProjectManifest;
+  referenceAnalysis?: ReferenceAnalysis;
+  differencePlan?: DifferencePlan;
+  implementationPlan?: ImplementationPlan;
+  verification?: VisualVerificationScores;
+};
+
+export type CliOptions = {
+  target?: string;
+  sessionId?: string;
+  instruction?: string;
+  referenceImages: string[];
+  referenceVideos: string[];
+  referenceUrls: string[];
+  referenceNames: string[];
+  currentImages: string[];
+  currentVideos: string[];
+  captureCurrent: boolean;
+  captureScreenshots: boolean;
+  captureVideo: boolean;
+  referenceDepth: ReferenceDepth;
+  planOnly: boolean;
+  apply: boolean;
+  dryRun: boolean;
+  analyzeOnly: boolean;
+  baseUrl: string;
+  viewports: ViewportPreset[];
+  maxPasses: number;
+};

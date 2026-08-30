@@ -49,4 +49,8 @@ next-env.d.ts
 public/connection-greeting/sources/*.wav
 public/voicemail/
 .mctb-571-forward-pickup-backup.json
-.mctb-fqdn-direct-mctb-backup.json
+.livekit-fqdn-direct-mctb-backup.json
+.ui-agent/references/**
+.ui-agent/sessions/**
+!.ui-agent/references/.gitkeep
+!.ui-agent/sessions/.gitkeep
