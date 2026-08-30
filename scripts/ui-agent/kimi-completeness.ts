@@ -20,7 +20,7 @@ export type CompletenessReport = {
 
 type RouteRule = {
   match: (target: string) => boolean;
-  gaps: (ctx: { files: string[]; sources: string }) => CompletenessGap[];
+  gaps: (ctx: { target: string; files: string[]; sources: string }) => CompletenessGap[];
 };
 
 function hasFile(files: string[], pattern: RegExp): boolean {
@@ -156,10 +156,10 @@ const ROUTE_RULES: RouteRule[] = [
     },
   },
   {
-    match: (t) => t === "/contacts" || t.startsWith("/contacts"),
-    gaps: ({ sources }) => {
+    match: (t) => t === "/contacts" || t.startsWith("/contacts/"),
+    gaps: ({ target, sources }) => {
       const gaps: CompletenessGap[] = [];
-      if (t === "/contacts") {
+      if (target === "/contacts") {
         if (!sourcesContain(sources, /ImportWizard|import/i)) {
           gaps.push({ id: "import", description: "Contact import/upload wizard", severity: "required" });
         }
@@ -210,7 +210,7 @@ export function auditSandboxCompleteness(sessionId: string, target: string): Com
   const gaps: CompletenessGap[] = [];
   for (const rule of ROUTE_RULES) {
     if (rule.match(target)) {
-      gaps.push(...rule.gaps({ files, sources }));
+      gaps.push(...rule.gaps({ target, files, sources }));
     }
   }
 
