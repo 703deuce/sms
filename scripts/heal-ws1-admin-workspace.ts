@@ -158,20 +158,39 @@ async function healAllNumbers() {
 
 async function healMctbRuntime() {
   const runtime = await loadMissedCallTextConfig(workspaceId);
-  if (!runtime.phoneNumberId) {
-    return { skipped: true, reason: "no_phone_number_id_in_config" };
+  const prisma = getPrisma();
+  const phones = await prisma.phoneNumber.findMany({
+    where: { workspaceId, status: { not: "Released" } },
+    select: { id: true, e164: true },
+    orderBy: { purchasedAt: "asc" },
+  });
+
+  let phoneNumberId = runtime.phoneNumberId;
+  if (phoneNumberId && !phones.some((p) => p.id === phoneNumberId)) {
+    const preferred =
+      phones.find((p) => p.e164 === "+15714073615") ||
+      phones.find((p) => p.e164 === "+18663464256") ||
+      phones[0];
+    phoneNumberId = preferred?.id || null;
+    console.warn(
+      `[heal-ws1] stale MCTB phoneNumberId ${runtime.phoneNumberId} → ${phoneNumberId || "(none)"}`,
+    );
+  }
+
+  if (!phoneNumberId) {
+    return { skipped: true, reason: "no_valid_phone_number_id" };
   }
 
   if (!apply) {
-    return { wouldEnable: true, phoneNumberId: runtime.phoneNumberId };
+    return { wouldEnable: true, phoneNumberId };
   }
 
   await updateMissedCallTextConfig({
     workspaceId,
     patch: {
       enabled: true,
-      phone_number_id: runtime.phoneNumberId,
-      sms_phone_number_id: runtime.smsPhoneNumberId || runtime.phoneNumberId,
+      phone_number_id: phoneNumberId,
+      sms_phone_number_id: runtime.smsPhoneNumberId || phoneNumberId,
     },
     source: "ws1_admin_heal",
   });

@@ -59,6 +59,35 @@ export async function switchDidToMctbTexmlIngress(input: {
     amyUnassigned = true;
   }
 
+  // MCTB TeXML owns inbound — clear AI receptionist joins that steal the DID.
+  const agentJoins = await prisma.voiceAgentPhoneNumber.findMany({
+    where: { workspaceId: input.workspaceId, phoneNumberId: phone.id },
+    select: { agentId: true },
+  });
+  for (const join of agentJoins) {
+    await syncVoiceAgentPhoneAssignment({
+      workspaceId: input.workspaceId,
+      agentId: join.agentId,
+      phoneNumberId: null,
+    });
+    await prisma.voiceAgent.updateMany({
+      where: {
+        id: join.agentId,
+        workspaceId: input.workspaceId,
+        phoneNumberId: phone.id,
+      },
+      data: { phoneNumberId: null },
+    });
+    amyUnassigned = true;
+  }
+  await prisma.voiceAgentPhoneNumber.deleteMany({
+    where: { workspaceId: input.workspaceId, phoneNumberId: phone.id },
+  });
+  await prisma.voiceAgent.updateMany({
+    where: { workspaceId: input.workspaceId, phoneNumberId: phone.id },
+    data: { phoneNumberId: null },
+  });
+
   const settings = mergePhoneCapabilitySettings(phone.settingsJson, {
     mctbEnabled: true,
     voiceEnabled: true,

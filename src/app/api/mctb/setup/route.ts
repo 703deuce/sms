@@ -24,6 +24,10 @@ import {
 } from "@/lib/mctb/platform-demo-access";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
+import {
+  isMctbSetupPhoneAccessible,
+  sanitizeMctbSetupPhoneNumberId,
+} from "@/lib/mctb/setup-phone-validation";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import {
@@ -139,10 +143,27 @@ export async function GET() {
   const scheduleSettings = readMctbScheduleFromCustomFields(customCfg, runtime);
   const effectiveSchedule = previewMctbPauseState(scheduleSettings, runtime);
   const pauseKind = resolveMctbPauseKind(effectiveSchedule, runtime);
+  const sanitizedPhoneNumberId = await sanitizeMctbSetupPhoneNumberId(
+    workspaceId,
+    runtime.phoneNumberId,
+  );
+  const sanitizedSmsPhoneNumberId = await sanitizeMctbSetupPhoneNumberId(
+    workspaceId,
+    runtime.smsPhoneNumberId,
+  );
+  const runtimeForClient =
+    sanitizedPhoneNumberId !== runtime.phoneNumberId ||
+    sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId
+      ? {
+          ...runtime,
+          phoneNumberId: sanitizedPhoneNumberId,
+          smsPhoneNumberId: sanitizedSmsPhoneNumberId,
+        }
+      : runtime;
 
   return NextResponse.json({
     data: {
-      runtime,
+      runtime: runtimeForClient,
       schedule: {
         scheduleMode: effectiveSchedule.scheduleMode,
         weeklySchedule: effectiveSchedule.weeklySchedule,
@@ -231,6 +252,26 @@ export async function POST(req: Request) {
       { error: "Existing consent attestation is required" },
       { status: 400 },
     );
+  }
+
+  if (body.phoneNumberId !== undefined && body.phoneNumberId !== null) {
+    const phoneOk = await isMctbSetupPhoneAccessible(workspaceId, body.phoneNumberId);
+    if (!phoneOk) {
+      return NextResponse.json(
+        { error: "Selected number is not available for this workspace." },
+        { status: 400 },
+      );
+    }
+  }
+
+  if (body.smsPhoneNumberId !== undefined && body.smsPhoneNumberId !== null) {
+    const smsOk = await isMctbSetupPhoneAccessible(workspaceId, body.smsPhoneNumberId);
+    if (!smsOk) {
+      return NextResponse.json(
+        { error: "Selected SMS number is not available for this workspace." },
+        { status: 400 },
+      );
+    }
   }
 
   if (body.activate === true && body.phoneNumberId) {
