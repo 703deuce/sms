@@ -6,6 +6,7 @@ import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
+import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import { cn } from "@/lib/utils";
 import {
   AudioLines,
@@ -78,7 +79,9 @@ export function MobileNav({
     ? buildRealtorMobileNav()
     : currentProduct === "numbers"
       ? numbersItems
-      : multiProduct
+      : isSmsOnlyAppNav()
+        ? massSmsItems
+        : multiProduct
         ? productShell === "mass_sms"
           ? massSmsItems
           : productShell === "ai_after_hours"

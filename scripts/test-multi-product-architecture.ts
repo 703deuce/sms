@@ -60,10 +60,10 @@ assert.equal(
   "/personal",
 );
 
-// Multi-product without last active → launcher
+// Multi-product without last active → SMS dashboard (no product launcher)
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: true, hasNumbers: true, hasSms: false })),
-  "/app",
+  "/dashboard",
 );
 
 // Deep link preserved

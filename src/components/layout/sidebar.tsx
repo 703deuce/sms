@@ -13,6 +13,7 @@ import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { productLogoHome } from "@/lib/products/context";
+import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import {
   aiAfterHoursShellHome,
   massSmsShellHome,
@@ -330,6 +331,10 @@ export function Sidebar({
       return buildNumbersNav({
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
+    }
+
+    if (isSmsOnlyAppNav()) {
+      return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
     }
 
     if (multiProduct) {

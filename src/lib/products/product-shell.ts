@@ -2,6 +2,7 @@
  * Transovo product shells — SMS, Missed Call Text Back, and AI After Hours.
  * Top switcher swaps shell context; ambiguous routes follow the last selected shell.
  */
+import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 
 export type ProductShell = "mass_sms" | "mctb" | "ai_after_hours";
 
@@ -172,5 +173,6 @@ export function shouldShowProductSwitcher(input: {
   hasMassSms: boolean;
   hasAiAfterHours: boolean;
 }): boolean {
+  if (isSmsOnlyAppNav()) return false;
   return countEntitledProductShells(input) >= 2;
 }

@@ -5,6 +5,7 @@ import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
 import { formatPhone } from "@/lib/utils";
+import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import {
   Bell,
   CircleHelp,
@@ -374,7 +375,9 @@ export function Header({
                 {[
                   { label: "Account Settings", href: "/settings/business" },
                   { label: "Billing", href: "/settings/billing" },
-                  { label: "All Transovo Products", href: "/app" },
+                  ...(isSmsOnlyAppNav()
+                    ? []
+                    : [{ label: "All Transovo Products", href: "/app" }]),
                 ].map((item) => (
                   <Link
                     key={item.label}

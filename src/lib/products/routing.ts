@@ -6,7 +6,7 @@ import {
 } from "@/lib/products/access-guards";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
-import { isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
+import { isSmsOnlyAppNav, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
 export {
   preferredProductFromPath,
@@ -43,14 +43,16 @@ export function resolvePostLoginPath(
     if (access.productIntent && !(isSmsStandaloneHidden() && access.productIntent === "sms")) {
       return productHomePath(access.productIntent);
     }
-    return "/app";
+    return isSmsOnlyAppNav() ? "/dashboard" : "/app";
   }
 
   if (active.length === 1) {
     return productHomePath(active[0]!);
   }
 
-  if (options?.forceLauncher) return "/app";
+  if (options?.forceLauncher) {
+    return isSmsOnlyAppNav() ? "/dashboard" : "/app";
+  }
 
   if (
     access.lastActiveProduct &&
@@ -60,6 +62,6 @@ export function resolvePostLoginPath(
     return productHomePath(access.lastActiveProduct);
   }
 
-  return "/app";
+  return isSmsOnlyAppNav() ? "/dashboard" : "/app";
 }
 

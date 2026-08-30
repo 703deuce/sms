@@ -34,10 +34,10 @@ assert.ok(!isExplicitMctbShellPath("/voice/agents"));
 assert.equal(aiAfterHoursShellHome(), "/voice/overview");
 
 assert.ok(
-  shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: false }),
+  !shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: false }),
 );
 assert.ok(
-  shouldShowProductSwitcher({ hasMassSms: true, hasMctb: false, hasAiAfterHours: true }),
+  !shouldShowProductSwitcher({ hasMassSms: true, hasMctb: false, hasAiAfterHours: true }),
 );
 
 const aiNav = buildAiAfterHoursNav({ primaryVoiceAgentId: "agent_1" });
