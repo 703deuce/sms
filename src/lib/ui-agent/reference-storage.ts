@@ -1,13 +1,18 @@
 import "server-only";
 
 import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/admin";
+import {
+  KIMI_IMAGE_MIME_TYPES,
+  KIMI_MAX_IMAGE_BYTES,
+  KIMI_MAX_VIDEO_BYTES,
+  KIMI_VIDEO_MIME_TYPES,
+} from "@/lib/ui-agent/reference-limits";
 
 const DEFAULT_BUCKET = "ui-references";
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+export const UI_REFERENCES_MANIFEST_PATH = "manifest/references.json";
 
-const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
-const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const VIDEO_TYPES = new Set<string>(KIMI_VIDEO_MIME_TYPES);
+const IMAGE_TYPES = new Set<string>(KIMI_IMAGE_MIME_TYPES);
 
 let ensuredBucket: string | null = null;
 
@@ -42,7 +47,7 @@ export async function ensureUiReferencesBucket(bucket = resolveUiReferencesBucke
   if (!buckets?.some((row) => row.name === bucket)) {
     const { error: createError } = await supabase.storage.createBucket(bucket, {
       public: false,
-      fileSizeLimit: MAX_VIDEO_BYTES,
+      fileSizeLimit: KIMI_MAX_VIDEO_BYTES,
     });
     if (createError && !/already exists/i.test(createError.message)) {
       throw new Error(`Storage bucket create failed for ${bucket}: ${createError.message}`);
@@ -61,7 +66,7 @@ export async function uploadUiReferenceToStorage(input: {
   filename?: string;
 }): Promise<{ bucket: string; path: string }> {
   assertMime(input.mimeType, input.kind);
-  const max = input.kind === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  const max = input.kind === "video" ? KIMI_MAX_VIDEO_BYTES : KIMI_MAX_IMAGE_BYTES;
   if (input.bytes.length > max) {
     throw new Error(`File exceeds ${input.kind === "video" ? "100MB" : "20MB"} limit.`);
   }
@@ -79,6 +84,50 @@ export async function uploadUiReferenceToStorage(input: {
   if (error) throw new Error(`UI reference upload failed: ${error.message}`);
 
   return { bucket, path: objectPath };
+}
+
+export async function createUiReferenceSignedUpload(input: {
+  name: string;
+  kind: "video" | "image";
+  mimeType: string;
+  filename?: string;
+}): Promise<{ bucket: string; path: string; token: string }> {
+  assertMime(input.mimeType, input.kind);
+  const bucket = await ensureUiReferencesBucket();
+  const ext = input.filename?.split(".").pop()?.toLowerCase() || (input.kind === "video" ? "mp4" : "png");
+  const folder = input.kind === "video" ? "videos" : "images";
+  const objectPath = `${folder}/${input.name}.${ext}`;
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(objectPath, {
+    upsert: true,
+  });
+  if (error || !data?.token) {
+    throw new Error(`Signed upload URL failed: ${error?.message || "missing token"}`);
+  }
+
+  return { bucket, path: objectPath, token: data.token };
+}
+
+export async function readUiReferencesManifestFromStorage(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const bucket = resolveUiReferencesBucket();
+    const bytes = await downloadUiReferenceFromStorage({ bucket, path: UI_REFERENCES_MANIFEST_PATH });
+    return bytes.toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+export async function writeUiReferencesManifestToStorage(json: string): Promise<void> {
+  const bucket = await ensureUiReferencesBucket();
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.storage.from(bucket).upload(UI_REFERENCES_MANIFEST_PATH, Buffer.from(json, "utf8"), {
+    contentType: "application/json",
+    upsert: true,
+  });
+  if (error) throw new Error(`Manifest save failed: ${error.message}`);
 }
 
 export async function downloadUiReferenceFromStorage(input: {
