@@ -72,7 +72,42 @@ const ROUTE_RULES: RouteRule[] = [
         gaps.push({ id: "chat-pane", description: "Active conversation thread + composer", severity: "required" });
       }
       if (!sourcesContain(sources, /ContactPanel|ContactSidebar|DetailsPanel/i)) {
-        gaps.push({ id: "contact-panel", description: "Contact details side panel", severity: "recommended" });
+        gaps.push({ id: "contact-panel", description: "Contact details side panel", severity: "required" });
+      }
+      if (!sourcesContain(sources, /compose|NewMessage|new message|SquarePen/i)) {
+        gaps.push({
+          id: "compose",
+          description: "New message / compose flow shown in inbox video",
+          severity: "required",
+        });
+      }
+      if (!sourcesContain(sources, /bulk|assign|tag.*conversation/i)) {
+        gaps.push({
+          id: "bulk-actions",
+          description: "Bulk assign/tag/status actions on conversation list",
+          severity: "recommended",
+        });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t === "/auto-replies",
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /office hours|OfficeHours|business hours/i)) {
+        gaps.push({
+          id: "office-hours",
+          description: "Office hours schedule + inside/outside auto-response messages",
+          severity: "required",
+        });
+      }
+      if (!sourcesContain(sources, /compliance|opt-in|opt-out|TCPA/i)) {
+        gaps.push({
+          id: "compliance",
+          description: "Compliance messaging section (opt-in, opt-out, help)",
+          severity: "required",
+        });
       }
       return gaps;
     },
@@ -91,11 +126,60 @@ const ROUTE_RULES: RouteRule[] = [
     },
   },
   {
-    match: (t) => t.includes("/contacts"),
+    match: (t) => t.includes("/grow/keywords"),
     gaps: ({ sources }) => {
       const gaps: CompletenessGap[] = [];
-      if (!sourcesContain(sources, /Import|Upload|CreateContact/i)) {
-        gaps.push({ id: "add-contact", description: "Add/import contact flow shown in video", severity: "recommended" });
+      if (!sourcesContain(sources, /KeywordCreate|CreateKeyword|keyword.*create/i)) {
+        gaps.push({ id: "keyword-create", description: "Create keyword form/wizard", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t.includes("/grow/qr"),
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /QrPreview|QRPreview|preview/i)) {
+        gaps.push({ id: "qr-preview", description: "QR code live preview panel", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t.includes("/grow/tap-to-join"),
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /CreateLink|create.*link/i)) {
+        gaps.push({ id: "create-link", description: "Create tap-to-join link form", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t === "/contacts" || t.startsWith("/contacts"),
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (t === "/contacts") {
+        if (!sourcesContain(sources, /ImportWizard|import/i)) {
+          gaps.push({ id: "import", description: "Contact import/upload wizard", severity: "required" });
+        }
+        if (!sourcesContain(sources, /CreateContact|add contact/i)) {
+          gaps.push({ id: "create-contact", description: "Add single contact form", severity: "required" });
+        }
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t.includes("/messaging/media"),
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /MediaLibrary|media list|gallery|MmsModal/i)) {
+        gaps.push({
+          id: "media-library",
+          description: "Media library / attachment gallery (not only campaign composer)",
+          severity: "recommended",
+        });
       }
       return gaps;
     },
