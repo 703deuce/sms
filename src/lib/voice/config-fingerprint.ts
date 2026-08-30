@@ -47,3 +47,26 @@ export function buildVoiceConfigFingerprint(input: {
     .slice(0, 16);
   return { ...parts, fingerprint };
 }
+
+/** Load fingerprint from a published agent version (Telnyx calls). */
+export async function buildVoiceConfigFingerprintForVersion(input: {
+  agentVersionId: string | null | undefined;
+  runtimeProvider?: string | null;
+}): Promise<VoiceConfigFingerprint | null> {
+  if (!input.agentVersionId) return null;
+  const { getPrisma } = await import("@/lib/db");
+  const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+  const prisma = getPrisma();
+  const ver = await prisma.voiceAgentVersion.findFirst({
+    where: { id: input.agentVersionId },
+    select: { id: true, version: true, config: true },
+  });
+  if (!ver) return null;
+  const config = parseVoiceAgentConfig(ver.config);
+  return buildVoiceConfigFingerprint({
+    config,
+    agentVersionId: ver.id,
+    runtimeProvider: input.runtimeProvider || "telnyx",
+    promptVersion: `v${ver.version}`,
+  });
+}

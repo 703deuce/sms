@@ -12,6 +12,7 @@ import {
   sanitizeTelnyxVoiceError,
 } from "./voices";
 import { CONVERSATIONAL_PROMPT_GUIDANCE } from "../timing-presets";
+import { TELNYX_SPEECH_PROMPT_GUIDANCE } from "./speech-prompt-guidance";
 import {
   LOW_LATENCY_CONVERSATION_GUIDANCE,
   buildFluxTranscriptionSettings,
@@ -317,6 +318,7 @@ export async function syncTelnyxAssistant(
     speaksFirstDirective(config),
     // Soft prompt guidance only — not hard truncation or provider timing.
     CONVERSATIONAL_PROMPT_GUIDANCE,
+    TELNYX_SPEECH_PROMPT_GUIDANCE,
     isDeepgramFluxModel(
       config.transcription?.sttModel || process.env.VOICE_TRANSCRIPTION_MODEL,
     ) || isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)

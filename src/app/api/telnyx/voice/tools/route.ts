@@ -12,6 +12,7 @@ import {
   normalizeCallerAni,
 } from "@/lib/voice/call-identity";
 import { recordToolWebhookIngress } from "@/lib/voice/telnyx/tool-webhook-ingress";
+import { formatTelnyxToolPayload } from "@/lib/voice/telnyx/format-speak-text";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   isLegacyCallerAmyAgent,
@@ -21,6 +22,10 @@ import {
   LEGACY_WORKFLOW_VOICE_TOOL_TYPES,
   isLegacyWorkflowVoicePathEnabled,
 } from "@/lib/voice/architecture/legacy-voice-path";
+
+function telnyxToolJson(payload: Record<string, unknown>, init?: ResponseInit) {
+  return NextResponse.json(formatTelnyxToolPayload(payload), init);
+}
 
 function resolveInboundAni(request: Request, body: Record<string, unknown>): string {
   const headerKeys = [
@@ -55,7 +60,7 @@ export async function POST(request: Request) {
     const toolType = request.headers.get("x-transovo-tool-type") || "";
 
     if (!workspaceId) {
-      return NextResponse.json(
+      return telnyxToolJson(
         {
           ok: false,
           error: "workspace required",
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
         },
       });
       if (!agent) {
-        return NextResponse.json(
+        return telnyxToolJson(
           {
             ok: false,
             error: "agent not found for workspace",
@@ -90,7 +95,7 @@ export async function POST(request: Request) {
 
       const agentConfig = parseVoiceAgentConfig(agent.draftConfig);
       if (requiresLiveKitVoiceRuntime({ ...agentConfig, agentType: agent.agentType })) {
-        return NextResponse.json(
+        return telnyxToolJson(
           {
             ok: false,
             error: "LiveKit-only voice agent — Telnyx AI tool webhooks are not supported",
@@ -106,7 +111,7 @@ export async function POST(request: Request) {
         LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has(toolType) &&
         !isLegacyWorkflowVoicePathEnabled()
       ) {
-        return NextResponse.json(
+        return telnyxToolJson(
           {
             ok: false,
             error: `Legacy workflow tool "${toolType}" is retired`,
@@ -121,7 +126,7 @@ export async function POST(request: Request) {
         LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has(toolType) &&
         !isLegacyCallerAmyAgent({ agentType: agent.agentType, config: agentConfig })
       ) {
-        return NextResponse.json(
+        return telnyxToolJson(
           {
             ok: false,
             error: "Workflow tools are only available for legacy Caller Amy agents",
@@ -150,7 +155,7 @@ export async function POST(request: Request) {
       });
 
       if (toolType && !toolId && !isBuiltinToolEnabled(enabled, toolType)) {
-        return NextResponse.json(
+        return telnyxToolJson(
           {
             ok: false,
             error: `Tool "${toolType}" is not enabled for this agent.`,
@@ -166,7 +171,7 @@ export async function POST(request: Request) {
           where: { agentId, workspaceId, toolId },
         });
         if (!link) {
-          return NextResponse.json(
+          return telnyxToolJson(
             {
               ok: false,
               error: "Tool is not assigned to this agent.",
@@ -326,7 +331,7 @@ export async function POST(request: Request) {
         input: body,
         asyncAllowed: true,
       });
-        return NextResponse.json({
+        return telnyxToolJson({
           ...result,
           ok: result.ok !== false,
           agentId,
@@ -393,7 +398,7 @@ export async function POST(request: Request) {
               })
               .catch(() => undefined);
           }
-          return NextResponse.json(blocked);
+          return telnyxToolJson(blocked);
         }
 
         if (callId && inboundAni) {
@@ -454,7 +459,7 @@ export async function POST(request: Request) {
             })
             .catch(() => undefined);
         }
-        return NextResponse.json({
+        return telnyxToolJson({
           ...result,
           ok: result.ok !== false,
           agentId,
@@ -483,7 +488,7 @@ export async function POST(request: Request) {
         }
         console.error("[telnyx/voice/tools]", toolType, message);
         // Never hang up on tool failure — return a speakable error.
-        return NextResponse.json(
+        return telnyxToolJson(
           {
             ok: false,
             error: message,
@@ -497,7 +502,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(
+    return telnyxToolJson(
       {
         ok: false,
         error: "No tool id or type",
@@ -508,7 +513,7 @@ export async function POST(request: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[telnyx/voice/tools]", message);
-    return NextResponse.json(
+    return telnyxToolJson(
       {
         ok: false,
         error: message,

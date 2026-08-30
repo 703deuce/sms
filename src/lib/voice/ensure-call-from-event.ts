@@ -235,6 +235,17 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
 
   const fromE164 = from || "unknown";
   let contactId: string | null = null;
+  let voiceConfigFingerprint: Record<string, unknown> | null = null;
+  if (agentVersionId) {
+    const { buildVoiceConfigFingerprintForVersion } = await import(
+      "@/lib/voice/config-fingerprint"
+    );
+    const fp = await buildVoiceConfigFingerprintForVersion({
+      agentVersionId,
+      runtimeProvider: "telnyx",
+    });
+    if (fp) voiceConfigFingerprint = fp as unknown as Record<string, unknown>;
+  }
   if (fromE164 && fromE164 !== "unknown") {
     const {
       ensureInboundCallerContact,
@@ -284,6 +295,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
         eventType: input.eventType,
         firstEventTerminal: terminal,
         payload: p,
+        ...(voiceConfigFingerprint ? { voiceConfigFingerprint } : {}),
       } as object,
     },
   });

@@ -24,6 +24,24 @@ Do **not** change Haiku, Telnyx architecture, or OpenAI Realtime until the four 
 
 ---
 
+## Production path (Amy 866) — Telnyx-applicable architecture (v1)
+
+Applied on the **live TeXML → Telnyx assistant** path (not LiveKit):
+
+| Capability | Implementation |
+|------------|----------------|
+| Speech shaping (prompt) | `TELNYX_SPEECH_PROMPT_GUIDANCE` in `assistant-sync.ts` + `caller-constitution.ts` |
+| Tool speak normalization | `formatTelnyxToolPayload()` on `/api/telnyx/voice/tools` egress |
+| Voice consistency tuning | `applyAmyProductionVoiceTuning()` — stability 0.72, style 0, pronunciation dict |
+| Config fingerprint | `voiceCall.metadata.voiceConfigFingerprint` on Telnyx call create |
+| Pronunciation | `AMY_PRONUNCIATION_DICTIONARY` + instruction notes |
+| Failure taxonomy / repair | Prompt rules in constitution + Telnyx speech guidance |
+| Republish script | `scripts/amy-apply-telnyx-voice-architecture.ts` |
+
+**Still Telnyx-internal (we cannot control):** generation IDs, TTS chunking, `previous_text` continuity, audio queue depth.
+
+---
+
 ## Production path (Amy 866)
 
 | Layer | Value |

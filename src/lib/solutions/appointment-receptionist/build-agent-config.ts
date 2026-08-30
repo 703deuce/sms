@@ -9,6 +9,7 @@ import {
 } from "./transfer-utils";
 import { resolveWizardRoutingMode } from "./routing-mode";
 import { buildCallerAmyPromptFromModules } from "@/lib/agents/appointment-booking/intelligence/caller-prompt";
+import { applyAmyProductionVoiceTuning } from "@/lib/voice/telnyx/amy-production-voice-tuning";
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "Answer hours, services, pricing ranges, policies, and FAQs directly from the Business knowledge section below — do not call any tool for those topics. " +
@@ -403,7 +404,7 @@ export function buildWizardAgentConfig(
   const keyterms = buildTranscriptionKeyterms(state);
   const recordingOn = state.callRecording !== "off";
 
-  return {
+  return applyAmyProductionVoiceTuning({
     ...base,
     identity: {
       ...base.identity,
@@ -618,8 +619,9 @@ export function buildWizardAgentConfig(
               mode: "none",
             },
           }),
+      voiceArchitectureVersion: "telnyx-production-v1",
     },
-  };
+  });
 }
 
 export function buildReceptionistWillList(state: AppointmentReceptionistWizardState): string[] {
