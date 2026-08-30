@@ -102,7 +102,7 @@ export async function evaluateMissedCallTextEligibility(input: {
       return { eligible: false, reason: "TRIGGER_DISABLED", classification };
     }
 
-    if (config.requireCarrierForward) {
+    if (config.requireCarrierForward && !input.eventOnly) {
       const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
       const transovo = input.transovoNumberE164 || input.businessE164;
       const directDial = !input.forwardedFromE164?.trim();

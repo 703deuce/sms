@@ -136,6 +136,8 @@ export async function evaluateMctbRecoveryEligibility(input: {
     idempotencyKey,
     demoMode: input.demoMode,
     eventOnly: true,
+    forwardedFromE164: input.event.forwardedFromE164,
+    transovoNumberE164: input.event.transovoNumberE164,
     call: {
       direction: "inbound",
       status: "NO_ANSWER",

@@ -136,7 +136,9 @@ export async function POST(request: Request) {
         consentMode,
         workspaceId: config?.workspaceId,
       });
-      return texmlResponse(`<Say voice="female">Thank you for calling.</Say><Hangup/>`, {
+      return texmlResponse(
+        `<Say voice="female">Thank you for calling. We will text you shortly.</Say><Pause length="1"/><Hangup/>`,
+        {
         branch: "existing_consent",
         consentMode,
       });
