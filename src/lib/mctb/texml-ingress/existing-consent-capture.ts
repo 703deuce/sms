@@ -60,7 +60,7 @@ export async function runMctbTexmlExistingConsentCapture(
   });
 
   const result = await handleMctbInboundEvent(normalized, {
-    fallbackWorkspaceId: input.workspaceId,
+    lockWorkspaceId: input.workspaceId,
   });
 
   return {

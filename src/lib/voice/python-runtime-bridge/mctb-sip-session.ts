@@ -19,9 +19,6 @@ import { getActiveMediaBackend } from "@/lib/voice/media-backend";
 import { mediaBackendMetadataStamp } from "@/lib/voice/media-backend/pinning";
 import { businessNumberForConsentStorage, consentIdentityMetadata } from "@/lib/mctb/consent-identity";
 
-const FALLBACK_WORKSPACE_ID =
-  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
-
 const MCTB_PRESS_1_CONFIRMATION_TEXT =
   "Perfect. Check your phone. We have just sent you a message.";
 
@@ -36,7 +33,7 @@ async function resolveConfirmationPlayUrl(workspaceId: string): Promise<string |
   if (cachedConfirmationPlayback && cachedConfirmationPlayback.expiresAt > Date.now()) {
     return cachedConfirmationPlayback.playUrl;
   }
-  const ownerId = process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || workspaceId;
+  const ownerId = workspaceId;
   const asset = await generatePromptAudio({
     workspaceId: ownerId,
     name: "MCTB Press-1 Confirmation",
@@ -142,7 +139,7 @@ export async function resolveMctbSipSessionForPython(
   if (!callerE164 || !transovoNumberE164) {
     return {
       ok: false,
-      workspaceId: FALLBACK_WORKSPACE_ID,
+      workspaceId: "",
       demoMode: false,
       consentMode: "press_1",
       consentDigit: "1",
@@ -157,9 +154,21 @@ export async function resolveMctbSipSessionForPython(
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164,
     businessE164: transovoNumberE164,
-    fallbackWorkspaceId: FALLBACK_WORKSPACE_ID,
     forwardedFrom: forwardedFromE164,
   });
+  if (!target.workspaceId) {
+    return {
+      ok: false,
+      workspaceId: "",
+      demoMode: false,
+      consentMode: "press_1",
+      consentDigit: "1",
+      mctbAutomationActive: false,
+      handlingMode: "voicemail_fallback",
+      businessE164: forwardedFromE164 || transovoNumberE164,
+      error: "workspace_unresolved",
+    };
+  }
 
   const mctbConfig = await loadMctbWorkspaceConfig(target.workspaceId, {
     callerE164,

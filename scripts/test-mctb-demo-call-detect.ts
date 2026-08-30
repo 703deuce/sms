@@ -115,7 +115,6 @@ async function testTexmlTargetResolution(
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164,
     businessE164: MCTB_PLATFORM_DEMO_E164,
-    fallbackWorkspaceId: "owner-ws-fallback",
     forwardedFrom: businessLine,
   });
   assert.equal(target.workspaceId, workspaceId);

@@ -28,35 +28,43 @@ import {
 import { validateTwilioSignature } from "../src/lib/messaging/twilio-client";
 import twilio from "twilio";
 import { parseTelnyxForwardedFrom } from "../src/lib/voice/telnyx/forwarded-from";
+import { getPrisma } from "../src/lib/db";
+import { startDemoSession } from "../src/lib/mctb/onboarding/demo";
 
 const CALL_ID = "mock_v3:mctb-voice-bridge-test";
-const WORKSPACE = "cmt2zyg4l43373s0f146b442h";
+function uniqueCallerE164(): string {
+  const digits = String(Date.now()).slice(-7);
+  return `+1202555${digits.padStart(4, "0")}`;
+}
 // Synthetic fixture numbers (valid E164 digits only; physical cert uses live payloads).
-const TEST_CALLER_E164 = "+12025550101";
 const TEST_BUSINESS_E164 = "+12025550102";
 
-const baseTelnyxPayload = {
+const baseTelnyxPayload = (callerE164: string) => ({
   call_control_id: CALL_ID,
   call_session_id: "sess-bridge-001",
   call_leg_id: "leg-bridge-001",
   connection_id: "conn-bridge-001",
-  from: TEST_CALLER_E164,
+  from: callerE164,
   to: MCTB_PLATFORM_DEMO_E164,
   direction: "incoming",
+});
+
+const baseTelnyxPayloadWithForward = (callerE164: string) => ({
+  ...baseTelnyxPayload(callerE164),
   sip_headers: [
     {
       name: "Diversion",
       value: `<sip:${TEST_BUSINESS_E164.replace("+", "")}@one.att.net;user=phone>;reason=no-answer`,
     },
   ],
-};
+});
 
 function testTwilioSignatureVerification() {
   const authToken = "test_auth_token_for_fixture";
   const url = ["https:/", "/example.com/api/twilio/voice/mctb-ingress"].join("");
   const params = {
     CallSid: "CA_fixture_sig",
-    From: TEST_CALLER_E164,
+    From: "+12025550101",
     To: MCTB_TWILIO_VOICE_INGRESS_E164,
     Direction: "inbound",
     CallStatus: "ringing",
@@ -80,7 +88,26 @@ function testRollbackScriptConfig() {
 }
 
 async function main() {
-  const forwarded = parseTelnyxForwardedFrom(baseTelnyxPayload);
+  const TEST_CALLER_E164 = uniqueCallerE164();
+  const telnyxPayload = baseTelnyxPayload(TEST_CALLER_E164);
+
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: "MCTB voice bridge fixture",
+      slug: `mctb-voice-bridge-${Date.now()}`,
+      type: "BUSINESS",
+    },
+    select: { id: true },
+  });
+
+  await startDemoSession({
+    workspaceId: workspace.id,
+    callerE164: TEST_CALLER_E164,
+    context: "try_it",
+  });
+
+  const forwarded = parseTelnyxForwardedFrom(baseTelnyxPayloadWithForward(TEST_CALLER_E164));
   assert.equal(forwarded, TEST_BUSINESS_E164);
 
   assert.equal(isMctb571InboundTarget(MCTB_PLATFORM_DEMO_E164), true);
@@ -102,16 +129,14 @@ async function main() {
 
   const initiated = await handleMctbVoiceBridgeTelnyxEvent({
     eventType: "call.initiated",
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
   assert.equal(initiated.handled, true);
   assert.equal(initiated.action, "answer");
 
   const answered = await handleMctbVoiceBridgeTelnyxEvent({
     eventType: "call.answered",
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
   assert.equal(answered.handled, true);
   assert.equal(answered.action, "capture_and_transfer");
@@ -119,34 +144,35 @@ async function main() {
 
   await handleMctbVoiceBridgeTelnyxEvent({
     eventType: "call.initiated",
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
   await handleMctbVoiceBridgeTelnyxEvent({
     eventType: "call.answered",
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
 
   const hangup = await handleMctbVoiceBridgeTelnyxEvent({
     eventType: "call.hangup",
-    eventPayload: { ...baseTelnyxPayload, hangup_cause: "normal_clearing" },
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: { ...telnyxPayload, hangup_cause: "normal_clearing" },
   });
   assert.equal(hangup.handled, true);
 
   await resetMctbVoiceBridgeForTests();
   const first = await captureMctbVoiceBridgeFirstHop({
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
   const dup = await captureMctbVoiceBridgeFirstHop({
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
   assert.equal(first.created, true);
   assert.equal(dup.created, false);
   assert.equal(first.callEventId, dup.callEventId);
+
+  const capturedRow = await prisma.mctbVoiceBridgeCallEvent.findUnique({
+    where: { id: first.callEventId },
+    select: { workspaceId: true },
+  });
+  assert.equal(capturedRow?.workspaceId, workspace.id);
 
   const twilioIngress = await handleMctbTwilioIngressVoice({
     CallSid: "CA_test_bridge_ingress",
@@ -171,8 +197,7 @@ async function main() {
 
   await resetMctbVoiceBridgeForTests();
   const second = await captureMctbVoiceBridgeFirstHop({
-    eventPayload: baseTelnyxPayload,
-    fallbackWorkspaceId: WORKSPACE,
+    eventPayload: telnyxPayload,
   });
   const correlatedSecond = await correlateTwilioIngressToFirstHop({
     callSid: "CA_test_bridge_001",
@@ -200,6 +225,7 @@ async function main() {
   assert.equal(miss.correlationMethod, "ani_to_timestamp_window_miss");
 
   console.log("test-mctb-voice-bridge: ok");
+  await prisma.workspace.delete({ where: { id: workspace.id } }).catch(() => undefined);
   process.exit(0);
 }
 

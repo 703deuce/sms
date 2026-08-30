@@ -1,24 +1,31 @@
+import "server-only";
+
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { resolveOnboardingWorkspaceForDemoCall } from "@/lib/agents/missed-call-text-back/demo-bypass";
 import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { resolveMctbSipIngressByDid } from "@/lib/mctb/sip-ingress/resolver";
 import { resolveRuntimeDemoMode } from "@/lib/mctb/ingress";
+import { resolveMctbAssignedWorkspaceForPhone } from "@/lib/mctb/sip-ingress/resolver";
 
-async function resolvePhoneOwnerWorkspace(e164: string): Promise<string | null> {
-  const pn = await getPrisma().phoneNumber.findFirst({
+export type MctbInboundWorkspaceTarget = {
+  workspaceId: string | null;
+  isPlatformDemo: boolean;
+  demoMode: boolean;
+};
+
+async function resolvePhoneRow(e164: string) {
+  return getPrisma().phoneNumber.findFirst({
     where: { e164 },
-    select: { workspaceId: true },
+    select: { id: true, workspaceId: true, settingsJson: true },
   });
-  return pn?.workspaceId || null;
 }
 
 async function resolvePlatformDemoTarget(input: {
   callerE164: string;
   transovoE164: string;
-  fallbackWorkspaceId: string;
   forwardedFrom?: string | null;
-}): Promise<{ workspaceId: string; demoMode: boolean }> {
+}): Promise<MctbInboundWorkspaceTarget> {
   const { loadMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
 
   const tenantWorkspaceId =
@@ -33,8 +40,11 @@ async function resolvePlatformDemoTarget(input: {
       );
       return resolveLinkedPlatformDemoTenantWorkspace(input.transovoE164);
     })()) ||
-    (await resolvePhoneOwnerWorkspace(input.transovoE164)) ||
-    input.fallbackWorkspaceId;
+    null;
+
+  if (!tenantWorkspaceId) {
+    return { workspaceId: null, isPlatformDemo: true, demoMode: false };
+  }
 
   const state = await loadMctbOnboardingState(tenantWorkspaceId);
   const demoMode = resolveRuntimeDemoMode({
@@ -45,16 +55,18 @@ async function resolvePlatformDemoTarget(input: {
     demoSession: state.demoSession,
   });
 
-  return { workspaceId: tenantWorkspaceId, demoMode };
+  return { workspaceId: tenantWorkspaceId, isPlatformDemo: true, demoMode };
 }
 
-/** Resolve workspace + demoMode from called Transovo DID (sip.trunkPhoneNumber). */
+/**
+ * Resolve workspace + demoMode from called Transovo DID.
+ * Never falls back to platform owner / admin workspace — returns workspaceId=null when unresolved.
+ */
 export async function resolveMctbTargetWorkspaceForInboundCall(input: {
   callerE164: string;
   businessE164: string;
-  fallbackWorkspaceId: string;
   forwardedFrom?: string | null;
-}): Promise<{ workspaceId: string; isPlatformDemo: boolean; demoMode: boolean }> {
+}): Promise<MctbInboundWorkspaceTarget> {
   let transovoE164 = input.businessE164;
   try {
     transovoE164 = normalizeE164(input.businessE164);
@@ -62,21 +74,12 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
     // keep raw
   }
 
-  const isPlatformDemo = isPlatformDemoNumber(transovoE164);
-
-  // Shared Try It demo DID — same SIP/LiveKit handler as production; workspace from active session.
-  if (isPlatformDemo) {
-    const target = await resolvePlatformDemoTarget({
+  if (isPlatformDemoNumber(transovoE164)) {
+    return resolvePlatformDemoTarget({
       callerE164: input.callerE164,
       transovoE164,
-      fallbackWorkspaceId: input.fallbackWorkspaceId,
       forwardedFrom: input.forwardedFrom,
     });
-    return {
-      workspaceId: target.workspaceId,
-      isPlatformDemo: true,
-      demoMode: target.demoMode,
-    };
   }
 
   const ingress = await resolveMctbSipIngressByDid(transovoE164);
@@ -98,18 +101,21 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
     };
   }
 
-  const ownerWorkspaceId = await resolvePhoneOwnerWorkspace(transovoE164);
-  if (ownerWorkspaceId) {
-    return {
-      workspaceId: ownerWorkspaceId,
-      isPlatformDemo: false,
-      demoMode: false,
-    };
+  const phone = await resolvePhoneRow(transovoE164);
+  if (phone) {
+    const assignedWorkspaceId = await resolveMctbAssignedWorkspaceForPhone({
+      phoneNumberId: phone.id,
+      ownerWorkspaceId: phone.workspaceId,
+      settingsJson: phone.settingsJson,
+    });
+    if (assignedWorkspaceId) {
+      return {
+        workspaceId: assignedWorkspaceId,
+        isPlatformDemo: false,
+        demoMode: false,
+      };
+    }
   }
 
-  return {
-    workspaceId: input.fallbackWorkspaceId,
-    isPlatformDemo: false,
-    demoMode: false,
-  };
+  return { workspaceId: null, isPlatformDemo: false, demoMode: false };
 }

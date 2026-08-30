@@ -215,18 +215,30 @@ export async function handleTexmlStatusCallback(request: Request) {
           if (leg?.forwardedFromE164) forwardedFrom = leg.forwardedFromE164;
         }
 
+        const { resolveMctbTexmlIngressConfig } = await import(
+          "@/lib/mctb/texml-ingress/config-cache"
+        );
+        const ingressConfig = await resolveMctbTexmlIngressConfig(toEarly).catch(() => null);
+        if (!ingressConfig?.workspaceId) {
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return NextResponse.json({ ok: true, skipped: "mctb_texml_workspace_unresolved" });
+        }
+
         const { resolveMctbTargetWorkspaceForInboundCall } = await import(
           "@/lib/mctb/onboarding/demo-workspace-target"
         );
         const target = await resolveMctbTargetWorkspaceForInboundCall({
           callerE164: fromEarly || "",
           businessE164: toEarly,
-          fallbackWorkspaceId: pnMctb.workspaceId,
           forwardedFrom: forwardedFrom || null,
         });
+        const tenantWorkspaceId = target.workspaceId || ingressConfig.workspaceId;
 
         const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
-        const mode = await loadMctbConsentMode(target.workspaceId).catch(() => "press_1");
+        const mode = await loadMctbConsentMode(tenantWorkspaceId).catch(() => "press_1");
         if (mode === MCTB_CONSENT_MODE_EXISTING) {
           const { scheduleMctbTexmlExistingConsentCapture } = await import(
             "@/lib/mctb/texml-ingress/existing-consent-capture"
@@ -236,7 +248,7 @@ export async function handleTexmlStatusCallback(request: Request) {
               ...eventPayload,
               ...(forwardedFrom ? { ForwardedFrom: forwardedFrom, forwarded_from: forwardedFrom } : {}),
             },
-            workspaceId: target.workspaceId,
+            workspaceId: tenantWorkspaceId,
             forwardedFromE164: forwardedFrom || null,
           });
         }

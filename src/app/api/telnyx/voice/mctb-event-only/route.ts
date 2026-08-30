@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleMctbEventOnlyTelnyxWebhook } from "@/lib/mctb/event-only/telnyx-handler";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
-import { resolveMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
 
 type TelnyxPayload = {
   data?: {
@@ -11,8 +10,6 @@ type TelnyxPayload = {
     payload?: Record<string, unknown>;
   };
 };
-
-const FALLBACK_WORKSPACE_ID = resolveMctbPlatformOwnerWorkspaceId();
 
 /**
  * Telnyx EVENT_ONLY MCTB: Call Control voice for 571 + FQDN direct 866 (no LiveKit).
@@ -40,7 +37,6 @@ export async function POST(request: Request) {
     const result = await handleMctbEventOnlyTelnyxWebhook({
       eventType,
       eventPayload,
-      fallbackWorkspaceId: FALLBACK_WORKSPACE_ID,
     });
     if (eventType.startsWith("call.")) {
       console.info(

@@ -11,9 +11,6 @@ type TelnyxPayload = {
   };
 };
 
-const FALLBACK_WORKSPACE_ID =
-  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
-
 /**
  * Telnyx first-hop MCTB voice bridge: capture metadata on 571, transfer voice to Twilio 855.
  */
@@ -30,7 +27,6 @@ export async function POST(request: Request) {
     const result = await handleMctbVoiceBridgeTelnyxEvent({
       eventType,
       eventPayload,
-      fallbackWorkspaceId: FALLBACK_WORKSPACE_ID,
     });
     return NextResponse.json({
       ok: true,

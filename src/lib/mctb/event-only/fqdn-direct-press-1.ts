@@ -9,10 +9,6 @@ import { resolveMctbTargetWorkspaceForInboundCall } from "@/lib/mctb/onboarding/
 import { businessNumberForConsentStorage } from "@/lib/mctb/consent-identity";
 import { parseTelnyxForwardedFrom, hasDiversionHeaderInPayload } from "@/lib/voice/telnyx/forwarded-from";
 import { resolveSmsConsentPlayback } from "@/lib/smart-routing/prompt-playback";
-import { resolveMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
-
-const FALLBACK_WORKSPACE_ID = resolveMctbPlatformOwnerWorkspaceId();
-
 const DEFAULT_PRESS_1_SAY =
   "Sorry we missed your call. To receive a text message from us, press 1 now.";
 
@@ -53,10 +49,7 @@ function extractDigits(payload: Record<string, unknown>): string {
   return String(payload.digits ?? payload.digit ?? "").trim();
 }
 
-async function resolveCallContext(
-  payload: Record<string, unknown>,
-  fallbackWorkspaceId: string,
-): Promise<CallContext | null> {
+async function resolveCallContext(payload: Record<string, unknown>): Promise<CallContext | null> {
   const callControlId = String(payload.call_control_id || "");
   const cached = contextByCall.get(callControlId);
   if (cached) return cached;
@@ -69,9 +62,17 @@ async function resolveCallContext(
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164,
     businessE164: transovoE164,
-    fallbackWorkspaceId: fallbackWorkspaceId || FALLBACK_WORKSPACE_ID,
     forwardedFrom,
   });
+  if (!target.workspaceId) {
+    logMctbEventOnly("workspace_unresolved", {
+      callControlId,
+      caller: callerE164,
+      transovoNumber: transovoE164,
+      forwardedFrom,
+    });
+    return null;
+  }
 
   const [consentMode, mctbConfig] = await Promise.all([
     loadMctbConsentMode(target.workspaceId),
@@ -135,10 +136,9 @@ async function resolvePress1Playback(
 
 export async function startFqdnDirectPress1Gather(input: {
   eventPayload: Record<string, unknown>;
-  fallbackWorkspaceId: string;
 }): Promise<{ action: string }> {
   const callControlId = String(input.eventPayload.call_control_id || "");
-  const ctx = await resolveCallContext(input.eventPayload, input.fallbackWorkspaceId);
+  const ctx = await resolveCallContext(input.eventPayload);
   if (!ctx) return { action: "missing_context" };
 
   const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
@@ -218,7 +218,6 @@ export async function startFqdnDirectPress1Gather(input: {
 
 export async function handleFqdnDirectGatherEnded(input: {
   eventPayload: Record<string, unknown>;
-  fallbackWorkspaceId: string;
 }): Promise<{ action: string }> {
   const callControlId = String(input.eventPayload.call_control_id || "");
   const phases = phaseByCall.get(callControlId);
@@ -228,7 +227,7 @@ export async function handleFqdnDirectGatherEnded(input: {
 
   const digits = extractDigits(input.eventPayload);
   const status = String(input.eventPayload.status || "");
-  const ctx = await resolveCallContext(input.eventPayload, input.fallbackWorkspaceId);
+  const ctx = await resolveCallContext(input.eventPayload);
   if (!ctx) return { action: "missing_context" };
 
   const { speakOnCall, hangupCall } = await import("@/lib/smart-routing/telnyx-provider");
@@ -349,9 +348,8 @@ export function wasPress1ConsentCompleted(callControlId: string): boolean {
 
 export async function resolveCallControlVoiceContext(
   payload: Record<string, unknown>,
-  fallbackWorkspaceId: string,
 ): Promise<CallContext | null> {
-  return resolveCallContext(payload, fallbackWorkspaceId);
+  return resolveCallContext(payload);
 }
 
 /** Test helper */

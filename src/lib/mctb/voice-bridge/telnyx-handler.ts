@@ -38,9 +38,8 @@ function isInbound(payload: MctbVoiceBridgeTelnyxPayload): boolean {
 export async function handleMctbVoiceBridgeTelnyxEvent(input: {
   eventType: string;
   eventPayload: MctbVoiceBridgeTelnyxPayload;
-  fallbackWorkspaceId: string;
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
-  const { eventType, eventPayload, fallbackWorkspaceId } = input;
+  const { eventType, eventPayload } = input;
   const callControlId = String(eventPayload.call_control_id || "");
   const to = String(eventPayload.to || "");
 
@@ -70,11 +69,10 @@ export async function handleMctbVoiceBridgeTelnyxEvent(input: {
     case "call.answered": {
       logMctbVoiceBridge("call_answered", { callControlId });
       let callEventId: string | undefined;
-      let workspaceId = fallbackWorkspaceId;
+      let workspaceId: string | undefined;
       if (markPhase(callControlId, "captured")) {
         const captured = await captureMctbVoiceBridgeFirstHop({
           eventPayload,
-          fallbackWorkspaceId,
         });
         callEventId = captured.callEventId;
       } else {
@@ -84,7 +82,7 @@ export async function handleMctbVoiceBridgeTelnyxEvent(input: {
           select: { id: true, workspaceId: true },
         });
         callEventId = existing?.id;
-        workspaceId = existing?.workspaceId || fallbackWorkspaceId;
+        workspaceId = existing?.workspaceId || undefined;
       }
 
       if (callEventId) {
@@ -94,6 +92,11 @@ export async function handleMctbVoiceBridgeTelnyxEvent(input: {
           select: { workspaceId: true },
         });
         if (row?.workspaceId) workspaceId = row.workspaceId;
+      }
+
+      if (!workspaceId) {
+        logMctbVoiceBridge("transfer_skipped_workspace_unresolved", { callControlId, callEventId });
+        return { handled: true, action: "workspace_unresolved", callEventId };
       }
 
       if (markPhase(callControlId, "transferred") && callEventId) {

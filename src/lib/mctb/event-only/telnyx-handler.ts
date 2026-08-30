@@ -79,12 +79,12 @@ async function resolvesMctbEventOnlyIngress(payload: TelnyxPayload): Promise<boo
 
 function captureMctbEventAsync(
   eventPayload: TelnyxPayload,
-  fallbackWorkspaceId: string,
+  lockWorkspaceId: string | undefined,
   voiceCaptureStatus: "EVENT_CAPTURED" | "VOICE_TERMINATION_FAILED",
 ): void {
   const normalized = normalizeTelnyxMctbInboundEvent(eventPayload, { voiceCaptureStatus });
   if (!normalized) return;
-  void handleMctbInboundEvent(normalized, { fallbackWorkspaceId }).catch((err) => {
+  void handleMctbInboundEvent(normalized, { lockWorkspaceId }).catch((err) => {
     logMctbEventOnly("inbound_capture_failed", {
       callControlId: eventPayload.call_control_id ?? null,
       error: err instanceof Error ? err.message : String(err),
@@ -151,9 +151,8 @@ async function answerInboundMctbLeg(
 export async function handleMctbEventOnlyTelnyxWebhook(input: {
   eventType: string;
   eventPayload: TelnyxPayload;
-  fallbackWorkspaceId: string;
 }): Promise<{ handled: boolean; action?: string; callEventId?: string }> {
-  const { eventType, eventPayload, fallbackWorkspaceId } = input;
+  const { eventType, eventPayload } = input;
   const callControlId = String(eventPayload.call_control_id || "");
   const inbound = isInbound(eventPayload);
 
@@ -194,7 +193,6 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
         try {
           const press1 = await startFqdnDirectPress1Gather({
             eventPayload,
-            fallbackWorkspaceId,
           });
           return { handled: true, action: press1.action };
         } catch (err) {
@@ -211,7 +209,6 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       if (!callControlVoice) return { handled: true, action: "ignored" };
       const gather = await handleFqdnDirectGatherEnded({
         eventPayload,
-        fallbackWorkspaceId,
       });
       return { handled: true, action: gather.action };
     }
@@ -221,7 +218,6 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       if (!digit) return { handled: true, action: "ignored" };
       const gather = await handleFqdnDirectGatherEnded({
         eventPayload: { ...eventPayload, digits: digit },
-        fallbackWorkspaceId,
       });
       return { handled: true, action: gather.action };
     }
@@ -253,10 +249,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       });
 
       if (callControlVoice) {
-        const voiceCtx = await resolveCallControlVoiceContext(
-          eventPayload,
-          fallbackWorkspaceId,
-        );
+        const voiceCtx = await resolveCallControlVoiceContext(eventPayload);
         if (
           !wasPress1ConsentCompleted(callControlId) &&
           voiceCtx?.consentMode === MCTB_CONSENT_MODE_EXISTING
@@ -271,7 +264,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
             clearCallControlVoicemailState(callControlId);
             return { handled: true, action: "existing_consent_hangup_no_voicemail" };
           }
-          captureMctbEventAsync(eventPayload, fallbackWorkspaceId, "EVENT_CAPTURED");
+          captureMctbEventAsync(eventPayload, voiceCtx?.workspaceId, "EVENT_CAPTURED");
           processedCalls.delete(callControlId);
           clearCallControlVoicemailState(callControlId);
           return { handled: true, action: "call_control_existing_consent_capture" };
@@ -283,7 +276,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
 
       const prior = processedCalls.get(callControlId);
       if (prior === "captured") {
-        captureMctbEventAsync(eventPayload, fallbackWorkspaceId, "VOICE_TERMINATION_FAILED");
+        captureMctbEventAsync(eventPayload, undefined, "VOICE_TERMINATION_FAILED");
         return { handled: true, action: "hangup_update_voice_status" };
       }
 
@@ -292,7 +285,7 @@ export async function handleMctbEventOnlyTelnyxWebhook(input: {
       });
       if (!normalized) return { handled: true, action: "hangup_invalid_payload" };
 
-      const result = await handleMctbInboundEvent(normalized, { fallbackWorkspaceId });
+      const result = await handleMctbInboundEvent(normalized);
       processedCalls.set(callControlId, "captured");
       return {
         handled: true,

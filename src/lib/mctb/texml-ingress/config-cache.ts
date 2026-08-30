@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
+import { resolveMctbAssignedWorkspaceForPhone } from "@/lib/mctb/sip-ingress/resolver";
 import {
   MCTB_TEXML_ROUTING_MODE,
   type MctbTexmlIngressBranch,
@@ -41,7 +42,7 @@ function resolveBranch(routingMode: string, mctbEnabled: boolean): MctbTexmlIngr
   return null;
 }
 
-/** Fast DID lookup — one DB round-trip, cached 60s. */
+/** Fast DID lookup — one DB round-trip, cached 60s. Workspace = assigned tenant, not phone row owner. */
 export async function resolveMctbTexmlIngressConfig(
   toE164: string,
 ): Promise<MctbTexmlIngressConfig | null> {
@@ -73,6 +74,13 @@ export async function resolveMctbTexmlIngressConfig(
   });
   if (!phone?.e164) return null;
 
+  const assignedWorkspaceId = await resolveMctbAssignedWorkspaceForPhone({
+    phoneNumberId: phone.id,
+    ownerWorkspaceId: phone.workspaceId,
+    settingsJson: phone.settingsJson,
+  });
+  if (!assignedWorkspaceId) return null;
+
   const caps = readPhoneCapabilities({ settingsJson: phone.settingsJson });
   const routingMode = telephonyRoutingMode(phone.settingsJson);
   const settings = (phone.settingsJson || {}) as Record<string, unknown>;
@@ -86,13 +94,13 @@ export async function resolveMctbTexmlIngressConfig(
 
   let consentMode: MctbConsentMode = "press_1";
   try {
-    consentMode = await loadMctbConsentMode(phone.workspaceId);
+    consentMode = await loadMctbConsentMode(assignedWorkspaceId);
   } catch {
     // default press_1
   }
 
   const config: MctbTexmlIngressConfig = {
-    workspaceId: phone.workspaceId,
+    workspaceId: assignedWorkspaceId,
     phoneNumberId: phone.id,
     e164: phone.e164,
     consentMode,

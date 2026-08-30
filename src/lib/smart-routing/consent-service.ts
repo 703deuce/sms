@@ -49,7 +49,12 @@ export async function recordSmsConsent(input: {
   const path = typeof input.metadata?.path === "string" ? input.metadata.path : null;
   const certMode = typeof input.metadata?.certMode === "string" ? input.metadata.certMode : null;
   const lockWorkspaceForTexmlIngress =
-    path === "texml_mctb_ingress" || certMode === "C";
+    path === "texml_mctb_ingress" ||
+    path === "texml_mctb_consent" ||
+    certMode === "C" ||
+    certMode === "C3" ||
+    certMode === "D" ||
+    input.metadata?.testSms === true;
 
   const identity = resolveConsentIdentity({
     signalingFrom: input.callerNumber,
@@ -76,9 +81,11 @@ export async function recordSmsConsent(input: {
     : await resolveMctbTargetWorkspaceForInboundCall({
         callerE164: identity.consentingCallerNumber || input.callerNumber,
         businessE164: businessNumber,
-        fallbackWorkspaceId: input.workspaceId,
         forwardedFrom: customerBusinessE164,
       });
+  if (!target.workspaceId) {
+    throw new Error("mctb_workspace_unresolved");
+  }
   const workspaceId = target.workspaceId;
 
   const providerCallId =
@@ -180,7 +187,12 @@ export async function triggerMissedCallTextFromConsent(input: {
   const certMode =
     typeof input.eventMetadata?.certMode === "string" ? input.eventMetadata.certMode : null;
   const lockWorkspaceForTexmlIngress =
-    path === "texml_mctb_ingress" || certMode === "C" || certMode === "C3" || input.eventMetadata?.testSms === true;
+    path === "texml_mctb_ingress" ||
+    path === "texml_mctb_consent" ||
+    certMode === "C" ||
+    certMode === "C3" ||
+    certMode === "D" ||
+    input.eventMetadata?.testSms === true;
 
   const session = await prisma.smartRoutingCallSession.findUnique({
     where: { id: input.callSessionId },
@@ -196,9 +208,12 @@ export async function triggerMissedCallTextFromConsent(input: {
     : await resolveMctbTargetWorkspaceForInboundCall({
         callerE164: input.callerNumber,
         businessE164: input.businessNumber,
-        fallbackWorkspaceId: input.workspaceId,
         forwardedFrom: input.forwardedFrom ?? session?.forwardedFromNumber,
       });
+
+  if (!target.workspaceId) {
+    return { triggered: false, reason: "workspace_unresolved" };
+  }
 
   await emitSmartRoutingEvent({
     workspaceId: target.workspaceId,

@@ -4,9 +4,6 @@ import { handleMctbInboundEvent } from "@/lib/mctb/event-only/handle";
 import { logMctbEventOnly } from "@/lib/mctb/event-only/logging";
 import { normalizeSipMctbInboundEvent } from "@/lib/mctb/event-only/normalize";
 
-const FALLBACK_WORKSPACE_ID =
-  process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
-
 export type CaptureMctbSipInboundInput = {
   providerCallId: string;
   callerE164: string;
@@ -18,7 +15,8 @@ export type CaptureMctbSipInboundInput = {
   participantIdentity?: string | null;
   sipAttributes?: Record<string, string>;
   receivedAt?: string;
-  fallbackWorkspaceId?: string;
+  /** When known from SIP ingress binding, lock tenant for capture (no owner fallback). */
+  lockWorkspaceId?: string;
   /** Observability path override (default livekit_sip_mctb). */
   capturePath?: string;
 };
@@ -56,7 +54,7 @@ export async function captureMctbSipInboundForPython(input: CaptureMctbSipInboun
   });
 
   const result = await handleMctbInboundEvent(normalized, {
-    fallbackWorkspaceId: input.fallbackWorkspaceId || FALLBACK_WORKSPACE_ID,
+    lockWorkspaceId: input.lockWorkspaceId,
   });
 
   return { ...result, captured: true };

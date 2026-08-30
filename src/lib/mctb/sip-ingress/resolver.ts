@@ -27,6 +27,14 @@ export type MctbSipIngressResolution = {
  * Resolve which workspace owns MCTB on this phone number for SIP ingress.
  * Paused/disabled MCTB must still answer calls — pause only blocks outbound SMS.
  */
+export async function resolveMctbAssignedWorkspaceForPhone(input: {
+  phoneNumberId: string;
+  ownerWorkspaceId: string;
+  settingsJson: unknown;
+}): Promise<string | null> {
+  return resolveWorkspaceForMctbPhoneAssignment(input);
+}
+
 async function resolveWorkspaceForMctbPhoneAssignment(input: {
   phoneNumberId: string;
   ownerWorkspaceId: string;

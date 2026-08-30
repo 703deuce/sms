@@ -74,7 +74,6 @@ export function isMctb571InboundTarget(to: string): boolean {
 
 export async function captureMctbVoiceBridgeFirstHop(input: {
   eventPayload: MctbVoiceBridgeTelnyxPayload;
-  fallbackWorkspaceId: string;
 }): Promise<{
   callEventId: string;
   created: boolean;
@@ -92,9 +91,17 @@ export async function captureMctbVoiceBridgeFirstHop(input: {
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164,
     businessE164: transovoNumberE164,
-    fallbackWorkspaceId: input.fallbackWorkspaceId,
     forwardedFrom: businessNumberE164,
   });
+  if (!target.workspaceId) {
+    logMctbVoiceBridge("first_hop_workspace_unresolved", {
+      callControlId,
+      caller: callerE164,
+      transovoNumber: transovoNumberE164,
+      businessNumber: businessNumberE164,
+    });
+    throw new Error("mctb_voice_bridge_workspace_unresolved");
+  }
 
   const correlation = createBridgeCorrelationToken();
   const prisma = getPrisma();

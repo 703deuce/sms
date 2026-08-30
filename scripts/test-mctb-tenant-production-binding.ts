@@ -64,7 +64,6 @@ async function main() {
   const withoutDiversion = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: "+17038166017", // pragma: allowlist secret
     businessE164: "+15714073615",
-    fallbackWorkspaceId: PLATFORM_OWNER,
     forwardedFrom: null,
   });
   assert.equal(withoutDiversion.workspaceId, TENANT_WORKSPACE);

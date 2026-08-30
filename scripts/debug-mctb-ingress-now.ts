@@ -76,7 +76,6 @@ async function main() {
       to: E164,
       direction: "incoming",
     },
-    fallbackWorkspaceId: "ws_1",
   });
   console.log("\nmock call.initiated:", JSON.stringify(initiated));
 
@@ -88,7 +87,6 @@ async function main() {
       to: "+17038166017",
       direction: "outgoing",
     },
-    fallbackWorkspaceId: "ws_1",
   });
   console.log("mock outbound (should not handle):", JSON.stringify(notInbound));
 }

@@ -142,6 +142,8 @@ export async function evaluateMctbRecoveryEligibility(input: {
     hangupCause: input.event.hangupCause,
   });
 
+  const businessE164 = input.event.forwardedFromE164 || input.event.transovoNumberE164;
+
   const base = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: caller,

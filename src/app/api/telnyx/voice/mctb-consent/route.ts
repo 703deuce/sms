@@ -51,24 +51,6 @@ function mctbConsentSmsTriggerSucceeded(sms: unknown): boolean {
   return row.ok === true;
 }
 
-async function resolveInboundTarget(input: {
-  from: string;
-  to: string;
-  forwardedFrom: string;
-}) {
-  const { resolveMctbTargetWorkspaceForInboundCall } = await import(
-    "@/lib/mctb/onboarding/demo-workspace-target"
-  );
-  const ownerId =
-    process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
-  return resolveMctbTargetWorkspaceForInboundCall({
-    callerE164: input.from,
-    businessE164: input.to,
-    fallbackWorkspaceId: ownerId,
-    forwardedFrom: input.forwardedFrom || null,
-  });
-}
-
 function scheduleDemoCallDetect(input: {
   from: string;
   to: string;
@@ -161,18 +143,12 @@ export async function POST(request: Request) {
             );
           }
 
-          const certIngressWorkspaceId =
-            consentPath === MCTB_TEXML_CONSENT_PATH ? ingressConfig.workspaceId : null;
-          const certIngressPhoneNumberId =
-            consentPath === MCTB_TEXML_CONSENT_PATH ? ingressConfig.phoneNumberId : null;
-
-          const target = certIngressWorkspaceId
-            ? {
-                workspaceId: certIngressWorkspaceId,
-                isPlatformDemo: false,
-                demoMode: false,
-              }
-            : await resolveInboundTarget({ from, to, forwardedFrom });
+          const target = {
+            workspaceId: ingressConfig.workspaceId,
+            isPlatformDemo: false,
+            demoMode: false,
+          };
+          const certIngressPhoneNumberId = ingressConfig.phoneNumberId;
           const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
             "@/lib/smart-routing/consent-service"
           );

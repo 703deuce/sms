@@ -12,8 +12,8 @@ export type MctbConsentTexmlInboundCallEvent = {
 export type MctbConsentTexmlDemoCallDetectResult = {
   ran: boolean;
   demoMode: boolean;
-  workspaceId: string;
-  skippedReason?: "not_demo_mode";
+  workspaceId: string | null;
+  skippedReason?: "not_demo_mode" | "workspace_unresolved";
 };
 
 /**
@@ -23,31 +23,50 @@ export type MctbConsentTexmlDemoCallDetectResult = {
 export async function runMctbConsentTexmlDemoCallDetect(
   input: MctbConsentTexmlInboundCallEvent,
 ): Promise<MctbConsentTexmlDemoCallDetectResult> {
+  const { resolveMctbTexmlIngressConfig } = await import(
+    "@/lib/mctb/texml-ingress/config-cache"
+  );
+  const ingress = await resolveMctbTexmlIngressConfig(input.to).catch(() => null);
+  if (!ingress?.workspaceId) {
+    return {
+      ran: false,
+      demoMode: false,
+      workspaceId: null,
+      skippedReason: "workspace_unresolved",
+    };
+  }
+
   const { resolveMctbTargetWorkspaceForInboundCall } = await import(
     "@/lib/mctb/onboarding/demo-workspace-target"
   );
-  const ownerId =
-    process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "cmt2zyg4l43373s0f146b442h";
-
   const target = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: input.from,
     businessE164: input.to,
-    fallbackWorkspaceId: ownerId,
     forwardedFrom: input.forwardedFrom || null,
   });
+
+  const workspaceId = target.workspaceId || ingress.workspaceId;
+  if (!workspaceId) {
+    return {
+      ran: false,
+      demoMode: false,
+      workspaceId: null,
+      skippedReason: "workspace_unresolved",
+    };
+  }
 
   if (!target.demoMode) {
     return {
       ran: false,
       demoMode: false,
-      workspaceId: target.workspaceId,
+      workspaceId,
       skippedReason: "not_demo_mode",
     };
   }
 
   const { recordDemoCallDetected } = await import("@/lib/mctb/onboarding/demo");
   await recordDemoCallDetected({
-    workspaceId: target.workspaceId,
+    workspaceId,
     from: input.from,
     to: input.to,
     forwardedFrom: input.forwardedFrom ?? null,
@@ -58,6 +77,6 @@ export async function runMctbConsentTexmlDemoCallDetect(
   return {
     ran: true,
     demoMode: true,
-    workspaceId: target.workspaceId,
+    workspaceId,
   };
 }

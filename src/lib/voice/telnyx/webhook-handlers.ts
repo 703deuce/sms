@@ -40,17 +40,34 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
     const to = String(eventPayload.to || "");
     const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
     if (callControlId && to === MCTB_PLATFORM_DEMO_E164 && forwardedFrom) {
-      const { startImmediate571ForwardGather } = await import(
-        "@/lib/smart-routing/platform-consent-fast-path"
+      const { resolveMctbTargetWorkspaceForInboundCall } = await import(
+        "@/lib/mctb/onboarding/demo-workspace-target"
       );
-      await startImmediate571ForwardGather({
-        callControlId,
-        workspaceId:
-          process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() ||
-          "cmt2zyg4l43373s0f146b442h",
-        flowId:
-          process.env.MCTB_PLATFORM_CONSENT_FLOW_ID?.trim() || "cmt3o902u2l4652654a4y1v3y",
+      const callerE164 = String(eventPayload.from || "").trim();
+      const target = await resolveMctbTargetWorkspaceForInboundCall({
+        callerE164,
+        businessE164: to,
+        forwardedFrom,
       });
+      if (target.workspaceId) {
+        const { startImmediate571ForwardGather } = await import(
+          "@/lib/smart-routing/platform-consent-fast-path"
+        );
+        await startImmediate571ForwardGather({
+          callControlId,
+          workspaceId: target.workspaceId,
+          flowId:
+            process.env.MCTB_PLATFORM_CONSENT_FLOW_ID?.trim() || "cmt3o902u2l4652654a4y1v3y",
+        });
+      } else {
+        const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
+        await answerCall(callControlId).catch((err) => {
+          console.error("[telnyx/voice] early answer (571 unresolved tenant) failed", {
+            callControlId,
+            err,
+          });
+        });
+      }
     } else if (callControlId && to === MCTB_PLATFORM_DEMO_E164) {
       const { answerCall } = await import("@/lib/smart-routing/telnyx-provider");
       await answerCall(callControlId).catch((err) => {

@@ -14,13 +14,12 @@ function uniqueCaller(): string {
   return `+1555${digits.padStart(7, "0")}`;
 }
 
-async function testTargetWorkspaceFallback() {
+async function testUnknownDidReturnsNullWorkspace() {
   const result = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: "+15551234567",
     businessE164: "+18885551234",
-    fallbackWorkspaceId: "ws-fallback",
   });
-  assert.equal(result.workspaceId, "ws-fallback");
+  assert.equal(result.workspaceId, null);
   assert.equal(result.demoMode, false);
   assert.equal(result.isPlatformDemo, false);
 }
@@ -29,14 +28,10 @@ async function testPlatformDemoWithoutSession() {
   const result = await resolveMctbTargetWorkspaceForInboundCall({
     callerE164: "+15551234567",
     businessE164: MCTB_PLATFORM_DEMO_E164,
-    fallbackWorkspaceId: "owner-ws",
   });
   assert.equal(result.isPlatformDemo, true);
   assert.equal(result.demoMode, false);
-  assert.ok(
-    result.workspaceId === "owner-ws" || typeof result.workspaceId === "string",
-    "uses owner workspace or phone owner when no active demo session",
-  );
+  assert.equal(result.workspaceId, null, "no owner/admin fallback when demo session missing");
 }
 
 async function testPlatformDemoWithActiveTryItSession() {
@@ -61,7 +56,6 @@ async function testPlatformDemoWithActiveTryItSession() {
     const target = await resolveMctbTargetWorkspaceForInboundCall({
       callerE164,
       businessE164: MCTB_PLATFORM_DEMO_E164,
-      fallbackWorkspaceId: "owner-ws-fallback",
     });
 
     assert.equal(target.workspaceId, workspace.id);
@@ -77,10 +71,10 @@ async function testPlatformDemoWithActiveTryItSession() {
 
 async function main() {
   console.log("MCTB demo Press-1 gate tests\n");
-  await testTargetWorkspaceFallback();
-  console.log("  ✓ non-platform falls back");
+  await testUnknownDidReturnsNullWorkspace();
+  console.log("  ✓ unknown DID returns null workspace (no owner fallback)");
   await testPlatformDemoWithoutSession();
-  console.log("  ✓ platform without demo session uses owner workspace");
+  console.log("  ✓ platform without demo session does not use owner workspace");
   await testPlatformDemoWithActiveTryItSession();
   console.log("  ✓ platform direct call routes to active Try It workspace");
   console.log("\nAll passed");
