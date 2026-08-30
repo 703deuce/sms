@@ -130,6 +130,14 @@ export async function runKimiCommand(
       isCompletenessPass: true,
     });
 
+    persistKimiGeneratedSource({
+      sessionId: session.id,
+      targetRoute: session.target,
+      referenceNames: referenceVideoNames,
+      status: "generated",
+    });
+    assertKimiOutputPersisted(session.id, session.target);
+
     await screenshotGeneratedReference(session.id);
     markKimiTiming(session.id, "previewRenderedMs");
 
@@ -162,6 +170,14 @@ export async function runKimiCommand(
       instruction: options.instruction || "",
       isRevision: true,
     });
+
+    persistKimiGeneratedSource({
+      sessionId: session.id,
+      targetRoute: session.target,
+      referenceNames: sessionReferenceVideoNames(session.id),
+      status: "generated",
+    });
+    assertKimiOutputPersisted(session.id, session.target);
 
     await screenshotGeneratedReference(session.id);
     markKimiTiming(session.id, "previewRenderedMs");
@@ -248,6 +264,15 @@ export async function runKimiCommand(
       currentMedia,
       instruction: session.instruction,
     });
+
+    // Persist immediately — refinement/preview failures must not lose generated source.
+    persistKimiGeneratedSource({
+      sessionId: session.id,
+      targetRoute: session.target,
+      referenceNames: options.referenceVideoNames,
+      status: "generated",
+    });
+    assertKimiOutputPersisted(session.id, session.target);
 
     try {
       await screenshotGeneratedReference(session.id);

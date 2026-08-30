@@ -44,7 +44,7 @@ export function writeGeneratedFiles(sessionId: string, files: GeneratedFileInput
         generatedAt: new Date().toISOString(),
         files: files.map((f) => f.path),
         sandbox: true,
-        note: "Visual reference only — mock data allowed here, never copy to src/",
+        note: "Ephemeral sandbox scratch — source is auto-copied to src/kimi-drafts/ on success",
       },
       null,
       2,
