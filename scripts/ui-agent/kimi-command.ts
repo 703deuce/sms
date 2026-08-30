@@ -229,6 +229,8 @@ function printKimiReady(session: UiAgentSession, summary?: string, fileCount?: n
   if (summary) console.log(`summary=${summary}`);
   console.log(`preview=${kimiUiPreviewPath(session.id)}`);
   console.log(`progress=tail -f .ui-agent/sessions/${session.id}/progress.log`);
+  console.log(`stream=tail -f .ui-agent/sessions/${session.id}/kimi-stream.log`);
+  console.log(`live=tail -f .ui-agent/sessions/${session.id}/kimi-live.txt`);
   console.log(`upload=${KIMI_UI_REFERENCES_PATH}`);
   console.log("");
 }
