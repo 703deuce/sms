@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { DEFAULT_NUMBER_CAPABILITY_PATCH } from "@/lib/mctb/provisioning/default-number-capabilities";
 import {
   telnyxLocalA2pSettings,
   tollFreeComplianceSettings,
@@ -29,8 +30,6 @@ function mergeSettings(
   return { ...base, ...patch };
 }
 
-import { DEFAULT_NUMBER_CAPABILITY_PATCH } from "@/lib/mctb/provisioning/default-number-capabilities";
-
 export type ReassertMctbTexmlVoiceRouteResult = {
   ok: boolean;
   e164: string;
@@ -40,9 +39,9 @@ export type ReassertMctbTexmlVoiceRouteResult = {
 };
 
 /**
- * Every Telnyx workspace number ships dual-channel from day one:
- * frozen MCTB TeXML voice + workspace SMS (campaigns, drip, MCTB texts).
- * Switching the active MCTB number is config-only — channels are pre-wired.
+ * Every Telnyx workspace number ships dual-channel from day one (carrier policy).
+ * App entitlements gate usage; never skip carrier wire based on product SKU.
+ * Switching the active MCTB number is config-only — siblings stay provisioned.
  */
 export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
   workspaceId: string;

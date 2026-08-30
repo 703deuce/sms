@@ -27,6 +27,7 @@ import {
   isMctbTexmlIngressLocked,
   MctbTexmlProvisionLockedError,
 } from "../src/lib/mctb/sip-ingress/sync";
+import { MCTB_CARRIER_DUAL_CHANNEL_POLICY_ID } from "../src/lib/mctb/provisioning/carrier-provision-policy";
 import { DEFAULT_NUMBER_CAPABILITY_PATCH } from "../src/lib/mctb/provisioning/default-number-capabilities";
 import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
 import { existsSync } from "node:fs";
@@ -121,6 +122,10 @@ test("MCTB TeXML-locked numbers refuse generic voice provision", () => {
 
 test("canonical MCTB provision entry is provisionMctbCustomerVoice", () => {
   assert.equal(MCTB_CANONICAL_PROVISION_ENTRY, "provisionMctbCustomerVoice");
+});
+
+test("carrier provision is always dual-channel; app entitlements gate usage", () => {
+  assert.equal(MCTB_CARRIER_DUAL_CHANNEL_POLICY_ID, "mctb_carrier_dual_channel_v1");
 });
 
 test("every number defaults to dual-channel MCTB+SMS capability flags", () => {

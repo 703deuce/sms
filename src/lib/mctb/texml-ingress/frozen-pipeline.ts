@@ -43,6 +43,8 @@ export const MCTB_FINAL_PIPELINE_SOURCE_FILES = [
   "src/lib/mctb/capture/types.ts",
   "src/lib/mctb/tenant/resolve-inbound.ts",
   "src/lib/mctb/provision-policy.ts",
+  "src/lib/mctb/provisioning/carrier-provision-policy.ts",
+  "src/lib/mctb/provisioning/default-number-capabilities.ts",
   "src/lib/mctb/provisioning/dual-channel-repair.ts",
   "src/lib/mctb/texml-ingress/call-leg-context.ts",
   "src/lib/mctb/texml-ingress/deprovision.ts",
