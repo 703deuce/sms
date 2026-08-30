@@ -221,6 +221,8 @@ check("receptionist compiles layered prompt and hybrid voice pipeline", () => {
   assert.ok(catalog.includes("RECEPTIONIST_ELEVENLABS_VOICES"));
   assert.ok(pipeline.includes("voicePipelineCfgForHybridAgent"));
   assert.ok(hybrid.includes("maybeNormalizeForElevenLabsModel"));
+  assert.ok(hybrid.includes("compileSemanticForSpeech"));
+  assert.ok(hybrid.includes("isGenerationActive"));
   assert.ok(agent.includes("compiledPrompt"));
   assert.ok(about.includes("what your receptionist should know"));
 });

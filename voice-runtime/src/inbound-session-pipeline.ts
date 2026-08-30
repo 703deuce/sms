@@ -2,6 +2,7 @@ import type { JobContext } from "@livekit/agents";
 import { voice } from "@livekit/agents";
 import { getPrisma } from "@/lib/db";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { buildVoiceConfigFingerprint } from "@/lib/voice/config-fingerprint";
 import { liveKitRuntimeProvider } from "@/lib/voice/runtime-provider/livekit";
 import { usesFrontDeskRealtimeVoicePipeline } from "@/lib/voice/frontdesk/agent-config";
 import { resolveOutboundRealtimePipelineConfig } from "@/lib/voice/outbound/agent-config";
@@ -414,6 +415,11 @@ export function createVoicePipeline(input: {
         profile: input.sessionBase.isRealEstate
           ? "frontdesk_real_estate_realtime"
           : "frontdesk_realtime",
+        voiceConfigFingerprint: buildVoiceConfigFingerprint({
+          config: input.agentConfig,
+          agentVersionId: input.agentRow?.publishedVersionId,
+          runtimeProvider: "livekit",
+        }),
         pipeline: describeRealtimePipelineConfig(realtimeCfg, outputMode, pipelineCfg, {
           inputAudioTranscription: true,
           frontdeskInbound: true,
@@ -458,6 +464,11 @@ export function createVoicePipeline(input: {
         agentId: input.routing.agentId,
         agentName: input.agentRow?.name || null,
         profile: input.sessionBase.isRealEstate ? "frontdesk_real_estate" : "frontdesk",
+        voiceConfigFingerprint: buildVoiceConfigFingerprint({
+          config: input.agentConfig,
+          agentVersionId: input.agentRow?.publishedVersionId,
+          runtimeProvider: "livekit",
+        }),
         pipeline: describePipelineConfig(config, sttConfig),
         turnHandling: describeTurnHandlingConfig(),
         outputGainDb: input.sessionBase.outputGainDb,

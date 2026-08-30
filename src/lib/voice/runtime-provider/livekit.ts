@@ -5,6 +5,7 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { VoiceRuntimeProvider, InboundSessionMetadata } from "./types";
 import { realEstateCallConfigStamp } from "@/lib/voice/real-estate/publish";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { buildVoiceConfigFingerprint } from "@/lib/voice/config-fingerprint";
 
 export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
   id: "livekit",
@@ -45,6 +46,11 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
           })()
         : parseVoiceAgentConfig(agent.draftConfig);
       const configStamp = realEstateCallConfigStamp(runtimeCfg);
+      const configFingerprint = buildVoiceConfigFingerprint({
+        config: runtimeCfg,
+        agentVersionId: agent.publishedVersionId,
+        runtimeProvider: "livekit",
+      });
 
       let toE164 = metadata.toE164 || "";
       if (!toE164 && agent.phoneNumberId) {
@@ -79,6 +85,7 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
             livekitRoomName: metadata.livekitRoomName,
             livekitParticipantId: metadata.livekitParticipantId,
             realtorAgentConfig: configStamp,
+            voiceConfigFingerprint: configFingerprint,
           } as object,
         },
       });
@@ -175,6 +182,8 @@ export const liveKitRuntimeProvider: VoiceRuntimeProvider = {
   },
 
   async endSession(callId: string): Promise<void> {
+    const { clearCallGenerationState } = await import("@/lib/voice/tts/generation-context");
+    clearCallGenerationState(callId);
     const { finalizeLiveKitCall } = await import("@/lib/voice/domain-actions/session-bootstrap");
     await finalizeLiveKitCall(callId);
     const { destroyRealtimeSession } = await import("@/lib/voice/realtime-session/init");

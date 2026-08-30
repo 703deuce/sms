@@ -3,10 +3,14 @@ import type { AgentContext } from "@livekit/agents";
 import { maybeNormalizeForElevenLabsModel } from "@/lib/voice/tts/normalize-tts-text";
 import { phraseBufferStream } from "@/lib/voice/tts/phrase-text-buffer";
 import {
+  isGenerationActive,
+  startAssistantGeneration,
+} from "@/lib/voice/tts/generation-context";
+import { compileSemanticForSpeech } from "@/lib/voice/tts/speech-compiler";
+import {
   markHybridLlmFirstTextDelta,
   markHybridTtsFirstTextSent,
 } from "./hybrid-streaming-telemetry";
-import { nextTtsGenerationId } from "@/lib/voice/tts/pipeline-diagnostics";
 import {
   resolveOutboundRealtimeOutputMode,
   type OutboundRealtimeOutputMode,
@@ -14,34 +18,59 @@ import {
 
 type AgentHookContext<TUserData> = AgentContext<TUserData>;
 
+function resolveCallIdFromCtx<TUserData>(ctx: AgentHookContext<TUserData>): string {
+  const session = ctx.agent.session;
+  const ud = session?.userData as
+    | { callId?: string; callContext?: { callId?: string } }
+    | undefined;
+  return ud?.callId ?? ud?.callContext?.callId ?? "unknown";
+}
+
+/** Phrase buffer is opt-in — ElevenLabs SentenceTokenizer handles buffering by default. */
+function usePhraseBuffer(): boolean {
+  return process.env.VOICE_TTS_USE_PHRASE_BUFFER === "1";
+}
+
 /**
- * Phrase-buffered tts_node for Realtime text + ElevenLabs half-cascade.
- * Preserves LiveKit default cancellation (stream.close on interrupt).
+ * Hybrid tts_node for Realtime text + ElevenLabs half-cascade.
+ * Generation isolation: stale LLM/TTS chunks are dropped on caller interrupt.
  */
 export function createHybridStreamingTtsNode<TUserData = unknown>(): NonNullable<
   AgentCreateOptions<TUserData>["ttsNode"]
 > {
   return async (ctx: AgentHookContext<TUserData>, text, modelSettings) => {
-    const generationId = nextTtsGenerationId("hybrid");
-    const bufferedText = phraseBufferStream(
-      (async function* () {
-        for await (const chunk of text) {
-          markHybridLlmFirstTextDelta(chunk);
-          yield chunk;
-        }
-      })(),
-    );
+    const callId = resolveCallIdFromCtx(ctx);
+    const { generationId, turnId } = startAssistantGeneration(callId);
+    const ttsModel = process.env.ELEVENLABS_TTS_MODEL;
+
+    const sourceStream = (async function* () {
+      for await (const chunk of text) {
+        if (!isGenerationActive(callId, generationId)) break;
+        markHybridLlmFirstTextDelta(chunk);
+        yield chunk;
+      }
+    })();
+
+    const phraseOrRaw = usePhraseBuffer()
+      ? phraseBufferStream(sourceStream)
+      : sourceStream;
 
     const monitoredText = (async function* () {
-      for await (const phrase of bufferedText) {
-        const spoken = maybeNormalizeForElevenLabsModel(phrase, process.env.ELEVENLABS_TTS_MODEL);
+      for await (const phrase of phraseOrRaw) {
+        if (!isGenerationActive(callId, generationId)) break;
+        const compiled = compileSemanticForSpeech(phrase);
+        const spoken = maybeNormalizeForElevenLabsModel(compiled.speechText, ttsModel);
         markHybridTtsFirstTextSent(spoken);
         if (process.env.VOICE_TTS_PIPELINE_DEBUG === "1") {
           console.log(
             JSON.stringify({
               source: "voice.tts_pipeline",
               event: "hybrid_tts_chunk",
+              callId,
+              turnId,
               generationId,
+              commitMode: compiled.commitMode,
+              phraseBuffer: usePhraseBuffer(),
               ttsChunkPreview: spoken.slice(0, 120),
             }),
           );

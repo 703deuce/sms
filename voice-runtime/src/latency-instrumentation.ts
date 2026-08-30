@@ -8,6 +8,10 @@ import {
   type UserStateChangedEvent,
   voice,
 } from "@livekit/agents";
+import {
+  advanceCallerTurn,
+  cancelActiveGeneration,
+} from "@/lib/voice/tts/generation-context";
 import { markFirstAudioStarted, markFirstParentAudio } from "./task-transition-instrumentation";
 import {
   markHybridElevenLabsTtfb,
@@ -359,6 +363,15 @@ export function attachLatencyInstrumentation<T>(
       if (ev.newState === "speaking" && ev.oldState !== "speaking") {
         state.userSpeechStartMs = Date.now();
         state.agentWasSpeakingAtSpeechStart = session.agentState === "speaking";
+        if (callId && state.agentWasSpeakingAtSpeechStart) {
+          const cancelledGenerationId = cancelActiveGeneration(callId, "caller_barge_in");
+          logLatency("generation_cancelled", {
+            turn: state.turn,
+            callId,
+            generationId: cancelledGenerationId,
+            reason: "caller_barge_in",
+          });
+        }
         logLatency("user_speech_started", {
           turn: state.turn,
           callId,
@@ -370,6 +383,9 @@ export function attachLatencyInstrumentation<T>(
 
       if (ev.oldState === "speaking" && ev.newState === "listening") {
         const priorEou = state.eou;
+        if (callId) {
+          advanceCallerTurn(callId);
+        }
         state.turn += 1;
         state.userSpeechEndMs = Date.now();
         state.sttFinalMs = undefined;
