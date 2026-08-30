@@ -227,15 +227,23 @@ export async function handleTexmlStatusCallback(request: Request) {
           return NextResponse.json({ ok: true, skipped: "mctb_texml_workspace_unresolved" });
         }
 
-        const { resolveMctbTargetWorkspaceForInboundCall } = await import(
-          "@/lib/mctb/onboarding/demo-workspace-target"
+        const { resolveMctbTexmlTenantWorkspace } = await import(
+          "@/lib/mctb/texml-ingress/resolve-tenant"
         );
-        const target = await resolveMctbTargetWorkspaceForInboundCall({
+        const tenant = await resolveMctbTexmlTenantWorkspace({
+          ingressConfig,
           callerE164: fromEarly || "",
-          businessE164: toEarly,
           forwardedFrom: forwardedFrom || null,
         });
-        const tenantWorkspaceId = target.workspaceId || ingressConfig.workspaceId;
+        if (!tenant.workspaceId) {
+          await prisma.providerWebhookEvent.update({
+            where: { providerEventId },
+            data: { status: "processed", processedAt: new Date() },
+          });
+          return NextResponse.json({ ok: true, skipped: "mctb_texml_workspace_unresolved" });
+        }
+
+        const tenantWorkspaceId = tenant.workspaceId;
 
         const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
         const mode = await loadMctbConsentMode(tenantWorkspaceId).catch(() => "press_1");

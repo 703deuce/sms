@@ -5,6 +5,7 @@ import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { resolveMctbAssignedWorkspaceForPhone } from "@/lib/mctb/sip-ingress/resolver";
+import { isMctbTexmlVoiceIngress } from "@/lib/mctb/sip-ingress/sync";
 import {
   MCTB_TEXML_ROUTING_MODE,
   type MctbTexmlIngressBranch,
@@ -74,23 +75,25 @@ export async function resolveMctbTexmlIngressConfig(
   });
   if (!phone?.e164) return null;
 
-  const assignedWorkspaceId = await resolveMctbAssignedWorkspaceForPhone({
-    phoneNumberId: phone.id,
-    ownerWorkspaceId: phone.workspaceId,
-    settingsJson: phone.settingsJson,
-  });
-  if (!assignedWorkspaceId) return null;
-
   const caps = readPhoneCapabilities({ settingsJson: phone.settingsJson });
   const routingMode = telephonyRoutingMode(phone.settingsJson);
   const settings = (phone.settingsJson || {}) as Record<string, unknown>;
   const telephony = (settings.telephony || {}) as Record<string, unknown>;
   const mctbEnabled = caps.mctbEnabled || routingMode === MCTB_TEXML_ROUTING_MODE;
   const branch = resolveBranch(routingMode, mctbEnabled);
+  const texmlIngress = isMctbTexmlVoiceIngress(phone.settingsJson);
 
   if (!branch || branch !== "mctb" || !mctbEnabled) {
     return null;
   }
+
+  const assignedWorkspaceId =
+    (await resolveMctbAssignedWorkspaceForPhone({
+      phoneNumberId: phone.id,
+      ownerWorkspaceId: phone.workspaceId,
+      settingsJson: phone.settingsJson,
+    })) ?? (texmlIngress || mctbEnabled ? phone.workspaceId : null);
+  if (!assignedWorkspaceId) return null;
 
   let consentMode: MctbConsentMode = "press_1";
   try {
@@ -125,14 +128,42 @@ export function invalidateMctbTexmlIngressCache(e164?: string): void {
   }
 }
 
-/** Invalidate ingress cache for every DID owned by a workspace (consent mode / setup changes). */
+/** Invalidate ingress cache for every DID tied to a workspace (owner or linked assignment). */
 export async function invalidateMctbTexmlIngressCacheForWorkspace(workspaceId: string): Promise<void> {
   const prisma = getPrisma();
-  const phones = await prisma.phoneNumber.findMany({
+  const owned = await prisma.phoneNumber.findMany({
     where: { workspaceId },
-    select: { e164: true },
+    select: { e164: true, settingsJson: true },
   });
-  for (const phone of phones) {
-    if (phone.e164) invalidateMctbTexmlIngressCache(phone.e164);
+  const e164s = new Set<string>();
+  for (const phone of owned) {
+    if (phone.e164) e164s.add(phone.e164);
+  }
+
+  const { loadMissedCallTextConfig } = await import("@/lib/agents/missed-call-text-back/config");
+  const runtime = await loadMissedCallTextConfig(workspaceId);
+  if (runtime.phoneNumberId) {
+    const assigned = await prisma.phoneNumber.findUnique({
+      where: { id: runtime.phoneNumberId },
+      select: { e164: true },
+    });
+    if (assigned?.e164) e164s.add(assigned.e164);
+  }
+
+  const { readAdminTestWorkspaceIds } = await import("@/lib/mctb/platform-demo-access-shared");
+  const linkedOwners = await prisma.phoneNumber.findMany({
+    where: { NOT: { settingsJson: null } },
+    select: { e164: true, settingsJson: true },
+    take: 500,
+  });
+  for (const phone of linkedOwners) {
+    if (!phone.e164) continue;
+    if (readAdminTestWorkspaceIds(phone.settingsJson).includes(workspaceId)) {
+      e164s.add(phone.e164);
+    }
+  }
+
+  for (const e164 of e164s) {
+    invalidateMctbTexmlIngressCache(e164);
   }
 }

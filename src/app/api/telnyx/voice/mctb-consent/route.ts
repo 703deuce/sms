@@ -143,10 +143,25 @@ export async function POST(request: Request) {
             );
           }
 
+          const { resolveMctbTexmlTenantWorkspace } = await import(
+            "@/lib/mctb/texml-ingress/resolve-tenant"
+          );
+          const tenant = await resolveMctbTexmlTenantWorkspace({
+            ingressConfig,
+            callerE164: from,
+            forwardedFrom: forwardedFrom || null,
+          });
+          if (!tenant.workspaceId) {
+            return texml(
+              buildMctbConsentControlledHangupTexml("We are unable to complete your call. Goodbye."),
+              "gather_press_1",
+            );
+          }
+
           const target = {
-            workspaceId: ingressConfig.workspaceId,
-            isPlatformDemo: false,
-            demoMode: false,
+            workspaceId: tenant.workspaceId,
+            isPlatformDemo: tenant.isPlatformDemo,
+            demoMode: tenant.demoMode,
           };
           const certIngressPhoneNumberId = ingressConfig.phoneNumberId;
           const { recordSmsConsent, triggerMissedCallTextFromConsent } = await import(
@@ -261,7 +276,7 @@ export async function POST(request: Request) {
           console.error("[mctb-consent-texml] gather handler failed", err);
         }
 
-        if (!gatherSucceeded && !consentRecorded) {
+        if (!gatherSucceeded) {
           return texml(
             buildMctbConsentControlledHangupTexml("Thank you. Goodbye."),
             "gather_press_1",

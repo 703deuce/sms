@@ -11,6 +11,9 @@ import {
   getMctbConsentAudioAssetId,
 } from "../src/lib/mctb/consent-prompt/texml-response";
 import {
+  buildMctbTexmlTerminalCallInput,
+} from "../src/lib/mctb/texml-ingress/texml-call-classification";
+import {
   MCTB_FINAL_PIPELINE_ID,
   MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID,
   MCTB_FINAL_PRODUCTION_CERT_MODE,
@@ -67,6 +70,16 @@ test("existing_consent uses voicemail greeting asset with Play+Record (no Gather
   assert.match(body, /mctb-texml-voicemail/);
   assert.doesNotMatch(body, /<Gather/);
   assert.doesNotMatch(body, new RegExp(MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID));
+});
+
+test("existing_consent TeXML completed status is missed (not human answered)", () => {
+  const result = buildMctbTexmlTerminalCallInput({
+    texmlCallStatus: "completed",
+    callDuration: 45,
+  });
+  assert.equal(result.status, "NO_ANSWER");
+  assert.equal(result.disposition, "missed_no_answer");
+  assert.equal(result.answeredAt, null);
 });
 
 console.log("test-mctb-final-pipeline-contract: ok");

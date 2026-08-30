@@ -28,8 +28,6 @@ export async function ensureMctbTexmlVoicemailSession(input: {
   const dbExisting = await resolveMctbTexmlVoicemailMessage({
     callSid,
     workspaceId: input.workspaceId,
-    callerE164: input.callerE164,
-    transovoNumberE164: input.transovoNumberE164,
   });
   if (dbExisting) {
     startMctbTexmlVoicemailSession({

@@ -5,6 +5,7 @@ import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/con
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   isMctbSipIngressTargetSync,
+  isMctbTexmlVoiceIngress,
   isPhoneMctbSipIngress,
 } from "@/lib/mctb/sip-ingress/sync";
 import { readAdminTestWorkspaceIds } from "@/lib/mctb/platform-demo-access-shared";
@@ -52,8 +53,9 @@ async function resolveWorkspaceForMctbPhoneAssignment(input: {
     }
   }
 
-  // Dedicated customer DIDs: only the owning workspace row may route inbound MCTB.
-  return null;
+  // Inbound hit this PhoneNumber row — owner workspace is the tenant unless a linked
+  // workspace explicitly claimed the number above.
+  return input.ownerWorkspaceId;
 }
 
 const CACHE_TTL_MS = 15_000;
@@ -124,29 +126,31 @@ export async function resolveMctbSipIngressByDid(
 
   if (pn && String(pn.status || "").toLowerCase() !== "released") {
     const settingsIngress = isPhoneMctbSipIngress(pn.settingsJson);
-    const assignedWorkspaceId =
-      (await resolveWorkspaceForMctbPhoneAssignment({
-        phoneNumberId: pn.id,
-        ownerWorkspaceId: pn.workspaceId,
-        settingsJson: pn.settingsJson,
-      })) ?? (settingsIngress ? pn.workspaceId : null);
+    const texmlIngress = isMctbTexmlVoiceIngress(pn.settingsJson);
+    const assignedWorkspaceId = await resolveWorkspaceForMctbPhoneAssignment({
+      phoneNumberId: pn.id,
+      ownerWorkspaceId: pn.workspaceId,
+      settingsJson: pn.settingsJson,
+    });
+    const tenantWorkspaceId =
+      assignedWorkspaceId ?? (settingsIngress || texmlIngress ? pn.workspaceId : null);
 
-    if (settingsIngress && assignedWorkspaceId) {
+    if ((settingsIngress || texmlIngress) && tenantWorkspaceId) {
       resolution = {
         isMctbSipIngress: true,
-        workspaceId: assignedWorkspaceId,
+        workspaceId: tenantWorkspaceId,
         phoneNumberId: pn.id,
         e164,
-        source: "phone_settings",
+        source: texmlIngress ? "phone_settings" : "phone_settings",
       };
-    } else if (assignedWorkspaceId) {
+    } else if (tenantWorkspaceId) {
       resolution = {
         isMctbSipIngress: true,
-        workspaceId: assignedWorkspaceId,
+        workspaceId: tenantWorkspaceId,
         phoneNumberId: pn.id,
         e164,
         source:
-          assignedWorkspaceId === pn.workspaceId
+          tenantWorkspaceId === pn.workspaceId
             ? "mctb_config_assignment"
             : "linked_workspace_assignment",
       };

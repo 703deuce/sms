@@ -10,8 +10,6 @@ export function buildMctbTexmlTerminalCallInput(input: {
     .trim()
     .toLowerCase()
     .replace(/_/g, "-");
-  const duration = Number(input.callDuration);
-  const hadConversation = Number.isFinite(duration) && duration > 3;
 
   let status = "NO_ANSWER";
   let disposition = "missed_no_answer";
@@ -26,8 +24,9 @@ export function buildMctbTexmlTerminalCallInput(input: {
     status = "CANCELLED";
     disposition = "missed_rejected";
   } else if (raw === "completed" || raw === "in-progress" || raw === "inprogress") {
-    status = hadConversation ? "COMPLETED" : "NO_ANSWER";
-    disposition = hadConversation ? "answered" : "missed_no_answer";
+    // TeXML MCTB ingress: greeting + voicemail playback is automated, not a human answer.
+    status = "NO_ANSWER";
+    disposition = "missed_no_answer";
   } else if (raw === "no-answer" || raw === "noanswer") {
     status = "NO_ANSWER";
     disposition = "missed_no_answer";
@@ -37,7 +36,7 @@ export function buildMctbTexmlTerminalCallInput(input: {
     direction: "inbound",
     status,
     disposition,
-    answeredAt: hadConversation ? new Date() : null,
+    answeredAt: null,
     hangupCause: input.hangupCause || input.texmlCallStatus || null,
   };
 }

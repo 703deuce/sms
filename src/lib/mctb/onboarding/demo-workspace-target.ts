@@ -7,6 +7,8 @@ import { isPlatformDemoNumber } from "@/lib/mctb/onboarding/demo";
 import { resolveMctbSipIngressByDid } from "@/lib/mctb/sip-ingress/resolver";
 import { resolveRuntimeDemoMode } from "@/lib/mctb/ingress";
 import { resolveMctbAssignedWorkspaceForPhone } from "@/lib/mctb/sip-ingress/resolver";
+import { isMctbTexmlVoiceIngress, isPhoneMctbSipIngress } from "@/lib/mctb/sip-ingress/sync";
+import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 
 export type MctbInboundWorkspaceTarget = {
   workspaceId: string | null;
@@ -111,6 +113,19 @@ export async function resolveMctbTargetWorkspaceForInboundCall(input: {
     if (assignedWorkspaceId) {
       return {
         workspaceId: assignedWorkspaceId,
+        isPlatformDemo: false,
+        demoMode: false,
+      };
+    }
+
+    const caps = readPhoneCapabilities({ settingsJson: phone.settingsJson });
+    if (
+      caps.mctbEnabled ||
+      isMctbTexmlVoiceIngress(phone.settingsJson) ||
+      isPhoneMctbSipIngress(phone.settingsJson)
+    ) {
+      return {
+        workspaceId: phone.workspaceId,
         isPlatformDemo: false,
         demoMode: false,
       };

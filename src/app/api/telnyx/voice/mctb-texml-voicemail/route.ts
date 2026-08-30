@@ -73,8 +73,6 @@ export async function POST(request: Request) {
       const resolved = await resolveMctbTexmlVoicemailMessage({
         callSid,
         workspaceId: ingressConfig?.workspaceId || null,
-        callerE164: from || null,
-        transovoNumberE164: to || null,
       });
       if (!resolved) return texmlHangup();
       session = {
