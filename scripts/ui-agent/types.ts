@@ -27,6 +27,8 @@ export type UiAnalysisInput = {
   userPrompt: string;
   labeledMedia: LabeledMedia[];
   expectJson?: boolean;
+  sessionId?: string;
+  phaseLabel?: string;
 };
 
 export type KimiMediaDelivery = {

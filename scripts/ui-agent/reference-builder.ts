@@ -80,6 +80,8 @@ Build the complete sandbox reference page under the file paths listed in the JSO
 Use mock data freely in mock-data.ts. Export ReferencePage from page.tsx.`,
     labeledMedia: [...input.referenceMedia, ...input.currentMedia],
     expectJson: true,
+    sessionId: input.sessionId,
+    phaseLabel: input.feedback ? "Kimi refinement" : "Kimi initial build",
   });
 
   const parsed = (result.parsedJson || {}) as {

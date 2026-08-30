@@ -32,6 +32,14 @@ export const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm"]);
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
+/** Kimi chat/completions — video analysis + code generation can take a long time. */
+export const KIMI_CHAT_TIMEOUT_MS = Number(process.env.KIMI_CHAT_TIMEOUT_MS || 60 * 60 * 1000);
+/** Wait for Kimi Files API to finish processing an uploaded video. */
+export const KIMI_FILE_READY_TIMEOUT_MS = Number(process.env.KIMI_FILE_READY_TIMEOUT_MS || 15 * 60 * 1000);
+/** Heartbeat log interval while waiting on Kimi HTTP. */
+export const KIMI_PROGRESS_HEARTBEAT_MS = Number(process.env.KIMI_PROGRESS_HEARTBEAT_MS || 15_000);
+export const KIMI_FILE_UPLOAD_TIMEOUT_MS = Number(process.env.KIMI_FILE_UPLOAD_TIMEOUT_MS || 20 * 60 * 1000);
+
 /** Paths the UI agent must never modify without explicit override. */
 export const PROTECTED_PATH_GLOBS = [
   "src/lib/**",

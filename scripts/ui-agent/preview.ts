@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
-import { existsSync, readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
-import { bundleReferencePreview } from "../../src/lib/ui-agent/preview-bundle";
 import { generatedDirForSession } from "./generated-sandbox";
 import { log } from "./logger";
 
@@ -13,7 +13,41 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 };
 
-export { bundleReferencePreview } from "../../src/lib/ui-agent/preview-bundle";
+export function bundleReferencePreview(sessionId: string): string {
+  const dir = generatedDirForSession(sessionId);
+  const entry = existsSync(join(dir, "page.tsx"))
+    ? join(dir, "page.tsx")
+    : existsSync(join(dir, "ReferencePage.tsx"))
+      ? join(dir, "ReferencePage.tsx")
+      : null;
+  if (!entry) throw new Error("Generated reference missing page.tsx");
+
+  const out = join(dir, "preview.bundle.js");
+  execSync(
+    `npx esbuild "${entry}" --bundle --outfile="${out}" --loader:.tsx=tsx --loader:.ts=ts --jsx=automatic --format=esm --external:react --external:react-dom`,
+    { cwd: process.cwd(), stdio: "pipe" },
+  );
+
+  const shell = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kimi Reference Preview</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./reference.css" />
+</head>
+<body class="bg-background text-foreground">
+  <div id="root"></div>
+  <script type="module" src="./preview.bundle.js"></script>
+</body>
+</html>`;
+
+  writeFileSync(join(dir, "index.html"), shell, "utf8");
+  return join(dir, "index.html");
+}
 
 export async function startPreviewServer(sessionId: string, port = 5174): Promise<{ url: string; close: () => Promise<void> }> {
   bundleReferencePreview(sessionId);

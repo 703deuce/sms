@@ -20,6 +20,7 @@ import {
   writeGeneratedFiles,
 } from "./generated-sandbox";
 import { log } from "./logger";
+import { initProgress, markProgressError, markProgressReady, progressTailPath, updateProgress } from "./progress";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
 
@@ -130,75 +131,97 @@ Return updated files[] with same schema as original build.`,
   session.generatedDir = generatedDirForSession(session.id);
   saveSession(session);
 
-  writeEnvironmentManifest(session.id, envManifest);
-  writeSessionInput(session.id, {
-    target: options.target,
-    instruction: options.instruction,
-    referenceVideoNames: options.referenceVideoNames,
-    referenceImageNames: options.referenceImageNames,
-    captureCurrent: options.captureCurrent,
-  });
+  initProgress(session.id, `Starting Kimi session for ${session.target}`);
+  log("progress log", progressTailPath(session.id));
 
-  const referenceMedia = buildLabeledMedia([
-    ...images.map((p, i) => ({
-      path: p,
-      label: `REFERENCE_IMAGE_${i + 1}`,
-      purpose: "Reference image",
-    })),
-    ...videos.map((p, i) => ({
-      path: p,
-      label: `REFERENCE_VIDEO_${i + 1}`,
-      purpose: "Reference video",
-    })),
-  ]);
+  try {
+    writeEnvironmentManifest(session.id, envManifest);
+    writeSessionInput(session.id, {
+      target: options.target,
+      instruction: options.instruction,
+      referenceVideoNames: options.referenceVideoNames,
+      referenceImageNames: options.referenceImageNames,
+      captureCurrent: options.captureCurrent,
+    });
 
-  session.referenceMedia = referenceMedia.map((m) => ({
-    label: m.label,
-    purpose: m.purpose,
-    path: m.path,
-    source: "resolved",
-  }));
-  updateSession(session);
+    updateProgress(session.id, {
+      phase: "resolving_media",
+      message: `Resolved ${videos.length} video(s) and ${images.length} image(s). Preparing Kimi…`,
+    });
 
-  const currentMedia = await collectCurrentMediaForKimi({ ...options, captureCurrent: options.captureCurrent || true }, session);
+    const referenceMedia = buildLabeledMedia([
+      ...images.map((p, i) => ({
+        path: p,
+        label: `REFERENCE_IMAGE_${i + 1}`,
+        purpose: "Reference image",
+      })),
+      ...videos.map((p, i) => ({
+        path: p,
+        label: `REFERENCE_VIDEO_${i + 1}`,
+        purpose: "Reference video",
+      })),
+    ]);
 
-  log("calling Kimi", session.id);
-  const envPrompt = environmentManifestToPrompt(envManifest);
-  const build = await buildReferenceImplementation(provider, {
-    sessionId: session.id,
-    target: session.target,
-    manifest: session.manifest,
-    referenceMedia,
-    currentMedia,
-    instruction: [session.instruction, envPrompt].filter(Boolean).join("\n\n"),
-  });
+    session.referenceMedia = referenceMedia.map((m) => ({
+      label: m.label,
+      purpose: m.purpose,
+      path: m.path,
+      source: "resolved",
+    }));
+    updateSession(session);
 
-  let passes = 0;
-  while (passes < options.maxPasses) {
-    passes += 1;
-    log("visual refinement pass", `${passes}/${options.maxPasses}`);
-    await refineReferenceImplementation(provider, {
+    const currentMedia = await collectCurrentMediaForKimi(options, session);
+
+    log("calling Kimi", session.id);
+    log("watch progress", `tail -f ${progressTailPath(session.id)}`);
+    const envPrompt = environmentManifestToPrompt(envManifest);
+    const build = await buildReferenceImplementation(provider, {
       sessionId: session.id,
       target: session.target,
       manifest: session.manifest,
       referenceMedia,
       currentMedia,
-      instruction: session.instruction,
-      originalReferenceMedia: referenceMedia,
-      pass: passes,
-      maxPasses: options.maxPasses,
+      instruction: [session.instruction, envPrompt].filter(Boolean).join("\n\n"),
     });
+
+    let passes = 0;
+    while (passes < options.maxPasses) {
+      passes += 1;
+      updateProgress(session.id, {
+        phase: "refining",
+        message: `Visual refinement pass ${passes}/${options.maxPasses}…`,
+      });
+      log("visual refinement pass", `${passes}/${options.maxPasses}`);
+      await refineReferenceImplementation(provider, {
+        sessionId: session.id,
+        target: session.target,
+        manifest: session.manifest,
+        referenceMedia,
+        currentMedia,
+        instruction: session.instruction,
+        originalReferenceMedia: referenceMedia,
+        pass: passes,
+        maxPasses: options.maxPasses,
+      });
+    }
+
+    session.refinementPasses = passes;
+    session.status = "ready";
+    updateSession(session);
+    writeHandoff(session);
+    markProgressReady(session.id, `Kimi sandbox ready (${listGeneratedFiles(session.id).length} files). Open preview to compare.`);
+
+    const files = listGeneratedFiles(session.id);
+    printKimiReady(session, build.summary, files.length);
+    log("preview", kimiUiPreviewPath(session.id));
+    log("approve", `npm run ui:approve -- --session ${session.id}`);
+  } catch (error) {
+    session.status = "error";
+    updateSession(session);
+    const message = error instanceof Error ? error.message : String(error);
+    markProgressError(session.id, message);
+    throw error;
   }
-
-  session.refinementPasses = passes;
-  session.status = "ready";
-  updateSession(session);
-  writeHandoff(session);
-
-  const files = listGeneratedFiles(session.id);
-  printKimiReady(session, build.summary, files.length);
-  log("preview", kimiUiPreviewPath(session.id));
-  log("approve", `npm run ui:approve -- --session ${session.id}`);
 }
 
 function printKimiReady(session: UiAgentSession, summary?: string, fileCount?: number): void {
@@ -212,6 +235,7 @@ function printKimiReady(session: UiAgentSession, summary?: string, fileCount?: n
   console.log(`files=${count}`);
   if (summary) console.log(`summary=${summary}`);
   console.log(`preview=${kimiUiPreviewPath(session.id)}`);
+  console.log(`progress=tail -f .ui-agent/sessions/${session.id}/progress.log`);
   console.log(`upload=${KIMI_UI_REFERENCES_PATH}`);
   console.log("");
 }
