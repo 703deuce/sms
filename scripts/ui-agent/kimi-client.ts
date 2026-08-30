@@ -1,8 +1,13 @@
 import { deliverVideoForKimi, buildImageDataUrlDelivery } from "./kimi-media";
 import { KIMI_CHAT_TIMEOUT_MS } from "./config";
 import { kimiFetch } from "./kimi-http";
+import {
+  buildKimiRequestPayloadReport,
+  printKimiRequestPayloadReport,
+  writeKimiRequestPayloadReport,
+} from "./kimi-request-audit";
 import { kimiStreamLogPath, streamKimiChatCompletion } from "./kimi-stream";
-import { loadKimiConfig } from "./config";
+import { loadKimiConfig, type KimiRuntimeConfig } from "./config";
 import { log } from "./logger";
 import { appendProgressLog, updateProgress } from "./progress";
 import { markKimiTiming, logKimiTiming } from "./kimi-timing";
@@ -26,6 +31,8 @@ export class KimiVisionProvider implements UiVisionProvider {
   readonly supportsVideo: boolean;
   private readonly apiKey: string;
   private readonly baseUrl: string;
+  private readonly reasoningEffort: "low" | "high" | "max";
+  private readonly maxOutputTokens?: number;
 
   constructor(config = loadKimiConfig()) {
     this.apiKey = config.apiKey;
@@ -33,10 +40,13 @@ export class KimiVisionProvider implements UiVisionProvider {
     this.model = config.model;
     this.supportsImage = config.supportsImage;
     this.supportsVideo = config.supportsVideo;
+    this.reasoningEffort = config.reasoningEffort;
+    this.maxOutputTokens = config.maxOutputTokens;
   }
 
-  static async createValidated(): Promise<KimiVisionProvider> {
-    const provider = new KimiVisionProvider();
+  static async createValidated(overrides?: Partial<KimiRuntimeConfig>): Promise<KimiVisionProvider> {
+    const config = { ...loadKimiConfig(), ...overrides };
+    const provider = new KimiVisionProvider(config);
     await provider.validateModel();
     return provider;
   }
@@ -129,11 +139,38 @@ export class KimiVisionProvider implements UiVisionProvider {
       messages,
       temperature: 1,
     };
+    const effort = input.reasoningEffort ?? this.reasoningEffort;
+    if (this.model.startsWith("kimi-k3") && effort) {
+      body.reasoning_effort = effort;
+    }
+    const maxTokens = input.maxOutputTokens ?? this.maxOutputTokens;
+    if (maxTokens) {
+      body.max_tokens = maxTokens;
+    }
     if (input.expectJson && !input.useIncrementalFiles) {
       body.response_format = { type: "json_object" };
     }
 
+    const videoRefs = deliveries
+      .filter((d) => d.kind === "video")
+      .map((d) => d.reference);
+    const payloadReport = buildKimiRequestPayloadReport({
+      body,
+      sessionId,
+      leanPrompt: input.leanPrompt,
+      videoRefs,
+      imageCount: images.length,
+      systemChars: input.systemPrompt.length,
+      userChars: input.userPrompt.length,
+    });
+
     if (sessionId) {
+      writeKimiRequestPayloadReport(sessionId, payloadReport);
+      printKimiRequestPayloadReport(payloadReport);
+      markKimiTiming(sessionId, "kimiModel", this.model);
+      if (this.model.startsWith("kimi-k3")) {
+        markKimiTiming(sessionId, "reasoningEffort", effort);
+      }
       markKimiTiming(sessionId, "kimiGenerationStartedMs");
       updateProgress(sessionId, {
         phase: "generating_ui",

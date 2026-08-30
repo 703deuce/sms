@@ -40,6 +40,11 @@ export type UiAnalysisInput = {
   useIncrementalFiles?: boolean;
   /** Revision pass — do not re-attach reference video */
   skipReferenceVideo?: boolean;
+  /** K3 only — low for visual UI codegen; omit on non-K3 models */
+  reasoningEffort?: "low" | "high" | "max";
+  maxOutputTokens?: number;
+  /** Use minimal stack prompt instead of full design/manifest context */
+  leanPrompt?: boolean;
   sessionId?: string;
   phaseLabel?: string;
 };
@@ -230,4 +235,6 @@ export type CliOptions = {
   baseUrl: string;
   viewports: ViewportPreset[];
   maxPasses: number;
+  kimiModel?: string;
+  reasoningEffort?: "low" | "high" | "max";
 };

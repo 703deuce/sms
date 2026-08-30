@@ -1,7 +1,6 @@
-import { DESIGN_REFERENCE_DEFAULT_INSTRUCTION } from "./config";
+import { MINIMAL_UI_STACK_CONTEXT } from "./config";
 import { INCREMENTAL_FILE_PROTOCOL } from "./kimi-incremental-files";
 import { listGeneratedFiles, readAllGeneratedSources, writeGeneratedFiles } from "./generated-sandbox";
-import { designContextForKimi } from "./project-context";
 import type { LabeledMedia, ProjectManifest, UiVisionProvider } from "./types";
 
 export type ReferenceBuildResult = {
@@ -9,26 +8,13 @@ export type ReferenceBuildResult = {
   summary: string;
 };
 
-const REFERENCE_BUILD_SYSTEM = `You are building a COMPLETE VISUAL REFERENCE IMPLEMENTATION inside an EXISTING Next.js application.
-This is NOT production code. It lives in a sandbox only (.ui-agent/generated/).
-
-CRITICAL — DO NOT SCAFFOLD A NEW PROJECT:
-- Do NOT create package.json, tsconfig, next.config, tailwind.config, or root app files
-- Do NOT initialize Next.js, Tailwind, or a new routing architecture
-- Generate ONLY: page.tsx, components/**, mock-data.ts, reference.css, README.md
-
-Your job: write runnable React/TSX + CSS that recreates the reference UI as faithfully as possible.
-You MAY use mock/static data (mock-data.ts) in this sandbox.
-You MUST NOT output prose-only design specs — output actual code files.
-
-Prefer existing project conventions (Tailwind className tokens: bg-card, text-foreground, border-border).
-Use lucide-react icons if needed — do not add new icon libraries.
-Preserve Transovo brand name and terminology where shown in current Transovo captures.
-Do NOT copy competitor trademarks, logos, or proprietary copy.
+const REFERENCE_BUILD_SYSTEM = `You are a visual UI builder. Recreate the reference video/screenshot as runnable React/TSX in a sandbox.
+Do NOT scaffold a new Next.js project. Generate ONLY: page.tsx, components/**, mock-data.ts, reference.css.
+Start emitting code files quickly — do not over-plan in prose.
 
 ${INCREMENTAL_FILE_PROTOCOL}
 
-Implement modals, dropdowns, tabs, responsive layouts, hover/selected states when visible in reference.`;
+Match layout, spacing, interactions, modals, and states visible in the reference.`;
 
 const REVISE_SYSTEM = `Revise the Kimi sandbox UI only. Do not touch production.
 The reference video was already analyzed in the initial build — do NOT require re-watching it.
@@ -57,7 +43,6 @@ export async function buildReferenceImplementation(
     isRevision?: boolean;
   },
 ): Promise<ReferenceBuildResult> {
-  const designContext = designContextForKimi(input.manifest);
   const isRevision = Boolean(input.isRevision);
 
   const result = await provider.analyze({
@@ -75,32 +60,29 @@ EXISTING SANDBOX FILES:
 ${formatExistingSources(input.sessionId)}
 
 Apply the instruction. Emit updated files using KIMI_FILE_BEGIN/END.`
-      : `BUILD VISUAL REFERENCE IMPLEMENTATION
+      : `GENERATE THIS UI
 
-TARGET PRODUCTION ROUTE (for context only — do NOT edit production): ${input.target}
+TARGET PAGE (context only — sandbox, not production): ${input.target}
 
-USER INSTRUCTION:
-${input.instruction || "(none)"}
+INSTRUCTION:
+${input.instruction || "Recreate the reference UI faithfully."}
 
-${DESIGN_REFERENCE_DEFAULT_INSTRUCTION}
+${MINIMAL_UI_STACK_CONTEXT}
 
 ${input.feedback ? `REFINEMENT FEEDBACK:\n${input.feedback}\n` : ""}
 
-TRANSOVO DESIGN / FRONTEND CONTEXT (brand + primitives — no backend):
-${designContext}
+MEDIA:
+- REFERENCE_* = inspiration video/screenshots — study layout and interactions
+- CURRENT_TRANSOVO_* = our page today (brand shell reference)
 
-Labelled media:
-- REFERENCE_* = competitor/inspiration screenshots or videos
-- CURRENT_TRANSOVO_* = what our page looks like today
-
-Build the complete sandbox reference page. Use mock data in mock-data.ts. Export ReferencePage from page.tsx.
-Emit files incrementally with KIMI_FILE_BEGIN/END — do not buffer one giant JSON object.`,
+Watch the reference video. Then emit sandbox files incrementally with KIMI_FILE_BEGIN/END.`,
     labeledMedia: isRevision
       ? input.currentMedia
       : [...input.referenceMedia, ...input.currentMedia],
     expectJson: false,
     useIncrementalFiles: true,
     skipReferenceVideo: isRevision,
+    leanPrompt: !isRevision,
     sessionId: input.sessionId,
     phaseLabel: input.feedback ? "Kimi refinement" : "Kimi initial build",
   });

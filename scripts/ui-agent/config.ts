@@ -17,6 +17,22 @@ export const kimiUiPreviewPath = (sessionId: string) => `/transovo/kimi/preview/
 
 export const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
 export const KIMI_MODEL = "kimi-k3";
+/** K3 defaults to max reasoning if omitted — use low for visual UI codegen. */
+export type KimiReasoningEffort = "low" | "high" | "max";
+export const KIMI_REASONING_EFFORT: KimiReasoningEffort =
+  (process.env.KIMI_REASONING_EFFORT?.trim() as KimiReasoningEffort) || "low";
+export const KIMI_MAX_OUTPUT_TOKENS = process.env.KIMI_MAX_OUTPUT_TOKENS
+  ? Number(process.env.KIMI_MAX_OUTPUT_TOKENS)
+  : undefined;
+
+/** Minimal stack context for first-pass visual UI generation — integration happens later. */
+export const MINIMAL_UI_STACK_CONTEXT = `UI STACK (existing app — do NOT scaffold a new project):
+- Next.js App Router, React, TypeScript
+- Tailwind CSS + project tokens (bg-card, text-foreground, border-border, muted-foreground)
+- lucide-react icons
+- Brand: Transovo (not competitor names/logos)
+- Sandbox only: page.tsx, components/**, mock-data.ts, reference.css
+- Use mock data in mock-data.ts; Cursor integrates into production later`;
 /** @deprecated Use KIMI_BASE_URL */
 export const DEFAULT_KIMI_BASE_URL = KIMI_BASE_URL;
 
@@ -147,6 +163,8 @@ export type KimiRuntimeConfig = {
   model: string;
   supportsImage: boolean;
   supportsVideo: boolean;
+  reasoningEffort: KimiReasoningEffort;
+  maxOutputTokens?: number;
 };
 
 export function loadKimiConfig(): KimiRuntimeConfig {
@@ -154,12 +172,15 @@ export function loadKimiConfig(): KimiRuntimeConfig {
   if (!apiKey) {
     throw new Error("KIMI_API_KEY is required. Set it in your environment — never commit API keys.");
   }
+  const model = process.env.KIMI_MODEL?.trim() || KIMI_MODEL;
   return {
     apiKey,
     baseUrl: KIMI_BASE_URL,
-    model: KIMI_MODEL,
+    model,
     supportsImage: true,
     supportsVideo: true,
+    reasoningEffort: (process.env.KIMI_REASONING_EFFORT?.trim() as KimiReasoningEffort) || KIMI_REASONING_EFFORT,
+    maxOutputTokens: KIMI_MAX_OUTPUT_TOKENS,
   };
 }
 

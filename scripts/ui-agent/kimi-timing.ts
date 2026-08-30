@@ -12,6 +12,8 @@ export type KimiTimingReport = {
   videoUploadCompleteMs?: number;
   kimiFileId?: string;
   kimiFileFromCache?: boolean;
+  kimiModel?: string;
+  reasoningEffort?: string;
   modelRequestAcceptedMs?: number;
   firstReasoningTokenMs?: number;
   firstContentTokenMs?: number;
@@ -88,6 +90,8 @@ export function printKimiTimingReport(sessionId: string): void {
   console.log("\n--- Kimi timing report ---");
   console.log(`video_upload_complete:     ${fmt(t.videoUploadCompleteMs)}${cacheNote}`);
   console.log(`kimi_file_id:              ${t.kimiFileId ?? "—"}`);
+  console.log(`model:                     ${t.kimiModel ?? "—"}`);
+  console.log(`reasoning_effort:          ${t.reasoningEffort ?? "—"}`);
   console.log(`model_request_accepted:    ${fmt(t.modelRequestAcceptedMs)}`);
   console.log(`first_reasoning_token:     ${fmt(t.firstReasoningTokenMs)}`);
   console.log(`first_content_token:       ${fmt(t.firstContentTokenMs)}`);

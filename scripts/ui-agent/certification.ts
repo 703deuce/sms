@@ -196,6 +196,26 @@ KIMI_FILE_END
   assert.ok(files.includes("mock-data.ts"));
 });
 
+gate("kimi ui generation sets reasoning_effort low by default", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { KIMI_REASONING_EFFORT } = require("./config") as typeof import("./config");
+  const clientSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/kimi-client.ts"), "utf8");
+  assert.equal(KIMI_REASONING_EFFORT, "low");
+  assert.ok(clientSrc.includes("reasoning_effort"));
+  assert.ok(clientSrc.includes('startsWith("kimi-k3")'));
+});
+
+gate("reference builder uses lean prompt not full manifest", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const builderSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/reference-builder.ts"), "utf8");
+  const cmdSrc = readFileSync(join(REPO_ROOT, "scripts/ui-agent/kimi-command.ts"), "utf8");
+  assert.ok(builderSrc.includes("MINIMAL_UI_STACK_CONTEXT"));
+  assert.ok(!builderSrc.includes("designContextForKimi"));
+  assert.ok(!cmdSrc.includes("environmentManifestToPrompt(envManifest)"));
+});
+
 gate("reference builder uses incremental protocol not json_object", () => {
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");

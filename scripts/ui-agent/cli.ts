@@ -103,6 +103,12 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--max-passes":
         options.maxPasses = Number(nextValue(args, i++));
         break;
+      case "--model":
+        options.kimiModel = nextValue(args, i++);
+        break;
+      case "--reasoning-effort":
+        options.reasoningEffort = nextValue(args, i++) as CliOptions["reasoningEffort"];
+        break;
       case "--revise":
         options.revise = true;
         break;

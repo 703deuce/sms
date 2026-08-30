@@ -158,14 +158,13 @@ export async function runKimiCommand(provider: UiVisionProvider, options: CliOpt
 
     log("calling Kimi", session.id);
     log("watch progress", `tail -f ${progressTailPath(session.id)}`);
-    const envPrompt = environmentManifestToPrompt(envManifest);
     const build = await buildReferenceImplementation(provider, {
       sessionId: session.id,
       target: session.target,
       manifest: session.manifest,
       referenceMedia,
       currentMedia,
-      instruction: [session.instruction, envPrompt].filter(Boolean).join("\n\n"),
+      instruction: session.instruction,
     });
 
     try {

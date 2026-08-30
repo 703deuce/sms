@@ -14,6 +14,7 @@ import {
   writeIntegrationReport,
 } from "./integrate";
 import { KimiVisionProvider } from "./kimi-client";
+import type { KimiRuntimeConfig } from "./config";
 import { log, logError } from "./logger";
 import { buildProjectManifest } from "./project-context";
 import { runPreview } from "./preview";
@@ -24,6 +25,13 @@ import { refineReferenceImplementation } from "./refine-reference";
 import { runRefsCommand } from "./refs-command";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession } from "./types";
+
+function kimiConfigFromCli(options: CliOptions): Partial<KimiRuntimeConfig> {
+  const overrides: Partial<KimiRuntimeConfig> = {};
+  if (options.kimiModel) overrides.model = options.kimiModel;
+  if (options.reasoningEffort) overrides.reasoningEffort = options.reasoningEffort;
+  return overrides;
+}
 import { validateTouchedFiles } from "./validate-changes";
 import { writeHandoff } from "./handoff";
 import { compareApprovedReferenceToProduction, writeVisualComparisonReport } from "./visual-comparison";
@@ -384,7 +392,7 @@ async function main(): Promise<void> {
     case "kimi":
     case "improve":
       ensureUiAgentDirs();
-      await runKimiCommand(await KimiVisionProvider.createValidated(), options);
+      await runKimiCommand(await KimiVisionProvider.createValidated(kimiConfigFromCli(options)), options);
       break;
     case "refs":
       await runRefsCommand(process.argv.slice(3));
