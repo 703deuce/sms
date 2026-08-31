@@ -16,7 +16,7 @@
     "ui:kimi-batch-rescreen": "tsx scripts/ui-agent/kimi-batch-pages.ts --force --concurrency 50 --stagger-ms 10000",
     "ui:kimi-batch-complete": "tsx scripts/ui-agent/kimi-batch-complete.ts",
     "ui:kimi-sidebar": "tsx scripts/ui-agent/kimi-sidebar.ts",
-    "ui:kimi-benchmark": "tsx scripts/ui-agent/kimi-reasoning-benchmark.ts",
+    "ui:kimi-capture-polish": "tsx scripts/ui-agent/capture-polish-target.ts",
     "ui:refs": "tsx scripts/ui-agent/index.ts refs",
     "ui:approve": "tsx scripts/ui-agent/index.ts approve",
     "ui:integrate": "tsx scripts/ui-agent/index.ts integrate",
