@@ -161,6 +161,18 @@ const ROUTE_MANIFEST_EXTRAS: Record<string, string[]> = {
     "src/app/(app)/campaigns/new/review/page.tsx",
   ],
   "/conversations": ["src/styles/kimi/conversations.css"],
+  "/automations": [
+    "src/styles/kimi/automations.css",
+    "src/app/(app)/automations/[flowId]/edit/page.tsx",
+    "src/app/(app)/automations/templates/page.tsx",
+    "src/app/(app)/automations/logs/page.tsx",
+    "src/components/kimi/automations/WorkflowBuilder.tsx",
+    "src/components/kimi/automations/BuilderPanel.tsx",
+    "src/components/kimi/automations/CanvasNode.tsx",
+    "src/components/kimi/automations/ConfigModal.tsx",
+    "src/components/kimi/automations/KimiAutomationBuilder.tsx",
+    "src/components/kimi/automations/palette-data.ts",
+  ],
 };
 
 export function buildProjectManifest(target: string): ProjectManifest {

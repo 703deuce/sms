@@ -35,15 +35,40 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
   },
   {
     route: "/automations",
+    referenceVideoName: "Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p)",
     steps: [
-      { id: "01_list", label: "Workflows list", path: "/automations", fullPage: true },
+      { id: "01_list", label: "Workflows list (Flows tab)", path: "/automations", fullPage: true },
+      { id: "02_templates", label: "Templates tab", path: "/automations/templates", fullPage: true },
+      { id: "03_logs", label: "Logs tab", path: "/automations/logs", fullPage: true },
       {
-        id: "02_builder",
-        label: "Workflow builder",
+        id: "04_builder",
+        label: "Workflow builder canvas",
         path: "/automations",
         actions: [
-          { type: "click", selector: 'button:has-text("Create Workflow"), button:has-text("Create workflow")' },
-          { type: "wait", ms: 1200 },
+          { type: "click", selector: "table tbody tr.cursor-pointer" },
+          { type: "wait", ms: 2500 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "05_builder_empty",
+        label: "Workflow builder — create new (fallback)",
+        path: "/automations",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Workflow")' },
+          { type: "wait", ms: 4000 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "06_node_config",
+        label: "Builder node config modal",
+        path: "/automations",
+        actions: [
+          { type: "click", selector: "table tbody tr.cursor-pointer, button:has-text(\"Create Workflow\")" },
+          { type: "wait", ms: 2500 },
+          { type: "click", selector: ".node-card" },
+          { type: "wait", ms: 800 },
         ],
         fullPage: true,
       },
