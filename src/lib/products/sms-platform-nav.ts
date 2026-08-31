@@ -10,6 +10,7 @@ import {
   Sparkles,
   Sprout,
   Users,
+  Zap,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 
@@ -60,11 +61,12 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       ],
     },
     {
-      label: "Auto Replies",
-      href: "/auto-replies",
-      icon: Reply,
+      label: "Automations",
+      href: "/automations",
+      icon: Zap,
       sectionLabel: "Automate",
     },
+    { label: "Auto Replies", href: "/auto-replies", icon: Reply },
     { label: "Drip Campaigns", href: "/drip-campaigns", icon: Layers },
     { label: "AI Replies", href: "/ai-replies", icon: Sparkles },
     { label: "Playbooks", href: "/playbooks", icon: BookOpen },
