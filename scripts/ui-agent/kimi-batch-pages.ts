@@ -12,6 +12,7 @@
  *   npm run ui:kimi-batch -- --no-complete-pass
  *   npm run ui:kimi-batch -- --status
  *   npm run ui:kimi-batch -- --restore-missing   # re-run jobs marked complete but sandbox files gone
+ *   npm run ui:kimi-batch -- --missing-drafts    # re-run jobs with no src/kimi-drafts copy yet
  *
  * Env: KIMI_BATCH_CONCURRENCY, KIMI_BATCH_STAGGER_MS
  */
@@ -21,6 +22,7 @@ import { loadReferencesManifest } from "@/lib/ui-agent/references-manifest";
 import { KimiVisionProvider } from "./kimi-client";
 import { runKimiCommand } from "./kimi-command";
 import { auditSandboxCompleteness } from "./kimi-completeness";
+import { draftDirForSession } from "./kimi-persist";
 import { KIMI_BATCH_PAGE_INSTRUCTION, UI_AGENT_DIR, ensureUiAgentDirs } from "./config";
 import { log } from "./logger";
 import type { CliOptions } from "./types";
@@ -168,6 +170,11 @@ function generatedSandboxReady(sessionId?: string): boolean {
   return existsSync(join(UI_AGENT_DIR, "generated", sessionId, "page.tsx"));
 }
 
+function draftPersisted(sessionId: string | undefined, route: string): boolean {
+  if (!sessionId) return false;
+  return existsSync(join(draftDirForSession(sessionId, route), "MANIFEST.json"));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -310,9 +317,11 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
   const restoreMissing = args.includes("--restore-missing");
+  const missingDrafts = args.includes("--missing-drafts");
   const statusOnly = args.includes("--status");
   const skipCompletePass = args.includes("--no-complete-pass");
   const onlyName = parseArg(args, "--only");
+  const skipName = parseArg(args, "--skip");
   const requestedConcurrency = Math.max(1, Number(parseArg(args, "--concurrency") || DEFAULT_CONCURRENCY));
   const staggerMs = Math.max(0, Number(parseArg(args, "--stagger-ms") || DEFAULT_STAGGER_MS));
 
@@ -342,20 +351,38 @@ async function main(): Promise<void> {
     jobs = jobs.filter((j) => j.videoName === onlyName || j.videoName.includes(onlyName));
     if (jobs.length === 0) throw new Error(`No batch job matches --only ${onlyName}`);
   }
+  if (skipName) {
+    jobs = jobs.filter((j) => !j.route.includes(skipName) && !j.videoName.includes(skipName));
+  }
 
   const pending = jobs.filter((j) => {
     if (j.status === "skipped") return false;
-    if (j.status === "running" && j.sessionId) return false;
-    if (force) return j.status !== "skipped";
+    if (force) return true;
+    if (missingDrafts && j.sessionId && !draftPersisted(j.sessionId, j.route)) return true;
     if (restoreMissing && j.status === "complete" && j.sessionId && !generatedSandboxReady(j.sessionId)) {
       return true;
     }
+    if (
+      restoreMissing &&
+      j.status === "complete" &&
+      j.sessionId &&
+      generatedSandboxReady(j.sessionId) &&
+      !draftPersisted(j.sessionId, j.route)
+    ) {
+      return true;
+    }
+    if (j.status === "running") return true;
+    if (j.status === "failed") return true;
+    if (j.status === "pending") return true;
     if (j.status === "complete") return false;
     return true;
   });
 
   if (restoreMissing && pending.length > 0) {
-    console.log(`\nRestore-missing: ${pending.length} sandbox(es) missing on disk — re-materializing from batch state.\n`);
+    console.log(`\nRestore-missing: ${pending.length} job(s) need sandbox and/or draft recovery.\n`);
+  }
+  if (missingDrafts && pending.length > 0) {
+    console.log(`\nMissing-drafts: ${pending.length} job(s) lack src/kimi-drafts — re-running Kimi.\n`);
   }
 
   if (pending.length === 0) {
