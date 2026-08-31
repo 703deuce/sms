@@ -2,6 +2,7 @@
  * Data adapter: maps /api/growth/forms ↔ Kimi grow-forms mock types.
  */
 import type { WebForm } from "@/components/kimi/grow-forms/mock-data";
+import type { FormLayout } from "@/lib/forms/layout";
 
 function formatSaved(iso?: string): string {
   if (!iso) return "Recently";
@@ -78,6 +79,14 @@ export async function updateWebForm(
     thankYouMessage?: string;
     optInMessage?: string;
     doubleOptInMessage?: string;
+    layout?: FormLayout;
+    customCss?: string;
+    customJs?: string;
+    contactMode?: "create" | "update";
+    description?: string;
+    urlPath?: string;
+    successHeadline?: string;
+    successMessage?: string;
     branding?: {
       primaryColor?: string;
       accentColor?: string;
@@ -109,6 +118,14 @@ export async function fetchWebFormById(id: string): Promise<{
     fields?: string[];
     optInMessage?: string;
     doubleOptInMessage?: string;
+    layout?: FormLayout;
+    customCss?: string;
+    customJs?: string;
+    contactMode?: "create" | "update";
+    description?: string;
+    urlPath?: string;
+    successHeadline?: string;
+    successMessage?: string;
     branding?: {
       primaryColor?: string;
       accentColor?: string;

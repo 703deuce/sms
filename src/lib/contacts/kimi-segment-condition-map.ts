@@ -64,6 +64,16 @@ function mapProperty(property: string): string | null {
       return "lastName";
     case "List Membership":
       return "list";
+    case "Link Clicked":
+      return "link_clicked";
+    case "Campaign Sent":
+      return "campaign_sent";
+    case "Timezone":
+      return "timezone";
+    case "Created":
+      return "createdAt";
+    case "Area Code":
+      return "areaCode";
     case "Favorite Sports Team":
       return "custom:favorite_sports_team";
     default:
@@ -137,6 +147,11 @@ export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditio
     if (field === "firstName") return "First Name";
     if (field === "lastName") return "Last Name";
     if (field === "email") return "Email Address";
+    if (field === "timezone") return "Timezone";
+    if (field === "createdAt") return "Created";
+    if (field === "link_clicked") return "Link Clicked";
+    if (field === "campaign_sent") return "Campaign Sent";
+    if (field === "areaCode") return "Area Code";
     if (field.startsWith("custom:")) {
       const key = field.slice("custom:".length);
       const map: Record<string, string> = {

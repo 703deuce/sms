@@ -1,3 +1,5 @@
+import { parseFormLayout } from "@/lib/forms/layout";
+
 export type FormFieldKey = "phone" | "firstName" | "lastName" | "email" | "dateOfBirth";
 
 export type FormBranding = {
@@ -8,6 +10,8 @@ export type FormBranding = {
   logoUrl?: string;
 };
 
+import type { FormLayout } from "@/lib/forms/layout";
+
 export type OptInFormConfig = {
   fields?: FormFieldKey[];
   branding?: FormBranding;
@@ -17,6 +21,14 @@ export type OptInFormConfig = {
   ageGateMinAge?: number;
   optInMessage?: string;
   doubleOptInMessage?: string;
+  layout?: FormLayout;
+  customCss?: string;
+  customJs?: string;
+  contactMode?: "create" | "update";
+  description?: string;
+  urlPath?: string;
+  successHeadline?: string;
+  successMessage?: string;
 };
 
 export const DEFAULT_FORM_FIELDS: FormFieldKey[] = ["firstName", "phone"];
@@ -44,6 +56,7 @@ export function parseFormConfig(raw: unknown): OptInFormConfig {
   if (!fields.includes("phone")) fields.unshift("phone");
   const ageGateMinAge =
     typeof obj.ageGateMinAge === "number" && obj.ageGateMinAge >= 1 ? obj.ageGateMinAge : undefined;
+  const layout = parseFormLayout(obj.layout);
   return {
     fields,
     branding: obj.branding,
@@ -53,6 +66,14 @@ export function parseFormConfig(raw: unknown): OptInFormConfig {
     ageGateMinAge,
     optInMessage: obj.optInMessage,
     doubleOptInMessage: obj.doubleOptInMessage,
+    layout: layout || undefined,
+    customCss: obj.customCss,
+    customJs: obj.customJs,
+    contactMode: obj.contactMode === "update" ? "update" : obj.contactMode === "create" ? "create" : undefined,
+    description: obj.description,
+    urlPath: obj.urlPath,
+    successHeadline: obj.successHeadline,
+    successMessage: obj.successMessage,
   };
 }
 

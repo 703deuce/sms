@@ -577,6 +577,101 @@ const UI_CHECKS: Check[] = [
       return null;
     },
   },
+  {
+    name: "inbox-permissions-persist",
+    run: async (page) => {
+      const patch = await page.evaluate(async () => {
+        const res = await fetch("/api/settings/messaging-runtime", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inboxPermissionsJson: {
+              inboxEnabled: true,
+              allowStartConversations: false,
+              allowAssignment: true,
+              allowTagging: true,
+              unassignOnClose: true,
+              markUnreadOnAssign: false,
+            },
+          }),
+        });
+        const json = await res.json();
+        return { ok: res.ok, perms: json.data?.inboxPermissionsJson };
+      });
+      if (!patch.ok) return "inbox permissions PATCH failed";
+      if (patch.perms?.allowStartConversations !== false) {
+        return "inbox permissions not persisted";
+      }
+      return null;
+    },
+  },
+  {
+    name: "form-layout-persist",
+    run: async (page) => {
+      const created = await page.evaluate(async () => {
+        const res = await fetch("/api/growth/forms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `Layout Form ${Date.now()}` }),
+        });
+        const json = await res.json();
+        return { ok: res.ok, id: json.data?.id as string };
+      });
+      if (!created.ok || !created.id) return "create form failed";
+      const headline = `Layout Headline ${Date.now()}`;
+      const layout = {
+        version: 1,
+        formType: "embed",
+        blocks: [
+          { id: "h1", type: "header", props: { content: headline } },
+          { id: "p1", type: "field", props: { fieldKey: "phone", placeholder: "Mobile" } },
+          { id: "b1", type: "button", props: { content: "Go" } },
+        ],
+      };
+      const patched = await page.evaluate(
+        async ({ id, headline, layout }) => {
+          const res = await fetch(`/api/growth/forms/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ headline, layout, fields: ["phone"] }),
+          });
+          const json = await res.json();
+          return {
+            ok: res.ok,
+            layout: json.data?.config?.layout,
+            headline: json.data?.config?.headline,
+          };
+        },
+        { id: created.id, headline, layout },
+      );
+      if (!patched.ok) return "layout patch failed";
+      if (patched.layout?.blocks?.[0]?.props?.content !== headline) return "layout headline not in blocks";
+      if (patched.headline !== headline) return "flat headline not derived";
+      return null;
+    },
+  },
+  {
+    name: "segment-link-clicked-preview",
+    run: async (page) => {
+      const res = await page.evaluate(async () => {
+        const r = await fetch("/api/contacts/segments/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conditions: {
+              match: "all",
+              rules: [{ field: "link_clicked", op: "exists" }],
+            },
+          }),
+        });
+        const json = await r.json();
+        return { ok: r.ok, count: json.data?.count };
+      });
+      if (!res.ok) return "link_clicked preview failed";
+      if (typeof res.count !== "number") return "link_clicked count missing";
+      return null;
+    },
+  },
 ];
 
 const ALL_CHECKS = [...CHECKS, ...UI_CHECKS];

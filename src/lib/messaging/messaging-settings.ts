@@ -19,6 +19,15 @@ export type InboxTagDefinition = {
   created?: string;
 };
 
+export type InboxPermissionsJson = {
+  inboxEnabled?: boolean;
+  allowStartConversations?: boolean;
+  allowAssignment?: boolean;
+  allowTagging?: boolean;
+  unassignOnClose?: boolean;
+  markUnreadOnAssign?: boolean;
+};
+
 export type MessagingRuntimeSettings = {
   workspaceId: string;
   businessHoursJson: BusinessHoursJson | null;
@@ -35,6 +44,7 @@ export type MessagingRuntimeSettings = {
   helpKeywords: string | null;
   optInMessagesJson: OptInMessagesJson | null;
   inboxTagsJson: InboxTagDefinition[] | null;
+  inboxPermissionsJson: InboxPermissionsJson | null;
 };
 
 export const DEFAULT_OPT_OUT_KEYWORDS = "STOP,STOPALL,UNSUBSCRIBE,CANCEL,END,QUIT";
@@ -158,6 +168,7 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
       helpKeywords: null,
       optInMessagesJson: null,
       inboxTagsJson: null,
+      inboxPermissionsJson: null,
       awayInsideMessage: null,
     };
   }
@@ -179,6 +190,7 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
     inboxTagsJson: Array.isArray(row.inboxTagsJson)
       ? (row.inboxTagsJson as InboxTagDefinition[])
       : null,
+    inboxPermissionsJson: (row.inboxPermissionsJson as InboxPermissionsJson | null) || null,
   };
 }
 
@@ -205,6 +217,7 @@ export async function upsertMessagingRuntimeSettings(
       helpKeywords: patch.helpKeywords,
       optInMessagesJson: patch.optInMessagesJson ?? undefined,
       inboxTagsJson: patch.inboxTagsJson ?? undefined,
+      inboxPermissionsJson: patch.inboxPermissionsJson ?? undefined,
     },
     update: {
       businessHoursJson: patch.businessHoursJson ?? undefined,
@@ -221,6 +234,7 @@ export async function upsertMessagingRuntimeSettings(
       helpKeywords: patch.helpKeywords,
       optInMessagesJson: patch.optInMessagesJson ?? undefined,
       inboxTagsJson: patch.inboxTagsJson ?? undefined,
+      inboxPermissionsJson: patch.inboxPermissionsJson ?? undefined,
     },
   });
   return {
@@ -241,7 +255,23 @@ export async function upsertMessagingRuntimeSettings(
     inboxTagsJson: Array.isArray(row.inboxTagsJson)
       ? (row.inboxTagsJson as InboxTagDefinition[])
       : null,
+    inboxPermissionsJson: (row.inboxPermissionsJson as InboxPermissionsJson | null) || null,
   };
+}
+
+export const DEFAULT_INBOX_PERMISSIONS: InboxPermissionsJson = {
+  inboxEnabled: true,
+  allowStartConversations: true,
+  allowAssignment: true,
+  allowTagging: true,
+  unassignOnClose: true,
+  markUnreadOnAssign: true,
+};
+
+export function resolveInboxPermissions(
+  raw: InboxPermissionsJson | null | undefined,
+): InboxPermissionsJson {
+  return { ...DEFAULT_INBOX_PERMISSIONS, ...(raw || {}) };
 }
 
 export function defaultBusinessHours(): BusinessHoursJson {

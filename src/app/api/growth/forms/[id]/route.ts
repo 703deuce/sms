@@ -3,6 +3,8 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import { parseFormConfig, type FormFieldKey, type OptInFormConfig } from "@/lib/forms/types";
+import type { FormLayout } from "@/lib/forms/layout";
+import { deriveConfigFromLayout } from "@/lib/forms/layout";
 
 function mapForm(row: {
   id: string;
@@ -94,6 +96,14 @@ export async function PATCH(
       ageGateMinAge?: number;
       optInMessage?: string;
       doubleOptInMessage?: string;
+      layout?: FormLayout;
+      customCss?: string;
+      customJs?: string;
+      contactMode?: "create" | "update";
+      description?: string;
+      urlPath?: string;
+      successHeadline?: string;
+      successMessage?: string;
     };
 
     const existing = await getPrisma().optInForm.findFirst({
@@ -102,15 +112,25 @@ export async function PATCH(
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const prevConfig = parseFormConfig(existing.config);
+    const mergedLayout = body.layout ?? prevConfig.layout;
+    const derived = mergedLayout ? deriveConfigFromLayout(mergedLayout) : {};
     const nextConfig: OptInFormConfig = {
-      fields: body.fields ?? prevConfig.fields,
+      fields: body.fields ?? derived.fields ?? prevConfig.fields,
       branding: body.branding ?? prevConfig.branding,
-      headline: body.headline ?? prevConfig.headline,
-      subheadline: body.subheadline ?? prevConfig.subheadline,
-      buttonLabel: body.buttonLabel ?? prevConfig.buttonLabel,
+      headline: body.headline ?? derived.headline ?? prevConfig.headline,
+      subheadline: body.subheadline ?? derived.subheadline ?? prevConfig.subheadline,
+      buttonLabel: body.buttonLabel ?? derived.buttonLabel ?? prevConfig.buttonLabel,
       ageGateMinAge: body.ageGateMinAge ?? prevConfig.ageGateMinAge,
       optInMessage: body.optInMessage ?? prevConfig.optInMessage,
       doubleOptInMessage: body.doubleOptInMessage ?? prevConfig.doubleOptInMessage,
+      layout: body.layout ?? prevConfig.layout,
+      customCss: body.customCss ?? prevConfig.customCss,
+      customJs: body.customJs ?? prevConfig.customJs,
+      contactMode: body.contactMode ?? prevConfig.contactMode,
+      description: body.description ?? prevConfig.description,
+      urlPath: body.urlPath ?? prevConfig.urlPath,
+      successHeadline: body.successHeadline ?? prevConfig.successHeadline,
+      successMessage: body.successMessage ?? prevConfig.successMessage,
     };
 
     let status = existing.status;

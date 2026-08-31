@@ -17,6 +17,7 @@ import {
   fetchWebFormById,
   updateWebForm,
 } from "@/lib/growth/kimi-forms-adapter";
+import type { FormLayout } from "@/lib/forms/layout";
 
 type View = "list" | "create" | "test" | "embed-site";
 
@@ -38,6 +39,14 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     optInMessage?: string;
     doubleOptInMessage?: string;
     disclosureText?: string;
+    layout?: FormLayout | null;
+    description?: string;
+    urlPath?: string;
+    customCss?: string;
+    customJs?: string;
+    successHeadline?: string;
+    successMessage?: string;
+    contactMode?: "create" | "update";
   } | null>(null);
   const [contactLists, setContactLists] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -90,6 +99,14 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     optInMessage?: string;
     doubleOptInMessage?: string;
     disclosureText?: string;
+    layout?: FormLayout;
+    description?: string;
+    urlPath?: string;
+    customCss?: string;
+    customJs?: string;
+    successHeadline?: string;
+    successMessage?: string;
+    contactMode?: "create" | "update";
   }) => {
     await updateWebForm(payload.formId, {
       name: payload.name,
@@ -103,6 +120,14 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
       optInMessage: payload.optInMessage,
       doubleOptInMessage: payload.doubleOptInMessage,
       disclosureText: payload.disclosureText,
+      layout: payload.layout,
+      description: payload.description,
+      urlPath: payload.urlPath,
+      customCss: payload.customCss,
+      customJs: payload.customJs,
+      successHeadline: payload.successHeadline,
+      successMessage: payload.successMessage,
+      contactMode: payload.contactMode,
     });
     await reload();
   };
@@ -126,6 +151,14 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
           optInMessage: detail.config?.optInMessage,
           doubleOptInMessage: detail.config?.doubleOptInMessage,
           disclosureText: detail.disclosureText || undefined,
+          layout: detail.config?.layout || null,
+          description: detail.config?.description,
+          urlPath: detail.config?.urlPath,
+          customCss: detail.config?.customCss,
+          customJs: detail.config?.customJs,
+          successHeadline: detail.config?.successHeadline,
+          successMessage: detail.config?.successMessage,
+          contactMode: detail.config?.contactMode,
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load form"));
@@ -151,6 +184,14 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
         fields: detailJson.data?.config?.fields,
         optInMessage: detailJson.data?.config?.optInMessage,
         doubleOptInMessage: detailJson.data?.config?.doubleOptInMessage,
+        layout: detailJson.data?.config?.layout,
+        description: detailJson.data?.config?.description,
+        urlPath: detailJson.data?.config?.urlPath,
+        customCss: detailJson.data?.config?.customCss,
+        customJs: detailJson.data?.config?.customJs,
+        successHeadline: detailJson.data?.config?.successHeadline,
+        successMessage: detailJson.data?.config?.successMessage,
+        contactMode: detailJson.data?.config?.contactMode,
       });
       await reload();
       openFormEditor({ ...created, name: `${src.name} (Copy)` });
@@ -189,6 +230,14 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
           initialFields={editingFormDetail?.fields}
           initialOptInMessage={editingFormDetail?.optInMessage}
           initialDoubleOptInMessage={editingFormDetail?.doubleOptInMessage}
+          initialLayout={editingFormDetail?.layout || undefined}
+          initialDescription={editingFormDetail?.description}
+          initialUrlPath={editingFormDetail?.urlPath}
+          initialCustomCss={editingFormDetail?.customCss}
+          initialCustomJs={editingFormDetail?.customJs}
+          initialSuccessHeadline={editingFormDetail?.successHeadline}
+          initialSuccessMessage={editingFormDetail?.successMessage}
+          initialContactMode={editingFormDetail?.contactMode}
           onSave={handleSaveForm}
           onSaveError={(msg) => setError(msg)}
           onExit={() => { setView("list"); setEditingFormId(null); void reload(); }}

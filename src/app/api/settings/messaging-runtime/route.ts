@@ -5,6 +5,7 @@ import {
   upsertMessagingRuntimeSettings,
   type BusinessHoursJson,
   type InboxTagDefinition,
+  type InboxPermissionsJson,
   type OptInMessagesJson,
 } from "@/lib/messaging/messaging-settings";
 
@@ -37,6 +38,7 @@ export async function PATCH(request: Request) {
       helpKeywords?: string | null;
       optInMessagesJson?: OptInMessagesJson | null;
       inboxTagsJson?: InboxTagDefinition[] | null;
+      inboxPermissionsJson?: InboxPermissionsJson | null;
       awayInsideMessage?: string | null;
     };
 
@@ -55,6 +57,7 @@ export async function PATCH(request: Request) {
     if (body.helpKeywords !== undefined) patch.helpKeywords = body.helpKeywords?.trim() || null;
     if (body.optInMessagesJson !== undefined) patch.optInMessagesJson = body.optInMessagesJson;
     if (body.inboxTagsJson !== undefined) patch.inboxTagsJson = body.inboxTagsJson;
+    if (body.inboxPermissionsJson !== undefined) patch.inboxPermissionsJson = body.inboxPermissionsJson;
     if (body.awayInsideMessage !== undefined) patch.awayInsideMessage = body.awayInsideMessage;
 
     const data = await upsertMessagingRuntimeSettings(auth.workspaceId, patch);

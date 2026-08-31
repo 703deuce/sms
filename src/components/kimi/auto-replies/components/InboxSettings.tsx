@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Inbox, ChevronDown } from "lucide-react";
 import { inboxDefaults } from "../mock-data";
 import MessageEditor from "./MessageEditor";
@@ -48,6 +48,7 @@ export default function InboxSettings({
   initialOfficeHoursEnabled,
   initialActiveDays,
   initialTimezone,
+  initialInboxToggles,
   onSave,
 }: {
   onBack: () => void;
@@ -57,6 +58,7 @@ export default function InboxSettings({
   initialOfficeHoursEnabled?: boolean;
   initialActiveDays?: string[];
   initialTimezone?: string;
+  initialInboxToggles?: Record<string, boolean>;
   onSave?: (payload: {
     awayMessage: string;
     awayInsideMessage?: string;
@@ -64,16 +66,19 @@ export default function InboxSettings({
     officeHoursEnabled?: boolean;
     activeDays?: string[];
     timezone?: string;
+    inboxToggles?: Record<string, boolean>;
   }) => Promise<void>;
 }) {
-  const [toggles, setToggles] = useState<Record<string, boolean>>({
-    inboxOn: true,
-    start: true,
-    assign: true,
-    tag: true,
-    unassign: true,
-    unread: true,
-  });
+  const [toggles, setToggles] = useState<Record<string, boolean>>(
+    initialInboxToggles ?? {
+      inboxOn: true,
+      start: true,
+      assign: true,
+      tag: true,
+      unassign: true,
+      unread: true,
+    },
+  );
   const [autoOn, setAutoOn] = useState(initialAwayEnabled ?? true);
   const [single, setSingle] = useState(initialAwayMessage ?? inboxDefaults.autoResponseMessage);
   const [officeOn, setOfficeOn] = useState(initialOfficeHoursEnabled ?? true);
@@ -86,6 +91,10 @@ export default function InboxSettings({
 
   const toggleDay = (d: string) =>
     setActiveDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
+
+  useEffect(() => {
+    if (initialInboxToggles) setToggles(initialInboxToggles);
+  }, [initialInboxToggles]);
 
   return (
     <div>
@@ -217,6 +226,7 @@ export default function InboxSettings({
                 officeHoursEnabled: officeOn,
                 activeDays,
                 timezone: initialTimezone,
+                inboxToggles: toggles,
               })
                 .then(finish)
                 .catch(() => {

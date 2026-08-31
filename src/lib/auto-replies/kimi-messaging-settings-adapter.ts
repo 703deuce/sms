@@ -3,11 +3,12 @@
  */
 import type {
   BusinessHoursJson,
+  InboxPermissionsJson,
   InboxTagDefinition,
   MessagingRuntimeSettings,
   OptInMessagesJson,
 } from "@/lib/messaging/messaging-settings";
-import { defaultBusinessHours } from "@/lib/messaging/messaging-settings";
+import { defaultBusinessHours, DEFAULT_INBOX_PERMISSIONS, resolveInboxPermissions } from "@/lib/messaging/messaging-settings";
 
 export async function fetchMessagingRuntimeSettings(): Promise<MessagingRuntimeSettings> {
   const res = await fetch("/api/settings/messaging-runtime");
@@ -115,3 +116,36 @@ export async function persistInboxTag(
 }
 
 export { KEY_TO_KIMI_DAY };
+
+const KIMI_TOGGLE_TO_PERMISSION: Record<string, keyof InboxPermissionsJson> = {
+  inboxOn: "inboxEnabled",
+  start: "allowStartConversations",
+  assign: "allowAssignment",
+  tag: "allowTagging",
+  unassign: "unassignOnClose",
+  unread: "markUnreadOnAssign",
+};
+
+export function inboxPermissionsToKimiToggles(
+  json: InboxPermissionsJson | null | undefined,
+): Record<string, boolean> {
+  const p = resolveInboxPermissions(json);
+  return {
+    inboxOn: p.inboxEnabled !== false,
+    start: p.allowStartConversations !== false,
+    assign: p.allowAssignment !== false,
+    tag: p.allowTagging !== false,
+    unassign: p.unassignOnClose !== false,
+    unread: p.markUnreadOnAssign !== false,
+  };
+}
+
+export function kimiTogglesToInboxPermissions(
+  toggles: Record<string, boolean>,
+): InboxPermissionsJson {
+  const out: InboxPermissionsJson = { ...DEFAULT_INBOX_PERMISSIONS };
+  for (const [toggleId, key] of Object.entries(KIMI_TOGGLE_TO_PERMISSION)) {
+    if (toggleId in toggles) out[key] = toggles[toggleId];
+  }
+  return out;
+}

@@ -71,6 +71,11 @@ type EvaluableContact = {
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
+  timezone?: string | null;
+  phone?: string | null;
+  createdAt?: Date | string | null;
+  linkClicks?: string[];
+  campaignsSent?: string[];
 };
 
 function matchListField(
@@ -209,8 +214,8 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
     }
   }
 
-  if (rule.field === "firstName" || rule.field === "lastName" || rule.field === "email") {
-    const val = stringVal(contact[rule.field]).toLowerCase();
+  if (rule.field === "firstName" || rule.field === "lastName" || rule.field === "email" || rule.field === "timezone") {
+    const val = stringVal(contact[rule.field as keyof EvaluableContact]).toLowerCase();
     const present = Boolean(val);
     switch (rule.op) {
       case "equals":
@@ -228,6 +233,60 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
       default:
         return val === targetLc;
     }
+  }
+
+  if (rule.field === "areaCode") {
+    const phone = stringVal(contact.phone).replace(/\D/g, "");
+    const area = phone.length >= 10 ? phone.slice(-10, -7) : "";
+    const val = area.toLowerCase();
+    const present = Boolean(area);
+    switch (rule.op) {
+      case "equals":
+        return val === targetLc;
+      case "not_equals":
+        return val !== targetLc;
+      case "contains":
+        return val.includes(targetLc);
+      case "not_contains":
+        return !val.includes(targetLc);
+      case "exists":
+        return present;
+      case "not_exists":
+        return !present;
+      default:
+        return val === targetLc;
+    }
+  }
+
+  if (rule.field === "createdAt") {
+    const raw = contact.createdAt;
+    const iso = raw instanceof Date ? raw.toISOString() : stringVal(raw);
+    const val = iso.toLowerCase();
+    const present = Boolean(iso);
+    switch (rule.op) {
+      case "equals":
+        return val.startsWith(targetLc);
+      case "not_equals":
+        return !val.startsWith(targetLc);
+      case "contains":
+        return val.includes(targetLc);
+      case "not_contains":
+        return !val.includes(targetLc);
+      case "exists":
+        return present;
+      case "not_exists":
+        return !present;
+      default:
+        return val.includes(targetLc);
+    }
+  }
+
+  if (rule.field === "link_clicked") {
+    return matchListField(contact.linkClicks, rule);
+  }
+
+  if (rule.field === "campaign_sent") {
+    return matchListField(contact.campaignsSent, rule);
   }
 
   if (rule.field.startsWith("custom:")) {
@@ -300,6 +359,9 @@ export async function resolveSegmentContactIds(
     firstName?: string | null;
     lastName?: string | null;
     email?: string | null;
+    timezone?: string | null;
+    phone?: string | null;
+    createdAt?: Date;
   }>;
 
   // Load tag names per contact only when a tag rule is present (avoids extra
@@ -315,6 +377,8 @@ export async function resolveSegmentContactIds(
     (r) => r.field === "appointment_status" || r.field === "appointment_type",
   );
   const needsOrders = parsed.rules.some((r) => r.field === "order_status");
+  const needsLinkClicks = parsed.rules.some((r) => r.field === "link_clicked");
+  const needsCampaigns = parsed.rules.some((r) => r.field === "campaign_sent");
   const tagNamesByContact = new Map<string, string[]>();
   const listNamesByContact = new Map<string, string[]>();
   const providersByContact = new Map<string, string[]>();
@@ -325,6 +389,8 @@ export async function resolveSegmentContactIds(
   const formsByContact = new Map<string, string[]>();
   const apptByContact = new Map<string, string[]>();
   const ordersByContact = new Map<string, string[]>();
+  const linkClicksByContact = new Map<string, string[]>();
+  const campaignsByContact = new Map<string, string[]>();
   const contactIds = rawContacts.map((c) => c.id);
   if (needsTags && rawContacts.length) {
     const contactTags = (await prisma.contactTag.findMany({
@@ -453,6 +519,38 @@ export async function resolveSegmentContactIds(
     }
   }
 
+  if (needsLinkClicks && contactIds.length) {
+    const clicks = (await prisma.linkClickEvent.findMany({
+      where: { workspaceId, contactId: { in: contactIds } },
+      select: { contactId: true, destinationUrl: true, trackingToken: true },
+      take: 10000,
+    })) as Array<{ contactId: string | null; destinationUrl: string | null; trackingToken: string }>;
+    for (const c of clicks) {
+      if (!c.contactId) continue;
+      const list = linkClicksByContact.get(c.contactId) || [];
+      for (const v of [c.destinationUrl, c.trackingToken].filter(Boolean) as string[]) {
+        if (!list.includes(v)) list.push(v);
+      }
+      linkClicksByContact.set(c.contactId, list);
+    }
+  }
+
+  if (needsCampaigns && contactIds.length) {
+    const recipients = (await prisma.campaignRecipient.findMany({
+      where: { workspaceId, contactId: { in: contactIds } },
+      select: { contactId: true, campaign: { select: { name: true, id: true } } },
+      take: 10000,
+    })) as Array<{ contactId: string | null; campaign: { name: string; id: string } }>;
+    for (const r of recipients) {
+      if (!r.contactId) continue;
+      const list = campaignsByContact.get(r.contactId) || [];
+      for (const v of [r.campaign.name, r.campaign.id].filter(Boolean)) {
+        if (!list.includes(v)) list.push(v);
+      }
+      campaignsByContact.set(r.contactId, list);
+    }
+  }
+
   const contacts: EvaluableContact[] = rawContacts.map((c) => ({
     id: c.id,
     status: c.status,
@@ -473,6 +571,11 @@ export async function resolveSegmentContactIds(
     firstName: c.firstName,
     lastName: c.lastName,
     email: c.email,
+    timezone: c.timezone,
+    phone: c.phone,
+    createdAt: c.createdAt,
+    linkClicks: linkClicksByContact.get(c.id) || [],
+    campaignsSent: campaignsByContact.get(c.id) || [],
   }));
 
   return contacts

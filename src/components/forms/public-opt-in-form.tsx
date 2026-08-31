@@ -3,6 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { FIELD_LABELS, type FormFieldKey } from "@/lib/forms/types";
+import type { FormLayout } from "@/lib/forms/layout";
+import { FormLayoutView } from "@/components/forms/form-layout-view";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +26,10 @@ export type PublicFormData = {
   subheadline?: string;
   buttonLabel?: string;
   ageGateMinAge?: number;
+  layout?: FormLayout;
+  successHeadline?: string;
+  successMessage?: string;
+  customCss?: string;
 };
 
 export function PublicOptInForm({
@@ -88,7 +94,7 @@ export function PublicOptInForm({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Submission failed");
-      setDone(json.thankYouMessage || "Thanks!");
+      setDone(json.thankYouMessage || form?.successMessage || "Thanks!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -142,10 +148,26 @@ export function PublicOptInForm({
 
           {done ? (
             <div className="rounded-xl bg-violet-50 px-4 py-6 text-center dark:bg-violet-950/40">
-              <p className="text-base font-medium text-violet-800 dark:text-violet-200">{done}</p>
+              <p className="text-base font-medium text-violet-800 dark:text-violet-200">
+                {form?.successHeadline || done}
+              </p>
+              {form?.successMessage && form.successHeadline ? (
+                <p className="mt-2 text-sm text-violet-700 dark:text-violet-300">{form.successMessage}</p>
+              ) : null}
             </div>
           ) : (
             <form className="space-y-4" onSubmit={submit}>
+              {form?.layout ? (
+                <FormLayoutView
+                  layout={form.layout}
+                  values={values}
+                  onChange={(key, value) => setValues((v) => ({ ...v, [key]: value }))}
+                  primaryColor={primary}
+                  submitting={submitting}
+                  disabled={!consent}
+                />
+              ) : (
+                <>
               {fields.map((field) => {
                 if (field === "phone") {
                   return (
@@ -195,7 +217,10 @@ export function PublicOptInForm({
                   </div>
                 );
               })}
+                </>
+              )}
 
+              {!form?.layout ? null : (
               <label className="flex items-start gap-3 text-sm leading-snug text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -206,6 +231,20 @@ export function PublicOptInForm({
                 />
                 <span>{form?.disclosureText}</span>
               </label>
+              )}
+
+              {!form?.layout && (
+              <label className="flex items-start gap-3 text-sm leading-snug text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  required
+                />
+                <span>{form?.disclosureText}</span>
+              </label>
+              )}
 
               <p className="text-xs text-slate-500">
                 <Link className="underline hover:text-slate-700" href="/privacy">Privacy</Link>
@@ -217,6 +256,7 @@ export function PublicOptInForm({
 
               {error && <p className="text-sm text-rose-600">{error}</p>}
 
+              {!form?.layout?.blocks.some((b) => b.type === "button") ? (
               <Button
                 type="submit"
                 disabled={submitting || !consent}
@@ -225,6 +265,7 @@ export function PublicOptInForm({
               >
                 {submitting ? "Submitting…" : form?.buttonLabel || "Subscribe"}
               </Button>
+              ) : null}
             </form>
           )}
         </div>

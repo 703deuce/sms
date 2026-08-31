@@ -70,6 +70,10 @@ export async function GET(
       subheadline: config.subheadline,
       buttonLabel: config.buttonLabel || "Subscribe",
       ageGateMinAge: config.ageGateMinAge,
+      layout: config.layout,
+      successHeadline: config.successHeadline,
+      successMessage: config.successMessage,
+      customCss: config.customCss,
     },
   });
 }

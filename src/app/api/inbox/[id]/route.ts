@@ -166,13 +166,47 @@ export async function PATCH(
         unread: existing.unread,
       };
       const nextStatus = body.status ? statusMap[body.status] : undefined;
+
+      const { getMessagingRuntimeSettings, resolveInboxPermissions } =
+        await import("@/lib/messaging/messaging-settings");
+      const runtime = await getMessagingRuntimeSettings(auth.workspaceId);
+      const perms = resolveInboxPermissions(runtime.inboxPermissionsJson);
+      const tagDefs = Array.isArray(runtime.inboxTagsJson) ? runtime.inboxTagsJson : [];
+
+      let assigneeId =
+        body.assigneeId === undefined ? existing.assigneeId : body.assigneeId;
+      let unread = body.unread === undefined ? existing.unread : body.unread;
+      let tags = body.tags ?? existing.tags ?? [];
+
+      if (nextStatus === "CLOSED" && perms.unassignOnClose) {
+        assigneeId = null;
+      }
+
+      if (
+        body.assigneeId !== undefined &&
+        body.assigneeId !== existing.assigneeId &&
+        body.assigneeId &&
+        perms.markUnreadOnAssign
+      ) {
+        unread = true;
+      }
+
+      if (nextStatus === "CLOSED") {
+        const untagNames = new Set(
+          tagDefs.filter((t: { untagOnClose?: boolean; name: string }) => t.untagOnClose).map((t) => t.name),
+        );
+        if (untagNames.size) {
+          tags = tags.filter((t) => !untagNames.has(t));
+        }
+      }
+
       await getPrisma().conversation.update({
         where: { id },
         data: {
           status: nextStatus,
-          unread: body.unread,
-          assigneeId: body.assigneeId === undefined ? undefined : body.assigneeId,
-          tags: body.tags,
+          unread,
+          assigneeId,
+          tags: body.tags !== undefined || nextStatus === "CLOSED" ? tags : undefined,
         },
       });
       try {

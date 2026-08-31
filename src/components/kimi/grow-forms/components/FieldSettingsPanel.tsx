@@ -24,12 +24,14 @@ function PanelLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function FieldSettingsPanel({
-  kind, onBack, placeholder, setPlaceholder, onOpenImages, onRemove,
+  kind, onBack, placeholder, setPlaceholder, contentValue, onContentChange, onOpenImages, onRemove,
 }: {
   kind: "field" | "column" | "header" | "button";
   onBack: () => void;
   placeholder: string;
   setPlaceholder: (v: string) => void;
+  contentValue?: string;
+  onContentChange?: (v: string) => void;
   onOpenImages: () => void;
   onRemove: () => void;
 }) {
@@ -108,7 +110,11 @@ export function FieldSettingsPanel({
 
       {kind !== "column" && kind !== "field" && (
         <PanelGroup title="Text">
-          <input defaultValue={kind === "header" ? "Want 20% Off?" : "Join Now"} className={panelInput} />
+          <input
+            value={contentValue ?? ""}
+            onChange={(e) => onContentChange?.(e.target.value)}
+            className={panelInput}
+          />
           <div className="flex gap-1">
             {["B", "I", "U", "S", "🔗", "🕐", "⚙", "★"].map((b, i) => (
               <button

@@ -3340,6 +3340,7 @@ model WorkspaceMessagingSettings {
   reviewLinkUrl    String?
   optInMessagesJson Json?
   inboxTagsJson    Json?
+  inboxPermissionsJson Json?
   awayInsideMessage String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

@@ -18,6 +18,8 @@ import {
   businessHoursToKimiActiveDays,
   fetchMessagingRuntimeSettings,
   kimiActiveDaysToBusinessHours,
+  inboxPermissionsToKimiToggles,
+  kimiTogglesToInboxPermissions,
   optInBodiesFromSettings,
   patchMessagingRuntimeSettings,
 } from "@/lib/auto-replies/kimi-messaging-settings-adapter";
@@ -57,6 +59,14 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
   ]);
   const [timezone, setTimezone] = useState("America/Chicago");
+  const [inboxToggles, setInboxToggles] = useState<Record<string, boolean>>({
+    inboxOn: true,
+    start: true,
+    assign: true,
+    tag: true,
+    unassign: true,
+    unread: true,
+  });
 
   const reload = useCallback(async () => {
     const [rows, settings] = await Promise.all([fetchAutoReplies(), fetchMessagingRuntimeSettings()]);
@@ -73,6 +83,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
     setOfficeHoursEnabled(!settings.awayAlways);
     setActiveDays(businessHoursToKimiActiveDays(settings.businessHoursJson));
     setTimezone(settings.timezone || "America/Chicago");
+    setInboxToggles(inboxPermissionsToKimiToggles(settings.inboxPermissionsJson));
   }, []);
 
   useEffect(() => {
@@ -182,6 +193,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
             initialOfficeHoursEnabled={officeHoursEnabled}
             initialActiveDays={activeDays}
             initialTimezone={timezone}
+            initialInboxToggles={inboxToggles}
             onSave={async (payload) => {
               setError("");
               await patchMessagingRuntimeSettings({
@@ -193,12 +205,16 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
                   ? kimiActiveDaysToBusinessHours(payload.activeDays || activeDays)
                   : null,
                 timezone: payload.timezone || timezone,
+                inboxPermissionsJson: payload.inboxToggles
+                  ? kimiTogglesToInboxPermissions(payload.inboxToggles)
+                  : undefined,
               });
               setAwayMessage(payload.awayMessage);
               setAwayInsideMessage(payload.awayInsideMessage || "");
               setAwayEnabled(payload.awayEnabled);
               if (payload.activeDays) setActiveDays(payload.activeDays);
               if (payload.officeHoursEnabled != null) setOfficeHoursEnabled(payload.officeHoursEnabled);
+              if (payload.inboxToggles) setInboxToggles(payload.inboxToggles);
             }}
           />
         )}
