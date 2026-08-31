@@ -7,6 +7,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BatchState } from "./kimi-batch-pages";
+import { scopeKimiCss } from "./scope-kimi-css";
 import { SMS_APP_ROUTE_PREFIXES } from "../../src/lib/products/sms-routes";
 
 const REPO = process.cwd();
@@ -352,7 +353,8 @@ function integrateJob(job: RouteJob) {
   }
   if (existsSync(join(draftDir, "reference.css"))) {
     mkdirSync(STYLES, { recursive: true });
-    cpSync(join(draftDir, "reference.css"), join(STYLES, `${job.slug}.css`));
+    const rawCss = readFileSync(join(draftDir, "reference.css"), "utf8");
+    writeFileSync(join(STYLES, `${job.slug}.css`), scopeKimiCss(rawCss, job.cssClass), "utf8");
     ensureGlobalsImport(job.slug);
   }
 
@@ -373,7 +375,7 @@ import ${job.flowName} from "@/components/kimi/${job.slug}/${job.flowName}";
 export default function Page() {
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
-      <div className="${job.cssClass} text-foreground">
+      <div className="kimi-surface ${job.cssClass}">
         <${job.flowName} />
       </div>
     </Suspense>

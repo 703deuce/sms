@@ -20,7 +20,7 @@ import type { CurrentProduct } from "@/lib/products/types";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
-import { usePathname } from "next/navigation";
+import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
@@ -114,7 +114,9 @@ export function AppShell({
   const currentProduct: CurrentProduct =
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
+  const isKimiPage = isKimiIntegratedRoute(pathname);
   const hideChromeTitle =
+    isKimiPage ||
     pathname.startsWith("/conversations") ||
     (realtorMode &&
       (pathname.startsWith("/realtor/setup") ||
@@ -180,7 +182,7 @@ export function AppShell({
             unreadNotifications={unreadNotifications}
             onMenuClick={() => setMenuOpen(true)}
           />
-        ) : (
+        ) : !isKimiPage ? (
           <Header
             title={title}
             userName={userName}
@@ -200,10 +202,10 @@ export function AppShell({
             hasNumbers={hasNumbers}
             hasMctb={hasMctb}
           />
-        )}
+        ) : null}
         <main
           className={
-            pathname.startsWith("/conversations")
+            isKimiPage
               ? "px-0 pb-0 pt-0 lg:px-0"
               : "px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
           }

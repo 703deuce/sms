@@ -6,7 +6,7 @@ import MessagingMediaFlow from "@/components/kimi/messaging-media/MessagingMedia
 export default function Page() {
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
-      <div className="kimi-messaging-media text-foreground">
+      <div className="kimi-surface kimi-messaging-media">
         <MessagingMediaFlow />
       </div>
     </Suspense>

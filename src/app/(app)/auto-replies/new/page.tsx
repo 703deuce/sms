@@ -6,7 +6,7 @@ import AutoRepliesFlow from "@/components/kimi/auto-replies/AutoRepliesFlow";
 export default function NewAutoReplyPage() {
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
-      <div className="kimi-auto-replies text-foreground">
+      <div className="kimi-surface kimi-auto-replies">
         <AutoRepliesFlow initialView="keywords" />
       </div>
     </Suspense>

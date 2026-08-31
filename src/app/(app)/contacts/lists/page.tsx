@@ -6,7 +6,7 @@ import ContactsListsFlow from "@/components/kimi/contacts-lists/ContactsListsFlo
 export default function Page() {
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
-      <div className="kimi-contacts-lists text-foreground">
+      <div className="kimi-surface kimi-contacts-lists">
         <ContactsListsFlow />
       </div>
     </Suspense>
