@@ -21,6 +21,7 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
+import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
