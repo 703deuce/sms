@@ -19,6 +19,8 @@ import {
   mapKimiToDefinition,
   persistCustomFields,
 } from "@/lib/contacts/kimi-fields-adapter";
+import { fetchContacts, fetchContactStats } from "@/lib/contacts/kimi-contacts-adapter";
+import type { Contact } from "@/components/kimi/contacts-fields/mock-data";
 
 type Props = {
   initialFields: CustomFieldDefinition[];
@@ -30,6 +32,8 @@ export function KimiFieldsConnected({ initialFields }: Props) {
   const [fields, setFields] = useState<CustomField[]>(() =>
     initialFields.filter((f) => !f.system).map(mapDefinitionToKimi),
   );
+  const [contactRows, setContactRows] = useState<Contact[]>([]);
+  const [contactStats, setContactStats] = useState({ total: 0, subscribed: 0, unsubscribed: 0 });
   const [editContactId, setEditContactId] = useState("c1");
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -45,11 +49,33 @@ export function KimiFieldsConnected({ initialFields }: Props) {
     setFields(rows.filter((f) => !f.system).map(mapDefinitionToKimi));
   }, []);
 
+  const reloadContacts = useCallback(async () => {
+    const [rows, stats] = await Promise.all([fetchContacts(), fetchContactStats()]);
+    setContactRows(
+      rows.map((c) => ({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        mobile: c.mobile,
+        email: c.email,
+        optIn: c.status === "Subscribed" ? "Subscribed" : "Unsubscribed",
+        created: c.created,
+        lists: [],
+      })),
+    );
+    setContactStats({
+      total: stats.contacts,
+      subscribed: stats.subscribed,
+      unsubscribed: stats.unsubscribed,
+    });
+  }, []);
+
   useEffect(() => {
     if (initialFields.length === 0) {
       void reload().catch((err) => setError(err instanceof Error ? err.message : "Load failed"));
     }
-  }, [initialFields.length, reload]);
+    void reloadContacts().catch(() => undefined);
+  }, [initialFields.length, reload, reloadContacts]);
 
   const handleSaveField = async (name: string, type: FieldType, desc: string) => {
     setError("");
@@ -100,7 +126,11 @@ export function KimiFieldsConnected({ initialFields }: Props) {
         <CreateFieldForm onSave={handleSaveField} onBack={() => setView("fields")} />
       )}
       {view === "contacts" && (
-        <ContactsList onEdit={(id) => { setEditContactId(id); setView("contactEdit"); }} />
+        <ContactsList
+          contacts={contactRows}
+          stats={contactStats}
+          onEdit={(id) => { setEditContactId(id); setView("contactEdit"); }}
+        />
       )}
       {view === "contactEdit" && <ContactEdit contactId={editContactId} fields={fields} />}
     </AppShell>

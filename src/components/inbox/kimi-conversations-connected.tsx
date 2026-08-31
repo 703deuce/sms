@@ -178,6 +178,12 @@ export function KimiConversationsConnected({
     [convos, sel],
   );
 
+  useEffect(() => {
+    if (selectedId && !filtered.some((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [filtered, selectedId]);
+
   const title =
     sel.kind === "mine"
       ? "Me"

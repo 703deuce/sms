@@ -12,8 +12,18 @@ import SegmentSavedModal from "@/components/kimi/contacts-segments/components/Se
 import ContactsList from "@/components/kimi/contacts-segments/components/ContactsList";
 import ListsList from "@/components/kimi/contacts-segments/components/ListsList";
 import Dashboard from "@/components/kimi/contacts-segments/components/Dashboard";
-import type { Segment } from "@/components/kimi/contacts-segments/mock-data";
-import { deleteSegment, fetchSegments, createSegment, updateSegment } from "@/lib/contacts/kimi-segments-adapter";
+import type { Contact, ContactList, Segment } from "@/components/kimi/contacts-segments/mock-data";
+import {
+  createSegment,
+  deleteSegment,
+  fetchSegmentContacts,
+  fetchSegments,
+  previewSegmentCount,
+  updateSegment,
+} from "@/lib/contacts/kimi-segments-adapter";
+import { kimiGroupsToSegmentConditions } from "@/lib/contacts/kimi-segment-condition-map";
+import { fetchContacts } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchLists } from "@/lib/contacts/kimi-lists-adapter";
 import { Send, CheckCircle2, LayoutDashboard } from "lucide-react";
 
 type View =
@@ -28,6 +38,9 @@ type Props = { initialSegments?: Segment[] };
 export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   const [view, setView] = useState<View>({ name: "audience", tab: "segments" });
   const [segments, setSegments] = useState<Segment[]>(initialSegments);
+  const [audienceContacts, setAudienceContacts] = useState<Contact[]>([]);
+  const [audienceLists, setAudienceLists] = useState<ContactList[]>([]);
+  const [segmentContacts, setSegmentContacts] = useState<Contact[]>([]);
   const [savedSegment, setSavedSegment] = useState<Segment | null>(null);
   const [campaignSent, setCampaignSent] = useState(false);
   const [error, setError] = useState("");
@@ -37,11 +50,61 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
     setSegments(rows);
   }, []);
 
+  const loadAudience = useCallback(async () => {
+    const [apiContacts, apiLists] = await Promise.all([fetchContacts(), fetchLists()]);
+    setAudienceContacts(
+      apiContacts.map((c) => ({
+        id: c.id,
+        phone: c.mobile,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        state: "",
+        age: null,
+        status: (c.status === "Subscribed" || c.status === "Unsubscribed"
+          ? c.status
+          : "Unsubscribed") as "Subscribed" | "Unsubscribed",
+      })),
+    );
+    setAudienceLists(
+      apiLists.map((l) => ({
+        id: l.id,
+        name: l.name,
+        contacts: l.contacts,
+        createdAt: l.created,
+      })),
+    );
+  }, []);
+
   useEffect(() => {
     if (initialSegments.length === 0) {
       void reload().catch(() => undefined);
     }
-  }, [initialSegments.length, reload]);
+    void loadAudience().catch(() => undefined);
+  }, [initialSegments.length, reload, loadAudience]);
+
+  useEffect(() => {
+    if (view.name !== "contacts") return;
+    void fetchSegmentContacts(view.segment.id)
+      .then(({ contacts, total }) => {
+        setSegmentContacts(
+          contacts.map((c) => ({
+            id: c.id,
+            phone: c.phone,
+            firstName: c.firstName,
+            lastName: c.lastName,
+            email: c.email,
+            state: c.state,
+            age: c.age,
+            status: c.status === "Subscribed" ? "Subscribed" : "Unsubscribed",
+          })),
+        );
+        setSegments((prev) =>
+          prev.map((s) => (s.id === view.segment.id ? { ...s, contacts: total } : s)),
+        );
+      })
+      .catch(() => setSegmentContacts([]));
+  }, [view]);
 
   const goTab = (tab: AudienceTab) => setView({ name: "audience", tab });
 
@@ -61,14 +124,20 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
     name: string;
     editing: Segment | null | undefined;
     contactCount: number;
+    groups: { conditions: { property: string; condition: string; value: string; values?: string[] }[] }[];
   }) => {
-    const conditions = { match: "all" as const, rules: [] };
+    const conditions = kimiGroupsToSegmentConditions(input.groups);
     if (input.editing?.id) {
       return updateSegment(input.editing.id, input.name, conditions);
     }
     const seg = await createSegment(input.name, conditions);
     return { ...seg, contacts: input.contactCount };
   };
+
+  const handlePreviewCount = useCallback(async (groups: Parameters<typeof kimiGroupsToSegmentConditions>[0]) => {
+    const conditions = kimiGroupsToSegmentConditions(groups);
+    return previewSegmentCount(conditions);
+  }, []);
 
   return (
     <div className="seg-shell min-h-screen bg-background text-foreground">
@@ -92,8 +161,8 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
           onDelete={(id) => void handleDelete(id)}
         />
       )}
-      {view.name === "audience" && view.tab === "contacts" && <ContactsList />}
-      {view.name === "audience" && view.tab === "lists" && <ListsList />}
+      {view.name === "audience" && view.tab === "contacts" && <ContactsList contacts={audienceContacts} />}
+      {view.name === "audience" && view.tab === "lists" && <ListsList lists={audienceLists} />}
 
       {view.name === "create" && (
         <CreateSegment
@@ -104,12 +173,14 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
           onCreateCampaign={(s) => setView({ name: "campaign", segment: s })}
           onSaveSegment={handleSaveSegment}
           onSaveError={(msg) => setError(msg)}
+          onPreviewCount={handlePreviewCount}
         />
       )}
 
       {view.name === "contacts" && (
         <SegmentContacts
           segment={view.segment}
+          contacts={segmentContacts}
           onBack={() => setView({ name: "audience", tab: "segments" })}
           onEdit={() => setView({ name: "create", editing: view.segment })}
         />

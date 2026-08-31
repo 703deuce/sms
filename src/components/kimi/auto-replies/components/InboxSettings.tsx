@@ -40,7 +40,17 @@ const baseToggles = [
   },
 ];
 
-export default function InboxSettings({ onBack }: { onBack: () => void }) {
+export default function InboxSettings({
+  onBack,
+  initialAwayMessage,
+  initialAwayEnabled,
+  onSave,
+}: {
+  onBack: () => void;
+  initialAwayMessage?: string;
+  initialAwayEnabled?: boolean;
+  onSave?: (payload: { awayMessage: string; awayEnabled: boolean }) => Promise<void>;
+}) {
   const [toggles, setToggles] = useState<Record<string, boolean>>({
     inboxOn: true,
     start: true,
@@ -49,8 +59,8 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
     unassign: true,
     unread: true,
   });
-  const [autoOn, setAutoOn] = useState(true);
-  const [single, setSingle] = useState(inboxDefaults.autoResponseMessage);
+  const [autoOn, setAutoOn] = useState(initialAwayEnabled ?? true);
+  const [single, setSingle] = useState(initialAwayMessage ?? inboxDefaults.autoResponseMessage);
   const [officeOn, setOfficeOn] = useState(true);
   const [activeDays, setActiveDays] = useState<string[]>([
     "Monday",
@@ -180,8 +190,15 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
       <div className="ar-save-row">
         <button
           onClick={() => {
-            setToast("Inbox settings saved.");
-            setTimeout(() => setToast(null), 2500);
+            const finish = () => {
+              setToast("Inbox settings saved.");
+              setTimeout(() => setToast(null), 2500);
+            };
+            if (onSave) {
+              void onSave({ awayMessage: single, awayEnabled: autoOn }).then(finish).catch(finish);
+              return;
+            }
+            finish();
           }}
           className="ar-btn-primary"
         >

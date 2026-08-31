@@ -1,11 +1,12 @@
 "use client";
 import { Search, Plus, Users, MoreVertical } from "lucide-react";
 import { useState } from "react";
-import { lists } from "../mock-data";
+import { lists as mockLists, type ContactList } from "../mock-data";
 
-export default function ListsList() {
+export default function ListsList({ lists: listsProp }: { lists?: ContactList[] }) {
   const [q, setQ] = useState("");
-  const filtered = lists.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
+  const source = listsProp ?? mockLists;
+  const filtered = source.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="p-6 max-w-6xl mx-auto seg-fade">
       <h1 className="text-[22px] font-semibold tracking-tight text-foreground mb-1">Lists</h1>

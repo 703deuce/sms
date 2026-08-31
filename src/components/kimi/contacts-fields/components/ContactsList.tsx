@@ -3,8 +3,20 @@ import { useState } from "react";
 import { Users, UserCheck, UserX, Search, MoreVertical, Pencil, MessageSquare, BellOff, Trash2, Plus, SlidersHorizontal } from "lucide-react";
 import { contacts, contactStats } from "../mock-data";
 
-export default function ContactsList({ onEdit }: { onEdit: (id: string) => void }) {
+export type ContactStats = { total: number; subscribed: number; unsubscribed: number };
+
+export default function ContactsList({
+  onEdit,
+  contacts: contactsProp,
+  stats: statsProp,
+}: {
+  onEdit: (id: string) => void;
+  contacts?: typeof contacts;
+  stats?: ContactStats;
+}) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const rows = contactsProp ?? contacts;
+  const stats = statsProp ?? contactStats;
   return (
     <div>
       <div className="tv-page-head">
@@ -17,15 +29,15 @@ export default function ContactsList({ onEdit }: { onEdit: (id: string) => void 
       <div className="tv-stats">
         <div className="tv-stat">
           <div className="tv-stat-icon" style={{ background: "var(--tv-purple-soft)", color: "var(--tv-purple)" }}><Users size={17} /></div>
-          <div><div className="tv-stat-label">Contacts</div><div className="tv-stat-num">{contactStats.total}</div></div>
+          <div><div className="tv-stat-label">Contacts</div><div className="tv-stat-num">{stats.total}</div></div>
         </div>
         <div className="tv-stat">
           <div className="tv-stat-icon" style={{ background: "var(--tv-green-bg)", color: "var(--tv-green)" }}><UserCheck size={17} /></div>
-          <div><div className="tv-stat-label">Subscribed Contacts</div><div className="tv-stat-num">{contactStats.subscribed}</div></div>
+          <div><div className="tv-stat-label">Subscribed Contacts</div><div className="tv-stat-num">{stats.subscribed}</div></div>
         </div>
         <div className="tv-stat">
           <div className="tv-stat-icon" style={{ background: "var(--tv-red-bg)", color: "var(--tv-red)" }}><UserX size={17} /></div>
-          <div><div className="tv-stat-label">Unsubscribed Contacts</div><div className="tv-stat-num">{contactStats.unsubscribed}</div></div>
+          <div><div className="tv-stat-label">Unsubscribed Contacts</div><div className="tv-stat-num">{stats.unsubscribed}</div></div>
         </div>
       </div>
       <div className="tv-toolbar" style={{ justifyContent: "space-between" }}>
@@ -46,7 +58,7 @@ export default function ContactsList({ onEdit }: { onEdit: (id: string) => void 
           </tr>
         </thead>
         <tbody>
-          {contacts.map((c) => (
+          {rows.map((c) => (
             <tr key={c.id} className={menuFor === c.id ? "tv-row-active" : ""}>
               <td><input type="checkbox" /></td>
               <td className="tv-cell-strong">{c.firstName}</td>

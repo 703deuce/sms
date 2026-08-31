@@ -5,10 +5,29 @@ import MessageEditor from "./MessageEditor";
 import Toast from "./Toast";
 import Toggle from "./Toggle";
 
-export default function ComplianceMessaging({ onBack }: { onBack: () => void }) {
+export default function ComplianceMessaging({
+  onBack,
+  initialOptInKeywords,
+  initialOptOutKeywords,
+  initialHelpKeywords,
+  onSave,
+}: {
+  onBack: () => void;
+  initialOptInKeywords?: string;
+  initialOptOutKeywords?: string;
+  initialHelpKeywords?: string;
+  onSave?: (payload: {
+    optInKeywords: string;
+    optOutKeywords: string;
+    helpKeywords: string;
+  }) => Promise<void>;
+}) {
   const [open, setOpen] = useState<string | null>("optinComp");
   const [doubleOptin, setDoubleOptin] = useState(false);
   const [optOutIntel, setOptOutIntel] = useState(true);
+  const [optInKeywords, setOptInKeywords] = useState(initialOptInKeywords ?? "START, YES, UNSTOP");
+  const [optOutKeywords, setOptOutKeywords] = useState(initialOptOutKeywords ?? "STOP, UNSUBSCRIBE");
+  const [helpKeywords, setHelpKeywords] = useState(initialHelpKeywords ?? "HELP, INFO");
   const [toast, setToast] = useState<string | null>(null);
 
   return (
@@ -47,6 +66,15 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
           </div>
           <Toggle on={optOutIntel} onChange={setOptOutIntel} />
         </div>
+      </div>
+
+      <div className="mt-6 space-y-3 max-w-3xl">
+        <label className="block text-sm font-medium">Opt-in keywords</label>
+        <input className="w-full rounded-md border border-border px-3 py-2 text-sm" value={optInKeywords} onChange={(e) => setOptInKeywords(e.target.value)} />
+        <label className="block text-sm font-medium">Opt-out keywords</label>
+        <input className="w-full rounded-md border border-border px-3 py-2 text-sm" value={optOutKeywords} onChange={(e) => setOptOutKeywords(e.target.value)} />
+        <label className="block text-sm font-medium">Help keywords</label>
+        <input className="w-full rounded-md border border-border px-3 py-2 text-sm" value={helpKeywords} onChange={(e) => setHelpKeywords(e.target.value)} />
       </div>
 
       <div className="space-y-3 mt-8 max-w-3xl">
@@ -93,8 +121,15 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
       <div className="ar-save-row">
         <button
           onClick={() => {
-            setToast("Settings saved.");
-            setTimeout(() => setToast(null), 2500);
+            const finish = () => {
+              setToast("Settings saved.");
+              setTimeout(() => setToast(null), 2500);
+            };
+            if (onSave) {
+              void onSave({ optInKeywords, optOutKeywords, helpKeywords }).then(finish).catch(finish);
+              return;
+            }
+            finish();
           }}
           className="ar-btn-primary"
         >

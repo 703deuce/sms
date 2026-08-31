@@ -26,13 +26,15 @@ const WIRED_ROUTES = [
   "/automations",
 ];
 
-const API_CHECKS: Array<{ name: string; path: string; method?: string }> = [
+const API_CHECKS: Array<{ name: string; path: string; method?: string; body?: unknown }> = [
   { name: "inbox", path: "/api/inbox" },
   { name: "campaigns", path: "/api/mass-texting/campaigns" },
   { name: "contacts-stats", path: "/api/contacts/stats" },
   { name: "lists", path: "/api/contacts/lists" },
   { name: "fields", path: "/api/contacts/fields" },
   { name: "segments", path: "/api/contacts/segments" },
+  { name: "segments-preview", path: "/api/contacts/segments/preview", method: "POST", body: { conditions: { match: "all", rules: [] } } },
+  { name: "messaging-runtime", path: "/api/settings/messaging-runtime" },
   { name: "keywords", path: "/api/growth/keywords" },
   { name: "forms", path: "/api/growth/forms" },
   { name: "tap-to-join", path: "/api/growth/tap-to-join" },
@@ -43,7 +45,7 @@ const API_CHECKS: Array<{ name: string; path: string; method?: string }> = [
 async function authenticate(page: Page) {
   await page.goto(`${BASE}/api/auth/dev-bypass?next=/dashboard`, {
     waitUntil: "domcontentloaded",
-    timeout: 60000,
+    timeout: 120000,
   });
   await page.waitForTimeout(500);
 }
@@ -93,11 +95,15 @@ async function main() {
   }
 
   for (const api of API_CHECKS) {
-    const result = await page.evaluate(async (path) => {
-      const res = await fetch(path);
+    const result = await page.evaluate(async (check) => {
+      const res = await fetch(check.path, {
+        method: check.method || "GET",
+        headers: check.body ? { "Content-Type": "application/json" } : undefined,
+        body: check.body ? JSON.stringify(check.body) : undefined,
+      });
       const json = await res.json().catch(() => ({}));
       return { ok: res.ok, status: res.status, error: json.error };
-    }, api.path);
+    }, api);
     if (!result.ok) {
       failedApis.push(`${api.name} ${result.status}: ${result.error || "failed"}`);
     }

@@ -11,7 +11,12 @@ import KeywordsList from "@/components/kimi/auto-replies/components/KeywordsList
 import KeywordEdit from "@/components/kimi/auto-replies/components/KeywordEdit";
 import InboxSettings from "@/components/kimi/auto-replies/components/InboxSettings";
 import type { Keyword } from "@/components/kimi/auto-replies/mock-data";
+import { optInMessages } from "@/components/kimi/auto-replies/mock-data";
 import { fetchAutoReplies, mapAutoReplyToKimiKeyword, updateAutoReply, createAutoReply } from "@/lib/auto-replies/kimi-auto-replies-adapter";
+import {
+  fetchMessagingRuntimeSettings,
+  patchMessagingRuntimeSettings,
+} from "@/lib/auto-replies/kimi-messaging-settings-adapter";
 import { MessageSquareReply, ShieldCheck, Tags, Inbox, LayoutGrid } from "lucide-react";
 import type { AutoRepliesInitialView } from "@/components/kimi/auto-replies/AutoRepliesFlow";
 
@@ -32,10 +37,31 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [editing, setEditing] = useState<Keyword | null>(null);
   const [error, setError] = useState("");
+  const [optInBodies, setOptInBodies] = useState<Record<string, string>>(
+    Object.fromEntries(optInMessages.map((m) => [m.id, m.body])),
+  );
+  const [runtimeKeywords, setRuntimeKeywords] = useState({
+    optInKeywords: "START, YES, UNSTOP",
+    optOutKeywords: "STOP, UNSUBSCRIBE",
+    helpKeywords: "HELP, INFO",
+  });
+  const [awayMessage, setAwayMessage] = useState("");
+  const [awayEnabled, setAwayEnabled] = useState(true);
 
   const reload = useCallback(async () => {
-    const rows = await fetchAutoReplies();
+    const [rows, settings] = await Promise.all([fetchAutoReplies(), fetchMessagingRuntimeSettings()]);
     setKeywords(rows.map(mapAutoReplyToKimiKeyword));
+    setOptInBodies((prev) => ({
+      ...prev,
+      optin: settings.awayMessage || prev.optin,
+    }));
+    setRuntimeKeywords({
+      optInKeywords: settings.optInKeywords || "START, YES, UNSTOP",
+      optOutKeywords: settings.optOutKeywords || "STOP, UNSUBSCRIBE",
+      helpKeywords: settings.helpKeywords || "HELP, INFO",
+    });
+    setAwayMessage(settings.awayMessage || "");
+    setAwayEnabled(settings.awayEnabled);
   }, []);
 
   useEffect(() => {
@@ -73,8 +99,30 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
       <div className="max-w-6xl mx-auto px-6 py-8">
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
         {view === "overview" && <AutoRepliesOverview onOpen={openSection} />}
-        {view === "optin" && <OptInMessages onBack={() => setView("overview")} />}
-        {view === "compliance" && <ComplianceMessaging onBack={() => setView("overview")} />}
+        {view === "optin" && (
+          <OptInMessages
+            onBack={() => setView("overview")}
+            initialBodies={optInBodies}
+            onSave={async ({ bodies }) => {
+              setError("");
+              await patchMessagingRuntimeSettings({ awayMessage: bodies.optin || null });
+              setOptInBodies(bodies);
+            }}
+          />
+        )}
+        {view === "compliance" && (
+          <ComplianceMessaging
+            onBack={() => setView("overview")}
+            initialOptInKeywords={runtimeKeywords.optInKeywords}
+            initialOptOutKeywords={runtimeKeywords.optOutKeywords}
+            initialHelpKeywords={runtimeKeywords.helpKeywords}
+            onSave={async (payload) => {
+              setError("");
+              await patchMessagingRuntimeSettings(payload);
+              setRuntimeKeywords(payload);
+            }}
+          />
+        )}
         {view === "keywords" && (
           <KeywordsList
             keywords={keywords}
@@ -112,7 +160,19 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
             }}
           />
         )}
-        {view === "inbox" && <InboxSettings onBack={() => setView("overview")} />}
+        {view === "inbox" && (
+          <InboxSettings
+            onBack={() => setView("overview")}
+            initialAwayMessage={awayMessage}
+            initialAwayEnabled={awayEnabled}
+            onSave={async (payload) => {
+              setError("");
+              await patchMessagingRuntimeSettings(payload);
+              setAwayMessage(payload.awayMessage);
+              setAwayEnabled(payload.awayEnabled);
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,12 +1,24 @@
 "use client";
 import { ArrowLeft, Search, Users, Download, MoreVertical } from "lucide-react";
 import { useState } from "react";
-import { Segment, contacts } from "../mock-data";
+import { Segment, contacts as mockContacts, type Contact } from "../mock-data";
 import { PieSlice } from "./SegmentsList";
 
-export default function SegmentContacts({ segment, onBack, onEdit }: { segment: Segment; onBack: () => void; onEdit: () => void }) {
+export default function SegmentContacts({
+  segment,
+  onBack,
+  onEdit,
+  contacts: contactsProp,
+}: {
+  segment: Segment;
+  onBack: () => void;
+  onEdit: () => void;
+  contacts?: Contact[];
+}) {
   const [q, setQ] = useState("");
-  const filtered = contacts.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
+  const source = contactsProp ?? mockContacts;
+  const filtered = source.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
+  const total = segment.contacts || source.length;
 
   return (
     <div className="p-6 max-w-6xl mx-auto seg-fade">
@@ -24,7 +36,7 @@ export default function SegmentContacts({ segment, onBack, onEdit }: { segment: 
         </div>
       </div>
       <p className="text-sm text-muted-foreground mb-5 ml-12 flex items-center gap-1.5">
-        <Users className="h-4 w-4" /> <span className="tabular-nums">{segment.contacts.toLocaleString()}</span> matched contacts · updates dynamically
+        <Users className="h-4 w-4" /> <span className="tabular-nums">{total.toLocaleString()}</span> matched contacts · updates dynamically
       </p>
 
       <div className="relative w-72 mb-4">

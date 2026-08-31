@@ -23,8 +23,26 @@ const elementIcons: Record<string, React.ReactNode> = {
 };
 
 export default function FormBuilder({
-  onExit, onTestForm, onEmbedSite,
-}: { onExit: () => void; onTestForm: () => void; onEmbedSite: () => void }) {
+  onExit, onTestForm, onEmbedSite, formId, formName, contactListNames, onSave, onSaveError,
+}: {
+  onExit: () => void;
+  onTestForm: () => void;
+  onEmbedSite: () => void;
+  formId?: string;
+  formName?: string;
+  contactListNames?: string[];
+  onSave?: (payload: {
+    formId: string;
+    name: string;
+    listName?: string;
+    doubleOptIn: boolean;
+    status: string;
+  }) => Promise<void>;
+  onSaveError?: (message: string) => void;
+}) {
+  const listOptions = (contactListNames?.length ? contactListNames : contactLists.map((l) => l.name)).map(
+    (name, idx) => ({ id: `l${idx}`, name }),
+  );
   const [formType, setFormType] = useState<"landing" | "embed">("landing");
   const [openSection, setOpenSection] = useState(1);
   const [view, setView] = useState<"form" | "success">("form");
@@ -45,10 +63,30 @@ export default function FormBuilder({
   const [previewMenu, setPreviewMenu] = useState(false);
   const [hiddenPanel, setHiddenPanel] = useState(false);
 
+  const [name, setName] = useState(formName || (formType === "landing" ? "20 % Off" : "Embed - 20% Off"));
   const [doubleOptIn, setDoubleOptIn] = useState(formDefaults.doubleOptIn);
   const [optIn, setOptIn] = useState(formDefaults.optIn);
 
   const handleSave = () => {
+    if (onSave && formId) {
+      setSaving(true);
+      void onSave({
+        formId,
+        name,
+        listName: chosenLists[0],
+        doubleOptIn: Boolean(String(doubleOptIn).trim()),
+        status: active ? "active" : "inactive",
+      })
+        .then(() => {
+          setSaving(false);
+          setCreatedOpen(true);
+        })
+        .catch((err) => {
+          setSaving(false);
+          onSaveError?.(err instanceof Error ? err.message : "Could not save form");
+        });
+      return;
+    }
     setSaving(true);
     setTimeout(() => { setSaving(false); setCreatedOpen(true); }, 900);
   };
@@ -94,7 +132,7 @@ export default function FormBuilder({
                     ))}
                   </div>
                 </Field>
-                <Field label="Name"><input className={inputCls} defaultValue={formType === "landing" ? "20 % Off" : "Embed - 20% Off"} /></Field>
+                <Field label="Name"><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} /></Field>
                 <Field label="Description"><textarea className={inputCls} rows={2} defaultValue={formType === "landing" ? "Sharing on Instagram" : "Embedded on Contact Page"} /></Field>
                 {formType === "landing" ? (
                   <>
@@ -124,7 +162,7 @@ export default function FormBuilder({
                 <Field label="Contact Lists" hint="When your form is submitted, you can optionally add contacts to one or more of your lists.">
                   <div className="border border-border rounded-md">
                     <input className="w-full px-3 py-2 text-sm bg-transparent focus:outline-none" placeholder="Search" />
-                    {contactLists.map((l) => (
+                    {listOptions.map((l) => (
                       <button key={l.id} onClick={() => setChosenLists((c) => c.includes(l.name) ? c.filter((x) => x !== l.name) : [...c, l.name])}
                         className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-muted ${chosenLists.includes(l.name) ? "text-indigo-600 font-medium" : "text-foreground"}`}>
                         ☰ {l.name} {chosenLists.includes(l.name) && "✓"}

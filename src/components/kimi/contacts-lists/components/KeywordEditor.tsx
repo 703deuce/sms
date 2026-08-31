@@ -5,6 +5,10 @@ import { ContactList, keywordDetail } from "../mock-data";
 
 interface Props {
   lists: ContactList[];
+  keywordId?: string;
+  initialKeyword?: string;
+  initialDescription?: string;
+  initialAutoResponse?: string;
   onSave: (listId: string | null) => void;
   onCancel: () => void;
 }
@@ -13,7 +17,7 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return <div className={`toggle ${on ? "on" : ""}`} onClick={onClick} />;
 }
 
-export default function KeywordEditor({ lists, onSave, onCancel }: Props) {
+export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, onSave, onCancel }: Props) {
   const [behaviorOpen, setBehaviorOpen] = useState(true);
   const [addToLists, setAddToLists] = useState(false);
   const [altResponse, setAltResponse] = useState(false);
@@ -40,17 +44,17 @@ export default function KeywordEditor({ lists, onSave, onCancel }: Props) {
           <div className="px-5 pb-5 space-y-4 border-t border-[#f1f3f9] pt-4">
             <div>
               <label className="field-label">Keyword</label>
-              <input className="input" defaultValue={keywordDetail.keyword} />
+              <input className="input" defaultValue={initialKeyword ?? keywordDetail.keyword} />
             </div>
             <div>
               <label className="field-label">Description</label>
-              <input className="input" defaultValue={keywordDetail.description} />
+              <input className="input" defaultValue={initialDescription ?? keywordDetail.description} />
             </div>
             <div>
               <label className="field-label flex justify-between">
                 Auto Response <span className="text-[#9aa3c0] font-normal">64/918</span>
               </label>
-              <textarea className="input h-[76px] resize-none" defaultValue={keywordDetail.autoResponse} />
+              <textarea className="input h-[76px] resize-none" defaultValue={initialAutoResponse ?? keywordDetail.autoResponse} />
             </div>
           </div>
         </div>

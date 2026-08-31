@@ -10,6 +10,7 @@ type ImportRow = {
   email?: string;
   tags?: string[];
   listName?: string;
+  status?: string;
 };
 
 export async function POST(request: Request) {
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
             firstName: row.firstName || null,
             lastName: row.lastName || null,
             email: row.email || null,
-            status: "SUBSCRIBED",
+            status: row.status || "SUBSCRIBED",
             consentSource: body.consentSource || "import",
             consentDate: new Date(),
           },
@@ -110,6 +111,7 @@ export async function POST(request: Request) {
             firstName: row.firstName || undefined,
             lastName: row.lastName || undefined,
             email: row.email || undefined,
+            status: row.status || undefined,
           },
         });
         if (existing) updated += 1;

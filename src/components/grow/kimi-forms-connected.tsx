@@ -9,7 +9,13 @@ import FormBuilder from "@/components/kimi/grow-forms/components/FormBuilder";
 import TestFormScreen from "@/components/kimi/grow-forms/components/TestFormScreen";
 import EmbedSiteScreen from "@/components/kimi/grow-forms/components/EmbedSiteScreen";
 import type { WebForm } from "@/components/kimi/grow-forms/mock-data";
-import { createWebForm, deleteWebForm, fetchWebForms } from "@/lib/growth/kimi-forms-adapter";
+import {
+  createWebForm,
+  deleteWebForm,
+  fetchContactListNames,
+  fetchWebForms,
+  updateWebForm,
+} from "@/lib/growth/kimi-forms-adapter";
 
 type View = "list" | "create" | "test" | "embed-site";
 
@@ -18,6 +24,9 @@ type Props = { initialForms?: WebForm[] };
 export function KimiFormsConnected({ initialForms = [] }: Props) {
   const [view, setView] = useState<View>("list");
   const [forms, setForms] = useState<WebForm[]>(initialForms);
+  const [editingFormId, setEditingFormId] = useState<string | null>(null);
+  const [editingFormName, setEditingFormName] = useState<string>("");
+  const [contactLists, setContactLists] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
@@ -29,6 +38,7 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     if (initialForms.length === 0) {
       void reload().catch(() => undefined);
     }
+    void fetchContactListNames().then(setContactLists).catch(() => undefined);
   }, [initialForms.length, reload]);
 
   const handleCreate = async () => {
@@ -36,6 +46,8 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     try {
       const created = await createWebForm(`Web Form ${forms.length + 1}`);
       setForms((prev) => [created, ...prev]);
+      setEditingFormId(created.id);
+      setEditingFormName(created.name);
       setView("create");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create form");
@@ -52,15 +64,36 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     }
   };
 
+  const handleSaveForm = async (payload: {
+    formId: string;
+    name: string;
+    listName?: string;
+    doubleOptIn: boolean;
+    status: string;
+  }) => {
+    await updateWebForm(payload.formId, {
+      name: payload.name,
+      listName: payload.listName,
+      doubleOptIn: payload.doubleOptIn,
+      status: payload.status,
+    });
+    await reload();
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
       {view === "list" && (
         <WebFormsList forms={forms} onCreate={() => void handleCreate()} onDelete={(id) => void handleDelete(id)} />
       )}
-      {view === "create" && (
+      {view === "create" && editingFormId && (
         <FormBuilder
-          onExit={() => { setView("list"); void reload(); }}
+          formId={editingFormId}
+          formName={editingFormName}
+          contactListNames={contactLists}
+          onSave={handleSaveForm}
+          onSaveError={(msg) => setError(msg)}
+          onExit={() => { setView("list"); setEditingFormId(null); void reload(); }}
           onTestForm={() => setView("test")}
           onEmbedSite={() => setView("embed-site")}
         />

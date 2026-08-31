@@ -98,11 +98,12 @@ export type KimiImportPayload = {
   headerRow: boolean;
 };
 
-function kimiFieldToRowKey(field: string): "firstName" | "lastName" | "phone" | "email" | null {
+function kimiFieldToRowKey(field: string): "firstName" | "lastName" | "phone" | "email" | "optInLabel" | null {
   if (field === "First Name") return "firstName";
   if (field === "Last Name") return "lastName";
   if (field === "Mobile Number" || field === "Mobile") return "phone";
   if (field === "Email") return "email";
+  if (field === "Opt-In Status") return "optInLabel";
   return null;
 }
 
@@ -146,16 +147,32 @@ export async function importContacts(payload: KimiImportPayload): Promise<{ crea
     : allRows[0].map((_, i) => `Column ${i + 1}`);
   const dataRows = payload.headerRow ? allRows.slice(1) : allRows;
 
+  const useColumnOptIn = payload.optInChoice === "Use the assigned opt-in status column";
+  const defaultStatus = mapOptInLabelToApiStatus(
+    useColumnOptIn ? "Subscribed" : payload.optInChoice || "Subscribed",
+  );
+
   const rows = dataRows
     .map((row) => {
-      const out: { phone?: string; firstName?: string; lastName?: string; email?: string } = {};
+      const out: {
+        phone?: string;
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        status?: string;
+      } = {};
       for (const [colName, kimiField] of Object.entries(payload.mapping)) {
         const colIdx = headers.findIndex((h) => h === colName);
         if (colIdx < 0 || kimiField === "None") continue;
         const val = row[colIdx]?.trim() || "";
         const key = kimiFieldToRowKey(kimiField);
-        if (key) out[key] = val;
+        if (key === "optInLabel") {
+          if (useColumnOptIn && val) out.status = mapOptInLabelToApiStatus(val);
+        } else if (key) {
+          out[key] = val;
+        }
       }
+      if (!out.status) out.status = defaultStatus;
       return out;
     })
     .filter((r) => r.phone);

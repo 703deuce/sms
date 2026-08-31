@@ -16,6 +16,7 @@ import {
   fetchContactsForLists,
   fetchKeywordsForLists,
   fetchLists,
+  updateKeywordForList,
 } from "@/lib/contacts/kimi-lists-adapter";
 import {
   Users, ListTodo, Wrench, LayoutTemplate, MonitorSmartphone, MessageSquareText,
@@ -27,6 +28,7 @@ export function KimiListsConnected() {
   const [lists, setLists] = useState<ContactList[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -70,10 +72,22 @@ export function KimiListsConnected() {
     }
   };
 
-  const saveKeyword = (listId: string | null) => {
-    setKeywords((ks) => ks.map((k) => (k.id === "k5" ? { ...k, connectedLists: listId ? 1 : 0 } : k)));
-    setPage("tools");
-    showToast("Keyword saved.");
+  const saveKeyword = async (listId: string | null) => {
+    if (!editingKeyword) {
+      setPage("tools");
+      return;
+    }
+    setError("");
+    try {
+      const listName = listId ? lists.find((l) => l.id === listId)?.name : undefined;
+      await updateKeywordForList(editingKeyword.id, { listName });
+      await reload();
+      setPage("tools");
+      setEditingKeyword(null);
+      showToast("Keyword saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save keyword");
+    }
   };
 
   const activeTab: "contacts" | "lists" | "tools" =
@@ -104,8 +118,25 @@ export function KimiListsConnected() {
         {page === "lists" && <ListsPage lists={lists} onCreate={() => setPage("createList")} />}
         {page === "createList" && <CreateListPage onBack={() => setPage("lists")} onSave={saveList} />}
         {page === "contacts" && <ContactsPage contacts={contacts} lists={lists} onAddToLists={addToLists} />}
-        {page === "tools" && <ToolsPage keywords={keywords} onEditKeyword={() => setPage("keyword")} />}
-        {page === "keyword" && <KeywordEditor lists={lists} onSave={saveKeyword} onCancel={() => setPage("tools")} />}
+        {page === "tools" && (
+          <ToolsPage
+            keywords={keywords}
+            onEditKeyword={(k) => {
+              setEditingKeyword(k);
+              setPage("keyword");
+            }}
+          />
+        )}
+        {page === "keyword" && editingKeyword && (
+          <KeywordEditor
+            lists={lists}
+            keywordId={editingKeyword.id}
+            initialKeyword={editingKeyword.keyword}
+            initialDescription={editingKeyword.description}
+            onSave={(listId) => void saveKeyword(listId)}
+            onCancel={() => { setEditingKeyword(null); setPage("tools"); }}
+          />
+        )}
       </main>
       {toast && (
         <div className="toast"><CheckCircle2 size={14} /> {toast}</div>
@@ -114,7 +145,7 @@ export function KimiListsConnected() {
   );
 }
 
-function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKeyword: () => void }) {
+function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKeyword: (k: Keyword) => void }) {
   const [view, setView] = useState<"tools" | "keywords">("tools");
   const cards = [
     { icon: <LayoutTemplate size={19} />, title: "Landing Pages", desc: "Build landing pages or embedded forms that collect contact data and opt people into your audience." },
@@ -159,7 +190,7 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
                 </span>
                 <span className="pill pill-green">Yes</span>
               </div>
-              <MoreVertical size={15} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" onClick={onEditKeyword} />
+              <MoreVertical size={15} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" onClick={() => onEditKeyword(k)} />
             </div>
           ))}
           <div className="table-footer">

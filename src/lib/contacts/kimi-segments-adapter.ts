@@ -4,10 +4,14 @@
 import type { SegmentSummary } from "@/lib/workspace-data";
 import type { Segment } from "@/components/kimi/contacts-segments/mock-data";
 
-export function mapApiSegmentToKimi(s: SegmentSummary & { createdAt?: string }, contactCount = 0): Segment {
+export function mapApiSegmentToKimi(
+  s: SegmentSummary & { createdAt?: string; conditions?: unknown },
+  contactCount = 0,
+): Segment {
   return {
     id: s.id,
     name: s.name,
+    conditions: s.conditions,
     createdAt: s.createdAt
       ? new Date(s.createdAt).toLocaleString(undefined, {
           month: "short",
@@ -25,7 +29,14 @@ export async function fetchSegments(): Promise<Segment[]> {
   const res = await fetch("/api/contacts/segments");
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load segments");
-  return (json.data || []).map((s: SegmentSummary) => mapApiSegmentToKimi(s));
+  const rows = (json.data || []) as Array<SegmentSummary & { createdAt?: string; conditions?: unknown }>;
+  const withCounts = await Promise.all(
+    rows.map(async (s) => {
+      const count = await previewSegmentCount(s.conditions ?? { match: "all", rules: [] });
+      return mapApiSegmentToKimi(s, count);
+    }),
+  );
+  return withCounts;
 }
 
 export async function previewSegmentCount(conditions: unknown): Promise<number> {
@@ -67,4 +78,32 @@ export async function deleteSegment(id: string): Promise<void> {
   const res = await fetch(`/api/contacts/segments?id=${encodeURIComponent(id)}`, { method: "DELETE" });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not delete segment");
+}
+
+export type SegmentContactRow = {
+  id: string;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  state: string;
+  age: number | null;
+  status: "Subscribed" | "Unsubscribed" | "Blocked" | "Not Subscribed";
+};
+
+export async function fetchSegmentContacts(
+  segmentId: string,
+  take = 200,
+): Promise<{ contacts: SegmentContactRow[]; total: number }> {
+  const res = await fetch("/api/contacts/segments/contacts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ segmentId, take }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not load segment contacts");
+  return {
+    contacts: json.data?.contacts ?? [],
+    total: json.data?.total ?? 0,
+  };
 }

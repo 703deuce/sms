@@ -99,3 +99,17 @@ export async function addContactsToList(listId: string, contactIds: string[]): P
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not add contacts to list");
 }
+
+export async function updateKeywordForList(
+  keywordId: string,
+  payload: { listName?: string; confirmation?: string; autoReply?: string },
+): Promise<Keyword> {
+  const res = await fetch(`/api/growth/keywords/${keywordId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not save keyword");
+  return mapApiKeywordToKimi(json.data);
+}

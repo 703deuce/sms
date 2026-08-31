@@ -4,6 +4,7 @@ export interface Segment {
   createdAt: string;
   description?: string;
   contacts: number;
+  conditions?: unknown;
 }
 
 export const segments: Segment[] = [

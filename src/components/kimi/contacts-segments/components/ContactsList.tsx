@@ -1,11 +1,12 @@
 "use client";
 import { Search, Plus, MoreVertical, Upload } from "lucide-react";
 import { useState } from "react";
-import { contacts } from "../mock-data";
+import { contacts as mockContacts, type Contact } from "../mock-data";
 
-export default function ContactsList() {
+export default function ContactsList({ contacts: contactsProp }: { contacts?: Contact[] }) {
   const [q, setQ] = useState("");
-  const filtered = contacts.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
+  const source = contactsProp ?? mockContacts;
+  const filtered = source.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="p-6 max-w-6xl mx-auto seg-fade">
       <h1 className="text-[22px] font-semibold tracking-tight text-foreground mb-1">Contacts</h1>

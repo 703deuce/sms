@@ -4,6 +4,8 @@ import { Users, ChevronDown, Save, Eye, PieChart as PieIcon, Send, Loader2 } fro
 import ConditionRow, { ConditionState } from "./ConditionRow";
 import { computeMatched, Segment } from "../mock-data";
 import { PieSlice } from "./SegmentsList";
+import type { KimiConditionGroup } from "@/lib/contacts/kimi-segment-condition-map";
+import { segmentConditionsToKimiGroups } from "@/lib/contacts/kimi-segment-condition-map";
 
 interface Group { id: string; conditions: ConditionState[]; }
 
@@ -11,7 +13,39 @@ let uid = 0;
 const nid = () => `g${++uid}_${Date.now()}`;
 const newCond = (): ConditionState => ({ id: nid(), property: "", condition: "", value: "", values: [] });
 
-export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment, onSaveError }: {
+function seedGroups(editing?: Segment | null): Group[] {
+  if (editing?.conditions) {
+    const kimiGroups = segmentConditionsToKimiGroups(editing.conditions);
+    return kimiGroups.map((g) => ({
+      id: nid(),
+      conditions: g.conditions.map((c) => ({
+        ...c,
+        id: nid(),
+        values: c.values ?? [],
+      })),
+    }));
+  }
+  if (editing) {
+    return [
+      {
+        id: nid(),
+        conditions: [
+          { id: nid(), property: "Age", condition: "Is Greater Than or Equal To", value: "25", values: [] },
+          { id: nid(), property: "Age", condition: "Is Not Known", value: "", values: [] },
+        ],
+      },
+      {
+        id: nid(),
+        conditions: [
+          { id: nid(), property: "State", condition: "Is", value: "", values: ["California", "Oregon", "Washington"] },
+        ],
+      },
+    ];
+  }
+  return [{ id: nid(), conditions: [newCond()] }];
+}
+
+export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment, onSaveError, onPreviewCount }: {
   editing?: Segment | null;
   onBack: () => void;
   onSaved: (seg: Segment, mode: "segments" | "contacts" | "campaign") => void;
@@ -21,18 +55,13 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
     name: string;
     editing: Segment | null | undefined;
     contactCount: number;
+    groups: KimiConditionGroup[];
   }) => Promise<Segment>;
   onSaveError?: (message: string) => void;
+  onPreviewCount?: (groups: KimiConditionGroup[]) => Promise<number>;
 }) {
   const [name, setName] = useState(editing?.name ?? "");
-  const [groups, setGroups] = useState<Group[]>(editing
-    ? [{ id: nid(), conditions: [
-        { id: nid(), property: "Age", condition: "Is Greater Than or Equal To", value: "25", values: [] },
-        { id: nid(), property: "Age", condition: "Is Not Known", value: "", values: [] },
-      ]},
-      { id: nid(), conditions: [{ id: nid(), property: "State", condition: "Is", value: "", values: ["California", "Oregon", "Washington"] }]},
-    ]
-    : [{ id: nid(), conditions: [newCond()] }]);
+  const [groups, setGroups] = useState<Group[]>(() => seedGroups(editing));
   const [calculating, setCalculating] = useState(false);
   const [displayCount, setDisplayCount] = useState<number | null>(null);
   const [saveMenu, setSaveMenu] = useState(false);
@@ -41,10 +70,33 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
   const matched = useMemo(() => computeMatched(name, groups), [groups, name]);
 
   useEffect(() => {
+    if (!onPreviewCount) {
+      setCalculating(true);
+      const t = setTimeout(() => { setDisplayCount(matched); setCalculating(false); }, 450);
+      return () => clearTimeout(t);
+    }
+    let cancelled = false;
     setCalculating(true);
-    const t = setTimeout(() => { setDisplayCount(matched); setCalculating(false); }, 450);
-    return () => clearTimeout(t);
-  }, [matched]);
+    const t = setTimeout(() => {
+      void onPreviewCount(groups)
+        .then((count) => {
+          if (!cancelled) {
+            setDisplayCount(count);
+            setCalculating(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDisplayCount(matched);
+            setCalculating(false);
+          }
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [groups, matched, onPreviewCount]);
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setSaveMenu(false); };
@@ -75,7 +127,12 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
       onSaved(seg, mode);
     };
     if (onSaveSegment) {
-      void onSaveSegment({ name: name || "Untitled Segment", editing, contactCount: displayCount ?? matched })
+      void onSaveSegment({
+        name: name || "Untitled Segment",
+        editing,
+        contactCount: displayCount ?? matched,
+        groups,
+      })
         .then(finish)
         .catch((err) => {
           setSaveMenu(false);

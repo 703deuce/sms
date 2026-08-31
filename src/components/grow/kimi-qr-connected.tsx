@@ -11,6 +11,7 @@ import {
 import QrGenerator from "@/components/kimi/grow-qr-codes/components/QrGenerator";
 import type { Keyword } from "@/components/kimi/grow-qr-codes/mock-data";
 import { fetchQrKeywords } from "@/lib/growth/kimi-qr-adapter";
+import { cloneKeyword, deleteKeyword } from "@/lib/growth/kimi-keywords-adapter";
 
 type View = "list" | "generator";
 
@@ -20,6 +21,7 @@ export function KimiQrCodesConnected() {
   const [query, setQuery] = useState("");
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [defaultKeyword, setDefaultKeyword] = useState<string | undefined>();
+  const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     const rows = await fetchQrKeywords();
@@ -38,10 +40,40 @@ export function KimiQrCodesConnected() {
     setView("generator");
   };
 
+  const handleDelete = async (id: string) => {
+    setError("");
+    try {
+      await deleteKeyword(id);
+      setKeywords((prev) => prev.filter((k) => k.id !== id));
+      setMenuFor(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
+
+  const handleClone = async (id: string) => {
+    setError("");
+    try {
+      await cloneKeyword(id, keywords.map((k) => ({
+        id: k.id,
+        name: k.name,
+        description: k.description,
+        lastSaved: k.lastSaved,
+        connectedLists: k.connectedLists,
+        status: k.status,
+      })));
+      await reload();
+      setMenuFor(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Clone failed");
+    }
+  };
+
   return (
     <div className="tv-shell">
       <main className="flex-1 overflow-y-auto" onClick={() => setMenuFor(null)}>
         <div className="max-w-[1100px] mx-auto px-8 py-7">
+          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
           {view === "generator" ? (
             <>
               <button
@@ -105,12 +137,12 @@ export function KimiQrCodesConnected() {
                       </button>
                       {menuFor === k.id && (
                         <div className="tv-popover absolute right-0 top-9 z-30 w-56 py-1.5">
-                          <button className="tv-menu-item"><Pencil size={14} className="mr-2.5 text-muted-foreground" />Edit</button>
-                          <button className="tv-menu-item"><Copy size={14} className="mr-2.5 text-muted-foreground" />Clone</button>
+                          <button className="tv-menu-item" onClick={() => openGenerator(k)}><Pencil size={14} className="mr-2.5 text-muted-foreground" />Edit</button>
+                          <button className="tv-menu-item" onClick={() => void handleClone(k.id)}><Copy size={14} className="mr-2.5 text-muted-foreground" />Clone</button>
                           <button className="tv-menu-item" onClick={() => openGenerator(k)}><QrIcon size={14} className="mr-2.5 text-muted-foreground" />Create QR Code</button>
-                          <button className="tv-menu-item"><Link2 size={14} className="mr-2.5 text-muted-foreground" />Create Tap-to-Join Link</button>
+                          <button className="tv-menu-item" onClick={() => window.location.assign("/grow/tap-to-join")}><Link2 size={14} className="mr-2.5 text-muted-foreground" />Create Tap-to-Join Link</button>
                           <div className="my-1.5 border-t border-border" />
-                          <button className="tv-menu-item text-red-600"><Trash2 size={14} className="mr-2.5" />Delete</button>
+                          <button className="tv-menu-item text-red-600" onClick={() => void handleDelete(k.id)}><Trash2 size={14} className="mr-2.5" />Delete</button>
                         </div>
                       )}
                     </div>

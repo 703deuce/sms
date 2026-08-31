@@ -62,3 +62,33 @@ export async function deleteWebForm(id: string): Promise<void> {
     throw new Error(json.error || "Could not delete form");
   }
 }
+
+export async function updateWebForm(
+  id: string,
+  payload: {
+    name?: string;
+    listName?: string;
+    doubleOptIn?: boolean;
+    status?: string;
+    fields?: string[];
+    headline?: string;
+    subheadline?: string;
+    buttonLabel?: string;
+  },
+): Promise<WebForm> {
+  const res = await fetch(`/api/growth/forms/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not save form");
+  return mapOptInFormToKimi(json.data);
+}
+
+export async function fetchContactListNames(): Promise<string[]> {
+  const res = await fetch("/api/contacts/lists");
+  const json = await res.json();
+  if (!res.ok) return [];
+  return (json.data || []).map((l: { name: string }) => l.name);
+}

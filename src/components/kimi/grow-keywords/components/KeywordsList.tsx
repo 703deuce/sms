@@ -20,10 +20,12 @@ export default function KeywordsList({
   keywords: keywordsProp,
   onCreate,
   onDelete,
+  onClone,
 }: {
   keywords?: Keyword[];
   onCreate: () => void;
   onDelete?: (id: string) => void;
+  onClone?: (id: string) => void;
 }) {
   const [keywords, setKeywords] = useState<Keyword[]>(keywordsProp ?? initialKeywords);
   const [query, setQuery] = useState("");
@@ -48,12 +50,16 @@ export default function KeywordsList({
       }
     }
     if (action === "Clone") {
-      const src = keywords.find((k) => k.id === id);
-      if (src)
-        setKeywords((ks) => [
-          { ...src, id: `${src.id}-copy-${Date.now()}`, name: `${src.name}Copy` },
-          ...ks,
-        ]);
+      if (onClone) {
+        onClone(id);
+      } else {
+        const src = keywords.find((k) => k.id === id);
+        if (src)
+          setKeywords((ks) => [
+            { ...src, id: `${src.id}-copy-${Date.now()}`, name: `${src.name}Copy` },
+            ...ks,
+          ]);
+      }
     }
     setOpenMenu(null);
   };

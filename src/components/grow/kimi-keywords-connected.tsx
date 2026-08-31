@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import KeywordsList from "@/components/kimi/grow-keywords/components/KeywordsList";
 import KeywordBuilder from "@/components/kimi/grow-keywords/components/KeywordBuilder";
 import type { Keyword } from "@/components/kimi/grow-keywords/mock-data";
-import { createKeyword, deleteKeyword, fetchContactListNames, fetchKeywords } from "@/lib/growth/kimi-keywords-adapter";
+import { createKeyword, deleteKeyword, fetchContactListNames, fetchKeywords, cloneKeyword } from "@/lib/growth/kimi-keywords-adapter";
 import { CheckCircle2 } from "lucide-react";
 
 type Props = { initialKeywords?: Keyword[] };
@@ -54,6 +54,17 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
     }
   };
 
+  const handleClone = async (id: string) => {
+    try {
+      await cloneKeyword(id, keywords);
+      await reload();
+      setToast(true);
+      setTimeout(() => setToast(false), 3200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Clone failed");
+    }
+  };
+
   return (
     <div className="kw-shell">
       <main className="kw-main">
@@ -63,6 +74,7 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
             keywords={keywords}
             onCreate={() => setView("create")}
             onDelete={(id) => void handleDelete(id)}
+            onClone={(id) => void handleClone(id)}
           />
         ) : (
           <KeywordBuilder

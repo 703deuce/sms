@@ -5,16 +5,36 @@ import MessageEditor from "./MessageEditor";
 import Toggle from "./Toggle";
 import Toast from "./Toast";
 
-export default function OptInMessages({ onBack }: { onBack: () => void }) {
+export default function OptInMessages({
+  onBack,
+  initialBodies,
+  onSave,
+}: {
+  onBack: () => void;
+  initialBodies?: Record<string, string>;
+  onSave?: (payload: { bodies: Record<string, string> }) => Promise<void>;
+}) {
   const [open, setOpen] = useState<string | null>("optin");
   const [bodies, setBodies] = useState<Record<string, string>>(
-    Object.fromEntries(optInMessages.map((m) => [m.id, m.body]))
+    initialBodies ?? Object.fromEntries(optInMessages.map((m) => [m.id, m.body])),
   );
   const [prefix, setPrefix] = useState(false);
   const [badNumber, setBadNumber] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const save = () => {
+    if (onSave) {
+      void onSave({ bodies })
+        .then(() => {
+          setToast("Settings saved.");
+          setTimeout(() => setToast(null), 2500);
+        })
+        .catch(() => {
+          setToast("Save failed.");
+          setTimeout(() => setToast(null), 2500);
+        });
+      return;
+    }
     setToast("Settings saved.");
     setTimeout(() => setToast(null), 2500);
   };
