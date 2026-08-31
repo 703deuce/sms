@@ -12,7 +12,7 @@ import TagsSettings from "./components/TagsSettings";
 import SettingsHome from "./components/SettingsHome";
 import InboxSettings from "./components/InboxSettings";
 import { CONVERSATIONS, TAGS as INIT_TAGS, Conversation, Tag, TEAMMATES } from "./mock-data";
-import { MessageSquarePlus, MessagesSquare, X } from "lucide-react";
+import { MessageSquarePlus, MessagesSquare, SendHorizonal, X } from "lucide-react";
 
 type View = "inbox" | "settings" | "inboxSettings" | "tags";
 
@@ -129,35 +129,39 @@ export default function ConversationsFlow() {
               {contactOpen && <ContactPanel convo={selected} onClose={() => setContactOpen(false)} />}
             </>
           ) : (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: "#fbfcfd" }}>
-              <MessagesSquare size={52} color="#c7d2fe" strokeWidth={1.4} />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: "var(--tv-panel)" }}>
+              <span style={{ width: 72, height: 72, borderRadius: 9999, background: "var(--tv-primary-soft)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <MessagesSquare size={34} color="var(--tv-primary)" strokeWidth={1.5} />
+              </span>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>No Conversation Selected</div>
-                <div style={{ fontSize: 12.5, color: "#9ca3af" }}>Select a conversation to begin chatting.</div>
+                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.1 }}>No Conversation Selected</div>
+                <div style={{ fontSize: 12.5, color: "var(--tv-faint)", marginTop: 4 }}>Select a conversation to begin chatting.</div>
               </div>
               <button className="tv-btn" onClick={() => setNewMsgOpen(true)}><MessageSquarePlus size={14} /> New Message</button>
-              <button onClick={() => setView("tags")} style={{ background: "none", border: "none", fontSize: 12, color: "var(--tv-primary)", cursor: "pointer", marginTop: 8 }}>Manage inbox tags →</button>
+              <button onClick={() => setView("tags")} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 500, color: "var(--tv-primary)", cursor: "pointer", marginTop: 2 }}>Manage inbox tags →</button>
             </div>
           )}
         </>
       )}
 
       {newMsgOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 120, zIndex: 100 }} onClick={() => setNewMsgOpen(false)}>
-          <div className="ref-pop" style={{ background: "#fff", borderRadius: 12, width: 460, padding: 20, boxShadow: "0 20px 50px rgba(0,0,0,.25)" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Compose New Message</span>
-              <X size={16} color="#9ca3af" style={{ cursor: "pointer" }} onClick={() => setNewMsgOpen(false)} />
+        <div className="ref-overlay" style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.45)", backdropFilter: "blur(2px)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 120, zIndex: 100 }} onClick={() => setNewMsgOpen(false)}>
+          <div className="ref-modal" style={{ background: "#fff", borderRadius: 14, width: 460, padding: 22, boxShadow: "0 24px 60px rgba(0,0,0,.28)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, flex: 1, letterSpacing: -0.1 }}>Compose New Message</span>
+              <button className="tv-icon-btn" onClick={() => setNewMsgOpen(false)} style={{ width: 26, height: 26, border: "none", background: "transparent" }}>
+                <X size={15} />
+              </button>
             </div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>To:</label>
-            <input className="tv-input" placeholder="Search or create new contact" style={{ margin: "6px 0 10px" }} autoFocus />
-            <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 14px" }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--tv-muted)" }}>To:</label>
+            <input className="tv-input" placeholder="Search or create new contact" style={{ margin: "6px 0 8px" }} autoFocus />
+            <p style={{ fontSize: 12, color: "var(--tv-faint)", margin: "0 0 14px", lineHeight: 1.5 }}>
               Search contacts by name or number. Provide a new number to create a contact.
             </p>
             <textarea className="tv-input" rows={3} placeholder="Type a message" style={{ resize: "none" }} />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button className="tv-btn-ghost" onClick={() => setNewMsgOpen(false)}>Cancel</button>
-              <button className="tv-btn" onClick={() => setNewMsgOpen(false)}>Send ▸</button>
+              <button className="tv-btn" onClick={() => setNewMsgOpen(false)}>Send <SendHorizonal size={13} /></button>
             </div>
           </div>
         </div>

@@ -17,8 +17,8 @@ export function Popover({ trigger, children, align = "right", width = 240, open,
       {open && (
         <div className="ref-pop" style={{
           position: "absolute", top: "calc(100% + 6px)", [align]: 0, width, zIndex: 50,
-          background: "#fff", border: "1px solid var(--tv-border)", borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(0,0,0,.12)", overflow: "hidden",
+          background: "#fff", border: "1px solid var(--tv-border)", borderRadius: 10,
+          boxShadow: "0 10px 30px rgba(16,24,40,.14), 0 2px 6px rgba(16,24,40,.06)", overflow: "hidden",
         } as React.CSSProperties}>
           {children}
         </div>

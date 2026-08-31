@@ -9,29 +9,25 @@ const Item = ({ active, icon, label, count, onClick, indent, chevron, expanded }
   active?: boolean; icon?: React.ReactNode; label: string; count?: number; onClick?: ()=>void; indent?: boolean;
   chevron?: boolean; expanded?: boolean;
 }) => (
-  <div onClick={onClick} style={{
-    display: "flex", alignItems: "center", gap: 8, padding: indent ? "4px 10px 4px 26px" : "5px 10px",
-    borderRadius: 6, fontSize: 13, cursor: "pointer",
-    background: active ? "#eef2ff" : "transparent", color: active ? "var(--tv-primary)" : "#374151",
-    fontWeight: active ? 600 : 400,
-  }}>
+  <div onClick={onClick} className={"tv-rail-item" + (active ? " active" : "")}
+    style={indent ? { paddingLeft: 26 } : undefined}>
     {chevron !== undefined && (
-      <span style={{ display: "flex", color: "#9ca3af", marginLeft: -4 }}>{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+      <span style={{ display: "flex", color: "var(--tv-faint)", marginLeft: -4 }}>{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
     )}
-    {icon && <span style={{ display: "flex", color: active ? "var(--tv-primary)" : "#9ca3af" }}>{icon}</span>}
-    <span style={{ flex: 1 }}>{label}</span>
-    {count !== undefined && <span style={{ fontSize: 11.5, color: "#9ca3af" }}>{count}</span>}
+    {icon && <span style={{ display: "flex", color: active ? "var(--tv-primary)" : "var(--tv-faint)" }}>{icon}</span>}
+    <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+    {count !== undefined && <span className="tv-count">{count}</span>}
   </div>
 );
 
 const Group = ({ title, children, defaultOpen = true }:{ title: string; children: React.ReactNode; defaultOpen?: boolean }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ marginTop: 10 }}>
-      <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 10px", fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: "#9ca3af", cursor: "pointer" }}>
+    <div style={{ marginTop: 12 }}>
+      <div onClick={() => setOpen(!open)} className="tv-rail-group">
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{title}
       </div>
-      {open && <div style={{ marginTop: 2 }}>{children}</div>}
+      {open && <div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 1 }}>{children}</div>}
     </div>
   );
 };
@@ -56,19 +52,19 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags }:{
   };
 
   return (
-    <div style={{ width: 208, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 12px 8px" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>Inbox</h1>
-        <button style={{ border: "1px solid #a7f3d0", background: "#ecfdf5", color: "#059669", borderRadius: 9999, fontSize: 11, fontWeight: 600, padding: "3px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+    <div style={{ width: 212, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 14px 10px" }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1, letterSpacing: -0.2, margin: 0 }}>Inbox</h1>
+        <button className="tv-online-pill">
           <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#10b981" }} />Online <ChevronDown size={11} />
         </button>
       </div>
-      <div style={{ display: "flex", gap: 6, padding: "0 12px 10px" }}>
+      <div style={{ display: "flex", gap: 6, padding: "0 12px 12px" }}>
         <div style={{ position: "relative", flex: 1 }}>
-          <Search size={13} style={{ position: "absolute", left: 9, top: 9, color: "#9ca3af" }} />
-          <input className="tv-input" placeholder="Search" style={{ paddingLeft: 28, padding: "7px 8px 7px 28px" }} />
+          <Search size={13} style={{ position: "absolute", left: 9, top: 9, color: "var(--tv-faint)", pointerEvents: "none" }} />
+          <input className="tv-input" placeholder="Search" style={{ padding: "7px 8px 7px 28px" }} />
         </div>
-        <button className="tv-btn" style={{ padding: "7px 10px" }} onClick={onNew} title="New Message"><MessageSquarePlus size={15} /></button>
+        <button className="tv-btn" style={{ padding: "7px 10px", borderRadius: 7 }} onClick={onNew} title="New Message"><MessageSquarePlus size={15} /></button>
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 8px 16px" }}>
         <Group title="MY CONVERSATIONS">
@@ -91,7 +87,7 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags }:{
             return (
               <div key={t.id}>
                 <Item chevron expanded={exp} active={is("tag", t.id)}
-                  icon={<TagIcon size={13} color={t.color} fill={t.color} style={{ opacity: .8 }} />}
+                  icon={<TagIcon size={13} color={t.color} fill={t.color} style={{ opacity: .85 }} />}
                   label={t.name} count={counts["tag:" + t.id] ?? 0}
                   onClick={() => pickMain("tag", t.id, "tag:" + t.id)} />
                 {exp && SUBS.map((s) => (
@@ -109,12 +105,11 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags }:{
             return (
               <div key={t.id}>
                 <div onClick={() => pickMain("teammate", t.id, "tm:" + t.id)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 6, fontSize: 13, cursor: "pointer",
-                    background: is("teammate", t.id) ? "#eef2ff" : "transparent", color: is("teammate", t.id) ? "var(--tv-primary)" : "#374151" }}>
-                  <span style={{ display: "flex", color: "#9ca3af", marginLeft: -4 }}>{exp ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+                  className={"tv-rail-item" + (is("teammate", t.id) ? " active" : "")}>
+                  <span style={{ display: "flex", color: "var(--tv-faint)", marginLeft: -4 }}>{exp ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
                   <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color }}>{t.initials}</span>
-                  <span style={{ flex: 1 }}>{t.name}</span>
-                  <span style={{ fontSize: 11.5, color: "#9ca3af" }}>{counts["tm:" + t.id] ?? 0}</span>
+                  <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
+                  <span className="tv-count">{counts["tm:" + t.id] ?? 0}</span>
                 </div>
                 {exp && SUBS.filter((s) => s.key !== "closed").map((s) => (
                   <Item key={s.key} indent active={is("teammate", t.id, s.key)} icon={s.icon} label={s.label}
