@@ -1,0 +1,39 @@
+{
+  "sessionId": "2026-08-31T00-54-54-827Z-4d5702",
+  "targetRoute": "/auto-replies",
+  "referenceNames": [
+    "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T00:58:33.618Z",
+  "generatedFiles": [
+    "components/AutoRepliesOverview.tsx",
+    "components/ComplianceMessaging.tsx",
+    "components/InboxSettings.tsx",
+    "components/KeywordEdit.tsx",
+    "components/KeywordsList.tsx",
+    "components/MessageEditor.tsx",
+    "components/OptInMessages.tsx",
+    "components/PhonePreview.tsx",
+    "components/Toast.tsx",
+    "components/Toggle.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/AutoRepliesOverview.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/ComplianceMessaging.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/InboxSettings.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/KeywordEdit.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/KeywordsList.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/MessageEditor.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/OptInMessages.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/PhonePreview.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/Toast.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/components/Toggle.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/mock-data.ts",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/page.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-54-54-827Z-4d5702/reference.css"
+  ],
+  "status": "generated"
+}

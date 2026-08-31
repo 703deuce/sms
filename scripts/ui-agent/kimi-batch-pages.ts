@@ -348,7 +348,14 @@ async function main(): Promise<void> {
 
   let jobs = state.jobs;
   if (onlyName) {
-    jobs = jobs.filter((j) => j.videoName === onlyName || j.videoName.includes(onlyName));
+    const needle = onlyName.replace(/^\//, "");
+    jobs = jobs.filter(
+      (j) =>
+        j.videoName === onlyName ||
+        j.videoName.includes(onlyName) ||
+        j.route === onlyName ||
+        j.route.includes(needle),
+    );
     if (jobs.length === 0) throw new Error(`No batch job matches --only ${onlyName}`);
   }
   if (skipName) {
