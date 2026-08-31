@@ -47,7 +47,7 @@ export default function CreateCampaign({ draft, onChange, onCancel, onReview }: 
   const removeAttachment = () => onChange({ ...draft, attachment: null })
 
   const filteredLists = lists.filter((l) => l.toLowerCase().includes(audienceQuery.toLowerCase()))
-  const filteredSegments = segments.filter((s) => s.toLowerCase().includes(audienceQuery.toLowerCase()))
+  const filteredChartPie = segments.filter((s) => s.toLowerCase().includes(audienceQuery.toLowerCase()))
   const canReview = draft.name.trim().length > 0 && draft.message.trim().length > 0
 
   return (
@@ -99,8 +99,8 @@ export default function CreateCampaign({ draft, onChange, onCancel, onReview }: 
                   <span className="st-dd-list-icon">☰</span> {l}
                 </button>
               ))}
-              {filteredSegments.length > 0 && <div className="st-dd-section">SEGMENTS</div>}
-              {filteredSegments.map((s) => (
+              {filteredChartPie.length > 0 && <div className="st-dd-section">SEGMENTS</div>}
+              {filteredChartPie.map((s) => (
                 <button key={s} className="st-dd-item" onClick={() => addAudience(s)}>
                   <span className="st-dd-list-icon">◔</span> {s}
                 </button>

@@ -1,47 +1,117 @@
-"use client";
-import React, { useState } from "react";
-import { optInMessages as optInInit, complianceMessages } from "../mock-data";
-import { MessageAccordion } from "./Shared";
+import { useState } from "react";
+import { ChevronRight, ChevronDown, MessageSquareText, Info } from "lucide-react";
+import { optInMessages } from "../mock-data";
+import MessageEditor from "./MessageEditor";
+import Toggle from "./Toggle";
+import Toast from "./Toast";
 
-export default function OptInMessages() {
-  const [messages, setMessages] = useState(optInInit);
-  const [openId, setOpenId] = useState<string | null>("optin");
-  const [openCompliance, setOpenCompliance] = useState<string | null>(null);
+export default function OptInMessages({ onBack }: { onBack: () => void }) {
+  const [open, setOpen] = useState<string | null>("optin");
+  const [bodies, setBodies] = useState<Record<string, string>>(
+    Object.fromEntries(optInMessages.map((m) => [m.id, m.body]))
+  );
+  const [prefix, setPrefix] = useState(false);
+  const [badNumber, setBadNumber] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const save = () => {
+    setToast("Settings saved.");
+    setTimeout(() => setToast(null), 2500);
+  };
 
   return (
     <div>
-      <h2 className="text-[15px] font-bold">Messaging</h2>
-      <p className="mt-1 mb-5 text-[13px] tv-muted">
-        Here is where you can set default messaging that will be used in various places throughout the platform and in contact messaging experiences.
+      <Toast message={toast} />
+      <p className="text-[12.5px] text-muted-foreground mb-1">Auto-Replies / Opt-In Messages</p>
+      <h1 className="text-[24px] font-bold text-foreground tracking-tight">Opt-In Auto-Responses</h1>
+      <p className="text-[14px] text-muted-foreground mt-1">
+        Manage basic settings and default messaging.
       </p>
-      {messages.map((m) => (
-        <MessageAccordion
-          key={m.id}
-          title={m.title}
-          description={m.description}
-          body={m.body}
-          editable={m.editable}
-          open={openId === m.id}
-          onToggle={() => setOpenId(openId === m.id ? null : m.id)}
-          onChange={(v) => setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, body: v } : x)))}
-        />
-      ))}
 
-      <h2 className="text-[15px] font-bold mt-10">Compliance Messaging</h2>
-      <p className="mt-1 mb-5 text-[13px] tv-muted">
-        The TCPA and cellular carriers require all mobile messaging programs to provide specific verbiage in different places throughout the subscriber experience. <span className="font-semibold text-[#3d4460]">Transovo includes this information for you in all the necessary places.</span> This content is simply here for your reference.
+      {/* Toggles */}
+      <div className="mt-7 space-y-6">
+        <div className="flex items-start justify-between gap-8 max-w-3xl">
+          <div>
+            <h3 className="text-[15px] font-semibold text-foreground">Message Prefix</h3>
+            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+              This is a word or phrase added to the beginning of all outgoing text messages to help
+              contacts easily identify who the message is from. Your messages would read{" "}
+              <span className="font-semibold text-foreground">prefix: your message here</span>.
+            </p>
+          </div>
+          <Toggle on={prefix} onChange={setPrefix} />
+        </div>
+        <div className="flex items-start justify-between gap-8 max-w-3xl">
+          <div>
+            <h3 className="text-[15px] font-semibold text-foreground">Bad Number Deletion</h3>
+            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+              Our system is constantly monitoring message delivery. If patterns of consecutive
+              message failures to individual contacts are recognized, they can be deleted
+              automatically.
+            </p>
+          </div>
+          <Toggle on={badNumber} onChange={setBadNumber} />
+        </div>
+      </div>
+
+      {/* Messaging accordions */}
+      <h2 className="text-[17px] font-semibold text-foreground mt-10">Messaging</h2>
+      <p className="text-[13px] text-muted-foreground mt-1 max-w-3xl">
+        Here is where you can set default messaging that will be used in various places throughout
+        the platform and in contact messaging experiences.
       </p>
-      {complianceMessages.map((m) => (
-        <MessageAccordion
-          key={m.id}
-          title={m.title}
-          description={m.description}
-          body={m.body}
-          editable={m.editable}
-          open={openCompliance === m.id}
-          onToggle={() => setOpenCompliance(openCompliance === m.id ? null : m.id)}
-        />
-      ))}
+
+      <div className="space-y-3 mt-4 max-w-3xl">
+        {optInMessages.map((m) => {
+          const isOpen = open === m.id;
+          return (
+            <div key={m.id} className={`accordion-item ${isOpen ? "open" : ""}`}>
+              <button
+                className="w-full flex items-center justify-between px-5 py-4"
+                onClick={() => setOpen(isOpen ? null : m.id)}
+              >
+                <span className="flex items-center gap-3 text-[14.5px] font-medium text-foreground">
+                  <MessageSquareText size={17} className="text-indigo-500" />
+                  {m.title}
+                </span>
+                {isOpen ? (
+                  <ChevronDown size={17} className="text-muted-foreground" />
+                ) : (
+                  <ChevronRight size={17} className="text-muted-foreground" />
+                )}
+              </button>
+              {isOpen && (
+                <div className="px-5 pb-5">
+                  <div className="info-note">
+                    <Info size={15} className="mt-0.5 shrink-0" />
+                    <span>{m.description}</span>
+                  </div>
+                  <MessageEditor
+                    label={m.title}
+                    value={bodies[m.id]}
+                    onChange={(v) => setBodies({ ...bodies, [m.id]: v })}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-3 mt-8">
+        <button
+          onClick={save}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[14px] font-semibold px-7 py-2.5 rounded-lg transition-colors"
+        >
+          Save
+        </button>
+        <button
+          onClick={onBack}
+          className="border border-border bg-card text-[14px] font-medium px-7 py-2.5 rounded-lg hover:bg-muted transition-colors"
+        >
+          Back
+        </button>
+      </div>
     </div>
   );
 }

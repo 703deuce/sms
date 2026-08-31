@@ -3,10 +3,11 @@ import React, { useState } from "react";
 import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash } from "lucide-react";
 import { TAGS, TEAMMATES } from "../mock-data";
 
-export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string };
+export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string; sub?: string };
 
-const Item = ({ active, icon, label, count, onClick, indent }:{
+const Item = ({ active, icon, label, count, onClick, indent, chevron, expanded }:{
   active?: boolean; icon?: React.ReactNode; label: string; count?: number; onClick?: ()=>void; indent?: boolean;
+  chevron?: boolean; expanded?: boolean;
 }) => (
   <div onClick={onClick} style={{
     display: "flex", alignItems: "center", gap: 8, padding: indent ? "4px 10px 4px 26px" : "5px 10px",
@@ -14,6 +15,9 @@ const Item = ({ active, icon, label, count, onClick, indent }:{
     background: active ? "#eef2ff" : "transparent", color: active ? "var(--tv-primary)" : "#374151",
     fontWeight: active ? 600 : 400,
   }}>
+    {chevron !== undefined && (
+      <span style={{ display: "flex", color: "#9ca3af", marginLeft: -4 }}>{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+    )}
     {icon && <span style={{ display: "flex", color: active ? "var(--tv-primary)" : "#9ca3af" }}>{icon}</span>}
     <span style={{ flex: 1 }}>{label}</span>
     {count !== undefined && <span style={{ fontSize: 11.5, color: "#9ca3af" }}>{count}</span>}
@@ -32,10 +36,25 @@ const Group = ({ title, children, defaultOpen = true }:{ title: string; children
   );
 };
 
-export default function InboxRail({ sel, onSel, counts, onNew }:{
-  sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void;
+const SUBS: { key: string; label: string; icon: React.ReactNode }[] = [
+  { key: "all", label: "All", icon: <InboxIcon size={13} /> },
+  { key: "open", label: "Open", icon: <MessageSquare size={13} /> },
+  { key: "pending", label: "Pending", icon: <Clock size={13} /> },
+  { key: "closed", label: "Closed", icon: <CheckCircle2 size={13} /> },
+];
+
+export default function InboxRail({ sel, onSel, counts, onNew, tags }:{
+  sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void; tags?: typeof TAGS;
 }) {
-  const is = (k: string, key: string) => sel.kind === k && sel.key === key;
+  const tagList = tags ?? TAGS;
+  const is = (k: string, key: string, sub?: string) => sel.kind === k && sel.key === key && (sub === undefined ? !sel.sub : sel.sub === sub);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const pickMain = (kind: FilterSel["kind"], key: string, expandKey: string) => {
+    onSel({ kind, key });
+    setExpanded((p) => ({ ...p, [expandKey]: !p[expandKey] }));
+  };
+
   return (
     <div style={{ width: 208, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 12px 8px" }}>
@@ -67,21 +86,44 @@ export default function InboxRail({ sel, onSel, counts, onNew }:{
           <Item active={is("all","closed")} icon={<CheckCircle2 size={14}/>} label="Closed" count={counts.closed} onClick={() => onSel({ kind: "all", key: "closed" })} />
         </Group>
         <Group title="TAGGED CONVERSATIONS" defaultOpen>
-          {TAGS.map((t) => (
-            <Item key={t.id} active={is("tag", t.id)} icon={<TagIcon size={13} color={t.color} fill={t.color} style={{ opacity: .8 }} />}
-              label={t.name} count={counts["tag:" + t.id] ?? 0} onClick={() => onSel({ kind: "tag", key: t.id })} />
-          ))}
+          {tagList.map((t) => {
+            const exp = !!expanded["tag:" + t.id] || (sel.kind === "tag" && sel.key === t.id && !!sel.sub);
+            return (
+              <div key={t.id}>
+                <Item chevron expanded={exp} active={is("tag", t.id)}
+                  icon={<TagIcon size={13} color={t.color} fill={t.color} style={{ opacity: .8 }} />}
+                  label={t.name} count={counts["tag:" + t.id] ?? 0}
+                  onClick={() => pickMain("tag", t.id, "tag:" + t.id)} />
+                {exp && SUBS.map((s) => (
+                  <Item key={s.key} indent active={is("tag", t.id, s.key)} icon={s.icon} label={s.label}
+                    count={counts["tag:" + t.id + ":" + s.key] ?? 0}
+                    onClick={() => onSel({ kind: "tag", key: t.id, sub: s.key === "all" ? undefined : s.key })} />
+                ))}
+              </div>
+            );
+          })}
         </Group>
         <Group title="TEAMMATE'S CONVERSATIONS">
-          {TEAMMATES.filter((t) => t.id !== "me").map((t) => (
-            <div key={t.id} onClick={() => onSel({ kind: "teammate", key: t.id })}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 6, fontSize: 13, cursor: "pointer",
-                background: is("teammate", t.id) ? "#eef2ff" : "transparent", color: is("teammate", t.id) ? "var(--tv-primary)" : "#374151" }}>
-              <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color }}>{t.initials}</span>
-              <span style={{ flex: 1 }}>{t.name}</span>
-              <span style={{ fontSize: 11.5, color: "#9ca3af" }}>{counts["tm:" + t.id] ?? 0}</span>
-            </div>
-          ))}
+          {TEAMMATES.filter((t) => t.id !== "me").map((t) => {
+            const exp = !!expanded["tm:" + t.id] || (sel.kind === "teammate" && sel.key === t.id && !!sel.sub);
+            return (
+              <div key={t.id}>
+                <div onClick={() => pickMain("teammate", t.id, "tm:" + t.id)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 6, fontSize: 13, cursor: "pointer",
+                    background: is("teammate", t.id) ? "#eef2ff" : "transparent", color: is("teammate", t.id) ? "var(--tv-primary)" : "#374151" }}>
+                  <span style={{ display: "flex", color: "#9ca3af", marginLeft: -4 }}>{exp ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+                  <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color }}>{t.initials}</span>
+                  <span style={{ flex: 1 }}>{t.name}</span>
+                  <span style={{ fontSize: 11.5, color: "#9ca3af" }}>{counts["tm:" + t.id] ?? 0}</span>
+                </div>
+                {exp && SUBS.filter((s) => s.key !== "closed").map((s) => (
+                  <Item key={s.key} indent active={is("teammate", t.id, s.key)} icon={s.icon} label={s.label}
+                    count={counts["tm:" + t.id + ":" + s.key] ?? 0}
+                    onClick={() => onSel({ kind: "teammate", key: t.id, sub: s.key === "all" ? undefined : s.key })} />
+                ))}
+              </div>
+            );
+          })}
         </Group>
       </div>
     </div>

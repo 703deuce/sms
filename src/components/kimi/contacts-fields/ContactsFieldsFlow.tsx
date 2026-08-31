@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-02-630Z-e3a6eb — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 "use client";
 import { useState } from "react";
 import AppShell from "./components/AppShell";
@@ -7,9 +10,6 @@ import ContactEdit from "./components/ContactEdit";
 import CustomFieldsList from "./components/CustomFieldsList";
 import CreateFieldForm from "./components/CreateFieldForm";
 import { initialFields, CustomField, FieldType, mergeTagFor } from "./mock-data";
-/**
- * Kimi session 2026-08-31T00-27-02-630Z-e3a6eb — UI from Kimi draft (mock data, no backend wiring yet).
- */
 export default function ContactsFieldsFlow() {
   const [view, setView] = useState<View>("fields");
   const [fields, setFields] = useState<CustomField[]>(initialFields);

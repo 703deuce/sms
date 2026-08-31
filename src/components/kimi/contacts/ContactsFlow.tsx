@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-02-745Z-325a4c — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 "use client";
 import { useState } from "react";
 import ContactsList from "./components/ContactsList";
@@ -6,10 +9,9 @@ import ImportWizard from "./components/ImportWizard";
 import { ImportStartedModal } from "./components/Modal";
 type View = "list" | "create" | "import";
 
-/**
- * Kimi session 2026-08-31T00-27-02-745Z-325a4c — UI from Kimi draft (mock data, no backend wiring yet).
- */
-export default function ContactsFlow() {
+export type ContactsInitialView = View["name"];
+
+export default function ContactsFlow({ initialView = "contacts" }: { initialView?: ContactsInitialView }) {
   const [view, setView] = useState<View>("list");
   const [savedToast, setSavedToast] = useState(false);
   const [importModal, setImportModal] = useState(false);

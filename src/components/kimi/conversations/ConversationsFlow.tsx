@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-03-004Z-da00ac — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 "use client";
 import React, { useMemo, useState } from "react";
 import InboxRail, { FilterSel } from "./components/InboxRail";
@@ -6,12 +9,13 @@ import ThreadView from "./components/ThreadView";
 import ContactPanel from "./components/ContactPanel";
 import BulkActionsBar from "./components/BulkActionsBar";
 import TagsSettings from "./components/TagsSettings";
+import SettingsHome from "./components/SettingsHome";
+import InboxSettings from "./components/InboxSettings";
 import { CONVERSATIONS, TAGS as INIT_TAGS, Conversation, Tag, TEAMMATES } from "./mock-data";
 import { MessageSquarePlus, MessagesSquare, X } from "lucide-react";
 
-/**
- * Kimi session 2026-08-31T00-27-03-004Z-da00ac — UI from Kimi draft (mock data, no backend wiring yet).
- */
+type View = "inbox" | "settings" | "inboxSettings" | "tags";
+
 export default function ConversationsFlow() {
   const [convos, setConvos] = useState<Conversation[]>(CONVERSATIONS);
   const [tags, setTags] = useState<Tag[]>(INIT_TAGS);
@@ -20,7 +24,7 @@ export default function ConversationsFlow() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [contactOpen, setContactOpen] = useState(false);
   const [newMsgOpen, setNewMsgOpen] = useState(false);
-  const [view, setView] = useState<"inbox" | "tags">("inbox");
+  const [view, setView] = useState<View>("inbox");
 
   const counts = useMemo(() => {
     const mine = convos.filter((c) => c.assignee === "me");
@@ -31,8 +35,20 @@ export default function ConversationsFlow() {
       allUnread: convos.filter((x) => x.unread).length, allOpen: convos.filter((x) => x.status === "open").length,
       allPending: convos.filter((x) => x.status === "pending").length, closed: convos.filter((x) => x.status === "closed").length,
     };
-    tags.forEach((t) => (c["tag:" + t.id] = convos.filter((x) => x.tags.includes(t.id)).length));
-    TEAMMATES.forEach((t) => (c["tm:" + t.id] = convos.filter((x) => x.assignee === t.id).length));
+    tags.forEach((t) => {
+      const tagged = convos.filter((x) => x.tags.includes(t.id));
+      c["tag:" + t.id] = tagged.length;
+      ["all", "open", "pending", "closed"].forEach((s) => {
+        c["tag:" + t.id + ":" + s] = s === "all" ? tagged.length : tagged.filter((x) => x.status === s).length;
+      });
+    });
+    TEAMMATES.forEach((t) => {
+      const owned = convos.filter((x) => x.assignee === t.id);
+      c["tm:" + t.id] = owned.length;
+      ["all", "open", "pending"].forEach((s) => {
+        c["tm:" + t.id + ":" + s] = s === "all" ? owned.length : owned.filter((x) => x.status === s).length;
+      });
+    });
     return c;
   }, [convos, tags]);
 
@@ -49,14 +65,19 @@ export default function ConversationsFlow() {
       if (sel.key === "all") return true;
       return c.status === sel.key;
     }
-    if (sel.kind === "tag") return c.tags.includes(sel.key);
-    return c.assignee === sel.key;
+    if (sel.kind === "tag") {
+      if (!c.tags.includes(sel.key)) return false;
+      return sel.sub ? c.status === sel.sub : true;
+    }
+    if (c.assignee !== sel.key) return false;
+    return sel.sub ? c.status === sel.sub : true;
   }), [convos, sel]);
 
   const title = sel.kind === "mine" ? "Me" : sel.kind === "all" ? "Everyone"
     : sel.kind === "tag" ? tags.find((t) => t.id === sel.key)?.name ?? "Tag"
     : TEAMMATES.find((t) => t.id === sel.key)?.name ?? "Teammate";
   const subtitle = sel.kind === "mine" && sel.key === "unread" ? "Unread Conversations"
+    : sel.sub ? sel.sub[0].toUpperCase() + sel.sub.slice(1) + " Conversations"
     : sel.kind === "mine" || sel.kind === "all" ? (sel.key === "all" ? "All Conversations" : sel.key[0].toUpperCase() + sel.key.slice(1) + " Conversations")
     : "All Conversations";
 
@@ -86,12 +107,17 @@ export default function ConversationsFlow() {
 
   return (
     <div className="ref-scope">
-      {view === "tags" ? (
-        <TagsSettings tags={tags} onBack={() => setView("inbox")}
+      <AppSidebar onOpenSettings={() => setView("settings")} />
+      {view === "settings" ? (
+        <SettingsHome onOpenInbox={() => setView("inboxSettings")} />
+      ) : view === "inboxSettings" ? (
+        <InboxSettings onBack={() => setView("settings")} onOpenTags={() => setView("tags")} />
+      ) : view === "tags" ? (
+        <TagsSettings tags={tags} onBack={() => setView("inboxSettings")}
           onCreate={(t) => setTags((p) => [{ ...t, id: "t" + Date.now(), created: "Aug 27th, 2024 @ 4:25 pm" }, ...p])} />
       ) : (
         <>
-          <InboxRail sel={sel} onSel={(s) => { setSel(s); setSelectedId(null); setChecked(new Set()); }} counts={counts} onNew={() => setNewMsgOpen(true)} />
+          <InboxRail sel={sel} onSel={(s) => { setSel(s); setSelectedId(null); setChecked(new Set()); }} counts={counts} tags={tags} onNew={() => setNewMsgOpen(true)} />
           <ConversationList title={title} subtitle={subtitle} convos={filtered} selectedId={selectedId}
             onSelect={pickConvo} checked={checked} onCheck={toggleCheck}
             allChecked={filtered.length > 0 && filtered.every((c) => checked.has(c.id))} onCheckAll={checkAll} />

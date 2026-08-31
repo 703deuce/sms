@@ -6,7 +6,7 @@ import {
 
 const nav = [
   { label: "Home", icon: Home },
-  { label: "Audience", icon: Users, children: ["Contacts", "Lists", "Segments"], active: true },
+  { label: "Audience", icon: Users, children: ["Contacts", "Lists", "ChartPie"], active: true },
   { label: "Campaigns", icon: Megaphone },
   { label: "Inbox", icon: Inbox },
   { label: "Workflows", icon: Workflow },

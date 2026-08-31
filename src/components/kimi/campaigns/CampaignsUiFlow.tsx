@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-02-999Z-ad1c3f — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 "use client";
 import { useState } from "react";
 import CampaignsList from "./components/CampaignsList";
@@ -6,10 +9,9 @@ import ReviewDetails from "./components/ReviewDetails";
 import { Check } from "lucide-react";
 type View = "list" | "create" | "review";
 
-/**
- * Kimi session 2026-08-31T00-27-02-999Z-ad1c3f — UI from Kimi draft (mock data, no backend wiring yet).
- */
-export default function CampaignsUiFlow({ initialView = "list" }: { initialView?: View }) {
+export type CampaignsInitialView = "list" | "create";
+
+export default function CampaignsUiFlow({ initialView = "list" }: { initialView?: CampaignsInitialView }) {
   const [view, setView] = useState<View>(initialView);
   const [draft, setDraft] = useState({ message: "", timing: "Send Immediately" });
   const [toast, setToast] = useState<string | null>(null);

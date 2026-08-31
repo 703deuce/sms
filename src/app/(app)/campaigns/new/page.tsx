@@ -1,7 +1,7 @@
 "use client";
 
-import CampaignsUiFlow from "@/components/kimi/campaigns/CampaignsUiFlow";
 import { Suspense } from "react";
+import CampaignsUiFlow from "@/components/kimi/campaigns/CampaignsUiFlow";
 
 export default function CreateCampaignPage() {
   return (

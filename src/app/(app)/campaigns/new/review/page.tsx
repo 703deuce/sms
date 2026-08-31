@@ -1,13 +1,13 @@
 "use client";
 
-import CampaignsUiFlow from "@/components/kimi/campaigns/CampaignsUiFlow";
 import { Suspense } from "react";
+import CampaignsUiFlow from "@/components/kimi/campaigns/CampaignsUiFlow";
 
-export default function CampaignReviewPage() {
+export default function ReviewCampaignPage() {
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
       <div className="kimi-campaigns text-foreground">
-        <CampaignsUiFlow initialView="review" />
+        <CampaignsUiFlow initialView="create" />
       </div>
     </Suspense>
   );

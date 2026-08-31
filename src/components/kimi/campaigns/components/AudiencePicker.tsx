@@ -42,7 +42,7 @@ export default function AudiencePicker({ selected, onChange }: { selected: Audie
               <List className="w-4 h-4 text-slate-400" /> {o.label}
             </button>
           ))}
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-3 mb-1.5">Segments</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-3 mb-1.5">ChartPie</p>
           {audienceOptions.segments.map((o) => (
             <button key={o.id} onClick={() => toggle(o)} className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-indigo-50 text-[13px] text-slate-700">
               <Filter className="w-4 h-4 text-slate-400" /> {o.label}

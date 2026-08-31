@@ -1,5 +1,14 @@
-import { AutoReplyWizard } from "@/components/auto-replies/auto-reply-wizard";
+"use client";
+
+import { Suspense } from "react";
+import AutoRepliesFlow from "@/components/kimi/auto-replies/AutoRepliesFlow";
 
 export default function NewAutoReplyPage() {
-  return <AutoReplyWizard mode="create" />;
+  return (
+    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
+      <div className="kimi-auto-replies text-foreground">
+        <AutoRepliesFlow initialView="keywords" />
+      </div>
+    </Suspense>
+  );
 }

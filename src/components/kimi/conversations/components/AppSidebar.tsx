@@ -1,6 +1,6 @@
 "use client";
-import React from "react";
-import { Home, Users, Megaphone, Inbox as InboxIcon, Workflow, BarChart3, Wrench, Bell, LifeBuoy, ChevronDown, Zap, MessageSquare } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Home, Users, Megaphone, Inbox as InboxIcon, Workflow, BarChart3, Wrench, Bell, LifeBuoy, ChevronDown, Zap, MessageSquare, UserCog, Settings2, LogOut } from "lucide-react";
 import { NAV } from "../mock-data";
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -8,7 +8,15 @@ const ICONS: Record<string, React.ReactNode> = {
   inbox: <InboxIcon size={17} />, workflow: <Workflow size={17} />, chart: <BarChart3 size={17} />, wrench: <Wrench size={17} />,
 };
 
-export default function AppSidebar() {
+export default function AppSidebar({ onOpenSettings }:{ onOpenSettings?: ()=>void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
   return (
     <aside style={{ width: 216, background: "#fff", borderRight: "1px solid var(--tv-border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 16px 12px" }}>
@@ -55,12 +63,26 @@ export default function AppSidebar() {
           </div>
           <span style={{ fontSize: 11, color: "var(--tv-primary)", fontWeight: 700, cursor: "pointer" }}>Upgrade</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px" }}>
-          <span className="tv-avatar" style={{ width: 26, height: 26, fontSize: 10, background: "#4f46e5" }}>JD</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600 }}>John Doe</div>
-            <div style={{ fontSize: 10.5, color: "#6b7280" }}>Transovo Tutorials</div>
+        <div ref={menuRef} style={{ position: "relative" }}>
+          <div onClick={() => setMenuOpen(!menuOpen)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px", borderRadius: 8, cursor: "pointer", background: menuOpen ? "#f3f4f6" : "transparent" }}>
+            <span className="tv-avatar" style={{ width: 26, height: 26, fontSize: 10, background: "#4f46e5" }}>JD</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600 }}>John Doe</div>
+              <div style={{ fontSize: 10.5, color: "#6b7280" }}>Transovo Tutorials</div>
+            </div>
           </div>
+          {menuOpen && (
+            <div className="ref-pop" style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, width: 190, background: "#fff", border: "1px solid var(--tv-border)", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.12)", padding: 6, zIndex: 60 }}>
+              {[
+                { i: <UserCog size={14} color="#6b7280" />, t: "Manage Profile", fn: () => setMenuOpen(false) },
+                { i: <Settings2 size={14} color="#6b7280" />, t: "Inbox Settings", fn: () => { setMenuOpen(false); onOpenSettings?.(); } },
+                { i: <LogOut size={14} color="#6b7280" />, t: "Log Out", fn: () => setMenuOpen(false) },
+              ].map((x) => (
+                <div key={x.t} onClick={x.fn} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", fontSize: 13, color: "#374151", borderRadius: 6, cursor: "pointer" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")} onMouseLeave={(e) => (e.currentTarget.style.background = "")}>{x.i}{x.t}</div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </aside>

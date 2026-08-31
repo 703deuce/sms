@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-02-964Z-35e7b9 — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 'use client'
 
 import { useState } from 'react'
@@ -8,9 +11,6 @@ import CreateCampaign from './components/CreateCampaign'
 import ReviewDetails from './components/ReviewDetails'
 import { Campaign, CampaignDraft } from './mock-data'
 
-/**
- * Kimi session 2026-08-31T00-27-02-964Z-35e7b9 — UI from Kimi draft (mock data, no backend wiring yet).
- */
 export default function MessagingMediaFlow() {
   const [view, setView] = useState<'list' | 'create' | 'review'>('list')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])

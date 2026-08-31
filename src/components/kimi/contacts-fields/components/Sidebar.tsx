@@ -21,7 +21,7 @@ export default function Sidebar({ view, onNavigate }: { view: View; onNavigate: 
         </button>
         {item("Contacts", <></>, view === "contacts" || view === "contactEdit", () => onNavigate("contacts"), true)}
         {item("Lists", <></>, false, undefined, true)}
-        {item("Segments", <></>, false, undefined, true)}
+        {item("ChartPie", <></>, false, undefined, true)}
         {item("Campaigns", <Megaphone size={16} />)}
         {item("Inbox", <Inbox size={16} />)}
         {item("Workflows", <Workflow size={16} />)}

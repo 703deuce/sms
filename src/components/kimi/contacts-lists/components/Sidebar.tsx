@@ -29,7 +29,7 @@ export default function Sidebar({ page, navigate }: Props) {
           <div className="ml-4 pl-3 border-l border-[#eceef5] space-y-0.5 py-1">
             <div className={`sidebar-link ${page === "contacts" ? "active" : ""}`} onClick={() => navigate("contacts")}>Contacts</div>
             <div className={`sidebar-link ${page === "lists" || page === "createList" ? "active" : ""}`} onClick={() => navigate("lists")}>Lists</div>
-            <div className="sidebar-link">Segments</div>
+            <div className="sidebar-link">ChartPie</div>
           </div>
         )}
         <div className="sidebar-link"><Megaphone size={16} /> Campaigns</div>

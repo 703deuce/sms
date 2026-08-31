@@ -1,110 +1,200 @@
-"use client";
-import React, { useState } from "react";
-import { inboxSettingsInit, officeDays } from "../mock-data";
-import { Toggle, MessageEditor } from "./Shared";
+import { useState } from "react";
+import { Inbox, ChevronDown } from "lucide-react";
+import { inboxDefaults } from "../mock-data";
+import MessageEditor from "./MessageEditor";
+import Toggle from "./Toggle";
+import Toast from "./Toast";
 
-function SettingRow({
-  title, description, on, onChange,
-}: { title: string; description: string; on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div className="tv-card mb-3 flex items-start justify-between gap-6 p-5">
-      <div>
-        <div className="text-sm font-semibold">{title}</div>
-        <p className="mt-1 text-[13px] tv-muted leading-relaxed">{description}</p>
-      </div>
-      <Toggle on={on} onChange={onChange} />
-    </div>
-  );
-}
+const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default function InboxSettings() {
-  const [s, setS] = useState(inboxSettingsInit);
-  const [days, setDays] = useState(officeDays);
-  const set = (k: keyof typeof inboxSettingsInit) => (v: boolean) => setS((p) => ({ ...p, [k]: v }));
+const baseToggles = [
+  {
+    id: "inboxOn",
+    title: "Inbox On",
+    desc: "Engage in real-time, one-on-one messaging using your text number. Manage conversations, collaborate with team members and connect with contacts using this powerful two-way messaging tool.",
+  },
+  {
+    id: "start",
+    title: "Allow Starting Conversations",
+    desc: "This determines whether or not team members have the ability to start conversations or reply to existing ones that are closed. This does not apply to inbox managers and account owners.",
+  },
+  {
+    id: "assign",
+    title: "Allow Conversation Assignment",
+    desc: "This determines whether or not team members have the ability to assign conversations to other teammates. This does not apply to inbox managers and account owners.",
+  },
+  {
+    id: "tag",
+    title: "Allow Conversation Tagging",
+    desc: "This determines whether or not team members have the ability to tag conversations. This does not apply to inbox managers and account owners.",
+  },
+  {
+    id: "unassign",
+    title: "Unassign Conversations When Closed",
+    desc: "This determines whether or not a conversation should be automatically unassigned when it's closed.",
+  },
+  {
+    id: "unread",
+    title: "Mark Conversations as Unread When Assigned",
+    desc: "This determines whether or not a conversation should be marked as unread when it's assigned to a team member.",
+  },
+];
+
+export default function InboxSettings({ onBack }: { onBack: () => void }) {
+  const [toggles, setToggles] = useState<Record<string, boolean>>({
+    inboxOn: true,
+    start: true,
+    assign: true,
+    tag: true,
+    unassign: true,
+    unread: true,
+  });
+  const [autoOn, setAutoOn] = useState(true);
+  const [single, setSingle] = useState(inboxDefaults.autoResponseMessage);
+  const [officeOn, setOfficeOn] = useState(true);
+  const [activeDays, setActiveDays] = useState<string[]>([
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+  ]);
+  const [inside, setInside] = useState(inboxDefaults.insideMessage);
+  const [outside, setOutside] = useState(inboxDefaults.outsideMessage);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const toggleDay = (d: string) =>
+    setActiveDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
 
   return (
     <div>
-      <h2 className="text-xl font-bold">General Inbox Settings</h2>
-      <p className="mt-1 mb-6 text-[13px] tv-muted">Manage general inbox rules and behaviors.</p>
+      <Toast message={toast} />
+      <p className="text-[12.5px] text-muted-foreground mb-1">Auto-Replies / Inbox / General</p>
+      <div className="flex items-center gap-2.5">
+        <Inbox size={22} className="text-teal-600" />
+        <h1 className="text-[24px] font-bold text-foreground tracking-tight">
+          General Inbox Settings
+        </h1>
+      </div>
+      <p className="text-[14px] text-muted-foreground mt-1">
+        Manage general inbox rules and behaviors.
+      </p>
 
-      <SettingRow title="Inbox On" description="Engage in real-time, one-on-one messaging using your text number. Manage conversations, collaborate with team members and connect with contacts using this powerful two-way messaging tool." on={s.inboxOn} onChange={set("inboxOn")} />
-      <SettingRow title="Allow Starting Conversations" description="This determines whether or not team members have the ability to start conversations or reply to existing ones that are closed." on={s.allowStarting} onChange={set("allowStarting")} />
-      <SettingRow title="Allow Conversation Assignment" description="This determines whether or not team members have the ability to assign conversations to other teammates." on={s.allowAssignment} onChange={set("allowAssignment")} />
-      <SettingRow title="Allow Conversation Tagging" description="This determines whether or not team members have the ability to tag conversations." on={s.allowTagging} onChange={set("allowTagging")} />
-      <SettingRow title="Private Conversations" description="This determines whether or not team members have visibility into conversations that aren't assigned to them." on={s.privateConversations} onChange={set("privateConversations")} />
+      <div className="mt-7 space-y-6 max-w-3xl">
+        {baseToggles.map((t) => (
+          <div key={t.id} className="flex items-start justify-between gap-8">
+            <div>
+              <h3 className="text-[15px] font-semibold text-foreground">{t.title}</h3>
+              <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">{t.desc}</p>
+            </div>
+            <Toggle
+              on={toggles[t.id]}
+              onChange={(v) => setToggles({ ...toggles, [t.id]: v })}
+            />
+          </div>
+        ))}
 
-      {/* Office Hours */}
-      <div className="tv-card mb-3 p-5">
-        <div className="flex items-start justify-between gap-6">
+        {/* Office hours */}
+        <div className="flex items-start justify-between gap-8">
           <div>
-            <div className="text-sm font-semibold">Office Hours</div>
-            <p className="mt-1 text-[13px] tv-muted leading-relaxed">
-              This allows you to specify the days and times that teammates are generally online and available. Setting your office hours then allows you to take various actions based on whether or not certain events occur inside or outside those times.
+            <h3 className="text-[15px] font-semibold text-foreground">Office Hours</h3>
+            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+              Specify the days and times that teammates are generally online and available. Setting
+              office hours lets you send different auto-responses inside and outside those times.
             </p>
           </div>
-          <Toggle on={s.officeHours} onChange={set("officeHours")} />
+          <Toggle on={officeOn} onChange={setOfficeOn} />
         </div>
-        {s.officeHours && (
-          <div className="mt-5 space-y-2">
-            {days.map((d, i) => (
-              <div key={d.day} className="flex items-center gap-3">
-                <button
-                  className={`tv-day-chip ${d.enabled ? "on" : ""}`}
-                  style={{ width: 110, textAlign: "left" }}
-                  onClick={() => setDays((p) => p.map((x, j) => (j === i ? { ...x, enabled: !x.enabled } : x)))}
-                >
-                  {d.day}
-                </button>
-                <select className="tv-select" disabled={!d.enabled} defaultValue={d.from}><option>9:00 am</option><option>8:00 am</option><option>10:00 am</option></select>
-                <span className="text-xs tv-muted">To</span>
-                <select className="tv-select" disabled={!d.enabled} defaultValue={d.to}><option>5:00 pm</option><option>6:00 pm</option><option>9:00 pm</option></select>
-                <span className="text-xs tv-muted">{d.tz}</span>
-              </div>
-            ))}
+
+        {officeOn && (
+          <div className="bg-muted/40 border border-border rounded-2xl p-5 space-y-2.5">
+            {days.map((d) => {
+              const active = activeDays.includes(d);
+              return (
+                <div key={d} className="flex items-center gap-3">
+                  <button
+                    className={`day-pill w-32 text-center ${active ? "active" : ""}`}
+                    onClick={() => toggleDay(d)}
+                  >
+                    {d}
+                  </button>
+                  <div
+                    className={`flex items-center gap-2 ${
+                      active ? "" : "opacity-40 pointer-events-none"
+                    }`}
+                  >
+                    <button className="field-input !w-28 flex items-center justify-between text-[13px]">
+                      9:00 am <ChevronDown size={14} />
+                    </button>
+                    <span className="text-[13px] text-muted-foreground">To</span>
+                    <button className="field-input !w-28 flex items-center justify-between text-[13px]">
+                      5:00 pm <ChevronDown size={14} />
+                    </button>
+                    <span className="text-[13px] text-muted-foreground font-medium">CDT</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Inbox auto-response */}
+        <div className="flex items-start justify-between gap-8">
+          <div>
+            <h3 className="text-[15px] font-semibold text-foreground">Inbox Auto-Response</h3>
+            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+              Send a standard automated response in conversations that are opened as a result of a
+              new inbound message.
+            </p>
+          </div>
+          <Toggle on={autoOn} onChange={setAutoOn} />
+        </div>
+
+        {autoOn && !officeOn && (
+          <div className="bg-muted/40 border border-border rounded-2xl p-5">
+            <MessageEditor
+              label="Auto-Response Message"
+              value={single}
+              onChange={setSingle}
+              withAttachment
+            />
+          </div>
+        )}
+
+        {autoOn && officeOn && (
+          <div className="bg-muted/40 border border-border rounded-2xl p-5 space-y-5">
+            <MessageEditor
+              label="Auto-Response Message Inside of Office Hours"
+              value={inside}
+              onChange={setInside}
+              withAttachment
+            />
+            <MessageEditor
+              label="Auto-Response Message Outside of Office Hours"
+              value={outside}
+              onChange={setOutside}
+              withAttachment
+            />
           </div>
         )}
       </div>
 
-      <SettingRow title="Conversation Auto-Assignment" description="This setting allows you to automatically assign unassigned conversations to teammates when new inbound messages are received." on={s.autoAssignment} onChange={set("autoAssignment")} />
-      <SettingRow title="Conversation Auto-Close" description="This setting allows open and pending conversations to be automatically closed after a specific number of days without messaging or status change activity." on={s.autoClose} onChange={set("autoClose")} />
-      <SettingRow title="Unassign Conversations When Closed" description="This determines whether or not a conversation should be automatically unassigned when it's closed." on={s.unassignWhenClosed} onChange={set("unassignWhenClosed")} />
-      <SettingRow title="Mark Conversations as Unread When Assigned" description="This determines whether or not a conversation should be marked as unread when it's assigned to a team member." on={s.markUnreadWhenAssigned} onChange={set("markUnreadWhenAssigned")} />
-
-      {/* Inbox Auto-Response */}
-      <div className="tv-card p-5">
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <div className="text-sm font-semibold">Inbox Auto-Response</div>
-            <p className="mt-1 text-[13px] tv-muted leading-relaxed">
-              This setting allows you to send a standard automated response in conversations that are opened as a result of a new inbound message.
-            </p>
-          </div>
-          <Toggle on={s.autoResponse} onChange={set("autoResponse")} />
-        </div>
-        {s.autoResponse && (
-          <div className="mt-5 space-y-5">
-            {s.officeHours ? (
-              <>
-                <MessageEditor
-                  label="Auto-Response Message Inside of Office Hours"
-                  value={s.autoResponseInside}
-                  onChange={(v) => setS((p) => ({ ...p, autoResponseInside: v }))}
-                />
-                <MessageEditor
-                  label="Auto-Response Message Outside of Office Hours"
-                  value={s.autoResponseOutside}
-                  onChange={(v) => setS((p) => ({ ...p, autoResponseOutside: v }))}
-                />
-              </>
-            ) : (
-              <MessageEditor
-                label="Auto-Response Message"
-                value={s.autoResponseInside}
-                onChange={(v) => setS((p) => ({ ...p, autoResponseInside: v }))}
-              />
-            )}
-          </div>
-        )}
+      <div className="flex items-center gap-3 mt-8">
+        <button
+          onClick={() => {
+            setToast("Inbox settings saved.");
+            setTimeout(() => setToast(null), 2500);
+          }}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[14px] font-semibold px-7 py-2.5 rounded-lg transition-colors"
+        >
+          Save
+        </button>
+        <button
+          onClick={onBack}
+          className="border border-border bg-card text-[14px] font-medium px-7 py-2.5 rounded-lg hover:bg-muted transition-colors"
+        >
+          Back
+        </button>
       </div>
     </div>
   );

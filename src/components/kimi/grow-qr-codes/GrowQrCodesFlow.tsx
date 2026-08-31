@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-02-641Z-bd7a3c — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 'use client';
 import { useState } from 'react';
 import {
@@ -9,9 +12,6 @@ import { keywords, Keyword } from './mock-data';
 
 type View = 'list' | 'generator';
 
-/**
- * Kimi session 2026-08-31T00-27-02-641Z-bd7a3c — UI from Kimi draft (mock data, no backend wiring yet).
- */
 export default function GrowQrCodesFlow() {
   const [view, setView] = useState<View>('list');
   const [menuFor, setMenuFor] = useState<string | null>(null);

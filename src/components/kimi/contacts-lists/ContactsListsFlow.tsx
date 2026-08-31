@@ -1,3 +1,6 @@
+/**
+ * Kimi session 2026-08-31T00-27-02-830Z-a189c0 — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 "use client";
 import { useState } from "react";
 import Sidebar, { Page } from "./components/Sidebar";
@@ -8,9 +11,6 @@ import KeywordEditor from "./components/KeywordEditor";
 import { initialLists, contacts as mockContacts, keywords as mockKeywords, ContactList } from "./mock-data";
 import { Wrench, LayoutTemplate, MonitorSmartphone, MessageSquareText, QrCode, MousePointerClick, Search, MoreVertical, CheckCircle2 } from "lucide-react";
 
-/**
- * Kimi session 2026-08-31T00-27-02-830Z-a189c0 — UI from Kimi draft (mock data, no backend wiring yet).
- */
 export default function ContactsListsFlow() {
   const [page, setPage] = useState<Page>("lists");
   const [lists, setLists] = useState<ContactList[]>(initialLists);

@@ -1,63 +1,86 @@
+/**
+ * Kimi session 2026-08-31T00-54-54-827Z-4d5702 — UI from Kimi draft (mock data, no backend wiring yet).
+ */
 "use client";
-import React, { useState } from "react";
-import OptInMessages from "./components/OptInMessages";
-import Keywords from "./components/Keywords";
-import InboxSettings from "./components/InboxSettings";
-import { Toast } from "./components/Shared";
-import { MessageSquareText, KeyRound, Inbox } from "lucide-react";
-type Tab = "optin" | "keywords" | "inbox";
 
-const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "optin", label: "Opt-In Messages", icon: MessageSquareText },
-  { id: "keywords", label: "Keyword Auto-Responses", icon: KeyRound },
+import { useState } from "react";
+import AutoRepliesOverview, { Section } from "./components/AutoRepliesOverview";
+import OptInMessages from "./components/OptInMessages";
+import ComplianceMessaging from "./components/ComplianceMessaging";
+import KeywordsList from "./components/KeywordsList";
+import KeywordEdit from "./components/KeywordEdit";
+import InboxSettings from "./components/InboxSettings";
+import { Keyword } from "./mock-data";
+import { MessageSquareReply, ShieldCheck, Tags, Inbox, LayoutGrid } from "lucide-react";
+
+type View = "overview" | "optin" | "compliance" | "keywords" | "keyword-edit" | "inbox";
+
+const tabs: { id: View; label: string; icon: any }[] = [
+  { id: "overview", label: "Overview", icon: LayoutGrid },
+  { id: "optin", label: "Opt-In Messages", icon: MessageSquareReply },
+  { id: "compliance", label: "Compliance", icon: ShieldCheck },
+  { id: "keywords", label: "Keywords", icon: Tags },
   { id: "inbox", label: "Inbox Auto-Response", icon: Inbox },
 ];
 
-/**
- * Kimi session 2026-08-31T00-26-52-701Z-4d9b2f — UI from Kimi draft (mock data, no backend wiring yet).
- */
-export default function AutoRepliesFlow() {
-  const [tab, setTab] = useState<Tab>("optin");
-  const [toast, setToast] = useState<string | null>(null);
+export type AutoRepliesInitialView = View;
+
+export default function AutoRepliesFlow({ initialView = "overview" }: { initialView?: AutoRepliesInitialView }) {
+  const [view, setView] = useState<View>(initialView);
+  const [editing, setEditing] = useState<Keyword | null>(null);
+
+  const openSection = (s: Section) => setView(s);
+
+  const activeTab = view === "keyword-edit" ? "keywords" : view;
 
   return (
-    <div className="tv-shell">
-      <main className="tv-main">
-        <div className="tv-content">
-          {/* Breadcrumb */}
-          <div className="text-xs tv-muted mb-2">Settings / General</div>
-          <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
-          <p className="mt-1 mb-6 text-sm tv-muted">
-            Manage the automated messages Transovo sends when contacts opt in, text a keyword, or message your inbox.
-          </p>
-
-          {/* Tabs */}
-          <div className="flex gap-7 border-b border-[#e6e8f0] mb-7">
-            {tabs.map((t) => (
+    <div className="sandbox-root min-h-screen bg-background">
+      {/* Feature sub-nav */}
+      <div className="border-b border-border bg-card sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = activeTab === t.id;
+            return (
               <button
                 key={t.id}
-                className={`tv-tab flex items-center gap-2 ${tab === t.id ? "active" : ""}`}
-                onClick={() => setTab(t.id)}
+                onClick={() => setView(t.id)}
+                className={`flex items-center gap-2 px-4 py-3.5 text-[13.5px] font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  active
+                    ? "border-indigo-600 text-indigo-600"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
               >
-                <t.icon size={15} />
+                <Icon size={15} />
                 {t.label}
               </button>
-            ))}
-          </div>
-
-          {tab === "optin" && <OptInMessages />}
-          {tab === "keywords" && <Keywords onSave={() => setToast("Keyword saved.")} />}
-          {tab === "inbox" && <InboxSettings />}
-
-          <div className="mt-8 flex gap-3">
-            <button className="tv-btn-primary" onClick={() => setToast(tab === "inbox" ? "Inbox settings saved." : "Settings saved.")}>
-              Save
-            </button>
-            <button className="tv-btn-ghost">Back</button>
-          </div>
+            );
+          })}
         </div>
-      </main>
-      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {view === "overview" && <AutoRepliesOverview onOpen={openSection} />}
+        {view === "optin" && <OptInMessages onBack={() => setView("overview")} />}
+        {view === "compliance" && <ComplianceMessaging onBack={() => setView("overview")} />}
+        {view === "keywords" && (
+          <KeywordsList
+            onBack={() => setView("overview")}
+            onEdit={(k) => {
+              setEditing(k);
+              setView("keyword-edit");
+            }}
+          />
+        )}
+        {view === "keyword-edit" && editing && (
+          <KeywordEdit
+            keyword={editing}
+            onBack={() => setView("keywords")}
+            onSaved={(k) => setEditing(k)}
+          />
+        )}
+        {view === "inbox" && <InboxSettings onBack={() => setView("overview")} />}
+      </div>
     </div>
   );
 }
