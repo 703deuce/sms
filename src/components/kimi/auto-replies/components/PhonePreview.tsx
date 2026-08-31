@@ -2,11 +2,10 @@ import { complianceFooter } from "../mock-data";
 
 export default function PhonePreview({ keyword, message }: { keyword: string; message: string }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[13px] font-semibold text-foreground">Message Preview</span>
-      </div>
+    <div className="phone-preview">
+      <div className="phone-preview-label">Message Preview</div>
       <div className="phone-frame">
+        <div className="phone-notch" />
         <div className="phone-screen">
           <div className="phone-bubble-out">{keyword}</div>
           <div className="phone-bubble-in">
@@ -15,6 +14,7 @@ export default function PhonePreview({ keyword, message }: { keyword: string; me
             {complianceFooter}
           </div>
         </div>
+        <div className="phone-home" />
       </div>
     </div>
   );

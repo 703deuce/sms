@@ -18,11 +18,13 @@ export default function KeywordsList({
 
   return (
     <div onClick={() => menuFor && setMenuFor(null)}>
-      <p className="text-[12.5px] text-muted-foreground mb-1">Auto-Replies / Keywords</p>
+      <p className="ar-breadcrumb">Auto-Replies / Keywords</p>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <Tags size={22} className="text-indigo-600" />
-          <h1 className="text-[24px] font-bold text-foreground tracking-tight">Keywords</h1>
+          <span className="ar-title-icon bg-indigo-50 text-indigo-600">
+            <Tags size={17} />
+          </span>
+          <h1 className="ar-title">Keywords</h1>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -46,13 +48,14 @@ export default function KeywordsList({
                 autoResponse: "Thanks for subscribing to Transovo text alerts.",
               })
             }
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[13.5px] font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            className="ar-btn-primary flex items-center gap-2"
+            style={{ padding: "10px 18px" }}
           >
             <Plus size={15} /> Create Keyword
           </button>
         </div>
       </div>
-      <p className="text-[14px] text-muted-foreground mt-1.5">
+      <p className="ar-subtitle">
         View and manage all of your keywords. Each keyword can override the default opt-in
         auto-response.
       </p>
@@ -128,10 +131,7 @@ export default function KeywordsList({
           <option>25 Per Page</option>
           <option>50 Per Page</option>
         </select>
-        <button
-          onClick={onBack}
-          className="border border-border bg-card text-[14px] font-medium px-6 py-2.5 rounded-lg hover:bg-muted transition-colors"
-        >
+        <button onClick={onBack} className="ar-btn-secondary">
           Back
         </button>
       </div>

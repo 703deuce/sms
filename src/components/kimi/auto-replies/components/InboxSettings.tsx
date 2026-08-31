@@ -69,23 +69,21 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
   return (
     <div>
       <Toast message={toast} />
-      <p className="text-[12.5px] text-muted-foreground mb-1">Auto-Replies / Inbox / General</p>
+      <p className="ar-breadcrumb">Auto-Replies / Inbox / General</p>
       <div className="flex items-center gap-2.5">
-        <Inbox size={22} className="text-teal-600" />
-        <h1 className="text-[24px] font-bold text-foreground tracking-tight">
-          General Inbox Settings
-        </h1>
+        <span className="ar-title-icon bg-teal-50 text-teal-600">
+          <Inbox size={17} />
+        </span>
+        <h1 className="ar-title">General Inbox Settings</h1>
       </div>
-      <p className="text-[14px] text-muted-foreground mt-1">
-        Manage general inbox rules and behaviors.
-      </p>
+      <p className="ar-subtitle">Manage general inbox rules and behaviors.</p>
 
       <div className="mt-7 space-y-6 max-w-3xl">
         {baseToggles.map((t) => (
-          <div key={t.id} className="flex items-start justify-between gap-8">
+          <div key={t.id} className="ar-toggle-row">
             <div>
-              <h3 className="text-[15px] font-semibold text-foreground">{t.title}</h3>
-              <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">{t.desc}</p>
+              <h3 className="ar-setting-title">{t.title}</h3>
+              <p className="ar-setting-desc">{t.desc}</p>
             </div>
             <Toggle
               on={toggles[t.id]}
@@ -95,10 +93,10 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
         ))}
 
         {/* Office hours */}
-        <div className="flex items-start justify-between gap-8">
+        <div className="ar-toggle-row">
           <div>
-            <h3 className="text-[15px] font-semibold text-foreground">Office Hours</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            <h3 className="ar-setting-title">Office Hours</h3>
+            <p className="ar-setting-desc">
               Specify the days and times that teammates are generally online and available. Setting
               office hours lets you send different auto-responses inside and outside those times.
             </p>
@@ -107,7 +105,7 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
         </div>
 
         {officeOn && (
-          <div className="bg-muted/40 border border-border rounded-2xl p-5 space-y-2.5">
+          <div className="ar-panel space-y-2">
             {days.map((d) => {
               const active = activeDays.includes(d);
               return (
@@ -123,14 +121,14 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
                       active ? "" : "opacity-40 pointer-events-none"
                     }`}
                   >
-                    <button className="field-input !w-28 flex items-center justify-between text-[13px]">
-                      9:00 am <ChevronDown size={14} />
+                    <button className="time-select">
+                      9:00 am <ChevronDown size={13} />
                     </button>
                     <span className="text-[13px] text-muted-foreground">To</span>
-                    <button className="field-input !w-28 flex items-center justify-between text-[13px]">
-                      5:00 pm <ChevronDown size={14} />
+                    <button className="time-select">
+                      5:00 pm <ChevronDown size={13} />
                     </button>
-                    <span className="text-[13px] text-muted-foreground font-medium">CDT</span>
+                    <span className="text-[12.5px] text-muted-foreground font-medium">CDT</span>
                   </div>
                 </div>
               );
@@ -139,10 +137,10 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
         )}
 
         {/* Inbox auto-response */}
-        <div className="flex items-start justify-between gap-8">
+        <div className="ar-toggle-row">
           <div>
-            <h3 className="text-[15px] font-semibold text-foreground">Inbox Auto-Response</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            <h3 className="ar-setting-title">Inbox Auto-Response</h3>
+            <p className="ar-setting-desc">
               Send a standard automated response in conversations that are opened as a result of a
               new inbound message.
             </p>
@@ -151,7 +149,7 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
         </div>
 
         {autoOn && !officeOn && (
-          <div className="bg-muted/40 border border-border rounded-2xl p-5">
+          <div className="ar-panel">
             <MessageEditor
               label="Auto-Response Message"
               value={single}
@@ -162,7 +160,7 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
         )}
 
         {autoOn && officeOn && (
-          <div className="bg-muted/40 border border-border rounded-2xl p-5 space-y-5">
+          <div className="ar-panel space-y-5">
             <MessageEditor
               label="Auto-Response Message Inside of Office Hours"
               value={inside}
@@ -179,20 +177,17 @@ export default function InboxSettings({ onBack }: { onBack: () => void }) {
         )}
       </div>
 
-      <div className="flex items-center gap-3 mt-8">
+      <div className="ar-save-row">
         <button
           onClick={() => {
             setToast("Inbox settings saved.");
             setTimeout(() => setToast(null), 2500);
           }}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[14px] font-semibold px-7 py-2.5 rounded-lg transition-colors"
+          className="ar-btn-primary"
         >
           Save
         </button>
-        <button
-          onClick={onBack}
-          className="border border-border bg-card text-[14px] font-medium px-7 py-2.5 rounded-lg hover:bg-muted transition-colors"
-        >
+        <button onClick={onBack} className="ar-btn-secondary">
           Back
         </button>
       </div>

@@ -33,15 +33,9 @@ export default function KeywordEdit({
   return (
     <div>
       <Toast message={toast} />
-      <p className="text-[12.5px] text-muted-foreground mb-1">
-        Auto-Replies / Keywords / {kw || "New Keyword"}
-      </p>
-      <h1 className="text-[24px] font-bold text-foreground tracking-tight">
-        {keyword.id === "new" ? "Create Keyword" : "Edit Keyword"}
-      </h1>
-      <p className="text-[14px] text-muted-foreground mt-1">
-        Edit your keyword and associated settings.
-      </p>
+      <p className="ar-breadcrumb">Auto-Replies / Keywords / {kw || "New Keyword"}</p>
+      <h1 className="ar-title">{keyword.id === "new" ? "Create Keyword" : "Edit Keyword"}</h1>
+      <p className="ar-subtitle">Edit your keyword and associated settings.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-10 mt-7 items-start">
         <div className="space-y-4 max-w-2xl">
@@ -84,11 +78,7 @@ export default function KeywordEdit({
                     placeholder="Internal note about this keyword"
                   />
                 </div>
-                <MessageEditor
-                  label="Auto Response"
-                  value={auto}
-                  onChange={setAuto}
-                />
+                <MessageEditor label="Auto Response" value={auto} onChange={setAuto} />
                 <p className="text-[12px] text-muted-foreground">
                   This overrides the default Opt-in Message for contacts who join via this keyword.
                 </p>
@@ -136,17 +126,11 @@ export default function KeywordEdit({
             )}
           </div>
 
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              onClick={save}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-[14px] font-semibold px-7 py-2.5 rounded-lg transition-colors"
-            >
+          <div className="ar-save-row" style={{ marginTop: 8 }}>
+            <button onClick={save} className="ar-btn-primary">
               Save
             </button>
-            <button
-              onClick={onBack}
-              className="border border-border bg-card text-[14px] font-medium px-7 py-2.5 rounded-lg hover:bg-muted transition-colors"
-            >
+            <button onClick={onBack} className="ar-btn-secondary">
               Cancel
             </button>
           </div>

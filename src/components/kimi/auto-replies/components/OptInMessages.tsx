@@ -22,18 +22,16 @@ export default function OptInMessages({ onBack }: { onBack: () => void }) {
   return (
     <div>
       <Toast message={toast} />
-      <p className="text-[12.5px] text-muted-foreground mb-1">Auto-Replies / Opt-In Messages</p>
-      <h1 className="text-[24px] font-bold text-foreground tracking-tight">Opt-In Auto-Responses</h1>
-      <p className="text-[14px] text-muted-foreground mt-1">
-        Manage basic settings and default messaging.
-      </p>
+      <p className="ar-breadcrumb">Auto-Replies / Opt-In Messages</p>
+      <h1 className="ar-title">Opt-In Auto-Responses</h1>
+      <p className="ar-subtitle">Manage basic settings and default messaging.</p>
 
       {/* Toggles */}
-      <div className="mt-7 space-y-6">
-        <div className="flex items-start justify-between gap-8 max-w-3xl">
+      <div className="mt-7 space-y-6 max-w-3xl">
+        <div className="ar-toggle-row">
           <div>
-            <h3 className="text-[15px] font-semibold text-foreground">Message Prefix</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            <h3 className="ar-setting-title">Message Prefix</h3>
+            <p className="ar-setting-desc">
               This is a word or phrase added to the beginning of all outgoing text messages to help
               contacts easily identify who the message is from. Your messages would read{" "}
               <span className="font-semibold text-foreground">prefix: your message here</span>.
@@ -41,10 +39,10 @@ export default function OptInMessages({ onBack }: { onBack: () => void }) {
           </div>
           <Toggle on={prefix} onChange={setPrefix} />
         </div>
-        <div className="flex items-start justify-between gap-8 max-w-3xl">
+        <div className="ar-toggle-row">
           <div>
-            <h3 className="text-[15px] font-semibold text-foreground">Bad Number Deletion</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            <h3 className="ar-setting-title">Bad Number Deletion</h3>
+            <p className="ar-setting-desc">
               Our system is constantly monitoring message delivery. If patterns of consecutive
               message failures to individual contacts are recognized, they can be deleted
               automatically.
@@ -98,17 +96,11 @@ export default function OptInMessages({ onBack }: { onBack: () => void }) {
         })}
       </div>
 
-      <div className="flex items-center gap-3 mt-8">
-        <button
-          onClick={save}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[14px] font-semibold px-7 py-2.5 rounded-lg transition-colors"
-        >
+      <div className="ar-save-row">
+        <button onClick={save} className="ar-btn-primary">
           Save
         </button>
-        <button
-          onClick={onBack}
-          className="border border-border bg-card text-[14px] font-medium px-7 py-2.5 rounded-lg hover:bg-muted transition-colors"
-        >
+        <button onClick={onBack} className="ar-btn-secondary">
           Back
         </button>
       </div>

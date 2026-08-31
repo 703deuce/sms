@@ -16,31 +16,39 @@ export default function MessageEditor({
   withAttachment?: boolean;
 }) {
   return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
+    <div className="msg-editor">
+      <div className="msg-editor-head">
+        <span className="msg-editor-label">{label}</span>
         {editable ? (
-          <span className="text-[12px] text-muted-foreground">
+          <span className="msg-editor-count">
             {value.length}/{max}
           </span>
         ) : (
-          <span className="text-[12px] italic text-muted-foreground">Not Editable</span>
+          <span className="msg-editor-count italic">Not Editable</span>
         )}
       </div>
-      <div className="relative">
+      <div className={`msg-editor-box ${editable ? "" : "is-locked"}`}>
         <textarea
           className="msg-textarea"
           value={value}
           readOnly={!editable}
           onChange={(e) => onChange?.(e.target.value)}
         />
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            {withAttachment && <Paperclip size={16} className="cursor-pointer hover:text-foreground" />}
-            <Smile size={16} className="cursor-pointer hover:text-foreground" />
-            <Braces size={16} className="cursor-pointer hover:text-foreground" />
+        <div className="msg-editor-toolbar">
+          <div className="msg-editor-tools">
+            {withAttachment && (
+              <button type="button" className="msg-tool" aria-label="Attach media">
+                <Paperclip size={15} />
+              </button>
+            )}
+            <button type="button" className="msg-tool" aria-label="Insert emoji">
+              <Smile size={15} />
+            </button>
+            <button type="button" className="msg-tool" aria-label="Insert merge tag">
+              <Braces size={15} />
+            </button>
           </div>
-          <Lock size={14} className="text-muted-foreground" />
+          <Lock size={13} className="msg-editor-lock" />
         </div>
       </div>
     </div>

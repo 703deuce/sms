@@ -14,9 +14,9 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
   return (
     <div>
       <Toast message={toast} />
-      <p className="text-[12.5px] text-muted-foreground mb-1">Auto-Replies / Compliance</p>
-      <h1 className="text-[24px] font-bold text-foreground tracking-tight">Compliance Messaging</h1>
-      <p className="text-[14px] text-muted-foreground mt-1 max-w-3xl">
+      <p className="ar-breadcrumb">Auto-Replies / Compliance</p>
+      <h1 className="ar-title">Compliance Messaging</h1>
+      <p className="ar-subtitle max-w-3xl">
         Manage all things related to TCPA compliance. The TCPA and cellular carriers require all
         mobile messaging programs to provide specific verbiage —{" "}
         <span className="font-semibold text-foreground">
@@ -25,10 +25,10 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
       </p>
 
       <div className="mt-7 space-y-6 max-w-3xl">
-        <div className="flex items-start justify-between gap-8">
+        <div className="ar-toggle-row">
           <div>
-            <h3 className="text-[15px] font-semibold text-foreground">Force Double Opt-In</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            <h3 className="ar-setting-title">Force Double Opt-In</h3>
+            <p className="ar-setting-desc">
               Some opt-in methods, such as web forms and website popups, require contacts to double
               opt-in before subscribing. This prevents bad actors from subscribing people without
               their consent.
@@ -36,10 +36,10 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
           </div>
           <Toggle on={doubleOptin} onChange={setDoubleOptin} />
         </div>
-        <div className="flex items-start justify-between gap-8">
+        <div className="ar-toggle-row">
           <div>
-            <h3 className="text-[15px] font-semibold text-foreground">Opt-Out Intelligence</h3>
-            <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+            <h3 className="ar-setting-title">Opt-Out Intelligence</h3>
+            <p className="ar-setting-desc">
               Contacts are always opted out whenever they text stop, unsubscribe, remove, cancel,
               end, quit, or opt out to your number. Opt-out intelligence uses AI to evaluate
               informal opt-out language.
@@ -82,7 +82,7 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
         })}
       </div>
 
-      <div className="info-note mt-8 max-w-3xl">
+      <div className="info-note mt-8 max-w-3xl" style={{ marginBottom: 0 }}>
         <ShieldCheck size={16} className="mt-0.5 shrink-0" />
         <span>
           Compliance verbiage is not editable. This content is simply here for your reference and is
@@ -90,20 +90,17 @@ export default function ComplianceMessaging({ onBack }: { onBack: () => void }) 
         </span>
       </div>
 
-      <div className="flex items-center gap-3 mt-8">
+      <div className="ar-save-row">
         <button
           onClick={() => {
             setToast("Settings saved.");
             setTimeout(() => setToast(null), 2500);
           }}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[14px] font-semibold px-7 py-2.5 rounded-lg transition-colors"
+          className="ar-btn-primary"
         >
           Save
         </button>
-        <button
-          onClick={onBack}
-          className="border border-border bg-card text-[14px] font-medium px-7 py-2.5 rounded-lg hover:bg-muted transition-colors"
-        >
+        <button onClick={onBack} className="ar-btn-secondary">
           Back
         </button>
       </div>
