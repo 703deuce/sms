@@ -103,7 +103,7 @@ export default function KeywordBuilder({
         onSaveKeyword({
           keyword: keyword.trim(),
           listName: selectedLists[0],
-          confirmation: autoResponse,
+          confirmation: description.trim() || autoResponse,
           autoReply: autoResponse,
         }),
       )

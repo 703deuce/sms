@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { loadContactById } from "@/lib/workspace-data";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 export async function GET(
   _request: Request,
@@ -31,6 +32,7 @@ export async function PATCH(
       firstName?: string;
       lastName?: string;
       email?: string;
+      phone?: string;
       status?: string;
       assignedUser?: string | null;
       company?: string;
@@ -43,12 +45,27 @@ export async function PATCH(
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    let phoneUpdate: string | undefined;
+    if (body.phone?.trim()) {
+      const normalized = normalizeE164(body.phone.trim());
+      if (normalized !== existing.phone) {
+        const conflict = await getPrisma().contact.findFirst({
+          where: { workspaceId: auth.workspaceId, phone: normalized, NOT: { id } },
+        });
+        if (conflict) {
+          return NextResponse.json({ error: "Phone number already in use" }, { status: 409 });
+        }
+        phoneUpdate = normalized;
+      }
+    }
+
     await getPrisma().contact.update({
       where: { id },
       data: {
         firstName: body.firstName ?? undefined,
         lastName: body.lastName ?? undefined,
         email: body.email ?? undefined,
+        phone: phoneUpdate,
         status: body.status
           ? (body.status.toUpperCase() as
               | "SUBSCRIBED"

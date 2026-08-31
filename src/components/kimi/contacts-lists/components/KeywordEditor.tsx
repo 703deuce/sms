@@ -9,6 +9,7 @@ interface Props {
   initialKeyword?: string;
   initialDescription?: string;
   initialAutoResponse?: string;
+  initialListName?: string;
   onSave: (payload: {
     listId: string | null;
     keyword: string;
@@ -22,16 +23,18 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return <div className={`toggle ${on ? "on" : ""}`} onClick={onClick} />;
 }
 
-export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, onSave, onCancel }: Props) {
+export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, initialListName, onSave, onCancel }: Props) {
   const keywordRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLInputElement>(null);
   const autoResponseRef = useRef<HTMLTextAreaElement>(null);
   const [behaviorOpen, setBehaviorOpen] = useState(true);
-  const [addToLists, setAddToLists] = useState(false);
+  const [addToLists, setAddToLists] = useState(Boolean(initialListName));
   const [altResponse, setAltResponse] = useState(false);
   const [doubleOptIn, setDoubleOptIn] = useState(false);
   const [createsContact, setCreatesContact] = useState(true);
-  const [selectedList, setSelectedList] = useState<string | null>(null);
+  const [selectedList, setSelectedList] = useState<string | null>(
+    () => lists.find((l) => l.name === initialListName)?.id ?? null,
+  );
   const [listDrop, setListDrop] = useState(false);
 
   const selectedName = lists.find((l) => l.id === selectedList)?.name;

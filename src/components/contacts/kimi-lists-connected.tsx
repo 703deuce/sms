@@ -155,6 +155,7 @@ export function KimiListsConnected() {
             initialKeyword={editingKeyword.keyword}
             initialDescription={editingKeyword.description}
             initialAutoResponse={editingKeyword.autoResponse}
+            initialListName={editingKeyword.listName}
             onSave={(payload) => void saveKeyword(payload)}
             onCancel={() => { setEditingKeyword(null); setPage("tools"); }}
           />

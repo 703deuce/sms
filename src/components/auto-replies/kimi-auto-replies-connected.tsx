@@ -100,6 +100,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
           <OptInMessages
             onBack={() => setView("overview")}
             initialBodies={optInBodies}
+            saveSuccessMessage="Saved for this session (server sync not available yet)."
             onSave={async ({ bodies }) => {
               setError("");
               setOptInBodies(bodies);

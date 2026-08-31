@@ -15,7 +15,7 @@ interface Props {
 export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber, onSave, onBack }: Props) {
   const [name, setName] = useState(prefillKeyword === "BlackFriday" ? "Black Friday" : "");
   const [keyword, setKeyword] = useState(prefillKeyword || "Join");
-  const number = defaultNumber || "888-379-4654";
+  const number = defaultNumber || "";
   const [fallback, setFallback] = useState("");
   const [active, setActive] = useState(true);
   const [kwOpen, setKwOpen] = useState(false);
@@ -26,7 +26,7 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
   );
 
   const handleSave = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !number.trim()) return;
     onSave({
       id: `link-${Date.now()}`,
       name,

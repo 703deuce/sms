@@ -57,13 +57,13 @@ function mapProperty(property: string): string | null {
     case "Age":
       return "custom:age";
     case "Email Address":
-      return "custom:email";
+      return "email";
     case "First Name":
-      return "custom:firstName";
+      return "firstName";
     case "Last Name":
-      return "custom:lastName";
+      return "lastName";
     case "List Membership":
-      return "tag";
+      return "list";
     case "Favorite Sports Team":
       return "custom:favorite_sports_team";
     default:
@@ -132,7 +132,11 @@ export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditio
   const reverseField = (field: string): string => {
     if (field === "status") return "Opt-In Status";
     if (field === "source") return "Source";
-    if (field === "tag") return "List Membership";
+    if (field === "list") return "List Membership";
+    if (field === "tag") return "Tag";
+    if (field === "firstName") return "First Name";
+    if (field === "lastName") return "Last Name";
+    if (field === "email") return "Email Address";
     if (field.startsWith("custom:")) {
       const key = field.slice("custom:".length);
       const map: Record<string, string> = {

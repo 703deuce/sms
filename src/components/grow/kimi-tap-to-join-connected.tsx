@@ -79,7 +79,11 @@ export function KimiTapToJoinConnected() {
   };
 
   const handleClone = (link: TapLink) => {
-    void createTapLink({ name: `${link.name} (Copy)`, keyword: link.keyword })
+    void createTapLink({
+      name: `${link.name} (Copy)`,
+      keyword: link.keyword,
+      phoneE164: link.number || defaultNumber,
+    })
       .then((created) => setLinks((prev) => [created, ...prev]))
       .catch((err) => setError(err instanceof Error ? err.message : "Could not clone link"));
   };

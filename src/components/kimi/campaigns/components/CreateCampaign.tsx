@@ -71,8 +71,31 @@ export default function CreateCampaign({
   useEffect(() => {
     const duplicateId = searchParams.get("duplicate");
     const editId = searchParams.get("edit");
+    const segmentId = searchParams.get("segmentId");
     const loadId = duplicateId || editId;
     let loaded = loadComposeDraft();
+
+    const applySegmentAudience = (seg: { id: string; name: string }) => {
+      setDraft((d) => {
+        const next: CampaignComposeDraft = {
+          ...d,
+          name: d.name || `${seg.name} Campaign`,
+          audience: [{ type: "segment", id: seg.id, name: seg.name }],
+        };
+        saveComposeDraft(next);
+        return next;
+      });
+    };
+
+    if (segmentId) {
+      fetch("/api/contacts/segments")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          const seg = (json?.data || []).find((s: { id: string; name: string }) => s.id === segmentId);
+          if (seg) applySegmentAudience(seg);
+        })
+        .catch(() => undefined);
+    }
 
     if (loadId) {
       fetch(`/api/mass-texting/campaigns/${loadId}`)

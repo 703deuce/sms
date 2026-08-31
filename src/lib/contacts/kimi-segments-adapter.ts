@@ -46,7 +46,7 @@ export async function previewSegmentCount(conditions: unknown): Promise<number> 
     body: JSON.stringify({ conditions }),
   });
   const json = await res.json();
-  if (!res.ok) return 0;
+  if (!res.ok) throw new Error(json.error || "Could not preview segment");
   return json.data?.count ?? 0;
 }
 

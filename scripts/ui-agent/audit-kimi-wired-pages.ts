@@ -1,5 +1,6 @@
 /**
- * Runtime audit for Kimi wired pages — console errors + API smoke checks.
+ * Runtime audit for Kimi wired pages — console errors, API smoke checks,
+ * and functional wiring checks that catch no-op saves / wrong entity lists.
  */
 import { chromium, type Page } from "playwright";
 
@@ -34,12 +35,80 @@ const API_CHECKS: Array<{ name: string; path: string; method?: string; body?: un
   { name: "fields", path: "/api/contacts/fields" },
   { name: "segments", path: "/api/contacts/segments" },
   { name: "segments-preview", path: "/api/contacts/segments/preview", method: "POST", body: { conditions: { match: "all", rules: [] } } },
+  { name: "segments-preview-list", path: "/api/contacts/segments/preview", method: "POST", body: { conditions: { match: "all", rules: [{ field: "list", op: "exists" }] } } },
   { name: "messaging-runtime", path: "/api/settings/messaging-runtime" },
   { name: "keywords", path: "/api/growth/keywords" },
+  { name: "qr-codes", path: "/api/growth/qr" },
   { name: "forms", path: "/api/growth/forms" },
   { name: "tap-to-join", path: "/api/growth/tap-to-join" },
   { name: "auto-replies", path: "/api/auto-replies" },
   { name: "automations", path: "/api/automations" },
+];
+
+const FUNCTIONAL_CHECKS: Array<{
+  name: string;
+  run: (page: Page) => Promise<string | null>;
+}> = [
+  {
+    name: "qr-page-shows-create-qr-not-create-keyword",
+    run: async (page) => {
+      await page.goto(`${BASE}/grow/qr-codes`, { waitUntil: "networkidle", timeout: 90000 });
+      const text = await page.locator("body").innerText();
+      if (/Create Keyword/i.test(text) && !/Create QR Code/i.test(text)) {
+        return "QR page still shows Create Keyword button (keyword/QR entity mismatch)";
+      }
+      return null;
+    },
+  },
+  {
+    name: "campaign-segmentId-query-loads",
+    run: async (page) => {
+      const segRes = await page.evaluate(async () => {
+        const res = await fetch("/api/contacts/segments");
+        const json = await res.json();
+        return { ok: res.ok, data: json.data as Array<{ id: string; name: string }> | undefined };
+      });
+      if (!segRes.ok || !segRes.data?.length) return null;
+      const segId = segRes.data[0].id;
+      await page.goto(`${BASE}/campaigns/new?segmentId=${encodeURIComponent(segId)}`, {
+        waitUntil: "networkidle",
+        timeout: 90000,
+      });
+      const body = await page.locator("body").innerText();
+      if (/Could not load|Failed to load/i.test(body)) {
+        return `campaigns/new?segmentId= shows load error`;
+      }
+      return null;
+    },
+  },
+  {
+    name: "contacts-fields-no-mock-fallback-banner",
+    run: async (page) => {
+      await page.goto(`${BASE}/contacts/fields`, { waitUntil: "networkidle", timeout: 90000 });
+      const body = await page.locator("body").innerText();
+      if (/Could not load contact|Contact not found/i.test(body)) {
+        return "contacts/fields shows contact load error on landing";
+      }
+      return null;
+    },
+  },
+  {
+    name: "segment-list-membership-field-accepted",
+    run: async (page) => {
+      const result = await page.evaluate(async () => {
+        const res = await fetch("/api/contacts/segments/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conditions: { match: "all", rules: [{ field: "list", op: "exists" }] },
+          }),
+        });
+        return { ok: res.ok, status: res.status };
+      });
+      if (!result.ok) return `list membership preview API failed (${result.status})`;
+      return null;
+    },
+  },
 ];
 
 async function authenticate(page: Page) {
@@ -57,6 +126,7 @@ async function main() {
   const pageErrors: string[] = [];
   const failedRoutes: string[] = [];
   const failedApis: string[] = [];
+  const failedFunctional: string[] = [];
 
   page.on("console", (msg) => {
     if (msg.type() === "error") consoleErrors.push(msg.text());
@@ -78,7 +148,6 @@ async function main() {
       }
       const bodyText = await page.locator("body").innerText();
       if (/Could not load|Failed to load|Loading…$/.test(bodyText.slice(0, 500))) {
-        // still loading or hard error banner — flag if error text present
         if (/Could not load|Failed to load/.test(bodyText)) {
           failedRoutes.push(`${route} error UI`);
         }
@@ -109,13 +178,24 @@ async function main() {
     }
   }
 
+  for (const check of FUNCTIONAL_CHECKS) {
+    try {
+      const err = await check.run(page);
+      if (err) failedFunctional.push(`${check.name}: ${err}`);
+    } catch (e) {
+      failedFunctional.push(`${check.name}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   await browser.close();
 
   console.log("\n=== Kimi Wired Page Audit ===\n");
   console.log(`Routes checked: ${WIRED_ROUTES.length}`);
   console.log(`API checks: ${API_CHECKS.length}`);
+  console.log(`Functional checks: ${FUNCTIONAL_CHECKS.length}`);
   console.log(`Route issues: ${failedRoutes.length}`);
   console.log(`API failures: ${failedApis.length}`);
+  console.log(`Functional failures: ${failedFunctional.length}`);
   console.log(`Page errors: ${pageErrors.length}`);
   console.log(`Console errors (total): ${consoleErrors.length}`);
 
@@ -127,12 +207,18 @@ async function main() {
     console.log("\nAPI failures:");
     failedApis.forEach((r) => console.log(`  - ${r}`));
   }
+  if (failedFunctional.length) {
+    console.log("\nFunctional failures:");
+    failedFunctional.forEach((r) => console.log(`  - ${r}`));
+  }
   if (pageErrors.length) {
     console.log("\nPage errors:");
     pageErrors.slice(0, 10).forEach((r) => console.log(`  - ${r}`));
   }
 
-  process.exit(failedRoutes.length || failedApis.length ? 1 : 0);
+  process.exit(
+    failedRoutes.length || failedApis.length || failedFunctional.length ? 1 : 0,
+  );
 }
 
 main().catch((e) => {

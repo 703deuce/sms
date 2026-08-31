@@ -24,6 +24,7 @@ export interface Keyword {
   connectedLists: number;
   createsContacts: boolean;
   autoResponse?: string;
+  listName?: string;
 }
 
 export const initialLists: ContactList[] = [

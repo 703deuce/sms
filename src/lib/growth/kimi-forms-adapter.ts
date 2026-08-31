@@ -86,6 +86,25 @@ export async function updateWebForm(
   return mapOptInFormToKimi(json.data);
 }
 
+export async function fetchWebFormById(id: string): Promise<{
+  id: string;
+  name: string;
+  listName?: string | null;
+  doubleOptIn?: boolean;
+  status?: string;
+  config?: {
+    headline?: string;
+    subheadline?: string;
+    buttonLabel?: string;
+    fields?: string[];
+  };
+}> {
+  const res = await fetch(`/api/growth/forms/${id}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not load form");
+  return json.data;
+}
+
 export async function fetchContactListNames(): Promise<string[]> {
   const res = await fetch("/api/contacts/lists");
   const json = await res.json();

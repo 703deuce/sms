@@ -10,6 +10,7 @@ export type QrCodeRow = {
   id: string;
   name: string;
   targetUrl: string;
+  targetType?: string;
   trackedUrl?: string;
   qrImageUrl?: string;
   status?: string;

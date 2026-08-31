@@ -79,6 +79,7 @@ export async function updateContact(
     firstName?: string;
     lastName?: string;
     email?: string;
+    phone?: string;
     optInLabel?: string;
   },
 ): Promise<void> {
@@ -89,6 +90,7 @@ export async function updateContact(
       firstName: payload.firstName,
       lastName: payload.lastName,
       email: payload.email,
+      phone: payload.phone,
       status: payload.optInLabel ? mapOptInLabelToApiStatus(payload.optInLabel) : undefined,
     }),
   });

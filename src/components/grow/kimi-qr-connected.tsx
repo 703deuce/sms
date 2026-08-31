@@ -5,17 +5,29 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  QrCode as QrIcon, Search, Plus, MoreVertical, Pencil, Copy, Link2, Trash2,
-  ListChecks, ArrowLeft,
+  QrCode as QrIcon, Search, Plus, MoreVertical, Download, Trash2,
+  ArrowLeft, ExternalLink,
 } from "lucide-react";
 import QrGenerator from "@/components/kimi/grow-qr-codes/components/QrGenerator";
 import type { Keyword } from "@/components/kimi/grow-qr-codes/mock-data";
-import { createQrCode, fetchQrKeywords } from "@/lib/growth/kimi-qr-adapter";
-import { cloneKeyword, deleteKeyword } from "@/lib/growth/kimi-keywords-adapter";
+import { createQrCode, fetchQrCodes, fetchQrKeywords, type QrCodeRow } from "@/lib/growth/kimi-qr-adapter";
 import { fetchWebForms } from "@/lib/growth/kimi-forms-adapter";
 import { useSearchParams } from "next/navigation";
 
 type View = "list" | "generator";
+
+function formatQrDate(iso?: string): string {
+  if (!iso) return "Recently";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Recently";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export function KimiQrCodesConnected() {
   const searchParams = useSearchParams();
@@ -24,13 +36,19 @@ export function KimiQrCodesConnected() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [qrCodes, setQrCodes] = useState<QrCodeRow[]>([]);
   const [webforms, setWebforms] = useState<Array<{ value: string; label: string }>>([]);
   const [defaultKeyword, setDefaultKeyword] = useState<string | undefined>(queryKeyword);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
-    const [rows, forms] = await Promise.all([fetchQrKeywords(), fetchWebForms()]);
-    setKeywords(rows);
+    const [keywordRows, qrRows, forms] = await Promise.all([
+      fetchQrKeywords(),
+      fetchQrCodes(),
+      fetchWebForms(),
+    ]);
+    setKeywords(keywordRows);
+    setQrCodes(qrRows);
     setWebforms(forms.map((f) => ({ value: f.id, label: f.name })));
   }, []);
 
@@ -38,41 +56,15 @@ export function KimiQrCodesConnected() {
     void reload().catch(() => undefined);
   }, [reload]);
 
-  const rows = keywords.filter((k) => k.name.toLowerCase().includes(query.toLowerCase()));
+  const rows = qrCodes.filter((qr) => {
+    const q = query.toLowerCase();
+    return qr.name.toLowerCase().includes(q) || qr.targetUrl.toLowerCase().includes(q);
+  });
 
-  const openGenerator = (kw?: Keyword) => {
-    setDefaultKeyword(kw?.name);
+  const openGenerator = (kw?: string) => {
+    setDefaultKeyword(kw);
     setMenuFor(null);
     setView("generator");
-  };
-
-  const handleDelete = async (id: string) => {
-    setError("");
-    try {
-      await deleteKeyword(id);
-      setKeywords((prev) => prev.filter((k) => k.id !== id));
-      setMenuFor(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-    }
-  };
-
-  const handleClone = async (id: string) => {
-    setError("");
-    try {
-      await cloneKeyword(id, keywords.map((k) => ({
-        id: k.id,
-        name: k.name,
-        description: k.description,
-        lastSaved: k.lastSaved,
-        connectedLists: k.connectedLists,
-        status: k.status,
-      })));
-      await reload();
-      setMenuFor(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Clone failed");
-    }
   };
 
   return (
@@ -86,7 +78,7 @@ export function KimiQrCodesConnected() {
                 className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors mb-5"
                 onClick={() => setView("list")}
               >
-                <ArrowLeft size={15} /> Back to Keywords
+                <ArrowLeft size={15} /> Back to QR Codes
               </button>
               <QrGenerator
                 onCancel={() => setView("list")}
@@ -94,6 +86,7 @@ export function KimiQrCodesConnected() {
                 keywordOptions={keywords.map((k) => ({ name: k.name }))}
                 webformOptions={webforms}
                 onDownload={async ({ action, keyword, webform, url }) => {
+                  setError("");
                   const targetUrl =
                     action === "url"
                       ? url
@@ -105,13 +98,15 @@ export function KimiQrCodesConnected() {
                     targetUrl,
                     targetType: action,
                   });
+                  await reload();
+                  setView("list");
                 }}
               />
             </>
           ) : (
             <>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
-                <span>Tools</span><span className="text-border">/</span><span>Keywords</span>
+                <span>Tools</span><span className="text-border">/</span><span>QR Codes</span>
               </div>
               <div className="flex items-center gap-2.5 mb-1.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
@@ -119,7 +114,7 @@ export function KimiQrCodesConnected() {
                 </span>
                 <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">QR Codes</h1>
               </div>
-              <p className="text-sm text-muted-foreground mb-6">View and manage all of your keywords &amp; QR codes.</p>
+              <p className="text-sm text-muted-foreground mb-6">Create and manage QR codes for keywords, web forms, and links.</p>
 
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div className="relative">
@@ -132,51 +127,80 @@ export function KimiQrCodesConnected() {
                   />
                 </div>
                 <button className="tv-btn-primary flex items-center gap-1.5" onClick={() => openGenerator()}>
-                  <Plus size={15} /> Create Keyword
+                  <Plus size={15} /> Create QR Code
                 </button>
               </div>
 
               <div className="bg-card border border-border rounded-xl shadow-sm overflow-visible">
                 <div className="grid grid-cols-[1.1fr_1.7fr_0.8fr_0.5fr_44px] items-center px-5 h-11 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase border-b border-border bg-muted/40 rounded-t-xl">
-                  <span>Keyword</span><span>Description</span><span /><span>Status</span><span />
+                  <span>Name</span><span>Destination</span><span /><span>Status</span><span />
                 </div>
-                {rows.map((k) => (
-                  <div
-                    key={k.id}
-                    className="grid grid-cols-[1.1fr_1.7fr_0.8fr_0.5fr_44px] items-center px-5 py-4 border-b border-border last:border-0 hover:bg-accent/40 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{k.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{k.lastSaved}</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground pr-6 leading-snug">{k.description}</p>
-                    <span className="tv-chip w-fit"><ListChecks size={12} className="mr-1.5" />{k.connectedLists} Connected List</span>
-                    <span className={`tv-status ${k.status === "Active" ? "" : "tv-status-inactive"}`}>{k.status}</span>
-                    <div className="relative flex justify-end" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        onClick={() => setMenuFor(menuFor === k.id ? null : k.id)}
-                      >
-                        <MoreVertical size={16} />
-                      </button>
-                      {menuFor === k.id && (
-                        <div className="tv-popover absolute right-0 top-9 z-30 w-56 py-1.5">
-                          <button className="tv-menu-item" onClick={() => openGenerator(k)}><Pencil size={14} className="mr-2.5 text-muted-foreground" />Edit</button>
-                          <button className="tv-menu-item" onClick={() => void handleClone(k.id)}><Copy size={14} className="mr-2.5 text-muted-foreground" />Clone</button>
-                          <button className="tv-menu-item" onClick={() => openGenerator(k)}><QrIcon size={14} className="mr-2.5 text-muted-foreground" />Create QR Code</button>
-                          <button className="tv-menu-item" onClick={() => window.location.assign("/grow/tap-to-join")}><Link2 size={14} className="mr-2.5 text-muted-foreground" />Create Tap-to-Join Link</button>
-                          <div className="my-1.5 border-t border-border" />
-                          <button className="tv-menu-item text-red-600" onClick={() => void handleDelete(k.id)}><Trash2 size={14} className="mr-2.5" />Delete</button>
-                        </div>
-                      )}
-                    </div>
+                {rows.length === 0 ? (
+                  <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    No QR codes yet. Create one to get started.
                   </div>
-                ))}
-                <div className="px-5 py-3 border-t border-border">
-                  <select className="tv-input w-auto text-[13px] py-1.5 pr-8 text-muted-foreground">
-                    <option>25 Per Page</option><option>50 Per Page</option>
-                  </select>
-                </div>
+                ) : (
+                  rows.map((qr) => (
+                    <div
+                      key={qr.id}
+                      className="grid grid-cols-[1.1fr_1.7fr_0.8fr_0.5fr_44px] items-center px-5 py-4 border-b border-border last:border-0 hover:bg-accent/40 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{qr.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{formatQrDate(qr.createdAt)}</p>
+                      </div>
+                      <p className="text-sm text-muted-foreground pr-6 leading-snug truncate" title={qr.targetUrl}>
+                        {qr.targetUrl}
+                      </p>
+                      <span className="tv-chip w-fit">{qr.targetType || "url"}</span>
+                      <span className={`tv-status ${qr.status === "Active" ? "" : "tv-status-inactive"}`}>
+                        {qr.status || "Active"}
+                      </span>
+                      <div className="relative flex justify-end" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          onClick={() => setMenuFor(menuFor === qr.id ? null : qr.id)}
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {menuFor === qr.id && (
+                          <div className="tv-popover absolute right-0 top-9 z-30 w-56 py-1.5">
+                            {qr.qrImageUrl && (
+                              <a
+                                className="tv-menu-item"
+                                href={qr.qrImageUrl}
+                                download={`${qr.name}.png`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <Download size={14} className="mr-2.5 text-muted-foreground" />Download
+                              </a>
+                            )}
+                            {qr.trackedUrl && (
+                              <a
+                                className="tv-menu-item"
+                                href={qr.trackedUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <ExternalLink size={14} className="mr-2.5 text-muted-foreground" />Open Link
+                              </a>
+                            )}
+                            <button
+                              className="tv-menu-item"
+                              onClick={() => {
+                                const smsMatch = qr.targetUrl.match(/^sms:\?body=(.+)$/i);
+                                openGenerator(smsMatch ? decodeURIComponent(smsMatch[1]) : undefined);
+                              }}
+                            >
+                              <QrIcon size={14} className="mr-2.5 text-muted-foreground" />Regenerate
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </>
           )}

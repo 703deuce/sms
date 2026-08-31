@@ -73,7 +73,7 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
         })
         .catch(() => {
           if (!cancelled) {
-            setDisplayCount(matched);
+            setDisplayCount(null);
             setCalculating(false);
           }
         });

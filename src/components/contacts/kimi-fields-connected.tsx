@@ -163,6 +163,7 @@ export function KimiFieldsConnected({ initialFields }: Props) {
               firstName: payload.firstName,
               lastName: payload.lastName,
               email: payload.email,
+              phone: payload.mobile,
               optInLabel: payload.optIn,
             });
             await reloadContacts();

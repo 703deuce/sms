@@ -45,6 +45,7 @@ export function mapApiKeywordToKimi(k: {
     connectedLists: k.listName ? 1 : 0,
     createsContacts: true,
     autoResponse: k.autoReply || "",
+    listName: k.listName || undefined,
   };
 }
 

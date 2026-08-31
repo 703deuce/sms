@@ -14,6 +14,7 @@ import {
   deleteWebForm,
   fetchContactListNames,
   fetchWebForms,
+  fetchWebFormById,
   updateWebForm,
 } from "@/lib/growth/kimi-forms-adapter";
 
@@ -26,6 +27,11 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
   const [forms, setForms] = useState<WebForm[]>(initialForms);
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [editingFormName, setEditingFormName] = useState<string>("");
+  const [editingFormDetail, setEditingFormDetail] = useState<{
+    listName?: string;
+    doubleOptIn?: boolean;
+    status?: string;
+  } | null>(null);
   const [contactLists, setContactLists] = useState<string[]>([]);
   const [error, setError] = useState("");
 
@@ -83,7 +89,18 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
   const openFormEditor = (form: WebForm) => {
     setEditingFormId(form.id);
     setEditingFormName(form.name);
+    setEditingFormDetail(null);
     setView("create");
+    void fetchWebFormById(form.id)
+      .then((detail) => {
+        setEditingFormName(detail.name || form.name);
+        setEditingFormDetail({
+          listName: detail.listName || undefined,
+          doubleOptIn: detail.doubleOptIn,
+          status: detail.status,
+        });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load form"));
   };
 
   const handleCloneForm = async (id: string) => {
@@ -91,9 +108,22 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     const src = forms.find((f) => f.id === id);
     if (!src) return;
     try {
+      const detailRes = await fetch(`/api/growth/forms/${id}`);
+      const detailJson = await detailRes.json();
+      if (!detailRes.ok) throw new Error(detailJson.error || "Could not load form");
       const created = await createWebForm(`${src.name} (Copy)`);
-      setForms((prev) => [created, ...prev]);
-      openFormEditor(created);
+      await updateWebForm(created.id, {
+        name: `${src.name} (Copy)`,
+        listName: detailJson.data?.listName || src.description || undefined,
+        doubleOptIn: Boolean(detailJson.data?.doubleOptIn),
+        status: detailJson.data?.status || src.status,
+        headline: detailJson.data?.config?.headline,
+        subheadline: detailJson.data?.config?.subheadline,
+        buttonLabel: detailJson.data?.config?.buttonLabel,
+        fields: detailJson.data?.config?.fields,
+      });
+      await reload();
+      openFormEditor({ ...created, name: `${src.name} (Copy)` });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not clone form");
     }
@@ -116,9 +146,13 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
       )}
       {view === "create" && editingFormId && (
         <FormBuilder
+          key={`${editingFormId}-${editingFormDetail ? "ready" : "pending"}`}
           formId={editingFormId}
           formName={editingFormName}
           contactListNames={contactLists}
+          initialListName={editingFormDetail?.listName}
+          initialDoubleOptIn={editingFormDetail?.doubleOptIn}
+          initialActive={editingFormDetail?.status !== "Inactive"}
           onSave={handleSaveForm}
           onSaveError={(msg) => setError(msg)}
           onExit={() => { setView("list"); setEditingFormId(null); void reload(); }}

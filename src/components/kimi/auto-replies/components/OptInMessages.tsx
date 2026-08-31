@@ -9,10 +9,12 @@ export default function OptInMessages({
   onBack,
   initialBodies,
   onSave,
+  saveSuccessMessage = "Settings saved.",
 }: {
   onBack: () => void;
   initialBodies?: Record<string, string>;
   onSave?: (payload: { bodies: Record<string, string> }) => Promise<void>;
+  saveSuccessMessage?: string;
 }) {
   const [open, setOpen] = useState<string | null>("optin");
   const [bodies, setBodies] = useState<Record<string, string>>(
@@ -26,7 +28,7 @@ export default function OptInMessages({
     if (onSave) {
       void onSave({ bodies })
         .then(() => {
-          setToast("Settings saved.");
+          setToast(saveSuccessMessage);
           setTimeout(() => setToast(null), 2500);
         })
         .catch(() => {

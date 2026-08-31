@@ -195,7 +195,8 @@ export default function InboxSettings({
               setTimeout(() => setToast(null), 2500);
             };
             if (onSave) {
-              void onSave({ awayMessage: single, awayEnabled: autoOn })
+              const awayMessage = autoOn ? (officeOn ? outside : single) : "";
+              void onSave({ awayMessage, awayEnabled: autoOn })
                 .then(finish)
                 .catch(() => {
                   setToast("Save failed.");

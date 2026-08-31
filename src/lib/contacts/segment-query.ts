@@ -53,6 +53,8 @@ type EvaluableContact = {
   customFields: unknown;
   /** Tag names attached to the contact. */
   tagNames: string[];
+  /** Internal contact list names. */
+  listNames?: string[];
   /** consentSource / import source */
   source?: string | null;
   /** Connected integration provider ids (from external mappings). */
@@ -66,6 +68,9 @@ type EvaluableContact = {
   dealStages?: string[];
   ticketStatuses?: string[];
   consentStatus?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
 };
 
 function matchListField(
@@ -136,6 +141,10 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
     }
   }
 
+  if (rule.field === "list") {
+    return matchListField(contact.listNames, rule);
+  }
+
   if (rule.field === "source") {
     const src = stringVal(contact.source).toLowerCase();
     const present = Boolean(src);
@@ -197,6 +206,27 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
         return !status;
       default:
         return status.includes(targetLc);
+    }
+  }
+
+  if (rule.field === "firstName" || rule.field === "lastName" || rule.field === "email") {
+    const val = stringVal(contact[rule.field]).toLowerCase();
+    const present = Boolean(val);
+    switch (rule.op) {
+      case "equals":
+        return val === targetLc;
+      case "not_equals":
+        return val !== targetLc;
+      case "contains":
+        return val.includes(targetLc);
+      case "not_contains":
+        return !val.includes(targetLc);
+      case "exists":
+        return present;
+      case "not_exists":
+        return !present;
+      default:
+        return val === targetLc;
     }
   }
 
@@ -267,12 +297,16 @@ export async function resolveSegmentContactIds(
     status: string;
     customFields: unknown;
     consentSource?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
   }>;
 
   // Load tag names per contact only when a tag rule is present (avoids extra
   // queries otherwise). The Supabase compat layer does not hydrate nested
   // relations via `select`, so we resolve the join manually.
   const needsTags = parsed.rules.some((r) => r.field === "tag" || r.field === "external_tag");
+  const needsLists = parsed.rules.some((r) => r.field === "list");
   const needsProviders = parsed.rules.some(
     (r) => r.field === "provider" || r.field === "connection" || r.field === "external_list" || r.field === "deal_stage" || r.field === "ticket_status",
   );
@@ -282,6 +316,7 @@ export async function resolveSegmentContactIds(
   );
   const needsOrders = parsed.rules.some((r) => r.field === "order_status");
   const tagNamesByContact = new Map<string, string[]>();
+  const listNamesByContact = new Map<string, string[]>();
   const providersByContact = new Map<string, string[]>();
   const connectionsByContact = new Map<string, string[]>();
   const listsByContact = new Map<string, string[]>();
@@ -309,6 +344,27 @@ export async function resolveSegmentContactIds(
       const list = tagNamesByContact.get(ct.contactId) || [];
       list.push(name);
       tagNamesByContact.set(ct.contactId, list);
+    }
+  }
+
+  if (needsLists && contactIds.length) {
+    const members = (await prisma.contactListMember.findMany({
+      where: { contactId: { in: contactIds } },
+    })) as Array<{ contactId: string; listId: string }>;
+    const listIds = [...new Set(members.map((m) => m.listId))];
+    const contactLists = listIds.length
+      ? ((await prisma.contactList.findMany({ where: { id: { in: listIds } } })) as Array<{
+          id: string;
+          name: string;
+        }>)
+      : [];
+    const listNameById = new Map(contactLists.map((l) => [l.id, l.name]));
+    for (const m of members) {
+      const name = listNameById.get(m.listId);
+      if (!name) continue;
+      const list = listNamesByContact.get(m.contactId) || [];
+      if (!list.includes(name)) list.push(name);
+      listNamesByContact.set(m.contactId, list);
     }
   }
 
@@ -402,6 +458,7 @@ export async function resolveSegmentContactIds(
     status: c.status,
     customFields: c.customFields,
     tagNames: tagNamesByContact.get(c.id) || [],
+    listNames: listNamesByContact.get(c.id) || [],
     source: c.consentSource || null,
     providers: providersByContact.get(c.id) || [],
     connectionIds: connectionsByContact.get(c.id) || [],
@@ -413,6 +470,9 @@ export async function resolveSegmentContactIds(
     dealStages: dealStagesByContact.get(c.id) || [],
     ticketStatuses: ticketStatusesByContact.get(c.id) || [],
     consentStatus: c.status,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    email: c.email,
   }));
 
   return contacts

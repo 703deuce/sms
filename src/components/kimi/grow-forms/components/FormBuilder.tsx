@@ -23,7 +23,7 @@ const elementIcons: Record<string, React.ReactNode> = {
 };
 
 export default function FormBuilder({
-  onExit, onTestForm, onEmbedSite, formId, formName, contactListNames, onSave, onSaveError,
+  onExit, onTestForm, onEmbedSite, formId, formName, contactListNames, initialListName, initialDoubleOptIn, initialActive, onSave, onSaveError,
 }: {
   onExit: () => void;
   onTestForm: () => void;
@@ -31,6 +31,9 @@ export default function FormBuilder({
   formId?: string;
   formName?: string;
   contactListNames?: string[];
+  initialListName?: string;
+  initialDoubleOptIn?: boolean;
+  initialActive?: boolean;
   onSave?: (payload: {
     formId: string;
     name: string;
@@ -47,12 +50,12 @@ export default function FormBuilder({
   const [openSection, setOpenSection] = useState(1);
   const [view, setView] = useState<"form" | "success">("form");
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [active, setActive] = useState(true);
+  const [active, setActive] = useState(initialActive ?? true);
   const [selected, setSelected] = useState<string | null>(null);
   const [imageHue, setImageHue] = useState<string | null>(null);
   const [emailRemoved, setEmailRemoved] = useState(false);
   const [emailPlaceholder, setEmailPlaceholder] = useState("Email");
-  const [chosenLists, setChosenLists] = useState<string[]>([]);
+  const [chosenLists, setChosenLists] = useState<string[]>(initialListName ? [initialListName] : []);
   const [saving, setSaving] = useState(false);
 
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -64,7 +67,9 @@ export default function FormBuilder({
   const [hiddenPanel, setHiddenPanel] = useState(false);
 
   const [name, setName] = useState(formName || (formType === "landing" ? "20 % Off" : "Embed - 20% Off"));
-  const [doubleOptIn, setDoubleOptIn] = useState(formDefaults.doubleOptIn);
+  const [doubleOptIn, setDoubleOptIn] = useState(
+    initialDoubleOptIn != null ? String(initialDoubleOptIn) : formDefaults.doubleOptIn,
+  );
   const [optIn, setOptIn] = useState(formDefaults.optIn);
 
   const handleSave = () => {
