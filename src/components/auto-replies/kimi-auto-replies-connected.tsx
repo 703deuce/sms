@@ -11,7 +11,7 @@ import KeywordsList from "@/components/kimi/auto-replies/components/KeywordsList
 import KeywordEdit from "@/components/kimi/auto-replies/components/KeywordEdit";
 import InboxSettings from "@/components/kimi/auto-replies/components/InboxSettings";
 import type { Keyword } from "@/components/kimi/auto-replies/mock-data";
-import { fetchAutoReplies, mapAutoReplyToKimiKeyword, updateAutoReply } from "@/lib/auto-replies/kimi-auto-replies-adapter";
+import { fetchAutoReplies, mapAutoReplyToKimiKeyword, updateAutoReply, createAutoReply } from "@/lib/auto-replies/kimi-auto-replies-adapter";
 import { MessageSquareReply, ShieldCheck, Tags, Inbox, LayoutGrid } from "lucide-react";
 import type { AutoRepliesInitialView } from "@/components/kimi/auto-replies/AutoRepliesFlow";
 
@@ -91,13 +91,24 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
             onBack={() => setView("keywords")}
             onSaved={(k) => {
               setError("");
-              void updateAutoReply(k.id, {
-                name: k.keyword,
-                message: k.autoResponse,
-              })
-                .then(() => reload())
+              const savePromise =
+                k.id === "new"
+                  ? createAutoReply({
+                      name: k.keyword || "New auto-reply",
+                      triggerType: "list_join",
+                      message: k.autoResponse,
+                    })
+                  : updateAutoReply(k.id, {
+                      name: k.keyword,
+                      message: k.autoResponse,
+                    });
+              void savePromise
+                .then(() => {
+                  void reload();
+                  setView("keywords");
+                  setEditing(null);
+                })
                 .catch((err) => setError(err instanceof Error ? err.message : "Save failed"));
-              setEditing(k);
             }}
           />
         )}

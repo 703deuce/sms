@@ -29,7 +29,7 @@ const WIRED_ROUTES = [
 const API_CHECKS: Array<{ name: string; path: string; method?: string }> = [
   { name: "inbox", path: "/api/inbox" },
   { name: "campaigns", path: "/api/mass-texting/campaigns" },
-  { name: "contacts", path: "/api/contacts?take=5" },
+  { name: "contacts-stats", path: "/api/contacts/stats" },
   { name: "lists", path: "/api/contacts/lists" },
   { name: "fields", path: "/api/contacts/fields" },
   { name: "segments", path: "/api/contacts/segments" },

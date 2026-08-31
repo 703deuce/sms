@@ -16,14 +16,21 @@ import {
   saveCampaignDraft,
   timingLabel,
   type LaunchReviewData,
+  type ReviewNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 
 export default function ReviewDetails({
   onPrev,
+  paths,
 }: {
   onPrev: () => void;
+  paths?: ReviewNavPaths;
 }) {
   const router = useRouter();
+  const homePath = paths?.homePath ?? "/campaigns";
+  const queuePath = paths?.queuePath ?? ((id: string) => `/campaigns/new/queue?id=${id}`);
+  const successPath =
+    paths?.successPath ?? ((id: string, mode: string) => `/campaigns/new/success?id=${id}&mode=${mode}`);
   const searchParams = useSearchParams();
   const campaignId = searchParams.get("id") || loadComposeDraft().campaignId;
   const [draft, setDraft] = useState<CampaignComposeDraft>(loadComposeDraft());
@@ -58,7 +65,7 @@ export default function ReviewDetails({
   async function handleSaveDraft() {
     try {
       await saveCampaignDraft({ ...draft, campaignId: campaignId || draft.campaignId });
-      router.push("/campaigns");
+      router.push(homePath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save draft");
     }
@@ -71,9 +78,9 @@ export default function ReviewDetails({
     try {
       await launchCampaign(campaignId, review.finalRecipientCount);
       if (draft.scheduleMode === "now") {
-        router.push(`/campaigns/new/queue?id=${campaignId}`);
+        router.push(queuePath(campaignId));
       } else {
-        router.push(`/campaigns/new/success?id=${campaignId}&mode=${draft.scheduleMode}`);
+        router.push(successPath(campaignId, draft.scheduleMode));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Launch failed");

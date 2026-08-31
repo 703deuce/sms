@@ -29,6 +29,7 @@ export function KimiListsConnected() {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     const [l, c, k] = await Promise.all([fetchLists(), fetchContactsForLists(), fetchKeywordsForLists()]);
@@ -49,16 +50,24 @@ export function KimiListsConnected() {
   };
 
   const saveList = async (name: string, description: string) => {
-    const created = await createList(name, description);
-    setLists((prev) => [created, ...prev]);
-    setPage("lists");
-    showToast("List created.");
+    try {
+      const created = await createList(name, description);
+      setLists((prev) => [created, ...prev]);
+      setPage("lists");
+      showToast("List created.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create list");
+    }
   };
 
   const addToLists = async (contactIds: string[], listIds: string[]) => {
-    await Promise.all(listIds.map((listId) => addContactsToList(listId, contactIds)));
-    await reload();
-    showToast("Contacts successfully added.");
+    try {
+      await Promise.all(listIds.map((listId) => addContactsToList(listId, contactIds)));
+      await reload();
+      showToast("Contacts successfully added.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add contacts to list");
+    }
   };
 
   const saveKeyword = (listId: string | null) => {
@@ -78,6 +87,7 @@ export function KimiListsConnected() {
   return (
     <div className="min-h-screen bg-[#f7f8fc] text-[#0f1b3d]">
       <main className="mx-auto max-w-[1160px] px-8 pb-16">
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
         {showTabs && (
           <div className="page-tabs">
             <button className={`page-tab ${activeTab === "contacts" ? "active" : ""}`} onClick={() => setPage("contacts")}>

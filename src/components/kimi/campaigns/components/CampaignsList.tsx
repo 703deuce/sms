@@ -25,7 +25,13 @@ const FILTER_OPTIONS = [
   { id: "failed", label: "Failed" },
 ];
 
-export default function CampaignsList({ onCreate }: { onCreate: () => void }) {
+export default function CampaignsList({
+  onCreate,
+  editCampaignPath,
+}: {
+  onCreate: () => void;
+  editCampaignPath?: (id: string) => string;
+}) {
   const router = useRouter();
   const [rows, setRows] = useState<CampaignListRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +79,7 @@ export default function CampaignsList({ onCreate }: { onCreate: () => void }) {
       const newId = await duplicateCampaign(c.id);
       notify("Campaign cloned.");
       reload();
-      router.push(`/campaigns/new?edit=${newId}`);
+      router.push(editCampaignPath ? editCampaignPath(newId) : `/campaigns/new?edit=${newId}`);
     } catch (err) {
       notify(err instanceof Error ? err.message : "Could not clone campaign");
     }

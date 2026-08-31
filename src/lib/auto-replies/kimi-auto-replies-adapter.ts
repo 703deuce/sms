@@ -54,13 +54,18 @@ export async function updateAutoReply(
 export async function createAutoReply(payload: {
   name: string;
   triggerType: string;
-  triggerValue?: string;
+  triggerConfig?: Record<string, string | undefined>;
   message: string;
 }): Promise<AutoReplyRecord> {
   const res = await fetch("/api/auto-replies", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      name: payload.name,
+      triggerType: payload.triggerType,
+      triggerConfig: payload.triggerConfig,
+      message: payload.message,
+    }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not create auto-reply");

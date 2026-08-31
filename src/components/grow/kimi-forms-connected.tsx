@@ -18,6 +18,7 @@ type Props = { initialForms?: WebForm[] };
 export function KimiFormsConnected({ initialForms = [] }: Props) {
   const [view, setView] = useState<View>("list");
   const [forms, setForms] = useState<WebForm[]>(initialForms);
+  const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     const rows = await fetchWebForms();
@@ -31,18 +32,29 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
   }, [initialForms.length, reload]);
 
   const handleCreate = async () => {
-    const created = await createWebForm(`Web Form ${forms.length + 1}`);
-    setForms((prev) => [created, ...prev]);
-    setView("create");
+    setError("");
+    try {
+      const created = await createWebForm(`Web Form ${forms.length + 1}`);
+      setForms((prev) => [created, ...prev]);
+      setView("create");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create form");
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await deleteWebForm(id);
-    setForms((prev) => prev.filter((f) => f.id !== id));
+    setError("");
+    try {
+      await deleteWebForm(id);
+      setForms((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete form");
+    }
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
       {view === "list" && (
         <WebFormsList forms={forms} onCreate={() => void handleCreate()} onDelete={(id) => void handleDelete(id)} />
       )}

@@ -21,6 +21,7 @@ import {
   previewAudience,
   saveCampaignDraft,
   draftAudiencePayload,
+  type CampaignNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 
 type SendMode = "Now" | "Later" | "Recurring";
@@ -44,8 +45,16 @@ function scheduleToMode(mode: CampaignComposeDraft["scheduleMode"]): SendMode {
   return "Now";
 }
 
-export default function CreateCampaign({ onCancel }: { onCancel: () => void }) {
+export default function CreateCampaign({
+  onCancel,
+  paths,
+}: {
+  onCancel: () => void;
+  paths?: CampaignNavPaths;
+}) {
   const router = useRouter();
+  const homePath = paths?.homePath ?? "/campaigns";
+  const reviewPath = paths?.reviewPath ?? ((id: string) => `/campaigns/new/review?id=${id}`);
   const searchParams = useSearchParams();
   const [draft, setDraft] = useState<CampaignComposeDraft>(defaultComposeDraft);
   const [mode, setMode] = useState<SendMode>("Now");
@@ -188,7 +197,7 @@ export default function CreateCampaign({ onCancel }: { onCancel: () => void }) {
 
   async function handleSaveDraft() {
     const id = await persistDraft();
-    if (id) router.push("/campaigns");
+    if (id) router.push(homePath);
   }
 
   async function handleReview() {
@@ -196,7 +205,7 @@ export default function CreateCampaign({ onCancel }: { onCancel: () => void }) {
     setDraft(next);
     saveComposeDraft(next);
     const id = await saveCampaignDraft(next);
-    if (id) router.push(`/campaigns/new/review?id=${id}`);
+    if (id) router.push(reviewPath(id));
   }
 
   const scheduleModes = useMemo(() => {

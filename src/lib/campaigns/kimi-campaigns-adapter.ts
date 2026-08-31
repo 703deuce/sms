@@ -244,6 +244,17 @@ export async function loadAudiencePickerItems(): Promise<AudiencePickerItem[]> {
   return items;
 }
 
+export type CampaignNavPaths = {
+  homePath?: string;
+  reviewPath?: (campaignId: string) => string;
+};
+
+export type ReviewNavPaths = {
+  homePath?: string;
+  queuePath?: (campaignId: string) => string;
+  successPath?: (campaignId: string, mode: string) => string;
+};
+
 export async function loadDefaultSendingNumber(): Promise<{ id: string; number: string } | null> {
   const res = await fetch("/api/numbers");
   const json = await res.json();

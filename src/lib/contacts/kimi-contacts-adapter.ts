@@ -25,6 +25,15 @@ function mapOptIn(status: string): KimiContact["status"] {
   return "Not Subscribed";
 }
 
+export function mapOptInLabelToApiStatus(label: string): string {
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "subscribed") return "SUBSCRIBED";
+  if (normalized === "blocked") return "BLOCKED";
+  if (normalized === "unsubscribed") return "UNSUBSCRIBED";
+  if (normalized === "not subscribed") return "UNSUBSCRIBED";
+  return "SUBSCRIBED";
+}
+
 export function mapApiContactToKimi(c: ApiContact): KimiContact {
   return {
     id: c.id,
@@ -47,18 +56,14 @@ export async function fetchContacts(): Promise<KimiContact[]> {
 }
 
 export async function fetchContactStats(): Promise<KimiContactStats> {
-  const [all, subscribed, unsubscribed] = await Promise.all([
-    fetch("/api/contacts?take=1").then((r) => (r.ok ? r.json() : { data: [] })),
-    fetch("/api/contacts?status=SUBSCRIBED&take=1").then((r) => (r.ok ? r.json() : { data: [] })),
-    fetch("/api/contacts?status=UNSUBSCRIBED&take=1").then((r) => (r.ok ? r.json() : { data: [] })),
-  ]);
-  // API doesn't return total count in list response — use length of full fetch
-  const full = await fetch("/api/contacts?take=200");
-  const fullJson = await full.json();
-  const rows = fullJson.data || [];
-  const sub = rows.filter((c: ApiContact) => c.status?.toUpperCase() === "SUBSCRIBED").length;
-  const unsub = rows.filter((c: ApiContact) => c.status?.toUpperCase() === "UNSUBSCRIBED").length;
-  return { contacts: rows.length, subscribed: sub, unsubscribed: unsub };
+  const res = await fetch("/api/contacts/stats");
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not load contact stats");
+  return {
+    contacts: json.data?.contacts ?? 0,
+    subscribed: json.data?.subscribed ?? 0,
+    unsubscribed: json.data?.unsubscribed ?? 0,
+  };
 }
 
 export async function createContact(payload: {
@@ -67,11 +72,19 @@ export async function createContact(payload: {
   phone: string;
   email?: string;
   status?: string;
+  optInLabel?: string;
 }): Promise<void> {
+  const status = mapOptInLabelToApiStatus(payload.optInLabel || payload.status || "Subscribed");
   const res = await fetch("/api/contacts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      phone: payload.phone,
+      email: payload.email,
+      status,
+    }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not create contact");

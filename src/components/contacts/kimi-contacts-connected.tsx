@@ -70,13 +70,13 @@ export function KimiContactsConnected({
       return;
     }
     try {
-      await createContact({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.mobile,
-        email: formData.email || undefined,
-        status: formData.optIn === "Subscribed" ? "SUBSCRIBED" : "UNSUBSCRIBED",
-      });
+        await createContact({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.mobile,
+          email: formData.email || undefined,
+          optInLabel: formData.optIn || "Subscribed",
+        });
       await reload();
     } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save contact");

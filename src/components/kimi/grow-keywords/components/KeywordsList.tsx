@@ -41,8 +41,11 @@ export default function KeywordsList({
 
   const menuAction = (action: string, id: string) => {
     if (action === "Delete") {
-      setKeywords((ks) => ks.filter((k) => k.id !== id));
-      onDelete?.(id);
+      if (onDelete) {
+        onDelete(id);
+      } else {
+        setKeywords((ks) => ks.filter((k) => k.id !== id));
+      }
     }
     if (action === "Clone") {
       const src = keywords.find((k) => k.id === id);
