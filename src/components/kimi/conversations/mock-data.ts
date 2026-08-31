@@ -6,7 +6,7 @@ export type Message = {
   time?: string; eventText?: string; image?: string; caption?: string;
 };
 export type Conversation = {
-  id: string; contactId?: string; name: string; initials: string; color: string; preview: string; ago: string;
+  id: string; name: string; initials: string; color: string; preview: string; ago: string;
   unread?: boolean; status: "open" | "pending" | "closed";
   assignee: string | null; tags: string[]; phone: string; email?: string;
   messages: Message[];

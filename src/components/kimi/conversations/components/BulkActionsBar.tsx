@@ -2,27 +2,18 @@
 import React from "react";
 import { ChevronDown, UserCheck, Tag as TagIcon, CheckSquare, ListChecks } from "lucide-react";
 import { Popover, usePopover } from "./Popover";
-import type { Tag, Teammate } from "../mock-data";
+import { TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
 
-export default function BulkActionsBar({
-  count,
-  onAction,
-  tags,
-  teammates,
-}: {
-  count: number;
-  onAction: (a: string) => void;
-  tags: Tag[];
-  teammates: Teammate[];
+export default function BulkActionsBar({ count, onAction, tags, teammates }:{
+  count: number; onAction: (a: string)=>void; tags?: Tag[]; teammates?: Teammate[];
 }) {
-  const [s, setS] = usePopover();
-  const [a, setA] = usePopover();
-  const [t, setT] = usePopover();
-  const [m, setM] = usePopover();
-  const Btn = ({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick?: () => void }) => (
-    <button type="button" className="tv-btn-ghost" onClick={onClick}>{icon}{label} <ChevronDown size={13} /></button>
+  const tagList = tags ?? TAGS;
+  const teammateList = teammates ?? TEAMMATES;
+  const [s, setS] = usePopover(); const [a, setA] = usePopover(); const [t, setT] = usePopover(); const [m, setM] = usePopover();
+  const Btn = ({ label, icon, onClick }:{ label: string; icon?: React.ReactNode; onClick?: ()=>void }) => (
+    <button className="tv-btn-ghost" onClick={onClick}>{icon}{label} <ChevronDown size={13} /></button>
   );
-  const MenuItem = ({ label, onClick }: { label: string; onClick?: () => void }) => (
+  const MenuItem = ({ label, onClick }:{ label: string; onClick?: ()=>void }) => (
     <div className="tv-menu-item" onClick={onClick}>{label}</div>
   );
   return (
@@ -47,13 +38,13 @@ export default function BulkActionsBar({
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">ASSIGN CONVERSATIONS</div>
             <MenuItem label="No One" onClick={() => { onAction("assign:"); setA(false); }} />
-            {teammates.map((x) => <MenuItem key={x.id} label={x.name} onClick={() => { onAction("assign:" + x.id); setA(false); }} />)}
+            {teammateList.map((x) => <MenuItem key={x.id} label={x.name} onClick={() => { onAction("assign:" + x.id); setA(false); }} />)}
           </div>
         </Popover>
         <Popover open={t} onOpenChange={setT} align="left" width={220} trigger={<Btn label="Tag As" icon={<TagIcon size={14} />} />}>
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">TAG CONVERSATIONS</div>
-            {tags.map((x) => <MenuItem key={x.id} label={x.name} onClick={() => { onAction("tag:" + x.id); setT(false); }} />)}
+            {tagList.map((x) => <MenuItem key={x.id} label={x.name} onClick={() => { onAction("tag:" + x.id); setT(false); }} />)}
             <div className="tv-menu-sep">
               <MenuItem label="Clear Tags" onClick={() => { onAction("tag:clear"); setT(false); }} />
             </div>

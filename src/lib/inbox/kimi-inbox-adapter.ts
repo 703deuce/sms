@@ -1,5 +1,10 @@
-import type { Contact, Conversation as ApiConversation, User } from "@/lib/types";
-import type { Conversation, Message, Tag, Teammate } from "./mock-data";
+/**
+ * Data adapter: maps /api/inbox ↔ Kimi conversations mock types.
+ * Lives outside Kimi UI — presentation components stay untouched.
+ */
+import type { Conversation as ApiConversation, User } from "@/lib/types";
+import type { Conversation, Message, Tag, Teammate } from "@/components/kimi/conversations/mock-data";
+import type { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 
 const AVATAR_COLORS = ["#14b8a6", "#6366f1", "#22c55e", "#0ea5e9", "#f59e0b", "#ec4899", "#8b5cf6"];
 
@@ -17,7 +22,12 @@ export type InboxListItem = {
   lastMessage: string;
   updatedAt: string;
   tags?: string[];
-  contactId?: string;
+};
+
+export type KimiInboxContext = {
+  currentUserId: string;
+  currentUserName: string;
+  teamMembers: User[];
 };
 
 function hashColor(seed: string): string {
@@ -67,27 +77,24 @@ export function kimiStatusToApi(status: Conversation["status"]): string {
 
 export function resolveAssigneeId(
   assignedTo: string | null | undefined,
-  currentUserId: string,
-  currentUserName: string,
-  teamMembers: User[],
+  ctx: KimiInboxContext,
 ): string | null {
   if (!assignedTo) return null;
-  if (assignedTo === currentUserName) return "me";
-  const member = teamMembers.find((m) => m.name === assignedTo);
+  if (assignedTo === ctx.currentUserName) return "me";
+  const member = ctx.teamMembers.find((m) => m.name === assignedTo);
   return member?.id ?? null;
 }
 
-export function resolveAssigneeName(
+export function resolveAssigneeApiId(
   assigneeId: string | null,
-  currentUserName: string,
-  teamMembers: User[],
+  ctx: KimiInboxContext,
 ): string | null {
   if (!assigneeId) return null;
-  if (assigneeId === "me") return currentUserName;
-  return teamMembers.find((m) => m.id === assigneeId)?.name ?? null;
+  if (assigneeId === "me") return ctx.currentUserId;
+  return assigneeId;
 }
 
-export function mapApiMessage(m: ApiConversation["messages"][number], contactName: string): Message {
+function mapApiMessage(m: ApiConversation["messages"][number], contactName: string): Message {
   if (m.direction === "note") {
     return {
       id: m.id,
@@ -108,18 +115,10 @@ export function mapApiMessage(m: ApiConversation["messages"][number], contactNam
   };
 }
 
-export function mapApiConversationToKimi(
-  c: ApiConversation,
-  ctx: {
-    currentUserId: string;
-    currentUserName: string;
-    teamMembers: User[];
-  },
-): Conversation {
+export function mapApiConversationToKimi(c: ApiConversation, ctx: KimiInboxContext): Conversation {
   const name = c.contactName || c.phone || "Unknown";
   return {
     id: c.id,
-    contactId: c.contactId,
     name,
     initials: initials(name),
     color: hashColor(name),
@@ -127,28 +126,19 @@ export function mapApiConversationToKimi(
     ago: relativeAgo(c.updatedAt),
     unread: c.unread,
     status: apiStatusToKimi(c.status),
-    assignee: resolveAssigneeId(c.assignedTo, ctx.currentUserId, ctx.currentUserName, ctx.teamMembers),
+    assignee: resolveAssigneeId(c.assignedTo, ctx),
     tags: c.tags || [],
     phone: c.phone,
-    email: undefined,
     messages: (c.messages || []).map((m) => mapApiMessage(m, name)),
   };
 }
 
-export function mapListItemToKimi(
-  item: InboxListItem,
-  ctx: {
-    currentUserId: string;
-    currentUserName: string;
-    teamMembers: User[];
-  },
-): Conversation {
+export function mapListItemToKimi(item: InboxListItem, ctx: KimiInboxContext): Conversation {
   const first = item.contact?.firstName || "";
   const last = item.contact?.lastName || "";
   const name = `${first} ${last}`.trim() || item.contact?.phone || "Unknown";
   return {
     id: item.id,
-    contactId: item.contact?.id,
     name,
     initials: initials(name),
     color: hashColor(name),
@@ -156,22 +146,22 @@ export function mapListItemToKimi(
     ago: relativeAgo(item.updatedAt),
     unread: item.unread,
     status: apiStatusToKimi(item.status),
-    assignee: resolveAssigneeId(item.assignedTo, ctx.currentUserId, ctx.currentUserName, ctx.teamMembers),
+    assignee: resolveAssigneeId(item.assignedTo, ctx),
     tags: item.tags || [],
     phone: item.contact?.phone || "",
     messages: [],
   };
 }
 
-export function buildTeammates(currentUserId: string, currentUserName: string, teamMembers: User[]): Teammate[] {
+export function buildTeammates(ctx: KimiInboxContext): Teammate[] {
   const me: Teammate = {
     id: "me",
     name: "Me",
-    initials: initials(currentUserName || "Me"),
+    initials: initials(ctx.currentUserName || "Me"),
     color: "#4f46e5",
   };
-  const others = teamMembers
-    .filter((m) => m.id !== currentUserId)
+  const others = ctx.teamMembers
+    .filter((m) => m.id !== ctx.currentUserId)
     .map((m) => ({
       id: m.id,
       name: m.name,
@@ -202,7 +192,7 @@ export type InboxQuery = {
   product?: string;
 };
 
-export function inboxQueryFromFilter(sel: { kind: string; key: string; sub?: string }): InboxQuery {
+export function inboxQueryFromFilter(sel: FilterSel): InboxQuery {
   const q: InboxQuery = { product: "all" };
   if (sel.kind === "mine") {
     q.filter = "mine";
@@ -244,20 +234,6 @@ export async function patchConversation(
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not update conversation");
   return json.data;
-}
-
-export async function fetchTeamMembers(): Promise<User[]> {
-  const res = await fetch("/api/team");
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Could not load team");
-  return json.data || [];
-}
-
-export async function fetchContact(contactId: string): Promise<Contact | null> {
-  const res = await fetch(`/api/contacts/${contactId}`);
-  const json = await res.json();
-  if (!res.ok) return null;
-  return json.data ?? null;
 }
 
 export async function searchContacts(query: string): Promise<Array<{ id: string; name: string; phone: string }>> {
@@ -307,4 +283,38 @@ export function downloadTranscript(convo: Conversation) {
   a.download = `${convo.name.replace(/\s+/g, "-")}-transcript.txt`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Sync Kimi optimistic ThreadView update → API patch. */
+export async function syncConversationUpdate(
+  prev: Conversation,
+  next: Conversation,
+  ctx: KimiInboxContext,
+): Promise<ApiConversation | null> {
+  if (next.messages.length > prev.messages.length) {
+    const added = next.messages[next.messages.length - 1];
+    if (added.kind === "outbound" && added.text) {
+      return patchConversation(prev.id, { action: "reply", body: added.text });
+    }
+    if (added.kind === "note" && added.text) {
+      return patchConversation(prev.id, { action: "note", body: added.text });
+    }
+  }
+  if (next.status !== prev.status) {
+    return patchConversation(prev.id, { status: kimiStatusToApi(next.status) });
+  }
+  if (next.assignee !== prev.assignee) {
+    return patchConversation(prev.id, {
+      assigneeId: resolveAssigneeApiId(next.assignee, ctx),
+    });
+  }
+  const tagsChanged =
+    next.tags.length !== prev.tags.length || next.tags.some((t, i) => t !== prev.tags[i]);
+  if (tagsChanged) {
+    return patchConversation(prev.id, { tags: next.tags });
+  }
+  if (next.unread !== prev.unread) {
+    return patchConversation(prev.id, { unread: next.unread });
+  }
+  return null;
 }

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import ConversationsFlow from "@/components/kimi/conversations/ConversationsFlow";
+import { KimiConversationsConnected } from "@/components/inbox/kimi-conversations-connected";
 import {
   loadConversations,
   loadTeamMembers,
@@ -18,7 +18,7 @@ export default async function ConversationsPage() {
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading conversations…</p>}>
       <div className="kimi-surface kimi-conversations">
-        <ConversationsFlow
+        <KimiConversationsConnected
           initialConversations={conversations}
           teamMembers={teamMembers}
           currentUserId={session.userId}

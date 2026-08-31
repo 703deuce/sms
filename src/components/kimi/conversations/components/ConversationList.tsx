@@ -3,10 +3,10 @@ import React from "react";
 import { Inbox as InboxIcon } from "lucide-react";
 import { Conversation } from "../mock-data";
 
-export default function ConversationList({ title, subtitle, convos, selectedId, onSelect, checked, onCheck, allChecked, onCheckAll, loading = false }:{
+export default function ConversationList({ title, subtitle, convos, selectedId, onSelect, checked, onCheck, allChecked, onCheckAll }:{
   title: string; subtitle: string; convos: Conversation[]; selectedId: string | null;
   onSelect: (c: Conversation)=>void; checked: Set<string>; onCheck: (id: string, v: boolean)=>void;
-  allChecked: boolean; onCheckAll: (v: boolean)=>void; loading?: boolean;
+  allChecked: boolean; onCheckAll: (v: boolean)=>void;
 }) {
   return (
     <div style={{ width: 300, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
@@ -18,11 +18,7 @@ export default function ConversationList({ title, subtitle, convos, selectedId, 
         </div>
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto" }}>
-        {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "48px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: "var(--tv-faint)" }}>Loading conversations…</div>
-          </div>
-        ) : convos.length === 0 ? (
+        {convos.length === 0 && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "48px 24px", textAlign: "center" }}>
             <span style={{ width: 40, height: 40, borderRadius: 9999, background: "var(--tv-primary-soft)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               <InboxIcon size={18} color="var(--tv-primary)" />
@@ -30,8 +26,8 @@ export default function ConversationList({ title, subtitle, convos, selectedId, 
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tv-text-2)" }}>No conversations here</div>
             <div style={{ fontSize: 12, color: "var(--tv-faint)" }}>Conversations matching this filter will appear here.</div>
           </div>
-        ) : null}
-        {!loading && convos.map((c) => {
+        )}
+        {convos.map((c) => {
           const isChecked = checked.has(c.id);
           const active = selectedId === c.id;
           return (

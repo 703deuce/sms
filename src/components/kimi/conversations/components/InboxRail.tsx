@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash } from "lucide-react";
-import { TAGS, type Tag, type Teammate } from "../mock-data";
+import { TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
 
 export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string; sub?: string };
 
@@ -44,7 +44,7 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates }
   tags?: Tag[]; teammates?: Teammate[];
 }) {
   const tagList = tags ?? TAGS;
-  const teammateList = teammates ?? [];
+  const teammateList = teammates ?? TEAMMATES;
   const is = (k: string, key: string, sub?: string) => sel.kind === k && sel.key === key && (sub === undefined ? !sel.sub : sel.sub === sub);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
