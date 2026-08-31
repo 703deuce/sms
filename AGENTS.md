@@ -199,3 +199,5 @@ Screenshots (current Transovo captures) stay as compact image data URLs. See `VI
 - `/transovo/kimi/preview/[sessionId]` — Current / Kimi / Split comparison
 
 See `scripts/ui-agent/README.md`.
+
+**Persistence (Cloud Agents):** Kimi-generated frontend source is never disposable. On successful generation, source is copied immediately to `src/kimi-drafts/<route>/<session>/` before preview/refinement. Generation fails with `KIMI_OUTPUT_NOT_PERSISTED` if that copy does not succeed. The ephemeral sandbox under `.ui-agent/generated/` remains gitignored scratch.

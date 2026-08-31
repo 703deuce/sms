@@ -1,40 +1,43 @@
 {
-  "updatedAt": "2026-08-30T21:44:33.933Z",
+  "updatedAt": "2026-08-30T23:40:36.946Z",
   "reasoningEffort": "low",
-  "concurrency": 9,
+  "concurrency": 3,
   "staggerMs": 2000,
   "jobs": [
     {
       "videoName": "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/auto-replies",
       "status": "complete",
-      "sessionId": "2026-08-30T21-31-49-644Z-f833cc",
-      "startedAt": "2026-08-30T21:31:49.642Z",
-      "completedAt": "2026-08-30T21:35:06.039Z"
+      "sessionId": "2026-08-30T23-38-24-565Z-8ac203",
+      "startedAt": "2026-08-30T23:38:24.293Z",
+      "completedAt": "2026-08-30T23:40:36.946Z"
     },
     {
       "videoName": "Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/automations",
-      "status": "complete",
+      "status": "running",
       "sessionId": "2026-08-30T21-35-06-283Z-baf6cd",
-      "startedAt": "2026-08-30T21:35:06.039Z",
-      "completedAt": "2026-08-30T21:38:35.044Z"
+      "startedAt": "2026-08-30T23:38:26.294Z",
+      "completedAt": "2026-08-30T21:38:35.044Z",
+      "pid": 16835
     },
     {
       "videoName": "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/campaigns",
-      "status": "complete",
+      "status": "running",
       "sessionId": "2026-08-30T21-40-34-537Z-32b6ff",
-      "startedAt": "2026-08-30T21:40:34.278Z",
-      "completedAt": "2026-08-30T21:43:48.765Z"
+      "startedAt": "2026-08-30T23:38:26.295Z",
+      "completedAt": "2026-08-30T21:43:48.765Z",
+      "pid": 16835
     },
     {
       "videoName": "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)(1)",
       "route": "/campaigns",
-      "status": "complete",
+      "status": "running",
       "sessionId": "2026-08-30T21-40-36-659Z-103110",
-      "startedAt": "2026-08-30T21:40:36.277Z",
-      "completedAt": "2026-08-30T21:43:47.965Z"
+      "startedAt": "2026-08-30T23:40:36.946Z",
+      "completedAt": "2026-08-30T21:43:47.965Z",
+      "pid": 16835
     },
     {
       "videoName": "Adding and Uploading Contacts in SlickText SlickText Tutorials - SlickText (360p)",

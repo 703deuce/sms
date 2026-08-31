@@ -302,6 +302,14 @@ export async function runKimiCommand(
       });
     }
 
+    persistKimiGeneratedSource({
+      sessionId: session.id,
+      targetRoute: session.target,
+      referenceNames: options.referenceVideoNames,
+      status: "generated",
+    });
+    assertKimiOutputPersisted(session.id, session.target);
+
     session.refinementPasses = passes;
     session.status = "ready";
     updateSession(session);
