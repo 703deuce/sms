@@ -186,7 +186,7 @@ export default function FormBuilder({
             <button className="p-1.5 hover:bg-muted rounded" title="Undo Last Change"><Undo2 size={15} /></button>
             <button className="p-1.5 hover:bg-muted rounded"><Redo2 size={15} /></button>
             <div className="relative">
-              <button className="p-1.5 hover:bg-muted rounded" onClick={() => setHiddenPanel(!hiddenPanel)}>{hiddenPanel ? <EyeOff size={15} /> : <Eye size={15} /></button>
+              <button className="p-1.5 hover:bg-muted rounded" onClick={() => setHiddenPanel(!hiddenPanel)}>{hiddenPanel ? <EyeOff size={15} /> : <Eye size={15} />}</button>
               {hiddenPanel && (
                 <div className="absolute right-0 top-8 bg-card border border-border rounded-lg shadow-lg w-52 py-1 z-20 tv-pop text-xs">
                   <div className="px-3 py-1 text-[10px] text-muted-foreground">HIDDEN ON MOBILE</div>
