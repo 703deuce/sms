@@ -184,6 +184,8 @@ const ROUTE_MANIFEST_EXTRAS: Record<string, string[]> = {
   "/grow/keywords": ["src/styles/kimi/grow-keywords.css"],
   "/grow/qr-codes": ["src/styles/kimi/grow-qr-codes.css"],
   "/grow/tap-to-join": ["src/styles/kimi/grow-tap-to-join.css"],
+  "/contacts/segments": ["src/styles/kimi/contacts-segments.css"],
+  "/grow/forms": ["src/styles/kimi/grow-forms.css"],
 };
 
 export function buildProjectManifest(target: string): ProjectManifest {

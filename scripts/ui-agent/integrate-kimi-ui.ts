@@ -63,11 +63,25 @@ const JOBS: RouteJob[] = [
     cssClass: "kimi-contacts-lists",
   },
   {
+    route: "/contacts/segments",
+    slug: "contacts-segments",
+    flowName: "ContactsSegmentsFlow",
+    pagePath: "src/app/(app)/contacts/segments/page.tsx",
+    cssClass: "kimi-contacts-segments",
+  },
+  {
     route: "/conversations",
     slug: "conversations",
     flowName: "ConversationsFlow",
     pagePath: "src/app/(app)/conversations/page.tsx",
     cssClass: "kimi-conversations",
+  },
+  {
+    route: "/grow/forms",
+    slug: "grow-forms",
+    flowName: "GrowFormsFlow",
+    pagePath: "src/app/(app)/grow/forms/page.tsx",
+    cssClass: "kimi-grow-forms",
   },
   {
     route: "/grow/keywords",
@@ -308,7 +322,9 @@ function patchComponentSources(dest: string, flowName: string) {
       /const hasEmoji = \/\[\\u\{1F300\}-\\u\{1FAFF\}[^\]]+\]\.test\(message\);/,
       "const hasEmoji = /[\\u{1F300}-\\u{1FAFF}👗🛍️🖤]/u.test(message);",
     );
-    src = src.replaceAll("Segments", "ChartPie");
+    if (slug === "contacts") {
+      src = src.replaceAll("Segments", "ChartPie");
+    }
     writeFileSync(path, src, "utf8");
   }
 }

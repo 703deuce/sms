@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-08-31T04-55-31-673Z-6022e2",
+  "targetRoute": "/contacts/segments",
+  "referenceNames": [
+    "Creating Segments of Your SlickText Audience SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T05:00:00.899Z",
+  "generatedFiles": [
+    "components/CreateCampaign.tsx",
+    "components/CreateSegment.tsx",
+    "components/SegmentContacts.tsx",
+    "components/SegmentsList.tsx",
+    "components/SuccessScreen.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/components/CreateCampaign.tsx",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/components/CreateSegment.tsx",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/components/SegmentContacts.tsx",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/components/SegmentsList.tsx",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/components/SuccessScreen.tsx",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/mock-data.ts",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/page.tsx",
+    "src/kimi-drafts/contacts-segments/2026-08-31T04-55-31-673Z-6022e2/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-08-31T00:36:58.673Z",
+  "updatedAt": "2026-08-31T05:13:00.804Z",
   "reasoningEffort": "low",
-  "concurrency": 11,
-  "staggerMs": 10000,
+  "concurrency": 1,
+  "staggerMs": 2000,
   "jobs": [
     {
       "videoName": "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)",
@@ -62,12 +62,28 @@
       "completedAt": "2026-08-31T00:30:48.880Z"
     },
     {
+      "videoName": "Creating Segments of Your SlickText Audience SlickText Tutorials - SlickText (360p)",
+      "route": "/contacts/segments",
+      "status": "complete",
+      "startedAt": "2026-08-31T05:06:07.943Z",
+      "completedAt": "2026-08-31T05:10:44.588Z",
+      "sessionId": "2026-08-31T05-06-08-206Z-bb0f8d"
+    },
+    {
       "videoName": "Navigating the SlickText Inbox SlickText Tutorials - SlickText (360p)",
       "route": "/conversations",
       "status": "complete",
       "sessionId": "2026-08-31T00-27-03-004Z-da00ac",
       "completedAt": "2026-08-31T00:36:58.673Z",
       "startedAt": "2026-08-31T00:27:02.422Z"
+    },
+    {
+      "videoName": "Creating a Web Form in SlickText SlickText Tutorials - SlickText (360p)",
+      "route": "/grow/forms",
+      "status": "complete",
+      "startedAt": "2026-08-31T05:06:07.934Z",
+      "completedAt": "2026-08-31T05:13:00.804Z",
+      "sessionId": "2026-08-31T05-06-08-199Z-f28882"
     },
     {
       "videoName": "Creating Text-to-Join Keywords in SlickText SlickText Tutorials - SlickText (360p)",

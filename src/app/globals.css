@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "../styles/kimi/grow-forms.css";
+@import "../styles/kimi/contacts-segments.css";
 @import "../styles/kimi/surface.css";
 @import "../styles/kimi/sidebar.css";
 @import "../styles/kimi/campaigns.css";

@@ -1,0 +1,43 @@
+{
+  "sessionId": "2026-08-31T04-55-31-592Z-80fc13",
+  "targetRoute": "/grow/forms",
+  "referenceNames": [
+    "Creating a Web Form in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T05:03:13.789Z",
+  "generatedFiles": [
+    "components/BuilderCanvas.tsx",
+    "components/EmbedSiteScreen.tsx",
+    "components/FieldSettingsPanel.tsx",
+    "components/FormBuilder.tsx",
+    "components/FormCreatedModal.tsx",
+    "components/ImageSearchModal.tsx",
+    "components/PreviewFormModal.tsx",
+    "components/RemoveFieldModal.tsx",
+    "components/TemplatesModal.tsx",
+    "components/TestFormScreen.tsx",
+    "components/WebFormsList.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/BuilderCanvas.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/EmbedSiteScreen.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/FieldSettingsPanel.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/FormBuilder.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/FormCreatedModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/ImageSearchModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/PreviewFormModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/RemoveFieldModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/TemplatesModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/TestFormScreen.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/WebFormsList.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/components/ui.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/mock-data.ts",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/page.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T04-55-31-592Z-80fc13/reference.css"
+  ],
+  "status": "generated"
+}

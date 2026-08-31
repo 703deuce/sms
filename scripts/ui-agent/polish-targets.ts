@@ -295,6 +295,40 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
       },
     ],
   },
+  {
+    route: "/contacts/segments",
+    referenceVideoName: "Creating Segments of Your SlickText Audience SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_list", label: "Segments list", path: "/contacts/segments", fullPage: true },
+      {
+        id: "02_create",
+        label: "Create segment",
+        path: "/contacts/segments",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Segment")' },
+          { type: "wait", ms: 1000 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/grow/forms",
+    referenceVideoName: "Creating a Web Form in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_list", label: "Web forms list", path: "/grow/forms", fullPage: true },
+      {
+        id: "02_builder",
+        label: "Form builder",
+        path: "/grow/forms",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Form"), button:has-text("Create")' },
+          { type: "wait", ms: 1200 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
 ];
 
 export function resolvePolishTarget(route: string): PolishTargetConfig | undefined {

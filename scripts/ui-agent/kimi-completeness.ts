@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { generatedDirForSession, readAllGeneratedSources } from "./generated-sandbox";
-import { KIMI_BATCH_PAGE_INSTRUCTION, UI_AGENT_DIR, ensureUiAgentDirs } from "./config";
+import { KIMI_BATCH_PAGE_INSTRUCTION, KIMI_COMPLETENESS_REQUIREMENTS, KIMI_MULTI_SCREEN_ARCHITECTURE, UI_AGENT_DIR, ensureUiAgentDirs } from "./config";
 
 export type CompletenessGap = {
   id: string;
@@ -196,6 +196,47 @@ const ROUTE_RULES: RouteRule[] = [
       }
       if (!sourcesContain(sources, /CustomFieldsList/i)) {
         gaps.push({ id: "fields-list", description: "Custom fields management list", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t === "/contacts/segments",
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /SegmentEditor|CreateSegment|segment.*editor|SegmentBuilder/i)) {
+        gaps.push({
+          id: "segment-editor",
+          description: "Create/edit segment builder with rules, match all/any, preview count",
+          severity: "required",
+        });
+      }
+      if (!sourcesContain(sources, /SegmentsList|segments list/i)) {
+        gaps.push({ id: "segments-list", description: "Segments management list table", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t.includes("/grow/forms"),
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /FormEditor|CreateForm|form.*builder|FormBuilder/i)) {
+        gaps.push({
+          id: "form-builder",
+          description: "Create/edit web form builder with fields, disclosure, list assignment",
+          severity: "required",
+        });
+      }
+      if (!sourcesContain(sources, /FormsList|forms list/i)) {
+        gaps.push({ id: "forms-list", description: "Web forms list with stats and create CTA", severity: "required" });
+      }
+      if (!sourcesContain(sources, /embed|EmbedCode|form\.js/i)) {
+        gaps.push({
+          id: "embed",
+          description: "Embed code / hosted URL panel shown in web forms video",
+          severity: "recommended",
+        });
       }
       return gaps;
     },

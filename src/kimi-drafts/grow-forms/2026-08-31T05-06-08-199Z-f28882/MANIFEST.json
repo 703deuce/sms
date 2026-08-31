@@ -1,0 +1,35 @@
+{
+  "sessionId": "2026-08-31T05-06-08-199Z-f28882",
+  "targetRoute": "/grow/forms",
+  "referenceNames": [
+    "Creating a Web Form in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T05:13:00.803Z",
+  "generatedFiles": [
+    "components/BuilderPanels.tsx",
+    "components/FormBuilder.tsx",
+    "components/FormCreatedModal.tsx",
+    "components/FormPreview.tsx",
+    "components/ImageSearchModal.tsx",
+    "components/Modals.tsx",
+    "components/TemplatesModal.tsx",
+    "components/WebFormsList.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/BuilderPanels.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/FormBuilder.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/FormCreatedModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/FormPreview.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/ImageSearchModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/Modals.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/TemplatesModal.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/components/WebFormsList.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/mock-data.ts",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/page.tsx",
+    "src/kimi-drafts/grow-forms/2026-08-31T05-06-08-199Z-f28882/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,0 +1,113 @@
+.ref-root {
+  --tv-primary: #4338ca;
+  --tv-primary-hover: #3730a3;
+  --tv-teal: #0d9488;
+  --tv-teal-light: #ccfbf1;
+  --tv-bg: #f7f8fa;
+  --tv-navy: #1e2a4a;
+  font-family: "Inter", system-ui, sans-serif;
+  color: #111827;
+  background: var(--tv-bg);
+  min-height: 100vh;
+}
+.ref-root .tv-btn-primary {
+  background: var(--tv-primary);
+  color: #fff;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .15s;
+}
+.ref-root .tv-btn-primary:hover { background: var(--tv-primary-hover); }
+.ref-root .tv-btn-ghost {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+.ref-root .tv-btn-ghost:hover { background: #f9fafb; }
+.ref-root .tv-input {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: #fff;
+  outline: none;
+}
+.ref-root .tv-input:focus { border-color: var(--tv-primary); box-shadow: 0 0 0 3px rgba(67,56,202,.12); }
+.ref-root .tv-label { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px; display: block; }
+.ref-root .tv-card {
+  background: #fff;
+  border: 1px solid #ececf1;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+.ref-root .tv-badge-active {
+  background: var(--tv-teal-light);
+  color: var(--tv-teal);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.ref-root .tv-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(30,32,50,.45);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+  animation: tvFade .15s ease-out;
+}
+@keyframes tvFade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes tvPop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+.ref-root .tv-modal { animation: tvPop .18s ease-out; }
+.ref-root .tv-section-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid #ececf1;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #111827;
+}
+.ref-root .tv-section-row:hover { border-color: #d4d4dc; }
+.ref-root .tv-section-row.active { border-color: var(--tv-primary); }
+.ref-root .tv-el-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  border: 1px solid #ececf1; border-radius: 8px;
+  padding: 12px 4px; font-size: 11px; color: #4b5563;
+  background: #fff; cursor: grab;
+}
+.ref-root .tv-el-tile:hover { border-color: var(--tv-primary); color: var(--tv-primary); }
+.ref-root .tv-accordion {
+  border: 1px solid #ececf1; border-radius: 8px; background: #fff; overflow: hidden;
+}
+.ref-root .tv-accordion-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; cursor: pointer; font-size: 12px; font-weight: 600; color: #374151;
+}
+.ref-root .tv-accordion-head:hover { background: #fafafa; }
+.ref-root .tv-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 6px; color: #6b7280;
+}
+.ref-root .tv-icon-btn:hover { background: #f3f4f6; color: #111827; }
+.ref-root .tv-icon-btn.active { color: var(--tv-primary); background: #eef2ff; }
+.ref-root .tv-pill-tab {
+  padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: #6b7280; cursor: pointer; border: 1px solid transparent;
+}
+.ref-root .tv-pill-tab.active { background: #fff; color: #111827; border-color: #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.ref-root .tv-drop-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  font-size: 13px; color: #374151; cursor: pointer; white-space: nowrap;
+}
+.ref-root .tv-drop-item:hover { background: #f6f7f9; }
+.tv-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.tv-scroll::-webkit-scrollbar-thumb { background: #d8d8de; border-radius: 8px; }
+.tv-scroll::-webkit-scrollbar-track { background: transparent; }

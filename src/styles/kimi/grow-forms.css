@@ -1,0 +1,59 @@
+.kimi-grow-forms .tv-forms{ --tv-indigo:#4f46e5; --tv-teal:#2dd4bf; --tv-ink:#0f172a; }
+.kimi-grow-forms .tv-forms .tv-scroll::-webkit-scrollbar{ width:6px; height:6px; }
+.kimi-grow-forms .tv-forms .tv-scroll::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:3px; }
+
+.kimi-grow-forms .tv-thumb{ position:relative; width:56px; height:40px; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0; flex:none; }
+.kimi-grow-forms .tv-thumb-forest{ background:linear-gradient(135deg,#1f3d2b 60%,#7ba383 60%); }
+.kimi-grow-forms .tv-thumb-dark{ background:linear-gradient(135deg,#0b0b0f 60%,#3b3b45 60%); }
+.kimi-grow-forms .tv-thumb-light{ background:linear-gradient(135deg,#f1f5f9 60%,#cbd5e1 60%); }
+.kimi-grow-forms .tv-thumb::after{ content:""; position:absolute; inset:8px 10px; border-radius:3px; background:rgba(255,255,255,.85); }
+.kimi-grow-forms .tv-thumb-dark::after{ background:rgba(255,255,255,.25); }
+
+.kimi-grow-forms .tv-tpl-card{ transition: box-shadow .15s, transform .15s; cursor:pointer; }
+.kimi-grow-forms .tv-tpl-card:hover{ box-shadow:0 8px 24px rgba(15,23,42,.14); transform:translateY(-2px); }
+
+.kimi-grow-forms .tv-landing-preview{ display:flex; min-height:520px; border-radius:8px; overflow:hidden; box-shadow:0 4px 24px rgba(15,23,42,.18); }
+.kimi-grow-forms .tv-landing-form{ background:#1f3d2b; color:#f8fafc; padding:44px 40px; flex:1 1 52%; display:flex; flex-direction:column; justify-content:center; gap:12px; }
+.kimi-grow-forms .tv-landing-img{ flex:1 1 48%; background:linear-gradient(160deg,#3e6b4a,#8fae8b 55%,#5b7d63); position:relative; }
+.kimi-grow-forms .tv-landing-img::after{ content:""; position:absolute; inset:0; background:radial-gradient(ellipse at 60% 30%, rgba(255,255,255,.25), transparent 60%); }
+.kimi-grow-forms .tv-embed-preview{ background:#0b0b0f; color:#f8fafc; padding:36px 32px; border-radius:8px; display:flex; flex-direction:column; gap:12px; min-height:420px; justify-content:center; }
+
+.kimi-grow-forms .tv-input-mock{ background:#fff; color:#94a3b8; border-radius:4px; padding:10px 14px; font-size:13px; }
+.kimi-grow-forms .tv-input-mock.tv-selected{ outline:2px solid #6366f1; position:relative; }
+.kimi-grow-forms .tv-input-mock.tv-selected::before{ content:attr(data-tag); position:absolute; top:-20px; left:-2px; background:#6366f1; color:#fff; font-size:10px; padding:1px 6px; border-radius:3px; }
+.kimi-grow-forms .tv-btn-mock{ background:#c9b291; color:#1f2937; text-align:center; padding:12px; border-radius:4px; font-weight:600; font-size:14px; cursor:pointer; }
+.kimi-grow-forms .tv-btn-mock.tv-dark-btn{ background:#fff; }
+
+.kimi-grow-forms .tv-element-tile{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; cursor:grab; font-size:11px; color:#475569; transition:border-color .12s, background .12s; }
+.kimi-grow-forms .tv-element-tile:hover{ border-color:#a5b4fc; background:#eef2ff; color:#4338ca; }
+
+.kimi-grow-forms .tv-tpl-thumb{ height:110px; border-radius:6px 6px 0 0; position:relative; overflow:hidden; border-bottom:1px solid #e2e8f0; }
+.kimi-grow-forms .tv-tpl-thumb-forest{ background:linear-gradient(90deg,#1f3d2b 50%, #5b7d63 50%); }
+.kimi-grow-forms .tv-tpl-thumb-orange{ background:linear-gradient(90deg,#7c2d12 50%, #f97316 50%); }
+.kimi-grow-forms .tv-tpl-thumb-gym{ background:linear-gradient(90deg,#f8fafc 50%, #94a3b8 50%); }
+.kimi-grow-forms .tv-tpl-thumb-purple{ background:linear-gradient(90deg,#312e81 50%, #8b5cf6 50%); }
+.kimi-grow-forms .tv-tpl-thumb-maroon{ background:linear-gradient(160deg,#450a0a,#991b1b); }
+.kimi-grow-forms .tv-tpl-thumb-paper{ background:linear-gradient(90deg,#fef3c7 50%, #fbbf24 50%); }
+.kimi-grow-forms .tv-tpl-thumb-embed-dark{ background:#0b0b0f; }
+.kimi-grow-forms .tv-tpl-thumb-embed-cream{ background:#f5f0e6; }
+.kimi-grow-forms .tv-tpl-thumb-embed-orange{ background:linear-gradient(135deg,#c2410c,#fb923c); }
+.kimi-grow-forms .tv-tpl-thumb-embed-split{ background:linear-gradient(90deg,#0f172a 50%,#f1f5f9 50%); }
+.kimi-grow-forms .tv-tpl-thumb-blank{ background:#f8fafc; display:flex; align-items:center; justify-content:center; }
+.kimi-grow-forms .tv-tpl-thumb::after{ content:""; position:absolute; left:16px; top:20px; right:16px; height:8px; border-radius:4px; background:rgba(255,255,255,.5); }
+.kimi-grow-forms .tv-tpl-thumb-blank::after{ display:none; }
+
+.kimi-grow-forms .tv-img-tile{ border-radius:8px; height:120px; display:flex; align-items:flex-end; padding:8px; color:#fff; font-size:10px; cursor:pointer; position:relative; overflow:hidden; transition:transform .12s; }
+.kimi-grow-forms .tv-img-tile:hover{ transform:scale(1.03); }
+.kimi-grow-forms .tv-img-tile::before{ content:"☕"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:28px; opacity:.5; }
+
+.kimi-grow-forms .tv-pop{ animation:tvPop .18s ease-out; }
+@keyframes tvPop { from { transform:scale(.96); opacity:0; } to { transform:scale(1); opacity:1; } }
+.kimi-grow-forms .tv-fade{ animation:tvFade .15s ease-out; }
+@keyframes tvFade { from { opacity:0; } to { opacity:1; } }
+
+.kimi-grow-forms .tv-success-view{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; min-height:280px; }
+.kimi-grow-forms .tv-check{ width:44px; height:44px; border-radius:50%; background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center; margin:0 auto; }
+
+.kimi-grow-forms .tv-phone{ width:300px; background:#fff; border-radius:36px; border:10px solid #0f172a; overflow:hidden; box-shadow:0 20px 60px rgba(15,23,42,.35); }
+.kimi-grow-forms .tv-msg-in{ background:#e5e7eb; color:#111827; border-radius:16px 16px 16px 4px; padding:10px 12px; font-size:12px; max-width:85%; }
+.kimi-grow-forms .tv-msg-out{ background:#22c55e; color:#fff; border-radius:16px 16px 4px 16px; padding:8px 12px; font-size:12px; margin-left:auto; max-width:60%; }
