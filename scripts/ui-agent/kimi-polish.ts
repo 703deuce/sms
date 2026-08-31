@@ -5,7 +5,7 @@ import { captureCurrentSite } from "./capture-current";
 import { captureWalkthrough } from "./capture-walkthrough";
 import { REPO_ROOT, UI_AGENT_DIR } from "./config";
 import { buildLabeledMedia } from "./reference-media";
-import { createPolishCheckpoint, readGitDirtyFiles } from "./git-safety";
+import { createPolishCheckpoint } from "./git-safety";
 import { KIMI_POLISH_FILE_PROTOCOL, KimiPolishFileWriter } from "./kimi-polish-files";
 import { designContextForKimi, buildProjectManifest, manifestToPromptContext } from "./project-context";
 import { resolvePolishTarget } from "./polish-targets";
