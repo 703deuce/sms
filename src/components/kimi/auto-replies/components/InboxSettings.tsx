@@ -43,13 +43,28 @@ const baseToggles = [
 export default function InboxSettings({
   onBack,
   initialAwayMessage,
+  initialAwayInsideMessage,
   initialAwayEnabled,
+  initialOfficeHoursEnabled,
+  initialActiveDays,
+  initialTimezone,
   onSave,
 }: {
   onBack: () => void;
   initialAwayMessage?: string;
+  initialAwayInsideMessage?: string;
   initialAwayEnabled?: boolean;
-  onSave?: (payload: { awayMessage: string; awayEnabled: boolean }) => Promise<void>;
+  initialOfficeHoursEnabled?: boolean;
+  initialActiveDays?: string[];
+  initialTimezone?: string;
+  onSave?: (payload: {
+    awayMessage: string;
+    awayInsideMessage?: string;
+    awayEnabled: boolean;
+    officeHoursEnabled?: boolean;
+    activeDays?: string[];
+    timezone?: string;
+  }) => Promise<void>;
 }) {
   const [toggles, setToggles] = useState<Record<string, boolean>>({
     inboxOn: true,
@@ -61,16 +76,12 @@ export default function InboxSettings({
   });
   const [autoOn, setAutoOn] = useState(initialAwayEnabled ?? true);
   const [single, setSingle] = useState(initialAwayMessage ?? inboxDefaults.autoResponseMessage);
-  const [officeOn, setOfficeOn] = useState(true);
-  const [activeDays, setActiveDays] = useState<string[]>([
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-  ]);
-  const [inside, setInside] = useState(inboxDefaults.insideMessage);
-  const [outside, setOutside] = useState(inboxDefaults.outsideMessage);
+  const [officeOn, setOfficeOn] = useState(initialOfficeHoursEnabled ?? true);
+  const [activeDays, setActiveDays] = useState<string[]>(
+    initialActiveDays ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+  );
+  const [inside, setInside] = useState(initialAwayInsideMessage ?? inboxDefaults.insideMessage);
+  const [outside, setOutside] = useState(initialAwayMessage ?? inboxDefaults.outsideMessage);
   const [toast, setToast] = useState<string | null>(null);
 
   const toggleDay = (d: string) =>
@@ -138,7 +149,9 @@ export default function InboxSettings({
                     <button className="time-select">
                       5:00 pm <ChevronDown size={13} />
                     </button>
-                    <span className="text-[12.5px] text-muted-foreground font-medium">CDT</span>
+                    <span className="text-[12.5px] text-muted-foreground font-medium">
+                      {initialTimezone || "CDT"}
+                    </span>
                   </div>
                 </div>
               );
@@ -196,7 +209,15 @@ export default function InboxSettings({
             };
             if (onSave) {
               const awayMessage = autoOn ? (officeOn ? outside : single) : "";
-              void onSave({ awayMessage, awayEnabled: autoOn })
+              const awayInsideMessage = autoOn && officeOn ? inside : "";
+              void onSave({
+                awayMessage,
+                awayInsideMessage,
+                awayEnabled: autoOn,
+                officeHoursEnabled: officeOn,
+                activeDays,
+                timezone: initialTimezone,
+              })
                 .then(finish)
                 .catch(() => {
                   setToast("Save failed.");

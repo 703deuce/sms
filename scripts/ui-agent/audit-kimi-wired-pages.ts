@@ -3,6 +3,7 @@
  * and functional wiring checks that catch no-op saves / wrong entity lists.
  */
 import { chromium, type Page } from "playwright";
+import { authenticateKimiAudit } from "./kimi-audit-auth";
 
 const BASE = process.env.UI_AGENT_BASE_URL?.trim() || "http://localhost:3456";
 
@@ -111,13 +112,6 @@ const FUNCTIONAL_CHECKS: Array<{
   },
 ];
 
-async function authenticate(page: Page) {
-  await page.goto(`${BASE}/api/auth/dev-bypass?next=/dashboard`, {
-    waitUntil: "domcontentloaded",
-    timeout: 120000,
-  });
-  await page.waitForTimeout(500);
-}
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
@@ -133,7 +127,7 @@ async function main() {
   });
   page.on("pageerror", (err) => pageErrors.push(err.message));
 
-  await authenticate(page);
+  await authenticateKimiAudit(page, BASE);
 
   for (const route of WIRED_ROUTES) {
     const errorsBefore = consoleErrors.length;

@@ -3,11 +3,28 @@ import { getPrisma } from "@/lib/db";
 export type BusinessHoursDay = { start: string; end: string; enabled?: boolean };
 export type BusinessHoursJson = Record<string, BusinessHoursDay>;
 
+export type OptInMessagesJson = {
+  optin?: string;
+  double?: string;
+  exists?: string;
+  reoptin?: string;
+};
+
+export type InboxTagDefinition = {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  untagOnClose?: boolean;
+  created?: string;
+};
+
 export type MessagingRuntimeSettings = {
   workspaceId: string;
   businessHoursJson: BusinessHoursJson | null;
   timezone: string;
   awayMessage: string | null;
+  awayInsideMessage: string | null;
   awayEnabled: boolean;
   awayAlways: boolean;
   quietHoursStart: string | null;
@@ -16,6 +33,8 @@ export type MessagingRuntimeSettings = {
   optOutKeywords: string | null;
   optInKeywords: string | null;
   helpKeywords: string | null;
+  optInMessagesJson: OptInMessagesJson | null;
+  inboxTagsJson: InboxTagDefinition[] | null;
 };
 
 export const DEFAULT_OPT_OUT_KEYWORDS = "STOP,STOPALL,UNSUBSCRIBE,CANCEL,END,QUIT";
@@ -137,6 +156,9 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
       optOutKeywords: null,
       optInKeywords: null,
       helpKeywords: null,
+      optInMessagesJson: null,
+      inboxTagsJson: null,
+      awayInsideMessage: null,
     };
   }
   return {
@@ -144,6 +166,7 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
     businessHoursJson: (row.businessHoursJson as BusinessHoursJson | null) || null,
     timezone: row.timezone || "America/Los_Angeles",
     awayMessage: row.awayMessage,
+    awayInsideMessage: row.awayInsideMessage ?? null,
     awayEnabled: row.awayEnabled,
     awayAlways: row.awayAlways,
     quietHoursStart: row.quietHoursStart,
@@ -152,6 +175,10 @@ export async function getMessagingRuntimeSettings(workspaceId: string): Promise<
     optOutKeywords: row.optOutKeywords ?? null,
     optInKeywords: row.optInKeywords ?? null,
     helpKeywords: row.helpKeywords ?? null,
+    optInMessagesJson: (row.optInMessagesJson as OptInMessagesJson | null) || null,
+    inboxTagsJson: Array.isArray(row.inboxTagsJson)
+      ? (row.inboxTagsJson as InboxTagDefinition[])
+      : null,
   };
 }
 
@@ -167,6 +194,7 @@ export async function upsertMessagingRuntimeSettings(
       businessHoursJson: patch.businessHoursJson ?? undefined,
       timezone: patch.timezone || "America/Los_Angeles",
       awayMessage: patch.awayMessage,
+      awayInsideMessage: patch.awayInsideMessage,
       awayEnabled: patch.awayEnabled ?? false,
       awayAlways: patch.awayAlways ?? false,
       quietHoursStart: patch.quietHoursStart,
@@ -175,11 +203,14 @@ export async function upsertMessagingRuntimeSettings(
       optOutKeywords: patch.optOutKeywords,
       optInKeywords: patch.optInKeywords,
       helpKeywords: patch.helpKeywords,
+      optInMessagesJson: patch.optInMessagesJson ?? undefined,
+      inboxTagsJson: patch.inboxTagsJson ?? undefined,
     },
     update: {
       businessHoursJson: patch.businessHoursJson ?? undefined,
       timezone: patch.timezone,
       awayMessage: patch.awayMessage,
+      awayInsideMessage: patch.awayInsideMessage,
       awayEnabled: patch.awayEnabled,
       awayAlways: patch.awayAlways,
       quietHoursStart: patch.quietHoursStart,
@@ -188,6 +219,8 @@ export async function upsertMessagingRuntimeSettings(
       optOutKeywords: patch.optOutKeywords,
       optInKeywords: patch.optInKeywords,
       helpKeywords: patch.helpKeywords,
+      optInMessagesJson: patch.optInMessagesJson ?? undefined,
+      inboxTagsJson: patch.inboxTagsJson ?? undefined,
     },
   });
   return {
@@ -195,6 +228,7 @@ export async function upsertMessagingRuntimeSettings(
     businessHoursJson: (row.businessHoursJson as BusinessHoursJson | null) || null,
     timezone: row.timezone,
     awayMessage: row.awayMessage,
+    awayInsideMessage: row.awayInsideMessage ?? null,
     awayEnabled: row.awayEnabled,
     awayAlways: row.awayAlways,
     quietHoursStart: row.quietHoursStart,
@@ -203,6 +237,10 @@ export async function upsertMessagingRuntimeSettings(
     optOutKeywords: row.optOutKeywords ?? null,
     optInKeywords: row.optInKeywords ?? null,
     helpKeywords: row.helpKeywords ?? null,
+    optInMessagesJson: (row.optInMessagesJson as OptInMessagesJson | null) || null,
+    inboxTagsJson: Array.isArray(row.inboxTagsJson)
+      ? (row.inboxTagsJson as InboxTagDefinition[])
+      : null,
   };
 }
 

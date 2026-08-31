@@ -3338,6 +3338,9 @@ model WorkspaceMessagingSettings {
   optInKeywords    String?  @default("START,YES,UNSTOP")
   helpKeywords     String?  @default("HELP,INFO")
   reviewLinkUrl    String?
+  optInMessagesJson Json?
+  inboxTagsJson    Json?
+  awayInsideMessage String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

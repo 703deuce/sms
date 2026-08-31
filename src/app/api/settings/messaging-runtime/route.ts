@@ -4,6 +4,8 @@ import {
   getMessagingRuntimeSettings,
   upsertMessagingRuntimeSettings,
   type BusinessHoursJson,
+  type InboxTagDefinition,
+  type OptInMessagesJson,
 } from "@/lib/messaging/messaging-settings";
 
 export async function GET() {
@@ -33,6 +35,9 @@ export async function PATCH(request: Request) {
       optOutKeywords?: string | null;
       optInKeywords?: string | null;
       helpKeywords?: string | null;
+      optInMessagesJson?: OptInMessagesJson | null;
+      inboxTagsJson?: InboxTagDefinition[] | null;
+      awayInsideMessage?: string | null;
     };
 
     const patch: Record<string, unknown> = {};
@@ -48,6 +53,9 @@ export async function PATCH(request: Request) {
       patch.optOutKeywords = body.optOutKeywords?.trim() || null;
     if (body.optInKeywords !== undefined) patch.optInKeywords = body.optInKeywords?.trim() || null;
     if (body.helpKeywords !== undefined) patch.helpKeywords = body.helpKeywords?.trim() || null;
+    if (body.optInMessagesJson !== undefined) patch.optInMessagesJson = body.optInMessagesJson;
+    if (body.inboxTagsJson !== undefined) patch.inboxTagsJson = body.inboxTagsJson;
+    if (body.awayInsideMessage !== undefined) patch.awayInsideMessage = body.awayInsideMessage;
 
     const data = await upsertMessagingRuntimeSettings(auth.workspaceId, patch);
     return NextResponse.json({ data });

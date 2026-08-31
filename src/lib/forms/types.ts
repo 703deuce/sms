@@ -15,6 +15,8 @@ export type OptInFormConfig = {
   headline?: string;
   subheadline?: string;
   ageGateMinAge?: number;
+  optInMessage?: string;
+  doubleOptInMessage?: string;
 };
 
 export const DEFAULT_FORM_FIELDS: FormFieldKey[] = ["firstName", "phone"];
@@ -49,6 +51,8 @@ export function parseFormConfig(raw: unknown): OptInFormConfig {
     headline: obj.headline,
     subheadline: obj.subheadline,
     ageGateMinAge,
+    optInMessage: obj.optInMessage,
+    doubleOptInMessage: obj.doubleOptInMessage,
   };
 }
 

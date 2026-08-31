@@ -23,7 +23,11 @@ const elementIcons: Record<string, React.ReactNode> = {
 };
 
 export default function FormBuilder({
-  onExit, onTestForm, onEmbedSite, formId, formName, contactListNames, initialListName, initialDoubleOptIn, initialActive, onSave, onSaveError,
+  onExit, onTestForm, onEmbedSite, formId, formName, contactListNames,
+  initialListName, initialDoubleOptIn, initialActive,
+  initialHeadline, initialSubheadline, initialButtonLabel, initialFields,
+  initialOptInMessage, initialDoubleOptInMessage,
+  onSave, onSaveError,
 }: {
   onExit: () => void;
   onTestForm: () => void;
@@ -34,12 +38,24 @@ export default function FormBuilder({
   initialListName?: string;
   initialDoubleOptIn?: boolean;
   initialActive?: boolean;
+  initialHeadline?: string;
+  initialSubheadline?: string;
+  initialButtonLabel?: string;
+  initialFields?: string[];
+  initialOptInMessage?: string;
+  initialDoubleOptInMessage?: string;
   onSave?: (payload: {
     formId: string;
     name: string;
     listName?: string;
     doubleOptIn: boolean;
     status: string;
+    headline?: string;
+    subheadline?: string;
+    buttonLabel?: string;
+    fields?: string[];
+    optInMessage?: string;
+    doubleOptInMessage?: string;
   }) => Promise<void>;
   onSaveError?: (message: string) => void;
 }) {
@@ -67,10 +83,14 @@ export default function FormBuilder({
   const [hiddenPanel, setHiddenPanel] = useState(false);
 
   const [name, setName] = useState(formName || (formType === "landing" ? "20 % Off" : "Embed - 20% Off"));
+  const [headline, setHeadline] = useState(initialHeadline || formDefaults.pageTitle);
+  const [subheadline, setSubheadline] = useState(initialSubheadline || "");
+  const [buttonLabel, setButtonLabel] = useState(initialButtonLabel || "Subscribe");
+  const [doubleOptInEnabled, setDoubleOptInEnabled] = useState(initialDoubleOptIn ?? false);
   const [doubleOptIn, setDoubleOptIn] = useState(
-    initialDoubleOptIn != null ? String(initialDoubleOptIn) : formDefaults.doubleOptIn,
+    initialDoubleOptInMessage || formDefaults.doubleOptIn,
   );
-  const [optIn, setOptIn] = useState(formDefaults.optIn);
+  const [optIn, setOptIn] = useState(initialOptInMessage || formDefaults.optIn);
 
   const handleSave = () => {
     if (onSave && formId) {
@@ -79,8 +99,14 @@ export default function FormBuilder({
         formId,
         name,
         listName: chosenLists[0],
-        doubleOptIn: Boolean(String(doubleOptIn).trim()),
+        doubleOptIn: doubleOptInEnabled,
         status: active ? "active" : "inactive",
+        headline,
+        subheadline,
+        buttonLabel,
+        fields: initialFields || ["firstName", "phone"],
+        optInMessage: optIn,
+        doubleOptInMessage: doubleOptIn,
       })
         .then(() => {
           setSaving(false);
@@ -141,7 +167,13 @@ export default function FormBuilder({
                 <Field label="Description"><textarea className={inputCls} rows={2} defaultValue={formType === "landing" ? "Sharing on Instagram" : "Embedded on Contact Page"} /></Field>
                 {formType === "landing" ? (
                   <>
-                    <Field label="Page Title"><input className={inputCls} defaultValue={formDefaults.pageTitle} /></Field>
+                    <Field label="Page Title">
+                      <input
+                        className={inputCls}
+                        value={headline}
+                        onChange={(e) => setHeadline(e.target.value)}
+                      />
+                    </Field>
                     <Field label="Custom URL Path"><input className={inputCls} defaultValue={formDefaults.urlPath} /></Field>
                     <Field label="Final Page URL"><input className={inputCls} disabled value="https://forms.transovo.io/20percentoff" /></Field>
                   </>
@@ -192,6 +224,9 @@ export default function FormBuilder({
               </SectionRow>
 
               <SectionRow num={5} title="Messaging" open={openSection === 5} onToggle={() => setOpenSection(5)}>
+                <Field label="Double Opt-In" hint="Require contacts to confirm with YES before subscribing.">
+                  <Toggle on={doubleOptInEnabled} onChange={setDoubleOptInEnabled} />
+                </Field>
                 <Field label="Double Opt-In Message" hint="After someone provides their mobile number, they'll receive this message asking them to confirm before being subscribed.">
                   <div className="relative">
                     <textarea className={inputCls} rows={3} value={doubleOptIn} onChange={(e) => setDoubleOptIn(e.target.value)} />

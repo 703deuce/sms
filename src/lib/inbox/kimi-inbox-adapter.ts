@@ -4,6 +4,7 @@
  */
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import type { Conversation, Message, Tag, Teammate } from "@/components/kimi/conversations/mock-data";
+import type { InboxTagDefinition } from "@/lib/messaging/messaging-settings";
 import type { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 
 const AVATAR_COLORS = ["#14b8a6", "#6366f1", "#22c55e", "#0ea5e9", "#f59e0b", "#ec4899", "#8b5cf6"];
@@ -183,6 +184,17 @@ export function buildTagsFromConversations(convos: Conversation[]): Tag[] {
     description: "",
     created: "",
     untagOnClose: false,
+  }));
+}
+
+export function inboxTagDefinitionsToKimi(rows: InboxTagDefinition[]): Tag[] {
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    color: r.color || AVATAR_COLORS[0],
+    description: r.description || "",
+    created: r.created || "",
+    untagOnClose: r.untagOnClose ?? false,
   }));
 }
 

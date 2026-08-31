@@ -31,6 +31,13 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     listName?: string;
     doubleOptIn?: boolean;
     status?: string;
+    headline?: string;
+    subheadline?: string;
+    buttonLabel?: string;
+    fields?: string[];
+    optInMessage?: string;
+    doubleOptInMessage?: string;
+    disclosureText?: string;
   } | null>(null);
   const [contactLists, setContactLists] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -76,12 +83,26 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     listName?: string;
     doubleOptIn: boolean;
     status: string;
+    headline?: string;
+    subheadline?: string;
+    buttonLabel?: string;
+    fields?: string[];
+    optInMessage?: string;
+    doubleOptInMessage?: string;
+    disclosureText?: string;
   }) => {
     await updateWebForm(payload.formId, {
       name: payload.name,
       listName: payload.listName,
       doubleOptIn: payload.doubleOptIn,
       status: payload.status,
+      headline: payload.headline,
+      subheadline: payload.subheadline,
+      buttonLabel: payload.buttonLabel,
+      fields: payload.fields,
+      optInMessage: payload.optInMessage,
+      doubleOptInMessage: payload.doubleOptInMessage,
+      disclosureText: payload.disclosureText,
     });
     await reload();
   };
@@ -98,6 +119,13 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
           listName: detail.listName || undefined,
           doubleOptIn: detail.doubleOptIn,
           status: detail.status,
+          headline: detail.config?.headline,
+          subheadline: detail.config?.subheadline,
+          buttonLabel: detail.config?.buttonLabel,
+          fields: detail.config?.fields,
+          optInMessage: detail.config?.optInMessage,
+          doubleOptInMessage: detail.config?.doubleOptInMessage,
+          disclosureText: detail.disclosureText || undefined,
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load form"));
@@ -121,6 +149,8 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
         subheadline: detailJson.data?.config?.subheadline,
         buttonLabel: detailJson.data?.config?.buttonLabel,
         fields: detailJson.data?.config?.fields,
+        optInMessage: detailJson.data?.config?.optInMessage,
+        doubleOptInMessage: detailJson.data?.config?.doubleOptInMessage,
       });
       await reload();
       openFormEditor({ ...created, name: `${src.name} (Copy)` });
@@ -152,7 +182,13 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
           contactListNames={contactLists}
           initialListName={editingFormDetail?.listName}
           initialDoubleOptIn={editingFormDetail?.doubleOptIn}
-          initialActive={editingFormDetail?.status !== "Inactive"}
+          initialActive={editingFormDetail?.status !== "Inactive" && editingFormDetail?.status !== "Paused"}
+          initialHeadline={editingFormDetail?.headline}
+          initialSubheadline={editingFormDetail?.subheadline}
+          initialButtonLabel={editingFormDetail?.buttonLabel}
+          initialFields={editingFormDetail?.fields}
+          initialOptInMessage={editingFormDetail?.optInMessage}
+          initialDoubleOptInMessage={editingFormDetail?.doubleOptInMessage}
           onSave={handleSaveForm}
           onSaveError={(msg) => setError(msg)}
           onExit={() => { setView("list"); setEditingFormId(null); void reload(); }}

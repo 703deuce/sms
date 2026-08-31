@@ -20,6 +20,7 @@ import { MessageSquarePlus, MessagesSquare, SendHorizonal, X, Loader2 } from "lu
 import {
   buildTagsFromConversations,
   buildTeammates,
+  inboxTagDefinitionsToKimi,
   fetchConversation,
   fetchInboxList,
   inboxQueryFromFilter,
@@ -33,6 +34,11 @@ import {
   syncConversationUpdate,
   type KimiInboxContext,
 } from "@/lib/inbox/kimi-inbox-adapter";
+import {
+  fetchMessagingRuntimeSettings,
+  inboxTagsFromSettings,
+  persistInboxTag,
+} from "@/lib/auto-replies/kimi-messaging-settings-adapter";
 
 type View = "inbox" | "settings" | "inboxSettings" | "tags";
 
@@ -60,11 +66,24 @@ export function KimiConversationsConnected({
     initialConversations.map((c) => mapApiConversationToKimi(c, ctx)),
   );
   const [extraTags, setExtraTags] = useState<Tag[]>([]);
+  const [persistedTags, setPersistedTags] = useState<Tag[]>([]);
+
+  useEffect(() => {
+    void fetchMessagingRuntimeSettings()
+      .then((s) => setPersistedTags(inboxTagDefinitionsToKimi(inboxTagsFromSettings(s.inboxTagsJson))))
+      .catch(() => undefined);
+  }, []);
+
   const tags = useMemo(() => {
     const fromConvos = buildTagsFromConversations(convos);
-    const ids = new Set(fromConvos.map((t) => t.id));
-    return [...fromConvos, ...extraTags.filter((t) => !ids.has(t.id))];
-  }, [convos, extraTags]);
+    const fromPersisted = persistedTags;
+    const fromExtra = extraTags;
+    const byId = new Map<string, Tag>();
+    for (const t of [...fromPersisted, ...fromConvos, ...fromExtra]) {
+      byId.set(t.id, t);
+    }
+    return Array.from(byId.values());
+  }, [convos, extraTags, persistedTags]);
   const [sel, setSel] = useState<FilterSel>({ kind: "mine", key: "all" });
   const [selectedId, setSelectedId] = useState<string | null>(
     () => initialConversations[0]?.id ?? null,
@@ -345,8 +364,16 @@ export function KimiConversationsConnected({
           tags={tags}
           onBack={() => setView("inboxSettings")}
           onCreate={(t) => {
-            const id = t.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `tag-${Date.now()}`;
-            setExtraTags((prev) => [...prev.filter((x) => x.id !== id), { ...t, id, created: new Date().toISOString() }]);
+            void persistInboxTag({
+              name: t.name,
+              description: t.description,
+              color: t.color,
+              untagOnClose: t.untagOnClose,
+            })
+              .then((rows) => {
+                setPersistedTags(inboxTagDefinitionsToKimi(rows));
+              })
+              .catch((err) => setError(err instanceof Error ? err.message : "Could not save tag"));
           }}
         />
       ) : (

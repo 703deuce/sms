@@ -74,6 +74,16 @@ export async function updateWebForm(
     headline?: string;
     subheadline?: string;
     buttonLabel?: string;
+    disclosureText?: string;
+    thankYouMessage?: string;
+    optInMessage?: string;
+    doubleOptInMessage?: string;
+    branding?: {
+      primaryColor?: string;
+      accentColor?: string;
+      theme?: string;
+      logoUrl?: string;
+    };
   },
 ): Promise<WebForm> {
   const res = await fetch(`/api/growth/forms/${id}`, {
@@ -97,7 +107,17 @@ export async function fetchWebFormById(id: string): Promise<{
     subheadline?: string;
     buttonLabel?: string;
     fields?: string[];
+    optInMessage?: string;
+    doubleOptInMessage?: string;
+    branding?: {
+      primaryColor?: string;
+      accentColor?: string;
+      theme?: string;
+      logoUrl?: string;
+    };
   };
+  disclosureText?: string | null;
+  thankYouMessage?: string | null;
 }> {
   const res = await fetch(`/api/growth/forms/${id}`);
   const json = await res.json();

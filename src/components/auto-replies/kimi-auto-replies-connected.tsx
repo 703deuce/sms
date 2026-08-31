@@ -14,7 +14,11 @@ import type { Keyword } from "@/components/kimi/auto-replies/mock-data";
 import { optInMessages } from "@/components/kimi/auto-replies/mock-data";
 import { fetchAutoReplies, mapAutoReplyToKimiKeyword, updateAutoReply, createAutoReply } from "@/lib/auto-replies/kimi-auto-replies-adapter";
 import {
+  bodiesToOptInMessagesJson,
+  businessHoursToKimiActiveDays,
   fetchMessagingRuntimeSettings,
+  kimiActiveDaysToBusinessHours,
+  optInBodiesFromSettings,
   patchMessagingRuntimeSettings,
 } from "@/lib/auto-replies/kimi-messaging-settings-adapter";
 import { MessageSquareReply, ShieldCheck, Tags, Inbox, LayoutGrid } from "lucide-react";
@@ -30,6 +34,8 @@ const tabs: { id: View; label: string; icon: ComponentType<{ size?: number }> }[
   { id: "inbox", label: "Inbox Auto-Response", icon: Inbox },
 ];
 
+const defaultOptInBodies = Object.fromEntries(optInMessages.map((m) => [m.id, m.body]));
+
 type Props = { initialView?: View };
 
 export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
@@ -37,28 +43,36 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [editing, setEditing] = useState<Keyword | null>(null);
   const [error, setError] = useState("");
-  const [optInBodies, setOptInBodies] = useState<Record<string, string>>(
-    Object.fromEntries(optInMessages.map((m) => [m.id, m.body])),
-  );
+  const [optInBodies, setOptInBodies] = useState<Record<string, string>>(defaultOptInBodies);
   const [runtimeKeywords, setRuntimeKeywords] = useState({
     optInKeywords: "START, YES, UNSTOP",
     optOutKeywords: "STOP, UNSUBSCRIBE",
     helpKeywords: "HELP, INFO",
   });
   const [awayMessage, setAwayMessage] = useState("");
+  const [awayInsideMessage, setAwayInsideMessage] = useState("");
   const [awayEnabled, setAwayEnabled] = useState(true);
+  const [officeHoursEnabled, setOfficeHoursEnabled] = useState(true);
+  const [activeDays, setActiveDays] = useState<string[]>([
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+  ]);
+  const [timezone, setTimezone] = useState("America/Chicago");
 
   const reload = useCallback(async () => {
     const [rows, settings] = await Promise.all([fetchAutoReplies(), fetchMessagingRuntimeSettings()]);
     setKeywords(rows.map(mapAutoReplyToKimiKeyword));
-    // Opt-in message bodies have no dedicated API field — keep Kimi defaults/local edits only.
+    setOptInBodies(optInBodiesFromSettings(settings.optInMessagesJson, defaultOptInBodies));
     setRuntimeKeywords({
       optInKeywords: settings.optInKeywords || "START, YES, UNSTOP",
       optOutKeywords: settings.optOutKeywords || "STOP, UNSUBSCRIBE",
       helpKeywords: settings.helpKeywords || "HELP, INFO",
     });
     setAwayMessage(settings.awayMessage || "");
+    setAwayInsideMessage(settings.awayInsideMessage || "");
     setAwayEnabled(settings.awayEnabled);
+    setOfficeHoursEnabled(!settings.awayAlways);
+    setActiveDays(businessHoursToKimiActiveDays(settings.businessHoursJson));
+    setTimezone(settings.timezone || "America/Chicago");
   }, []);
 
   useEffect(() => {
@@ -100,9 +114,11 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
           <OptInMessages
             onBack={() => setView("overview")}
             initialBodies={optInBodies}
-            saveSuccessMessage="Saved for this session (server sync not available yet)."
             onSave={async ({ bodies }) => {
               setError("");
+              await patchMessagingRuntimeSettings({
+                optInMessagesJson: bodiesToOptInMessagesJson(bodies),
+              });
               setOptInBodies(bodies);
             }}
           />
@@ -161,12 +177,28 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
           <InboxSettings
             onBack={() => setView("overview")}
             initialAwayMessage={awayMessage}
+            initialAwayInsideMessage={awayInsideMessage}
             initialAwayEnabled={awayEnabled}
+            initialOfficeHoursEnabled={officeHoursEnabled}
+            initialActiveDays={activeDays}
+            initialTimezone={timezone}
             onSave={async (payload) => {
               setError("");
-              await patchMessagingRuntimeSettings(payload);
+              await patchMessagingRuntimeSettings({
+                awayMessage: payload.awayMessage || null,
+                awayInsideMessage: payload.awayInsideMessage || null,
+                awayEnabled: payload.awayEnabled,
+                awayAlways: payload.officeHoursEnabled ? false : true,
+                businessHoursJson: payload.officeHoursEnabled
+                  ? kimiActiveDaysToBusinessHours(payload.activeDays || activeDays)
+                  : null,
+                timezone: payload.timezone || timezone,
+              });
               setAwayMessage(payload.awayMessage);
+              setAwayInsideMessage(payload.awayInsideMessage || "");
               setAwayEnabled(payload.awayEnabled);
+              if (payload.activeDays) setActiveDays(payload.activeDays);
+              if (payload.officeHoursEnabled != null) setOfficeHoursEnabled(payload.officeHoursEnabled);
             }}
           />
         )}
