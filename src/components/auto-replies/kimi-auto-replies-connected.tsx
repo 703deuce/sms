@@ -51,10 +51,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
   const reload = useCallback(async () => {
     const [rows, settings] = await Promise.all([fetchAutoReplies(), fetchMessagingRuntimeSettings()]);
     setKeywords(rows.map(mapAutoReplyToKimiKeyword));
-    setOptInBodies((prev) => ({
-      ...prev,
-      optin: settings.awayMessage || prev.optin,
-    }));
+    // Opt-in message bodies have no dedicated API field — keep Kimi defaults/local edits only.
     setRuntimeKeywords({
       optInKeywords: settings.optInKeywords || "START, YES, UNSTOP",
       optOutKeywords: settings.optOutKeywords || "STOP, UNSUBSCRIBE",
@@ -105,7 +102,6 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
             initialBodies={optInBodies}
             onSave={async ({ bodies }) => {
               setError("");
-              await patchMessagingRuntimeSettings({ awayMessage: bodies.optin || null });
               setOptInBodies(bodies);
             }}
           />

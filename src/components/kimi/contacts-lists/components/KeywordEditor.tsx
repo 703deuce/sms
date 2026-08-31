@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, X, MessageSquareText, List, Wifi, Signal, BatteryFull } from "lucide-react";
 import { ContactList, keywordDetail } from "../mock-data";
 
@@ -9,7 +9,12 @@ interface Props {
   initialKeyword?: string;
   initialDescription?: string;
   initialAutoResponse?: string;
-  onSave: (listId: string | null) => void;
+  onSave: (payload: {
+    listId: string | null;
+    keyword: string;
+    description: string;
+    autoResponse: string;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -18,6 +23,9 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
 }
 
 export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, onSave, onCancel }: Props) {
+  const keywordRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLInputElement>(null);
+  const autoResponseRef = useRef<HTMLTextAreaElement>(null);
   const [behaviorOpen, setBehaviorOpen] = useState(true);
   const [addToLists, setAddToLists] = useState(false);
   const [altResponse, setAltResponse] = useState(false);
@@ -44,17 +52,17 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
           <div className="px-5 pb-5 space-y-4 border-t border-[#f1f3f9] pt-4">
             <div>
               <label className="field-label">Keyword</label>
-              <input className="input" defaultValue={initialKeyword ?? keywordDetail.keyword} />
+              <input ref={keywordRef} className="input" defaultValue={initialKeyword ?? keywordDetail.keyword} />
             </div>
             <div>
               <label className="field-label">Description</label>
-              <input className="input" defaultValue={initialDescription ?? keywordDetail.description} />
+              <input ref={descriptionRef} className="input" defaultValue={initialDescription ?? keywordDetail.description} />
             </div>
             <div>
               <label className="field-label flex justify-between">
                 Auto Response <span className="text-[#9aa3c0] font-normal">64/918</span>
               </label>
-              <textarea className="input h-[76px] resize-none" defaultValue={initialAutoResponse ?? keywordDetail.autoResponse} />
+              <textarea ref={autoResponseRef} className="input h-[76px] resize-none" defaultValue={initialAutoResponse ?? keywordDetail.autoResponse} />
             </div>
           </div>
         </div>
@@ -138,7 +146,19 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
         </div>
 
         <div className="flex gap-3">
-          <button className="btn-primary" onClick={() => onSave(addToLists ? selectedList : null)}>Save</button>
+          <button
+            className="btn-primary"
+            onClick={() =>
+              onSave({
+                listId: addToLists ? selectedList : null,
+                keyword: keywordRef.current?.value ?? initialKeyword ?? "",
+                description: descriptionRef.current?.value ?? initialDescription ?? "",
+                autoResponse: autoResponseRef.current?.value ?? initialAutoResponse ?? "",
+              })
+            }
+          >
+            Save
+          </button>
           <button className="btn-secondary" onClick={onCancel}>Cancel</button>
         </div>
       </div>

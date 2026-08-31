@@ -33,15 +33,18 @@ export function mapApiKeywordToKimi(k: {
   id: string;
   keyword: string;
   listName?: string | null;
+  confirmation?: string | null;
+  autoReply?: string | null;
   updatedAt?: string;
 }): Keyword {
   return {
     id: k.id,
     keyword: k.keyword,
-    description: k.listName || "",
+    description: k.confirmation || k.listName || "",
     lastSaved: formatCreated(k.updatedAt),
     connectedLists: k.listName ? 1 : 0,
     createsContacts: true,
+    autoResponse: k.autoReply || "",
   };
 }
 
@@ -85,9 +88,14 @@ export async function fetchKeywordsForLists(): Promise<Keyword[]> {
   const res = await fetch("/api/growth/keywords");
   const json = await res.json();
   if (!res.ok) return [];
-  return (json.data || []).map((k: { id: string; keyword: string; listName?: string; updatedAt?: string }) =>
-    mapApiKeywordToKimi(k),
-  );
+  return (json.data || []).map((k: {
+    id: string;
+    keyword: string;
+    listName?: string;
+    confirmation?: string;
+    autoReply?: string;
+    updatedAt?: string;
+  }) => mapApiKeywordToKimi(k));
 }
 
 export async function addContactsToList(listId: string, contactIds: string[]): Promise<void> {
@@ -102,7 +110,7 @@ export async function addContactsToList(listId: string, contactIds: string[]): P
 
 export async function updateKeywordForList(
   keywordId: string,
-  payload: { listName?: string; confirmation?: string; autoReply?: string },
+  payload: { listName?: string; keyword?: string; confirmation?: string; autoReply?: string },
 ): Promise<Keyword> {
   const res = await fetch(`/api/growth/keywords/${keywordId}`, {
     method: "PATCH",

@@ -80,11 +80,39 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
     await reload();
   };
 
+  const openFormEditor = (form: WebForm) => {
+    setEditingFormId(form.id);
+    setEditingFormName(form.name);
+    setView("create");
+  };
+
+  const handleCloneForm = async (id: string) => {
+    setError("");
+    const src = forms.find((f) => f.id === id);
+    if (!src) return;
+    try {
+      const created = await createWebForm(`${src.name} (Copy)`);
+      setForms((prev) => [created, ...prev]);
+      openFormEditor(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not clone form");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
       {view === "list" && (
-        <WebFormsList forms={forms} onCreate={() => void handleCreate()} onDelete={(id) => void handleDelete(id)} />
+        <WebFormsList
+          forms={forms}
+          onCreate={() => void handleCreate()}
+          onDelete={(id) => void handleDelete(id)}
+          onEdit={(id) => {
+            const form = forms.find((f) => f.id === id);
+            if (form) openFormEditor(form);
+          }}
+          onClone={(id) => void handleCloneForm(id)}
+        />
       )}
       {view === "create" && editingFormId && (
         <FormBuilder

@@ -26,6 +26,9 @@ export default function KeywordsList({
   onCreate: () => void;
   onDelete?: (id: string) => void;
   onClone?: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onCreateQr?: (id: string) => void;
+  onCreateTap?: (id: string) => void;
 }) {
   const [keywords, setKeywords] = useState<Keyword[]>(keywordsProp ?? initialKeywords);
   const [query, setQuery] = useState("");
@@ -61,6 +64,9 @@ export default function KeywordsList({
           ]);
       }
     }
+    if (action === "Edit" && onEdit) onEdit(id);
+    if (action === "QR" && onCreateQr) onCreateQr(id);
+    if (action === "Tap" && onCreateTap) onCreateTap(id);
     setOpenMenu(null);
   };
 

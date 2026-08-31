@@ -17,6 +17,8 @@ import {
   fetchTapKeywords,
   fetchTapLinks,
 } from "@/lib/growth/kimi-tap-to-join-adapter";
+import { loadDefaultSendingNumber } from "@/lib/campaigns/kimi-campaigns-adapter";
+import { useSearchParams } from "next/navigation";
 
 type View =
   | { name: "links" }
@@ -26,15 +28,25 @@ type View =
   | { name: "fallback" };
 
 export function KimiTapToJoinConnected() {
-  const [view, setView] = useState<View>({ name: "links" });
+  const searchParams = useSearchParams();
+  const prefillFromQuery = searchParams.get("keyword") ?? undefined;
+  const [view, setView] = useState<View>(
+    prefillFromQuery ? { name: "create", prefillKeyword: prefillFromQuery } : { name: "links" },
+  );
   const [links, setLinks] = useState<TapLink[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [defaultNumber, setDefaultNumber] = useState<string>("");
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
-    const [l, k] = await Promise.all([fetchTapLinks(), fetchTapKeywords()]);
+    const [l, k, num] = await Promise.all([
+      fetchTapLinks(),
+      fetchTapKeywords(),
+      loadDefaultSendingNumber(),
+    ]);
     setLinks(l);
     setKeywords(k);
+    if (num?.number) setDefaultNumber(num.number);
   }, []);
 
   useEffect(() => {
@@ -47,6 +59,7 @@ export function KimiTapToJoinConnected() {
       const created = await createTapLink({
         name: link.name,
         keyword: link.keyword,
+        phoneE164: defaultNumber || link.number,
       });
       setLinks((prev) => [created, ...prev]);
       setView({ name: "success", link: created });
@@ -56,8 +69,13 @@ export function KimiTapToJoinConnected() {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteTapLink(id);
-    setLinks((prev) => prev.filter((l) => l.id !== id));
+    setError("");
+    try {
+      await deleteTapLink(id);
+      setLinks((prev) => prev.filter((l) => l.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete link");
+    }
   };
 
   const handleClone = (link: TapLink) => {
@@ -96,6 +114,7 @@ export function KimiTapToJoinConnected() {
           <CreateLinkPage
             keywords={keywords}
             prefillKeyword={view.prefillKeyword}
+            defaultNumber={defaultNumber}
             onSave={handleSave}
             onBack={() => setView({ name: "links" })}
           />

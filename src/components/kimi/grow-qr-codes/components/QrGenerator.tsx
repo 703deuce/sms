@@ -5,7 +5,21 @@ import { keywords, qrActions, webforms } from '../mock-data';
 import QrCode from './QrCode';
 import ColorPicker from './ColorPicker';
 
-export default function QrGenerator({ onCancel, defaultKeyword }: { onCancel: () => void; defaultKeyword?: string }) {
+export default function QrGenerator({
+  onCancel,
+  defaultKeyword,
+  keywordOptions,
+  webformOptions,
+  onDownload,
+}: {
+  onCancel: () => void;
+  defaultKeyword?: string;
+  keywordOptions?: Array<{ name: string }>;
+  webformOptions?: Array<{ value: string; label: string }>;
+  onDownload?: (ctx: { action: string; keyword: string; webform: string; url: string }) => Promise<void>;
+}) {
+  const keywordRows = keywordOptions?.length ? keywordOptions : keywords;
+  const webformRows = webformOptions?.length ? webformOptions : webforms;
   const [action, setAction] = useState('keyword');
   const [keyword, setKeyword] = useState(defaultKeyword ?? 'Jot');
   const [webform, setWebform] = useState('signup');
@@ -15,7 +29,7 @@ export default function QrGenerator({ onCancel, defaultKeyword }: { onCancel: ()
   const [openMenu, setOpenMenu] = useState<'action' | 'keyword' | 'webform' | null>(null);
   const [kwSearch, setKwSearch] = useState('');
 
-  const filtered = keywords.filter((k) => k.name.toLowerCase().includes(kwSearch.toLowerCase()));
+  const filtered = keywordRows.filter((k) => k.name.toLowerCase().includes(kwSearch.toLowerCase()));
 
   const select = (
     label: string, value: string, opts: { value: string; label: string }[],
@@ -79,8 +93,8 @@ export default function QrGenerator({ onCancel, defaultKeyword }: { onCancel: ()
       <div className="flex gap-10" onClick={(e) => e.stopPropagation()}>
         <div className="w-[400px] shrink-0 space-y-5">
           {select('What do you want this QR code to do?', action, qrActions, 'action', setAction)}
-          {action === 'keyword' && select('Select a Keyword', keyword, keywords.map((k) => ({ value: k.name, label: k.name })), 'keyword', setKeyword, true)}
-          {action === 'webform' && select('Select a Web Form', webform, webforms, 'webform', setWebform)}
+          {action === 'keyword' && select('Select a Keyword', keyword, keywordRows.map((k) => ({ value: k.name, label: k.name })), 'keyword', setKeyword, true)}
+          {action === 'webform' && select('Select a Web Form', webform, webformRows, 'webform', setWebform)}
           {action === 'url' && (
             <div>
               <label className="block text-[13px] font-semibold text-foreground mb-1.5">Destination URL</label>
@@ -117,7 +131,7 @@ export default function QrGenerator({ onCancel, defaultKeyword }: { onCancel: ()
 
       <div className="flex items-center justify-end gap-3 mt-10 pt-5 border-t border-border">
         <button className="tv-btn-ghost" onClick={onCancel}>Cancel</button>
-        <button className="tv-btn-primary flex items-center gap-2"><Download size={15} />Download</button>
+        <button className="tv-btn-primary flex items-center gap-2" onClick={() => void onDownload?.({ action, keyword, webform, url })}><Download size={15} />Download</button>
       </div>
     </div>
   );

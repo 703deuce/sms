@@ -28,9 +28,15 @@ const FILTER_OPTIONS = [
 export default function CampaignsList({
   onCreate,
   editCampaignPath,
+  rowFilter,
+  title = "Campaigns",
+  subtitle = "Create and manage your text message campaigns.",
 }: {
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
+  rowFilter?: (row: CampaignListRow) => boolean;
+  title?: string;
+  subtitle?: string;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<CampaignListRow[]>([]);
@@ -47,13 +53,14 @@ export default function CampaignsList({
     setLoading(true);
     setError("");
     fetchCampaigns()
+      .then((data) => (rowFilter ? data.filter(rowFilter) : data))
       .then(setRows)
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Could not load campaigns");
         setRows([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [rowFilter]);
 
   useEffect(() => {
     reload();
@@ -97,9 +104,9 @@ export default function CampaignsList({
           <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-indigo-50">
             <Megaphone className="w-5 h-5 text-indigo-600" />
           </span>
-          Campaigns
+          {title}
         </h1>
-        <p className="text-sm text-slate-500 mt-1.5">View and manage all of your campaigns.</p>
+        <p className="text-sm text-slate-500 mt-1.5">{subtitle}</p>
       </header>
 
       <div className="px-8 flex items-center gap-3">

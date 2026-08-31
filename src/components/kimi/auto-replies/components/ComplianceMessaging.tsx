@@ -126,7 +126,12 @@ export default function ComplianceMessaging({
               setTimeout(() => setToast(null), 2500);
             };
             if (onSave) {
-              void onSave({ optInKeywords, optOutKeywords, helpKeywords }).then(finish).catch(finish);
+              void onSave({ optInKeywords, optOutKeywords, helpKeywords })
+                .then(finish)
+                .catch(() => {
+                  setToast("Save failed.");
+                  setTimeout(() => setToast(null), 2500);
+                });
               return;
             }
             finish();

@@ -7,14 +7,15 @@ import { Keyword, TapLink } from "../mock-data";
 interface Props {
   keywords: Keyword[];
   prefillKeyword?: string;
+  defaultNumber?: string;
   onSave: (link: TapLink) => void;
   onBack: () => void;
 }
 
-export default function CreateLinkPage({ keywords, prefillKeyword, onSave, onBack }: Props) {
+export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber, onSave, onBack }: Props) {
   const [name, setName] = useState(prefillKeyword === "BlackFriday" ? "Black Friday" : "");
   const [keyword, setKeyword] = useState(prefillKeyword || "Join");
-  const [number] = useState("888-379-4654");
+  const number = defaultNumber || "888-379-4654";
   const [fallback, setFallback] = useState("");
   const [active, setActive] = useState(true);
   const [kwOpen, setKwOpen] = useState(false);

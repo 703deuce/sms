@@ -23,6 +23,7 @@ export interface Keyword {
   lastSaved: string;
   connectedLists: number;
   createsContacts: boolean;
+  autoResponse?: string;
 }
 
 export const initialLists: ContactList[] = [

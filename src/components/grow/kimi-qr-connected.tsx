@@ -10,22 +10,28 @@ import {
 } from "lucide-react";
 import QrGenerator from "@/components/kimi/grow-qr-codes/components/QrGenerator";
 import type { Keyword } from "@/components/kimi/grow-qr-codes/mock-data";
-import { fetchQrKeywords } from "@/lib/growth/kimi-qr-adapter";
+import { createQrCode, fetchQrKeywords } from "@/lib/growth/kimi-qr-adapter";
 import { cloneKeyword, deleteKeyword } from "@/lib/growth/kimi-keywords-adapter";
+import { fetchWebForms } from "@/lib/growth/kimi-forms-adapter";
+import { useSearchParams } from "next/navigation";
 
 type View = "list" | "generator";
 
 export function KimiQrCodesConnected() {
-  const [view, setView] = useState<View>("list");
+  const searchParams = useSearchParams();
+  const queryKeyword = searchParams.get("keyword") ?? undefined;
+  const [view, setView] = useState<View>(queryKeyword ? "generator" : "list");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [keywords, setKeywords] = useState<Keyword[]>([]);
-  const [defaultKeyword, setDefaultKeyword] = useState<string | undefined>();
+  const [webforms, setWebforms] = useState<Array<{ value: string; label: string }>>([]);
+  const [defaultKeyword, setDefaultKeyword] = useState<string | undefined>(queryKeyword);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
-    const rows = await fetchQrKeywords();
+    const [rows, forms] = await Promise.all([fetchQrKeywords(), fetchWebForms()]);
     setKeywords(rows);
+    setWebforms(forms.map((f) => ({ value: f.id, label: f.name })));
   }, []);
 
   useEffect(() => {
@@ -82,7 +88,25 @@ export function KimiQrCodesConnected() {
               >
                 <ArrowLeft size={15} /> Back to Keywords
               </button>
-              <QrGenerator onCancel={() => setView("list")} defaultKeyword={defaultKeyword} />
+              <QrGenerator
+                onCancel={() => setView("list")}
+                defaultKeyword={defaultKeyword}
+                keywordOptions={keywords.map((k) => ({ name: k.name }))}
+                webformOptions={webforms}
+                onDownload={async ({ action, keyword, webform, url }) => {
+                  const targetUrl =
+                    action === "url"
+                      ? url
+                      : action === "webform"
+                        ? `/forms/${webform}`
+                        : `sms:?body=${encodeURIComponent(keyword)}`;
+                  await createQrCode({
+                    name: `QR ${action === "keyword" ? keyword : action === "webform" ? webform : "link"}`,
+                    targetUrl,
+                    targetType: action,
+                  });
+                }}
+              />
             </>
           ) : (
             <>

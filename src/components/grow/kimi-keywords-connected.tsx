@@ -8,11 +8,13 @@ import KeywordsList from "@/components/kimi/grow-keywords/components/KeywordsLis
 import KeywordBuilder from "@/components/kimi/grow-keywords/components/KeywordBuilder";
 import type { Keyword } from "@/components/kimi/grow-keywords/mock-data";
 import { createKeyword, deleteKeyword, fetchContactListNames, fetchKeywords, cloneKeyword } from "@/lib/growth/kimi-keywords-adapter";
+import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 
 type Props = { initialKeywords?: Keyword[] };
 
 export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
+  const router = useRouter();
   const [view, setView] = useState<"list" | "create">("list");
   const [keywords, setKeywords] = useState<Keyword[]>(initialKeywords);
   const [contactLists, setContactLists] = useState<string[]>([]);
@@ -75,6 +77,15 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
             onCreate={() => setView("create")}
             onDelete={(id) => void handleDelete(id)}
             onClone={(id) => void handleClone(id)}
+            onEdit={(id) => router.push(`/contacts/lists?editKeyword=${encodeURIComponent(id)}`)}
+            onCreateQr={(id) => {
+              const kw = keywords.find((k) => k.id === id);
+              router.push(kw ? `/grow/qr-codes?keyword=${encodeURIComponent(kw.name)}` : "/grow/qr-codes");
+            }}
+            onCreateTap={(id) => {
+              const kw = keywords.find((k) => k.id === id);
+              router.push(kw ? `/grow/tap-to-join?keyword=${encodeURIComponent(kw.name)}` : "/grow/tap-to-join");
+            }}
           />
         ) : (
           <KeywordBuilder

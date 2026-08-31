@@ -19,7 +19,7 @@ import {
   mapKimiToDefinition,
   persistCustomFields,
 } from "@/lib/contacts/kimi-fields-adapter";
-import { fetchContacts, fetchContactStats } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchContacts, fetchContactStats, fetchContactById, updateContact } from "@/lib/contacts/kimi-contacts-adapter";
 import type { Contact } from "@/components/kimi/contacts-fields/mock-data";
 
 type Props = {
@@ -34,7 +34,8 @@ export function KimiFieldsConnected({ initialFields }: Props) {
   );
   const [contactRows, setContactRows] = useState<Contact[]>([]);
   const [contactStats, setContactStats] = useState({ total: 0, subscribed: 0, unsubscribed: 0 });
-  const [editContactId, setEditContactId] = useState("c1");
+  const [editContactId, setEditContactId] = useState("");
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -129,10 +130,48 @@ export function KimiFieldsConnected({ initialFields }: Props) {
         <ContactsList
           contacts={contactRows}
           stats={contactStats}
-          onEdit={(id) => { setEditContactId(id); setView("contactEdit"); }}
+          onEdit={(id) => {
+            setEditContactId(id);
+            void fetchContactById(id)
+              .then((row) => {
+                if (!row) throw new Error("Contact not found");
+                setEditingContact({
+                  id: row.id,
+                  firstName: row.firstName,
+                  lastName: row.lastName,
+                  mobile: row.mobile,
+                  email: row.email,
+                  optIn: row.status === "Subscribed" ? "Subscribed" : "Unsubscribed",
+                  created: row.created,
+                  lists: [],
+                });
+                setView("contactEdit");
+              })
+              .catch((err) => setError(err instanceof Error ? err.message : "Could not load contact"));
+          }}
         />
       )}
-      {view === "contactEdit" && <ContactEdit contactId={editContactId} fields={fields} />}
+      {view === "contactEdit" && editingContact && (
+        <ContactEdit
+          contactId={editContactId}
+          contact={editingContact}
+          fields={fields}
+          onBack={() => { setView("contacts"); setEditingContact(null); }}
+          onSave={async (payload) => {
+            setError("");
+            await updateContact(editContactId, {
+              firstName: payload.firstName,
+              lastName: payload.lastName,
+              email: payload.email,
+              optInLabel: payload.optIn,
+            });
+            await reloadContacts();
+            setView("contacts");
+            setEditingContact(null);
+            showToast("Contact updated.");
+          }}
+        />
+      )}
     </AppShell>
   );
 }

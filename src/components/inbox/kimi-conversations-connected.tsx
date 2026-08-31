@@ -59,7 +59,12 @@ export function KimiConversationsConnected({
   const [convos, setConvos] = useState<Conversation[]>(() =>
     initialConversations.map((c) => mapApiConversationToKimi(c, ctx)),
   );
-  const tags = useMemo(() => buildTagsFromConversations(convos), [convos]);
+  const [extraTags, setExtraTags] = useState<Tag[]>([]);
+  const tags = useMemo(() => {
+    const fromConvos = buildTagsFromConversations(convos);
+    const ids = new Set(fromConvos.map((t) => t.id));
+    return [...fromConvos, ...extraTags.filter((t) => !ids.has(t.id))];
+  }, [convos, extraTags]);
   const [sel, setSel] = useState<FilterSel>({ kind: "mine", key: "all" });
   const [selectedId, setSelectedId] = useState<string | null>(
     () => initialConversations[0]?.id ?? null,
@@ -107,7 +112,9 @@ export function KimiConversationsConnected({
           setConvos((prev) => prev.map((c) => (c.id === selectedId ? { ...mapped, unread: false } : c)));
         }
       })
-      .catch(() => undefined);
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load conversation");
+      });
     return () => {
       cancelled = true;
     };
@@ -337,7 +344,10 @@ export function KimiConversationsConnected({
         <TagsSettings
           tags={tags}
           onBack={() => setView("inboxSettings")}
-          onCreate={() => undefined}
+          onCreate={(t) => {
+            const id = t.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `tag-${Date.now()}`;
+            setExtraTags((prev) => [...prev.filter((x) => x.id !== id), { ...t, id, created: new Date().toISOString() }]);
+          }}
         />
       ) : (
         <>
@@ -370,6 +380,8 @@ export function KimiConversationsConnected({
             <>
               <ThreadView
                 convo={selected}
+                tags={tags}
+                teammates={teammates}
                 onUpdate={(c) => void update(c)}
                 contactOpen={contactOpen}
                 onToggleContact={() => setContactOpen(!contactOpen)}

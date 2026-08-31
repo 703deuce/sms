@@ -3,6 +3,7 @@
  */
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AudienceSubNav, { AudienceTab } from "@/components/kimi/contacts-segments/components/AudienceSubNav";
 import SegmentsList from "@/components/kimi/contacts-segments/components/SegmentsList";
@@ -36,6 +37,7 @@ type View =
 type Props = { initialSegments?: Segment[] };
 
 export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
+  const router = useRouter();
   const [view, setView] = useState<View>({ name: "audience", tab: "segments" });
   const [segments, setSegments] = useState<Segment[]>(initialSegments);
   const [audienceContacts, setAudienceContacts] = useState<Contact[]>([]);
@@ -116,8 +118,13 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteSegment(id);
-    setSegments((prev) => prev.filter((s) => s.id !== id));
+    setError("");
+    try {
+      await deleteSegment(id);
+      setSegments((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete segment");
+    }
   };
 
   const handleSaveSegment = async (input: {
@@ -208,7 +215,7 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
               </div>
             ) : (
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setCampaignSent(true)} className="seg-btn-primary h-10 px-5 rounded-lg text-sm font-medium flex items-center gap-2"><Send className="h-4 w-4" /> Schedule Campaign</button>
+                <button onClick={() => router.push(`/campaigns/new?segmentId=${encodeURIComponent(view.segment.id)}`)} className="seg-btn-primary h-10 px-5 rounded-lg text-sm font-medium flex items-center gap-2"><Send className="h-4 w-4" /> Create Campaign</button>
                 <button onClick={() => setView({ name: "audience", tab: "segments" })} className="h-10 px-5 rounded-lg border border-border bg-card hover:bg-muted text-sm font-medium transition-colors">Back</button>
               </div>
             )}

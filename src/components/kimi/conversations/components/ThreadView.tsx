@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { ChevronDown, UserCheck, Tag as TagIcon, MoreVertical, EyeOff, Download, MessageSquare, FileText, CalendarDays, StickyNote, Users, Check } from "lucide-react";
-import { Conversation, Message, TAGS, TEAMMATES } from "../mock-data";
+import { Conversation, Message, TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
 import { Popover, usePopover } from "./Popover";
 import Composer from "./Composer";
 
@@ -11,9 +11,12 @@ const MenuItem = ({ children, onClick }:{ children: React.ReactNode; onClick?: (
   <div className="tv-menu-item" onClick={onClick}>{children}</div>
 );
 
-export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings }:{
+export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, tags: tagsProp, teammates: teammatesProp }:{
   convo: Conversation; onUpdate: (c: Conversation)=>void; onToggleContact: ()=>void; contactOpen: boolean; onOpenTagsSettings: ()=>void;
+  tags?: Tag[]; teammates?: Teammate[];
 }) {
+  const tagCatalog = tagsProp ?? TAGS;
+  const teammateCatalog = teammatesProp ?? TEAMMATES;
   const [statusOpen, setStatusOpen] = usePopover();
   const [assignOpen, setAssignOpen] = usePopover();
   const [tagOpen, setTagOpen] = usePopover();
@@ -32,13 +35,13 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
     setStatusOpen(false);
   };
   const assign = (id: string | null) => {
-    const name = id === null ? "No One" : id === "me" ? "Me" : TEAMMATES.find((t) => t.id === id)?.name ?? "";
+    const name = id === null ? "No One" : id === "me" ? "Me" : teammateCatalog.find((t) => t.id === id)?.name ?? "";
     onUpdate({ ...convo, assignee: id, messages: [...convo.messages, ev(`Conversation Assigned to ${name} — ${now}`)] });
     setAssignOpen(false);
   };
   const applyTags = () => {
     const added = pendingTags.filter((t) => !convo.tags.includes(t));
-    const msgs = [...convo.messages, ...added.map((t) => ev(`Conversation Tagged as ${TAGS.find((x) => x.id === t)?.name} — ${now}`))];
+    const msgs = [...convo.messages, ...added.map((t) => ev(`Conversation Tagged as ${tagCatalog.find((x) => x.id === t)?.name} — ${now}`))];
     onUpdate({ ...convo, tags: pendingTags, messages: msgs });
     setTagOpen(false);
   };
@@ -54,7 +57,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
     return filters.inbox;
   });
 
-  const assignee = TEAMMATES.find((t) => t.id === convo.assignee);
+  const assignee = teammateCatalog.find((t) => t.id === convo.assignee);
   const statusCls = convo.status === "open" ? "tv-status-open" : convo.status === "pending" ? "tv-status-pending" : "tv-status-closed";
 
   const Toggle = ({ on, onClick }:{ on: boolean; onClick: ()=>void }) => <button className={"tv-toggle" + (on ? " on" : "")} onClick={onClick} />;
@@ -68,7 +71,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
           <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.1 }}>{convo.name}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
             {convo.tags.map((tid) => {
-              const t = TAGS.find((x) => x.id === tid); if (!t) return null;
+              const t = tagCatalog.find((x) => x.id === tid); if (!t) return null;
               return <span key={tid} className="tv-chip"><TagIcon size={10} color={t.color} fill={t.color} />{t.name}</span>;
             })}
           </div>
@@ -94,7 +97,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
           <div style={{ padding: 8 }}>
             <input className="tv-input" placeholder="Search Teammates" style={{ marginBottom: 6, padding: "6px 10px" }} />
             <div className="tv-menu-label">ASSIGN CONVERSATION</div>
-            {[{ id: null, name: "No One", initials: "—", color: "#9ca3af" }, ...TEAMMATES].map((t) => (
+            {[{ id: null, name: "No One", initials: "—", color: "#9ca3af" }, ...teammateCatalog].map((t) => (
               <MenuItem key={t.id ?? "none"} onClick={() => assign(t.id)}>
                 <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color }}>{t.initials}</span>
                 <span style={{ flex: 1 }}>{t.name}</span>
@@ -110,7 +113,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
           <div style={{ padding: 8 }}>
             <input className="tv-input" placeholder="Search Tags" style={{ marginBottom: 6, padding: "6px 10px" }} />
             <div className="tv-menu-label">TAG CONVERSATION</div>
-            {TAGS.map((t) => (
+            {tagCatalog.map((t) => (
               <label key={t.id} className="tv-menu-item" style={{ cursor: "pointer" }}>
                 <input type="checkbox" checked={pendingTags.includes(t.id)} style={{ accentColor: "var(--tv-primary)" }}
                   onChange={(e) => setPendingTags(e.target.checked ? [...pendingTags, t.id] : pendingTags.filter((x) => x !== t.id))} />

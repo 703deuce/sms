@@ -26,21 +26,7 @@ function seedGroups(editing?: Segment | null): Group[] {
     }));
   }
   if (editing) {
-    return [
-      {
-        id: nid(),
-        conditions: [
-          { id: nid(), property: "Age", condition: "Is Greater Than or Equal To", value: "25", values: [] },
-          { id: nid(), property: "Age", condition: "Is Not Known", value: "", values: [] },
-        ],
-      },
-      {
-        id: nid(),
-        conditions: [
-          { id: nid(), property: "State", condition: "Is", value: "", values: ["California", "Oregon", "Washington"] },
-        ],
-      },
-    ];
+    return [{ id: nid(), conditions: [newCond()] }];
   }
   return [{ id: nid(), conditions: [newCond()] }];
 }

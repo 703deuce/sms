@@ -4,6 +4,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Page } from "@/components/kimi/contacts-lists/components/Sidebar";
 import ListsPage from "@/components/kimi/contacts-lists/components/ListsPage";
 import CreateListPage from "@/components/kimi/contacts-lists/components/CreateListPage";
@@ -24,6 +25,8 @@ import {
 } from "lucide-react";
 
 export function KimiListsConnected() {
+  const searchParams = useSearchParams();
+  const editKeywordId = searchParams.get("editKeyword");
   const [page, setPage] = useState<Page>("lists");
   const [lists, setLists] = useState<ContactList[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -42,9 +45,17 @@ export function KimiListsConnected() {
 
   useEffect(() => {
     reload()
-      .catch(() => undefined)
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load lists"))
       .finally(() => setLoading(false));
   }, [reload]);
+
+  useEffect(() => {
+    if (!editKeywordId || keywords.length === 0) return;
+    const kw = keywords.find((k) => k.id === editKeywordId);
+    if (!kw) return;
+    setEditingKeyword(kw);
+    setPage("keyword");
+  }, [editKeywordId, keywords]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -72,15 +83,25 @@ export function KimiListsConnected() {
     }
   };
 
-  const saveKeyword = async (listId: string | null) => {
+  const saveKeyword = async (payload: {
+    listId: string | null;
+    keyword: string;
+    description: string;
+    autoResponse: string;
+  }) => {
     if (!editingKeyword) {
       setPage("tools");
       return;
     }
     setError("");
     try {
-      const listName = listId ? lists.find((l) => l.id === listId)?.name : undefined;
-      await updateKeywordForList(editingKeyword.id, { listName });
+      const listName = payload.listId ? lists.find((l) => l.id === payload.listId)?.name : undefined;
+      await updateKeywordForList(editingKeyword.id, {
+        keyword: payload.keyword,
+        listName,
+        confirmation: payload.description,
+        autoReply: payload.autoResponse,
+      });
       await reload();
       setPage("tools");
       setEditingKeyword(null);
@@ -133,7 +154,8 @@ export function KimiListsConnected() {
             keywordId={editingKeyword.id}
             initialKeyword={editingKeyword.keyword}
             initialDescription={editingKeyword.description}
-            onSave={(listId) => void saveKeyword(listId)}
+            initialAutoResponse={editingKeyword.autoResponse}
+            onSave={(payload) => void saveKeyword(payload)}
             onCancel={() => { setEditingKeyword(null); setPage("tools"); }}
           />
         )}
@@ -169,7 +191,7 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
               <input className="input pl-8 w-[220px]" placeholder="Search" />
             </div>
-            <button className="btn-primary">Create Keyword</button>
+            <button className="btn-primary" onClick={() => window.location.assign("/grow/keywords")}>Create Keyword</button>
           </div>
         </div>
         <div className="table-card">

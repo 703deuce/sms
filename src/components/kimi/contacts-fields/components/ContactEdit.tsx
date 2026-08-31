@@ -1,9 +1,47 @@
 "use client";
+import { useRef } from "react";
 import { Users, Lightbulb, X } from "lucide-react";
-import { contacts, CustomField } from "../mock-data";
+import { contacts, CustomField, type Contact } from "../mock-data";
 
-export default function ContactEdit({ contactId, fields }: { contactId: string; fields: CustomField[] }) {
-  const c = contacts.find((x) => x.id === contactId) ?? contacts[0];
+type SavePayload = {
+  firstName: string;
+  lastName: string;
+  mobile: string;
+  email: string;
+  optIn: string;
+};
+
+export default function ContactEdit({
+  contactId,
+  fields,
+  contact: contactProp,
+  onBack,
+  onSave,
+}: {
+  contactId: string;
+  fields: CustomField[];
+  contact?: Contact;
+  onBack?: () => void;
+  onSave?: (payload: SavePayload) => Promise<void>;
+}) {
+  const c = contactProp ?? contacts.find((x) => x.id === contactId) ?? contacts[0];
+  const firstRef = useRef<HTMLInputElement>(null);
+  const lastRef = useRef<HTMLInputElement>(null);
+  const mobileRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const optInRef = useRef<HTMLSelectElement>(null);
+
+  const handleSave = () => {
+    if (!onSave) return;
+    void onSave({
+      firstName: firstRef.current?.value ?? c.firstName,
+      lastName: lastRef.current?.value ?? c.lastName,
+      mobile: mobileRef.current?.value ?? c.mobile,
+      email: emailRef.current?.value ?? c.email,
+      optIn: optInRef.current?.value ?? c.optIn,
+    });
+  };
+
   return (
     <div>
       <div className="tv-breadcrumb">Contacts / {c.firstName} {c.lastName}</div>
@@ -19,13 +57,13 @@ export default function ContactEdit({ contactId, fields }: { contactId: string; 
       <div className="tv-two-col" style={{ marginTop: 22 }}>
         <div style={{ flex: 1, maxWidth: 520 }}>
           <div style={{ display: "flex", gap: 12 }}>
-            <div style={{ flex: 1 }}><label className="tv-label" style={{ marginTop: 0 }}>First Name</label><input className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.firstName} /></div>
-            <div style={{ flex: 1 }}><label className="tv-label" style={{ marginTop: 0 }}>Last Name</label><input className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.lastName} /></div>
+            <div style={{ flex: 1 }}><label className="tv-label" style={{ marginTop: 0 }}>First Name</label><input ref={firstRef} className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.firstName} /></div>
+            <div style={{ flex: 1 }}><label className="tv-label" style={{ marginTop: 0 }}>Last Name</label><input ref={lastRef} className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.lastName} /></div>
           </div>
           <label className="tv-label">Mobile Number</label>
-          <input className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.mobile} />
+          <input ref={mobileRef} className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.mobile} />
           <label className="tv-label">Email</label>
-          <input className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.email} />
+          <input ref={emailRef} className="tv-input" style={{ width: "100%", minWidth: 0 }} defaultValue={c.email} />
           <label className="tv-label">Birthdate</label>
           <input className="tv-input" style={{ width: "100%", minWidth: 0 }} placeholder="mm/dd/yyyy" type="date" />
           <label className="tv-label">Address</label>
@@ -73,11 +111,14 @@ export default function ContactEdit({ contactId, fields }: { contactId: string; 
           </div>
 
           <h3 className="tv-section-title">Opt-In Status</h3>
-          <select className="tv-select" style={{ width: "100%" }}><option>Subscribed</option><option>Unsubscribed</option></select>
+          <select ref={optInRef} className="tv-select" style={{ width: "100%" }} defaultValue={c.optIn}>
+            <option>Subscribed</option>
+            <option>Unsubscribed</option>
+          </select>
 
           <div className="tv-form-actions">
-            <button className="tv-btn tv-btn-primary" style={{ minWidth: 110 }}>Save</button>
-            <button className="tv-btn tv-btn-ghost" style={{ minWidth: 110 }}>Back</button>
+            <button type="button" className="tv-btn tv-btn-primary" style={{ minWidth: 110 }} onClick={handleSave}>Save</button>
+            <button type="button" className="tv-btn tv-btn-ghost" style={{ minWidth: 110 }} onClick={onBack}>Back</button>
           </div>
         </div>
         <div className="tv-tip-card">

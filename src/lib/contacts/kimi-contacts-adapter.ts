@@ -66,6 +66,36 @@ export async function fetchContactStats(): Promise<KimiContactStats> {
   };
 }
 
+export async function fetchContactById(id: string): Promise<KimiContact | null> {
+  const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`);
+  const json = await res.json();
+  if (!res.ok) return null;
+  return mapApiContactToKimi(json.data as ApiContact);
+}
+
+export async function updateContact(
+  id: string,
+  payload: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    optInLabel?: string;
+  },
+): Promise<void> {
+  const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      status: payload.optInLabel ? mapOptInLabelToApiStatus(payload.optInLabel) : undefined,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not update contact");
+}
+
 export async function createContact(payload: {
   firstName?: string;
   lastName?: string;
