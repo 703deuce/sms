@@ -46,8 +46,12 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteKeyword(id);
-    setKeywords((prev) => prev.filter((k) => k.id !== id));
+    try {
+      await deleteKeyword(id);
+      setKeywords((prev) => prev.filter((k) => k.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    }
   };
 
   return (

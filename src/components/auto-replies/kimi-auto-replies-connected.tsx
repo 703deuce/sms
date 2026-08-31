@@ -11,7 +11,7 @@ import KeywordsList from "@/components/kimi/auto-replies/components/KeywordsList
 import KeywordEdit from "@/components/kimi/auto-replies/components/KeywordEdit";
 import InboxSettings from "@/components/kimi/auto-replies/components/InboxSettings";
 import type { Keyword } from "@/components/kimi/auto-replies/mock-data";
-import { fetchAutoReplies, mapAutoReplyToKimiKeyword } from "@/lib/auto-replies/kimi-auto-replies-adapter";
+import { fetchAutoReplies, mapAutoReplyToKimiKeyword, updateAutoReply } from "@/lib/auto-replies/kimi-auto-replies-adapter";
 import { MessageSquareReply, ShieldCheck, Tags, Inbox, LayoutGrid } from "lucide-react";
 import type { AutoRepliesInitialView } from "@/components/kimi/auto-replies/AutoRepliesFlow";
 
@@ -31,6 +31,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
   const [view, setView] = useState<View>(initialView);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [editing, setEditing] = useState<Keyword | null>(null);
+  const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     const rows = await fetchAutoReplies();
@@ -70,6 +71,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8">
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
         {view === "overview" && <AutoRepliesOverview onOpen={openSection} />}
         {view === "optin" && <OptInMessages onBack={() => setView("overview")} />}
         {view === "compliance" && <ComplianceMessaging onBack={() => setView("overview")} />}
@@ -87,7 +89,16 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
           <KeywordEdit
             keyword={editing}
             onBack={() => setView("keywords")}
-            onSaved={(k) => setEditing(k)}
+            onSaved={(k) => {
+              setError("");
+              void updateAutoReply(k.id, {
+                name: k.keyword,
+                message: k.autoResponse,
+              })
+                .then(() => reload())
+                .catch((err) => setError(err instanceof Error ? err.message : "Save failed"));
+              setEditing(k);
+            }}
           />
         )}
         {view === "inbox" && <InboxSettings onBack={() => setView("overview")} />}

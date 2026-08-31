@@ -4,7 +4,8 @@ import {
   FileUp, UploadCloud, CheckCircle2, Columns3, ListChecks,
   ChevronDown, Check, FileSpreadsheet, Users, X,
 } from "lucide-react";
-import { contactFieldOptions, contactLists, importColumns } from "../mock-data";
+import { contactFieldOptions, contactLists as defaultContactLists, importColumns as defaultImportColumns, type ImportColumn } from "../mock-data";
+import { parseImportCsvColumns, type KimiImportPayload } from "@/lib/contacts/kimi-contacts-adapter";
 
 type Step = "upload" | "columns" | "optin" | "lists" | "review";
 
@@ -74,15 +75,19 @@ export default function ImportWizard({
   onCancel,
   onDone,
   onImportFile,
+  contactLists = defaultContactLists,
 }: {
   onCancel: () => void;
   onDone: () => void;
-  onImportFile?: (file: File) => Promise<void>;
+  onImportFile?: (payload: KimiImportPayload) => Promise<void>;
+  contactLists?: string[];
 }) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [parsedColumns, setParsedColumns] = useState<ImportColumn[]>(defaultImportColumns);
   const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
   const [headerRow, setHeaderRow] = useState(false);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [onlyEmpty, setOnlyEmpty] = useState(false);
@@ -120,9 +125,18 @@ export default function ImportWizard({
     else {
       if (onImportFile && uploadedFile) {
         setImporting(true);
-        void onImportFile(uploadedFile)
+        setImportError("");
+        void onImportFile({
+          file: uploadedFile,
+          mapping,
+          optInChoice,
+          selectedLists,
+          headerRow,
+        })
           .then(() => onDone())
-          .catch(() => onDone())
+          .catch((err) => {
+            setImportError(err instanceof Error ? err.message : "Import failed");
+          })
           .finally(() => setImporting(false));
         return;
       }
@@ -173,6 +187,17 @@ export default function ImportWizard({
                     if (!picked) return;
                     setUploadedFile(picked);
                     setFile(picked.name);
+                    setImportError("");
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const text = String(reader.result || "");
+                      const { columns, mapping: guessed } = parseImportCsvColumns(text, headerRow);
+                      if (columns.length) {
+                        setParsedColumns(columns);
+                        setMapping((prev) => ({ ...prev, ...guessed }));
+                      }
+                    };
+                    reader.readAsText(picked);
                   }}
                 />
                 <UploadCloud className="w-8 h-8 text-primary mx-auto mb-2" />
@@ -222,7 +247,7 @@ export default function ImportWizard({
               <div className="grid grid-cols-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted/40 px-5 py-3">
                 <span>Column Name</span><span>Sample Column Data</span><span>Contact Field</span>
               </div>
-              {importColumns.map((col) => {
+              {parsedColumns.map((col) => {
                 const assigned = mapping[col.name];
                 const matched = assigned && assigned !== "None";
                 return (
@@ -395,6 +420,9 @@ export default function ImportWizard({
       </div>
 
       {/* Sticky footer actions */}
+      {importError && (
+        <p className="text-sm text-red-600 mb-3">{importError}</p>
+      )}
       <div className="flex items-center justify-between pt-6 mt-8 border-t border-border">
         {step === "upload" ? (
           <button onClick={onCancel} className="kc-btn-secondary px-8 h-10 text-[13px]">Cancel</button>

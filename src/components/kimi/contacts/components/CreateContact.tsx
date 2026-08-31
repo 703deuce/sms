@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { UserPlus, Lightbulb, X, ChevronDown } from "lucide-react";
-import { contactLists } from "../mock-data";
+import { contactLists as defaultContactLists } from "../mock-data";
 
 const inputCls =
   "w-full px-3 h-10 border border-border rounded-lg text-[13px] bg-card text-foreground outline-none transition focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-muted-foreground";
@@ -12,6 +12,7 @@ const sectionDescCls = "text-[13px] text-muted-foreground mt-1 mb-4";
 export default function CreateContact({
   onBack,
   onSaved,
+  contactLists = defaultContactLists,
 }: {
   onBack: () => void;
   onSaved: (formData?: {
@@ -21,6 +22,7 @@ export default function CreateContact({
     email: string;
     optIn: string;
   }) => void | Promise<void>;
+  contactLists?: string[];
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");

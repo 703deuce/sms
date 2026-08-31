@@ -57,8 +57,12 @@ export async function createKeyword(payload: {
   return mapApiKeywordToKimi(json.data);
 }
 
-export async function deleteKeyword(_id: string): Promise<void> {
-  // No per-keyword DELETE route yet — UI removes row optimistically.
+export async function deleteKeyword(id: string): Promise<void> {
+  const res = await fetch(`/api/growth/keywords/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Could not delete keyword");
+  }
 }
 
 export async function fetchContactListNames(): Promise<string[]> {

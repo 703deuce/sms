@@ -13,6 +13,7 @@ import {
   createContact,
   fetchContactStats,
   fetchContacts,
+  fetchContactLists,
   importContacts,
   type KimiContactStats,
 } from "@/lib/contacts/kimi-contacts-adapter";
@@ -36,11 +37,13 @@ export function KimiContactsConnected({
   const [savedToast, setSavedToast] = useState(false);
   const [importModal, setImportModal] = useState(false);
   const [error, setError] = useState("");
+  const [contactLists, setContactLists] = useState<string[]>([]);
 
   const reload = useCallback(async () => {
-    const [rows, s] = await Promise.all([fetchContacts(), fetchContactStats()]);
+    const [rows, s, lists] = await Promise.all([fetchContacts(), fetchContactStats(), fetchContactLists()]);
     setContacts(rows);
     setStats(s);
+    setContactLists(lists);
   }, []);
 
   useEffect(() => {
@@ -90,14 +93,15 @@ export function KimiContactsConnected({
           />
         )}
         {view === "create" && (
-          <CreateContact onBack={() => setView("list")} onSaved={handleSaved} />
+          <CreateContact contactLists={contactLists} onBack={() => setView("list")} onSaved={handleSaved} />
         )}
         {view === "import" && (
           <ImportWizard
+            contactLists={contactLists}
             onCancel={() => setView("list")}
             onDone={() => setImportModal(true)}
-            onImportFile={async (file) => {
-              await importContacts(file);
+            onImportFile={async (payload) => {
+              await importContacts(payload);
               await reload();
             }}
           />

@@ -3,6 +3,7 @@
  */
 import type { Contact as ApiContact } from "@/lib/types";
 import type { Contact as KimiContact } from "@/components/kimi/contacts/mock-data";
+import { parseCsv } from "@/lib/contacts/parse-csv";
 
 function formatCreated(iso: string): string {
   const d = new Date(iso);
@@ -76,13 +77,122 @@ export async function createContact(payload: {
   if (!res.ok) throw new Error(json.error || "Could not create contact");
 }
 
-export async function importContacts(file: File): Promise<{ imported: number }> {
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch("/api/contacts/import", { method: "POST", body: form });
-  const json = await res.json();
+export type KimiImportPayload = {
+  file: File;
+  mapping: Record<string, string>;
+  optInChoice: string;
+  selectedLists: string[];
+  headerRow: boolean;
+};
+
+function kimiFieldToRowKey(field: string): "firstName" | "lastName" | "phone" | "email" | null {
+  if (field === "First Name") return "firstName";
+  if (field === "Last Name") return "lastName";
+  if (field === "Mobile Number" || field === "Mobile") return "phone";
+  if (field === "Email") return "email";
+  return null;
+}
+
+function guessKimiField(header: string): string {
+  const h = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (h.includes("firstname") || h === "first") return "First Name";
+  if (h.includes("lastname") || h === "last") return "Last Name";
+  if (h.includes("phone") || h.includes("mobile") || h.includes("cell")) return "Mobile Number";
+  if (h.includes("email")) return "Email";
+  if (h.includes("optin") || h.includes("status") || h.includes("subscribe")) return "Opt-In Status";
+  return "None";
+}
+
+export function parseImportCsvColumns(
+  text: string,
+  headerRow: boolean,
+): { columns: Array<{ name: string; sample: string }>; mapping: Record<string, string> } {
+  const allRows = parseCsv(text);
+  if (!allRows.length) return { columns: [], mapping: {} };
+
+  const headers = headerRow ? allRows[0] : allRows[0].map((_, i) => `Column ${i + 1}`);
+  const sampleRow = headerRow ? allRows[1] : allRows[0];
+  const columns = headers.map((name, idx) => ({
+    name: name || `Column ${idx + 1}`,
+    sample: sampleRow?.[idx] || "",
+  }));
+  const mapping: Record<string, string> = {};
+  for (const col of columns) {
+    mapping[col.name] = guessKimiField(col.name);
+  }
+  return { columns, mapping };
+}
+
+export async function importContacts(payload: KimiImportPayload): Promise<{ created: number; updated: number }> {
+  const text = await payload.file.text();
+  const allRows = parseCsv(text);
+  if (!allRows.length) throw new Error("CSV file is empty");
+
+  const headers = payload.headerRow
+    ? allRows[0]
+    : allRows[0].map((_, i) => `Column ${i + 1}`);
+  const dataRows = payload.headerRow ? allRows.slice(1) : allRows;
+
+  const rows = dataRows
+    .map((row) => {
+      const out: { phone?: string; firstName?: string; lastName?: string; email?: string } = {};
+      for (const [colName, kimiField] of Object.entries(payload.mapping)) {
+        const colIdx = headers.findIndex((h) => h === colName);
+        if (colIdx < 0 || kimiField === "None") continue;
+        const val = row[colIdx]?.trim() || "";
+        const key = kimiFieldToRowKey(kimiField);
+        if (key) out[key] = val;
+      }
+      return out;
+    })
+    .filter((r) => r.phone);
+
+  if (!rows.length) {
+    throw new Error("No rows with a mapped phone number found. Map a column to Mobile Number.");
+  }
+
+  const listName = payload.selectedLists[0] || undefined;
+
+  async function submitImport(attestationId?: string) {
+    const res = await fetch("/api/contacts/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows,
+        listName,
+        consentSource: "csv_import",
+        marketingImport: Boolean(attestationId),
+        attestationId,
+      }),
+    });
+    const json = await res.json();
+    return { res, json };
+  }
+
+  let { res, json } = await submitImport();
+  if (!res.ok && String(json.error || "").toLowerCase().includes("attestation")) {
+    const attestRes = await fetch("/api/mass-texting/import-attestation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listName,
+        contactCount: rows.length,
+        attestationAccepted: true,
+        source: "csv_import",
+      }),
+    });
+    const attestJson = await attestRes.json();
+    if (!attestRes.ok) {
+      throw new Error(attestJson.error || "List consent attestation failed");
+    }
+    ({ res, json } = await submitImport(attestJson.data?.id));
+  }
+
   if (!res.ok) throw new Error(json.error || "Import failed");
-  return { imported: json.data?.imported ?? json.data?.created ?? 0 };
+  return {
+    created: json.data?.created ?? 0,
+    updated: json.data?.updated ?? 0,
+  };
 }
 
 export async function fetchContactLists(): Promise<string[]> {
