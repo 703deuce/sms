@@ -107,7 +107,6 @@ export default function ConversationsFlow() {
 
   return (
     <div className="ref-scope">
-      <AppSidebar onOpenSettings={() => setView("settings")} />
       {view === "settings" ? (
         <SettingsHome onOpenInbox={() => setView("inboxSettings")} />
       ) : view === "inboxSettings" ? (

@@ -190,6 +190,24 @@ function copyDir(src: string, dest: string) {
   }
 }
 
+function removeJsxComponent(source: string, name: string): string {
+  let s = source;
+  const open = `<${name}`;
+  let idx = 0;
+  while ((idx = s.indexOf(open, idx)) !== -1) {
+    const selfClose = s.indexOf("/>", idx);
+    const blockClose = s.indexOf(`</${name}>`, idx);
+    if (selfClose === -1 && blockClose === -1) break;
+    if (selfClose !== -1 && (blockClose === -1 || selfClose < blockClose)) {
+      s = s.slice(0, idx) + s.slice(selfClose + 2);
+      continue;
+    }
+    const end = blockClose + `</${name}>`.length;
+    s = s.slice(0, idx) + s.slice(end);
+  }
+  return s;
+}
+
 function stripShellFromSource(source: string): string {
   const hasFeatureSubNav =
     /<(Sidebar|AppSidebar|SubNav)[^>]*(page|view|active)=\{/.test(source) ||
@@ -204,10 +222,8 @@ function stripShellFromSource(source: string): string {
   if (!hasFeatureSubNav) {
     s = s.replace(/^import\s+Sidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
     s = s.replace(/^import\s+AppSidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
-    s = s.replace(/<Sidebar[^>]*\/>\s*/g, "");
-    s = s.replace(/<Sidebar[^>]*>[\s\S]*?<\/Sidebar>\s*/g, "");
-    s = s.replace(/<AppSidebar[^>]*\/>\s*/g, "");
-    s = s.replace(/<AppSidebar[^>]*>[\s\S]*?<\/AppSidebar>\s*/g, "");
+    s = removeJsxComponent(s, "Sidebar");
+    s = removeJsxComponent(s, "AppSidebar");
     s = s.replace(/<AppShell[^>]*>\s*/g, "");
     s = s.replace(/<\/AppShell>\s*/g, "");
     s = s.replace(/active="[^"]*"\s*/g, "");
@@ -299,10 +315,17 @@ function patchComponentSources(dest: string, flowName: string) {
 function ensureGlobalsImport(slug: string) {
   const importLine = `@import "../styles/kimi/${slug}.css";`;
   let css = readFileSync(GLOBALS, "utf8");
-  if (!css.includes(importLine)) {
+  if (css.includes(importLine)) return;
+
+  const tailwindImport = '@import "tailwindcss";';
+  const tailwindIdx = css.indexOf(tailwindImport);
+  if (tailwindIdx === -1) {
     css = css.trimEnd() + `\n${importLine}\n`;
-    writeFileSync(GLOBALS, css, "utf8");
+  } else {
+    const insertAt = tailwindIdx + tailwindImport.length;
+    css = `${css.slice(0, insertAt)}\n${importLine}${css.slice(insertAt)}`;
   }
+  writeFileSync(GLOBALS, css, "utf8");
 }
 
 function integrateJob(job: RouteJob) {
