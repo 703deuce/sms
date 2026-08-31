@@ -17,12 +17,14 @@ export default async function ConversationsPage() {
 
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading conversations…</p>}>
-      <ConversationsFlow
-        initialConversations={conversations}
-        teamMembers={teamMembers}
-        currentUserId={session.userId}
-        currentUserName={currentMember?.name ?? session.name ?? "You"}
-      />
+      <div className="kimi-surface kimi-conversations">
+        <ConversationsFlow
+          initialConversations={conversations}
+          teamMembers={teamMembers}
+          currentUserId={session.userId}
+          currentUserName={currentMember?.name ?? session.name ?? "You"}
+        />
+      </div>
     </Suspense>
   );
 }

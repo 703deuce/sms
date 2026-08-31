@@ -2,7 +2,7 @@
  * Kimi conversations flow — wired to /api/inbox.
  */
 "use client";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import { MediaPicker } from "@/components/messaging/media-picker";
@@ -87,6 +87,7 @@ export default function ConversationsFlow({
 
   const teammates = useMemo(() => buildTeammates(currentUserId, currentUserName, teamMembers), [currentUserId, currentUserName, teamMembers]);
   const tags = useMemo(() => buildTagsFromConversations(convos), [convos]);
+  const skipInitialReload = useRef(true);
 
   const reloadList = useCallback(async () => {
     setLoading(true);
@@ -103,6 +104,10 @@ export default function ConversationsFlow({
   }, [sel, ctx]);
 
   useEffect(() => {
+    if (skipInitialReload.current) {
+      skipInitialReload.current = false;
+      return;
+    }
     void reloadList();
   }, [reloadList]);
 
