@@ -9,7 +9,6 @@ import {
   Trash2,
   Settings,
   ArrowRight,
-  GripVertical,
 } from "lucide-react";
 import type { CanvasNodeData } from "./WorkflowBuilder";
 
@@ -55,11 +54,10 @@ function PieHandle({
     const y1 = r + r * Math.sin(start);
     const x2 = r + r * Math.cos(end);
     const y2 = r + r * Math.sin(end);
-    const large = n > 2 ? 0 : 0;
     return (
       <path
         key={o.label}
-        d={`M ${r} ${r} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`}
+        d={`M ${r} ${r} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z`}
         fill={colors[o.kind]}
         stroke="white"
         strokeWidth={1.5}
@@ -73,7 +71,7 @@ function PieHandle({
     );
   });
   return (
-    <svg className="pie-handle" width={size} height={size} style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))" }}>
+    <svg className="pie-handle" width={size} height={size} style={{ filter: "drop-shadow(0 2px 5px rgba(30,42,90,0.2))" }}>
       {segments}
     </svg>
   );
@@ -93,45 +91,48 @@ export default function CanvasNode({ node, selected, onSelect, onConfigure, onDe
         onStartDrag(e);
       }}
     >
-      <div className={`node-card relative w-[168px] rounded-xl border border-border bg-card shadow-sm ${selected ? "selected" : ""}`}>
-        {/* header controls */}
-        <div className="flex items-center justify-between px-2 pt-1.5">
+      <div className={`node-card group relative w-[152px] border bg-card ${selected ? "selected" : "border-border"}`}>
+        {/* hover controls */}
+        <div
+          className={`pointer-events-none absolute -top-2.5 left-0 right-0 flex items-center justify-between px-1 transition-opacity duration-150 ${
+            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
           <button
-            className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500"
+            className="node-ctl pointer-events-auto"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onDelete}
             title="Delete"
           >
-            <Trash2 size={12} />
+            <Trash2 size={11} />
           </button>
-          <GripVertical size={12} className="text-muted-foreground/40" />
           <button
-            className="rounded p-1 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600"
+            className="node-ctl pointer-events-auto"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onConfigure}
             title="Configure"
           >
-            <Settings size={12} />
+            <Settings size={11} />
           </button>
         </div>
 
-        <div className="flex flex-col items-center px-3 pb-3 pt-1">
-          <div className={`flex h-11 w-11 items-center justify-center rounded-full ${style.iconBg}`}>
+        <div className="flex flex-col items-center px-3 pb-3.5 pt-4">
+          <div className={`node-icon flex h-11 w-11 items-center justify-center rounded-full ${style.iconBg}`}>
             <Icon size={19} className={style.iconColor} />
           </div>
           <p className="mt-2 text-center text-[12px] font-semibold leading-tight text-foreground">{node.label}</p>
-          <p className="mt-0.5 text-center text-[10.5px] leading-tight text-muted-foreground">
+          <p className={`mt-0.5 text-center text-[10.5px] leading-tight ${node.configured ? "text-muted-foreground" : "text-muted-foreground/70"}`}>
             {node.configured ? node.subtitle : "Not configured"}
           </p>
         </div>
 
         {/* input handle */}
-        <div className="absolute -left-[7px] top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-gray-300 bg-white" />
+        {node.kind !== "trigger" && <div className="node-handle-in" />}
 
         {/* output */}
         {node.outputs.length === 1 && !node.outputs[0].pie ? (
           <button
-            className="absolute -right-[11px] top-1/2 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-full border border-border bg-white shadow-sm text-indigo-600 hover:bg-indigo-50"
+            className="node-out-btn absolute -right-[11px] top-1/2 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-full border border-indigo-200 bg-white text-indigo-600 shadow-sm"
             onMouseDown={(e) => {
               e.stopPropagation();
               onStartConnect(node.outputs[0].label, node.outputs[0].kind);

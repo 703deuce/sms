@@ -31,7 +31,7 @@ function Field({ label, children, action }: { label: string; children: React.Rea
 }
 
 const selectCls =
-  "h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
+  "h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-foreground shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
 const inputCls = selectCls;
 
 export default function ConfigModal({ node, onClose, onSave }: Props) {
@@ -82,19 +82,19 @@ export default function ConfigModal({ node, onClose, onSave }: Props) {
   const enabledCount = creationSources.filter((s) => sources[s]).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onMouseDown={onClose}>
+    <div className="overlay-enter fixed inset-0 z-50 flex justify-start bg-black/30 backdrop-blur-[1px]" onMouseDown={onClose}>
       <div
-        className="modal-enter flex h-full w-[460px] flex-col bg-card shadow-2xl"
+        className="drawer-enter flex h-full w-[480px] flex-col bg-card shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-border px-6 py-4">
-          <div>
-            <h2 className="text-[16px] font-bold" style={{ color: "var(--navy)" }}>{node.label}</h2>
+          <div className="pr-4">
+            <h2 className="text-[16px] font-bold" style={{ color: "var(--navy, #1e2a5a)" }}>{node.label}</h2>
             <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
               {descriptions[node.itemId] || "Configure this step of your automation."}
             </p>
           </div>
-          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted">
+          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <X size={16} />
           </button>
         </div>
@@ -103,18 +103,16 @@ export default function ConfigModal({ node, onClose, onSave }: Props) {
           {node.itemId === "t-contact-created" && (
             <>
               <h3 className="mb-3 text-[13px] font-bold text-foreground">Creation Source</h3>
-              <div className="divide-y divide-border rounded-xl border border-border">
+              <div className="divide-y divide-border rounded-xl border border-border bg-card shadow-sm">
                 {creationSources.map((s) => (
                   <div key={s} className="flex items-center justify-between px-4 py-2.5">
                     <span className="text-[12.5px] text-foreground">{s}</span>
                     <button
                       onClick={() => setSources((p) => ({ ...p, [s]: !p[s] }))}
-                      className={`relative h-5 w-9 rounded-full transition-colors ${sources[s] ? "bg-indigo-600" : "bg-gray-300"}`}
-                    >
-                      <span
-                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${sources[s] ? "left-[18px]" : "left-0.5"}`}
-                      />
-                    </button>
+                      className={`kimi-toggle ${sources[s] ? "on" : ""}`}
+                      aria-pressed={Boolean(sources[s])}
+                      aria-label={`Toggle ${s}`}
+                    />
                   </div>
                 ))}
               </div>
@@ -142,8 +140,8 @@ export default function ConfigModal({ node, onClose, onSave }: Props) {
                 <Field label="Message Name">
                   <input className={inputCls} value={msgName} onChange={(e) => setMsgName(e.target.value)} placeholder="Message name" />
                 </Field>
-                <Field label={`Message`}>
-                  <div className="rounded-lg border border-border focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
+                <Field label="Message">
+                  <div className="rounded-lg border border-border shadow-sm transition focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
                     <textarea
                       className="h-36 w-full resize-none rounded-t-lg bg-card p-2.5 text-[12.5px] outline-none"
                       value={msgBody}
@@ -151,24 +149,31 @@ export default function ConfigModal({ node, onClose, onSave }: Props) {
                       placeholder="Type your message..."
                     />
                     <div className="flex items-center justify-between border-t border-border px-2.5 py-1.5">
-                      <div className="flex gap-2 text-muted-foreground">
-                        <Paperclip size={14} className="cursor-pointer hover:text-foreground" />
-                        <SmilePlus size={14} className="cursor-pointer hover:text-foreground" />
-                        <Braces size={14} className="cursor-pointer hover:text-foreground" />
+                      <div className="flex gap-2.5 text-muted-foreground">
+                        <Paperclip size={14} className="cursor-pointer transition-colors hover:text-foreground" />
+                        <SmilePlus size={14} className="cursor-pointer transition-colors hover:text-foreground" />
+                        <Braces size={14} className="cursor-pointer transition-colors hover:text-foreground" />
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{msgBody.length}/918</span>
+                      <span className="text-[10px] font-medium text-muted-foreground">{msgBody.length}/918</span>
                     </div>
                   </div>
                 </Field>
               </div>
-              <div className="w-[130px] shrink-0">
-                <p className="mb-2 text-center text-[10px] font-semibold text-muted-foreground">Message Preview</p>
-                <div className="rounded-2xl border border-border bg-muted/40 p-2 shadow-inner" style={{ minHeight: 220 }}>
-                  {msgBody && (
-                    <div className="rounded-lg rounded-tr-sm bg-indigo-600 p-2 text-[9.5px] leading-snug text-white">
-                      {msgBody}
-                    </div>
-                  )}
+              <div className="w-[158px] shrink-0">
+                <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Message Preview
+                </p>
+                <div className="phone-frame mx-auto">
+                  <div className="phone-notch" />
+                  <div className="phone-screen">
+                    {msgBody ? (
+                      <div className="sms-bubble">{msgBody}</div>
+                    ) : (
+                      <p className="mt-8 text-center text-[9px] text-muted-foreground/60">
+                        Start typing to preview
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -217,7 +222,7 @@ export default function ConfigModal({ node, onClose, onSave }: Props) {
           )}
 
           {!["t-contact-created", "c-field-matches", "a-send-message", "a-assign", "w-msg-received"].includes(node.itemId) && (
-            <p className="rounded-lg bg-muted/60 p-4 text-[12px] text-muted-foreground">
+            <p className="rounded-lg bg-muted/60 p-4 text-[12px] leading-relaxed text-muted-foreground">
               This step has no additional settings. Save to mark it as configured.
             </p>
           )}
@@ -226,14 +231,14 @@ export default function ConfigModal({ node, onClose, onSave }: Props) {
         <div className="flex gap-3 border-t border-border px-6 py-4">
           <button
             onClick={onClose}
-            className="h-9 flex-1 rounded-lg border border-border text-[13px] font-semibold text-foreground hover:bg-muted"
+            className="h-9 flex-1 rounded-lg border border-border text-[13px] font-semibold text-foreground transition-colors hover:bg-muted"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={node.itemId === "t-contact-created" && enabledCount === 0}
-            className="h-9 flex-1 rounded-lg bg-indigo-600 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-40"
+            className="h-9 flex-1 rounded-lg bg-indigo-600 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40"
           >
             Save
           </button>
