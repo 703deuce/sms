@@ -100,6 +100,7 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
         fullPage: true,
       },
     ],
+  },
   {
     route: "/auto-replies",
     referenceVideoName: "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)",
