@@ -40,16 +40,29 @@ export const MINIMAL_UI_STACK_CONTEXT = `UI STACK (existing app — do NOT scaff
 export const KIMI_COMPLETENESS_REQUIREMENTS = `COMPLETENESS (non-negotiable):
 - Watch the ENTIRE reference video — not just the opening screen.
 - Generate EVERY distinct screen, view, modal, drawer, wizard step, and builder canvas shown.
-- If the video has a list page AND a builder/editor, generate BOTH and wire navigation (CTA → builder, back → list).
-- If the video shows configuration panels for workflow steps, generate them AND the canvas they attach to.
-- Use KIMI_MANIFEST_BEGIN to declare the full file list up front before emitting code.
+- If the video has a list page AND a create/editor AND a review/confirm AND a success/result screen, generate ALL of them as separate components and wire navigation in page.tsx (useState view router).
+- Match the automations pattern: list ↔ create ↔ review ↔ builder ↔ config modals — each is its own component file, not one combined page.
+- If the video shows configuration panels for steps, generate them AND the canvas/list they attach to.
+- Use KIMI_MANIFEST_BEGIN to declare every file (all screens + modals) before emitting code.
 - Do not stop after the first page — partial output is a failure.
 - Import paths in page.tsx must use ./components/ and ./reference.css (same directory as page.tsx).`;
 
+export const KIMI_MULTI_SCREEN_ARCHITECTURE = `MULTI-SCREEN ARCHITECTURE (required):
+- page.tsx is a client view-router: useState<"list" | "create" | "review" | ...> (or discriminated union) switching between screens.
+- One React component file per major screen (e.g. components/CampaignsList.tsx, CreateCampaign.tsx, ReviewDetails.tsx, SuccessScreen.tsx).
+- Modals and drawers are separate components (e.g. AIComposeModal.tsx, ImportStartedModal.tsx, ConfigModal.tsx).
+- Every CTA in the video must navigate to a real generated screen — no dead buttons.
+- When the video shows sub-areas under one product (e.g. Audience → Contacts / Lists / Tools), add a feature sub-nav (tabs or compact left rail) to reach each sub-screen. Do NOT use a full duplicate Transovo app sidebar — global nav is provided by the host app.
+- Emit mock-data.ts for all list rows and form defaults so every screen renders with realistic content.`;
+
 /** Default Kimi batch instruction — preserve visual fidelity from reference videos. */
-export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate this SlickText screen faithfully in a Transovo-branded sandbox.
+export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate ALL screens shown in this SlickText tutorial video as a Transovo-branded sandbox.
+The video is a walkthrough — it is NOT one page. Generate every list, create, edit, review, success, import, builder, and settings screen shown.
+
 Preserve icons, colors, images/MMS previews, spacing, and interaction patterns from the reference video.
-Keep the Transovo sidebar with all nav links. Use mock data. Do not scaffold a new Next.js project.
+Use mock data. Do not scaffold a new Next.js project.
+
+${KIMI_MULTI_SCREEN_ARCHITECTURE}
 
 ${KIMI_COMPLETENESS_REQUIREMENTS}`;
 

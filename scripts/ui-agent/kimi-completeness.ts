@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { generatedDirForSession, readAllGeneratedSources } from "./generated-sandbox";
-import { KIMI_COMPLETENESS_REQUIREMENTS } from "./config";
+import { KIMI_BATCH_PAGE_INSTRUCTION, UI_AGENT_DIR, ensureUiAgentDirs } from "./config";
 
 export type CompletenessGap = {
   id: string;
@@ -68,7 +68,7 @@ const ROUTE_RULES: RouteRule[] = [
     match: (t) => t === "/conversations" || t.includes("inbox"),
     gaps: ({ files, sources }) => {
       const gaps: CompletenessGap[] = [];
-      if (!sourcesContain(sources, /ChatPane|ConversationPane|MessageThread/i)) {
+      if (!sourcesContain(sources, /ThreadView|MessageThread|ChatPane/i)) {
         gaps.push({ id: "chat-pane", description: "Active conversation thread + composer", severity: "required" });
       }
       if (!sourcesContain(sources, /ContactPanel|ContactSidebar|DetailsPanel/i)) {
@@ -156,16 +156,46 @@ const ROUTE_RULES: RouteRule[] = [
     },
   },
   {
-    match: (t) => t === "/contacts" || t.startsWith("/contacts/"),
-    gaps: ({ target, sources }) => {
+    match: (t) => t === "/contacts",
+    gaps: ({ sources }) => {
       const gaps: CompletenessGap[] = [];
-      if (target === "/contacts") {
-        if (!sourcesContain(sources, /ImportWizard|import/i)) {
-          gaps.push({ id: "import", description: "Contact import/upload wizard", severity: "required" });
-        }
-        if (!sourcesContain(sources, /CreateContact|add contact/i)) {
-          gaps.push({ id: "create-contact", description: "Add single contact form", severity: "required" });
-        }
+      if (!sourcesContain(sources, /ImportWizard|import/i)) {
+        gaps.push({ id: "import", description: "Contact import/upload wizard", severity: "required" });
+      }
+      if (!sourcesContain(sources, /CreateContact|add contact/i)) {
+        gaps.push({ id: "create-contact", description: "Add single contact form", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t === "/contacts/lists",
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /CreateListPage|createList/i)) {
+        gaps.push({ id: "create-list", description: "Create list form screen", severity: "required" });
+      }
+      if (!sourcesContain(sources, /ContactsPage|addToLists/i)) {
+        gaps.push({ id: "contacts-picker", description: "Contacts list + add-to-lists screen", severity: "required" });
+      }
+      if (!sourcesContain(sources, /KeywordEditor|edit keyword/i)) {
+        gaps.push({ id: "keyword-editor", description: "Edit keyword / connect list screen", severity: "required" });
+      }
+      if (!sourcesContain(sources, /ToolsPage|Audience Growth|Landing Pages/i)) {
+        gaps.push({ id: "tools-hub", description: "Tools / Audience Growth hub screen", severity: "required" });
+      }
+      return gaps;
+    },
+  },
+  {
+    match: (t) => t === "/contacts/fields",
+    gaps: ({ sources }) => {
+      const gaps: CompletenessGap[] = [];
+      if (!sourcesContain(sources, /CreateFieldForm|createField/i)) {
+        gaps.push({ id: "create-field", description: "Create custom field form", severity: "required" });
+      }
+      if (!sourcesContain(sources, /CustomFieldsList/i)) {
+        gaps.push({ id: "fields-list", description: "Custom fields management list", severity: "required" });
       }
       return gaps;
     },
@@ -233,7 +263,16 @@ export function buildCompletenessInstruction(
   existingFiles: string[],
 ): string {
   if (gaps.length === 0) {
-    return `Review the reference video for any screens, modals, wizards, or builder views not yet in the sandbox. Emit missing files only.`;
+    return `COMPLETENESS PASS — re-watch the entire reference video and add ANY missing screens.
+
+TARGET: ${target}
+
+${KIMI_COMPLETENESS_REQUIREMENTS}
+
+${KIMI_MULTI_SCREEN_ARCHITECTURE}
+
+Check for: list, create, edit, review, confirm, success/result, import wizards, builder canvases, config modals/drawers, and feature sub-nav between related screens.
+Emit missing component files only; preserve existing working code.`;
   }
 
   const gapList = gaps.map((g) => `- [${g.severity}] ${g.description}`).join("\n");

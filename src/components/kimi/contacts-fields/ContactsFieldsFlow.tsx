@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import AppShell from "./components/AppShell";
 import { View } from "./components/Sidebar";
 import ContactsList from "./components/ContactsList";
 import ContactEdit from "./components/ContactEdit";
@@ -37,7 +38,7 @@ export default function ContactsFieldsFlow() {
   };
 
   return (
-    <div className="tv-main min-h-full w-full">
+    <AppShell view={view} onNavigate={setView}>
       {toast && <div className="tv-toast">{toast}</div>}
       {view === "fields" && (
         <CustomFieldsList
@@ -53,6 +54,6 @@ export default function ContactsFieldsFlow() {
         <ContactsList onEdit={(id) => { setEditContactId(id); setView("contactEdit"); }} />
       )}
       {view === "contactEdit" && <ContactEdit contactId={editContactId} fields={fields} />}
-    </div>
+    </AppShell>
   );
 }

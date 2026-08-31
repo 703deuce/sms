@@ -125,18 +125,27 @@ function copyDir(src: string, dest: string) {
 }
 
 function stripShellFromSource(source: string): string {
+  const hasFeatureSubNav =
+    /<(Sidebar|AppSidebar)[^>]*(page|view)=\{/.test(source) ||
+    /navigate=\{/.test(source) ||
+    /onNavigate=\{/.test(source) ||
+    /<AppShell\b/.test(source);
+
   let s = source;
-  s = s.replace(/^import\s+Sidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
-  s = s.replace(/^import\s+AppSidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
-  s = s.replace(/^import\s+AppShell\s+from\s+["'][^"']+["'];\s*\n/gm, "");
   s = s.replace(/^import\s+["']\.?\/?reference\.css["'];\s*\n/gm, "");
-  s = s.replace(/<Sidebar[^>]*\/>\s*/g, "");
-  s = s.replace(/<Sidebar[^>]*>[\s\S]*?<\/Sidebar>\s*/g, "");
-  s = s.replace(/<AppSidebar[^>]*\/>\s*/g, "");
-  s = s.replace(/<AppSidebar[^>]*>[\s\S]*?<\/AppSidebar>\s*/g, "");
-  s = s.replace(/<AppShell[^>]*>\s*/g, "");
-  s = s.replace(/<\/AppShell>\s*/g, "");
-  s = s.replace(/active="[^"]*"\s*/g, "");
+
+  if (!hasFeatureSubNav) {
+    s = s.replace(/^import\s+Sidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
+    s = s.replace(/^import\s+AppSidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
+    s = s.replace(/<Sidebar[^>]*\/>\s*/g, "");
+    s = s.replace(/<Sidebar[^>]*>[\s\S]*?<\/Sidebar>\s*/g, "");
+    s = s.replace(/<AppSidebar[^>]*\/>\s*/g, "");
+    s = s.replace(/<AppSidebar[^>]*>[\s\S]*?<\/AppSidebar>\s*/g, "");
+    s = s.replace(/<AppShell[^>]*>\s*/g, "");
+    s = s.replace(/<\/AppShell>\s*/g, "");
+    s = s.replace(/active="[^"]*"\s*/g, "");
+  }
+
   s = s.replace(/export default function ReferencePage/g, "export default function KimiFlow");
   s = s.replace(/export default function CampaignsPage/g, "export default function KimiFlow");
   return s;

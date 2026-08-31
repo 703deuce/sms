@@ -41,6 +41,7 @@ export default function ContactsListsFlow() {
 
   return (
     <div className="flex min-h-screen bg-[#fbfcfe] text-[#0f1b3d]">
+      <Sidebar page={page} navigate={setPage} />
       <main className="flex-1 overflow-y-auto">
         {page === "lists" && <ListsPage lists={lists} onCreate={() => setPage("createList")} />}
         {page === "createList" && <CreateListPage onBack={() => setPage("lists")} onSave={saveList} />}
