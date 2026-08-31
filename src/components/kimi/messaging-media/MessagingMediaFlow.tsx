@@ -4,7 +4,6 @@
 'use client'
 
 import { useState } from 'react'
-import './reference.css'
 import Sidebar from './components/Sidebar'
 import CampaignList from './components/CampaignList'
 import CreateCampaign from './components/CreateCampaign'

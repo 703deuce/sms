@@ -180,7 +180,7 @@ function stripShellFromSource(source: string): string {
     /Feature sub-nav/.test(source);
 
   let s = source;
-  s = s.replace(/^import\s+["']\.?\/?reference\.css["'];\s*\n/gm, "");
+  s = s.replace(/^import\s+["']\.?\/?reference\.css["'];?\s*\n/gm, "");
 
   if (!hasFeatureSubNav) {
     s = s.replace(/^import\s+Sidebar\s+from\s+["'][^"']+["'];\s*\n/gm, "");
