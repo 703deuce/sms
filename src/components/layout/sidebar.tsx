@@ -26,6 +26,7 @@ import { useProductShell, ProductShellSwitcher } from "@/components/products/pro
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
+import { cn } from "@/lib/utils";
 import { TransovoSidebar } from "@/components/kimi/sidebar/TransovoSidebar";
 import { initialsForName, mapProductionNavToKimi } from "@/components/kimi/sidebar/map-nav";
 import {
