@@ -31,6 +31,7 @@ export const SMS_DEEP_ROUTE_PREFIXES = [
 /** Core SMS app prefixes (sidebar sections + deep routes). */
 export const SMS_APP_ROUTE_PREFIXES = [
   "/sms",
+  "/dashboard",
   "/conversations",
   "/inbox",
   "/analytics",
@@ -38,6 +39,9 @@ export const SMS_APP_ROUTE_PREFIXES = [
   "/playbooks",
   "/contacts",
   "/automations",
+  "/auto-replies",
+  "/drip-campaigns",
+  "/ai-replies",
   "/grow",
   "/numbers",
   "/reports",

@@ -32,6 +32,14 @@ export function productAccessDeniedRedirect(
     if (access.hasVoice || access.hasSms) return null;
     return options?.authenticated ? "/app" : productOfferPath("sms");
   }
+  const isSharedPlatformHome =
+    pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  if (isSharedPlatformHome) {
+    if (access.hasVoice || access.hasSms) return null;
+    return options?.authenticated
+      ? "/api/products/open?product=mass_texting"
+      : productOfferPath("sms");
+  }
   if (isVoiceProductPath(pathname) && !access.hasVoice) {
     return options?.authenticated
       ? "/api/products/open?product=voice"

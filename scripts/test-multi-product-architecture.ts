@@ -81,8 +81,13 @@ assert.equal(resolveProductFromPath("/personal/vault"), "numbers");
 assert.equal(resolveProductFromPath("/app"), null);
 assert.equal(resolveProductFromPath("/numbers/premium"), "numbers");
 assert.equal(isSmsProductPath("/campaigns"), true);
+assert.equal(isSmsProductPath("/auto-replies"), true);
+assert.equal(isSmsProductPath("/drip-campaigns"), true);
+assert.equal(isSmsProductPath("/ai-replies"), true);
 assert.equal(isSmsProductPath("/dashboard"), false);
 assert.equal(isVoiceProductPath("/dashboard"), true);
+assert.equal(isSmsShellRoute("/dashboard"), true);
+assert.equal(isSmsShellRoute("/auto-replies"), true);
 assert.equal(isNumbersProductPath("/personal/forwarding"), true);
 assert.equal(isNumbersProductPath("/numbers/buy"), false);
 assert.equal(isSmsLegacyHidden("/outcomes"), true);
@@ -124,8 +129,8 @@ assert.equal(
     hasNumbers: true,
     hasSms: false,
   }),
-  "/signup?product=voice",
-  "Voice paths gate without entitlement",
+  "/mass-texting",
+  "Platform home gates without voice or SMS entitlement",
 );
 assert.equal(
   productAccessDeniedRedirect(
@@ -137,8 +142,21 @@ assert.equal(
     },
     { authenticated: true },
   ),
-  "/api/products/open?product=voice",
-  "Authenticated voice gate opens product workspace",
+  "/api/products/open?product=mass_texting",
+  "Authenticated platform home opens mass texting workspace",
+);
+assert.equal(
+  productAccessDeniedRedirect(
+    "/dashboard",
+    {
+      hasVoice: false,
+      hasNumbers: false,
+      hasSms: true,
+    },
+    { authenticated: true },
+  ),
+  null,
+  "Mass texting customers can open /dashboard without voice",
 );
 assert.equal(
   productAccessDeniedRedirect("/campaigns", {

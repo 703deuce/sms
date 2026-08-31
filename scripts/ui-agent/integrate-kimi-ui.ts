@@ -7,6 +7,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BatchState } from "./kimi-batch-pages";
+import { SMS_APP_ROUTE_PREFIXES } from "../../src/lib/products/sms-routes";
 
 const REPO = process.cwd();
 const DRAFTS = join(REPO, "src/kimi-drafts");
@@ -96,6 +97,24 @@ const JOBS: RouteJob[] = [
     cssClass: "kimi-messaging-media",
   },
 ];
+
+function isSmsRoutePrefixRegistered(route: string): boolean {
+  return SMS_APP_ROUTE_PREFIXES.some(
+    (prefix) => route === prefix || route.startsWith(`${prefix}/`),
+  );
+}
+
+function assertSmsRoutesRegistered(jobs: RouteJob[]) {
+  const missing = jobs
+    .map((job) => job.route)
+    .filter((route) => !isSmsRoutePrefixRegistered(route));
+  if (missing.length) {
+    throw new Error(
+      `Kimi routes missing from SMS_APP_ROUTE_PREFIXES: ${missing.join(", ")}. ` +
+        "Add them to src/lib/products/sms-routes.ts (and BUSINESS_ONLY_PATH_PREFIXES when new) before deploy.",
+    );
+  }
+}
 
 function parseArg(flag: string): string | undefined {
   const args = process.argv.slice(2);
@@ -361,6 +380,7 @@ function main() {
     if (!job.sessionId) throw new Error(`No Kimi session for ${job.route}`);
     integrateJob(job);
   }
+  assertSmsRoutesRegistered(jobs);
   console.log(`\nIntegrated ${jobs.length} Kimi UI route(s).\n`);
 }
 
