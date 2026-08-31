@@ -1,47 +1,230 @@
 "use client";
-import { useState } from "react";
-import { Paperclip, Smile, Braces, Sparkles, Send, ChevronRight, Megaphone, HelpCircle } from "lucide-react";
-import AudiencePicker, { AudienceChip } from "./AudiencePicker";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Paperclip, Smile, Braces, Sparkles, Send, ChevronRight, Megaphone, HelpCircle, Loader2 } from "lucide-react";
+import AudiencePicker from "./AudiencePicker";
 import AIComposeModal from "./AIComposeModal";
-import RecurringModal from "./RecurringModal";
 import PhonePreview from "./PhonePreview";
-import { mergeTags } from "../mock-data";
+import { MediaPicker } from "@/components/messaging/media-picker";
+import { TestMessageModal } from "@/components/campaigns/broadcast/test-message-modal";
+import {
+  composeMessageBody,
+  defaultComposeDraft,
+  loadComposeDraft,
+  saveComposeDraft,
+  type CampaignComposeDraft,
+} from "@/lib/campaigns/compose-draft";
+import { estimateSmsSegments } from "@/lib/utils";
+import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
+import {
+  loadDefaultSendingNumber,
+  previewAudience,
+  saveCampaignDraft,
+  draftAudiencePayload,
+} from "../campaign-flow-utils";
 
 type SendMode = "Now" | "Later" | "Recurring";
 
-export default function CreateCampaign({ onCancel, onReview }: { onCancel: () => void; onReview: (data: { message: string; timing: string }) => void }) {
-  const [name, setName] = useState("");
-  const [audience, setAudience] = useState<AudienceChip[]>([]);
-  const [message, setMessage] = useState("");
+const MERGE_FIELDS = [
+  { label: "First Name", value: "{{first_name}}" },
+  { label: "Last Name", value: "{{last_name}}" },
+  { label: "Company", value: "{{company}}" },
+  { label: "Email", value: "{{email}}" },
+];
+
+function modeToSchedule(mode: SendMode): CampaignComposeDraft["scheduleMode"] {
+  if (mode === "Later") return "later";
+  if (mode === "Recurring") return "recurring";
+  return "now";
+}
+
+function scheduleToMode(mode: CampaignComposeDraft["scheduleMode"]): SendMode {
+  if (mode === "later") return "Later";
+  if (mode === "recurring") return "Recurring";
+  return "Now";
+}
+
+export default function CreateCampaign({ onCancel }: { onCancel: () => void }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [draft, setDraft] = useState<CampaignComposeDraft>(defaultComposeDraft);
   const [mode, setMode] = useState<SendMode>("Now");
   const [showAI, setShowAI] = useState(false);
-  const [showRecurring, setShowRecurring] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
+  const [showTest, setShowTest] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
-  const [recurringSummary, setRecurringSummary] = useState<string | null>(null);
   const [trackPrompt, setTrackPrompt] = useState<string | null>(null);
   const [linkName, setLinkName] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [eligibleCount, setEligibleCount] = useState(0);
 
-  const limit = 402;
-  const chars = message.length;
+  useEffect(() => {
+    const duplicateId = searchParams.get("duplicate");
+    const editId = searchParams.get("edit");
+    const loadId = duplicateId || editId;
+    let loaded = loadComposeDraft();
+
+    if (loadId) {
+      fetch(`/api/mass-texting/campaigns/${loadId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (!json?.data) return;
+          const c = json.data as {
+            id: string;
+            name: string;
+            body: string;
+            scheduledAt?: string | null;
+            configJson?: {
+              audience?: {
+                include?: Array<{ type: CampaignComposeDraft["audience"][0]["type"]; id: string; name: string }>;
+                exclude?: Array<{ type: CampaignComposeDraft["audience"][0]["type"]; id: string; name: string }>;
+              };
+              numberId?: string;
+              mediaUrls?: string[];
+              trackedLinks?: CampaignComposeDraft["trackedLinks"];
+              scheduleMode?: CampaignComposeDraft["scheduleMode"];
+              timezone?: string;
+              recurrence?: CampaignComposeDraft["recurrence"];
+            };
+          };
+          const config = c.configJson;
+          const include = config?.audience?.include || [];
+          const scheduled = c.scheduledAt ? new Date(c.scheduledAt) : null;
+          const next: CampaignComposeDraft = {
+            ...defaultComposeDraft(),
+            campaignId: editId ? c.id : undefined,
+            name: duplicateId ? `${c.name} (copy)` : c.name,
+            message: c.body.replace(/\n\nReply STOP to opt out\. Msg & data rates may apply\./i, ""),
+            audience: include.map((a) => ({ type: a.type, id: a.id, name: a.name })),
+            excludeAudience: (config?.audience?.exclude || []).map((a) => ({
+              type: a.type,
+              id: a.id,
+              name: a.name,
+            })),
+            numberId: config?.numberId || "",
+            mediaUrls: config?.mediaUrls || [],
+            trackedLinks: config?.trackedLinks || [],
+            scheduleMode: duplicateId ? "now" : config?.scheduleMode || "now",
+            timezone: config?.timezone || loaded.timezone,
+            recurrence: config?.recurrence,
+            scheduledDate: scheduled ? scheduled.toISOString().slice(0, 10) : undefined,
+            scheduledTime: scheduled ? scheduled.toTimeString().slice(0, 5) : undefined,
+          };
+          saveComposeDraft(next);
+          setDraft(next);
+          setMode(scheduleToMode(next.scheduleMode));
+        })
+        .catch(() => undefined);
+    } else {
+      setDraft(loaded);
+      setMode(scheduleToMode(loaded.scheduleMode));
+    }
+
+    loadDefaultSendingNumber().then((num) => {
+      if (!num) return;
+      setDraft((d) => {
+        if (d.numberId) return d;
+        const next = { ...d, numberId: num.id, senderLabel: num.number };
+        saveComposeDraft(next);
+        return next;
+      });
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (draft.audience.length === 0) {
+      setEligibleCount(0);
+      return;
+    }
+    let cancelled = false;
+    previewAudience(draftAudiencePayload(draft), draft.campaignId)
+      .then((count) => { if (!cancelled) setEligibleCount(count); })
+      .catch(() => { if (!cancelled) setEligibleCount(0); });
+    return () => { cancelled = true; };
+  }, [draft.audience, draft.excludeAudience, draft.campaignId]);
+
+  function updateDraft(patch: Partial<CampaignComposeDraft>) {
+    setDraft((d) => {
+      const next = { ...d, ...patch };
+      saveComposeDraft(next);
+      return next;
+    });
+  }
+
+  const previewBody = composeMessageBody(
+    draft.message.replace(/\{\{first_name\}\}/gi, "Anthony"),
+  );
+  const { characters, segments } = estimateSmsSegments(previewBody);
+  const isMms = draft.mediaUrls.length > 0;
+  const limit = isMms ? 1600 : 402;
 
   const handleMessageChange = (v: string) => {
-    setMessage(v);
-    const m = v.match(/(www\.[a-z0-9.-]+\.[a-z]{2,})/i);
+    updateDraft({ message: v });
+    const m = v.match(/(https?:\/\/[^\s]+|www\.[a-z0-9.-]+\.[a-z]{2,})/i);
     if (m && !v.includes("stxt.io")) setTrackPrompt(m[1]);
     else setTrackPrompt(null);
   };
 
-  const insertTag = (tag: string) => { setMessage(message + " " + tag); setShowMerge(false); };
+  const insertTag = (tag: string) => {
+    updateDraft({ message: `${draft.message} ${tag}`.trim() });
+    setShowMerge(false);
+  };
 
-  const timing = mode === "Now" ? "Send Immediately" : mode === "Later" ? "Scheduled for 04/17/2025 4:29 PM (CDT)" : recurringSummary ?? "Recurring";
+  async function persistDraft(): Promise<string | null> {
+    setSaving(true);
+    setError("");
+    try {
+      const id = await saveCampaignDraft(draft);
+      updateDraft({ campaignId: id });
+      return id;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save campaign");
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveDraft() {
+    const id = await persistDraft();
+    if (id) router.push("/campaigns");
+  }
+
+  async function handleReview() {
+    const next = { ...draft, scheduleMode: modeToSchedule(mode) };
+    setDraft(next);
+    saveComposeDraft(next);
+    const id = await saveCampaignDraft(next);
+    if (id) router.push(`/campaigns/new/review?id=${id}`);
+  }
+
+  const scheduleModes = useMemo(() => {
+    const modes: SendMode[] = ["Now", "Later"];
+    if (MASS_TEXT_RECURRING_PRODUCTION_ENABLED) modes.push("Recurring");
+    return modes;
+  }, []);
 
   return (
     <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
-      {showAI && <AIComposeModal onClose={() => setShowAI(false)} onUse={(m) => { setMessage(m); setShowAI(false); }} />}
-      {showRecurring && (
-        <RecurringModal
-          onClose={() => setShowRecurring(false)}
-          onSet={(s) => { setRecurringSummary(s); setShowRecurring(false); setMode("Recurring"); }}
+      {showAI && (
+        <AIComposeModal
+          onClose={() => setShowAI(false)}
+          onUse={(m) => { updateDraft({ message: m }); setShowAI(false); }}
+        />
+      )}
+      <TestMessageModal
+        open={showTest}
+        onClose={() => setShowTest(false)}
+        message={composeMessageBody(draft.message)}
+        numberId={draft.numberId}
+      />
+      {showMedia && (
+        <MediaPicker
+          open={showMedia}
+          onClose={() => setShowMedia(false)}
+          initialSelected={draft.mediaUrls}
+          onConfirm={(urls) => { updateDraft({ mediaUrls: urls }); setShowMedia(false); }}
         />
       )}
 
@@ -49,7 +232,7 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
         <p className="text-[12px] text-slate-400">
           Campaigns <span className="mx-1 text-slate-300">/</span> <span className="text-slate-600 font-medium">Create Campaign</span>
         </p>
-        <button className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+        <button type="button" className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
           <HelpCircle className="w-4 h-4 text-slate-400" />
         </button>
       </div>
@@ -65,20 +248,33 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
           <p className="text-sm text-slate-500 mt-1.5">Create a campaign to reach your contacts at scale.</p>
 
           <label className="block text-[13px] font-semibold text-slate-700 mt-7 mb-1.5">Campaign Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Black Friday Dress Sale" className="input-field max-w-md" />
+          <input
+            value={draft.name}
+            onChange={(e) => updateDraft({ name: e.target.value })}
+            placeholder="Black Friday Dress Sale"
+            className="input-field max-w-md"
+          />
 
           <label className="block text-[13px] font-semibold text-slate-700 mt-5 mb-1.5">Audience</label>
-          <div className="max-w-md"><AudiencePicker selected={audience} onChange={setAudience} /></div>
+          <div className="max-w-md">
+            <AudiencePicker
+              selected={draft.audience}
+              onChange={(audience) => updateDraft({ audience })}
+            />
+            {eligibleCount > 0 && (
+              <p className="mt-1.5 text-[12px] text-emerald-600">{eligibleCount.toLocaleString()} eligible contacts</p>
+            )}
+          </div>
 
           <div className="flex items-center justify-between max-w-md mt-5 mb-1.5">
             <label className="text-[13px] font-semibold text-slate-700">Message</label>
             <span className="flex items-center gap-1.5 text-[11px] text-slate-400 tabular-nums">
-              {chars}/{limit} <span className="segment-badge">1</span>
+              {characters}/{limit} <span className="segment-badge">{segments}</span>
             </span>
           </div>
           <div className="max-w-md composer-box">
             <textarea
-              value={message}
+              value={draft.message}
               onChange={(e) => handleMessageChange(e.target.value)}
               className="w-full h-36 resize-none outline-none p-3 text-[13.5px] leading-relaxed text-slate-800 rounded-t-xl bg-transparent"
             />
@@ -86,8 +282,18 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50/60">
                 <span className="text-[12px] text-slate-500">Track the <span className="font-medium text-slate-700">{trackPrompt}</span> link?</span>
                 <span className="flex gap-3">
-                  <button onClick={() => { setTrackPrompt(null); setLinkName(""); }} className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700">Yes</button>
-                  <button onClick={() => setTrackPrompt(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">No</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tracked = [...draft.trackedLinks, { url: trackPrompt, name: trackPrompt, tracked: true }];
+                      updateDraft({ trackedLinks: tracked });
+                      setTrackPrompt(null);
+                    }}
+                    className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
+                  >
+                    Yes
+                  </button>
+                  <button type="button" onClick={() => setTrackPrompt(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">No</button>
                 </span>
               </div>
             )}
@@ -100,42 +306,41 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
                   placeholder="Name your link"
                   className="flex-1 text-[12px] outline-none border-b border-indigo-300 focus:border-indigo-500 py-1 bg-transparent transition-colors"
                 />
-                <button
-                  onClick={() => { setMessage(message.replace(/www\.[a-z0-9.-]+\.[a-z]{2,}/i, "stxt.io/lea/872c4aa521")); setLinkName(null); }}
-                  className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
-                >
-                  Shorten
-                </button>
-                <button onClick={() => setLinkName(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">Cancel</button>
+                <button type="button" onClick={() => setLinkName(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">Cancel</button>
               </div>
             )}
             <div className="composer-toolbar relative flex items-center gap-1.5 px-2.5 py-2 border-t border-slate-100">
-              <button title="Attach a File"><Paperclip className="w-4 h-4" /></button>
-              <button title="Emojis"><Smile className="w-4 h-4" /></button>
+              <button type="button" title="Attach a File" onClick={() => setShowMedia(true)}><Paperclip className="w-4 h-4" /></button>
+              <button type="button" title="Emojis"><Smile className="w-4 h-4" /></button>
               <div className="relative">
-                <button title="Merge Tags" onClick={() => setShowMerge(!showMerge)}><Braces className="w-4 h-4" /></button>
+                <button type="button" title="Merge Tags" onClick={() => setShowMerge(!showMerge)}><Braces className="w-4 h-4" /></button>
                 {showMerge && (
                   <div className="absolute bottom-9 left-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 w-64 p-2 fade-in">
-                    <input placeholder="Search tags" className="input-field !py-1.5 !text-[12px] mb-1" />
-                    {mergeTags.map((t) => (
-                      <button key={t.label} onClick={() => insertTag(t.value)} className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50 text-[13px] text-slate-700 transition-colors">
+                    {MERGE_FIELDS.map((t) => (
+                      <button
+                        key={t.label}
+                        type="button"
+                        onClick={() => insertTag(t.value)}
+                        className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50 text-[13px] text-slate-700 transition-colors"
+                      >
                         {t.label} <span className="text-[11px] text-slate-400 font-mono">{t.value}</span>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-              <button title="AI Compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
-              <button title="Send a Test" className="ml-auto"><Send className="w-4 h-4" /></button>
+              <button type="button" title="AI Compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
+              <button type="button" title="Send a Test" className="ml-auto" onClick={() => setShowTest(true)}><Send className="w-4 h-4" /></button>
             </div>
           </div>
 
           <label className="block text-[13px] font-semibold text-slate-700 mt-6 mb-2">When to Send</label>
           <div className="seg-toggle max-w-md">
-            {(["Now", "Later", "Recurring"] as SendMode[]).map((m) => (
+            {scheduleModes.map((m) => (
               <button
                 key={m}
-                onClick={() => { setMode(m); if (m === "Recurring") setShowRecurring(true); }}
+                type="button"
+                onClick={() => { setMode(m); updateDraft({ scheduleMode: modeToSchedule(m) }); }}
                 className={`flex-1 ${mode === m ? "on" : ""}`}
               >
                 {m}
@@ -147,39 +352,52 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
             <div className="flex items-end gap-2 mt-4 max-w-md fade-in">
               <div className="flex-1">
                 <label className="block text-[12px] font-semibold text-slate-600 mb-1">Date</label>
-                <input defaultValue="04/17/2025" className="input-field !text-[13px]" />
+                <input
+                  type="date"
+                  value={draft.scheduledDate || ""}
+                  onChange={(e) => updateDraft({ scheduledDate: e.target.value })}
+                  className="input-field !text-[13px]"
+                />
               </div>
               <div>
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Time (CDT)</label>
-                <div className="flex gap-1.5">
-                  <select className="input-field !text-[13px] !w-16"><option>4</option></select>
-                  <select className="input-field !text-[13px] !w-16"><option>29</option></select>
-                  <select className="input-field !text-[13px] !w-20"><option>PM</option><option>AM</option></select>
-                </div>
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Time</label>
+                <input
+                  type="time"
+                  value={draft.scheduledTime || ""}
+                  onChange={(e) => updateDraft({ scheduledTime: e.target.value })}
+                  className="input-field !text-[13px]"
+                />
               </div>
             </div>
           )}
 
-          {mode === "Recurring" && recurringSummary && (
-            <p className="mt-4 max-w-md text-[12px] leading-relaxed text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5 fade-in">{recurringSummary}</p>
-          )}
+          {error ? <p className="mt-4 text-[13px] text-red-600">{error}</p> : null}
 
           <div className="flex items-center justify-between max-w-md mt-12">
-            <button onClick={onCancel} className="btn-ghost">Cancel</button>
+            <button type="button" onClick={onCancel} className="btn-ghost">Cancel</button>
             <div className="flex items-center gap-4">
-              <button className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Save Draft</button>
               <button
-                onClick={() => onReview({ message, timing })}
-                disabled={!name || !message || audience.length === 0}
+                type="button"
+                onClick={() => void handleSaveDraft()}
+                disabled={saving}
+                className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+              >
+                {saving ? "Saving…" : "Save Draft"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleReview()}
+                disabled={saving || !draft.name || !draft.message || draft.audience.length === 0}
                 className="btn-primary flex items-center gap-1.5"
               >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Review <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
 
-        <PhonePreview message={message} />
+        <PhonePreview message={previewBody} />
       </div>
     </div>
   );
