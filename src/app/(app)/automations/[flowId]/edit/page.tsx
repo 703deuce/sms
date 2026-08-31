@@ -1,8 +1,7 @@
 import { requireWorkspaceContext, loadAutomationById } from "@/lib/workspace-data";
 import { notFound } from "next/navigation";
-import AutomationBuilder from "@/components/automations/builder/automation-builder";
+import KimiAutomationBuilder from "@/components/kimi/automations/KimiAutomationBuilder";
 import { DeploymentDiagnosticsPanel } from "@/components/automations/builder/deployment-diagnostics-panel";
-import AutomationEditHeader from "@/components/kimi/automations/AutomationEditHeader";
 
 export default async function AutomationEditPage({
   params,
@@ -23,10 +22,9 @@ export default async function AutomationEditPage({
     Boolean((flow as { ownerAgentId?: string | null }).ownerAgentId);
 
   return (
-    <div className="kimi-automations space-y-0">
-      <AutomationEditHeader flowName={flow.name} />
+    <div className="kimi-automations space-y-4">
       {showDiagnostics ? <DeploymentDiagnosticsPanel flowId={flowId} /> : null}
-      <AutomationBuilder
+      <KimiAutomationBuilder
         flowId={flowId}
         initialName={flow.name}
         initialDescription=""

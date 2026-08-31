@@ -18,7 +18,7 @@ export default function WorkflowsList({
 }: {
   workflows: KimiWorkflowRow[];
   onCreate: () => void;
-  onOpen?: (flowId: string) => void;
+  onOpen: (flowId: string) => void;
 }) {
   const [query, setQuery] = useState("");
 
@@ -111,7 +111,7 @@ export default function WorkflowsList({
                   <tr
                     key={wf.id}
                     className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/30"
-                    onClick={() => onOpen?.(wf.id)}
+                    onClick={() => onOpen(wf.id)}
                   >
                     <td className="px-5 py-4 align-top">
                       <p className="text-[13.5px] font-semibold text-foreground">{wf.name}</p>

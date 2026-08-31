@@ -8,8 +8,8 @@ import type { KimiWorkflowRow } from "./types";
 import { reloadAutomations } from "./wiring";
 
 /**
- * Kimi session 2026-08-30T23-46-59-898Z-59452d — list UI from Kimi;
- * create/edit use production flow builder at /automations/new and /automations/[id]/edit.
+ * Kimi session 2026-08-30T23-46-59-898Z-59452d — list + flow builder UI from Kimi;
+ * wired to production automations APIs and useAutomationBuilder engine.
  */
 export default function AutomationsFlow() {
   const router = useRouter();
