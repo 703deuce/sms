@@ -30,6 +30,7 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   const [segments, setSegments] = useState<Segment[]>(initialSegments);
   const [savedSegment, setSavedSegment] = useState<Segment | null>(null);
   const [campaignSent, setCampaignSent] = useState(false);
+  const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     const rows = await fetchSegments();
@@ -71,6 +72,7 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
 
   return (
     <div className="seg-shell min-h-screen bg-background text-foreground">
+      {error && <p className="px-6 pt-4 text-sm text-red-600">{error}</p>}
       <div className="border-b border-border bg-card px-6 flex items-center gap-2">
         <button onClick={() => setView({ name: "home" })}
           className={`flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-medium transition-colors ${view.name === "home" ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
@@ -101,6 +103,7 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
           onViewContacts={(s) => setView({ name: "contacts", segment: s })}
           onCreateCampaign={(s) => setView({ name: "campaign", segment: s })}
           onSaveSegment={handleSaveSegment}
+          onSaveError={(msg) => setError(msg)}
         />
       )}
 

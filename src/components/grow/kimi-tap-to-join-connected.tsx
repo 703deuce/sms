@@ -29,6 +29,7 @@ export function KimiTapToJoinConnected() {
   const [view, setView] = useState<View>({ name: "links" });
   const [links, setLinks] = useState<TapLink[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     const [l, k] = await Promise.all([fetchTapLinks(), fetchTapKeywords()]);
@@ -41,12 +42,17 @@ export function KimiTapToJoinConnected() {
   }, [reload]);
 
   const handleSave = async (link: TapLink) => {
-    const created = await createTapLink({
-      name: link.name,
-      keyword: link.keyword,
-    });
-    setLinks((prev) => [created, ...prev]);
-    setView({ name: "success", link: created });
+    setError("");
+    try {
+      const created = await createTapLink({
+        name: link.name,
+        keyword: link.keyword,
+      });
+      setLinks((prev) => [created, ...prev]);
+      setView({ name: "success", link: created });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create link");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -79,6 +85,7 @@ export function KimiTapToJoinConnected() {
         }}
       />
       <main className="ttj-main">
+        {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
         {view.name === "links" && (
           <LinksListPage
             links={links}

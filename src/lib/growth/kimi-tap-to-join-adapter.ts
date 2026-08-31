@@ -57,10 +57,27 @@ export async function createTapLink(payload: {
   phoneE164?: string;
   body?: string;
 }): Promise<TapLink> {
+  let keywordId = payload.keywordId;
+  if (!keywordId && payload.keyword) {
+    const keywords = await fetchKeywords();
+    const match = keywords.find(
+      (k) => k.name.toUpperCase() === payload.keyword!.trim().toUpperCase(),
+    );
+    keywordId = match?.id;
+  }
+  if (!keywordId) {
+    throw new Error("Select a keyword that exists in your workspace");
+  }
+
   const res = await fetch("/api/growth/tap-to-join", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      name: payload.name,
+      keywordId,
+      phoneE164: payload.phoneE164,
+      buttonText: payload.body,
+    }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not create tap-to-join link");

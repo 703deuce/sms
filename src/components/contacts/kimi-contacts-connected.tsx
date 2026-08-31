@@ -47,6 +47,12 @@ export function KimiContactsConnected({
   }, []);
 
   useEffect(() => {
+    void fetchContactLists()
+      .then(setContactLists)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (initialContacts.length === 0) {
       void reload().catch(() => undefined);
     }
@@ -59,21 +65,23 @@ export function KimiContactsConnected({
     email: string;
     optIn: string;
   }) => {
-    if (formData?.mobile) {
-      try {
-        await createContact({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.mobile,
-          email: formData.email || undefined,
-          status: formData.optIn === "Subscribed" ? "SUBSCRIBED" : "UNSUBSCRIBED",
-        });
-        await reload();
-      } catch (err) {
+    if (!formData?.mobile?.trim()) {
+      setError("Mobile number is required");
+      return;
+    }
+    try {
+      await createContact({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.mobile,
+        email: formData.email || undefined,
+        status: formData.optIn === "Subscribed" ? "SUBSCRIBED" : "UNSUBSCRIBED",
+      });
+      await reload();
+    } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save contact");
         return;
       }
-    }
     setView("list");
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 3000);

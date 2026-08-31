@@ -11,7 +11,7 @@ let uid = 0;
 const nid = () => `g${++uid}_${Date.now()}`;
 const newCond = (): ConditionState => ({ id: nid(), property: "", condition: "", value: "", values: [] });
 
-export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment }: {
+export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment, onSaveError }: {
   editing?: Segment | null;
   onBack: () => void;
   onSaved: (seg: Segment, mode: "segments" | "contacts" | "campaign") => void;
@@ -22,6 +22,7 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
     editing: Segment | null | undefined;
     contactCount: number;
   }) => Promise<Segment>;
+  onSaveError?: (message: string) => void;
 }) {
   const [name, setName] = useState(editing?.name ?? "");
   const [groups, setGroups] = useState<Group[]>(editing
@@ -76,7 +77,10 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
     if (onSaveSegment) {
       void onSaveSegment({ name: name || "Untitled Segment", editing, contactCount: displayCount ?? matched })
         .then(finish)
-        .catch(() => finish(fallback));
+        .catch((err) => {
+          setSaveMenu(false);
+          onSaveError?.(err instanceof Error ? err.message : "Could not save segment");
+        });
       return;
     }
     finish(fallback);
