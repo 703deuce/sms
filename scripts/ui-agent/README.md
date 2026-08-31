@@ -34,12 +34,16 @@ npm run ui:refs -- --show slicktext-inbox
 npm run ui:kimi -- --target "/campaigns" --video-file "./ref.mov"
 
 # Polish existing production page (preferred when structure already works)
+# Auto-attaches the route's reference video from references.json (transovoRoute match)
 npm run ui:kimi -- \
   --mode polish \
   --target "/campaigns" \
   --walkthrough \
   --capture-current \
   --instruction "Keep structure. Improve color hierarchy, table density, buttons."
+
+# Disable auto reference video: --no-reference
+# Override video: --video "Sending Mass Texts in SlickText..."
 
 # Apply Kimi edits to real src/ (after reviewing plan-only output)
 npm run ui:kimi -- \

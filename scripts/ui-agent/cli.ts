@@ -88,6 +88,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--capture-video":
         options.captureVideo = true;
         break;
+      case "--no-reference":
+        options.skipAutoReference = true;
+        break;
       case "--reference-depth":
         options.referenceDepth = nextValue(args, i++) as "page" | "flow";
         break;
@@ -149,6 +152,8 @@ PRIMARY (Cursor-controlled):
     --capture-current \\
     --apply \\
     --instruction "Keep structure. Improve color hierarchy, buttons, table polish."
+  # Auto-attaches the reference video for the route from .ui-agent/references.json
+  # Override with --video "name" or disable with --no-reference
 
   npm run ui:kimi -- --session <id> --revise --instruction "Tighten row spacing"
 
@@ -172,6 +177,7 @@ OPTIONS:
   --target, --session, --instruction, --revise, --complete, --walkthrough
   --video, --image (named references from .ui-agent/references.json)
   --video-file, --image-file, --reference-video, --reference-image (local paths)
+  --no-reference (polish mode: skip auto route reference video)
   --reference-url, --reference-name, --capture-current
   --apply, --dry-run, --max-passes (default 2)
   --base-url http://localhost:3000

@@ -1,13 +1,33 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { downloadUiReferenceObject } from "./supabase-references";
-import { getReference, type UiReferenceEntry } from "@/lib/ui-agent/references-manifest";
+import {
+  getReference,
+  loadReferencesManifest,
+  type UiReferenceEntry,
+} from "@/lib/ui-agent/references-manifest";
 import { UI_AGENT_DIR, resolveUiAgentPath } from "./config";
 import { loadNamedReference } from "./reference-media";
 import { detectMediaKind, inferMimeType } from "./path-guards";
 import type { LabeledMedia } from "./types";
 
 const CACHE_DIR = join(UI_AGENT_DIR, "cache");
+
+/** Video reference names mapped to a Transovo route in .ui-agent/references.json */
+export function listReferenceVideosForRoute(route: string): string[] {
+  const clean = route.startsWith("/") ? route.split("?")[0].replace(/\/$/, "") || "/" : `/${route.split("?")[0]}`;
+  return Object.entries(loadReferencesManifest())
+    .filter(([, entry]) => entry.type === "video" && entry.transovoRoute === clean)
+    .map(([name]) => name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/** Prefer the canonical reference over duplicate uploads like "name(1)". */
+export function pickPrimaryReferenceVideo(names: string[]): string | undefined {
+  if (names.length === 0) return undefined;
+  const withoutDuplicateSuffix = names.filter((n) => !/\(\d+\)$/.test(n.trim()));
+  return (withoutDuplicateSuffix[0] || names[0]).trim();
+}
 
 export async function resolveReferenceByName(name: string): Promise<{ images: string[]; videos: string[] }> {
   const entry = getReference(name);

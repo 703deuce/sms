@@ -9,6 +9,11 @@ import { createPolishCheckpoint } from "./git-safety";
 import { KIMI_POLISH_FILE_PROTOCOL, KimiPolishFileWriter } from "./kimi-polish-files";
 import { designContextForKimi, buildProjectManifest, manifestToPromptContext } from "./project-context";
 import { resolvePolishTarget } from "./polish-targets";
+import {
+  listReferenceVideosForRoute,
+  pickPrimaryReferenceVideo,
+  resolveAllReferenceMediaForKimi,
+} from "./reference-resolve";
 import { log, logError } from "./logger";
 import { initProgress, markProgressReady, markProgressError, updateProgress } from "./progress";
 import { validateTouchedFiles } from "./validate-changes";
@@ -17,14 +22,19 @@ import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from 
 
 export const KIMI_POLISH_SYSTEM = `You are polishing an existing production SaaS interface.
 
-The screenshots show the CURRENT rendered Transovo page.
-The attached source files are the REAL frontend implementation.
+You receive three kinds of visual input:
+1. BEFORE_* screenshots — what Transovo renders TODAY on the real production page
+2. REFERENCE_VIDEO (when provided) — the target product's visual quality, density, and interaction patterns
+3. CURRENT SOURCE — the real frontend files that produce the BEFORE screenshots
+
+Your job is to CLOSE THE GAP between BEFORE and REFERENCE by editing the real source files.
+Match the reference's polish level (spacing, hierarchy, surfaces, buttons, tables, pills, phone preview)
+while keeping Transovo branding and the existing information architecture.
 
 Do NOT rebuild the page from scratch.
 Do NOT create a parallel sandbox or mock-only prototype.
-Keep the current information architecture and functionality unless a visual change clearly improves usability.
-
-Improve the existing frontend so it feels like a polished, mature SaaS platform rather than a basic admin interface.
+Do NOT copy competitor branding, logos, or exact colors from the reference video.
+Keep current functionality, hooks, handlers, data fetching, and API calls exactly as they are.
 
 Pay close attention to:
 - color hierarchy and contrast
@@ -38,11 +48,11 @@ Pay close attention to:
 - empty states and status pills
 - icon consistency
 - modal/drawer polish
+- phone preview frame and SMS bubble styling
 - subtle transitions
 - overall visual cohesion
 
 Do not overdecorate. Do not turn everything into cards. Do not add giant hero headings or excessive empty space.
-Preserve hooks, handlers, data fetching, and API calls exactly as they are.
 
 ${KIMI_POLISH_FILE_PROTOCOL}`;
 
@@ -161,8 +171,10 @@ CURRENT IMPLEMENTATION:
 ${sourceBundle}
 
 MEDIA:
-- BEFORE_* screenshots = current rendered page (all states)
-- REFERENCE_* = optional quality reference only — do not rebuild it
+- BEFORE_* screenshots = current rendered Transovo page (all walkthrough states)
+- REFERENCE_VIDEO = target visual quality from the competitor/reference product walkthrough
+  Watch the video and note spacing, table rows, status pills, composer layout, phone preview, and button hierarchy.
+  Apply those patterns to the real Transovo files — do not clone branding or rebuild from scratch.
 
 Apply presentation-layer improvements directly to the real files listed above.`;
 
@@ -208,6 +220,59 @@ Apply presentation-layer improvements directly to the real files listed above.`;
   return touched;
 }
 
+async function resolvePolishReferenceMedia(
+  options: CliOptions,
+  target: string,
+): Promise<LabeledMedia[]> {
+  if (options.skipAutoReference) return [];
+
+  const polishTarget = resolvePolishTarget(target);
+  let videoNames = [...options.referenceVideoNames];
+
+  if (
+    videoNames.length === 0 &&
+    options.referenceVideos.length === 0 &&
+    options.referenceImageNames.length === 0 &&
+    options.referenceImages.length === 0 &&
+    options.referenceNames.length === 0
+  ) {
+    if (polishTarget?.referenceVideoName) {
+      videoNames = [polishTarget.referenceVideoName];
+    } else {
+      const routeVideos = listReferenceVideosForRoute(target);
+      const primary = pickPrimaryReferenceVideo(routeVideos);
+      if (primary) videoNames = [primary];
+    }
+  }
+
+  if (
+    videoNames.length === 0 &&
+    options.referenceVideos.length === 0 &&
+    options.referenceImageNames.length === 0 &&
+    options.referenceImages.length === 0 &&
+    options.referenceNames.length === 0
+  ) {
+    return [];
+  }
+
+  const referenceMedia = await resolveAllReferenceMediaForKimi({
+    videoNames,
+    imageNames: options.referenceImageNames,
+    videoFiles: options.referenceVideos,
+    imageFiles: options.referenceImages,
+    legacyNames: options.referenceNames,
+  });
+
+  if (referenceMedia.some((m) => m.kind === "video")) {
+    log(
+      "polish reference video",
+      videoNames[0] || options.referenceVideos[0] || "attached",
+    );
+  }
+
+  return referenceMedia;
+}
+
 export async function runKimiPolishCommand(
   provider: UiVisionProvider,
   options: CliOptions,
@@ -235,17 +300,14 @@ export async function runKimiPolishCommand(
     updateProgress(session.id, { phase: "capture_before", message: "Capturing current page states…" });
     const beforeMedia = await captureBefore(options, session, "before");
 
-    let referenceMedia: LabeledMedia[] = [];
-    if (options.referenceVideoNames.length || options.referenceImageNames.length) {
-      const { resolveAllReferenceMediaForKimi } = await import("./reference-resolve");
-      referenceMedia = await resolveAllReferenceMediaForKimi({
-        videoNames: options.referenceVideoNames,
-        imageNames: options.referenceImageNames,
-        videoFiles: options.referenceVideos,
-        imageFiles: options.referenceImages,
-        legacyNames: options.referenceNames,
-      });
-    }
+    const referenceMedia = await resolvePolishReferenceMedia(options, session.target);
+    session.referenceMedia = referenceMedia.map((m) => ({
+      label: m.label,
+      purpose: m.purpose,
+      path: m.path,
+      source: m.supabase?.referenceName || m.path,
+    }));
+    updateSession(session);
 
     const maxPasses = Math.min(options.maxPasses, 2);
     let allTouched: string[] = [];

@@ -18,12 +18,15 @@ export type WalkthroughStep = {
 
 export type PolishTargetConfig = {
   route: string;
+  /** Override auto-resolved reference video name from references.json */
+  referenceVideoName?: string;
   steps: WalkthroughStep[];
 };
 
 export const POLISH_TARGETS: PolishTargetConfig[] = [
   {
     route: "/campaigns",
+    referenceVideoName: "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)",
     steps: [
       { id: "01_list", label: "Campaigns list", path: "/campaigns", fullPage: true },
       { id: "02_create", label: "Create campaign composer", path: "/campaigns/new", fullPage: true },

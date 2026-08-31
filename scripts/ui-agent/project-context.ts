@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { REPO_ROOT, SHARED_UI_GLOBS } from "./config";
 import type { ProjectManifest } from "./types";
 
@@ -49,14 +49,28 @@ function readImports(source: string): string[] {
   return imports;
 }
 
+const IMPORT_EXTS = [".tsx", ".ts", "/index.tsx", "/index.ts"];
+
 function resolveImportToFile(importPath: string, fromFile: string): string | null {
-  if (!importPath.startsWith("@/")) return null;
-  const rel = importPath.slice(2);
-  const exts = [".tsx", ".ts", "/index.tsx", "/index.ts"];
-  for (const ext of exts) {
-    const candidate = join(REPO_ROOT, "src", rel + ext);
-    if (existsSync(candidate)) return relative(REPO_ROOT, candidate);
+  if (importPath.startsWith("@/")) {
+    const rel = importPath.slice(2);
+    for (const ext of IMPORT_EXTS) {
+      const candidate = join(REPO_ROOT, "src", rel + ext);
+      if (existsSync(candidate)) return relative(REPO_ROOT, candidate);
+    }
+    return null;
   }
+
+  if (importPath.startsWith(".")) {
+    const fromDir = dirname(join(REPO_ROOT, fromFile));
+    const base = join(fromDir, importPath);
+    if (existsSync(base)) return relative(REPO_ROOT, base);
+    for (const ext of IMPORT_EXTS) {
+      const candidate = base + ext;
+      if (existsSync(candidate)) return relative(REPO_ROOT, candidate);
+    }
+  }
+
   return null;
 }
 
@@ -139,13 +153,24 @@ function extractComponentNames(files: string[]): string[] {
   return [...names].sort();
 }
 
+/** Presentation-layer files not reachable via TS import graph (e.g. global CSS). */
+const ROUTE_MANIFEST_EXTRAS: Record<string, string[]> = {
+  "/campaigns": [
+    "src/styles/kimi/campaigns.css",
+    "src/app/(app)/campaigns/new/page.tsx",
+    "src/app/(app)/campaigns/new/review/page.tsx",
+  ],
+};
+
 export function buildProjectManifest(target: string): ProjectManifest {
   const entryCandidates = routeToPageFile(target);
   if (entryCandidates.length === 0) {
     throw new Error(`Could not resolve target to page/component files: ${target}`);
   }
 
-  const targetFiles = collectRelatedFiles(entryCandidates, 2);
+  const routeKey = target.startsWith("/") ? target.split("?")[0].replace(/\/$/, "") || "/" : `/${target.split("?")[0]}`;
+  const extras = (ROUTE_MANIFEST_EXTRAS[routeKey] || []).filter((p) => existsSync(join(REPO_ROOT, p)));
+  const targetFiles = [...new Set([...collectRelatedFiles(entryCandidates, 3), ...extras])].sort();
   const sharedUiFiles = listSharedUiFiles();
   const designSystemFiles = sharedUiFiles.filter((f) => f.startsWith("src/components/ui/"));
 
