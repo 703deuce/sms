@@ -13,6 +13,7 @@ import {
   createContact,
   fetchContactStats,
   fetchContacts,
+  importContacts,
   type KimiContactStats,
 } from "@/lib/contacts/kimi-contacts-adapter";
 
@@ -92,7 +93,14 @@ export function KimiContactsConnected({
           <CreateContact onBack={() => setView("list")} onSaved={handleSaved} />
         )}
         {view === "import" && (
-          <ImportWizard onCancel={() => setView("list")} onDone={() => setImportModal(true)} />
+          <ImportWizard
+            onCancel={() => setView("list")}
+            onDone={() => setImportModal(true)}
+            onImportFile={async (file) => {
+              await importContacts(file);
+              await reload();
+            }}
+          />
         )}
       </main>
       {importModal && (

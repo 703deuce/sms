@@ -70,9 +70,19 @@ function Stepper({ step }: { step: Step }) {
   );
 }
 
-export default function ImportWizard({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
+export default function ImportWizard({
+  onCancel,
+  onDone,
+  onImportFile,
+}: {
+  onCancel: () => void;
+  onDone: () => void;
+  onImportFile?: (file: File) => Promise<void>;
+}) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
   const [headerRow, setHeaderRow] = useState(false);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [onlyEmpty, setOnlyEmpty] = useState(false);
@@ -107,7 +117,17 @@ export default function ImportWizard({ onCancel, onDone }: { onCancel: () => voi
     else if (step === "columns") setStep("optin");
     else if (step === "optin") setStep("lists");
     else if (step === "lists") setStep("review");
-    else onDone();
+    else {
+      if (onImportFile && uploadedFile) {
+        setImporting(true);
+        void onImportFile(uploadedFile)
+          .then(() => onDone())
+          .catch(() => onDone())
+          .finally(() => setImporting(false));
+        return;
+      }
+      onDone();
+    }
   };
   const prev = () => {
     if (step === "columns") setStep("upload");
@@ -116,11 +136,12 @@ export default function ImportWizard({ onCancel, onDone }: { onCancel: () => voi
     else if (step === "review") setStep("lists");
   };
 
-  const nextLabel = step === "review" ? "Import Contacts" : "Next →";
+  const nextLabel = step === "review" ? (importing ? "Importing…" : "Import Contacts") : "Next →";
   const nextDisabled =
     (step === "upload" && !file) ||
     (step === "optin" && !optInChoice) ||
-    (step === "review" && !confirmed);
+    (step === "review" && !confirmed) ||
+    importing;
 
   return (
     <div className="px-8 pt-6 pb-10 max-w-4xl flex flex-col min-h-screen" ref={dropdownRef}>
@@ -142,14 +163,22 @@ export default function ImportWizard({ onCancel, onDone }: { onCancel: () => voi
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => setFile("List Upload 1.csv")}
-                className="w-full border-2 border-dashed border-primary/40 bg-primary/[0.02] rounded-xl p-12 text-center hover:bg-primary/5 hover:border-primary/60 transition-colors mb-8"
-              >
+              <label className="block w-full border-2 border-dashed border-primary/40 bg-primary/[0.02] rounded-xl p-12 text-center hover:bg-primary/5 hover:border-primary/60 transition-colors mb-8 cursor-pointer">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const picked = e.target.files?.[0];
+                    if (!picked) return;
+                    setUploadedFile(picked);
+                    setFile(picked.name);
+                  }}
+                />
                 <UploadCloud className="w-8 h-8 text-primary mx-auto mb-2" />
                 <div className="text-sm font-semibold text-primary">Click or Drag to Upload</div>
                 <div className="text-xs text-muted-foreground mt-1.5">.csv files only · 100 MB or less · 100k contacts or less</div>
-              </button>
+              </label>
             )}
 
             <div className="space-y-7">

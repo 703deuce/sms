@@ -11,12 +11,17 @@ let uid = 0;
 const nid = () => `g${++uid}_${Date.now()}`;
 const newCond = (): ConditionState => ({ id: nid(), property: "", condition: "", value: "", values: [] });
 
-export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign }: {
+export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment }: {
   editing?: Segment | null;
   onBack: () => void;
   onSaved: (seg: Segment, mode: "segments" | "contacts" | "campaign") => void;
   onViewContacts: (seg: Segment) => void;
   onCreateCampaign: (seg: Segment) => void;
+  onSaveSegment?: (input: {
+    name: string;
+    editing: Segment | null | undefined;
+    contactCount: number;
+  }) => Promise<Segment>;
 }) {
   const [name, setName] = useState(editing?.name ?? "");
   const [groups, setGroups] = useState<Group[]>(editing
@@ -55,17 +60,26 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
   const addAnd = () => setGroups(gs => [...gs, { id: nid(), conditions: [newCond()] }]);
 
   const doSave = (mode: "segments" | "contacts" | "campaign") => {
-    const seg: Segment = {
+    const fallback: Segment = {
       id: editing?.id ?? `s_${Date.now()}`,
       name: name || "Untitled Segment",
       createdAt: editing?.createdAt ?? "Today @ " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       contacts: displayCount ?? matched,
     };
-    const existing: Segment[] = (window as any).__transovoSegments ?? [];
-    const next = editing ? existing.map(s => s.id === seg.id ? seg : s) : [...existing, seg];
-    (window as any).__transovoSegments = next;
-    setSaveMenu(false);
-    onSaved(seg, mode);
+    const finish = (seg: Segment) => {
+      const existing: Segment[] = (window as any).__transovoSegments ?? [];
+      const next = editing ? existing.map(s => s.id === seg.id ? seg : s) : [...existing, seg];
+      (window as any).__transovoSegments = next;
+      setSaveMenu(false);
+      onSaved(seg, mode);
+    };
+    if (onSaveSegment) {
+      void onSaveSegment({ name: name || "Untitled Segment", editing, contactCount: displayCount ?? matched })
+        .then(finish)
+        .catch(() => finish(fallback));
+      return;
+    }
+    finish(fallback);
   };
 
   return (

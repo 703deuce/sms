@@ -1,0 +1,10 @@
+{
+  "sessionId": "2026-08-31T11-46-00-083Z-109e30",
+  "commitHash": "58d05856dabb45406d4f9ef01f32849ee24c009b",
+  "dirtyBefore": [
+    "ui-agent/references.json",
+    ".ui-agent/polish-checkpoint-2026-08-31T05-38-40-161Z-2160c8.json",
+    ".ui-agent/polish-checkpoint-2026-08-31T05-38-40-315Z-c21112.json"
+  ],
+  "createdAt": "2026-08-31T11:46:00.105Z"
+}

@@ -13,7 +13,7 @@ import ContactsList from "@/components/kimi/contacts-segments/components/Contact
 import ListsList from "@/components/kimi/contacts-segments/components/ListsList";
 import Dashboard from "@/components/kimi/contacts-segments/components/Dashboard";
 import type { Segment } from "@/components/kimi/contacts-segments/mock-data";
-import { deleteSegment, fetchSegments } from "@/lib/contacts/kimi-segments-adapter";
+import { deleteSegment, fetchSegments, createSegment, updateSegment } from "@/lib/contacts/kimi-segments-adapter";
 import { Send, CheckCircle2, LayoutDashboard } from "lucide-react";
 
 type View =
@@ -56,6 +56,19 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
     setSegments((prev) => prev.filter((s) => s.id !== id));
   };
 
+  const handleSaveSegment = async (input: {
+    name: string;
+    editing: Segment | null | undefined;
+    contactCount: number;
+  }) => {
+    const conditions = { match: "all" as const, rules: [] };
+    if (input.editing?.id) {
+      return updateSegment(input.editing.id, input.name, conditions);
+    }
+    const seg = await createSegment(input.name, conditions);
+    return { ...seg, contacts: input.contactCount };
+  };
+
   return (
     <div className="seg-shell min-h-screen bg-background text-foreground">
       <div className="border-b border-border bg-card px-6 flex items-center gap-2">
@@ -87,6 +100,7 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
           onSaved={handleSaved}
           onViewContacts={(s) => setView({ name: "contacts", segment: s })}
           onCreateCampaign={(s) => setView({ name: "campaign", segment: s })}
+          onSaveSegment={handleSaveSegment}
         />
       )}
 
