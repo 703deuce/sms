@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash } from "lucide-react";
-import { TAGS, TEAMMATES } from "../mock-data";
+import { TAGS, type Tag, type Teammate } from "../mock-data";
 
 export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string; sub?: string };
 
@@ -39,10 +39,12 @@ const SUBS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "closed", label: "Closed", icon: <CheckCircle2 size={13} /> },
 ];
 
-export default function InboxRail({ sel, onSel, counts, onNew, tags }:{
-  sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void; tags?: typeof TAGS;
+export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates }:{
+  sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void;
+  tags?: Tag[]; teammates?: Teammate[];
 }) {
   const tagList = tags ?? TAGS;
+  const teammateList = teammates ?? [];
   const is = (k: string, key: string, sub?: string) => sel.kind === k && sel.key === key && (sub === undefined ? !sel.sub : sel.sub === sub);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -100,7 +102,7 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags }:{
           })}
         </Group>
         <Group title="TEAMMATE'S CONVERSATIONS">
-          {TEAMMATES.filter((t) => t.id !== "me").map((t) => {
+          {teammateList.filter((t) => t.id !== "me").map((t) => {
             const exp = !!expanded["tm:" + t.id] || (sel.kind === "teammate" && sel.key === t.id && !!sel.sub);
             return (
               <div key={t.id}>

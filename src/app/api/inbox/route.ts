@@ -61,6 +61,7 @@ export async function GET(request: Request) {
             : null,
           lastMessage: c.messages[0]?.body || "",
           updatedAt: c.updatedAt,
+          tags: c.tags || [],
         };
       }),
       filters,
