@@ -9,7 +9,7 @@ export default function TestFormScreen({ onBack }: { onBack: () => void }) {
       <div className="flex items-center gap-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white"
+          className="flex items-center gap-1.5 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50"
         >
           <ArrowLeft size={12} /> Back to Builder
         </button>
