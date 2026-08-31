@@ -64,6 +64,25 @@ function shouldUseDevBypass(): boolean {
   return dev === "1" || dev === "true" || dev === "yes";
 }
 
+function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+/** Remote production captures cannot show un-deployed polish — skip unless explicit. */
+function shouldCaptureAfterPolish(options: CliOptions): boolean {
+  if (options.captureAfter) return true;
+  return isLocalBaseUrl(options.baseUrl);
+}
+
+function postDeployCaptureHint(target: string, baseUrl: string): string {
+  return `DEV_AUTH_BYPASS=1 UI_AGENT_BASE_URL=${baseUrl} npm run ui:kimi-capture-polish -- --target ${target} --phase after`;
+}
+
 function readSourceBundle(manifest: ReturnType<typeof buildProjectManifest>): string {
   const chunks: string[] = [];
   for (const file of manifest.targetFiles) {
@@ -329,15 +348,17 @@ export async function runKimiPolishCommand(
       );
       allTouched = [...new Set([...allTouched, ...touched])];
 
-      if (options.apply && pass < maxPasses) {
+      if (options.apply && pass < maxPasses && shouldCaptureAfterPolish(options)) {
         updateProgress(session.id, { phase: "capture_after", message: "Capturing after state for review…" });
         await captureBefore({ ...options, walkthrough: options.walkthrough }, session, "after");
       }
     }
 
-    if (options.apply) {
+    if (options.apply && shouldCaptureAfterPolish(options)) {
       updateProgress(session.id, { phase: "capture_after", message: "Final after screenshots…" });
       await captureBefore(options, session, "after");
+    } else if (options.apply && !isLocalBaseUrl(options.baseUrl)) {
+      log("polish after-capture skipped", "remote base URL — run post-deploy capture after Coolify deploy");
     }
 
     session.status = "ready";
@@ -368,6 +389,9 @@ export async function runKimiPolishCommand(
     console.log(`BEFORE_KIMI_POLISH=${checkpoint.commitHash}`);
     console.log(`files=${allTouched.length}`);
     console.log(`applied=${options.apply}`);
+    if (options.apply && !shouldCaptureAfterPolish(options)) {
+      console.log(`post_deploy_capture=${postDeployCaptureHint(session.target, options.baseUrl)}`);
+    }
     console.log(`rollback=git checkout ${checkpoint.commitHash} -- ${allTouched.join(" ") || "."}`);
     console.log("");
 

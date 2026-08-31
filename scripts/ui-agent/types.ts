@@ -238,6 +238,8 @@ export type CliOptions = {
   /** Run completeness pass — re-watch video, fill missing screens/builders */
   complete: boolean;
   walkthrough: boolean;
+  /** Polish mode: capture AFTER screenshots (required for remote/production base URLs post-deploy) */
+  captureAfter?: boolean;
   /** Polish mode: do not auto-resolve route reference video from references.json */
   skipAutoReference?: boolean;
   baseUrl: string;

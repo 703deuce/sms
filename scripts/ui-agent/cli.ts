@@ -91,6 +91,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--no-reference":
         options.skipAutoReference = true;
         break;
+      case "--capture-after":
+        options.captureAfter = true;
+        break;
       case "--reference-depth":
         options.referenceDepth = nextValue(args, i++) as "page" | "flow";
         break;
@@ -178,6 +181,7 @@ OPTIONS:
   --video, --image (named references from .ui-agent/references.json)
   --video-file, --image-file, --reference-video, --reference-image (local paths)
   --no-reference (polish mode: skip auto route reference video)
+  --capture-after (polish mode: capture AFTER on remote URL — use after Coolify deploy)
   --reference-url, --reference-name, --capture-current
   --apply, --dry-run, --max-passes (default 2)
   --base-url http://localhost:3000

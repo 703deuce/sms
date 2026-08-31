@@ -45,6 +45,9 @@ npm run ui:kimi -- \
 # Disable auto reference video: --no-reference
 # Override video: --video "Sending Mass Texts in SlickText..."
 
+# After Coolify deploy — capture polished result on live site:
+DEV_AUTH_BYPASS=1 UI_AGENT_BASE_URL=\$APP_URL npm run ui:kimi-capture-polish -- --target /campaigns --phase after
+
 # Apply Kimi edits to real src/ (after reviewing plan-only output)
 npm run ui:kimi -- \
   --mode polish \
