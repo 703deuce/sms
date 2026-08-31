@@ -31,6 +31,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     integrate: false,
     revise: false,
     complete: false,
+    walkthrough: false,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop", "mobile"],
     maxPasses: 2,
@@ -113,6 +114,12 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--revise":
         options.revise = true;
         break;
+      case "--mode":
+        options.mode = nextValue(args, i++) as CliOptions["mode"];
+        break;
+      case "--walkthrough":
+        options.walkthrough = true;
+        break;
       case "--complete":
         options.complete = true;
         break;
@@ -128,10 +135,20 @@ export function printUsage(): void {
   console.log(`Visual UI Agent — Cursor orchestrates Kimi for visual UI work
 
 PRIMARY (Cursor-controlled):
+  # GENERATION — reference video → sandbox UI
   npm run ui:kimi -- \\
     --target "/conversations" \\
     --video "slicktext-inbox" \\
     --instruction "Match inbox layout; keep Transovo sidebar"
+
+  # POLISH — existing production page → tighten real frontend in place
+  npm run ui:kimi -- \\
+    --mode polish \\
+    --target "/campaigns" \\
+    --walkthrough \\
+    --capture-current \\
+    --apply \\
+    --instruction "Keep structure. Improve color hierarchy, buttons, table polish."
 
   npm run ui:kimi -- --session <id> --revise --instruction "Tighten row spacing"
 
@@ -151,7 +168,8 @@ WORKFLOW:
 LEGACY ALIASES: ui:improve (= ui:kimi), ui:preview, ui:capture, ui:reference
 
 OPTIONS:
-  --target, --session, --instruction, --revise, --complete
+  --mode generate|polish (default: generate)
+  --target, --session, --instruction, --revise, --complete, --walkthrough
   --video, --image (named references from .ui-agent/references.json)
   --video-file, --image-file, --reference-video, --reference-image (local paths)
   --reference-url, --reference-name, --capture-current

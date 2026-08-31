@@ -209,7 +209,10 @@ export type UiAgentSession = {
   verification?: VisualVerificationScores;
 };
 
+export type KimiCommandMode = "generate" | "polish";
+
 export type CliOptions = {
+  mode?: KimiCommandMode;
   target?: string;
   sessionId?: string;
   instruction?: string;
@@ -234,6 +237,7 @@ export type CliOptions = {
   revise: boolean;
   /** Run completeness pass — re-watch video, fill missing screens/builders */
   complete: boolean;
+  walkthrough: boolean;
   baseUrl: string;
   viewports: ViewportPreset[];
   maxPasses: number;

@@ -84,6 +84,10 @@ async function collectCurrentMedia(options: CliOptions, session: UiAgentSession)
       video: options.captureVideo,
       email: process.env.UI_AGENT_SMOKE_EMAIL || process.env.SMOKE_EMAIL,
       password: process.env.UI_AGENT_SMOKE_PASSWORD || process.env.SMOKE_PASSWORD,
+      useDevBypass:
+        process.env.UI_AGENT_DEV_BYPASS === "1" ||
+        process.env.DEV_AUTH_BYPASS === "1" ||
+        process.env.DEV_AUTH_BYPASS === "true",
     });
     session.currentMedia = captured.map((p) => ({ label: basename(p), path: p }));
     updateSession(session);

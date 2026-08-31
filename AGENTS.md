@@ -141,7 +141,31 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 **Orchestration:** USER → CURSOR → repo-local Kimi tool → generated UI → CURSOR integrates.
 
-The user should **not** manually operate Kimi. When the user asks to use Kimi, recreate a page from a saved video/image, or improve UI from a reference:
+### Two modes
+
+| Mode | When | Command |
+|------|------|---------|
+| **GENERATION** | New page from reference video | `npm run ui:kimi -- --target /route --video <name>` |
+| **POLISH** | Existing page ~60%+ done — tighten real frontend in place | `npm run ui:kimi -- --mode polish --target /campaigns --walkthrough --capture-current --apply` |
+
+**Prefer POLISH** when the page already works and structure is acceptable. Do not rebuild good structure from scratch.
+
+### POLISH workflow (production pages)
+
+1. Git checkpoint (`BEFORE_KIMI_POLISH=<commit>` recorded automatically).
+2. Capture **multiple real states** via Playwright (`--walkthrough` for list + builder + modals).
+3. Send screenshots + relevant `src/` presentation files to Kimi (K3, `reasoning_effort=low`).
+4. Kimi edits **real** `src/app/`, `src/components/`, `src/styles/` only — never APIs/lib/runtime.
+5. Cursor inspects diff, validates protected paths, re-captures AFTER screenshots.
+6. Max **2 passes**. Roll back with `git checkout BEFORE_KIMI_POLISH -- <files>` if worse.
+
+**Auth for capture:** set `DEV_AUTH_BYPASS=1` on the target environment (uses `/api/auth/dev-bypass`). Or `UI_AGENT_SMOKE_EMAIL` + password. Set `UI_AGENT_BASE_URL` to production/staging URL.
+
+**Campaigns walkthrough states:** list (`/campaigns`), create (`/campaigns/new`), review (`/campaigns/new/review`).
+
+### GENERATION workflow (reference video → sandbox)
+
+The user should **not** manually operate Kimi. When the user asks to recreate a page from a saved video/image:
 
 1. Resolve media from `.ui-agent/references.json` (`npm run ui:refs`) or local `--video-file` paths.
 2. Identify the exact existing Transovo target route/component.

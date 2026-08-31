@@ -14,9 +14,24 @@ export type CaptureOptions = {
   video: boolean;
   email?: string;
   password?: string;
+  useDevBypass?: boolean;
 };
 
-async function authenticate(page: import("playwright").Page, baseUrl: string, email?: string, password?: string) {
+async function authenticate(
+  page: import("playwright").Page,
+  baseUrl: string,
+  targetPath: string,
+  email?: string,
+  password?: string,
+  useDevBypass?: boolean,
+) {
+  if (useDevBypass && !email && !password) {
+    const bypass = `${baseUrl}/api/auth/dev-bypass?next=${encodeURIComponent(targetPath)}`;
+    log("auth", `dev-bypass → ${targetPath}`);
+    await page.goto(bypass, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(800);
+    return;
+  }
   if (!email || !password) return;
   await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded" });
   await page.fill('input[name="email"], input[type="email"]', email);
@@ -33,7 +48,7 @@ export async function captureCurrentSite(options: CaptureOptions): Promise<strin
 
   try {
     const page = await context.newPage();
-    await authenticate(page, options.baseUrl, options.email, options.password);
+    await authenticate(page, options.baseUrl, options.targetPath, options.email, options.password, options.useDevBypass);
 
     for (const viewportName of options.viewports) {
       const vp = VIEWPORT_PRESETS[viewportName];
@@ -60,7 +75,7 @@ export async function captureCurrentSite(options: CaptureOptions): Promise<strin
         viewport: { width: 1440, height: 900 },
       });
       const videoPage = await videoContext.newPage();
-      await authenticate(videoPage, options.baseUrl, options.email, options.password);
+      await authenticate(videoPage, options.baseUrl, options.targetPath, options.email, options.password, options.useDevBypass);
       const url = `${options.baseUrl}${options.targetPath.startsWith("/") ? options.targetPath : `/${options.targetPath}`}`;
       await videoPage.goto(url, { waitUntil: "networkidle", timeout: 60000 });
       await videoPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));

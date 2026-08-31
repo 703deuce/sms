@@ -25,6 +25,7 @@ import { assertKimiOutputPersisted, persistKimiGeneratedSource } from "./kimi-pe
 import { log } from "./logger";
 import { initProgress, markProgressError, markProgressReady, progressTailPath, updateProgress } from "./progress";
 import { startKimiTiming, markKimiTiming, printKimiTimingReport } from "./kimi-timing";
+import { runKimiPolishCommand } from "./kimi-polish";
 import { createSessionId, loadSession, saveSession, sessionDir, updateSession } from "./session";
 import type { CliOptions, LabeledMedia, UiAgentSession, UiVisionProvider } from "./types";
 
@@ -70,6 +71,10 @@ async function collectCurrentMediaForKimi(
       video: options.captureVideo,
       email: process.env.UI_AGENT_SMOKE_EMAIL || process.env.SMOKE_EMAIL,
       password: process.env.UI_AGENT_SMOKE_PASSWORD || process.env.SMOKE_PASSWORD,
+      useDevBypass:
+        process.env.UI_AGENT_DEV_BYPASS === "1" ||
+        process.env.DEV_AUTH_BYPASS === "1" ||
+        process.env.DEV_AUTH_BYPASS === "true",
     });
     session.currentMedia = captured.map((p) => ({ label: p.split("/").pop() || p, path: p }));
     updateSession(session);
@@ -90,6 +95,18 @@ export async function runKimiCommand(
   provider: UiVisionProvider,
   options: CliOptions,
 ): Promise<{ sessionId: string; target: string; fileCount: number }> {
+  if (options.mode === "polish") {
+    const polishDefaults: CliOptions = {
+      ...options,
+      captureCurrent: options.captureCurrent || true,
+      walkthrough: options.walkthrough || Boolean(options.target?.startsWith("/campaigns")),
+      maxPasses: Math.min(options.maxPasses || 2, 2),
+      reasoningEffort: options.reasoningEffort || "low",
+    };
+    const result = await runKimiPolishCommand(provider, polishDefaults);
+    return { sessionId: result.sessionId, target: result.target, fileCount: result.touchedFiles.length };
+  }
+
   let session: UiAgentSession;
 
   if (options.sessionId && options.complete) {

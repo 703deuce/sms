@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { REPO_ROOT } from "./config";
+import { REPO_ROOT, UI_AGENT_DIR } from "./config";
 import { log } from "./logger";
 
 export type FileSnapshot = {
@@ -64,4 +64,31 @@ export function restoreSnapshots(snapshots: FileSnapshot[]): void {
 export function filesChangedOutsidePlan(dirtyBefore: string[], touchedFiles: string[]): string[] {
   const touched = new Set(touchedFiles);
   return dirtyBefore.filter((f) => !touched.has(f));
+}
+
+export type PolishCheckpoint = {
+  sessionId: string;
+  commitHash: string;
+  dirtyBefore: string[];
+  createdAt: string;
+};
+
+export function createPolishCheckpoint(sessionId: string): PolishCheckpoint {
+  const dirtyBefore = readGitDirtyFiles();
+  let commitHash = "unknown";
+  try {
+    commitHash = execSync("git rev-parse HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+  } catch {
+    // ignore
+  }
+  const checkpoint: PolishCheckpoint = {
+    sessionId,
+    commitHash,
+    dirtyBefore,
+    createdAt: new Date().toISOString(),
+  };
+  mkdirSync(UI_AGENT_DIR, { recursive: true });
+  writeFileSync(join(UI_AGENT_DIR, `polish-checkpoint-${sessionId}.json`), JSON.stringify(checkpoint, null, 2), "utf8");
+  log("polish checkpoint", `HEAD=${commitHash} dirty=${dirtyBefore.length}`);
+  return checkpoint;
 }

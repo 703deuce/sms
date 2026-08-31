@@ -33,6 +33,22 @@ npm run ui:refs -- --show slicktext-inbox
 # Local file (before uploading to library)
 npm run ui:kimi -- --target "/campaigns" --video-file "./ref.mov"
 
+# Polish existing production page (preferred when structure already works)
+npm run ui:kimi -- \
+  --mode polish \
+  --target "/campaigns" \
+  --walkthrough \
+  --capture-current \
+  --instruction "Keep structure. Improve color hierarchy, table density, buttons."
+
+# Apply Kimi edits to real src/ (after reviewing plan-only output)
+npm run ui:kimi -- \
+  --mode polish \
+  --target "/campaigns" \
+  --walkthrough \
+  --capture-current \
+  --apply
+
 # Approve + integrate
 npm run ui:approve -- --session <id>
 npm run ui:integrate -- --session <id>
