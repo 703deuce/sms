@@ -18,13 +18,24 @@ import {
   dripTriggerLabel,
   type DripCampaignRecord,
 } from "@/lib/drip-campaigns/types";
+import {
+  dripCampaignDetailHref,
+  dripCampaignEditHref,
+  dripCampaignNewHref,
+} from "@/lib/drip-campaigns/routes";
 import { formatNumber } from "@/lib/utils";
 import { Filter, Layers, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-export function DripCampaignsList({ initialRows }: { initialRows: DripCampaignRecord[] }) {
+export function DripCampaignsList({
+  initialRows,
+  embedded = false,
+}: {
+  initialRows: DripCampaignRecord[];
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [rows, setRows] = useState(initialRows);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -79,13 +90,13 @@ export function DripCampaignsList({ initialRows }: { initialRows: DripCampaignRe
   return (
     <div className="text-[13px]">
       <SlickAudienceHeader
-        breadcrumb="Campaigns / Drip Campaigns"
+        breadcrumb={embedded ? "Automations / Drip Campaigns" : "Campaigns / Drip Campaigns"}
         title="Drip Campaigns"
         description="Send a timed series of messages when someone triggers an event."
         icon={Layers}
         actions={
           <Link
-            href="/drip-campaigns/new"
+            href={dripCampaignNewHref()}
             className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-semibold text-white no-underline hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
@@ -135,7 +146,7 @@ export function DripCampaignsList({ initialRows }: { initialRows: DripCampaignRe
             title="No drip campaigns yet"
             description="Build a multi-message sequence that starts when a contact joins a list, gets a tag, and more."
             actionLabel="Create Drip Campaign"
-            actionHref="/drip-campaigns/new"
+            actionHref={dripCampaignNewHref()}
           />
         ) : (
           <>
@@ -157,7 +168,7 @@ export function DripCampaignsList({ initialRows }: { initialRows: DripCampaignRe
                   <TR key={row.id} className="border-slate-100">
                     <TD>
                       <Link
-                        href={`/drip-campaigns/${row.id}`}
+                        href={dripCampaignDetailHref(row.id)}
                         className="font-semibold text-slate-900 no-underline hover:text-primary"
                       >
                         {row.name}
@@ -191,12 +202,12 @@ export function DripCampaignsList({ initialRows }: { initialRows: DripCampaignRe
                           {
                             label: "View",
                             icon: "users",
-                            href: `/drip-campaigns/${row.id}`,
+                            href: dripCampaignDetailHref(row.id),
                           },
                           {
                             label: "Edit",
                             icon: "pencil",
-                            href: `/drip-campaigns/${row.id}/edit`,
+                            href: dripCampaignEditHref(row.id),
                           },
                           {
                             label: "Duplicate",

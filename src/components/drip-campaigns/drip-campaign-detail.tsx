@@ -15,6 +15,7 @@ import {
   type DripCampaignRecord,
   type DripEnrollmentRecord,
 } from "@/lib/drip-campaigns/types";
+import { dripCampaignEditHref } from "@/lib/drip-campaigns/routes";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import { Layers, MessageSquare, Pencil, Reply, Send } from "lucide-react";
 import Link from "next/link";
@@ -107,7 +108,7 @@ export function DripCampaignDetail({
               />
             </div>
             <Link
-              href={`/drip-campaigns/${campaign.id}/edit`}
+              href={dripCampaignEditHref(campaign.id)}
               className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-900 no-underline hover:bg-slate-50"
             >
               <Pencil className="h-4 w-4" />

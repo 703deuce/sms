@@ -260,6 +260,7 @@ export const appNav: NavItem[] = [
     children: [
       { label: "Flows", href: "/automations" },
       { label: "Templates", href: "/automations/templates" },
+      { label: "Drip Campaigns", href: "/automations/drip-campaigns" },
       { label: "Builder", href: "/automations/new" },
       { label: "Run History", href: "/automations/logs" },
     ],

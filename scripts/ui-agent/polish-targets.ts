@@ -162,6 +162,139 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
       },
     ],
   },
+  {
+    route: "/contacts",
+    referenceVideoName: "Adding and Uploading Contacts in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_list", label: "Contacts list", path: "/contacts", fullPage: true },
+      {
+        id: "02_create",
+        label: "Create contact",
+        path: "/contacts",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Contact")' },
+          { type: "wait", ms: 400 },
+          { type: "click", selector: 'button:has-text("Create One")' },
+          { type: "wait", ms: 800 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "03_import",
+        label: "Import wizard",
+        path: "/contacts",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Contact")' },
+          { type: "wait", ms: 400 },
+          { type: "click", selector: 'button:has-text("Import List")' },
+          { type: "wait", ms: 800 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/contacts/lists",
+    referenceVideoName: "Using Lists to Organize Your Audience in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_lists", label: "Lists page", path: "/contacts/lists", fullPage: true },
+      {
+        id: "02_create",
+        label: "Create list",
+        path: "/contacts/lists",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create List")' },
+          { type: "wait", ms: 800 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/contacts/fields",
+    referenceVideoName: "How to Use Custom Fields in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_fields", label: "Custom fields list", path: "/contacts/fields", fullPage: true },
+      {
+        id: "02_create",
+        label: "Create field form",
+        path: "/contacts/fields",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Field")' },
+          { type: "wait", ms: 800 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/messaging/media",
+    referenceVideoName: "Adding Multimedia Attachments in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_list", label: "Media campaigns list", path: "/messaging/media", fullPage: true },
+      {
+        id: "02_create",
+        label: "Create campaign with attachment",
+        path: "/messaging/media",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Campaign")' },
+          { type: "wait", ms: 1200 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/grow/keywords",
+    referenceVideoName: "Creating Text-to-Join Keywords in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_list", label: "Keywords list", path: "/grow/keywords", fullPage: true },
+      {
+        id: "02_create",
+        label: "Keyword builder",
+        path: "/grow/keywords",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Keyword")' },
+          { type: "wait", ms: 1000 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/grow/qr-codes",
+    referenceVideoName: "QRCodes",
+    steps: [
+      { id: "01_list", label: "QR codes list", path: "/grow/qr-codes", fullPage: true },
+      {
+        id: "02_generator",
+        label: "QR generator",
+        path: "/grow/qr-codes",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Keyword")' },
+          { type: "wait", ms: 1000 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/grow/tap-to-join",
+    referenceVideoName: "Creating Tap-to-Join Links in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_links", label: "Tap-to-join links list", path: "/grow/tap-to-join", fullPage: true },
+      {
+        id: "02_create",
+        label: "Create link",
+        path: "/grow/tap-to-join",
+        actions: [
+          { type: "click", selector: 'button:has-text("Create Link")' },
+          { type: "wait", ms: 1000 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
 ];
 
 export function resolvePolishTarget(route: string): PolishTargetConfig | undefined {

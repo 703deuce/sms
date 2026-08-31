@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { AUTOMATION_NAV_TABS } from "@/lib/automations/nav-tabs";
 import { formatNumber } from "@/lib/utils";
 import { ScrollText } from "lucide-react";
 import {
@@ -11,11 +12,7 @@ import {
   requireWorkspaceContext,
 } from "@/lib/workspace-data";
 
-const automationTabs = [
-  { label: "Flows", href: "/automations" },
-  { label: "Templates", href: "/automations/templates" },
-  { label: "Logs", href: "/automations/logs" },
-];
+const automationTabs = [...AUTOMATION_NAV_TABS];
 
 export default async function AutomationsLogsPage() {
   const { workspaceId } = await requireWorkspaceContext();

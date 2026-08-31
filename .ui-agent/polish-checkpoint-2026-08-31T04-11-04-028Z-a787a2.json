@@ -1,0 +1,13 @@
+{
+  "sessionId": "2026-08-31T04-11-04-028Z-a787a2",
+  "commitHash": "586f6052b4a3df1155fd78c49741b9d454ad3305",
+  "dirtyBefore": [
+    "cripts/ui-agent/polish-targets.ts",
+    ".ui-agent/polish-checkpoint-2026-08-31T03-04-37-446Z-38b719.json",
+    ".ui-agent/polish-checkpoint-2026-08-31T03-06-39-718Z-48cca9.json",
+    ".ui-agent/polish-checkpoint-2026-08-31T03-13-03-753Z-201be0.json",
+    ".ui-agent/polish-checkpoint-2026-08-31T03-32-49-812Z-19bbd6.json",
+    ".ui-agent/polish-checkpoint-2026-08-31T03-49-57-106Z-5edfdd.json"
+  ],
+  "createdAt": "2026-08-31T04:11:04.050Z"
+}

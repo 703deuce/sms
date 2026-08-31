@@ -1,5 +1,6 @@
-import { DripCampaignWizard } from "@/components/drip-campaigns/drip-campaign-wizard";
+import { redirect } from "next/navigation";
+import { dripCampaignNewHref } from "@/lib/drip-campaigns/routes";
 
-export default function NewDripCampaignPage() {
-  return <DripCampaignWizard mode="create" />;
+export default function LegacyNewDripCampaignPage() {
+  redirect(dripCampaignNewHref());
 }

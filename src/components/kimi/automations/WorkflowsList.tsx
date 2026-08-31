@@ -3,13 +3,9 @@
 import React, { useMemo, useState } from "react";
 import { Search, MoreVertical, Workflow, Users, Plus } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { AUTOMATION_NAV_TABS } from "@/lib/automations/nav-tabs";
 import type { KimiWorkflowRow } from "./types";
-
-const subNav = [
-  { label: "Flows", href: "/automations" },
-  { label: "Templates", href: "/automations/templates" },
-  { label: "Logs", href: "/automations/logs" },
-];
 
 export default function WorkflowsList({
   workflows,
@@ -20,6 +16,7 @@ export default function WorkflowsList({
   onCreate: () => void;
   onOpen: (flowId: string) => void;
 }) {
+  const pathname = usePathname();
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -52,12 +49,12 @@ export default function WorkflowsList({
 
         {/* Sub nav */}
         <div className="mt-5 flex gap-1 border-b border-border">
-          {subNav.map((tab) => (
+          {AUTOMATION_NAV_TABS.map((tab) => (
             <Link
               key={tab.href}
               href={tab.href}
               className={`palette-tab px-3.5 py-2.5 text-[13px] font-semibold transition-colors ${
-                tab.href === "/automations"
+                pathname === tab.href
                   ? "active text-indigo-700"
                   : "text-muted-foreground hover:text-foreground"
               }`}

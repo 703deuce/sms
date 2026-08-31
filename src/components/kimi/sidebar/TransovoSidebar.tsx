@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  Bell,
-  LifeBuoy,
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
@@ -20,8 +18,6 @@ export interface TransovoSidebarProps {
   onToggleCollapse?: () => void;
   credits: KimiCredits;
   user: KimiSidebarUser;
-  notificationsHref?: string;
-  supportHref?: string;
   upgradeHref?: string;
   homeHref?: string;
 }
@@ -124,8 +120,6 @@ export function TransovoSidebar({
   onToggleCollapse,
   credits,
   user,
-  notificationsHref = "/settings/notifications",
-  supportHref = "/getting-started",
   upgradeHref = "/settings/billing",
   homeHref = "/dashboard",
 }: TransovoSidebarProps) {
@@ -196,23 +190,9 @@ export function TransovoSidebar({
       >
         {collapsed ? (
           <>
-            <Link
-              href={notificationsHref}
-              title="Notifications"
-              className="transovo-nav-item flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
-            >
-              <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            </Link>
-            <Link
-              href={supportHref}
-              title="Support"
-              className="transovo-nav-item flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
-            >
-              <LifeBuoy className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            </Link>
             <span
               title={user.name}
-              className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700"
             >
               {user.initials}
             </span>
@@ -229,22 +209,7 @@ export function TransovoSidebar({
           </>
         ) : (
           <>
-            <Link
-              href={notificationsHref}
-              className="transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground"
-            >
-              <Bell className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className="flex-1 text-left whitespace-nowrap">Notifications</span>
-            </Link>
-            <Link
-              href={supportHref}
-              className="transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground"
-            >
-              <LifeBuoy className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className="flex-1 text-left whitespace-nowrap">Support</span>
-            </Link>
-
-            <div className="mt-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-medium text-foreground">{credits.label}</span>
                 <Link

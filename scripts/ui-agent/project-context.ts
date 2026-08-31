@@ -177,6 +177,13 @@ const ROUTE_MANIFEST_EXTRAS: Record<string, string[]> = {
     "src/styles/kimi/auto-replies.css",
     "src/app/(app)/auto-replies/new/page.tsx",
   ],
+  "/contacts": ["src/styles/kimi/contacts.css"],
+  "/contacts/lists": ["src/styles/kimi/contacts-lists.css"],
+  "/contacts/fields": ["src/styles/kimi/contacts-fields.css"],
+  "/messaging/media": ["src/styles/kimi/messaging-media.css"],
+  "/grow/keywords": ["src/styles/kimi/grow-keywords.css"],
+  "/grow/qr-codes": ["src/styles/kimi/grow-qr-codes.css"],
+  "/grow/tap-to-join": ["src/styles/kimi/grow-tap-to-join.css"],
 };
 
 export function buildProjectManifest(target: string): ProjectManifest {

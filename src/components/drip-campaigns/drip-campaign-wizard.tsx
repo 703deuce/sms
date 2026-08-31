@@ -19,6 +19,10 @@ import {
   type DripStep,
   type DripTriggerConfig,
 } from "@/lib/drip-campaigns/types";
+import {
+  dripCampaignDetailHref,
+  dripCampaignsListHref,
+} from "@/lib/drip-campaigns/routes";
 import { cn, estimateSmsSegments, formatPhone } from "@/lib/utils";
 import { Info, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -158,7 +162,11 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not save drip campaign");
-      router.push(mode === "edit" && initial ? `/drip-campaigns/${initial.id}` : "/drip-campaigns");
+      router.push(
+        mode === "edit" && initial
+          ? dripCampaignDetailHref(initial.id)
+          : dripCampaignsListHref(),
+      );
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -171,7 +179,7 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
     <div className="text-[13px]">
       <div className="mb-6">
         <p className="mb-1 text-[12px] font-medium text-primary">
-          <Link href="/drip-campaigns" className="hover:underline">
+          <Link href={dripCampaignsListHref()} className="hover:underline">
             Drip Campaigns
           </Link>
           <span className="mx-2 text-slate-400">/</span>
@@ -462,7 +470,7 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
 
           <MockupWizardFooter
             onBack={step > 0 ? () => setStep((s) => s - 1) : undefined}
-            onCancel={step === 0 ? () => router.push("/drip-campaigns") : undefined}
+            onCancel={step === 0 ? () => router.push(dripCampaignsListHref()) : undefined}
             onNext={
               step === 0
                 ? () => setStep(1)

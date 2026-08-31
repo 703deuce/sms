@@ -1,8 +1,6 @@
 import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BarChart3,
-  BookOpen,
-  Layers,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
@@ -67,9 +65,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       sectionLabel: "Automate",
     },
     { label: "Auto Replies", href: "/auto-replies", icon: Reply },
-    { label: "Drip Campaigns", href: "/drip-campaigns", icon: Layers },
     { label: "AI Replies", href: "/ai-replies", icon: Sparkles },
-    { label: "Playbooks", href: "/playbooks", icon: BookOpen },
     ...buildAccountNavItems(),
   ];
 }
@@ -87,7 +83,6 @@ export function getSmsPlatformPageTitle(pathname: string): string {
     if (pathname.startsWith("/sms/settings")) return "Settings";
     return "Analytics";
   }
-  if (pathname.startsWith("/playbooks")) return "Playbooks";
   if (pathname.startsWith("/campaigns")) {
     if (pathname.startsWith("/campaigns/new/review")) return "Review Campaign";
     if (pathname.startsWith("/campaigns/new")) return "Create Campaign";
@@ -111,10 +106,13 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/grow/tap-to-join")) return "Tap-to-Join";
   if (pathname.startsWith("/grow/keywords")) return "Keywords";
   if (pathname.startsWith("/auto-replies")) return "Auto Replies";
-  if (pathname.startsWith("/drip-campaigns")) return "Drip Campaigns";
+  if (pathname.startsWith("/drip-campaigns") || pathname.startsWith("/automations/drip-campaigns")) {
+    return "Drip Campaigns";
+  }
   if (pathname.startsWith("/ai-replies")) return "AI Replies";
   if (pathname === "/automations/new") return "Create Automation";
   if (pathname === "/automations/logs") return "Run History";
+  if (pathname.startsWith("/automations/templates")) return "Automation Templates";
   if (pathname.startsWith("/automations")) return "Automations";
   if (pathname.startsWith("/grow")) return "List Growth";
   if (pathname.startsWith("/help")) return "Help";

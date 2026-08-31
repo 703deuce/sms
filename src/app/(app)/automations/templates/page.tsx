@@ -3,16 +3,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/catalog";
 import { playbookHref } from "@/lib/campaigns/playbook-routes";
+import { AUTOMATION_NAV_TABS } from "@/lib/automations/nav-tabs";
 import { INTEGRATION_AUTOMATION_TEMPLATES } from "@/lib/automations/integration-templates";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Plug } from "lucide-react";
 import Link from "next/link";
 
-const automationTabs = [
-  { label: "Flows", href: "/automations" },
-  { label: "Templates", href: "/automations/templates" },
-  { label: "Logs", href: "/automations/logs" },
-];
+const automationTabs = [...AUTOMATION_NAV_TABS];
 
 /**
  * Workflow templates = campaign categories + CRM/Calendly starters.

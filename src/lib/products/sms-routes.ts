@@ -36,8 +36,6 @@ export const SMS_APP_ROUTE_PREFIXES = [
   "/inbox",
   "/analytics",
   "/campaigns",
-  "/playbooks",
-  "/contacts",
   "/automations",
   "/auto-replies",
   "/drip-campaigns",

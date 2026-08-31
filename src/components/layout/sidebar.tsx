@@ -30,11 +30,9 @@ import { cn } from "@/lib/utils";
 import { TransovoSidebar } from "@/components/kimi/sidebar/TransovoSidebar";
 import { initialsForName, mapProductionNavToKimi } from "@/components/kimi/sidebar/map-nav";
 import {
-  Bell,
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
-  LifeBuoy,
   LogOut,
   MessageSquare,
 } from "lucide-react";
@@ -828,26 +826,10 @@ export function Sidebar({
       >
         {collapsed ? (
           <>
-            <Link
-              href="/settings/notifications"
-              title="Notifications"
-              onClick={onClose}
-              className="transovo-nav-item flex h-10 w-10 items-center justify-center rounded-md text-sidebar-muted hover:text-sidebar-foreground"
-            >
-              <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            </Link>
-            <Link
-              href="/getting-started"
-              title="Support"
-              onClick={onClose}
-              className="transovo-nav-item flex h-10 w-10 items-center justify-center rounded-md text-sidebar-muted hover:text-sidebar-foreground"
-            >
-              <LifeBuoy className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            </Link>
             <button
               type="button"
               title={userName}
-              className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700"
             >
               {userName
                 .split(" ")
@@ -869,23 +851,6 @@ export function Sidebar({
           </>
         ) : (
           <>
-            <Link
-              href="/settings/notifications"
-              onClick={onClose}
-              className="transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-sidebar-muted hover:text-sidebar-foreground"
-            >
-              <Bell className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className="flex-1 text-left whitespace-nowrap">Notifications</span>
-            </Link>
-            <Link
-              href="/getting-started"
-              onClick={onClose}
-              className="transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-sidebar-muted hover:text-sidebar-foreground"
-            >
-              <LifeBuoy className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className="flex-1 text-left whitespace-nowrap">Support</span>
-            </Link>
-
             {!realtorMode && currentProduct !== "numbers" ? (
               <MessageCreditsCard creditsRemaining={creditsRemaining} />
             ) : null}
