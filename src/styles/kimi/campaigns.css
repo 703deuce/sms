@@ -1,48 +1,343 @@
+/* ---------- Transovo Campaigns — polish pass ---------- */
+
 .kimi-campaigns .tv-sidebar{ width: 228px; min-width: 228px; }
-.kimi-campaigns .tv-sidebar .nav-item{ display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; font-size: 14px; color: #475569; cursor: pointer; }
+.kimi-campaigns .tv-sidebar .nav-item{ display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; font-size: 14px; color: #475569; cursor: pointer; transition: background .15s ease, color .15s ease; }
 .kimi-campaigns .tv-sidebar .nav-item:hover{ background: #f1f5f9; }
 .kimi-campaigns .tv-sidebar .nav-item.active{ background: #eef2ff; color: #4f46e5; font-weight: 600; }
-.kimi-campaigns .tv-sidebar .sub-item{ display: block; padding: 6px 12px 6px 38px; font-size: 13px; color: #64748b; border-radius: 8px; cursor: pointer; }
+.kimi-campaigns .tv-sidebar .sub-item{ display: block; padding: 6px 12px 6px 38px; font-size: 13px; color: #64748b; border-radius: 8px; cursor: pointer; transition: background .15s ease; }
 .kimi-campaigns .tv-sidebar .sub-item:hover{ background: #f1f5f9; }
 .kimi-campaigns .tv-sidebar .sub-item.active{ background: #eef2ff; color: #4f46e5; font-weight: 600; }
 
-.kimi-campaigns .camp-row{ display: grid; grid-template-columns: 1fr 150px 60px 200px 90px 40px; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #eef1f6; background: #fff; }
-.kimi-campaigns .camp-row:hover{ background: #f8fafc; }
-.kimi-campaigns .camp-row.selected{ box-shadow: inset 0 0 0 2px #6366f1; border-radius: 10px; }
+/* ---------- Campaign list ---------- */
 
-.kimi-campaigns .status-pill{ display: inline-flex; align-items: center; justify-content: center; padding: 4px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-.kimi-campaigns .status-pill.sent{ background: #d1fae5; color: #047857; }
-.kimi-campaigns .status-pill.draft{ background: #fff; color: #334155; border: 1px solid #e2e8f0; }
+.kimi-campaigns .camp-table{ background: #fff; border: 1px solid #e8ecf3; border-radius: 14px; overflow: visible; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
 
-.kimi-campaigns .chip{ display: inline-flex; align-items: center; gap: 6px; background: #eef2ff; color: #4338ca; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 600; }
-.kimi-campaigns .chip button{ color: #6366f1; }
+.kimi-campaigns .camp-row{
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 150px 48px 210px 96px 40px;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f2f7;
+  background: #fff;
+  transition: background .14s ease, box-shadow .14s ease;
+}
+.kimi-campaigns .camp-row:last-child{ border-bottom: none; border-radius: 0 0 14px 14px; }
+.kimi-campaigns .camp-row:hover{ background: #f8faff; }
+.kimi-campaigns .camp-row.selected{
+  background: #f5f7ff;
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+.kimi-campaigns .camp-row.camp-head{
+  background: transparent;
+  border-bottom: 1px solid #e8ecf3;
+  border-radius: 14px 14px 0 0;
+  padding: 10px 20px;
+}
+.kimi-campaigns .camp-row.camp-head:hover{ background: transparent; }
 
-.kimi-campaigns .seg-toggle{ display: inline-flex; background: #f1f5f9; border-radius: 8px; padding: 3px; }
-.kimi-campaigns .seg-toggle button{ padding: 6px 22px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #64748b; }
-.kimi-campaigns .seg-toggle button.on{ background: #fff; color: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+/* ---------- Status pills ---------- */
 
-.kimi-campaigns .phone-frame{ width: 300px; height: 560px; border: 2px solid #cbd5e1; border-radius: 36px; background: #fff; padding: 18px 14px; position: relative; }
-.kimi-campaigns .phone-frame::before{ content: ""; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 90px; height: 8px; border-radius: 8px; background: #e2e8f0; }
-.kimi-campaigns .sms-bubble{ background: #e9e9eb; color: #111; border-radius: 16px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; max-width: 92%; }
+.kimi-campaigns .status-pill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 62px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: .01em;
+}
+.kimi-campaigns .status-pill::before{
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.kimi-campaigns .status-pill.sent{ background: #e7f8ef; color: #15803d; }
+.kimi-campaigns .status-pill.draft{ background: #fff; color: #475569; border: 1px solid #dbe1ea; }
+.kimi-campaigns .status-pill.draft::before{ background: #94a3b8; }
 
-.kimi-campaigns .modal-overlay{ position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
-.kimi-campaigns .modal-card{ background: #fff; border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+/* ---------- Audience chips ---------- */
 
-.kimi-campaigns .kebab-menu{ position: absolute; right: 0; top: 28px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,.12); width: 140px; z-index: 30; overflow: hidden; }
-.kimi-campaigns .kebab-menu button{ display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 14px; font-size: 13px; color: #334155; }
-.kimi-campaigns .kebab-menu button:hover{ background: #f1f5f9; }
+.kimi-campaigns .chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #dfe4ff;
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background .14s ease;
+}
+.kimi-campaigns .chip:hover{ background: #e3e9ff; }
+.kimi-campaigns .chip button{
+  display: inline-flex;
+  color: #818cf8;
+  border-radius: 4px;
+  transition: color .12s ease;
+}
+.kimi-campaigns .chip button:hover{ color: #4338ca; }
 
-.kimi-campaigns .btn-primary{ background: #4f46e5; color: #fff; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; }
-.kimi-campaigns .btn-primary:hover{ background: #4338ca; }
-.kimi-campaigns .btn-primary:disabled{ background: #c7d2fe; cursor: not-allowed; }
-.kimi-campaigns .btn-ghost{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; color: #334155; background: #fff; }
-.kimi-campaigns .btn-ghost:hover{ background: #f8fafc; }
+/* ---------- Segmented toggle (When to Send / Ending) ---------- */
 
-.kimi-campaigns .input-field{ width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; font-size: 14px; outline: none; }
-.kimi-campaigns .input-field:focus{ border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+.kimi-campaigns .seg-toggle{
+  display: inline-flex;
+  background: #eef1f6;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.kimi-campaigns .seg-toggle button{
+  padding: 7px 22px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+}
+.kimi-campaigns .seg-toggle button:hover:not(.on){ color: #334155; }
+.kimi-campaigns .seg-toggle button.on{
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15,23,42,.14), 0 0 0 1px rgba(99,102,241,.25);
+}
 
-.kimi-campaigns .weekday-btn{ padding: 5px 10px; border-radius: 6px; font-size: 12px; color: #64748b; border: 1px solid transparent; }
-.kimi-campaigns .weekday-btn.on{ background: #eef2ff; color: #4338ca; border-color: #c7d2fe; font-weight: 600; }
+/* ---------- Phone preview ---------- */
+
+.kimi-campaigns .phone-frame{
+  width: 300px;
+  height: 560px;
+  border: 1.5px solid #d7dde8;
+  border-radius: 40px;
+  background: #fff;
+  padding: 20px 16px;
+  position: relative;
+  box-shadow: 0 12px 32px rgba(15,23,42,.08), inset 0 0 0 5px #f4f6fa;
+}
+.kimi-campaigns .phone-frame::before{
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 88px;
+  height: 9px;
+  border-radius: 8px;
+  background: #dfe4ec;
+}
+.kimi-campaigns .sms-bubble{
+  background: #ececf0;
+  color: #111827;
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+  padding: 10px 13px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-width: 94%;
+  box-shadow: 0 1px 1px rgba(15,23,42,.05);
+  animation: tvBubbleIn .25s ease-out;
+}
+@keyframes tvBubbleIn { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* ---------- Modals ---------- */
+
+.kimi-campaigns .modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,.48);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  animation: tvOverlayIn .18s ease-out;
+}
+@keyframes tvOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+.kimi-campaigns .modal-card{
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #eceff5;
+  box-shadow: 0 24px 60px rgba(15,23,42,.22);
+}
+
+/* ---------- Kebab menu ---------- */
+
+.kimi-campaigns .kebab-menu{
+  position: absolute;
+  right: 0;
+  top: 30px;
+  background: #fff;
+  border: 1px solid #e6eaf1;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15,23,42,.14);
+  width: 148px;
+  padding: 4px;
+  z-index: 30;
+  overflow: hidden;
+}
+.kimi-campaigns .kebab-menu button{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  border-radius: 8px;
+  transition: background .12s ease;
+}
+.kimi-campaigns .kebab-menu button:hover{ background: #f4f6fb; }
+.kimi-campaigns .kebab-menu button svg{ color: #94a3b8; }
+
+/* ---------- Buttons ---------- */
+
+.kimi-campaigns .btn-primary{
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 9px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(79,70,229,.35), inset 0 1px 0 rgba(255,255,255,.12);
+  transition: background .15s ease, box-shadow .15s ease, transform .1s ease;
+}
+.kimi-campaigns .btn-primary:hover{ background: #4338ca; box-shadow: 0 3px 8px rgba(79,70,229,.35); }
+.kimi-campaigns .btn-primary:active{ transform: translateY(1px); }
+.kimi-campaigns .btn-primary:disabled{
+  background: #c7d2fe;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+.kimi-campaigns .btn-ghost{
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  background: #fff;
+  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+.kimi-campaigns .btn-ghost:hover{ background: #f8fafc; border-color: #cbd5e1; box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+
+/* ---------- Inputs ---------- */
+
+.kimi-campaigns .input-field{
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #fff;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kimi-campaigns .input-field::placeholder{ color: #94a3b8; }
+.kimi-campaigns .input-field:hover:not(:focus){ border-color: #cbd5e1; }
+.kimi-campaigns .input-field:focus{
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.14);
+}
+
+/* ---------- Composer ---------- */
+
+.kimi-campaigns .composer-box{
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kimi-campaigns .composer-box:focus-within{
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.14);
+}
+.kimi-campaigns .composer-toolbar button{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #94a3b8;
+  transition: background .13s ease, color .13s ease;
+}
+.kimi-campaigns .composer-toolbar button:hover{ background: #f1f5f9; color: #475569; }
+.kimi-campaigns .composer-toolbar button.ai:hover{ background: #eef2ff; color: #4f46e5; }
+
+.kimi-campaigns .segment-badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* ---------- Weekday buttons (Recurring modal) ---------- */
+
+.kimi-campaigns .weekday-btn{
+  flex: 1;
+  padding: 6px 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  border: 1px solid transparent;
+  transition: background .13s ease, color .13s ease, border-color .13s ease;
+}
+.kimi-campaigns .weekday-btn:hover:not(.on){ background: #f1f5f9; }
+.kimi-campaigns .weekday-btn.on{
+  background: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+  font-weight: 600;
+}
+
+/* ---------- Review summary cards ---------- */
+
+.kimi-campaigns .review-card{
+  border: 1px solid #e8ecf3;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+
+/* ---------- Animations ---------- */
 
 .kimi-campaigns .fade-in{ animation: tvFade .18s ease-out; }
 @keyframes tvFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.kimi-campaigns .toast{
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #059669;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 10px;
+  box-shadow: 0 10px 26px rgba(5,150,105,.35);
+  animation: tvToastIn .22s ease-out;
+}
+@keyframes tvToastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }

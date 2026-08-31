@@ -46,16 +46,23 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
       )}
 
       <div className="flex items-center justify-between">
-        <p className="text-[12px] text-slate-400">Campaigns / <span className="text-slate-600">Create Campaign</span></p>
-        <HelpCircle className="w-4 h-4 text-slate-400" />
+        <p className="text-[12px] text-slate-400">
+          Campaigns <span className="mx-1 text-slate-300">/</span> <span className="text-slate-600 font-medium">Create Campaign</span>
+        </p>
+        <button className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+          <HelpCircle className="w-4 h-4 text-slate-400" />
+        </button>
       </div>
 
       <div className="grid grid-cols-[1fr_360px] gap-14 mt-4">
         <div>
-          <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
-            <Megaphone className="w-6 h-6 text-indigo-500" /> Create Campaign
+          <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight text-slate-900">
+            <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-indigo-50">
+              <Megaphone className="w-5 h-5 text-indigo-600" />
+            </span>
+            Create Campaign
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Create a campaign to reach your contacts at scale.</p>
+          <p className="text-sm text-slate-500 mt-1.5">Create a campaign to reach your contacts at scale.</p>
 
           <label className="block text-[13px] font-semibold text-slate-700 mt-7 mb-1.5">Campaign Name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Black Friday Dress Sale" className="input-field max-w-md" />
@@ -65,59 +72,61 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
 
           <div className="flex items-center justify-between max-w-md mt-5 mb-1.5">
             <label className="text-[13px] font-semibold text-slate-700">Message</label>
-            <span className="text-[11px] text-slate-400">{chars}/{limit} <span className="ml-1 inline-block bg-indigo-100 text-indigo-600 rounded-full px-1.5 font-semibold">1</span></span>
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 tabular-nums">
+              {chars}/{limit} <span className="segment-badge">1</span>
+            </span>
           </div>
-          <div className="max-w-md rounded-xl border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100">
+          <div className="max-w-md composer-box">
             <textarea
               value={message}
               onChange={(e) => handleMessageChange(e.target.value)}
-              className="w-full h-36 resize-none outline-none p-3 text-[13.5px] text-slate-800 rounded-t-xl"
+              className="w-full h-36 resize-none outline-none p-3 text-[13.5px] leading-relaxed text-slate-800 rounded-t-xl bg-transparent"
             />
             {trackPrompt && (
-              <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                <span className="text-[12px] text-slate-500">Track the {trackPrompt} link?</span>
+              <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50/60">
+                <span className="text-[12px] text-slate-500">Track the <span className="font-medium text-slate-700">{trackPrompt}</span> link?</span>
                 <span className="flex gap-3">
-                  <button onClick={() => { setTrackPrompt(null); setLinkName(""); }} className="text-[12px] font-semibold text-indigo-600">Yes</button>
-                  <button onClick={() => setTrackPrompt(null)} className="text-[12px] font-semibold text-slate-400">No</button>
+                  <button onClick={() => { setTrackPrompt(null); setLinkName(""); }} className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700">Yes</button>
+                  <button onClick={() => setTrackPrompt(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">No</button>
                 </span>
               </div>
             )}
             {linkName !== null && (
-              <div className="flex items-center gap-2 px-3 py-2 border-t border-slate-100">
+              <div className="flex items-center gap-2 px-3 py-2 border-t border-slate-100 bg-slate-50/60">
                 <input
                   autoFocus
                   value={linkName}
                   onChange={(e) => setLinkName(e.target.value)}
                   placeholder="Name your link"
-                  className="flex-1 text-[12px] outline-none border-b border-indigo-300 py-1"
+                  className="flex-1 text-[12px] outline-none border-b border-indigo-300 focus:border-indigo-500 py-1 bg-transparent transition-colors"
                 />
                 <button
                   onClick={() => { setMessage(message.replace(/www\.[a-z0-9.-]+\.[a-z]{2,}/i, "stxt.io/lea/872c4aa521")); setLinkName(null); }}
-                  className="text-[12px] font-semibold text-indigo-600"
+                  className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
                 >
                   Shorten
                 </button>
-                <button onClick={() => setLinkName(null)} className="text-[12px] font-semibold text-slate-400">Cancel</button>
+                <button onClick={() => setLinkName(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">Cancel</button>
               </div>
             )}
-            <div className="relative flex items-center gap-4 px-3 py-2.5 border-t border-slate-100 text-slate-400">
-              <button title="Attach a File" className="hover:text-slate-600"><Paperclip className="w-4 h-4" /></button>
-              <button title="Emojis" className="hover:text-slate-600"><Smile className="w-4 h-4" /></button>
+            <div className="composer-toolbar relative flex items-center gap-1.5 px-2.5 py-2 border-t border-slate-100">
+              <button title="Attach a File"><Paperclip className="w-4 h-4" /></button>
+              <button title="Emojis"><Smile className="w-4 h-4" /></button>
               <div className="relative">
-                <button title="Merge Tags" onClick={() => setShowMerge(!showMerge)} className="hover:text-slate-600"><Braces className="w-4 h-4" /></button>
+                <button title="Merge Tags" onClick={() => setShowMerge(!showMerge)}><Braces className="w-4 h-4" /></button>
                 {showMerge && (
-                  <div className="absolute bottom-7 left-0 bg-white border border-slate-200 rounded-xl shadow-lg z-20 w-64 p-2 fade-in">
-                    <input placeholder="Search" className="input-field !py-1.5 !text-[12px] mb-1" />
+                  <div className="absolute bottom-9 left-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 w-64 p-2 fade-in">
+                    <input placeholder="Search tags" className="input-field !py-1.5 !text-[12px] mb-1" />
                     {mergeTags.map((t) => (
-                      <button key={t.label} onClick={() => insertTag(t.value)} className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50 text-[13px] text-slate-700">
-                        {t.label} <span className="text-[11px] text-slate-400">{t.value}</span>
+                      <button key={t.label} onClick={() => insertTag(t.value)} className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50 text-[13px] text-slate-700 transition-colors">
+                        {t.label} <span className="text-[11px] text-slate-400 font-mono">{t.value}</span>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-              <button title="AI Compose" onClick={() => setShowAI(true)} className="hover:text-indigo-600"><Sparkles className="w-4 h-4" /></button>
-              <button title="Send a Test" className="ml-auto hover:text-slate-600"><Send className="w-4 h-4" /></button>
+              <button title="AI Compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
+              <button title="Send a Test" className="ml-auto"><Send className="w-4 h-4" /></button>
             </div>
           </div>
 
@@ -152,13 +161,13 @@ export default function CreateCampaign({ onCancel, onReview }: { onCancel: () =>
           )}
 
           {mode === "Recurring" && recurringSummary && (
-            <p className="mt-4 max-w-md text-[12px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5 fade-in">{recurringSummary}</p>
+            <p className="mt-4 max-w-md text-[12px] leading-relaxed text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5 fade-in">{recurringSummary}</p>
           )}
 
           <div className="flex items-center justify-between max-w-md mt-12">
             <button onClick={onCancel} className="btn-ghost">Cancel</button>
             <div className="flex items-center gap-4">
-              <button className="text-[13px] font-semibold text-indigo-600">Save Draft</button>
+              <button className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Save Draft</button>
               <button
                 onClick={() => onReview({ message, timing })}
                 disabled={!name || !message || audience.length === 0}

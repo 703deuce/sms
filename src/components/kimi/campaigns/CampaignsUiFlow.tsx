@@ -9,7 +9,7 @@ import ReviewDetails from "./components/ReviewDetails";
 import { Check } from "lucide-react";
 type View = "list" | "create" | "review";
 
-export type CampaignsInitialView = "list" | "create";
+export type CampaignsInitialView = "list" | "create" | "review";
 
 export default function CampaignsUiFlow({ initialView = "list" }: { initialView?: CampaignsInitialView }) {
   const [view, setView] = useState<View>(initialView);
@@ -24,7 +24,7 @@ export default function CampaignsUiFlow({ initialView = "list" }: { initialView?
   return (
     <div className="flex bg-[#f6f7fb] text-slate-900">
       {toast && (
-        <div className="fixed top-4 right-4 z-50 fade-in flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-lg">
+        <div className="toast">
           <Check className="w-4 h-4" /> {toast}
         </div>
       )}
