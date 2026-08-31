@@ -100,6 +100,66 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
         fullPage: true,
       },
     ],
+  {
+    route: "/auto-replies",
+    referenceVideoName: "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)",
+    steps: [
+      { id: "01_overview", label: "Auto-replies overview", path: "/auto-replies", fullPage: true },
+      {
+        id: "02_optin",
+        label: "Opt-in messages",
+        path: "/auto-replies",
+        actions: [
+          { type: "click", selector: 'button:has-text("Opt-In Messages")' },
+          { type: "wait", ms: 700 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "03_compliance",
+        label: "Compliance messaging",
+        path: "/auto-replies",
+        actions: [
+          { type: "click", selector: 'button:has-text("Compliance")' },
+          { type: "wait", ms: 700 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "04_keywords",
+        label: "Keywords list",
+        path: "/auto-replies",
+        actions: [
+          { type: "click", selector: 'button:has-text("Keywords")' },
+          { type: "wait", ms: 700 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "05_keyword_edit",
+        label: "Keyword editor",
+        path: "/auto-replies",
+        actions: [
+          { type: "click", selector: 'button:has-text("Keywords")' },
+          { type: "wait", ms: 600 },
+          { type: "click", selector: 'table tbody tr button' },
+          { type: "wait", ms: 400 },
+          { type: "click", selector: 'button:has-text("Edit")' },
+          { type: "wait", ms: 800 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "06_inbox",
+        label: "Inbox auto-response",
+        path: "/auto-replies",
+        actions: [
+          { type: "click", selector: 'button:has-text("Inbox Auto-Response")' },
+          { type: "wait", ms: 700 },
+        ],
+        fullPage: true,
+      },
+    ],
   },
 ];
 

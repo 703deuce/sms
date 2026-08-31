@@ -173,6 +173,10 @@ const ROUTE_MANIFEST_EXTRAS: Record<string, string[]> = {
     "src/components/kimi/automations/KimiAutomationBuilder.tsx",
     "src/components/kimi/automations/palette-data.ts",
   ],
+  "/auto-replies": [
+    "src/styles/kimi/auto-replies.css",
+    "src/app/(app)/auto-replies/new/page.tsx",
+  ],
 };
 
 export function buildProjectManifest(target: string): ProjectManifest {
