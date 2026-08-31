@@ -94,5 +94,21 @@
     "path": "videos/Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p).mp4",
     "transovoRoute": "/auto-replies",
     "createdAt": "2026-08-30T00:00:00.000Z"
+  },
+  "Creating Segments of Your SlickText Audience SlickText Tutorials - SlickText (360p)": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/Creating Segments of Your SlickText Audience SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/contacts/segments",
+    "createdAt": "2026-08-31T04:51:00.000Z"
+  },
+  "Creating a Web Form in SlickText SlickText Tutorials - SlickText (360p)": {
+    "type": "video",
+    "storage": "supabase",
+    "bucket": "ui-references",
+    "path": "videos/Creating a Web Form in SlickText SlickText Tutorials - SlickText (360p).mp4",
+    "transovoRoute": "/grow/forms",
+    "createdAt": "2026-08-31T04:51:00.000Z"
   }
 }
