@@ -160,6 +160,7 @@ const ROUTE_MANIFEST_EXTRAS: Record<string, string[]> = {
     "src/app/(app)/campaigns/new/page.tsx",
     "src/app/(app)/campaigns/new/review/page.tsx",
   ],
+  "/conversations": ["src/styles/kimi/conversations.css"],
 };
 
 export function buildProjectManifest(target: string): ProjectManifest {

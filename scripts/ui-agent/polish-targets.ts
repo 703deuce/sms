@@ -51,8 +51,29 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
   },
   {
     route: "/conversations",
+    referenceVideoName: "Navigating the SlickText Inbox SlickText Tutorials - SlickText (360p)",
     steps: [
-      { id: "01_empty", label: "Inbox — no selection", path: "/conversations", fullPage: true },
+      { id: "01_empty", label: "Inbox — no conversation selected", path: "/conversations", fullPage: true },
+      {
+        id: "02_thread",
+        label: "Inbox — thread open",
+        path: "/conversations",
+        actions: [
+          { type: "click", selector: 'text=Patrick Dukes' },
+          { type: "wait", ms: 800 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "03_compose",
+        label: "Compose new message modal",
+        path: "/conversations",
+        actions: [
+          { type: "click", selector: 'button:has-text("New Message")' },
+          { type: "wait", ms: 600 },
+        ],
+        fullPage: true,
+      },
     ],
   },
 ];
