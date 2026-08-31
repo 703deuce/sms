@@ -22,8 +22,15 @@ import {
   fieldsFromLayout,
   syncLayoutContent,
   updateBlockInLayout,
+  updateBlockStyle,
+  addPaletteElement,
+  layoutFromTemplate,
+  removeBlockFromLayout,
+  setFieldKeyOnBlock,
 } from "@/lib/forms/layout";
+import { useLayoutHistory } from "@/lib/forms/use-layout-history";
 import type { OptInFormConfig } from "@/lib/forms/types";
+import type { FormFieldKey } from "@/lib/forms/types";
 
 const elementIcons: Record<string, React.ReactNode> = {
   header: <Heading1 size={16} />, text: <Type size={16} />, image: <ImageIcon size={16} />,
@@ -32,11 +39,15 @@ const elementIcons: Record<string, React.ReactNode> = {
   container: <Square size={16} />, "two-col": <Columns2 size={16} />, "three-col": <Columns3 size={16} />, error: <AlertCircle size={16} />,
 };
 
-function blockKind(block: FormBlock | undefined): "field" | "column" | "header" | "button" | null {
+function blockKind(block: FormBlock | undefined): "field" | "column" | "header" | "button" | "text" | "compliance" | "link" | "error" | null {
   if (!block) return null;
   if (block.type === "image-column") return "column";
   if (block.type === "header") return "header";
   if (block.type === "button") return "button";
+  if (block.type === "text") return "text";
+  if (block.type === "compliance") return "compliance";
+  if (block.type === "link") return "link";
+  if (block.type === "error") return "error";
   if (block.type === "field" || block.type === "field-row") return "field";
   return null;
 }
@@ -109,10 +120,8 @@ export default function FormBuilder({
     (name, idx) => ({ id: `l${idx}`, name }),
   );
 
-  const [layout, setLayout] = useState<FormLayout>(
-    () =>
-      initialLayout ||
-      defaultLayoutFromConfig(seedConfig, "landing"),
+  const { layout, setLayout, undo, redo, canUndo, canRedo, resetHistory } = useLayoutHistory(
+    initialLayout || defaultLayoutFromConfig(seedConfig, "landing"),
   );
   const [openSection, setOpenSection] = useState(1);
   const [view, setView] = useState<"form" | "success">("form");
@@ -128,6 +137,8 @@ export default function FormBuilder({
   const [createdOpen, setCreatedOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewMenu, setPreviewMenu] = useState(false);
+  const [savedUrl, setSavedUrl] = useState("");
+  const [savedEmbed, setSavedEmbed] = useState("");
   const [hiddenPanel, setHiddenPanel] = useState(false);
 
   const [name, setName] = useState(formName || formDefaults.name);
@@ -158,8 +169,8 @@ export default function FormBuilder({
   const emailRemoved = emailBlock?.props?.hidden === true;
 
   useEffect(() => {
-    if (initialLayout) setLayout(initialLayout);
-  }, [initialLayout]);
+    if (initialLayout) resetHistory(initialLayout);
+  }, [initialLayout, resetHistory]);
 
   const selectedBlock = layout.blocks.find((b) => b.id === selected);
   const panelKind = blockKind(selectedBlock);
@@ -203,6 +214,8 @@ export default function FormBuilder({
       })
         .then(() => {
           setSaving(false);
+          setSavedUrl(urlPath ? `https://forms.transovo.io/${urlPath}` : "");
+          setSavedEmbed(`<script async src="https://static.transovo.io/forms/scripts/embed/${formId}"></script>`);
           setCreatedOpen(true);
         })
         .catch((err) => {
@@ -217,18 +230,15 @@ export default function FormBuilder({
 
   const pickTemplate = (id: string) => {
     setTemplatesOpen(false);
-    const formType = id.startsWith("e") ? "embed" : "landing";
-    setLayout((prev) => syncLayoutContent({ ...prev, formType }, { formType }));
-    if (id === "t1") {
-      setLayout((prev) => syncLayoutContent(prev, { imageHue: null }));
-    }
+    const next = layoutFromTemplate(id, layout);
+    resetHistory(next);
   };
 
   const deviceWidth = device === "desktop" ? "100%" : device === "tablet" ? 520 : 380;
 
   return (
     <div className="tv-forms flex h-[calc(100vh-64px)] overflow-hidden">
-      <div className="w-[320px] flex-none border-r border-border bg-card flex flex-col">
+      <div className={`w-[320px] flex-none border-r border-border bg-card flex flex-col ${hiddenPanel ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="p-4 border-b border-border">
           <button onClick={onExit} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-2"><ArrowLeft size={12} /> Grow / Forms / Create Form</button>
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2"><Layout size={16} className="text-indigo-600" /> Create Form</h2>
@@ -249,12 +259,35 @@ export default function FormBuilder({
                 if (!selected) return;
                 setLayout((prev) => updateBlockInLayout(prev, selected, { content: v }));
               }}
+              fieldKey={selectedBlock?.props?.fieldKey}
+              onFieldKeyChange={(key: FormFieldKey) => {
+                if (!selected) return;
+                setLayout((prev) => setFieldKeyOnBlock(prev, selected, key));
+              }}
+              required={selectedBlock?.props?.required}
+              onRequiredChange={(v) => {
+                if (!selected) return;
+                setLayout((prev) => updateBlockInLayout(prev, selected, { required: v }));
+              }}
+              defaultValue={selectedBlock?.props?.defaultValue}
+              onDefaultValueChange={(v) => {
+                if (!selected) return;
+                setLayout((prev) => updateBlockInLayout(prev, selected, { defaultValue: v }));
+              }}
+              inputMode={selectedBlock?.props?.inputMode}
+              onInputModeChange={(v) => {
+                if (!selected) return;
+                setLayout((prev) => updateBlockInLayout(prev, selected, { inputMode: v }));
+              }}
+              style={selectedBlock?.props?.style}
+              onStyleChange={(patch) => {
+                if (!selected) return;
+                setLayout((prev) => updateBlockStyle(prev, selected, patch));
+              }}
               onOpenImages={() => setImagesOpen(true)}
               onRemove={() => {
                 if (!selected) return;
-                setLayout((prev) => ensureEmailField(prev, false));
-                setRemoveOpen(false);
-                setSelected(null);
+                setRemoveOpen(true);
               }}
             />
           ) : (
@@ -301,6 +334,8 @@ export default function FormBuilder({
                       onClick={() => {
                         if (el.id === "field") {
                           setLayout((prev) => ensureEmailField(prev, true));
+                        } else {
+                          setLayout((prev) => addPaletteElement(prev, el.id));
                         }
                       }}
                     >
@@ -378,8 +413,8 @@ export default function FormBuilder({
             <button onClick={() => setView("success")} className={`px-3 py-1.5 rounded-md ${view === "success" ? "bg-indigo-600 text-white" : "text-muted-foreground hover:bg-muted"}`}>Success</button>
           </div>
           <div className="flex items-center gap-1 text-muted-foreground">
-            <button className="p-1.5 hover:bg-muted rounded" title="Undo Last Change"><Undo2 size={15} /></button>
-            <button className="p-1.5 hover:bg-muted rounded"><Redo2 size={15} /></button>
+            <button onClick={undo} disabled={!canUndo} className="p-1.5 hover:bg-muted rounded disabled:opacity-30" title="Undo"><Undo2 size={15} /></button>
+            <button onClick={redo} disabled={!canRedo} className="p-1.5 hover:bg-muted rounded disabled:opacity-30" title="Redo"><Redo2 size={15} /></button>
             <div className="relative">
               <button className="p-1.5 hover:bg-muted rounded" onClick={() => setHiddenPanel(!hiddenPanel)}>{hiddenPanel ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </div>
@@ -402,16 +437,21 @@ export default function FormBuilder({
         </div>
         <div className="flex-1 overflow-auto tv-scroll flex items-start justify-center p-8">
           <div style={{ width: deviceWidth, transition: "width .25s" }} className="tv-fade">
-            <BuilderCanvas layout={layout} view={view} selected={selected} onSelect={setSelected} />
+            <BuilderCanvas layout={layout} view={view} selected={selected} onSelect={setSelected} device={device} />
           </div>
         </div>
       </div>
 
       <TemplatesModal open={templatesOpen} onClose={() => setTemplatesOpen(false)} onPick={pickTemplate} />
       <ImageSearchModal open={imagesOpen} onClose={() => setImagesOpen(false)} onPick={(hue) => { setLayout((prev) => syncLayoutContent(prev, { imageHue: hue })); setImagesOpen(false); }} />
-      <RemoveFieldModal open={removeOpen} onClose={() => setRemoveOpen(false)} onConfirm={() => { setLayout((prev) => ensureEmailField(prev, false)); setRemoveOpen(false); setSelected(null); }} />
-      <FormCreatedModal open={createdOpen} onClose={() => setCreatedOpen(false)} type={layout.formType} url="https://forms.transovo.io/20percentoff" embedCode='<script async src="https://static.transovo.io/forms/scripts/embed/eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9"></script>' />
-      <PreviewFormModal open={previewOpen} onClose={() => setPreviewOpen(false)} imageHue={layout.imageHue || null} emailRemoved={emailRemoved} emailPlaceholder={emailBlock?.props?.placeholder || "Email"} />
+      <RemoveFieldModal open={removeOpen} onClose={() => setRemoveOpen(false)} onConfirm={() => {
+        if (!selected) return;
+        setLayout((prev) => removeBlockFromLayout(prev, selected));
+        setRemoveOpen(false);
+        setSelected(null);
+      }} />
+      <FormCreatedModal open={createdOpen} onClose={() => setCreatedOpen(false)} type={layout.formType} url={savedUrl || `https://forms.transovo.io/${urlPath}`} embedCode={savedEmbed || `<script async src="https://static.transovo.io/forms/scripts/embed/${formId || "draft"}"></script>`} />
+      <PreviewFormModal open={previewOpen} onClose={() => setPreviewOpen(false)} layout={layout} />
     </div>
   );
 }

@@ -1,6 +1,12 @@
-import { getBlock } from "@/lib/automations/catalog";
-import { isConditionBlock } from "@/lib/automations/catalog";
-import { createEdgeId, nodeSummary, type AutomationCanvasEdge, type AutomationDefinition, type AutomationCanvasNode } from "@/lib/automations/types";
+import { getBlock, isConditionBlock } from "@/lib/automations/catalog";
+import { getBlockOutcomes } from "@/lib/automations/block-registry/outcomes";
+import {
+  createEdgeId,
+  nodeSummary,
+  type AutomationCanvasEdge,
+  type AutomationDefinition,
+  type AutomationCanvasNode,
+} from "@/lib/automations/types";
 import {
   blockTypeForKimiId,
   kimiIdForBlockType,
@@ -8,37 +14,21 @@ import {
   paletteItemForBlockType,
   paletteItemForKimiId,
 } from "./block-bridge";
-import type { CanvasEdge, CanvasNodeData, NodeOutput } from "./WorkflowBuilder";
+import {
+  outcomesToKimiOutputs,
+  handleFromKimiEdge,
+  kimiEdgeFromHandle,
+  type KimiNodeOutput,
+} from "@/lib/automations/outcome-ui";
+import type { CanvasEdge, CanvasNodeData } from "./WorkflowBuilder";
 
-function outputsForKind(kind: CanvasNodeData["kind"], blockType: string): NodeOutput[] {
-  if (kind === "condition" || isConditionBlock(blockType)) {
-    return [
-      { label: "Yes", kind: "yes", pie: true },
-      { label: "No", kind: "no", pie: true },
-    ];
-  }
-  if (kind === "wait" || blockType.startsWith("wait_for_")) {
-    return [
-      { label: "Found", kind: "yes", pie: true },
-      { label: "Not Found", kind: "no", pie: true },
-    ];
-  }
-  const block = getBlock(blockType);
-  if (block?.blockType === "send_sms") {
-    return [
-      { label: "Message Sent", kind: "yes", pie: true },
-      { label: "Failed", kind: "no", pie: true },
-    ];
-  }
-  return [{ label: "", kind: "neutral" }];
-}
+export type { KimiNodeOutput };
 
-function handleFromEdgeLabel(label: string, kind: CanvasEdge["kind"]): string {
-  if (kind === "yes") return "yes";
-  if (kind === "no") return "no";
-  if (label.toLowerCase() === "yes") return "yes";
-  if (label.toLowerCase() === "no") return "no";
-  return "default";
+function outputsForNode(
+  blockType: string,
+  config?: Record<string, unknown>,
+): KimiNodeOutput[] {
+  return outcomesToKimiOutputs(blockType, config);
 }
 
 export function definitionToKimi(def: AutomationDefinition): {
@@ -51,6 +41,7 @@ export function definitionToKimi(def: AutomationDefinition): {
     const kimiId = palette?.id ?? kimiIdForBlockType(blockType) ?? blockType;
     const kind = palette?.kind ?? kimiKindForBlock(blockType);
     const configured = Object.keys(n.data.config || {}).length > 0;
+    const subtitle = configured ? nodeSummary(n) : "Not configured";
     return {
       id: n.id,
       itemId: kimiId,
@@ -60,23 +51,25 @@ export function definitionToKimi(def: AutomationDefinition): {
       x: n.position.x,
       y: n.position.y,
       configured,
-      subtitle: configured ? nodeSummary(n) : "Not configured",
-      outputs: outputsForKind(kind, blockType),
+      subtitle,
+      config: n.data.config || {},
+      outputs: outputsForNode(blockType, n.data.config),
     };
   });
 
   const edges: CanvasEdge[] = def.edges.map((e) => {
+    const sourceNode = def.nodes.find((n) => n.id === e.source);
+    const blockType = sourceNode?.data.blockType || "";
+    const outcomes = getBlockOutcomes(blockType, sourceNode?.data.config);
     const handle = e.sourceHandle || "default";
-    const kind: CanvasEdge["kind"] =
-      handle === "yes" ? "yes" : handle === "no" ? "no" : "neutral";
-    const label =
-      handle === "yes" ? "Yes" : handle === "no" ? "No" : handle === "default" ? "" : handle;
+    const mapped = kimiEdgeFromHandle(handle, outcomes);
     return {
       id: e.id,
       from: e.source,
       to: e.target,
-      label,
-      kind,
+      label: mapped.label,
+      kind: mapped.kind,
+      outcomeId: mapped.outcomeId,
     };
   });
 
@@ -107,15 +100,8 @@ export function kimiToDefinition(
     const config: Record<string, unknown> = {
       ...(block?.defaultConfig ?? {}),
       ...(prior?.data.config ?? {}),
+      ...(n.config ?? {}),
     };
-
-    if (blockType === "send_sms" && n.subtitle && n.subtitle !== "Not configured") {
-      config.messageName = n.subtitle;
-      if (!config.body) config.body = n.subtitle;
-    }
-    if (blockType === "assign_inbox_conversation" && n.subtitle && n.subtitle !== "Not configured") {
-      config.assigneeName = n.subtitle;
-    }
 
     const canvasNode: AutomationCanvasNode = {
       id: n.id,
@@ -135,7 +121,7 @@ export function kimiToDefinition(
     id: e.id || createEdgeId(),
     source: e.from,
     target: e.to,
-    sourceHandle: handleFromEdgeLabel(e.label, e.kind),
+    sourceHandle: handleFromKimiEdge(e.outcomeId || e.label || "default"),
     targetHandle: null,
   }));
 
@@ -144,5 +130,14 @@ export function kimiToDefinition(
     nodes: canvasNodes,
     edges: canvasEdges,
     viewport: existing.viewport ?? { x: 0, y: 0, zoom: 1 },
+  };
+}
+
+/** Refresh node outputs after config change (e.g. split traffic path count). */
+export function refreshNodeOutputs(node: CanvasNodeData): CanvasNodeData {
+  const blockType = blockTypeForKimiId(node.itemId);
+  return {
+    ...node,
+    outputs: outputsForNode(blockType, node.config),
   };
 }

@@ -2,6 +2,7 @@
 
 import { FIELD_LABELS, DEFAULT_DISCLOSURE, type FormFieldKey } from "@/lib/forms/types";
 import type { FormLayout } from "@/lib/forms/layout";
+import { blockStyleToCss } from "@/lib/forms/block-styles";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -31,13 +32,15 @@ export function FormLayoutView({
         switch (block.type) {
           case "header":
             return (
-              <h1 key={block.id} className="text-2xl font-semibold tracking-tight text-center">
+              <h1 key={block.id} className="text-2xl font-semibold tracking-tight text-center" style={blockStyleToCss(block.props?.style)}>
                 {block.props?.content}
               </h1>
             );
           case "text":
+          case "link":
+          case "error":
             return (
-              <p key={block.id} className="text-sm text-muted-foreground text-center">
+              <p key={block.id} className="text-sm text-muted-foreground text-center" style={blockStyleToCss(block.props?.style)}>
                 {block.props?.content}
               </p>
             );
@@ -67,21 +70,27 @@ export function FormLayoutView({
                 <Input
                   id={key}
                   type={key === "email" ? "email" : key === "phone" ? "tel" : key === "dateOfBirth" ? "date" : "text"}
-                  value={values[key] || ""}
+                  value={values[key] || block.props?.defaultValue || ""}
                   onChange={(e) => onChange(key, e.target.value)}
-                  required={key === "phone"}
+                  required={block.props?.required ?? key === "phone"}
+                  style={blockStyleToCss(block.props?.style)}
                 />
               </div>
             );
           }
           case "button": {
             const label = block.props?.content || "Subscribe";
+            const btnStyle = {
+              backgroundColor: block.props?.style?.backgroundColor || primaryColor,
+              color: block.props?.style?.color,
+              ...blockStyleToCss(block.props?.style),
+            };
             return (
               <Button
                 key={block.id}
                 type="submit"
                 className="w-full"
-                style={{ backgroundColor: primaryColor }}
+                style={btnStyle}
                 disabled={submitting || disabled}
               >
                 {submitting ? "Submitting…" : label}
@@ -90,7 +99,7 @@ export function FormLayoutView({
           }
           case "compliance":
             return (
-              <p key={block.id} className="text-xs text-muted-foreground leading-relaxed">
+              <p key={block.id} className="text-xs text-muted-foreground leading-relaxed" style={blockStyleToCss(block.props?.style)}>
                 {block.props?.content || DEFAULT_DISCLOSURE}
               </p>
             );

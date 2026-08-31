@@ -7,11 +7,12 @@ import {
   hasBlockingErrors,
   validateAutomationForPublish,
 } from "@/lib/automations/validation";
+import { outcomesToKimiOutputs } from "@/lib/automations/outcome-ui";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { blockTypeForKimiId, paletteItemForKimiId } from "./block-bridge";
-import { definitionToKimi, kimiToDefinition } from "./definition-bridge";
-import type { CanvasEdge, CanvasNodeData, NodeOutput } from "./WorkflowBuilder";
+import { definitionToKimi, kimiToDefinition, refreshNodeOutputs } from "./definition-bridge";
+import type { CanvasEdge, CanvasNodeData } from "./WorkflowBuilder";
 import WorkflowBuilder from "./WorkflowBuilder";
 
 type Props = {
@@ -21,30 +22,6 @@ type Props = {
   initialDefinition: unknown;
   initialStatus: string;
 };
-
-function outputsForItem(itemId: string): NodeOutput[] {
-  const item = paletteItemForKimiId(itemId);
-  if (!item) return [{ label: "", kind: "neutral" }];
-  if (item.kind === "condition") {
-    return [
-      { label: "Yes", kind: "yes", pie: true },
-      { label: "No", kind: "no", pie: true },
-    ];
-  }
-  if (item.kind === "wait") {
-    return [
-      { label: "Found", kind: "yes", pie: true },
-      { label: "Not Found", kind: "no", pie: true },
-    ];
-  }
-  if (itemId === "a-send-message") {
-    return [
-      { label: "Message Sent", kind: "yes", pie: true },
-      { label: "Failed", kind: "no", pie: true },
-    ];
-  }
-  return [{ label: "", kind: "neutral" }];
-}
 
 export default function KimiAutomationBuilder({
   flowId,
@@ -126,6 +103,7 @@ export default function KimiAutomationBuilder({
       }
       const id = createNodeId();
       const count = kimiNodes.length;
+      const defaultConfig = { ...(block?.defaultConfig ?? {}) };
       const node: CanvasNodeData = {
         id,
         itemId: item.id,
@@ -136,7 +114,8 @@ export default function KimiAutomationBuilder({
         y: 60 + Math.floor(count / 4) * 200,
         configured: false,
         subtitle: "",
-        outputs: outputsForItem(itemId),
+        config: defaultConfig,
+        outputs: outcomesToKimiOutputs(blockType, defaultConfig),
       };
       const nodes = [...kimiNodes, node];
       setKimiNodes(nodes);
@@ -159,30 +138,50 @@ export default function KimiAutomationBuilder({
   );
 
   const onSaveConfig = useCallback(
-    (nodeId: string, subtitle: string) => {
-      const nodes = kimiNodes.map((n) =>
-        n.id === nodeId
-          ? { ...n, configured: subtitle !== "Not configured", subtitle }
-          : n,
-      );
+    (nodeId: string, config: Record<string, unknown>, subtitle: string) => {
+      const nodes = kimiNodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const updated = {
+          ...n,
+          configured: subtitle !== "Not configured",
+          subtitle,
+          config,
+        };
+        return refreshNodeOutputs(updated);
+      });
       setKimiNodes(nodes);
       setConfigNode(null);
+
+      builder.updateNode(nodeId, { config });
       pushKimiToBuilder(nodes, kimiEdges);
 
-      const kimiNode = nodes.find((n) => n.id === nodeId);
-      if (!kimiNode) return;
-      const blockType = blockTypeForKimiId(kimiNode.itemId);
-      const patch: Record<string, unknown> = {};
-      if (blockType === "send_sms") {
-        patch.messageName = subtitle;
-        patch.body = subtitle;
+      const updatedNode = nodes.find((n) => n.id === nodeId);
+      if (updatedNode) {
+        const blockType = blockTypeForKimiId(updatedNode.itemId);
+        const validOutcomes = new Set(
+          outcomesToKimiOutputs(blockType, config).map((o) => o.outcomeId),
+        );
+        const prunedEdges = kimiEdges.filter(
+          (e) => e.from !== nodeId || validOutcomes.has(e.outcomeId),
+        );
+        if (prunedEdges.length !== kimiEdges.length) {
+          setKimiEdges(prunedEdges);
+          pushKimiToBuilder(nodes, prunedEdges);
+        }
       }
-      if (blockType === "assign_inbox_conversation") {
-        patch.assigneeName = subtitle;
-      }
-      builder.updateNode(nodeId, { config: patch });
     },
     [builder, kimiEdges, kimiNodes, pushKimiToBuilder],
+  );
+
+  const openConfig = useCallback(
+    (node: CanvasNodeData) => {
+      const defNode = builder.definition.nodes.find((n) => n.id === node.id);
+      setConfigNode({
+        ...node,
+        config: defNode?.data.config || node.config || {},
+      });
+    },
+    [builder.definition.nodes],
   );
 
   async function saveDraft(publishAfter = false) {
@@ -227,6 +226,7 @@ export default function KimiAutomationBuilder({
 
   const controlled = useMemo(
     () => ({
+      flowId,
       name: builder.name,
       description: builder.description,
       frequency,
@@ -252,7 +252,10 @@ export default function KimiAutomationBuilder({
       onNodesChange,
       onEdgesChange,
       onSelectedIdChange: setSelectedId,
-      onConfigNodeChange: setConfigNode,
+      onConfigNodeChange: (node: CanvasNodeData | null) => {
+        if (node) openConfig(node);
+        else setConfigNode(null);
+      },
       onAddItem,
       onDeleteNode,
       onSaveConfig,
@@ -268,6 +271,7 @@ export default function KimiAutomationBuilder({
       active,
       builder,
       configNode,
+      flowId,
       frequency,
       initialStatus,
       kimiEdges,
@@ -277,6 +281,7 @@ export default function KimiAutomationBuilder({
       onEdgesChange,
       onNodesChange,
       onSaveConfig,
+      openConfig,
       selectedId,
     ],
   );

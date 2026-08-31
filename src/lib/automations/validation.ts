@@ -3,6 +3,7 @@ import { findTriggerNode, getOutgoingEdges, hasCycle } from "./types";
 import { isConditionBlock } from "./catalog";
 import { getAutomationCapabilities } from "./capabilities";
 import { isVoiceAutomationBlock } from "./block-scope";
+import { getBlockOutcomes } from "./block-registry/outcomes";
 
 export type ValidationIssue = {
   nodeId?: string;
@@ -194,14 +195,18 @@ export function validateAutomationForPublish(
     }
 
     if (isConditionBlock(block)) {
-      const yesEdge = def.edges.some((e) => e.source === node.id && e.sourceHandle === "yes");
-      const noEdge = def.edges.some((e) => e.source === node.id && e.sourceHandle === "no");
-      if (!yesEdge || !noEdge) {
-        issues.push({
-          nodeId: node.id,
-          message: "Condition must have both Yes and No branches connected",
-          severity: "error",
-        });
+      const outcomes = getBlockOutcomes(block, cfg);
+      const connectedHandles = new Set(
+        def.edges.filter((e) => e.source === node.id).map((e) => e.sourceHandle || "default"),
+      );
+      if (outcomes.length === 2 && outcomes.some((o) => o.id === "yes") && outcomes.some((o) => o.id === "no")) {
+        if (!connectedHandles.has("yes") || !connectedHandles.has("no")) {
+          issues.push({
+            nodeId: node.id,
+            message: "Condition must have both Yes and No branches connected",
+            severity: "warning",
+          });
+        }
       }
     }
 

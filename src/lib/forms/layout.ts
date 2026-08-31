@@ -1,5 +1,6 @@
 import type { FormFieldKey, OptInFormConfig } from "@/lib/forms/types";
 import { DEFAULT_DISCLOSURE } from "@/lib/forms/types";
+import type { BlockStyle } from "@/lib/forms/block-styles";
 
 export type FormBlockType =
   | "header"
@@ -8,7 +9,9 @@ export type FormBlockType =
   | "field-row"
   | "button"
   | "compliance"
-  | "image-column";
+  | "image-column"
+  | "link"
+  | "error";
 
 export type FormBlock = {
   id: string;
@@ -20,6 +23,11 @@ export type FormBlock = {
     placeholder?: string;
     hidden?: boolean;
     imageHue?: string | null;
+    imageUrl?: string | null;
+    required?: boolean;
+    defaultValue?: string;
+    inputMode?: "standard" | "email" | "phone" | "numeric";
+    style?: BlockStyle;
   };
 };
 
@@ -41,6 +49,23 @@ export const DEFAULT_SUCCESS_HEADLINE = "Check Your Texts";
 export const DEFAULT_SUCCESS_MESSAGE =
   "We just sent you a message. Reply YES and we'll respond with your promo code.";
 
+const FIELD_KEY_FROM_LABEL: Record<string, FormFieldKey> = {
+  "First Name": "firstName",
+  "Last Name": "lastName",
+  "Mobile Number": "phone",
+  Email: "email",
+  Birthdate: "dateOfBirth",
+};
+
+export function fieldKeyFromLabel(label: string): FormFieldKey | undefined {
+  return FIELD_KEY_FROM_LABEL[label];
+}
+
+export function labelFromFieldKey(key: FormFieldKey): string {
+  const entry = Object.entries(FIELD_KEY_FROM_LABEL).find(([, v]) => v === key);
+  return entry?.[0] || key;
+}
+
 function blockId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -58,7 +83,7 @@ export function defaultLayoutFromConfig(
     {
       id: blockId("header"),
       type: "header",
-      props: { content: config.headline || "Want 20% off?" },
+      props: { content: config.headline || "Want 20% off?", style: { textAlign: "center", fontSize: 28 } },
     },
     {
       id: blockId("text"),
@@ -67,6 +92,7 @@ export function defaultLayoutFromConfig(
         content:
           config.subheadline ||
           "Join our VIP text list and receive a code for your next purchase.",
+        style: { textAlign: "center", fontSize: 12, color: "#cbd5e1" },
       },
     },
   ];
@@ -88,7 +114,7 @@ export function defaultLayoutFromConfig(
   blocks.push({
     id: blockId("phone"),
     type: "field",
-    props: { fieldKey: "phone", placeholder: "Mobile Number" },
+    props: { fieldKey: "phone", placeholder: "Mobile Number", required: true },
   });
 
   if (hasEmail) {
@@ -110,13 +136,16 @@ export function defaultLayoutFromConfig(
   blocks.push({
     id: blockId("btn"),
     type: "button",
-    props: { content: config.buttonLabel || "Join Now" },
+    props: {
+      content: config.buttonLabel || "Join Now",
+      style: { backgroundColor: "#4f46e5", color: "#ffffff", borderRadius: 6 },
+    },
   });
 
   blocks.push({
     id: blockId("compliance"),
     type: "compliance",
-    props: { content: DEFAULT_DISCLOSURE },
+    props: { content: DEFAULT_DISCLOSURE, style: { fontSize: 9, color: "#94a3b8", textAlign: "center" } },
   });
 
   if (formType === "landing") {
@@ -136,6 +165,80 @@ export function defaultLayoutFromConfig(
     successMessage: DEFAULT_SUCCESS_MESSAGE,
     contactMode: "create",
   };
+}
+
+const TEMPLATE_HUES: Record<string, string | null> = {
+  t0: null,
+  t1: "#3f5b46",
+  t2: "#c45c26",
+  t3: "#4a5568",
+  t4: "#5b21b6",
+  t5: "#7f1d1d",
+  t6: "#d6cfc4",
+  e1: null,
+  e2: null,
+  e3: null,
+  e4: null,
+};
+
+/** Apply a template id to produce a full layout. */
+export function layoutFromTemplate(templateId: string, base?: FormLayout): FormLayout {
+  const formType = templateId.startsWith("e") ? "embed" : "landing";
+  const hue = TEMPLATE_HUES[templateId] ?? null;
+
+  if (templateId === "t0") {
+    return {
+      version: 1,
+      formType,
+      imageHue: null,
+      blocks: [
+        { id: blockId("header"), type: "header", props: { content: "Your Headline", style: { textAlign: "center" } } },
+        { id: blockId("phone"), type: "field", props: { fieldKey: "phone", placeholder: "Mobile Number", required: true } },
+        { id: blockId("btn"), type: "button", props: { content: "Submit", style: { backgroundColor: "#4f46e5", color: "#fff" } } },
+        { id: blockId("compliance"), type: "compliance", props: { content: DEFAULT_DISCLOSURE } },
+        ...(formType === "landing"
+          ? [{ id: blockId("img"), type: "image-column" as const, props: { imageHue: null } }]
+          : []),
+      ],
+      successHeadline: DEFAULT_SUCCESS_HEADLINE,
+      successMessage: DEFAULT_SUCCESS_MESSAGE,
+      contactMode: "create",
+    };
+  }
+
+  const layout = defaultLayoutFromConfig(
+    {
+      headline: base ? deriveConfigFromLayout(base).headline : "Want 20% off?",
+      subheadline: base ? deriveConfigFromLayout(base).subheadline : undefined,
+      buttonLabel: base ? deriveConfigFromLayout(base).buttonLabel : "Join Now",
+      fields: ["firstName", "lastName", "phone", "email"],
+    },
+    formType,
+  );
+
+  if (hue) {
+    layout.imageHue = hue;
+    layout.blocks = layout.blocks.map((b) =>
+      b.type === "image-column" ? { ...b, props: { ...b.props, imageHue: hue } } : b,
+    );
+  }
+
+  if (formType === "embed") {
+    layout.blocks = layout.blocks.map((b) => {
+      if (b.type === "button") {
+        return {
+          ...b,
+          props: {
+            ...b.props,
+            style: { ...b.props?.style, backgroundColor: "#f8fafc", color: "#0f172a" },
+          },
+        };
+      }
+      return b;
+    });
+  }
+
+  return layout;
 }
 
 export function parseFormLayout(raw: unknown): FormLayout | null {
@@ -168,6 +271,9 @@ export function deriveConfigFromLayout(layout: FormLayout): Partial<OptInFormCon
     if (block.type === "header") headline = block.props?.content;
     if (block.type === "text") subheadline = block.props?.content;
     if (block.type === "button") buttonLabel = block.props?.content;
+    if (block.type === "compliance") {
+      // compliance content synced separately if needed
+    }
     if (block.type === "field" && block.props?.fieldKey && !block.props.hidden) {
       if (!fields.includes(block.props.fieldKey)) fields.push(block.props.fieldKey);
     }
@@ -186,18 +292,113 @@ export function deriveConfigFromLayout(layout: FormLayout): Partial<OptInFormCon
 export function updateBlockInLayout(
   layout: FormLayout,
   blockId: string,
-  patch: Partial<FormBlock["props"]>,
+  patch: Partial<NonNullable<FormBlock["props"]>>,
 ): FormLayout {
   return {
     ...layout,
     blocks: layout.blocks.map((b) =>
-      b.id === blockId ? { ...b, props: { ...b.props, ...patch } } : b,
+      b.id === blockId
+        ? {
+            ...b,
+            props: {
+              ...b.props,
+              ...patch,
+              style: patch.style ? { ...b.props?.style, ...patch.style } : b.props?.style,
+            },
+          }
+        : b,
+    ),
+  };
+}
+
+export function updateBlockStyle(
+  layout: FormLayout,
+  blockId: string,
+  stylePatch: Partial<BlockStyle>,
+): FormLayout {
+  return {
+    ...layout,
+    blocks: layout.blocks.map((b) =>
+      b.id === blockId
+        ? { ...b, props: { ...b.props, style: { ...b.props?.style, ...stylePatch } } }
+        : b,
     ),
   };
 }
 
 export function setBlockHidden(layout: FormLayout, blockId: string, hidden: boolean): FormLayout {
   return updateBlockInLayout(layout, blockId, { hidden });
+}
+
+export function removeBlockFromLayout(layout: FormLayout, blockId: string): FormLayout {
+  return { ...layout, blocks: layout.blocks.filter((b) => b.id !== blockId) };
+}
+
+export function insertBlockAt(layout: FormLayout, index: number, block: FormBlock): FormLayout {
+  const blocks = [...layout.blocks];
+  const safeIndex = Math.max(0, Math.min(index, blocks.length));
+  blocks.splice(safeIndex, 0, block);
+  return { ...layout, blocks };
+}
+
+export function moveBlockInLayout(layout: FormLayout, blockId: string, newIndex: number): FormLayout {
+  const blocks = [...layout.blocks];
+  const idx = blocks.findIndex((b) => b.id === blockId);
+  if (idx < 0) return layout;
+  const [block] = blocks.splice(idx, 1);
+  const safeIndex = Math.max(0, Math.min(newIndex, blocks.length));
+  blocks.splice(safeIndex, 0, block);
+  return { ...layout, blocks };
+}
+
+export function createBlockFromPalette(elementId: string): FormBlock | null {
+  const id = blockId(elementId);
+  switch (elementId) {
+    case "header":
+      return { id, type: "header", props: { content: "New Header", style: { textAlign: "center", fontSize: 24 } } };
+    case "text":
+      return { id, type: "text", props: { content: "New text block", style: { textAlign: "center", fontSize: 12 } } };
+    case "field":
+      return { id, type: "field", props: { fieldKey: "email", placeholder: "Email" } };
+    case "dropdown":
+      return { id, type: "field", props: { fieldKey: "firstName", placeholder: "Select option" } };
+    case "button":
+      return { id, type: "button", props: { content: "Click Here", style: { backgroundColor: "#4f46e5", color: "#fff", borderRadius: 6 } } };
+    case "link":
+      return { id, type: "link", props: { content: "Learn more", style: { color: "#6366f1", textDecoration: "underline" } } };
+    case "compliance":
+      return { id, type: "compliance", props: { content: DEFAULT_DISCLOSURE, style: { fontSize: 9, color: "#94a3b8" } } };
+    case "two-col":
+      return { id, type: "field-row", props: { fieldKeys: ["firstName", "lastName"] } };
+    case "three-col":
+      return { id, type: "field-row", props: { fieldKeys: ["firstName", "lastName", "email"] } };
+    case "error":
+      return { id, type: "error", props: { content: "Error message", style: { color: "#ef4444", fontSize: 11 } } };
+    case "image":
+      return { id, type: "image-column", props: { imageHue: null } };
+    case "container":
+      return { id, type: "text", props: { content: "", style: { padding: 16, backgroundColor: "#f8fafc", borderRadius: 8 } } };
+    case "icon":
+      return { id, type: "text", props: { content: "★", style: { textAlign: "center", fontSize: 24 } } };
+    default:
+      return null;
+  }
+}
+
+export function addPaletteElement(layout: FormLayout, elementId: string): FormLayout {
+  const block = createBlockFromPalette(elementId);
+  if (!block) return layout;
+
+  if (block.type === "image-column") {
+    if (layout.blocks.some((b) => b.type === "image-column")) {
+      return layout;
+    }
+    return { ...layout, blocks: [...layout.blocks, block] };
+  }
+
+  const insertBefore = layout.blocks.findIndex((b) => b.type === "button" || b.type === "compliance");
+  const index = insertBefore >= 0 ? insertBefore : layout.blocks.length;
+  return insertBlockAt(layout, index, block);
 }
 
 export function syncLayoutContent(
@@ -265,10 +466,8 @@ export function ensureEmailField(layout: FormLayout, include: boolean): FormLayo
   if (!include && hasEmail) {
     return {
       ...layout,
-      blocks: layout.blocks.map((b) =>
-        b.type === "field" && b.props?.fieldKey === "email"
-          ? { ...b, props: { ...b.props, hidden: true } }
-          : b,
+      blocks: layout.blocks.filter(
+        (b) => !(b.type === "field" && b.props?.fieldKey === "email"),
       ),
     };
   }
@@ -283,4 +482,19 @@ export function ensureEmailField(layout: FormLayout, include: boolean): FormLayo
     };
   }
   return layout;
+}
+
+export function setFieldKeyOnBlock(layout: FormLayout, blockId: string, fieldKey: FormFieldKey): FormLayout {
+  const placeholders: Record<FormFieldKey, string> = {
+    phone: "Mobile Number",
+    firstName: "First Name",
+    lastName: "Last Name",
+    email: "Email",
+    dateOfBirth: "Date of birth",
+  };
+  return updateBlockInLayout(layout, blockId, {
+    fieldKey,
+    placeholder: placeholders[fieldKey],
+    inputMode: fieldKey === "email" ? "email" : fieldKey === "phone" ? "phone" : "standard",
+  });
 }

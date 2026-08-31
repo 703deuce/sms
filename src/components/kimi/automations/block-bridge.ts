@@ -38,7 +38,7 @@ export const KIMI_ID_TO_BLOCK: Record<string, string> = {
   "c-convo-tags": "condition_inbox_tags",
   "c-convo-status": "condition_inbox_status",
   "c-unread": "condition_inbox_unread",
-  "c-optin": "condition_opt_in_status",
+  "c-optin": "condition_sms_opt_in_status",
   "c-cart-status": "condition_cart_status",
   "c-cart-value": "condition_cart_value",
   "w-field-changed": "wait_for_customer_field_change",

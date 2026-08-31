@@ -4,6 +4,7 @@ import { MessageCircle } from "lucide-react";
 import { FIELD_LABELS, DEFAULT_DISCLOSURE, type FormFieldKey } from "@/lib/forms/types";
 import type { FormBlock, FormLayout } from "@/lib/forms/layout";
 import { DEFAULT_SUCCESS_HEADLINE, DEFAULT_SUCCESS_MESSAGE } from "@/lib/forms/layout";
+import { blockStyleToCss } from "@/lib/forms/block-styles";
 
 const FIELD_PLACEHOLDERS: Record<FormFieldKey, string> = {
   phone: "Mobile Number",
@@ -24,6 +25,8 @@ function BlockShell({
   selectedId,
   onSelect,
   className = "",
+  style,
+  device,
   children,
 }: {
   id: string;
@@ -32,15 +35,22 @@ function BlockShell({
   selectedId: string;
   onSelect: (id: string | null) => void;
   className?: string;
+  style?: React.CSSProperties;
+  device?: "desktop" | "tablet" | "mobile";
   children: React.ReactNode;
 }) {
   const isSel = selected === selectedId;
+  const hidden =
+    (device === "mobile" && style && "display" in style && style.display === "none") ||
+    (device === "desktop" && style && "display" in style && style.display === "none");
+  if (hidden) return null;
+
   return (
     <div
       data-tag={tag}
       data-block-id={id}
       className={`cursor-pointer rounded transition-shadow ${className} ${selClass(isSel)}`}
-      style={{ outline: isSel ? "2px solid #6366f1" : undefined, outlineOffset: 4 }}
+      style={{ ...style, outline: isSel ? "2px solid #6366f1" : undefined, outlineOffset: 4 }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(selectedId);
@@ -51,57 +61,51 @@ function BlockShell({
   );
 }
 
+function blockCss(block: FormBlock, device?: "desktop" | "tablet" | "mobile") {
+  return blockStyleToCss(block.props?.style, device);
+}
+
 function renderBlock(
   block: FormBlock,
   selected: string | null,
   onSelect: (id: string | null) => void,
   formType: "landing" | "embed",
+  device?: "desktop" | "tablet" | "mobile",
 ) {
   if (block.props?.hidden) return null;
+  const css = blockCss(block, device);
 
   switch (block.type) {
     case "header":
       return (
-        <BlockShell
-          key={block.id}
-          id={block.id}
-          tag="Header"
-          selected={selected}
-          selectedId={block.id}
-          onSelect={onSelect}
-          className="text-center text-2xl font-semibold tracking-tight"
-        >
-          <h2 style={{ fontFamily: "Georgia, serif" }}>{block.props?.content || "Headline"}</h2>
+        <BlockShell key={block.id} id={block.id} tag="Header" selected={selected} selectedId={block.id} onSelect={onSelect} className="text-center text-2xl font-semibold tracking-tight" style={css} device={device}>
+          <h2 style={{ fontFamily: block.props?.style?.fontFamily || "Georgia, serif", margin: 0, ...css }}>{block.props?.content || "Headline"}</h2>
         </BlockShell>
       );
     case "text":
       return (
-        <BlockShell
-          key={block.id}
-          id={block.id}
-          tag="Text"
-          selected={selected}
-          selectedId={block.id}
-          onSelect={onSelect}
-          className="text-center text-xs leading-relaxed text-slate-300"
-        >
-          <p>{block.props?.content || ""}</p>
+        <BlockShell key={block.id} id={block.id} tag="Text" selected={selected} selectedId={block.id} onSelect={onSelect} className="text-center text-xs leading-relaxed text-slate-300" style={css} device={device}>
+          <p style={{ margin: 0, ...css }}>{block.props?.content || ""}</p>
+        </BlockShell>
+      );
+    case "link":
+      return (
+        <BlockShell key={block.id} id={block.id} tag="Link" selected={selected} selectedId={block.id} onSelect={onSelect} className="text-center text-xs" style={css} device={device}>
+          <span style={{ ...css, cursor: "pointer" }}>{block.props?.content || "Link"}</span>
+        </BlockShell>
+      );
+    case "error":
+      return (
+        <BlockShell key={block.id} id={block.id} tag="Error" selected={selected} selectedId={block.id} onSelect={onSelect} className="text-center text-xs text-red-400" style={css} device={device}>
+          <p style={{ margin: 0, ...css }}>{block.props?.content || "Error"}</p>
         </BlockShell>
       );
     case "field-row": {
       const keys = block.props?.fieldKeys || ["firstName", "lastName"];
       return (
-        <BlockShell
-          key={block.id}
-          id={block.id}
-          tag="Field Row"
-          selected={selected}
-          selectedId={block.id}
-          onSelect={onSelect}
-          className="flex gap-2"
-        >
+        <BlockShell key={block.id} id={block.id} tag="Field Row" selected={selected} selectedId={block.id} onSelect={onSelect} className="flex gap-2" style={css} device={device}>
           {keys.map((k) => (
-            <div key={k} className="tv-input-mock flex-1">
+            <div key={k} className="tv-input-mock flex-1" style={css}>
               {block.props?.placeholder || FIELD_PLACEHOLDERS[k] || FIELD_LABELS[k]}
             </div>
           ))}
@@ -111,38 +115,29 @@ function renderBlock(
     case "field": {
       const key = block.props?.fieldKey || "phone";
       return (
-        <BlockShell
-          key={block.id}
-          id={block.id}
-          tag="Field"
-          selected={selected}
-          selectedId={block.id}
-          onSelect={onSelect}
-          className="tv-input-mock"
-        >
+        <BlockShell key={block.id} id={block.id} tag="Field" selected={selected} selectedId={block.id} onSelect={onSelect} className="tv-input-mock" style={css} device={device}>
           {block.props?.placeholder || FIELD_PLACEHOLDERS[key] || FIELD_LABELS[key]}
+          {block.props?.required ? " *" : ""}
         </BlockShell>
       );
     }
-    case "button":
+    case "button": {
+      const btnStyle: React.CSSProperties = {
+        ...css,
+        backgroundColor: block.props?.style?.backgroundColor || (formType === "embed" ? "#f8fafc" : "#4f46e5"),
+        color: block.props?.style?.color || (formType === "embed" ? "#0f172a" : "#ffffff"),
+      };
       return (
-        <BlockShell
-          key={block.id}
-          id={block.id}
-          tag="Button"
-          selected={selected}
-          selectedId={block.id}
-          onSelect={onSelect}
-          className={`tv-btn-mock ${formType === "embed" ? "tv-dark-btn text-black" : ""}`}
-        >
+        <BlockShell key={block.id} id={block.id} tag="Button" selected={selected} selectedId={block.id} onSelect={onSelect} className={`tv-btn-mock ${formType === "embed" ? "tv-dark-btn text-black" : ""}`} style={btnStyle} device={device}>
           {block.props?.content || "Submit"}
         </BlockShell>
       );
+    }
     case "compliance":
       return (
-        <p key={block.id} className="text-[9px] leading-snug text-slate-400">
-          {block.props?.content || DEFAULT_DISCLOSURE}
-        </p>
+        <BlockShell key={block.id} id={block.id} tag="Compliance" selected={selected} selectedId={block.id} onSelect={onSelect} className="text-[9px] leading-snug text-slate-400" style={css} device={device}>
+          <p style={{ margin: 0, ...css }}>{block.props?.content || DEFAULT_DISCLOSURE}</p>
+        </BlockShell>
       );
     case "image-column":
       return null;
@@ -156,37 +151,30 @@ export default function BuilderCanvas({
   view,
   selected,
   onSelect,
+  device = "desktop",
 }: {
   layout: FormLayout;
   view: "form" | "success";
   selected: string | null;
   onSelect: (id: string | null) => void;
+  device?: "desktop" | "tablet" | "mobile";
 }) {
   const formBlocks = layout.blocks.filter((b) => b.type !== "image-column");
   const imageBlock = layout.blocks.find((b) => b.type === "image-column");
   const imageHue = imageBlock?.props?.imageHue ?? layout.imageHue;
+  const colStyle = blockCss(imageBlock || { id: "col", type: "image-column" }, device);
 
   const inner =
     view === "success" ? (
-      <div
-        className="tv-success-view"
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(null);
-        }}
-      >
+      <div className="tv-success-view" onClick={(e) => { e.stopPropagation(); onSelect(null); }}>
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
           <MessageCircle size={24} className="text-slate-200" />
         </div>
-        <h2 className="text-xl font-semibold tracking-tight">
-          {layout.successHeadline || DEFAULT_SUCCESS_HEADLINE}
-        </h2>
-        <p className="max-w-[260px] text-xs leading-relaxed text-slate-300">
-          {layout.successMessage || DEFAULT_SUCCESS_MESSAGE}
-        </p>
+        <h2 className="text-xl font-semibold tracking-tight">{layout.successHeadline || DEFAULT_SUCCESS_HEADLINE}</h2>
+        <p className="max-w-[260px] text-xs leading-relaxed text-slate-300">{layout.successMessage || DEFAULT_SUCCESS_MESSAGE}</p>
       </div>
     ) : (
-      <>{formBlocks.map((b) => renderBlock(b, selected, onSelect, layout.formType))}</>
+      <>{formBlocks.map((b) => renderBlock(b, selected, onSelect, layout.formType, device))}</>
     );
 
   if (layout.formType === "embed") {
@@ -197,6 +185,10 @@ export default function BuilderCanvas({
     );
   }
 
+  const imgPosX = imageBlock?.props?.style?.backgroundImagePositionX ?? 50;
+  const imgPosY = imageBlock?.props?.style?.backgroundImagePositionY ?? 50;
+  const imgSize = imageBlock?.props?.style?.backgroundImageSize || "cover";
+
   return (
     <div className="tv-landing-preview mx-auto w-full max-w-[720px]" onClick={() => onSelect(null)}>
       <div className="tv-landing-form">{inner}</div>
@@ -205,7 +197,10 @@ export default function BuilderCanvas({
           className="tv-landing-img cursor-pointer"
           data-tag="Column"
           style={{
-            background: imageHue ? `linear-gradient(160deg, ${imageHue}, #1f2937)` : undefined,
+            background: imageHue ? `linear-gradient(160deg, ${imageHue}, #1f2937)` : imageBlock?.props?.style?.backgroundColor || undefined,
+            backgroundSize: imgSize,
+            backgroundPosition: `${imgPosX}% ${imgPosY}%`,
+            ...colStyle,
             outline: selected === imageBlock?.id ? "2px solid #6366f1" : undefined,
             outlineOffset: -2,
           }}

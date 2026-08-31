@@ -5,9 +5,11 @@ import { ChevronDown, Map as MapIcon, Undo2, Redo2, ZoomIn, ZoomOut, Maximize, C
 import BuilderPanel from "./BuilderPanel";
 import CanvasNode from "./CanvasNode";
 import ConfigModal from "./ConfigModal";
+import KimiNodeConfigDrawer from "./KimiNodeConfigDrawer";
 import { paletteItems, type PaletteKind } from "./palette-data";
 
 export interface NodeOutput {
+  outcomeId: string;
   label: string;
   kind: "yes" | "no" | "neutral";
   pie?: boolean;
@@ -23,6 +25,7 @@ export interface CanvasNodeData {
   y: number;
   configured: boolean;
   subtitle: string;
+  config?: Record<string, unknown>;
   outputs: NodeOutput[];
 }
 
@@ -32,58 +35,59 @@ export interface CanvasEdge {
   to: string;
   label: string;
   kind: "yes" | "no" | "neutral";
+  outcomeId: string;
 }
 
 const initialNodes: CanvasNodeData[] = [
   {
     id: "n1", itemId: "t-contact-created", label: "Contact Created", kind: "trigger", icon: "UserPlus",
-    x: 60, y: 220, configured: true, subtitle: "Via keyword",
-    outputs: [{ label: "", kind: "neutral" }],
+    x: 60, y: 220, configured: true, subtitle: "Via keyword", config: { sources: ["Keyword"] },
+    outputs: [{ outcomeId: "default", label: "", kind: "neutral" }],
   },
   {
     id: "n2", itemId: "c-field-matches", label: "Contact Field Matches", kind: "condition", icon: "FileCheck",
-    x: 300, y: 220, configured: true, subtitle: "Email has no value",
+    x: 300, y: 220, configured: true, subtitle: "Email has no value", config: { field: "email", operator: "is_empty" },
     outputs: [
-      { label: "Yes", kind: "yes", pie: true },
-      { label: "No", kind: "no", pie: true },
+      { outcomeId: "yes", label: "Yes", kind: "yes", pie: true },
+      { outcomeId: "no", label: "No", kind: "no", pie: true },
     ],
   },
   {
     id: "n3", itemId: "a-send-message", label: "Send Message", kind: "action", icon: "MessageSquare",
-    x: 540, y: 220, configured: true, subtitle: "Email Request",
-    outputs: [
-      { label: "Message Sent", kind: "yes", pie: true },
-      { label: "Contact Not Subscribed", kind: "no", pie: true },
-      { label: "Not Enough Messages", kind: "neutral", pie: true },
-    ],
+    x: 540, y: 220, configured: true, subtitle: "Email Request", config: { body: "Reply with your email" },
+    outputs: [{ outcomeId: "default", label: "Next", kind: "neutral" }],
   },
   {
     id: "n4", itemId: "w-msg-received", label: "Message Received", kind: "wait", icon: "MessageSquare",
-    x: 800, y: 220, configured: true, subtitle: "Look for an email",
+    x: 800, y: 220, configured: true, subtitle: "Look for an email", config: { extractData: true, dataType: "email" },
     outputs: [
-      { label: "Email Found", kind: "yes", pie: true },
-      { label: "Message Wasn't Received", kind: "neutral", pie: true },
-      { label: "Email Not Found", kind: "no", pie: true },
+      { outcomeId: "email_found", label: "Email Found", kind: "yes", pie: true },
+      { outcomeId: "reply_no_email", label: "Email Not Found", kind: "no", pie: true },
+      { outcomeId: "no_reply", label: "Message Not Received", kind: "neutral", pie: true },
     ],
   },
   {
     id: "n5", itemId: "a-send-message", label: "Send Message", kind: "action", icon: "MessageSquare",
-    x: 1080, y: 90, configured: true, subtitle: "Thanks",
-    outputs: [{ label: "Message Sent", kind: "yes", pie: true }, { label: "Failed", kind: "no", pie: true }],
+    x: 1080, y: 90, configured: true, subtitle: "Thanks", config: { body: "Thanks!" },
+    outputs: [{ outcomeId: "default", label: "Next", kind: "neutral" }],
   },
   {
     id: "n6", itemId: "a-assign", label: "Assign Inbox Conversation", kind: "action", icon: "UserCheck",
-    x: 1080, y: 360, configured: true, subtitle: "Chris Jones",
-    outputs: [{ label: "", kind: "neutral" }],
+    x: 1080, y: 360, configured: true, subtitle: "Chris Jones", config: { assigneeName: "Chris Jones" },
+    outputs: [
+      { outcomeId: "assigned", label: "Assigned", kind: "yes", pie: true },
+      { outcomeId: "conversation_not_found", label: "Conversation Doesn't Exist", kind: "no", pie: true },
+      { outcomeId: "failed", label: "Failed", kind: "neutral", pie: true },
+    ],
   },
 ];
 
 const initialEdges: CanvasEdge[] = [
-  { id: "e1", from: "n1", to: "n2", label: "", kind: "neutral" },
-  { id: "e2", from: "n2", to: "n3", label: "Yes", kind: "yes" },
-  { id: "e3", from: "n3", to: "n4", label: "Message Sent", kind: "neutral" },
-  { id: "e4", from: "n4", to: "n5", label: "Email Found", kind: "yes" },
-  { id: "e5", from: "n4", to: "n6", label: "Email Not Found", kind: "no" },
+  { id: "e1", from: "n1", to: "n2", label: "", kind: "neutral", outcomeId: "default" },
+  { id: "e2", from: "n2", to: "n3", label: "Yes", kind: "yes", outcomeId: "yes" },
+  { id: "e3", from: "n3", to: "n4", label: "", kind: "neutral", outcomeId: "default" },
+  { id: "e4", from: "n4", to: "n5", label: "Email Found", kind: "yes", outcomeId: "email_found" },
+  { id: "e5", from: "n4", to: "n6", label: "Email Not Found", kind: "no", outcomeId: "reply_no_email" },
 ];
 
 const NODE_W = 168;
@@ -109,8 +113,9 @@ export type WorkflowBuilderControlledProps = {
   onConfigNodeChange: (node: CanvasNodeData | null) => void;
   onAddItem: (itemId: string) => void;
   onDeleteNode: (id: string) => void;
-  onSaveConfig: (nodeId: string, subtitle: string) => void;
+  onSaveConfig: (nodeId: string, config: Record<string, unknown>, subtitle: string) => void;
   onSave: () => void | Promise<void>;
+  flowId?: string;
 };
 
 export default function WorkflowBuilder({
@@ -161,7 +166,7 @@ export default function WorkflowBuilder({
   const setConfigNode = controlled?.onConfigNodeChange ?? setDemoConfigNode;
 
   const [toast, setToast] = useState(false);
-  const [pending, setPending] = useState<{ from: string; label: string; kind: "yes" | "no" | "neutral"; x: number; y: number } | null>(null);
+  const [pending, setPending] = useState<{ from: string; label: string; kind: "yes" | "no" | "neutral"; outcomeId: string; x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const idCounter = useRef(100);
@@ -182,10 +187,16 @@ export default function WorkflowBuilder({
     const id = `n${idCounter.current}`;
     const outputs: NodeOutput[] =
       item.kind === "condition"
-        ? [{ label: "Yes", kind: "yes", pie: true }, { label: "No", kind: "no", pie: true }]
+        ? [
+            { outcomeId: "yes", label: "Yes", kind: "yes", pie: true },
+            { outcomeId: "no", label: "No", kind: "no", pie: true },
+          ]
         : item.kind === "wait"
-        ? [{ label: "Found", kind: "yes", pie: true }, { label: "Not Found", kind: "no", pie: true }]
-        : [{ label: "", kind: "neutral" }];
+          ? [
+              { outcomeId: "reply_received", label: "Found", kind: "yes", pie: true },
+              { outcomeId: "no_reply", label: "Not Found", kind: "no", pie: true },
+            ]
+          : [{ outcomeId: "default", label: "", kind: "neutral" }];
     const count = nodes.length;
     setNodes((prev) => [
       ...prev,
@@ -218,11 +229,11 @@ export default function WorkflowBuilder({
     window.addEventListener("mouseup", up);
   };
 
-  const startConnect = (fromId: string, label: string, kind: "yes" | "no" | "neutral") => (e: React.MouseEvent) => {
+  const startConnect = (fromId: string, label: string, kind: "yes" | "no" | "neutral", outcomeId: string) => (e: React.MouseEvent) => {
     const from = nodes.find((n) => n.id === fromId)!;
     const sx = from.x + NODE_W + 10;
     const sy = from.y + NODE_H / 2;
-    setPending({ from: fromId, label, kind, x: sx, y: sy });
+    setPending({ from: fromId, label, kind, outcomeId, x: sx, y: sy });
   };
 
   const onCanvasMouseMove = (e: React.MouseEvent) => {
@@ -239,7 +250,10 @@ export default function WorkflowBuilder({
   const onNodeMouseUp = (targetId: string) => {
     if (pending && pending.from !== targetId) {
       idCounter.current += 1;
-      setEdges((prev) => [...prev, { id: `e${idCounter.current}`, from: pending.from, to: targetId, label: pending.label, kind: pending.kind }]);
+      setEdges((prev) => [
+        ...prev.filter((e) => !(e.from === pending.from && e.outcomeId === pending.outcomeId)),
+        { id: `e${idCounter.current}`, from: pending.from, to: targetId, label: pending.label, kind: pending.kind, outcomeId: pending.outcomeId },
+      ]);
     }
     setPending(null);
   };
@@ -254,12 +268,12 @@ export default function WorkflowBuilder({
     if (selectedId === id) setSelectedId(null);
   };
 
-  const saveConfig = (nodeId: string, subtitle: string) => {
+  const saveConfig = (nodeId: string, config: Record<string, unknown>, subtitle: string) => {
     if (controlled) {
-      controlled.onSaveConfig(nodeId, subtitle);
+      controlled.onSaveConfig(nodeId, config, subtitle);
       return;
     }
-    setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, configured: subtitle !== "Not configured", subtitle } : n)));
+    setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, configured: subtitle !== "Not configured", subtitle, config } : n)));
     setConfigNode(null);
   };
 
@@ -443,8 +457,8 @@ export default function WorkflowBuilder({
                   onConfigure={() => setConfigNode(n)}
                   onDelete={() => deleteNode(n.id)}
                   onStartDrag={(e) => startDrag(n.id, e)}
-                  onStartConnect={(label, kind) => {
-                    const handler = startConnect(n.id, label, kind);
+                  onStartConnect={(label, kind, outcomeId) => {
+                    const handler = startConnect(n.id, label, kind, outcomeId);
                     handler({} as React.MouseEvent);
                   }}
                 />
@@ -492,9 +506,16 @@ export default function WorkflowBuilder({
         </div>
       </div>
 
-      {configNode && (
-        <ConfigModal node={configNode} onClose={() => setConfigNode(null)} onSave={saveConfig} />
-      )}
+      {configNode && controlled?.flowId ? (
+        <KimiNodeConfigDrawer
+          flowId={controlled.flowId}
+          node={configNode}
+          onClose={() => setConfigNode(null)}
+          onSave={saveConfig}
+        />
+      ) : configNode ? (
+        <ConfigModal node={configNode} onClose={() => setConfigNode(null)} onSave={(id, subtitle) => saveConfig(id, {}, subtitle)} />
+      ) : null}
     </div>
   );
 }

@@ -651,6 +651,108 @@ const UI_CHECKS: Check[] = [
     },
   },
   {
+    name: "form-block-style-persist",
+    run: async (page) => {
+      const created = await page.evaluate(async () => {
+        const res = await fetch("/api/growth/forms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `Style Form ${Date.now()}` }),
+        });
+        const json = await res.json();
+        return { ok: res.ok, id: json.data?.id as string };
+      });
+      if (!created.ok || !created.id) return "create form failed";
+      const layout = {
+        version: 1,
+        formType: "embed",
+        blocks: [
+          {
+            id: "h1",
+            type: "header",
+            props: { content: "Styled", style: { color: "#ff0000", fontSize: 32, backgroundColor: "#111827" } },
+          },
+        ],
+      };
+      const patched = await page.evaluate(
+        async ({ id, layout }) => {
+          const res = await fetch(`/api/growth/forms/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ layout, fields: ["phone"] }),
+          });
+          const json = await res.json();
+          return { ok: res.ok, style: json.data?.config?.layout?.blocks?.[0]?.props?.style };
+        },
+        { id: created.id, layout },
+      );
+      if (!patched.ok) return "style patch failed";
+      if (patched.style?.color !== "#ff0000") return "block color style not persisted";
+      if (patched.style?.fontSize !== 32) return "block fontSize style not persisted";
+      return null;
+    },
+  },
+  {
+    name: "automation-multi-outcome-persist",
+    run: async (page) => {
+      const created = await page.evaluate(async () => {
+        const res = await fetch("/api/automations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `Outcome Flow ${Date.now()}` }),
+        });
+        const json = await res.json();
+        return { ok: res.ok, id: json.data?.id as string };
+      });
+      if (!created.ok || !created.id) return "create automation failed";
+      const definition = {
+        version: 1,
+        nodes: [
+          {
+            id: "t1",
+            type: "trigger",
+            position: { x: 0, y: 0 },
+            data: { blockType: "customer_added", label: "Contact Created", config: {} },
+          },
+          {
+            id: "c1",
+            type: "logic",
+            position: { x: 200, y: 0 },
+            data: {
+              blockType: "condition_sms_opt_in_status",
+              label: "Check Opt-In",
+              config: {},
+            },
+          },
+        ],
+        edges: [
+          { id: "e1", source: "t1", target: "c1", sourceHandle: "default" },
+          { id: "e2", source: "c1", target: "t1", sourceHandle: "subscribed" },
+        ],
+      };
+      const patched = await page.evaluate(
+        async ({ id, definition }) => {
+          const patch = await fetch(`/api/automations/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ definition }),
+          });
+          if (!patch.ok) return { ok: false, handle: null };
+          const get = await fetch(`/api/automations/${id}`);
+          const json = await get.json();
+          const edge = json.data?.definition?.edges?.find(
+            (e: { sourceHandle?: string }) => e.sourceHandle === "subscribed",
+          );
+          return { ok: get.ok, handle: edge?.sourceHandle };
+        },
+        { id: created.id, definition },
+      );
+      if (!patched.ok) return "automation patch failed";
+      if (patched.handle !== "subscribed") return "multi-outcome sourceHandle not persisted";
+      return null;
+    },
+  },
+  {
     name: "segment-link-clicked-preview",
     run: async (page) => {
       const res = await page.evaluate(async () => {
