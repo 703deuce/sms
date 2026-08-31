@@ -1,8 +1,21 @@
 .kimi-contacts-segments .seg-shell{ font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.kimi-contacts-segments .seg-dropdown{ box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15,23,42,0.08); }
+.kimi-contacts-segments .seg-dropdown{ box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15,23,42,0.06); }
+.kimi-contacts-segments .seg-card{ box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04); }
+.kimi-contacts-segments .seg-card-hover{ transition: box-shadow .16s ease, border-color .16s ease; }
+.kimi-contacts-segments .seg-card-hover:hover{ box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15,23,42,0.05); }
 .kimi-contacts-segments .seg-scroll::-webkit-scrollbar{ width: 6px; }
 .kimi-contacts-segments .seg-scroll::-webkit-scrollbar-thumb{ background: #cbd5e1; border-radius: 3px; }
+.kimi-contacts-segments .seg-scroll::-webkit-scrollbar-track{ background: transparent; }
 .kimi-contacts-segments .seg-connector{ position: relative; }
 @keyframes segFadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none;} }
 .kimi-contacts-segments .seg-fade{ animation: segFadeIn .18s ease-out; }
 .kimi-contacts-segments .seg-chip{ display: inline-flex; align-items: center; gap: 4px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
+.kimi-contacts-segments .seg-chip button{ display: inline-flex; align-items: center; border-radius: 4px; }
+.kimi-contacts-segments .seg-chip button:hover{ background: rgba(79, 70, 229, 0.12); }
+.kimi-contacts-segments .seg-btn-primary{ background: #4f46e5; color: #fff; box-shadow: 0 1px 2px rgba(79, 70, 229, 0.35); transition: background-color .14s ease, box-shadow .14s ease; }
+.kimi-contacts-segments .seg-btn-primary:hover:not(:disabled){ background: #4338ca; box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4); }
+.kimi-contacts-segments .seg-btn-primary:disabled{ opacity: .5; cursor: not-allowed; }
+.kimi-contacts-segments .seg-input{ transition: border-color .14s ease, box-shadow .14s ease; }
+.kimi-contacts-segments .seg-input:focus{ border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18); outline: none; }
+.kimi-contacts-segments .seg-row{ transition: background-color .12s ease; }
+.kimi-contacts-segments .seg-row:hover{ background: rgba(99, 102, 241, 0.035); }

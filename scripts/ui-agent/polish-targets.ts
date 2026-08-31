@@ -322,7 +322,7 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
         label: "Form builder",
         path: "/grow/forms",
         actions: [
-          { type: "click", selector: 'button:has-text("Create Form"), button:has-text("Create")' },
+          { type: "click", selector: 'button:has-text("Create Web Form")' },
           { type: "wait", ms: 1200 },
         ],
         fullPage: true,
@@ -332,6 +332,10 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
 ];
 
 export function resolvePolishTarget(route: string): PolishTargetConfig | undefined {
-  const clean = route.startsWith("/") ? route : `/${route}`;
-  return POLISH_TARGETS.find((t) => t.route === clean || clean.startsWith(`${t.route}/`));
+  const clean = route.startsWith("/") ? route.split("?")[0].replace(/\/$/, "") || "/" : `/${route.split("?")[0]}`;
+  const matches = POLISH_TARGETS.filter(
+    (t) => t.route === clean || clean.startsWith(`${t.route}/`),
+  );
+  if (matches.length === 0) return undefined;
+  return matches.sort((a, b) => b.route.length - a.route.length)[0];
 }

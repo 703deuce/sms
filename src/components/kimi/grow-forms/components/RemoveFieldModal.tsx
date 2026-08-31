@@ -9,12 +9,24 @@ export default function RemoveFieldModal({
   return (
     <Modal open={open} onClose={onClose} width={360}>
       <div className="p-6 text-center">
-        <HelpCircle size={32} className="mx-auto text-indigo-500 mb-3" />
-        <h3 className="text-base font-semibold text-foreground mb-1">Remove Field?</h3>
-        <p className="text-sm text-muted-foreground mb-5">Are you sure you want to remove this field element?</p>
+        <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-50">
+          <HelpCircle size={22} className="text-indigo-500" />
+        </div>
+        <h3 className="mb-1 text-base font-semibold tracking-tight text-foreground">Remove Field?</h3>
+        <p className="mb-5 text-sm text-muted-foreground">Are you sure you want to remove this field element?</p>
         <div className="flex gap-3">
-          <button onClick={onConfirm} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-2 rounded-md">Yes</button>
-          <button onClick={onClose} className="flex-1 border border-border text-sm font-medium py-2 rounded-md hover:bg-muted">No</button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-md bg-indigo-600 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+          >
+            Yes
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-md border border-border py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            No
+          </button>
         </div>
       </div>
     </Modal>

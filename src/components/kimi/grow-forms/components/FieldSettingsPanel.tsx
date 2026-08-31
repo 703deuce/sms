@@ -5,6 +5,24 @@ import { contactFields } from "../mock-data";
 
 const categories = ["Text", "Size & Spacing", "Border", "Background", "Shadow", "Opacity", "Visibility", "Custom CSS"];
 
+const panelInput =
+  "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground transition-shadow focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25";
+
+function PanelGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </div>
+      <div className="space-y-2.5 p-3">{children}</div>
+    </div>
+  );
+}
+
+function PanelLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block text-[11px] font-medium text-muted-foreground">{children}</label>;
+}
+
 export function FieldSettingsPanel({
   kind, onBack, placeholder, setPlaceholder, onOpenImages, onRemove,
 }: {
@@ -18,82 +36,123 @@ export function FieldSettingsPanel({
   const title = kind === "column" ? "Column Settings" : kind === "header" ? "Header Settings" : kind === "button" ? "Button Settings" : "Field Settings";
   return (
     <div className="space-y-3">
-      <button onClick={onBack} className="flex items-center gap-1 text-xs text-indigo-600 hover:underline"><ArrowLeft size={12} /> Back</button>
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <p className="text-[11px] text-muted-foreground">Below are all of the settings for this element. Expand each settings category to reveal all of its available options.</p>
+      <button onClick={onBack} className="flex items-center gap-1 text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-700 hover:underline">
+        <ArrowLeft size={12} /> Back
+      </button>
+      <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Below are all of the settings for this element. Expand each settings category to reveal all of its available options.
+      </p>
 
       {kind === "field" && (
-        <div className="border border-border rounded-lg">
-          <div className="px-3 py-2 text-xs font-medium border-b border-border bg-muted/40">Field</div>
-          <div className="p-3 space-y-2.5">
-            <label className="text-[11px] text-muted-foreground">Contact Field</label>
-            <select className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background">
-              {contactFields.map((f) => <option key={f} selected={f === "Email"}>{f}</option>)}
+        <PanelGroup title="Field">
+          <div>
+            <PanelLabel>Contact Field</PanelLabel>
+            <select className={panelInput} defaultValue="Email">
+              {contactFields.map((f) => <option key={f}>{f}</option>)}
             </select>
-            <label className="text-[11px] text-muted-foreground">Placeholder Text</label>
-            <input value={placeholder} onChange={(e) => setPlaceholder(e.target.value)} className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-            <label className="text-[11px] text-muted-foreground">Default Value</label>
-            <input className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background" />
-            <label className="text-[11px] text-muted-foreground">Keyboard On Mobile</label>
-            <select className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background"><option>Standard</option><option>Email</option><option>Phone</option></select>
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-muted-foreground">Required</span>
-              <span className="w-9 h-5 rounded-full bg-slate-300 relative"><span className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow" /></span>
-            </div>
           </div>
-        </div>
+          <div>
+            <PanelLabel>Placeholder Text</PanelLabel>
+            <input value={placeholder} onChange={(e) => setPlaceholder(e.target.value)} className={panelInput} />
+          </div>
+          <div>
+            <PanelLabel>Default Value</PanelLabel>
+            <input className={panelInput} />
+          </div>
+          <div>
+            <PanelLabel>Keyboard On Mobile</PanelLabel>
+            <select className={panelInput}><option>Standard</option><option>Email</option><option>Phone</option></select>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Required</span>
+            <span className="relative h-5 w-9 rounded-full bg-slate-300">
+              <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm" />
+            </span>
+          </div>
+        </PanelGroup>
       )}
 
       {kind === "column" && (
-        <div className="border border-border rounded-lg">
-          <div className="px-3 py-2 text-xs font-medium border-b border-border bg-muted/40">Background</div>
-          <div className="p-3 space-y-2.5">
-            <label className="text-[11px] text-muted-foreground">Background Color</label>
-            <div className="h-8 rounded border border-border bg-[repeating-conic-gradient(#e2e8f0_0_25%,#fff_0_50%)] bg-[length:12px_12px]" />
-            <label className="text-[11px] text-muted-foreground">Background Image</label>
-            <button onClick={onOpenImages} className="flex items-center gap-1.5 text-xs border border-border rounded-md px-3 py-1.5 hover:bg-muted"><Search size={12} /> Search</button>
-            <label className="text-[11px] text-muted-foreground">Background Image Size</label>
-            <select className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background"><option>Cover</option><option>Contain</option></select>
-            {["Background Image Position - Vertical", "Background Image Position - Horizontal"].map((l) => (
-              <div key={l}>
-                <div className="flex justify-between text-[11px] text-muted-foreground"><span>{l}</span><span>50%</span></div>
-                <div className="h-1.5 rounded bg-slate-200 mt-1"><div className="h-full w-1/2 bg-indigo-500 rounded" /></div>
-              </div>
-            ))}
+        <PanelGroup title="Background">
+          <div>
+            <PanelLabel>Background Color</PanelLabel>
+            <div className="h-8 rounded-md border border-border bg-[repeating-conic-gradient(#e2e8f0_0_25%,#fff_0_50%)] bg-[length:12px_12px]" />
           </div>
-        </div>
+          <div>
+            <PanelLabel>Background Image</PanelLabel>
+            <button
+              onClick={onOpenImages}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <Search size={12} /> Search
+            </button>
+          </div>
+          <div>
+            <PanelLabel>Background Image Size</PanelLabel>
+            <select className={panelInput}><option>Cover</option><option>Contain</option></select>
+          </div>
+          {["Background Image Position - Vertical", "Background Image Position - Horizontal"].map((l) => (
+            <div key={l}>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>{l}</span>
+                <span className="font-medium text-foreground">50%</span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-slate-200">
+                <div className="h-full w-1/2 rounded-full bg-indigo-500" />
+              </div>
+            </div>
+          ))}
+        </PanelGroup>
       )}
 
       {kind !== "column" && kind !== "field" && (
-        <div className="border border-border rounded-lg">
-          <div className="px-3 py-2 text-xs font-medium border-b border-border bg-muted/40">Text</div>
-          <div className="p-3 space-y-2.5">
-            <input defaultValue={kind === "header" ? "Want 20% Off?" : "Join Now"} className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background" />
-            <div className="flex gap-1">
-              {["B", "I", "U", "S", "🔗", "🕐", "⚙", "★"].map((b, i) => (
-                <button key={i} className="w-7 h-7 text-xs border border-border rounded hover:bg-muted">{b}</button>
-              ))}
-            </div>
-            <label className="text-[11px] text-muted-foreground">Font</label>
-            <select className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background">
+        <PanelGroup title="Text">
+          <input defaultValue={kind === "header" ? "Want 20% Off?" : "Join Now"} className={panelInput} />
+          <div className="flex gap-1">
+            {["B", "I", "U", "S", "🔗", "🕐", "⚙", "★"].map((b, i) => (
+              <button
+                key={i}
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+          <div>
+            <PanelLabel>Font</PanelLabel>
+            <select className={panelInput}>
               <option>Cormorant Garamond</option><option>Arial</option><option>Sans Serif</option><option>Serif</option><option>DM Sans</option>
             </select>
-            <label className="text-[11px] text-muted-foreground">Text Size</label>
-            <div className="h-1.5 rounded bg-slate-200"><div className="h-full w-1/3 bg-indigo-500 rounded" /></div>
           </div>
-        </div>
+          <div>
+            <PanelLabel>Text Size</PanelLabel>
+            <div className="mt-1.5 h-1.5 rounded-full bg-slate-200">
+              <div className="h-full w-1/3 rounded-full bg-indigo-500" />
+            </div>
+          </div>
+        </PanelGroup>
       )}
 
-      <div className="border border-border rounded-lg divide-y divide-border">
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
         {categories.map((c) => (
-          <button key={c} className="w-full flex items-center justify-between px-3 py-2 text-xs text-foreground hover:bg-muted/50">
-            {c} <ChevronRight size={13} className="text-muted-foreground" />
+          <button
+            key={c}
+            className="flex w-full items-center justify-between px-3 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
+          >
+            {c}
+            <ChevronRight size={13} className="text-muted-foreground" />
           </button>
         ))}
       </div>
 
       {kind === "field" && (
-        <button onClick={onRemove} className="w-full text-xs text-red-600 border border-red-200 rounded-md py-2 hover:bg-red-50">Remove Field</button>
+        <button
+          onClick={onRemove}
+          className="w-full rounded-md border border-red-200 py-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+        >
+          Remove Field
+        </button>
       )}
     </div>
   );

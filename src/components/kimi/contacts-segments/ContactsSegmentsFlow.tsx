@@ -38,7 +38,7 @@ export default function ContactsSegmentsFlow() {
     <div className="seg-shell min-h-screen bg-background text-foreground">
       <div className="border-b border-border bg-card px-6 flex items-center gap-2">
         <button onClick={() => setView({ name: "home" })}
-          className={`flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-md text-xs font-medium transition-colors ${view.name === "home" ? "bg-indigo-50 text-indigo-700" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+          className={`flex items-center gap-1.5 px-3 py-2 my-1.5 rounded-lg text-xs font-medium transition-colors ${view.name === "home" ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
           <LayoutDashboard className="h-3.5 w-3.5" /> Dashboard
         </button>
       </div>
@@ -77,27 +77,27 @@ export default function ContactsSegmentsFlow() {
       {view.name === "campaign" && (
         <div className="p-6 max-w-3xl mx-auto seg-fade">
           <p className="text-xs text-muted-foreground mb-1">Campaigns / Create Campaign</p>
-          <h1 className="text-2xl font-semibold mb-1">Create Campaign</h1>
-          <p className="text-sm text-muted-foreground mb-6">Send a message to segment “{view.segment.name}” ({view.segment.contacts.toLocaleString()} contacts).</p>
-          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <h1 className="text-[22px] font-semibold tracking-tight mb-1">Create Campaign</h1>
+          <p className="text-sm text-muted-foreground mb-6">Send a message to segment “{view.segment.name}” (<span className="tabular-nums">{view.segment.contacts.toLocaleString()}</span> contacts).</p>
+          <div className="seg-card rounded-xl border border-border bg-card p-5 space-y-4">
             <div>
               <label className="text-sm font-medium">Campaign Name</label>
-              <input defaultValue={`${view.segment.name} Blast`} className="mt-1.5 w-full h-10 rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input defaultValue={`${view.segment.name} Blast`} className="seg-input mt-1.5 w-full h-10 rounded-lg border border-border bg-card px-3 text-sm" />
             </div>
             <div>
               <label className="text-sm font-medium">Message</label>
               <textarea rows={4} defaultValue={`Hey {firstName}! Exclusive offer for our West Coast crew — 20% off this weekend only. Reply STOP to opt out.`}
-                className="mt-1.5 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <p className="text-xs text-muted-foreground mt-1">161 characters · 2 credits per contact · ~{(view.segment.contacts * 2).toLocaleString()} credits</p>
+                className="seg-input mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" />
+              <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">161 characters · 2 credits per contact · ~{(view.segment.contacts * 2).toLocaleString()} credits</p>
             </div>
             {campaignSent ? (
-              <div className="flex items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4" /> Campaign scheduled to {view.segment.contacts.toLocaleString()} contacts.
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> Campaign scheduled to <span className="tabular-nums">{view.segment.contacts.toLocaleString()}</span> contacts.
               </div>
             ) : (
-              <div className="flex gap-2">
-                <button onClick={() => setCampaignSent(true)} className="h-10 px-5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center gap-2"><Send className="h-4 w-4" /> Schedule Campaign</button>
-                <button onClick={() => setView({ name: "audience", tab: "segments" })} className="h-10 px-5 rounded-md border border-border bg-card hover:bg-muted text-sm font-medium">Back</button>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setCampaignSent(true)} className="seg-btn-primary h-10 px-5 rounded-lg text-sm font-medium flex items-center gap-2"><Send className="h-4 w-4" /> Schedule Campaign</button>
+                <button onClick={() => setView({ name: "audience", tab: "segments" })} className="h-10 px-5 rounded-lg border border-border bg-card hover:bg-muted text-sm font-medium transition-colors">Back</button>
               </div>
             )}
           </div>
