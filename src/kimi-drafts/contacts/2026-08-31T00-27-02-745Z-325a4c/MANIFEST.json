@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-08-31T00-27-02-745Z-325a4c",
+  "targetRoute": "/contacts",
+  "referenceNames": [
+    "Adding and Uploading Contacts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T00:30:12.476Z",
+  "generatedFiles": [
+    "components/ContactsList.tsx",
+    "components/CreateContact.tsx",
+    "components/ImportWizard.tsx",
+    "components/Modal.tsx",
+    "components/Sidebar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/components/ContactsList.tsx",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/components/CreateContact.tsx",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/components/ImportWizard.tsx",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/components/Modal.tsx",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/components/Sidebar.tsx",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/mock-data.ts",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/page.tsx",
+    "src/kimi-drafts/contacts/2026-08-31T00-27-02-745Z-325a4c/reference.css"
+  ],
+  "status": "generated"
+}

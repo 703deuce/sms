@@ -1,0 +1,63 @@
+.tv-shell { display: flex; min-height: 100vh; background: #f7f8fb; color: #171a2b; font-family: "Inter", system-ui, sans-serif; }
+.tv-main { flex: 1; min-width: 0; }
+.tv-content { max-width: 880px; margin: 0 auto; padding: 32px 40px 96px; }
+.tv-card { background: #fff; border: 1px solid #e6e8f0; border-radius: 12px; }
+.tv-input { width: 100%; border: 1px solid #dfe2ec; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #fff; color: #171a2b; outline: none; }
+.tv-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+.tv-textarea { width: 100%; border: 1px solid #dfe2ec; border-radius: 8px; padding: 12px; font-size: 14px; min-height: 110px; resize: vertical; background: #fff; color: #171a2b; outline: none; line-height: 1.5; }
+.tv-textarea:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+.tv-textarea:disabled { background: #f4f5fa; color: #4a4e63; }
+.tv-btn-primary { background: #4f46e5; color: #fff; font-weight: 600; font-size: 14px; padding: 10px 32px; border-radius: 8px; border: none; cursor: pointer; transition: background .15s; }
+.tv-btn-primary:hover { background: #4338ca; }
+.tv-btn-ghost { background: #fff; color: #171a2b; font-weight: 500; font-size: 14px; padding: 10px 28px; border-radius: 8px; border: 1px solid #dfe2ec; cursor: pointer; }
+.tv-btn-ghost:hover { background: #f4f5fa; }
+.tv-label { font-size: 13px; font-weight: 600; color: #171a2b; margin-bottom: 6px; display: block; }
+.tv-muted { color: #6b7186; }
+.tv-info-banner { display: flex; gap: 10px; background: #eef1fd; border: 1px solid #d9dffa; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #3d4460; line-height: 1.5; }
+.tv-char-count { font-size: 12px; color: #9aa0b4; }
+.tv-toast { position: fixed; top: 20px; right: 20px; z-index: 60; background: #101532; color: #fff; border-radius: 10px; padding: 12px 18px; font-size: 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 12px 32px rgba(10,14,40,.25); animation: toast-in .25s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Toggle */
+.tv-toggle { position: relative; width: 40px; height: 22px; border-radius: 999px; background: #d3d7e4; border: none; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+.tv-toggle.on { background: #4f46e5; }
+.tv-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.tv-toggle.on::after { transform: translateX(18px); }
+
+/* Accordion */
+.tv-acc { border: 1px solid #e6e8f0; border-radius: 12px; background: #fff; overflow: hidden; }
+.tv-acc + .tv-acc { margin-top: 12px; }
+.tv-acc-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: #fff; border: none; cursor: pointer; text-align: left; }
+.tv-acc-head:hover { background: #fafbfe; }
+.tv-acc-body { border-top: 1px solid #eef0f6; padding: 18px; }
+
+/* Sidebar */
+.tv-sidebar { width: 232px; flex-shrink: 0; background: #fff; border-right: 1px solid #e9ebf2; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.tv-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; margin: 1px 10px; border-radius: 8px; font-size: 14px; color: #3d4460; cursor: pointer; border: none; background: transparent; width: calc(100% - 20px); text-align: left; }
+.tv-nav-item:hover { background: #f4f5fa; }
+.tv-nav-item.active { background: #eef1fd; color: #4f46e5; font-weight: 600; }
+
+/* Phone preview */
+.tv-phone { width: 300px; border: 1px solid #e6e8f0; border-radius: 28px; background: #fff; padding: 18px 14px; box-shadow: 0 8px 24px rgba(16,21,50,.06); }
+.tv-bubble-out { background: #4f46e5; color: #fff; border-radius: 16px 16px 4px 16px; padding: 8px 12px; font-size: 13px; max-width: 85%; margin-left: auto; width: fit-content; }
+.tv-bubble-in { background: #f1f2f8; color: #2b2f45; border-radius: 16px 16px 16px 4px; padding: 10px 12px; font-size: 13px; max-width: 92%; margin-top: 10px; line-height: 1.5; white-space: pre-line; }
+
+/* Table */
+.tv-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tv-table th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8a90a6; font-weight: 600; padding: 12px 16px; border-bottom: 1px solid #eef0f6; }
+.tv-table td { padding: 16px; border-bottom: 1px solid #f2f3f8; vertical-align: middle; }
+.tv-table tr:last-child td { border-bottom: none; }
+.tv-table tbody tr:hover { background: #fafbfe; }
+.tv-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #e7f8f1; color: #0f9d6c; }
+.tv-icon-btn { border: 1px solid #e6e8f0; background: #fff; border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #6b7186; }
+.tv-icon-btn:hover { background: #f4f5fa; }
+.tv-menu { position: absolute; right: 0; top: 38px; background: #fff; border: 1px solid #e6e8f0; border-radius: 10px; box-shadow: 0 12px 32px rgba(16,21,50,.12); padding: 6px; z-index: 30; min-width: 190px; }
+.tv-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; font-size: 13px; color: #3d4460; background: none; border: none; border-radius: 7px; cursor: pointer; text-align: left; }
+.tv-menu-item:hover { background: #f4f5fa; }
+.tv-day-chip { border: 1px solid #dfe2ec; background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #3d4460; cursor: pointer; }
+.tv-day-chip.on { border-color: #4f46e5; color: #4f46e5; background: #eef1fd; font-weight: 600; }
+.tv-select { border: 1px solid #dfe2ec; border-radius: 8px; padding: 7px 10px; font-size: 13px; background: #fff; color: #171a2b; }
+.tv-tab { padding: 10px 4px; font-size: 14px; font-weight: 500; color: #6b7186; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; }
+.tv-tab.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
+.tv-toolbar-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; border: none; background: none; color: #9aa0b4; cursor: pointer; }
+.tv-toolbar-btn:hover { background: #f1f2f8; color: #4f46e5; }

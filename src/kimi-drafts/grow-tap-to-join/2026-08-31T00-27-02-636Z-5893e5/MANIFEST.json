@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-08-31T00-27-02-636Z-5893e5",
+  "targetRoute": "/grow/tap-to-join",
+  "referenceNames": [
+    "Creating Tap-to-Join Links in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T00:30:02.488Z",
+  "generatedFiles": [
+    "components/AppSidebar.tsx",
+    "components/CreateLinkPage.tsx",
+    "components/FallbackFormPreview.tsx",
+    "components/KeywordsPage.tsx",
+    "components/LinkSuccessCard.tsx",
+    "components/LinksListPage.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/components/AppSidebar.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/components/CreateLinkPage.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/components/FallbackFormPreview.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/components/KeywordsPage.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/components/LinkSuccessCard.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/components/LinksListPage.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/mock-data.ts",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/page.tsx",
+    "src/kimi-drafts/grow-tap-to-join/2026-08-31T00-27-02-636Z-5893e5/reference.css"
+  ],
+  "status": "generated"
+}

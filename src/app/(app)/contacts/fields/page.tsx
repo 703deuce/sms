@@ -1,15 +1,14 @@
-import { FieldsManager } from "@/components/contacts/fields-manager";
-import { parseCustomFieldsConfig } from "@/lib/contacts/custom-fields";
-import { getPrisma } from "@/lib/db";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
+"use client";
 
-export default async function ContactFieldsPage() {
-  const { workspaceId } = await requireWorkspaceContext();
-  const workspace = await getPrisma().workspace.findUnique({
-    where: { id: workspaceId },
-    select: { customFieldsConfig: true },
-  });
-  const fields = parseCustomFieldsConfig(workspace?.customFieldsConfig);
+import { Suspense } from "react";
+import ContactsFieldsFlow from "@/components/kimi/contacts-fields/ContactsFieldsFlow";
 
-  return <FieldsManager initialFields={fields} />;
+export default function Page() {
+  return (
+    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
+      <div className="kimi-contacts-fields text-foreground">
+        <ContactsFieldsFlow />
+      </div>
+    </Suspense>
+  );
 }

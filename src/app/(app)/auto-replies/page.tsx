@@ -1,9 +1,14 @@
-import { AutoRepliesList } from "@/components/auto-replies/auto-replies-list";
-import { getActiveWorkspaceId } from "@/lib/auth";
-import { listAutoReplies } from "@/lib/auto-replies/service";
+"use client";
 
-export default async function AutoRepliesPage() {
-  const workspaceId = await getActiveWorkspaceId();
-  const rows = workspaceId ? await listAutoReplies(workspaceId) : [];
-  return <AutoRepliesList initialRows={rows} />;
+import { Suspense } from "react";
+import AutoRepliesFlow from "@/components/kimi/auto-replies/AutoRepliesFlow";
+
+export default function Page() {
+  return (
+    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
+      <div className="kimi-auto-replies text-foreground">
+        <AutoRepliesFlow />
+      </div>
+    </Suspense>
+  );
 }

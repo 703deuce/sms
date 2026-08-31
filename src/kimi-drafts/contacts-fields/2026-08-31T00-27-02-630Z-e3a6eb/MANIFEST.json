@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-08-31T00-27-02-630Z-e3a6eb",
+  "targetRoute": "/contacts/fields",
+  "referenceNames": [
+    "How to Use Custom Fields in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T00:29:22.743Z",
+  "generatedFiles": [
+    "components/AppShell.tsx",
+    "components/ContactEdit.tsx",
+    "components/ContactsList.tsx",
+    "components/CreateFieldForm.tsx",
+    "components/CustomFieldsList.tsx",
+    "components/Sidebar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/components/AppShell.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/components/ContactEdit.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/components/ContactsList.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/components/CreateFieldForm.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/components/CustomFieldsList.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/components/Sidebar.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/mock-data.ts",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/page.tsx",
+    "src/kimi-drafts/contacts-fields/2026-08-31T00-27-02-630Z-e3a6eb/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,51 +1,14 @@
-import { InboxView } from "@/components/inbox/inbox-view";
-import { parseInboxSearchParams } from "@/lib/mass-texting/inbox-filters";
-import {
-  loadContacts,
-  loadConversations,
-  loadTeamMembers,
-  requireWorkspaceContext,
-} from "@/lib/workspace-data";
+"use client";
 
-/** Primary SMS shared inbox — three-column workspace with optional contact drawer. */
-export default async function ConversationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const { workspaceId, session } = await requireWorkspaceContext();
-  const params = await searchParams;
-  const urlSearch = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") urlSearch.set(key, value);
-  }
-  const filters = parseInboxSearchParams(urlSearch);
+import { Suspense } from "react";
+import ConversationsFlow from "@/components/kimi/conversations/ConversationsFlow";
 
-  const [conversations, contacts, teamMembers] = await Promise.all([
-    loadConversations(workspaceId, filters),
-    loadContacts(workspaceId),
-    loadTeamMembers(workspaceId),
-  ]);
-
-  const initialFilter =
-    filters.filter === "mine"
-      ? "Mine"
-      : filters.filter === "unassigned"
-        ? "Unassigned"
-        : filters.filter === "archived"
-          ? "Closed"
-          : filters.unread
-            ? "Unread"
-            : "All conversations";
-
+export default function Page() {
   return (
-    <InboxView
-      initialFilter={initialFilter}
-      conversations={conversations}
-      contacts={contacts}
-      teamMembers={teamMembers}
-      currentUserName={session.name}
-      currentUserId={session.userId}
-    />
+    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
+      <div className="kimi-conversations text-foreground">
+        <ConversationsFlow />
+      </div>
+    </Suspense>
   );
 }

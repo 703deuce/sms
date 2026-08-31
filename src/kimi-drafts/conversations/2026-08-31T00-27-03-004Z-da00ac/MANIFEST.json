@@ -1,0 +1,41 @@
+{
+  "sessionId": "2026-08-31T00-27-03-004Z-da00ac",
+  "targetRoute": "/conversations",
+  "referenceNames": [
+    "Navigating the SlickText Inbox SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T00:36:58.673Z",
+  "generatedFiles": [
+    "components/AppSidebar.tsx",
+    "components/BulkActionsBar.tsx",
+    "components/Composer.tsx",
+    "components/ContactPanel.tsx",
+    "components/ConversationList.tsx",
+    "components/InboxRail.tsx",
+    "components/InboxSettings.tsx",
+    "components/Popover.tsx",
+    "components/SettingsHome.tsx",
+    "components/TagsSettings.tsx",
+    "components/ThreadView.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/AppSidebar.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/BulkActionsBar.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/Composer.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/ContactPanel.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/ConversationList.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/InboxRail.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/InboxSettings.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/Popover.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/SettingsHome.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/TagsSettings.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/components/ThreadView.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/mock-data.ts",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/page.tsx",
+    "src/kimi-drafts/conversations/2026-08-31T00-27-03-004Z-da00ac/reference.css"
+  ],
+  "status": "generated"
+}

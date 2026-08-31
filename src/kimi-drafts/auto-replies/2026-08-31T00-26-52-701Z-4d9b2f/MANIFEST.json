@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-08-31T00-26-52-701Z-4d9b2f",
+  "targetRoute": "/auto-replies",
+  "referenceNames": [
+    "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-08-31T00:29:27.791Z",
+  "generatedFiles": [
+    "components/InboxSettings.tsx",
+    "components/Keywords.tsx",
+    "components/OptInMessages.tsx",
+    "components/Shared.tsx",
+    "components/Sidebar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/components/InboxSettings.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/components/Keywords.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/components/OptInMessages.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/components/Shared.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/components/Sidebar.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/mock-data.ts",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/page.tsx",
+    "src/kimi-drafts/auto-replies/2026-08-31T00-26-52-701Z-4d9b2f/reference.css"
+  ],
+  "status": "generated"
+}

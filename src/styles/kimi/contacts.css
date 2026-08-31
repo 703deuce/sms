@@ -1,0 +1,33 @@
+:root {
+  --background: 250 250 252;
+  --card: 255 255 255;
+  --foreground: 24 24 42;
+  --muted-foreground: 110 113 134;
+  --border: 231 232 240;
+  --primary: 79 70 229;
+  --primary-foreground: 255 255 255;
+  --accent: 240 240 250;
+  --muted: 241 242 247;
+}
+
+body {
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bg-background { background-color: rgb(var(--background)); }
+.bg-card { background-color: rgb(var(--card)); }
+.bg-primary { background-color: rgb(var(--primary)); }
+.bg-accent { background-color: rgb(var(--accent)); }
+.bg-muted { background-color: rgb(var(--muted)); }
+.text-foreground { color: rgb(var(--foreground)); }
+.text-muted-foreground { color: rgb(var(--muted-foreground)); }
+.text-primary { color: rgb(var(--primary)); }
+.text-primary-foreground { color: rgb(var(--primary-foreground)); }
+.border-border { border-color: rgb(var(--border)); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #d4d6e0; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }

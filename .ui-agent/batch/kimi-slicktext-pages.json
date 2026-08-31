@@ -1,16 +1,16 @@
 {
-  "updatedAt": "2026-08-30T23:40:36.946Z",
+  "updatedAt": "2026-08-31T00:36:58.673Z",
   "reasoningEffort": "low",
-  "concurrency": 3,
-  "staggerMs": 2000,
+  "concurrency": 11,
+  "staggerMs": 10000,
   "jobs": [
     {
       "videoName": "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/auto-replies",
       "status": "complete",
-      "sessionId": "2026-08-30T23-38-24-565Z-8ac203",
-      "startedAt": "2026-08-30T23:38:24.293Z",
-      "completedAt": "2026-08-30T23:40:36.946Z"
+      "sessionId": "2026-08-31T00-26-52-701Z-4d9b2f",
+      "startedAt": "2026-08-31T00:26:52.411Z",
+      "completedAt": "2026-08-31T00:29:27.792Z"
     },
     {
       "videoName": "Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p)",
@@ -24,83 +24,82 @@
     {
       "videoName": "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/campaigns",
-      "status": "running",
-      "sessionId": "2026-08-30T21-40-34-537Z-32b6ff",
-      "startedAt": "2026-08-30T23:38:26.295Z",
-      "completedAt": "2026-08-30T21:43:48.765Z",
-      "pid": 16835
+      "status": "complete",
+      "sessionId": "2026-08-31T00-27-02-999Z-ad1c3f",
+      "startedAt": "2026-08-31T00:27:02.415Z",
+      "completedAt": "2026-08-31T00:30:42.403Z"
     },
     {
       "videoName": "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)(1)",
       "route": "/campaigns",
-      "status": "running",
-      "sessionId": "2026-08-30T21-40-36-659Z-103110",
-      "startedAt": "2026-08-30T23:40:36.946Z",
-      "completedAt": "2026-08-30T21:43:47.965Z",
-      "pid": 16835
+      "status": "complete",
+      "sessionId": "2026-08-31T00-27-02-818Z-6bb9ec",
+      "startedAt": "2026-08-31T00:27:02.417Z",
+      "completedAt": "2026-08-31T00:30:55.514Z"
     },
     {
       "videoName": "Adding and Uploading Contacts in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/contacts",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-495Z-fc5a36",
-      "startedAt": "2026-08-30T21:40:36.278Z",
-      "completedAt": "2026-08-30T21:44:33.933Z"
+      "sessionId": "2026-08-31T00-27-02-745Z-325a4c",
+      "startedAt": "2026-08-31T00:27:02.419Z",
+      "completedAt": "2026-08-31T00:30:12.476Z"
     },
     {
       "videoName": "How to Use Custom Fields in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/contacts/fields",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-479Z-51b8da",
-      "startedAt": "2026-08-30T21:40:36.279Z",
-      "completedAt": "2026-08-30T21:42:58.647Z"
+      "sessionId": "2026-08-31T00-27-02-630Z-e3a6eb",
+      "startedAt": "2026-08-31T00:27:02.420Z",
+      "completedAt": "2026-08-31T00:29:22.744Z"
     },
     {
       "videoName": "Using Lists to Organize Your Audience in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/contacts/lists",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-824Z-4fa74e",
-      "startedAt": "2026-08-30T21:40:36.280Z",
-      "completedAt": "2026-08-30T21:42:37.508Z"
+      "sessionId": "2026-08-31T00-27-02-830Z-a189c0",
+      "startedAt": "2026-08-31T00:27:02.420Z",
+      "completedAt": "2026-08-31T00:30:48.880Z"
     },
     {
       "videoName": "Navigating the SlickText Inbox SlickText Tutorials - SlickText (360p)",
       "route": "/conversations",
       "status": "complete",
-      "sessionId": "2026-08-30T21-10-07-149Z-f62033-bench-B",
-      "completedAt": "2026-08-30T21:31:49.252Z"
+      "sessionId": "2026-08-31T00-27-03-004Z-da00ac",
+      "completedAt": "2026-08-31T00:36:58.673Z",
+      "startedAt": "2026-08-31T00:27:02.422Z"
     },
     {
       "videoName": "Creating Text-to-Join Keywords in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/grow/keywords",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-958Z-bf7096",
-      "startedAt": "2026-08-30T21:40:36.281Z",
-      "completedAt": "2026-08-30T21:44:00.760Z"
+      "sessionId": "2026-08-31T00-27-03-081Z-938e13",
+      "startedAt": "2026-08-31T00:27:02.423Z",
+      "completedAt": "2026-08-31T00:29:55.650Z"
     },
     {
       "videoName": "QRCodes",
       "route": "/grow/qr-codes",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-834Z-c49e12",
-      "startedAt": "2026-08-30T21:40:36.282Z",
-      "completedAt": "2026-08-30T21:42:59.135Z"
+      "sessionId": "2026-08-31T00-27-02-641Z-bd7a3c",
+      "startedAt": "2026-08-31T00:27:02.424Z",
+      "completedAt": "2026-08-31T00:29:03.815Z"
     },
     {
       "videoName": "Creating Tap-to-Join Links in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/grow/tap-to-join",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-841Z-0a4302",
-      "startedAt": "2026-08-30T21:40:36.283Z",
-      "completedAt": "2026-08-30T21:43:03.415Z"
+      "sessionId": "2026-08-31T00-27-02-636Z-5893e5",
+      "startedAt": "2026-08-31T00:27:02.425Z",
+      "completedAt": "2026-08-31T00:30:02.488Z"
     },
     {
       "videoName": "Adding Multimedia Attachments in SlickText SlickText Tutorials - SlickText (360p)",
       "route": "/messaging/media",
       "status": "complete",
-      "sessionId": "2026-08-30T21-40-36-514Z-b03728",
-      "startedAt": "2026-08-30T21:40:36.284Z",
-      "completedAt": "2026-08-30T21:43:20.232Z"
+      "sessionId": "2026-08-31T00-27-02-964Z-35e7b9",
+      "startedAt": "2026-08-31T00:27:02.425Z",
+      "completedAt": "2026-08-31T00:30:21.605Z"
     }
   ]
 }
