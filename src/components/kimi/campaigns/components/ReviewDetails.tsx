@@ -16,7 +16,7 @@ import {
   saveCampaignDraft,
   timingLabel,
   type LaunchReviewData,
-} from "../campaign-flow-utils";
+} from "@/lib/campaigns/kimi-campaigns-adapter";
 
 export default function ReviewDetails({
   onPrev,

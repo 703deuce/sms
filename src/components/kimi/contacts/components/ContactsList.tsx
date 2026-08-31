@@ -4,7 +4,7 @@ import {
   Users, UserCheck, UserX, Search, SlidersHorizontal, ChevronDown,
   UserPlus, Upload, ArrowUpDown, Info,
 } from "lucide-react";
-import { contacts, stats } from "../mock-data";
+import { contacts as seedContacts, stats as seedStats } from "../mock-data";
 
 function StatCard({ icon: Icon, label, value, tint }: { icon: any; label: string; value: string; tint: string }) {
   return (
@@ -23,10 +23,14 @@ function StatCard({ icon: Icon, label, value, tint }: { icon: any; label: string
 }
 
 export default function ContactsList({
+  contacts = seedContacts,
+  stats = seedStats,
   onCreateOne,
   onImportList,
   savedToast,
 }: {
+  contacts?: typeof seedContacts;
+  stats?: typeof seedStats;
   onCreateOne: () => void;
   onImportList: () => void;
   savedToast: boolean;

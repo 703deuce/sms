@@ -1,22 +1,29 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Users, MoreVertical, Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { Segment, segments as initialSegments } from "../mock-data";
 
-export default function SegmentsList({ onCreate, onViewContacts, onEdit }: {
+export default function SegmentsList({ segments: segmentsProp, onCreate, onViewContacts, onEdit, onDelete }: {
+  segments?: Segment[];
   onCreate: () => void;
   onViewContacts: (s: Segment) => void;
   onEdit: (s: Segment) => void;
+  onDelete?: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [items, setItems] = useState<Segment[]>(() => {
+    if (segmentsProp) return segmentsProp;
     if (typeof window !== "undefined") {
       const saved = (window as any).__transovoSegments;
       if (saved) return saved;
     }
     return initialSegments;
   });
+
+  useEffect(() => {
+    if (segmentsProp) setItems(segmentsProp);
+  }, [segmentsProp]);
 
   const filtered = items.filter(s => s.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -69,7 +76,7 @@ export default function SegmentsList({ onCreate, onViewContacts, onEdit }: {
                   <button onClick={() => { setMenuFor(null); onViewContacts(s); }} className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2"><Eye className="h-3.5 w-3.5 text-muted-foreground" /> View Contacts</button>
                   <button onClick={() => { setMenuFor(null); onEdit(s); }} className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Edit Segment</button>
                   <div className="my-1 h-px bg-border" />
-                  <button onClick={() => { const next = items.filter(x => x.id !== s.id); setItems(next); (window as any).__transovoSegments = next; setMenuFor(null); }} className="w-full px-3 py-2 text-sm text-left hover:bg-red-50 text-red-600 flex items-center gap-2"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+                  <button onClick={() => { const next = items.filter(x => x.id !== s.id); setItems(next); (window as any).__transovoSegments = next; setMenuFor(null); onDelete?.(s.id); }} className="w-full px-3 py-2 text-sm text-left hover:bg-red-50 text-red-600 flex items-center gap-2"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
                 </div>
               )}
             </div>

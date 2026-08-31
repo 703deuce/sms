@@ -21,7 +21,7 @@ import {
   previewAudience,
   saveCampaignDraft,
   draftAudiencePayload,
-} from "../campaign-flow-utils";
+} from "@/lib/campaigns/kimi-campaigns-adapter";
 
 type SendMode = "Now" | "Later" | "Recurring";
 

@@ -13,7 +13,7 @@ import {
   normalizeCampaignStatus,
   statusMatchesFilter,
   type CampaignListRow,
-} from "../campaign-flow-utils";
+} from "@/lib/campaigns/kimi-campaigns-adapter";
 import { formatNumber } from "@/lib/utils";
 
 const FILTER_OPTIONS = [

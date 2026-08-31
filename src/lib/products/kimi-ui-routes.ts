@@ -5,9 +5,11 @@
 
 export const KIMI_INTEGRATED_ROUTE_PREFIXES = [
   "/auto-replies",
+  "/automations",
   "/campaigns",
   "/contacts",
   "/conversations",
+  "/grow/forms",
   "/grow/keywords",
   "/grow/qr-codes",
   "/grow/tap-to-join",
@@ -27,6 +29,15 @@ export function kimiRouteScopeClass(pathname: string): string | null {
   }
   if (pathname === "/campaigns" || pathname.startsWith("/campaigns/")) {
     return "kimi-campaigns";
+  }
+  if (pathname === "/contacts/segments" || pathname.startsWith("/contacts/segments/")) {
+    return "kimi-contacts-segments";
+  }
+  if (pathname === "/grow/forms" || pathname.startsWith("/grow/forms/")) {
+    return "kimi-grow-forms";
+  }
+  if (pathname === "/automations" || pathname.startsWith("/automations/")) {
+    return "kimi-automations";
   }
   if (pathname === "/contacts/fields" || pathname.startsWith("/contacts/fields/")) {
     return "kimi-contacts-fields";

@@ -1,13 +1,16 @@
-"use client";
-
 import { Suspense } from "react";
-import ContactsSegmentsFlow from "@/components/kimi/contacts-segments/ContactsSegmentsFlow";
+import { KimiSegmentsConnected } from "@/components/contacts/kimi-segments-connected";
+import { mapApiSegmentToKimi } from "@/lib/contacts/kimi-segments-adapter";
+import { loadSegments, requireWorkspaceContext } from "@/lib/workspace-data";
 
-export default function Page() {
+export default async function ContactsSegmentsPage() {
+  const { workspaceId } = await requireWorkspaceContext();
+  const segments = await loadSegments(workspaceId);
+
   return (
     <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
       <div className="kimi-surface kimi-contacts-segments">
-        <ContactsSegmentsFlow />
+        <KimiSegmentsConnected initialSegments={segments.map((s) => mapApiSegmentToKimi(s))} />
       </div>
     </Suspense>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   MessageSquareText,
@@ -16,10 +16,22 @@ import {
 } from "lucide-react";
 import { keywords as initialKeywords, Keyword } from "../mock-data";
 
-export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
-  const [keywords, setKeywords] = useState<Keyword[]>(initialKeywords);
+export default function KeywordsList({
+  keywords: keywordsProp,
+  onCreate,
+  onDelete,
+}: {
+  keywords?: Keyword[];
+  onCreate: () => void;
+  onDelete?: (id: string) => void;
+}) {
+  const [keywords, setKeywords] = useState<Keyword[]>(keywordsProp ?? initialKeywords);
   const [query, setQuery] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (keywordsProp) setKeywords(keywordsProp);
+  }, [keywordsProp]);
 
   const filtered = keywords.filter(
     (k) =>
@@ -28,7 +40,10 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
   );
 
   const menuAction = (action: string, id: string) => {
-    if (action === "Delete") setKeywords((ks) => ks.filter((k) => k.id !== id));
+    if (action === "Delete") {
+      setKeywords((ks) => ks.filter((k) => k.id !== id));
+      onDelete?.(id);
+    }
     if (action === "Clone") {
       const src = keywords.find((k) => k.id === id);
       if (src)

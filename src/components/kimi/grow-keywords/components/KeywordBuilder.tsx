@@ -18,7 +18,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import PhonePreview from "./PhonePreview";
-import { contactLists } from "../mock-data";
+import { contactLists as defaultContactLists } from "../mock-data";
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -50,9 +50,18 @@ function MessageToolbar({ count }: { count: number }) {
 export default function KeywordBuilder({
   onBack,
   onSaved,
+  contactLists = defaultContactLists,
+  onSaveKeyword,
 }: {
   onBack: () => void;
   onSaved: () => void;
+  contactLists?: string[];
+  onSaveKeyword?: (payload: {
+    keyword: string;
+    listName?: string;
+    confirmation?: string;
+    autoReply?: string;
+  }) => void | Promise<void>;
 }) {
   const [setupOpen, setSetupOpen] = useState(true);
   const [behaviorOpen, setBehaviorOpen] = useState(false);
@@ -85,7 +94,24 @@ export default function KeywordBuilder({
 
   const handleSave = () => {
     setSaving(true);
-    setTimeout(() => onSaved(), 700);
+    const done = () => {
+      setSaving(false);
+      onSaved();
+    };
+    if (onSaveKeyword && keyword.trim()) {
+      void Promise.resolve(
+        onSaveKeyword({
+          keyword: keyword.trim(),
+          listName: selectedLists[0],
+          confirmation: autoResponse,
+          autoReply: autoResponse,
+        }),
+      )
+        .then(done)
+        .catch(() => setSaving(false));
+      return;
+    }
+    setTimeout(done, 700);
   };
 
   return (

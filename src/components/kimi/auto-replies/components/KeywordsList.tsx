@@ -1,18 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Plus, MoreVertical, Pencil, QrCode, Link2, Trash2, ListChecks, Tags } from "lucide-react";
-import { keywords, Keyword } from "../mock-data";
+import { keywords as seedKeywords, Keyword } from "../mock-data";
 
 export default function KeywordsList({
+  keywords: keywordsProp,
   onEdit,
   onBack,
 }: {
+  keywords?: Keyword[];
   onEdit: (k: Keyword) => void;
   onBack: () => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [items, setItems] = useState(keywordsProp ?? seedKeywords);
 
-  const rows = keywords.filter((k) =>
+  useEffect(() => {
+    if (keywordsProp) setItems(keywordsProp);
+  }, [keywordsProp]);
+
+  const rows = items.filter((k) =>
     k.keyword.toLowerCase().includes(query.toLowerCase())
   );
 

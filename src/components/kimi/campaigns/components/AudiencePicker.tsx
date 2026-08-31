@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Users, List, PieChart, X, Check, User } from "lucide-react";
 import type { AudienceSelection } from "@/lib/campaigns/compose-draft";
-import { loadAudiencePickerItems, type AudiencePickerItem } from "../campaign-flow-utils";
+import { loadAudiencePickerItems, type AudiencePickerItem } from "@/lib/campaigns/kimi-campaigns-adapter";
 
 export type AudienceChip = AudienceSelection;
 

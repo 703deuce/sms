@@ -14,7 +14,13 @@ export default function CreateContact({
   onSaved,
 }: {
   onBack: () => void;
-  onSaved: () => void;
+  onSaved: (formData?: {
+    firstName: string;
+    lastName: string;
+    mobile: string;
+    email: string;
+    optIn: string;
+  }) => void | Promise<void>;
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -184,7 +190,18 @@ export default function CreateContact({
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button onClick={onSaved} className="kc-btn-primary px-12 h-10 text-[13px]">
+            <button
+              onClick={() =>
+                void onSaved({
+                  firstName,
+                  lastName,
+                  mobile,
+                  email,
+                  optIn: optIn || "Subscribed",
+                })
+              }
+              className="kc-btn-primary px-12 h-10 text-[13px]"
+            >
               Save
             </button>
             <button onClick={onBack} className="kc-btn-secondary px-12 h-10 text-[13px]">

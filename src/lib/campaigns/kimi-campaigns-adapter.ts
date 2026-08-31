@@ -1,3 +1,7 @@
+/**
+ * Data adapter: maps mass-texting campaign APIs ↔ Kimi campaigns UI types.
+ * Lives outside Kimi UI — presentation components stay untouched.
+ */
 import {
   composeMessageBody,
   type AudienceSelection,
