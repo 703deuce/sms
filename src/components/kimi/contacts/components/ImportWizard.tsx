@@ -157,7 +157,7 @@ export default function ImportWizard({
                 <div className="text-sm font-semibold text-emerald-700">File Uploaded</div>
                 <div className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-2">
                   {file}
-                  <button onClick={() => setFile(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <button onClick={() => { setFile(null); setUploadedFile(null); }} className="text-muted-foreground hover:text-foreground transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
