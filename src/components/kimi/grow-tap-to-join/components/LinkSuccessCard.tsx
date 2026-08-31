@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Smartphone, ArrowLeft, MessageSquare, Copy, Check, MousePointerClick } from "lucide-react";
+import {
+  Smartphone, ArrowLeft, MessageSquare, Copy, Check, MousePointerClick,
+  ChevronLeft, Signal, Wifi, BatteryFull,
+} from "lucide-react";
 import { TapLink } from "../mock-data";
 
 interface Props {
@@ -35,36 +38,51 @@ export default function LinkSuccessCard({ link, onBack }: Props) {
       <div className="ttj-success-wrap">
         <div className="ttj-success-card">
           <div className="ttj-info-illustration"><Smartphone size={40} /></div>
-          <h3>Here's Your Link</h3>
+          <h3>Here&apos;s Your Link</h3>
           <div className="ttj-link-display">
             <span>{link.url}</span>
-            <button className="ttj-icon-btn" onClick={copy}>
-              {copied ? <Check size={15} color="#10b981" /> : <Copy size={15} />}
+            <button className="ttj-icon-btn" onClick={copy} aria-label="Copy link">
+              {copied ? <Check size={15} color="#059669" /> : <Copy size={15} />}
             </button>
           </div>
           <div className="ttj-success-actions">
             <button className="ttj-link-btn" onClick={onBack}><ArrowLeft size={13} /> Back to Links</button>
             <button className="ttj-link-btn" onClick={() => setTesting(!testing)}>
-              <MessageSquare size={13} /> Text the Link
+              <MessageSquare size={13} /> {testing ? "Hide Preview" : "Text the Link"}
             </button>
           </div>
         </div>
 
         {testing && (
           <div className="ttj-phone">
-            <div className="ttj-phone-notch" />
-            <div className="ttj-phone-header">
-              <div className="ttj-phone-avatar">+1</div>
-              <div>
-                <div className="ttj-phone-num">+1 (888) 379-4654</div>
-                <div className="ttj-phone-sub">Text Message · SMS · Today 10:30 AM</div>
+            <div className="ttj-phone-screen">
+              <div className="ttj-phone-notch" />
+              <div className="ttj-phone-statusbar">
+                <span>10:30</span>
+                <span className="ttj-phone-statusbar-icons">
+                  <Signal size={12} />
+                  <Wifi size={12} />
+                  <BatteryFull size={14} />
+                </span>
               </div>
+              <div className="ttj-phone-header">
+                <span className="ttj-phone-back"><ChevronLeft size={18} /></span>
+                <div className="ttj-phone-header-center">
+                  <div className="ttj-phone-avatar">+1</div>
+                  <div className="ttj-phone-num">+1 (888) 379-4654</div>
+                </div>
+                <span style={{ width: 18 }} />
+              </div>
+              <div className="ttj-phone-body">
+                <div className="ttj-phone-time">Text Message · SMS · Today 10:30 AM</div>
+                <div className="ttj-bubble sent">{link.keyword}</div>
+                <div className="ttj-bubble received">Thanks for subscribing!</div>
+              </div>
+              <div className="ttj-phone-input">
+                <span>Text Message · SMS</span>
+              </div>
+              <div className="ttj-phone-home" />
             </div>
-            <div className="ttj-phone-body">
-              <div className="ttj-bubble sent">{link.keyword}</div>
-              <div className="ttj-bubble received">Thanks for subscribing!</div>
-            </div>
-            <div className="ttj-phone-input">Text Message · SMS</div>
           </div>
         )}
       </div>

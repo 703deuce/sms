@@ -43,32 +43,20 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="kw-fade" onClick={() => openMenu && setOpenMenu(null)}>
       {/* Breadcrumb */}
-      <div style={{ fontSize: 12.5, color: "#8a8fa8", marginBottom: 6 }}>
-        Grow <span style={{ margin: "0 4px" }}>/</span> Keywords
+      <div className="kw-breadcrumb">
+        Grow <span className="kw-breadcrumb-sep">/</span>{" "}
+        <span className="kw-breadcrumb-current">Keywords</span>
       </div>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
+      <div className="kw-page-header">
         <div style={{ display: "flex", gap: 12 }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: "#eef0fd",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
+          <div className="kw-header-icon">
             <MessageSquareText size={20} color="#4f46e5" />
           </div>
           <div>
-            <h1 style={{ fontSize: 21, fontWeight: 800, margin: 0, color: "#1f2440" }}>Keywords</h1>
-            <p style={{ fontSize: 13, color: "#6a708c", margin: "3px 0 0" }}>
-              View and manage all of your keywords.
-            </p>
+            <h1 className="kw-page-title">Keywords</h1>
+            <p className="kw-page-subtitle">View and manage all of your keywords.</p>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -80,7 +68,7 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
             />
             <input
               className="kw-input"
-              style={{ paddingLeft: 33, width: 220 }}
+              style={{ paddingLeft: 33, width: 220, height: 38 }}
               placeholder="Search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -94,19 +82,7 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
 
       {/* Table */}
       <div className="kw-card" style={{ overflow: "visible" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "260px 1fr 190px 120px 44px",
-            padding: "11px 24px",
-            borderBottom: "1px solid #eef0f7",
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 0.8,
-            textTransform: "uppercase",
-            color: "#8a8fa8",
-          }}
-        >
+        <div className="kw-table-head">
           <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
             Keyword <ArrowUpDown size={11} />
           </span>
@@ -126,39 +102,25 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
             </div>
             <div style={{ fontSize: 13, color: "#4a5070", paddingRight: 24 }}>{k.description}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "#4a5070" }}>
-              <span
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
-                  background: "#eef0fd",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <span className="kw-list-icon">
                 <List size={12} color="#4f46e5" />
               </span>
-              <strong style={{ color: "#1f2440" }}>{k.connectedLists}</strong> Connected List
+              <strong style={{ color: "#1f2440", fontWeight: 700 }}>{k.connectedLists}</strong> Connected List
             </div>
             <div>
-              <span className="kw-status-pill">{k.status}</span>
+              <span className="kw-status-pill">
+                <span className="kw-status-dot" />
+                {k.status}
+              </span>
             </div>
             <div style={{ position: "relative" }}>
               <button
+                className="kw-icon-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   setOpenMenu(openMenu === k.id ? null : k.id);
                 }}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  padding: 6,
-                  borderRadius: 6,
-                  display: "flex",
-                  color: "#8a8fa8",
-                }}
+                aria-label="Keyword actions"
               >
                 <MoreVertical size={16} />
               </button>
@@ -176,7 +138,7 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
                   <button onClick={() => menuAction("Tap", k.id)}>
                     <MousePointerClick size={14} /> Create Tap-to-Join Link
                   </button>
-                  <div style={{ height: 1, background: "#eef0f7", margin: "4px 6px" }} />
+                  <div className="kw-dropdown-divider" />
                   <button className="danger" onClick={() => menuAction("Delete", k.id)}>
                     <Trash2 size={14} /> Delete
                   </button>
@@ -187,27 +149,24 @@ export default function KeywordsList({ onCreate }: { onCreate: () => void }) {
         ))}
 
         {filtered.length === 0 && (
-          <div style={{ padding: "48px 24px", textAlign: "center", color: "#8a8fa8", fontSize: 13.5 }}>
-            No keywords found.
+          <div className="kw-empty">
+            <div className="kw-header-icon" style={{ margin: "0 auto 12px" }}>
+              <MessageSquareText size={20} color="#4f46e5" />
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1f2440" }}>No keywords found</div>
+            <div style={{ fontSize: 13, color: "#8a8fa8", marginTop: 4 }}>
+              {query ? "Try a different search term." : "Create your first keyword to get started."}
+            </div>
+            {!query && (
+              <button className="kw-btn-primary" style={{ marginTop: 16 }} onClick={onCreate}>
+                Create Keyword
+              </button>
+            )}
           </div>
         )}
 
-        <div style={{ padding: "12px 24px", borderTop: "1px solid #eef0f7" }}>
-          <button
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              border: "1px solid #dfe2ee",
-              background: "#fff",
-              borderRadius: 8,
-              padding: "7px 12px",
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: "#4a5070",
-              cursor: "pointer",
-            }}
-          >
+        <div style={{ padding: "12px 20px", borderTop: "1px solid #eef0f7" }}>
+          <button className="kw-btn-outline">
             25 Per Page <ChevronDown size={13} />
           </button>
         </div>

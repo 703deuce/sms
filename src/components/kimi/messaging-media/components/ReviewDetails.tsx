@@ -1,6 +1,6 @@
 'use client'
 
-import { Users, Megaphone } from 'lucide-react'
+import { Users, Megaphone, Rocket } from 'lucide-react'
 import { CampaignDraft, creditsAvailable } from '../mock-data'
 import PhonePreview from './PhonePreview'
 
@@ -19,7 +19,7 @@ export default function ReviewDetails({ draft, onPrev, onSend }: Props) {
     <div className="st-page st-create">
       <div className="st-breadcrumb">Campaigns / Create Campaign</div>
       <div className="st-title-row">
-        <div className="st-title-icon"><Megaphone size={22} /></div>
+        <div className="st-title-icon"><Megaphone size={20} /></div>
         <div>
           <h1>Review Details</h1>
           <p className="st-subtitle">Confirm your campaign details.</p>
@@ -77,7 +77,9 @@ export default function ReviewDetails({ draft, onPrev, onSend }: Props) {
         <button className="st-btn-ghost" onClick={onPrev}>← Prev</button>
         <div className="st-footer-right">
           <button className="st-btn-ghost">Save Draft</button>
-          <button className="st-btn-primary" onClick={onSend}>Send Now 🚀</button>
+          <button className="st-btn-primary" onClick={onSend}>
+            Send Now <Rocket size={14} />
+          </button>
         </div>
       </div>
     </div>

@@ -1,13 +1,21 @@
-.kimi-messaging-media /* Transovo / messaging media sandbox — SlickText-inspired */
-:root{
+/* Transovo / messaging media — SlickText-inspired polish */
+.kimi-messaging-media{
   --brand: #4f46e5;
   --brand-hover: #4338ca;
+  --brand-soft: #eef0fd;
   --navy: #17203a;
   --bg: #f6f7fb;
   --card: #ffffff;
   --border: #e5e7f0;
+  --border-soft: #f0f1f8;
   --muted: #7a8199;
   --text: #1b2138;
+  --text-2: #4a5068;
+  --green-bg: #e3f6ec;
+  --green: #149654;
+  --amber: #d97706;
+  --amber-bg: #fef3e2;
+  background: var(--bg);
 }
 
 .kimi-messaging-media *{ box-sizing: border-box; }
@@ -19,10 +27,858 @@
   color: var(--text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
-.kimi-messaging-media /* ---------- Sidebar ---------- */
-.st-sidebar{
+.kimi-messaging-media .st-main{ flex: 1; min-width: 0; position: relative; }
+
+.kimi-messaging-media .st-page{
+  padding: 28px 36px 96px;
+  max-width: 1160px;
+  margin: 0 auto;
+}
+
+/* ---------- Page header ---------- */
+.kimi-messaging-media .st-header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.kimi-messaging-media .st-title-row{ display: flex; align-items: center; gap: 13px; }
+
+.kimi-messaging-media .st-title-icon{
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kimi-messaging-media .st-page h1{
+  font-size: 21px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--navy);
+  letter-spacing: -0.3px;
+}
+
+.kimi-messaging-media .st-subtitle{ margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+
+.kimi-messaging-media .st-header-actions{ display: flex; gap: 10px; align-items: center; }
+
+.kimi-messaging-media .st-search{
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--muted);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kimi-messaging-media .st-search:focus-within{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.kimi-messaging-media .st-search input{
+  border: none;
+  outline: none;
+  height: 36px;
+  width: 170px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--text);
+}
+
+/* ---------- Buttons ---------- */
+.kimi-messaging-media .st-btn-primary{
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0 18px;
+  height: 38px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(23, 32, 58, 0.12);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.kimi-messaging-media .st-btn-primary:hover{ background: var(--brand-hover); box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3); }
+.kimi-messaging-media .st-btn-primary:active{ transform: translateY(1px); }
+.kimi-messaging-media .st-btn-primary:disabled{ background: #c3c6e8; box-shadow: none; cursor: not-allowed; }
+
+.kimi-messaging-media .st-btn-secondary{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 14px;
+  height: 38px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.kimi-messaging-media .st-btn-secondary:hover{ background: #f6f7fc; border-color: #d5d9e8; }
+
+.kimi-messaging-media .st-btn-ghost{
+  background: transparent;
+  border: none;
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 9px 12px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.kimi-messaging-media .st-btn-ghost:hover{ background: var(--brand-soft); }
+
+/* ---------- Campaign table ---------- */
+.kimi-messaging-media .st-table{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(23, 32, 58, 0.04);
+}
+
+.kimi-messaging-media .st-table-head,
+.kimi-messaging-media .st-table-row{
+  display: grid;
+  grid-template-columns: minmax(230px, 1.6fr) 130px 56px 70px 70px 90px 90px 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+}
+
+.kimi-messaging-media .st-table-head{
+  height: 40px;
+  background: #fafbfe;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.kimi-messaging-media .st-table-row{
+  min-height: 62px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 0.12s;
+}
+
+.kimi-messaging-media .st-table-row:last-child{ border-bottom: none; }
+.kimi-messaging-media .st-table-row:hover{ background: #fafbfe; }
+
+.kimi-messaging-media .col-campaign{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kimi-messaging-media .st-campaign-name{ font-weight: 600; font-size: 13.5px; color: var(--text); }
+.kimi-messaging-media .st-campaign-detail{ font-size: 12px; color: var(--muted); }
+
+.kimi-messaging-media .col-audience{ display: flex; flex-direction: column; gap: 2px; }
+.kimi-messaging-media .st-contact-count{ font-weight: 600; font-size: 13px; }
+.kimi-messaging-media .st-audience-type{ font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+
+.kimi-messaging-media .col-attach{ display: flex; gap: 7px; }
+.kimi-messaging-media .st-dim-icon{ color: #b3b8cc; }
+
+.kimi-messaging-media .col-stat{ font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.kimi-messaging-media .st-revenue{ font-weight: 600; color: var(--text); }
+
+.kimi-messaging-media .col-status{ display: flex; }
+
+.kimi-messaging-media .st-status{
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.kimi-messaging-media .st-status::before{
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.kimi-messaging-media .st-status-draft{ background: #f1f2f7; color: #6b7194; }
+.kimi-messaging-media .st-status-sent{ background: var(--green-bg); color: var(--green); }
+.kimi-messaging-media .st-status-sending{ background: #e8edff; color: var(--brand); }
+
+/* ---------- Create campaign ---------- */
+.kimi-messaging-media .st-breadcrumb{
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kimi-messaging-media .st-create-grid{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 48px;
+  margin-top: 28px;
+  align-items: start;
+}
+
+.kimi-messaging-media .st-form{ max-width: 540px; }
+
+.kimi-messaging-media .st-label{
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 20px 0 7px;
+}
+
+.kimi-messaging-media .st-label:first-child{ margin-top: 0; }
+.kimi-messaging-media .st-label em{ font-weight: 400; color: var(--muted); font-style: normal; }
+
+.kimi-messaging-media .st-input{
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  outline: none;
+  background: var(--card);
+  color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kimi-messaging-media .st-input:focus{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+/* Audience */
+.kimi-messaging-media .st-audience-box{
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px 10px;
+  cursor: text;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kimi-messaging-media .st-audience-box:focus-within{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.kimi-messaging-media .st-audience-input{
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 90px;
+  font-size: 13.5px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text);
+  height: 28px;
+}
+
+.kimi-messaging-media .st-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.kimi-messaging-media .st-chip button{
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  padding: 0;
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
+.kimi-messaging-media .st-chip button:hover{ opacity: 1; }
+
+.kimi-messaging-media .st-audience-dropdown{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 5px;
+  box-shadow: 0 12px 32px rgba(23, 32, 58, 0.12);
+  padding: 6px;
+  max-height: 264px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 20;
+}
+
+.kimi-messaging-media .st-dd-section{
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  padding: 8px 10px 4px;
+}
+
+.kimi-messaging-media .st-dd-item{
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.kimi-messaging-media .st-dd-item:hover{ background: #f1f2f9; }
+.kimi-messaging-media .st-dd-list-icon{ color: var(--muted); font-size: 12px; }
+
+/* Message composer */
+.kimi-messaging-media .st-message-head{ display: flex; justify-content: space-between; align-items: baseline; }
+.kimi-messaging-media .st-char-count{ font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.kimi-messaging-media .st-mms-badge{
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 5px;
+}
+
+.kimi-messaging-media .st-message-box{
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kimi-messaging-media .st-message-box:focus-within{
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.kimi-messaging-media .st-message-box textarea{
+  width: 100%;
+  min-height: 132px;
+  border: none;
+  outline: none;
+  resize: vertical;
+  padding: 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--text);
+  line-height: 1.5;
+  background: transparent;
+}
+
+.kimi-messaging-media .st-attachment-thumb{
+  position: relative;
+  width: 52px;
+  margin: 0 0 10px 12px;
+}
+
+.kimi-messaging-media .st-attachment-img{
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(23, 32, 58, 0.12);
+}
+
+.kimi-messaging-media .st-attachment-remove{
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.kimi-messaging-media .st-attachment-remove:hover{ background: #000; }
+
+.kimi-messaging-media .st-message-toolbar{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border-soft);
+  background: #fafbfe;
+}
+
+.kimi-messaging-media .st-toolbar-left{ display: flex; gap: 2px; }
+
+.kimi-messaging-media .st-toolbar-btn{
+  position: relative;
+  border: none;
+  background: transparent;
+  color: #8a90a8;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.kimi-messaging-media .st-toolbar-btn:hover{ background: #eceef7; color: var(--text-2); }
+
+.kimi-messaging-media .st-tooltip{
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(23, 32, 58, 0.2);
+}
+
+/* Segmented control */
+.kimi-messaging-media .st-segmented{
+  display: inline-flex;
+  background: #eceef6;
+  border-radius: 9px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.kimi-messaging-media .st-seg-btn{
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  padding: 7px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.kimi-messaging-media .st-seg-btn:hover{ color: var(--text); }
+
+.kimi-messaging-media .st-seg-btn.active{
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(23, 32, 58, 0.12);
+}
+
+/* ---------- Phone preview ---------- */
+.kimi-messaging-media .st-phone-wrap{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 24px;
+}
+
+.kimi-messaging-media .st-phone-label{
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand);
+  background: var(--brand-soft);
+  padding: 5px 13px;
+  border-radius: 99px;
+}
+
+.kimi-messaging-media .st-phone{
+  width: 280px;
+  height: 560px;
+  background: #fff;
+  border: 9px solid #141b2e;
+  border-radius: 42px;
+  box-shadow:
+    0 24px 48px rgba(23, 32, 58, 0.16),
+    0 2px 6px rgba(23, 32, 58, 0.08);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.kimi-messaging-media .st-phone::before{
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 86px;
+  height: 22px;
+  background: #141b2e;
+  border-radius: 12px;
+  z-index: 2;
+}
+
+.kimi-messaging-media .st-phone-content{
+  flex: 1;
+  padding: 52px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  background: #f7f8fb;
+}
+
+.kimi-messaging-media .st-bubble{
+  align-self: flex-start;
+  max-width: 82%;
+  background: #e9e9ee;
+  color: #111;
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 9px 12px;
+  border-radius: 17px;
+  border-bottom-left-radius: 5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: st-bubble-in 0.25s ease;
+}
+
+@keyframes st-bubble-in{
+  from{ opacity: 0; transform: translateY(5px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+
+.kimi-messaging-media .st-mms-card{
+  align-self: flex-start;
+  width: 82%;
+  border-radius: 15px;
+  overflow: hidden;
+  border-bottom-left-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 12px 14px;
+  gap: 8px;
+  position: relative;
+  animation: st-bubble-in 0.25s ease;
+}
+
+.kimi-messaging-media .st-mms-pattern{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  opacity: 0.14;
+  overflow: hidden;
+}
+
+.kimi-messaging-media .st-mms-pattern span{
+  color: #d4af6e;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 5px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.kimi-messaging-media .st-mms-shirt{
+  font-size: 46px;
+  line-height: 1;
+  position: relative;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+}
+
+.kimi-messaging-media .st-mms-cta{
+  position: relative;
+  color: #e8c887;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  border: 1px solid rgba(232, 200, 135, 0.5);
+  padding: 5px 12px;
+  border-radius: 4px;
+}
+
+/* ---------- Review details ---------- */
+.kimi-messaging-media .st-review{ max-width: 540px; display: flex; flex-direction: column; gap: 4px; }
+
+.kimi-messaging-media .st-review-section{ margin-bottom: 14px; }
+
+.kimi-messaging-media .st-review-head{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.kimi-messaging-media .st-edit-link{
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 5px;
+}
+
+.kimi-messaging-media .st-edit-link:hover{ background: var(--brand-soft); }
+
+.kimi-messaging-media .st-review-card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  box-shadow: 0 1px 2px rgba(23, 32, 58, 0.04);
+}
+
+.kimi-messaging-media .st-review-audience{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.kimi-messaging-media .st-review-audience svg{ color: var(--muted); }
+
+.kimi-messaging-media .st-review-count{
+  font-weight: 700;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kimi-messaging-media .st-credit-summary{
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 16px;
+  gap: 0;
+}
+
+.kimi-messaging-media .st-credit-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  font-size: 13px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.kimi-messaging-media .st-credit-row:last-child{
+  border-bottom: none;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.kimi-messaging-media .st-credit-row span:last-child{
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Footer bar ---------- */
+.kimi-messaging-media .st-footer-bar{
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+  padding: 13px 36px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 30;
+}
+
+.kimi-messaging-media .st-footer-right{ display: flex; gap: 8px; align-items: center; }
+
+/* ---------- Modal ---------- */
+.kimi-messaging-media .st-modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 32, 58, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: st-fade-in 0.15s ease;
+}
+
+@keyframes st-fade-in{ from{ opacity: 0; } to{ opacity: 1; } }
+
+.kimi-messaging-media .st-modal{
+  background: var(--card);
+  border-radius: 14px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  padding: 30px 28px 26px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(23, 32, 58, 0.28);
+  animation: st-modal-in 0.2s ease;
+}
+
+@keyframes st-modal-in{
+  from{ opacity: 0; transform: translateY(10px) scale(0.98); }
+  to{ opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.kimi-messaging-media .st-modal-close{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.kimi-messaging-media .st-modal-close:hover{ background: #f1f2f7; color: var(--text); }
+
+.kimi-messaging-media .st-modal-icon{
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--amber-bg);
+  color: var(--amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+
+.kimi-messaging-media .st-modal h2{
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 10px;
+  letter-spacing: -0.2px;
+}
+
+.kimi-messaging-media .st-modal p{
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+  margin: 0 0 20px;
+}
+
+.kimi-messaging-media .st-modal-btn{ width: 100%; }
+
+/* ---------- Toast ---------- */
+.kimi-messaging-media .st-toast{
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 11px 18px;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(23, 32, 58, 0.3);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: st-toast-in 0.25s ease;
+}
+
+.kimi-messaging-media .st-toast::before{
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+@keyframes st-toast-in{
+  from{ opacity: 0; transform: translateY(-8px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Sidebar (kept for completeness) ---------- */
+.kimi-messaging-media .st-sidebar{
   width: 232px;
   flex-shrink: 0;
   background: var(--card);
@@ -35,12 +891,7 @@
   height: 100vh;
 }
 
-.kimi-messaging-media .st-logo{
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 4px 8px 18px;
-}
+.kimi-messaging-media .st-logo{ display: flex; align-items: center; gap: 9px; padding: 4px 8px 18px; }
 
 .kimi-messaging-media .st-logo-mark{
   width: 30px;
@@ -53,12 +904,7 @@
   justify-content: center;
 }
 
-.kimi-messaging-media .st-logo-text{
-  font-weight: 700;
-  font-size: 17px;
-  color: var(--navy);
-  letter-spacing: -0.3px;
-}
+.kimi-messaging-media .st-logo-text{ font-weight: 700; font-size: 17px; color: var(--navy); letter-spacing: -0.3px; }
 
 .kimi-messaging-media .st-nav{ display: flex; flex-direction: column; gap: 2px; flex: 1; }
 
@@ -70,22 +916,18 @@
   border: none;
   background: transparent;
   border-radius: 8px;
-  color: #4a5068;
+  color: var(--text-2);
   font-size: 13.5px;
   font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
   width: 100%;
+  transition: background 0.12s;
 }
 
 .kimi-messaging-media .st-nav-item:hover{ background: #f1f2f9; }
-
-.kimi-messaging-media .st-nav-item.active{
-  background: #eef0fd;
-  color: var(--brand);
-  font-weight: 600;
-}
-
+.kimi-messaging-media .st-nav-item.active{ background: var(--brand-soft); color: var(--brand); font-weight: 600; }
 .kimi-messaging-media .st-nav-chevron{ margin-left: auto; opacity: 0.4; }
 
 .kimi-messaging-media .st-sidebar-footer{
@@ -104,7 +946,7 @@
   align-items: center;
   font-size: 12px;
   font-weight: 600;
-  color: #4a5068;
+  color: var(--text-2);
   margin-bottom: 7px;
 }
 
@@ -119,7 +961,6 @@
 }
 
 .kimi-messaging-media .st-credits-fill{ width: 62%; height: 100%; background: var(--brand); border-radius: 99px; }
-
 .kimi-messaging-media .st-credits-count{ font-size: 11px; color: var(--muted); }
 
 .kimi-messaging-media .st-user{
@@ -147,580 +988,14 @@
 .kimi-messaging-media .st-user-name{ font-size: 13px; font-weight: 600; }
 .kimi-messaging-media .st-user-sub{ font-size: 11px; color: var(--muted); }
 
-.kimi-messaging-media /* ---------- Main / page ---------- */
-.st-main{ flex: 1; min-width: 0; position: relative; }
-
-.kimi-messaging-media .st-page{ padding: 26px 32px 90px; max-width: 1200px; }
-
-.kimi-messaging-media .st-title-row{ display: flex; align-items: center; gap: 13px; }
-
-.kimi-messaging-media .st-title-icon{
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
-  background: #eef0fd;
-  color: var(--brand);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.kimi-messaging-media .st-page h1{ font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); letter-spacing: -0.3px; }
-.kimi-messaging-media .st-subtitle{ margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-
-.kimi-messaging-media .st-header{
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 22px;
-}
-
-.kimi-messaging-media .st-header-actions{ display: flex; gap: 10px; align-items: center; }
-
-.kimi-messaging-media .st-search{
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  border-radius: 8px;
-  padding: 0 11px;
-  color: var(--muted);
-}
-
-.kimi-messaging-media .st-search input{
-  border: none;
-  outline: none;
-  height: 36px;
-  width: 160px;
-  font-size: 13px;
-  background: transparent;
-}
-
-.kimi-messaging-media /* ---------- Buttons ---------- */
-.st-btn-primary{
-  background: var(--brand);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 9px 18px;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.kimi-messaging-media .st-btn-primary:hover{ background: var(--brand-hover); }
-.kimi-messaging-media .st-btn-primary:disabled{ background: #c3c6e8; cursor: not-allowed; }
-
-.kimi-messaging-media .st-btn-secondary{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #4a5068;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kimi-messaging-media .st-btn-ghost{
-  background: transparent;
-  border: none;
-  color: var(--brand);
-  font-weight: 600;
-  font-size: 13.5px;
-  cursor: pointer;
-  padding: 9px 14px;
-}
-
-.kimi-messaging-media /* ---------- Campaign table ---------- */
-.st-table{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.kimi-messaging-media .st-table-head, .kimi-messaging-media .st-table-row{
-  display: grid;
-  grid-template-columns: minmax(230px, 1.6fr) 130px 56px 70px 70px 90px 90px 36px;
-  align-items: center;
-  gap: 8px;
-  padding: 13px 20px;
-}
-
-.kimi-messaging-media .st-table-head{
-  background: #fafbfe;
-  border-bottom: 1px solid var(--border);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--muted);
-}
-
-.kimi-messaging-media .st-table-row{ border-bottom: 1px solid #f0f1f8; }
-.kimi-messaging-media .st-table-row:last-child{ border-bottom: none; }
-.kimi-messaging-media .st-table-row:hover{ background: #fafbfe; }
-
-.kimi-messaging-media .col-campaign{ display: flex; flex-direction: column; gap: 2px; }
-.kimi-messaging-media .st-campaign-name{ font-weight: 600; font-size: 13.5px; }
-.kimi-messaging-media .st-campaign-detail{ font-size: 12px; color: var(--muted); }
-
-.kimi-messaging-media .col-audience{ display: flex; flex-direction: column; gap: 2px; }
-.kimi-messaging-media .st-contact-count{ font-weight: 600; }
-.kimi-messaging-media .st-audience-type{ font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
-
-.kimi-messaging-media .col-attach{ display: flex; gap: 7px; }
-.kimi-messaging-media .st-dim-icon{ color: #b3b8cc; }
-
-.kimi-messaging-media .col-stat{ font-size: 13px; color: #4a5068; }
-.kimi-messaging-media .st-revenue{ font-weight: 600; color: var(--text); }
-
-.kimi-messaging-media .st-status{
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 4px 11px;
-  border-radius: 99px;
-  display: inline-block;
-}
-
-.kimi-messaging-media .st-status-draft{ background: #f1f2f7; color: #6b7194; }
-.kimi-messaging-media .st-status-sent{ background: #e3f6ec; color: #149654; }
-.kimi-messaging-media .st-status-sending{ background: #e8edff; color: var(--brand); }
-
-.kimi-messaging-media /* ---------- Create campaign ---------- */
-.st-breadcrumb{ font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
-
-.kimi-messaging-media .st-create-grid{
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 40px;
-  margin-top: 26px;
-  align-items: start;
-}
-
-.kimi-messaging-media .st-form{ max-width: 520px; }
-
-.kimi-messaging-media .st-label{
-  display: block;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #4a5068;
-  margin: 18px 0 7px;
-}
-
-.kimi-messaging-media .st-label em{ font-weight: 400; color: var(--muted); font-style: normal; }
-
-.kimi-messaging-media .st-input{
-  width: 100%;
-  height: 40px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: 13.5px;
-  outline: none;
-  background: var(--card);
-}
-
-.kimi-messaging-media .st-input:focus{ border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
-
-.kimi-messaging-media /* Audience */
-.st-audience-box{
-  min-height: 40px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 5px 10px;
-  cursor: text;
-}
-
-.kimi-messaging-media .st-audience-box:focus-within{ border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
-
-.kimi-messaging-media .st-audience-input{ border: none; outline: none; flex: 1; min-width: 90px; font-size: 13.5px; }
-
-.kimi-messaging-media .st-chip{
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: #eef0fd;
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 3px 8px;
-}
-
-.kimi-messaging-media .st-chip button{ border: none; background: transparent; cursor: pointer; color: inherit; display: flex; padding: 0; }
-
-.kimi-messaging-media .st-audience-dropdown{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  margin-top: 5px;
-  box-shadow: 0 10px 30px rgba(23, 32, 58, 0.1);
-  padding: 6px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.kimi-messaging-media .st-dd-section{
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  color: var(--muted);
-  padding: 8px 10px 4px;
-}
-
-.kimi-messaging-media .st-dd-item{
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  border: none;
-  background: transparent;
-  padding: 8px 10px;
-  border-radius: 7px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-
-.kimi-messaging-media .st-dd-item:hover{ background: #f1f2f9; }
-.kimi-messaging-media .st-dd-list-icon{ color: var(--muted); font-size: 12px; }
-
-.kimi-messaging-media /* Message box */
-.st-message-head{ display: flex; justify-content: space-between; align-items: baseline; }
-.kimi-messaging-media .st-char-count{ font-size: 12px; color: var(--muted); }
-
-.kimi-messaging-media .st-mms-badge{
-  background: var(--brand);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 5px;
-  padding: 1px 5px;
-  margin-left: 5px;
-}
-
-.kimi-messaging-media .st-message-box{
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-  overflow: hidden;
-  position: relative;
-}
-
-.kimi-messaging-media .st-message-box:focus-within{ border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
-
-.kimi-messaging-media .st-message-box textarea{
-  width: 100%;
-  min-height: 130px;
-  border: none;
-  outline: none;
-  resize: vertical;
-  padding: 12px;
-  font-size: 13.5px;
-  font-family: inherit;
-}
-
-.kimi-messaging-media .st-attachment-thumb{
-  position: relative;
-  width: 52px;
-  margin: 0 0 8px 12px;
-}
-
-.kimi-messaging-media .st-attachment-img{
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  border: 1px solid var(--border);
-}
-
-.kimi-messaging-media .st-attachment-remove{
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: var(--navy);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.kimi-messaging-media .st-message-toolbar{
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 10px;
-  border-top: 1px solid #f0f1f8;
-}
-
-.kimi-messaging-media .st-toolbar-left{ display: flex; gap: 4px; }
-
-.kimi-messaging-media .st-toolbar-btn{
-  position: relative;
-  border: none;
-  background: transparent;
-  color: #6b7194;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.kimi-messaging-media .st-toolbar-btn:hover{ background: #f1f2f9; color: var(--text); }
-
-.kimi-messaging-media .st-tooltip{
-  position: absolute;
-  bottom: calc(100% + 7px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--navy);
-  color: #fff;
-  font-size: 11.5px;
-  font-weight: 500;
-  padding: 5px 10px;
-  border-radius: 6px;
-  white-space: nowrap;
-  z-index: 20;
-}
-
-.kimi-messaging-media /* Segmented control */
-.st-segmented{
-  display: inline-flex;
-  background: #edeff7;
-  border-radius: 9px;
-  padding: 3px;
-}
-
-.kimi-messaging-media .st-seg-btn{
-  border: none;
-  background: transparent;
-  padding: 7px 26px;
-  border-radius: 7px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #6b7194;
-  cursor: pointer;
-}
-
-.kimi-messaging-media .st-seg-btn.active{
-  background: var(--card);
-  color: var(--text);
-  font-weight: 600;
-  box-shadow: 0 1px 4px rgba(23, 32, 58, 0.12);
-  outline: 1.5px solid var(--brand);
-}
-
-.kimi-messaging-media /* ---------- Phone preview ---------- */
-.st-phone-wrap{ display: flex; flex-direction: column; align-items: center; gap: 10px; }
-
-.kimi-messaging-media .st-phone-label{ font-size: 12px; font-weight: 600; color: var(--muted); }
-
-.kimi-messaging-media .st-phone{
-  width: 280px;
-  height: 480px;
-  border: 2px solid var(--border);
-  border-radius: 30px;
-  background: var(--card);
-  padding: 18px 14px;
-  overflow: hidden;
-}
-
-.kimi-messaging-media .st-phone-content{ display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
-
-.kimi-messaging-media .st-bubble{
-  background: #eceef6;
-  color: var(--text);
-  border-radius: 14px 14px 14px 4px;
-  padding: 9px 12px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  max-width: 92%;
-}
-
-.kimi-messaging-media .st-mms-card{
-  width: 92%;
-  border-radius: 12px;
-  overflow: hidden;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: #f5c518;
-}
-
-.kimi-messaging-media .st-mms-pattern{
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  opacity: 0.75;
-}
-
-.kimi-messaging-media .st-mms-shirt{
-  font-size: 54px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 8px 20px;
-  filter: grayscale(1) brightness(0.4);
-}
-
-.kimi-messaging-media .st-mms-cta{
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-  color: #fff;
-  border: 1.5px solid #f5c518;
-  border-radius: 6px;
-  padding: 4px 12px;
-}
-
-.kimi-messaging-media /* ---------- Modal ---------- */
-.st-modal-overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(23, 32, 58, 0.45);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.kimi-messaging-media .st-modal{
-  background: var(--card);
-  border-radius: 14px;
-  width: 430px;
-  max-width: calc(100vw - 40px);
-  padding: 30px 32px 26px;
-  position: relative;
-  text-align: center;
-  box-shadow: 0 24px 60px rgba(23, 32, 58, 0.25);
-}
-
-.kimi-messaging-media .st-modal-close{
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.kimi-messaging-media .st-modal-icon{
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: #fdf3e0;
-  color: #e8a33d;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 14px;
-}
-
-.kimi-messaging-media .st-modal h2{ font-size: 17px; font-weight: 700; margin: 0 0 10px; color: var(--navy); }
-.kimi-messaging-media .st-modal p{ font-size: 13px; color: #5a6078; line-height: 1.6; margin: 0 0 20px; }
-.kimi-messaging-media .st-modal-btn{ width: 100%; padding: 11px; }
-
-.kimi-messaging-media /* ---------- Review ---------- */
-.st-review{ max-width: 560px; display: flex; flex-direction: column; gap: 6px; }
-
-.kimi-messaging-media .st-review-section{ margin-bottom: 14px; }
-.kimi-messaging-media .st-review-head{ display: flex; justify-content: space-between; align-items: baseline; }
-
-.kimi-messaging-media .st-edit-link{
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.kimi-messaging-media .st-review-card{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.kimi-messaging-media .st-review-audience{ display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--brand); }
-.kimi-messaging-media .st-review-count{ font-weight: 700; }
-
-.kimi-messaging-media .st-credit-summary{ flex-direction: column; align-items: stretch; gap: 0; padding: 6px 16px; }
-
-.kimi-messaging-media .st-credit-row{
-  display: flex;
-  justify-content: space-between;
-  padding: 9px 0;
-  font-size: 13px;
-  border-bottom: 1px solid #f0f1f8;
-}
-
-.kimi-messaging-media .st-credit-row:last-child{ border-bottom: none; }
-.kimi-messaging-media .st-credit-row span:last-child{ font-weight: 600; }
-
-.kimi-messaging-media /* ---------- Footer bar ---------- */
-.st-footer-bar{
-  position: fixed;
-  bottom: 0;
-  left: 232px;
-  right: 0;
-  background: var(--card);
-  border-top: 1px solid var(--border);
-  padding: 13px 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 50;
-}
-
-.kimi-messaging-media .st-footer-right{ display: flex; gap: 6px; align-items: center; }
-
-.kimi-messaging-media /* ---------- Toast ---------- */
-.st-toast{
-  position: fixed;
-  top: 20px;
-  right: 24px;
-  background: #149654;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 11px 20px;
-  border-radius: 9px;
-  box-shadow: 0 8px 24px rgba(20, 150, 84, 0.35);
-  z-index: 200;
+/* ---------- Responsive ---------- */
+@media (max-width: 1080px){
+  .kimi-messaging-media .st-create-grid{ grid-template-columns: minmax(0, 1fr); }
+  .kimi-messaging-media .st-phone-wrap{ position: static; }
+  .kimi-messaging-media .st-table-head,
+  .kimi-messaging-media .st-table-row{
+    grid-template-columns: minmax(200px, 1.6fr) 110px 50px 60px 60px 80px 84px 32px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
 }

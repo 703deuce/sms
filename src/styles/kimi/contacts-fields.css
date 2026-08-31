@@ -1,85 +1,133 @@
 .kimi-contacts-fields{
-  --tv-purple: #4f46e5;
-  --tv-purple-dark: #4338ca;
-  --tv-navy: #1e2a5a;
-  --tv-bg: #f6f7fb;
-  --tv-border: #e5e7f0;
-  --tv-text: #1f2437;
-  --tv-muted: #6b7280;
+  --tv-purple: #5a4bda;
+  --tv-purple-dark: #4a3fc4;
+  --tv-purple-soft: #eeedfd;
+  --tv-navy: #232a4d;
+  --tv-bg: #f7f8fc;
+  --tv-border: #e7e8f2;
+  --tv-border-soft: #f0f1f8;
+  --tv-text: #24283b;
+  --tv-muted: #6d7284;
+  --tv-green: #16a34a;
+  --tv-green-bg: #e3f6ec;
+  --tv-red: #dc2626;
+  --tv-red-bg: #fdecec;
 }
 
-.kimi-contacts-fields .tv-app{ display: flex; min-height: 100vh; background: var(--tv-bg); color: var(--tv-text); font-family: "Inter", system-ui, sans-serif; }
-.kimi-contacts-fields .tv-main{ flex: 1; padding: 28px 36px; overflow-y: auto; }
+.kimi-contacts-fields .tv-app{ display: flex; min-height: 100vh; background: var(--tv-bg); color: var(--tv-text); font-family: "Inter", system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+.kimi-contacts-fields .tv-main{ flex: 1; padding: 26px 32px 48px; overflow-y: auto; }
 
-.kimi-contacts-fields .tv-sidebar{ width: 228px; background: #fff; border-right: 1px solid var(--tv-border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
-.kimi-contacts-fields .tv-logo{ display: flex; align-items: center; gap: 8px; padding: 18px 20px; font-weight: 700; font-size: 17px; color: var(--tv-navy); }
-.kimi-contacts-fields .tv-logo-mark{ width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, #34d399 0%, #4f46e5 70%); display: inline-block; }
-.kimi-contacts-fields .tv-nav{ flex: 1; padding: 6px 12px; display: flex; flex-direction: column; gap: 2px; }
-.kimi-contacts-fields .tv-nav-item{ display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; color: #3d4358; cursor: pointer; border: none; background: transparent; text-align: left; width: 100%; }
-.kimi-contacts-fields .tv-nav-item:hover{ background: #f1f2fa; }
-.kimi-contacts-fields .tv-nav-item.active{ background: #eef0fe; color: var(--tv-purple); font-weight: 600; }
-.kimi-contacts-fields .tv-nav-sub{ padding-left: 34px; font-size: 13px; }
-.kimi-contacts-fields .tv-nav-group-label{ display: flex; align-items: center; justify-content: space-between; }
-.kimi-contacts-fields .tv-sidebar-footer{ border-top: 1px solid var(--tv-border); padding: 12px 16px; font-size: 12px; color: var(--tv-muted); }
-.kimi-contacts-fields .tv-user-row{ display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.kimi-contacts-fields .tv-avatar{ width: 30px; height: 30px; border-radius: 50%; background: #e0e7ff; color: var(--tv-purple); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+/* ---------- Sidebar ---------- */
+.kimi-contacts-fields .tv-sidebar{ width: 224px; background: #fff; border-right: 1px solid var(--tv-border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.kimi-contacts-fields .tv-logo{ display: flex; align-items: center; gap: 9px; padding: 16px 18px 14px; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; color: var(--tv-navy); border-bottom: 1px solid var(--tv-border-soft); }
+.kimi-contacts-fields .tv-logo-mark{ width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, #7a6cf0 0%, #5a4bda 70%); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 800; }
+.kimi-contacts-fields .tv-nav{ flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 1px; }
+.kimi-contacts-fields .tv-nav-item{ display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #454a63; cursor: pointer; border: none; background: transparent; text-align: left; width: 100%; transition: background .12s ease, color .12s ease; }
+.kimi-contacts-fields .tv-nav-item:hover{ background: #f3f4fb; color: var(--tv-navy); }
+.kimi-contacts-fields .tv-nav-item.active{ background: var(--tv-purple-soft); color: var(--tv-purple); font-weight: 600; }
+.kimi-contacts-fields .tv-nav-sub{ padding-left: 36px; font-size: 12.5px; position: relative; }
+.kimi-contacts-fields .tv-nav-sub.active::before{ content: ""; position: absolute; left: 18px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--tv-purple); }
+.kimi-contacts-fields .tv-nav-group-label{ display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.kimi-contacts-fields .tv-sidebar-footer{ border-top: 1px solid var(--tv-border); padding: 12px 14px 14px; font-size: 12px; color: var(--tv-muted); }
+.kimi-contacts-fields .tv-credits-bar{ height: 4px; border-radius: 4px; background: #eceef6; margin-top: 8px; overflow: hidden; }
+.kimi-contacts-fields .tv-credits-fill{ height: 100%; width: 72%; border-radius: 4px; background: var(--tv-purple); }
+.kimi-contacts-fields .tv-user-row{ display: flex; align-items: center; gap: 9px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--tv-border-soft); }
+.kimi-contacts-fields .tv-avatar{ width: 30px; height: 30px; border-radius: 50%; background: var(--tv-purple-soft); color: var(--tv-purple); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 
-.kimi-contacts-fields .tv-page-head{ display: flex; align-items: flex-start; gap: 12px; margin-bottom: 6px; }
-.kimi-contacts-fields .tv-head-icon{ width: 38px; height: 38px; border-radius: 10px; background: #eef0fe; color: var(--tv-purple); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.kimi-contacts-fields .tv-title{ font-size: 21px; font-weight: 700; margin: 0; color: var(--tv-navy); }
-.kimi-contacts-fields .tv-subtitle{ font-size: 13px; color: var(--tv-muted); max-width: 780px; line-height: 1.5; margin: 4px 0 18px; }
-.kimi-contacts-fields .tv-breadcrumb{ font-size: 12px; color: var(--tv-muted); margin-bottom: 12px; }
+/* ---------- Page header ---------- */
+.kimi-contacts-fields .tv-page-head{ display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+.kimi-contacts-fields .tv-head-icon{ width: 36px; height: 36px; border-radius: 10px; background: var(--tv-purple-soft); color: var(--tv-purple); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.kimi-contacts-fields .tv-title{ font-size: 20px; font-weight: 700; letter-spacing: -0.015em; margin: 0; color: var(--tv-navy); }
+.kimi-contacts-fields .tv-subtitle{ font-size: 13px; color: var(--tv-muted); max-width: 760px; line-height: 1.55; margin: 3px 0 18px; }
+.kimi-contacts-fields .tv-breadcrumb{ font-size: 12px; color: var(--tv-muted); margin-bottom: 14px; }
 
-.kimi-contacts-fields .tv-toolbar{ display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 14px; }
-.kimi-contacts-fields .tv-input, .kimi-contacts-fields .tv-select, .kimi-contacts-fields .tv-textarea{ border: 1px solid var(--tv-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; background: #fff; color: var(--tv-text); outline: none; }
-.kimi-contacts-fields .tv-input:focus, .kimi-contacts-fields .tv-select:focus, .kimi-contacts-fields .tv-textarea:focus{ border-color: var(--tv-purple); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
-.kimi-contacts-fields .tv-input{ min-width: 240px; }
-.kimi-contacts-fields .tv-btn{ border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
-.kimi-contacts-fields .tv-btn-primary{ background: var(--tv-purple); color: #fff; }
+/* ---------- Toolbar ---------- */
+.kimi-contacts-fields .tv-toolbar{ display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: 6px 0 14px; }
+.kimi-contacts-fields .tv-search{ position: relative; }
+.kimi-contacts-fields .tv-search .tv-input{ padding-left: 32px; min-width: 230px; background: #fff; }
+.kimi-contacts-fields .tv-search-icon{ position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #a0a4b8; pointer-events: none; }
+
+/* ---------- Inputs ---------- */
+.kimi-contacts-fields .tv-input, .kimi-contacts-fields .tv-select, .kimi-contacts-fields .tv-textarea{ border: 1px solid var(--tv-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; background: #fff; color: var(--tv-text); outline: none; transition: border-color .12s ease, box-shadow .12s ease; }
+.kimi-contacts-fields .tv-input::placeholder, .kimi-contacts-fields .tv-textarea::placeholder{ color: #a0a4b8; }
+.kimi-contacts-fields .tv-input:focus, .kimi-contacts-fields .tv-select:focus, .kimi-contacts-fields .tv-textarea:focus{ border-color: var(--tv-purple); box-shadow: 0 0 0 3px rgba(90,75,218,.12); }
+.kimi-contacts-fields .tv-input{ min-width: 220px; height: 36px; box-sizing: border-box; }
+.kimi-contacts-fields .tv-select{ height: 36px; appearance: none; background-image: linear-gradient(45deg, transparent 50%, #8b8fa3 50%), linear-gradient(135deg, #8b8fa3 50%, transparent 50%); background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 30px; }
+.kimi-contacts-fields .tv-label{ display: block; font-size: 12.5px; font-weight: 600; color: #3c4157; margin: 16px 0 6px; }
+
+/* ---------- Buttons ---------- */
+.kimi-contacts-fields .tv-btn{ display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: none; border-radius: 8px; padding: 0 16px; height: 36px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s ease, box-shadow .12s ease, color .12s ease; white-space: nowrap; }
+.kimi-contacts-fields .tv-btn-primary{ background: var(--tv-purple); color: #fff; box-shadow: 0 1px 2px rgba(35,42,77,.12); }
 .kimi-contacts-fields .tv-btn-primary:hover{ background: var(--tv-purple-dark); }
-.kimi-contacts-fields .tv-btn-ghost{ background: #fff; border: 1px solid var(--tv-border); color: var(--tv-text); }
+.kimi-contacts-fields .tv-btn-primary:disabled{ background: #c9c6ec; cursor: not-allowed; box-shadow: none; }
+.kimi-contacts-fields .tv-btn-ghost{ background: #fff; border: 1px solid var(--tv-border); color: #3c4157; }
+.kimi-contacts-fields .tv-btn-ghost:hover{ background: #f3f4fb; border-color: #d9dbea; }
 
-.kimi-contacts-fields .tv-table{ width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; overflow: hidden; font-size: 13px; }
-.kimi-contacts-fields .tv-table th{ text-align: left; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--tv-muted); padding: 12px 16px; border-bottom: 1px solid var(--tv-border); background: #fafbfe; font-weight: 600; }
-.kimi-contacts-fields .tv-table td{ padding: 14px 16px; border-bottom: 1px solid #f0f1f8; vertical-align: middle; }
-.kimi-contacts-fields .tv-table tr:last-child td{ border-bottom: none; }
-.kimi-contacts-fields .tv-table tr:hover td{ background: #fafbff; }
-.kimi-contacts-fields .tv-row-active td{ box-shadow: inset 0 0 0 1.5px var(--tv-purple); }
+/* ---------- Tables ---------- */
+.kimi-contacts-fields .tv-table{ width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; overflow: hidden; font-size: 13px; box-shadow: 0 1px 2px rgba(35,42,77,.04); }
+.kimi-contacts-fields .tv-table th{ text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: #7a7f95; padding: 11px 16px; border-bottom: 1px solid var(--tv-border); background: #fafbfe; font-weight: 600; }
+.kimi-contacts-fields .tv-table td{ padding: 12px 16px; border-bottom: 1px solid var(--tv-border-soft); vertical-align: middle; color: #33384f; }
+.kimi-contacts-fields .tv-table tbody tr:last-child td{ border-bottom: none; }
+.kimi-contacts-fields .tv-table tbody tr{ transition: background .1s ease; }
+.kimi-contacts-fields .tv-table tbody tr:hover td{ background: #fafbff; }
+.kimi-contacts-fields .tv-row-active td{ box-shadow: inset 0 0 0 1.5px var(--tv-purple); background: #f6f5fe !important; }
+.kimi-contacts-fields .tv-cell-strong{ font-weight: 600; color: var(--tv-navy); }
+.kimi-contacts-fields .tv-cell-sub{ font-size: 12px; color: var(--tv-muted); margin-top: 2px; }
 
-.kimi-contacts-fields .tv-pill{ display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-.kimi-contacts-fields .tv-pill-green{ background: #e5f7ee; color: #16a34a; }
-.kimi-contacts-fields .tv-pill-purple{ background: #eeedfd; color: var(--tv-purple); }
+/* ---------- Pills ---------- */
+.kimi-contacts-fields .tv-pill{ display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: .01em; }
+.kimi-contacts-fields .tv-pill-green{ background: var(--tv-green-bg); color: var(--tv-green); }
+.kimi-contacts-fields .tv-pill-red{ background: var(--tv-red-bg); color: var(--tv-red); }
+.kimi-contacts-fields .tv-pill-purple{ background: var(--tv-purple-soft); color: var(--tv-purple); }
 .kimi-contacts-fields .tv-pill-blue{ background: #e8f1fe; color: #2563eb; }
-.kimi-contacts-fields .tv-pill-amber{ background: #fef3e2; color: #d97706; }
+.kimi-contacts-fields .tv-pill-amber{ background: #fef3e2; color: #b45309; }
 
-.kimi-contacts-fields .tv-icon-btn{ background: transparent; border: none; color: #9aa0b4; cursor: pointer; padding: 6px; border-radius: 6px; }
-.kimi-contacts-fields .tv-icon-btn:hover{ background: #eef0fe; color: var(--tv-purple); }
-.kimi-contacts-fields .tv-merge{ font-family: ui-monospace, monospace; font-size: 12.5px; color: #3d4358; display: inline-flex; align-items: center; gap: 6px; }
+/* ---------- Misc ---------- */
+.kimi-contacts-fields .tv-icon-btn{ background: transparent; border: none; color: #9aa0b4; cursor: pointer; padding: 6px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; transition: background .12s ease, color .12s ease; }
+.kimi-contacts-fields .tv-icon-btn:hover{ background: var(--tv-purple-soft); color: var(--tv-purple); }
+.kimi-contacts-fields .tv-icon-btn.danger:hover{ background: var(--tv-red-bg); color: var(--tv-red); }
+.kimi-contacts-fields .tv-merge{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #454a63; background: #f4f5fa; border: 1px solid var(--tv-border-soft); border-radius: 6px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 7px; }
 .kimi-contacts-fields .tv-link{ color: var(--tv-purple); font-size: 13px; cursor: pointer; background: none; border: none; padding: 0; }
+.kimi-contacts-fields .tv-link:hover{ text-decoration: underline; }
 
-.kimi-contacts-fields .tv-form-card{ max-width: 460px; }
-.kimi-contacts-fields .tv-label{ display: block; font-size: 13px; font-weight: 600; margin: 18px 0 6px; }
-.kimi-contacts-fields .tv-form-actions{ display: flex; gap: 10px; margin-top: 24px; }
+/* ---------- Forms ---------- */
+.kimi-contacts-fields .tv-form-card{ max-width: 480px; background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; padding: 22px 24px 24px; box-shadow: 0 1px 2px rgba(35,42,77,.04); }
+.kimi-contacts-fields .tv-form-actions{ display: flex; gap: 10px; margin-top: 26px; }
+.kimi-contacts-fields .tv-two-col{ display: flex; gap: 36px; align-items: flex-start; }
 
-.kimi-contacts-fields .tv-toast{ position: fixed; top: 18px; right: 22px; background: #16a34a; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.15); z-index: 60; animation: tvSlide .25s ease; }
+/* ---------- Toast ---------- */
+.kimi-contacts-fields .tv-toast{ position: fixed; top: 18px; right: 22px; background: #16a34a; color: #fff; padding: 10px 18px; border-radius: 9px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(20,24,60,.18); z-index: 60; animation: tvSlide .25s ease; display: flex; align-items: center; gap: 8px; }
 @keyframes tvSlide { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-.kimi-contacts-fields .tv-dropdown{ position: absolute; background: #fff; border: 1px solid var(--tv-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(20,24,60,.12); padding: 6px; z-index: 50; min-width: 160px; }
-.kimi-contacts-fields .tv-dropdown button{ display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--tv-text); }
-.kimi-contacts-fields .tv-dropdown button:hover{ background: #f1f2fa; }
+/* ---------- Dropdown ---------- */
+.kimi-contacts-fields .tv-dropdown{ position: absolute; background: #fff; border: 1px solid var(--tv-border); border-radius: 10px; box-shadow: 0 12px 32px rgba(20,24,60,.14); padding: 5px; z-index: 50; min-width: 190px; }
+.kimi-contacts-fields .tv-dropdown button{ display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: none; border: none; padding: 8px 10px; border-radius: 7px; font-size: 12.5px; font-weight: 500; cursor: pointer; color: #33384f; }
+.kimi-contacts-fields .tv-dropdown button:hover{ background: #f3f4fb; }
+.kimi-contacts-fields .tv-dropdown .tv-dd-danger{ color: var(--tv-red); }
+.kimi-contacts-fields .tv-dropdown .tv-dd-danger:hover{ background: var(--tv-red-bg); }
+.kimi-contacts-fields .tv-dropdown .tv-dd-sep{ height: 1px; background: var(--tv-border-soft); margin: 4px 6px; }
 
-.kimi-contacts-fields .tv-stats{ display: flex; gap: 14px; margin: 16px 0 20px; }
-.kimi-contacts-fields .tv-stat{ flex: 1; max-width: 220px; background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
-.kimi-contacts-fields .tv-stat-icon{ width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.kimi-contacts-fields .tv-stat-num{ font-size: 20px; font-weight: 700; color: var(--tv-navy); }
-.kimi-contacts-fields .tv-stat-label{ font-size: 12px; color: var(--tv-muted); }
+/* ---------- Stat cards ---------- */
+.kimi-contacts-fields .tv-stats{ display: flex; gap: 14px; margin: 18px 0 20px; }
+.kimi-contacts-fields .tv-stat{ flex: 1; max-width: 250px; background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 13px; box-shadow: 0 1px 2px rgba(35,42,77,.04); }
+.kimi-contacts-fields .tv-stat-icon{ width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.kimi-contacts-fields .tv-stat-num{ font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: var(--tv-navy); line-height: 1.15; }
+.kimi-contacts-fields .tv-stat-label{ font-size: 12px; color: var(--tv-muted); font-weight: 500; }
 
-.kimi-contacts-fields .tv-tip-card{ background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; padding: 20px; max-width: 340px; }
-.kimi-contacts-fields .tv-two-col{ display: flex; gap: 40px; align-items: flex-start; }
-.kimi-contacts-fields .tv-tag{ display: inline-flex; align-items: center; gap: 6px; background: #eef0fe; color: var(--tv-purple); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+/* ---------- Tip card ---------- */
+.kimi-contacts-fields .tv-tip-card{ background: #fff; border: 1px solid var(--tv-border); border-radius: 12px; padding: 18px; max-width: 330px; box-shadow: 0 1px 2px rgba(35,42,77,.04); }
+
+/* ---------- Tags ---------- */
+.kimi-contacts-fields .tv-tag{ display: inline-flex; align-items: center; gap: 6px; background: var(--tv-purple-soft); color: var(--tv-purple); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; margin: 0 6px 6px 0; }
+
+/* ---------- Custom select ---------- */
 .kimi-contacts-fields .tv-select-wrap{ position: relative; }
-.kimi-contacts-fields .tv-options{ position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #eceef6; border: 1px solid var(--tv-border); border-radius: 8px; z-index: 40; overflow: hidden; box-shadow: 0 10px 26px rgba(20,24,60,.14); }
-.kimi-contacts-fields .tv-options button{ display: block; width: 100%; text-align: left; border: none; background: none; padding: 9px 12px; font-size: 13px; cursor: pointer; }
-.kimi-contacts-fields .tv-options button:hover{ background: var(--tv-purple); color: #fff; }
-.kimi-contacts-fields .tv-section-title{ font-size: 15px; font-weight: 700; margin: 28px 0 4px; color: var(--tv-navy); }
-.kimi-contacts-fields .tv-section-sub{ font-size: 12.5px; color: var(--tv-muted); margin-bottom: 10px; }
+.kimi-contacts-fields .tv-options{ position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid var(--tv-border); border-radius: 9px; z-index: 40; overflow: hidden; box-shadow: 0 12px 30px rgba(20,24,60,.14); padding: 4px; }
+.kimi-contacts-fields .tv-options button{ display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; border: none; background: none; padding: 8px 10px; font-size: 13px; border-radius: 6px; cursor: pointer; color: #33384f; }
+.kimi-contacts-fields .tv-options button:hover{ background: var(--tv-purple-soft); color: var(--tv-purple); }
+.kimi-contacts-fields .tv-options button.selected{ background: var(--tv-purple-soft); color: var(--tv-purple); font-weight: 600; }
+
+/* ---------- Sections ---------- */
+.kimi-contacts-fields .tv-section-title{ font-size: 14.5px; font-weight: 700; margin: 28px 0 4px; color: var(--tv-navy); letter-spacing: -0.01em; }
+.kimi-contacts-fields .tv-section-sub{ font-size: 12.5px; color: var(--tv-muted); margin: 0 0 12px; line-height: 1.55; max-width: 560px; }
+.kimi-contacts-fields .tv-table-footer{ display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 12px; color: var(--tv-muted); }

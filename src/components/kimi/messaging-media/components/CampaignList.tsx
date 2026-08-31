@@ -15,7 +15,7 @@ export default function CampaignList({ extraCampaigns, onCreate }: Props) {
     <div className="st-page">
       <div className="st-header">
         <div className="st-title-row">
-          <div className="st-title-icon"><Megaphone size={22} /></div>
+          <div className="st-title-icon"><Megaphone size={20} /></div>
           <div>
             <h1>Campaigns</h1>
             <p className="st-subtitle">View and manage all of your campaigns.</p>
@@ -35,38 +35,41 @@ export default function CampaignList({ extraCampaigns, onCreate }: Props) {
 
       <div className="st-table">
         <div className="st-table-head">
-          <span className="col-campaign">CAMPAIGN</span>
+          <span className="col-campaign">Campaign</span>
           <span className="col-audience"></span>
           <span className="col-attach"></span>
           <span className="col-stat">Clicks</span>
           <span className="col-stat">Unsubs</span>
           <span className="col-stat">Revenue</span>
-          <span className="col-status">STATUS</span>
+          <span className="col-status">Status</span>
           <span className="col-more"></span>
         </div>
-        {all.map((c) => (
-          <div key={c.id} className="st-table-row">
-            <div className="col-campaign">
-              <span className="st-campaign-name">{c.name}</span>
-              <span className="st-campaign-detail">{c.detail}</span>
+        {all.map((c) => {
+          const showStats = c.status === 'Sent' || c.status === 'Sending'
+          return (
+            <div key={c.id} className="st-table-row">
+              <div className="col-campaign">
+                <span className="st-campaign-name">{c.name}</span>
+                <span className="st-campaign-detail">{c.detail}</span>
+              </div>
+              <div className="col-audience">
+                <span className="st-contact-count">{c.contacts.toLocaleString()}</span>
+                <span className="st-audience-type"><Users size={12} /> {c.audienceType}</span>
+              </div>
+              <div className="col-attach">
+                <MessageSquare size={15} className="st-dim-icon" />
+                {c.hasAttachment && <Paperclip size={14} className="st-dim-icon" />}
+              </div>
+              <span className="col-stat">{showStats ? c.clicks : ''}</span>
+              <span className="col-stat">{showStats ? c.unsubs : ''}</span>
+              <span className="col-stat st-revenue">{showStats ? c.revenue : ''}</span>
+              <span className="col-status">
+                <span className={`st-status st-status-${c.status.toLowerCase()}`}>{c.status}</span>
+              </span>
+              <span className="col-more"><MoreVertical size={15} className="st-dim-icon" /></span>
             </div>
-            <div className="col-audience">
-              <span className="st-contact-count">{c.contacts.toLocaleString()}</span>
-              <span className="st-audience-type"><Users size={12} /> {c.audienceType}</span>
-            </div>
-            <div className="col-attach">
-              <MessageSquare size={15} className="st-dim-icon" />
-              {c.hasAttachment && <Paperclip size={14} className="st-dim-icon" />}
-            </div>
-            <span className="col-stat">{c.status === 'Sent' || c.status === 'Sending' ? c.clicks : ''}</span>
-            <span className="col-stat">{c.status === 'Sent' || c.status === 'Sending' ? c.unsubs : ''}</span>
-            <span className="col-stat st-revenue">{c.status === 'Sent' || c.status === 'Sending' ? c.revenue : ''}</span>
-            <span className="col-status">
-              <span className={`st-status st-status-${c.status.toLowerCase()}`}>{c.status}</span>
-            </span>
-            <span className="col-more"><MoreVertical size={15} className="st-dim-icon" /></span>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

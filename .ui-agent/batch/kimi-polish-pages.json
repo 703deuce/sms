@@ -1,0 +1,76 @@
+{
+  "updatedAt": "2026-08-31T04:42:12.350Z",
+  "concurrency": 7,
+  "staggerMs": 3000,
+  "jobs": [
+    {
+      "route": "/campaigns",
+      "status": "complete",
+      "completedAt": "2026-08-31T04:36:13.698Z"
+    },
+    {
+      "route": "/automations",
+      "status": "complete",
+      "completedAt": "2026-08-31T04:36:13.698Z"
+    },
+    {
+      "route": "/conversations",
+      "status": "complete",
+      "completedAt": "2026-08-31T04:36:13.698Z"
+    },
+    {
+      "route": "/auto-replies",
+      "status": "complete",
+      "completedAt": "2026-08-31T04:36:13.698Z"
+    },
+    {
+      "route": "/contacts",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:13.699Z",
+      "sessionId": "2026-08-31T04-36-14-002Z-54a416",
+      "completedAt": "2026-08-31T04:41:33.277Z"
+    },
+    {
+      "route": "/contacts/lists",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:16.700Z",
+      "sessionId": "2026-08-31T04-36-16-892Z-960fa2",
+      "completedAt": "2026-08-31T04:42:12.350Z"
+    },
+    {
+      "route": "/contacts/fields",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:16.702Z",
+      "sessionId": "2026-08-31T04-36-17-148Z-244877",
+      "completedAt": "2026-08-31T04:41:24.585Z"
+    },
+    {
+      "route": "/messaging/media",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:16.703Z",
+      "sessionId": "2026-08-31T04-36-16-971Z-7a000c",
+      "completedAt": "2026-08-31T04:41:06.878Z"
+    },
+    {
+      "route": "/grow/keywords",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:16.705Z",
+      "sessionId": "2026-08-31T04-36-16-917Z-a75f72",
+      "completedAt": "2026-08-31T04:41:15.694Z"
+    },
+    {
+      "route": "/grow/qr-codes",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:16.706Z",
+      "sessionId": "2026-08-31T04-36-17-271Z-acae8c",
+      "completedAt": "2026-08-31T04:39:33.845Z"
+    },
+    {
+      "route": "/grow/tap-to-join",
+      "status": "complete",
+      "startedAt": "2026-08-31T04:36:16.707Z",
+      "sessionId": "2026-08-31T04-36-16-995Z-c54b50",
+      "completedAt": "2026-08-31T04:39:42.844Z"
+    }
+  ]
+}

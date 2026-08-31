@@ -17,6 +17,7 @@
     "ui:kimi-batch-complete": "tsx scripts/ui-agent/kimi-batch-complete.ts",
     "ui:kimi-sidebar": "tsx scripts/ui-agent/kimi-sidebar.ts",
     "ui:kimi-capture-polish": "tsx scripts/ui-agent/capture-polish-target.ts",
+    "ui:kimi-batch-polish": "tsx scripts/ui-agent/kimi-batch-polish.ts",
     "ui:refs": "tsx scripts/ui-agent/index.ts refs",
     "ui:approve": "tsx scripts/ui-agent/index.ts approve",
     "ui:integrate": "tsx scripts/ui-agent/index.ts integrate",

@@ -11,22 +11,20 @@ export default function PhonePreview({ message, attachment, label = 'Message Pre
     <div className="st-phone-wrap">
       <span className="st-phone-label">{label}</span>
       <div className="st-phone">
-        {(message || attachment) ? (
-          <div className="st-phone-content">
-            {message && <div className="st-bubble">{message}</div>}
-            {attachment && (
-              <div className="st-mms-card" style={{ background: attachment.color }}>
-                <div className="st-mms-pattern">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <span key={i}>{attachment.label}</span>
-                  ))}
-                </div>
-                <div className="st-mms-shirt">👕</div>
-                <div className="st-mms-cta">20% OFF BASICS</div>
+        <div className="st-phone-content">
+          {message ? <div className="st-bubble">{message}</div> : null}
+          {attachment ? (
+            <div className="st-mms-card" style={{ background: attachment.color }}>
+              <div className="st-mms-pattern">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <span key={i}>{attachment.label} {attachment.label} {attachment.label}</span>
+                ))}
               </div>
-            )}
-          </div>
-        ) : null}
+              <div className="st-mms-shirt">👕</div>
+              <div className="st-mms-cta">20% OFF BASICS</div>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )

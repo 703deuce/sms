@@ -29,30 +29,35 @@ export default function GrowQrCodesFlow() {
   return (
     <div className="tv-shell">
       <main className="flex-1 overflow-y-auto" onClick={() => setMenuFor(null)}>
-        <div className="max-w-[1100px] mx-auto px-8 py-6">
+        <div className="max-w-[1100px] mx-auto px-8 py-7">
           {view === 'generator' ? (
             <>
-              <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4" onClick={() => setView('list')}>
+              <button
+                className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors mb-5"
+                onClick={() => setView('list')}
+              >
                 <ArrowLeft size={15} /> Back to Keywords
               </button>
               <QrGenerator onCancel={() => setView('list')} defaultKeyword={defaultKeyword} />
             </>
           ) : (
             <>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                <span>Tools</span><span>/</span><span>Keywords</span>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                <span>Tools</span><span className="text-border">/</span><span>Keywords</span>
               </div>
-              <div className="flex items-center gap-2.5 mb-1">
-                <QrIcon size={22} className="text-foreground" />
-                <h1 className="text-xl font-semibold text-foreground">QR Codes</h1>
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
+                  <QrIcon size={18} />
+                </span>
+                <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">QR Codes</h1>
               </div>
-              <p className="text-sm text-muted-foreground mb-5">View and manage all of your keywords &amp; QR codes.</p>
+              <p className="text-sm text-muted-foreground mb-6">View and manage all of your keywords &amp; QR codes.</p>
 
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between gap-4 mb-4">
                 <div className="relative">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    className="tv-input pl-9 w-64"
+                    className="tv-input pl-9 w-72"
                     placeholder="Search"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -63,37 +68,44 @@ export default function GrowQrCodesFlow() {
                 </button>
               </div>
 
-              <div className="bg-card border border-border rounded-lg overflow-visible">
-                <div className="grid grid-cols-[1.2fr_1.6fr_0.7fr_0.5fr_40px] px-5 py-3 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase border-b border-border">
+              <div className="bg-card border border-border rounded-xl shadow-sm overflow-visible">
+                <div className="grid grid-cols-[1.1fr_1.7fr_0.8fr_0.5fr_44px] items-center px-5 h-11 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase border-b border-border bg-muted/40 rounded-t-xl">
                   <span>Keyword</span><span>Description</span><span /><span>Status</span><span />
                 </div>
                 {rows.map((k) => (
-                  <div key={k.id} className="grid grid-cols-[1.2fr_1.6fr_0.7fr_0.5fr_40px] items-center px-5 py-4 border-b border-border last:border-0 hover:bg-accent/40">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{k.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{k.lastSaved}</p>
+                  <div
+                    key={k.id}
+                    className="grid grid-cols-[1.1fr_1.7fr_0.8fr_0.5fr_44px] items-center px-5 py-4 border-b border-border last:border-0 hover:bg-accent/40 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{k.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{k.lastSaved}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground pr-6">{k.description}</p>
-                    <span className="tv-chip w-fit"><ListChecks size={12} className="mr-1" />{k.connectedLists} Connected List</span>
-                    <span className="tv-status">{k.status}</span>
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <button className="p-1.5 rounded hover:bg-accent" onClick={() => setMenuFor(menuFor === k.id ? null : k.id)}>
-                        <MoreVertical size={16} className="text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground pr-6 leading-snug">{k.description}</p>
+                    <span className="tv-chip w-fit"><ListChecks size={12} className="mr-1.5" />{k.connectedLists} Connected List</span>
+                    <span className={`tv-status ${k.status === 'Active' ? '' : 'tv-status-inactive'}`}>{k.status}</span>
+                    <div className="relative flex justify-end" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        onClick={() => setMenuFor(menuFor === k.id ? null : k.id)}
+                      >
+                        <MoreVertical size={16} />
                       </button>
                       {menuFor === k.id && (
-                        <div className="tv-popover absolute right-0 z-30 w-52 py-1">
-                          <button className="tv-menu-item"><Pencil size={14} className="mr-2" />Edit</button>
-                          <button className="tv-menu-item"><Copy size={14} className="mr-2" />Clone</button>
-                          <button className="tv-menu-item" onClick={() => openGenerator(k)}><QrIcon size={14} className="mr-2" />Create QR Code</button>
-                          <button className="tv-menu-item"><Link2 size={14} className="mr-2" />Create Tap-to-Join Link</button>
-                          <button className="tv-menu-item text-red-600"><Trash2 size={14} className="mr-2" />Delete</button>
+                        <div className="tv-popover absolute right-0 top-9 z-30 w-56 py-1.5">
+                          <button className="tv-menu-item"><Pencil size={14} className="mr-2.5 text-muted-foreground" />Edit</button>
+                          <button className="tv-menu-item"><Copy size={14} className="mr-2.5 text-muted-foreground" />Clone</button>
+                          <button className="tv-menu-item" onClick={() => openGenerator(k)}><QrIcon size={14} className="mr-2.5 text-muted-foreground" />Create QR Code</button>
+                          <button className="tv-menu-item"><Link2 size={14} className="mr-2.5 text-muted-foreground" />Create Tap-to-Join Link</button>
+                          <div className="my-1.5 border-t border-border" />
+                          <button className="tv-menu-item text-red-600"><Trash2 size={14} className="mr-2.5" />Delete</button>
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
-                <div className="px-5 py-3">
-                  <select className="tv-input w-auto text-sm py-1.5">
+                <div className="px-5 py-3 border-t border-border">
+                  <select className="tv-input w-auto text-[13px] py-1.5 pr-8 text-muted-foreground">
                     <option>25 Per Page</option><option>50 Per Page</option>
                   </select>
                 </div>

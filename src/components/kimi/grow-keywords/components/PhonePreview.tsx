@@ -10,38 +10,49 @@ export default function PhonePreview({
   message: string;
 }) {
   return (
-    <div style={{ position: "sticky", top: 0 }}>
-      <div
-        style={{
-          textAlign: "center",
-          fontSize: 11.5,
-          fontWeight: 700,
-          letterSpacing: 1.4,
-          textTransform: "uppercase",
-          color: "#6a708c",
-          marginBottom: 12,
-        }}
-      >
-        Message Preview
-      </div>
+    <div style={{ position: "sticky", top: 8, width: 300, flexShrink: 0 }}>
+      <div className="kw-preview-label">Message Preview</div>
       <div className="kw-phone">
-        <div
-          style={{
-            width: 90,
-            height: 5,
-            borderRadius: 99,
-            background: "#e6e8f2",
-            margin: "0 auto 18px",
-          }}
-        />
-        {keyword && <div className="kw-bubble-out kw-fade">{keyword}</div>}
-        {message && (
-          <div className="kw-bubble-in kw-fade">
-            {message}
-            {"\n\n"}
-            {complianceFooter}
-          </div>
-        )}
+        {/* Status bar */}
+        <div className="kw-phone-status">
+          <span>9:41</span>
+          <div className="kw-phone-notch" />
+          <span className="kw-phone-signal">
+            <span style={{ height: 4 }} />
+            <span style={{ height: 6 }} />
+            <span style={{ height: 8 }} />
+            <span style={{ height: 10 }} />
+          </span>
+        </div>
+        {/* Conversation header */}
+        <div className="kw-phone-header">
+          <div className="kw-phone-avatar">T</div>
+          <span>Transovo</span>
+        </div>
+
+        <div className="kw-phone-thread">
+          {keyword ? (
+            <>
+              <div className="kw-bubble-out kw-fade">{keyword}</div>
+              <div className="kw-bubble-time">Delivered</div>
+            </>
+          ) : null}
+          {message ? (
+            <div className="kw-bubble-in kw-fade">
+              {message}
+              {"\n\n"}
+              <span style={{ color: "#9aa0b8", fontSize: 11.5 }}>
+                {complianceFooter}
+              </span>
+            </div>
+          ) : null}
+          {!keyword && !message && (
+            <div className="kw-phone-empty">
+              Start typing to preview how your keyword conversation will look on a
+              subscriber&apos;s phone.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

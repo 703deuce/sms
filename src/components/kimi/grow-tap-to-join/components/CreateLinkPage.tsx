@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MousePointerClick, Info, Smartphone } from "lucide-react";
+import { MousePointerClick, Info, Smartphone, Search, ChevronDown } from "lucide-react";
 import { Keyword, TapLink } from "../mock-data";
 
 interface Props {
@@ -18,6 +18,11 @@ export default function CreateLinkPage({ keywords, prefillKeyword, onSave, onBac
   const [fallback, setFallback] = useState("");
   const [active, setActive] = useState(true);
   const [kwOpen, setKwOpen] = useState(false);
+  const [kwSearch, setKwSearch] = useState("");
+
+  const filteredKeywords = keywords.filter((k) =>
+    k.keyword.toLowerCase().includes(kwSearch.toLowerCase())
+  );
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -60,20 +65,32 @@ export default function CreateLinkPage({ keywords, prefillKeyword, onSave, onBac
             <label>Keyword <Info size={12} className="ttj-info-icon" /></label>
             <div className="ttj-dropdown-wrap">
               <button className="ttj-input ttj-dropdown-btn" onClick={() => setKwOpen(!kwOpen)}>
-                {keyword}
+                <span>{keyword}</span>
+                <ChevronDown size={14} className="ttj-info-icon" />
               </button>
               {kwOpen && (
                 <div className="ttj-dropdown">
-                  <div className="ttj-dropdown-search">Search</div>
-                  {keywords.map((k) => (
+                  <div className="ttj-dropdown-search">
+                    <Search size={12} />
+                    <input
+                      placeholder="Search"
+                      value={kwSearch}
+                      onChange={(e) => setKwSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {filteredKeywords.map((k) => (
                     <button
                       key={k.id}
                       className="ttj-dropdown-item"
-                      onClick={() => { setKeyword(k.keyword); setKwOpen(false); }}
+                      onClick={() => { setKeyword(k.keyword); setKwOpen(false); setKwSearch(""); }}
                     >
                       {k.keyword}
                     </button>
                   ))}
+                  {filteredKeywords.length === 0 && (
+                    <div className="ttj-dropdown-empty">No keywords found</div>
+                  )}
                 </div>
               )}
             </div>
@@ -119,7 +136,7 @@ export default function CreateLinkPage({ keywords, prefillKeyword, onSave, onBac
             app and automatically fill out the necessary info to text a keyword.
           </p>
           <p>
-            They're a great way to grow contact base as it takes the work out of having to compose a new text
+            They&apos;re a great way to grow contact base as it takes the work out of having to compose a new text
             message. They are commonly used in social media posts and emails.
           </p>
         </div>

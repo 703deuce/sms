@@ -8,8 +8,10 @@ interface Props {
 
 export default function FallbackFormPreview({ onClose }: Props) {
   return (
-    <div className="ttj-fallback-overlay">
-      <button className="ttj-fallback-close" onClick={onClose}><X size={18} /></button>
+    <div className="ttj-fallback-overlay" role="dialog" aria-modal="true">
+      <button className="ttj-fallback-close" onClick={onClose} aria-label="Close preview">
+        <X size={18} />
+      </button>
       <div className="ttj-fallback-card">
         <h2>Want 30% Off?</h2>
         <p>Join our VIP text list and receive a code for 30% off your purchase during our Black Friday/Cyber Monday sale.</p>

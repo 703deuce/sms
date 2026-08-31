@@ -1,42 +1,163 @@
 .kimi-grow-keywords .kw-shell{
   display: flex;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   background: #f4f5fb;
   font-family: Inter, system-ui, -apple-system, sans-serif;
   color: #1f2440;
+  -webkit-font-smoothing: antialiased;
 }
 
 .kimi-grow-keywords .kw-main{
   flex: 1;
   overflow-y: auto;
-  padding: 28px 32px;
+  padding: 24px 32px 64px;
 }
+
+/* ---------- Typography / page chrome ---------- */
+
+.kimi-grow-keywords .kw-breadcrumb{
+  font-size: 12.5px;
+  color: #8a8fa8;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.kimi-grow-keywords .kw-breadcrumb-link{
+  border: none;
+  background: transparent;
+  color: #8a8fa8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  padding: 0;
+  transition: color 0.12s ease;
+}
+.kimi-grow-keywords .kw-breadcrumb-link:hover{
+  color: #4f46e5;
+}
+.kimi-grow-keywords .kw-breadcrumb-sep{
+  color: #c9cde0;
+}
+.kimi-grow-keywords .kw-breadcrumb-current{
+  color: #4a5070;
+  font-weight: 600;
+}
+
+.kimi-grow-keywords .kw-page-header{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.kimi-grow-keywords .kw-header-icon{
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #eef0fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kimi-grow-keywords .kw-page-title{
+  font-size: 21px;
+  font-weight: 800;
+  margin: 0;
+  color: #1f2440;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.kimi-grow-keywords .kw-page-subtitle{
+  font-size: 13px;
+  color: #6a708c;
+  margin: 3px 0 0;
+}
+
+/* ---------- Surfaces ---------- */
 
 .kimi-grow-keywords .kw-card{
   background: #ffffff;
   border: 1px solid #e6e8f2;
   border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(20, 24, 60, 0.04);
 }
+
+/* ---------- Buttons ---------- */
 
 .kimi-grow-keywords .kw-btn-primary{
   background: #4f46e5;
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 9px 18px;
+  padding: 0 18px;
+  height: 38px;
   font-size: 13.5px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 .kimi-grow-keywords .kw-btn-primary:hover{
   background: #4338ca;
+  box-shadow: 0 3px 8px rgba(79, 70, 229, 0.32);
+}
+.kimi-grow-keywords .kw-btn-primary:active{
+  transform: translateY(0.5px);
 }
 .kimi-grow-keywords .kw-btn-primary:disabled{
   opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
+
+.kimi-grow-keywords .kw-btn-outline{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #dfe2ee;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4a5070;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.kimi-grow-keywords .kw-btn-outline:hover{
+  background: #f7f8fc;
+  border-color: #c9cde0;
+}
+
+.kimi-grow-keywords .kw-icon-btn{
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  color: #8a8fa8;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.kimi-grow-keywords .kw-icon-btn:hover{
+  background: #f0f1f8;
+  color: #4a5070;
+}
+
+/* ---------- Inputs ---------- */
 
 .kimi-grow-keywords .kw-input{
   width: 100%;
@@ -44,10 +165,14 @@
   border-radius: 8px;
   padding: 9px 12px;
   font-size: 13.5px;
+  font-family: inherit;
   color: #1f2440;
   outline: none;
   background: #fff;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.kimi-grow-keywords .kw-input:hover{
+  border-color: #c9cde0;
 }
 .kimi-grow-keywords .kw-input:focus{
   border-color: #4f46e5;
@@ -57,33 +182,139 @@
   color: #a3a8c0;
 }
 
+.kimi-grow-keywords .kw-textarea-wrap{
+  border: 1px solid #dfe2ee;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.kimi-grow-keywords .kw-textarea-wrap:hover{
+  border-color: #c9cde0;
+}
+.kimi-grow-keywords .kw-textarea-wrap:focus-within{
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.kimi-grow-keywords .kw-msg-toolbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-top: 1px solid #eef0f7;
+  background: #fafbfd;
+}
+
+.kimi-grow-keywords .kw-toolbar-btn{
+  border: none;
+  background: transparent;
+  padding: 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  color: #8a8fa8;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.kimi-grow-keywords .kw-toolbar-btn:hover{
+  background: #eef0f7;
+  color: #4f46e5;
+}
+
 .kimi-grow-keywords .kw-label{
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   font-size: 12.5px;
   font-weight: 600;
   color: #3c4260;
   margin-bottom: 6px;
 }
 
+.kimi-grow-keywords .kw-field-heading{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2440;
+  margin-bottom: 5px;
+}
+
+.kimi-grow-keywords .kw-field-help{
+  font-size: 12.5px;
+  color: #6a708c;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.kimi-grow-keywords .kw-toggle-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+}
+
+/* ---------- Pills / chips ---------- */
+
 .kimi-grow-keywords .kw-status-pill{
-  display: inline-block;
-  background: #d9f7ee;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e2f8ee;
   color: #0d8a63;
   font-size: 12px;
   font-weight: 600;
-  padding: 4px 12px;
+  padding: 4px 12px 4px 10px;
   border-radius: 999px;
 }
+.kimi-grow-keywords .kw-status-dot{
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #16b981;
+}
+
+.kimi-grow-keywords .kw-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef0fd;
+  color: #4f46e5;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+.kimi-grow-keywords .kw-chip button{
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  padding: 1px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+.kimi-grow-keywords .kw-chip button:hover{
+  background: rgba(79, 70, 229, 0.16);
+}
+
+/* ---------- Sections ---------- */
 
 .kimi-grow-keywords .kw-section-header{
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 20px;
+  padding: 15px 20px;
   cursor: pointer;
   user-select: none;
   border-bottom: 1px solid #eef0f7;
+  transition: background 0.12s ease;
+}
+.kimi-grow-keywords .kw-section-header:hover{
+  background: #fafbff;
 }
 .kimi-grow-keywords .kw-section-num{
   width: 22px;
@@ -96,10 +327,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 .kimi-grow-keywords .kw-section-num.muted{
   background: #c9cde0;
 }
+
+/* ---------- Toggle ---------- */
 
 .kimi-grow-keywords .kw-toggle{
   position: relative;
@@ -131,6 +366,8 @@
   transform: translateX(16px);
 }
 
+/* ---------- Segmented control ---------- */
+
 .kimi-grow-keywords .kw-segment{
   display: inline-flex;
   background: #f0f1f8;
@@ -145,6 +382,7 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
+  font-family: inherit;
   color: #5a6080;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -155,11 +393,26 @@
   box-shadow: 0 1px 4px rgba(20, 24, 60, 0.14);
 }
 
+/* ---------- Table ---------- */
+
+.kimi-grow-keywords .kw-table-head{
+  display: grid;
+  grid-template-columns: 260px 1fr 190px 120px 44px;
+  align-items: center;
+  padding: 11px 24px;
+  border-bottom: 1px solid #eef0f7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8a8fa8;
+}
+
 .kimi-grow-keywords .kw-row{
   display: grid;
   grid-template-columns: 260px 1fr 190px 120px 44px;
   align-items: center;
-  padding: 18px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid #eef0f7;
   cursor: default;
   transition: background 0.12s ease;
@@ -167,9 +420,27 @@
 .kimi-grow-keywords .kw-row:hover{
   background: #fafbff;
 }
-.kimi-grow-keywords .kw-row:last-child{
+.kimi-grow-keywords .kw-row:last-of-type{
   border-bottom: none;
 }
+
+.kimi-grow-keywords .kw-list-icon{
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #eef0fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kimi-grow-keywords .kw-empty{
+  padding: 52px 24px;
+  text-align: center;
+}
+
+/* ---------- Dropdown ---------- */
 
 .kimi-grow-keywords .kw-dropdown{
   position: absolute;
@@ -179,7 +450,7 @@
   border: 1px solid #e6e8f2;
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(20, 24, 60, 0.14);
-  min-width: 200px;
+  min-width: 210px;
   z-index: 40;
   padding: 6px;
 }
@@ -192,10 +463,12 @@
   background: transparent;
   padding: 9px 12px;
   font-size: 13px;
+  font-family: inherit;
   color: #2e3450;
   border-radius: 7px;
   cursor: pointer;
   text-align: left;
+  transition: background 0.1s ease;
 }
 .kimi-grow-keywords .kw-dropdown button:hover{
   background: #f2f3fa;
@@ -203,26 +476,25 @@
 .kimi-grow-keywords .kw-dropdown button.danger{
   color: #d64545;
 }
+.kimi-grow-keywords .kw-dropdown button.danger:hover{
+  background: #fdf0f0;
+}
+.kimi-grow-keywords .kw-dropdown-divider{
+  height: 1px;
+  background: #eef0f7;
+  margin: 4px 6px;
+}
 
-.kimi-grow-keywords .kw-chip{
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #eef0fd;
-  color: #4f46e5;
-  font-size: 12.5px;
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 4px 8px;
-}
-.kimi-grow-keywords .kw-chip button{
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
+/* ---------- Save bar ---------- */
+
+.kimi-grow-keywords .kw-save-bar{
   display: flex;
-  padding: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px;
 }
+
+/* ---------- Toast ---------- */
 
 .kimi-grow-keywords .kw-toast{
   position: fixed;
@@ -246,17 +518,86 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- Phone preview ---------- */
+
+.kimi-grow-keywords .kw-preview-label{
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: #6a708c;
+  margin-bottom: 12px;
+}
+
 .kimi-grow-keywords .kw-phone{
   width: 300px;
   min-height: 560px;
   border: 1.5px solid #dfe2ee;
   border-radius: 34px;
   background: #fff;
-  padding: 18px 14px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 30px rgba(20, 24, 60, 0.06);
+  box-shadow: 0 8px 30px rgba(20, 24, 60, 0.07);
+  overflow: hidden;
 }
+
+.kimi-grow-keywords .kw-phone-status{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2440;
+}
+.kimi-grow-keywords .kw-phone-notch{
+  width: 90px;
+  height: 5px;
+  border-radius: 99px;
+  background: #e6e8f2;
+}
+.kimi-grow-keywords .kw-phone-signal{
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+.kimi-grow-keywords .kw-phone-signal span{
+  width: 3px;
+  border-radius: 1px;
+  background: #c9cde0;
+}
+
+.kimi-grow-keywords .kw-phone-header{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f1f8;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2440;
+}
+.kimi-grow-keywords .kw-phone-avatar{
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #eef0fd;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kimi-grow-keywords .kw-phone-thread{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px;
+}
+
 .kimi-grow-keywords .kw-bubble-out{
   align-self: flex-end;
   background: #4f46e5;
@@ -266,7 +607,12 @@
   border-radius: 16px 16px 4px 16px;
   padding: 9px 14px;
   max-width: 78%;
-  margin-bottom: 10px;
+}
+.kimi-grow-keywords .kw-bubble-time{
+  align-self: flex-end;
+  font-size: 10.5px;
+  color: #a3a8c0;
+  margin: 4px 2px 10px 0;
 }
 .kimi-grow-keywords .kw-bubble-in{
   align-self: flex-start;
@@ -279,6 +625,17 @@
   max-width: 88%;
   white-space: pre-wrap;
 }
+
+.kimi-grow-keywords .kw-phone-empty{
+  margin: auto;
+  max-width: 200px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #a3a8c0;
+}
+
+/* ---------- Animation ---------- */
 
 .kimi-grow-keywords .kw-fade{
   animation: kw-fade 0.2s ease;
