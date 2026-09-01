@@ -91,7 +91,9 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   }
   if (pathname === "/sms" || pathname.startsWith("/sms/")) {
     if (pathname.startsWith("/sms/settings")) return "Settings";
-    return "Analytics";
+    if (pathname.startsWith("/sms/dashboard")) return "Dashboard";
+    if (pathname.startsWith("/sms/analytics")) return "Analytics";
+    return "SMS";
   }
   if (pathname.startsWith("/campaigns")) {
     if (pathname.startsWith("/campaigns/new/review")) return "Review Campaign";
@@ -117,6 +119,9 @@ export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/grow/keywords")) return "Keywords";
   if (pathname.startsWith("/auto-replies")) return "Auto Replies";
   if (pathname.startsWith("/drip-campaigns") || pathname.startsWith("/automations/drip-campaigns")) {
+    if (pathname.endsWith("/new")) return "New Drip Campaign";
+    if (pathname.includes("/edit")) return "Edit Drip Campaign";
+    if (pathname.match(/\/automations\/drip-campaigns\/[^/]+$/)) return "Drip Campaign";
     return "Drip Campaigns";
   }
   if (pathname.startsWith("/ai-replies")) return "AI Replies";

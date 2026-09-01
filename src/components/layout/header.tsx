@@ -213,7 +213,7 @@ export function Header({
           <Menu className="h-5 w-5" />
         </button>
 
-        {title && (currentProduct === "sms" || currentProduct === "voice") ? (
+        {title ? (
           <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
             {title}
           </h1>

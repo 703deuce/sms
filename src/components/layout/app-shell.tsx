@@ -12,7 +12,8 @@ import { isVoiceShellRoute } from "@/lib/products/voice-routes";
 import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
 import { getAiAfterHoursPageTitle } from "@/lib/products/ai-after-hours-nav";
 import { getVoicePageTitle } from "@/lib/products/voice-nav";
-import { getSmsPageTitle } from "@/lib/products/sms-nav";
+import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
+import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
@@ -25,6 +26,32 @@ import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
+const APP_HEADER_HEIGHT = "4rem";
+
+/** Automation builder/list — unchanged legacy chrome (excludes drip campaigns). */
+function isLegacyAutomationRoute(pathname: string): boolean {
+  if (pathname.startsWith("/automations/drip-campaigns") || pathname.startsWith("/drip-campaigns")) {
+    return false;
+  }
+  return pathname.startsWith("/automations");
+}
+
+function shouldAutoCollapseSidebar(path: string) {
+  return path.startsWith("/conversations") || /^\/automations\/[^/]+\/edit/.test(path);
+}
+
+function isSmsFullBleedRoute(pathname: string): boolean {
+  if (isLegacyAutomationRoute(pathname)) return false;
+  return (
+    (isKimiIntegratedRoute(pathname) && !pathname.startsWith("/automations")) ||
+    pathname.startsWith("/automations/drip-campaigns") ||
+    pathname.startsWith("/drip-campaigns") ||
+    pathname.startsWith("/playbooks") ||
+    pathname.startsWith("/ai-replies") ||
+    pathname.startsWith("/sms/dashboard") ||
+    pathname.startsWith("/sms/analytics")
+  );
+}
 
 function readSidebarCollapsedPreference(): boolean {
   if (typeof window === "undefined") return false;
@@ -81,8 +108,6 @@ export function AppShell({
   productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
   const pathname = usePathname();
-  const shouldAutoCollapseSidebar = (path: string) =>
-    path.startsWith("/conversations") || /^\/automations\/[^/]+\/edit/.test(path);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -109,37 +134,40 @@ export function AppShell({
       // ignore storage errors
     }
   }, [sidebarCollapsed, pathname]);
+
   const resolvedProduct = getCurrentProduct(pathname);
   const currentProduct: CurrentProduct =
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
-  const isKimiPage = isKimiIntegratedRoute(pathname);
+  const legacyAutomation = isLegacyAutomationRoute(pathname);
+  const isFullBleed = isSmsFullBleedRoute(pathname);
   const hideChromeTitle =
-    isKimiPage ||
-    pathname.startsWith("/conversations") ||
-    (realtorMode &&
-      (pathname.startsWith("/realtor/setup") ||
-        pathname.startsWith("/realtor/dashboard") ||
-        pathname.startsWith("/realtor/leads")));
+    realtorMode &&
+    (pathname.startsWith("/realtor/setup") ||
+      pathname.startsWith("/realtor/dashboard") ||
+      pathname.startsWith("/realtor/leads"));
   const multiProduct = shouldShowProductSwitcher({
     hasMctb,
     hasMassSms: hasSms,
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
+  const smsPlatformTitle = isSmsShellRoute(pathname) ? getSmsPlatformPageTitle(pathname) : "";
   const title = hideChromeTitle
     ? ""
     : isLauncher
       ? "Your Transovo Products"
+      : smsPlatformTitle
+        ? smsPlatformTitle
         : currentProduct === "numbers"
-        ? getNumbersPageTitle(pathname)
-        : multiProduct && productShell === "ai_after_hours"
-          ? getAiAfterHoursPageTitle(pathname) ||
-            getVoicePageTitle(pathname) ||
-            getSmsPageTitle(pathname)
-          : currentProduct === "voice" || currentProduct === "sms"
-          ? getVoicePageTitle(pathname) || getSmsPageTitle(pathname)
-          : getPageTitle(pathname);
+          ? getNumbersPageTitle(pathname)
+          : multiProduct && productShell === "ai_after_hours"
+            ? getAiAfterHoursPageTitle(pathname) ||
+              getVoicePageTitle(pathname) ||
+              getSmsPlatformPageTitle(pathname)
+            : currentProduct === "voice" || currentProduct === "sms"
+              ? getVoicePageTitle(pathname) || getSmsPlatformPageTitle(pathname)
+              : getPageTitle(pathname);
 
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
@@ -147,8 +175,13 @@ export function AppShell({
 
   return (
     <div
-      className="product-theme min-h-screen overflow-x-hidden bg-background"
-      style={{ "--sidebar-offset": sidebarOffset } as CSSProperties}
+      className="product-theme flex h-dvh overflow-hidden bg-background"
+      style={
+        {
+          "--sidebar-offset": sidebarOffset,
+          "--app-header-height": APP_HEADER_HEIGHT,
+        } as CSSProperties
+      }
     >
       <ProductActivityTracker />
       <Suspense fallback={null}>
@@ -179,7 +212,7 @@ export function AppShell({
         />
       </Suspense>
       <div
-        className={`${sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"}${isKimiPage ? " overflow-x-hidden" : ""}`}
+        className={`flex h-full min-w-0 flex-1 flex-col overflow-hidden ${sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"}`}
       >
         {realtorMode ? (
           <RealtorHeader
@@ -193,7 +226,7 @@ export function AppShell({
             unreadNotifications={unreadNotifications}
             onMenuClick={() => setMenuOpen(true)}
           />
-        ) : !isKimiPage ? (
+        ) : legacyAutomation ? null : (
           <Header
             title={title}
             userName={userName}
@@ -213,12 +246,14 @@ export function AppShell({
             hasNumbers={hasNumbers}
             hasMctb={hasMctb}
           />
-        ) : null}
+        )}
         <main
           className={
-            isKimiPage
+            legacyAutomation
               ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
-              : "px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
+              : isFullBleed
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                : "flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
           }
         >
           {children}
