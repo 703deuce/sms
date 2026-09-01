@@ -40,7 +40,15 @@ export function definitionToKimi(def: AutomationDefinition): {
     const palette = paletteItemForBlockType(blockType);
     const kimiId = palette?.id ?? kimiIdForBlockType(blockType) ?? blockType;
     const kind = palette?.kind ?? kimiKindForBlock(blockType);
-    const configured = Object.keys(n.data.config || {}).length > 0;
+    const configured = Boolean(
+      n.data.config &&
+        Object.entries(n.data.config).some(([k, v]) => {
+          if (v === undefined || v === null || v === "") return false;
+          if (Array.isArray(v) && v.length === 0) return false;
+          if (k === "sources" && Array.isArray(v) && v.length === 0) return false;
+          return true;
+        }),
+    );
     const subtitle = configured ? nodeSummary(n) : "Not configured";
     return {
       id: n.id,

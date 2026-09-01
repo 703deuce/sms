@@ -811,6 +811,118 @@ export function ParityNodeConfig({
     );
   }
 
+  if (block === "send_sms" || block === "send_review_request") {
+    const bodyLen = String(cfg.body || "").length;
+    const segments = Math.max(1, Math.ceil(bodyLen / 160));
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Internal message name</Label>
+          <Input
+            value={String(cfg.messageName || "")}
+            onChange={(e) => setConfig({ messageName: e.target.value })}
+            placeholder="e.g. Welcome message"
+          />
+        </div>
+        <div>
+          <Label>From number</Label>
+          <Select
+            value={String(cfg.fromNumber || "")}
+            onChange={(e) => setConfig({ fromNumber: e.target.value })}
+          >
+            <option value="">Default sending number</option>
+            {numbers.map((n) => (
+              <option key={n.id} value={n.number}>
+                {n.number}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="sms-body">Message body</Label>
+          <Textarea
+            id="sms-body"
+            rows={5}
+            value={String(cfg.body || "")}
+            onChange={(e) => setConfig({ body: e.target.value })}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            {bodyLen} characters · ~{segments} segment(s)
+          </p>
+        </div>
+        {block === "send_sms" && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={Boolean(cfg.stopOnReply)}
+              onChange={(e) => setConfig({ stopOnReply: e.target.checked })}
+            />
+            Stop on reply
+          </label>
+        )}
+      </div>
+    );
+  }
+
+  if (block === "update_customer") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Contact field</Label>
+          <Select
+            value={String(cfg.field || "firstName")}
+            onChange={(e) => setConfig({ field: e.target.value })}
+          >
+            {CONTACT_FIELD_OPTIONS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>New value</Label>
+          <Input
+            value={String(cfg.value ?? "")}
+            onChange={(e) => setConfig({ value: e.target.value })}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (block === "customer_added") {
+    const sources = [
+      "CSV Import",
+      "Manual Creation",
+      "Keyword",
+      "Inbox",
+      "Website Popup/Form",
+      "API",
+    ];
+    const selected = Array.isArray(cfg.sources) ? (cfg.sources as string[]) : sources;
+    return (
+      <div className="space-y-2">
+        <Label>Creation sources</Label>
+        {sources.map((s) => (
+          <label key={s} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={selected.includes(s)}
+              onChange={(e) => {
+                const next = e.target.checked
+                  ? [...selected, s]
+                  : selected.filter((x) => x !== s);
+                setConfig({ sources: next });
+              }}
+            />
+            {s}
+          </label>
+        ))}
+      </div>
+    );
+  }
+
   if (block === "delete_contact") {
     return (
       <div className="space-y-2">

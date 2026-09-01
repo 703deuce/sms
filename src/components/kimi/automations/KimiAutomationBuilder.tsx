@@ -151,8 +151,6 @@ export default function KimiAutomationBuilder({
       });
       setKimiNodes(nodes);
       setConfigNode(null);
-
-      builder.updateNode(nodeId, { config });
       pushKimiToBuilder(nodes, kimiEdges);
 
       const updatedNode = nodes.find((n) => n.id === nodeId);
@@ -186,6 +184,7 @@ export default function KimiAutomationBuilder({
 
   async function saveDraft(publishAfter = false) {
     builder.setSaving(true);
+    const definition = kimiToDefinition(kimiNodes, kimiEdges, builder.definition);
     try {
       const res = await fetch(`/api/automations/${flowId}`, {
         method: "PATCH",
@@ -193,24 +192,25 @@ export default function KimiAutomationBuilder({
         body: JSON.stringify({
           name: builder.name,
           description: builder.description,
-          definition: builder.definition,
+          definition,
           status: active ? "Active" : "Draft",
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
+      builder.setDefinition(definition, false);
       builder.setDirty(false);
       builder.setLastSaved(new Date());
 
       if (publishAfter) {
-        const issues = validateAutomationForPublish(builder.name, builder.definition);
+        const issues = validateAutomationForPublish(builder.name, definition);
         builder.setValidationIssues(issues);
         if (hasBlockingErrors(issues)) return;
         builder.setPublishing(true);
         const pub = await fetch(`/api/automations/${flowId}/publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: builder.name, definition: builder.definition }),
+          body: JSON.stringify({ name: builder.name, definition }),
         });
         const pubJson = await pub.json();
         if (!pub.ok) throw new Error(pubJson.error || "Publish failed");
