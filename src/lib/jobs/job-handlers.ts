@@ -936,7 +936,6 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!jobId) throw new Error("jobId required");
       return processBulkVerifyJob(jobId);
     }
-    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
