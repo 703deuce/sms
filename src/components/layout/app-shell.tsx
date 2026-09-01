@@ -22,7 +22,7 @@ import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState, type CSSProperties } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
 
@@ -81,30 +81,28 @@ export function AppShell({
   productFeatures?: WorkspaceFeatureSnapshot | null;
 }) {
   const pathname = usePathname();
+  const shouldAutoCollapseSidebar = (path: string) =>
+    path.startsWith("/conversations") || /^\/automations\/[^/]+\/edit/.test(path);
+
   const [menuOpen, setMenuOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const prevPathRef = useRef<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (shouldAutoCollapseSidebar(window.location.pathname)) return true;
+    return readSidebarCollapsedPreference();
+  });
 
   useEffect(() => {
-    setSidebarCollapsed(readSidebarCollapsedPreference());
-  }, []);
-
-  useEffect(() => {
-    const prev = prevPathRef.current;
-    const isConversations = pathname.startsWith("/conversations");
-    const wasConversations = prev?.startsWith("/conversations") ?? false;
-
-    if (!wasConversations && isConversations) {
+    if (shouldAutoCollapseSidebar(pathname)) {
       setSidebarCollapsed(true);
-    } else if (wasConversations && !isConversations) {
-      setSidebarCollapsed(readSidebarCollapsedPreference());
+      return;
     }
-
-    prevPathRef.current = pathname;
+    setSidebarCollapsed(readSidebarCollapsedPreference());
   }, [pathname]);
 
   useEffect(() => {
-    if (pathname.startsWith("/conversations")) return;
+    if (shouldAutoCollapseSidebar(pathname)) {
+      return;
+    }
     try {
       window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
     } catch {
@@ -143,8 +141,15 @@ export function AppShell({
           ? getVoicePageTitle(pathname) || getSmsPageTitle(pathname)
           : getPageTitle(pathname);
 
+  const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
+  const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
+  const sidebarOffset = sidebarCollapsedEffective ? "56px" : "224px";
+
   return (
-    <div className="product-theme min-h-screen bg-background">
+    <div
+      className="product-theme min-h-screen overflow-x-hidden bg-background"
+      style={{ "--sidebar-offset": sidebarOffset } as CSSProperties}
+    >
       <ProductActivityTracker />
       <Suspense fallback={null}>
         <Sidebar
@@ -158,8 +163,11 @@ export function AppShell({
           currentProduct={currentProduct}
           isLauncher={isLauncher}
           inboxBadge={unreadNotifications}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          collapsed={sidebarCollapsedEffective}
+          onToggleCollapse={() => {
+            if (autoCollapseSidebar) return;
+            setSidebarCollapsed((v) => !v);
+          }}
           creditsRemaining={metrics.creditsRemaining}
           hasVoice={hasVoice}
           hasSms={hasSms}
@@ -170,7 +178,9 @@ export function AppShell({
           productFeatures={productFeatures}
         />
       </Suspense>
-      <div className={sidebarCollapsed ? "lg:pl-[56px]" : "lg:pl-[224px]"}>
+      <div
+        className={`${sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"}${isKimiPage ? " overflow-x-hidden" : ""}`}
+      >
         {realtorMode ? (
           <RealtorHeader
             userName={userName}
@@ -207,7 +217,7 @@ export function AppShell({
         <main
           className={
             isKimiPage
-              ? "px-0 pb-0 pt-0 lg:px-0"
+              ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
               : "px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
           }
         >

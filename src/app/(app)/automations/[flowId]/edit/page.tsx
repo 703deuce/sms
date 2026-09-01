@@ -7,10 +7,10 @@ function shouldStartInSetup(
   flow: { name: string; definition: unknown; description?: string | null },
   setupParam?: string,
 ): boolean {
-  if (setupParam === "1") return true;
   const def = parseAutomationDefinition(flow.definition);
+  if (def.nodes.length > 0) return false;
+  if (setupParam === "1") return true;
   const isFreshDraft =
-    def.nodes.length === 0 &&
     (!flow.description || !String(flow.description).trim()) &&
     /^New automation ·/.test(flow.name);
   return isFreshDraft;
@@ -30,7 +30,7 @@ export default async function AutomationEditPage({
   if (!flow) notFound();
 
   return (
-    <div className="kimi-automations">
+    <div className="kimi-surface kimi-automations kimi-automation-builder fixed inset-y-0 right-0 z-10 flex flex-col overflow-hidden bg-background">
       <KimiAutomationBuilder
         flowId={flowId}
         initialName={flow.name}

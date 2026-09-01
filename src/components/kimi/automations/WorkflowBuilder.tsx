@@ -311,7 +311,7 @@ export default function WorkflowBuilder({
   const canAdvanceSetup = name.trim().length > 0;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
       {toast && (
         <div className="toast-enter absolute right-6 top-5 z-50 flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg">
           <CheckCircle2 size={16} /> Workflow Successfully Saved
@@ -389,8 +389,8 @@ export default function WorkflowBuilder({
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between border-b border-border bg-card px-5 py-2.5">
-            <div className="min-w-0">
+          <div className="flex min-w-0 shrink-0 items-center justify-between border-b border-border bg-card px-5 py-2.5">
+            <div className="min-w-0 flex-1 pr-4">
               <p className="text-[11px] text-muted-foreground">
                 <button onClick={onBack} className="hover:text-indigo-600 hover:underline">Automations</button>
                 {" / "}
@@ -426,11 +426,11 @@ export default function WorkflowBuilder({
             </div>
           </div>
 
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex min-h-0 w-full flex-1 overflow-hidden">
             <BuilderPanel onAddItem={handleAddItem} />
 
             {/* Canvas */}
-            <div className="relative flex-1 overflow-hidden">
+            <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
             ref={canvasRef}
             className="canvas-dots absolute inset-0 overflow-hidden"

@@ -34,7 +34,7 @@ export default function BuilderPanel({ onAddItem }: { onAddItem: (itemId: string
   const colors = kindColors[tab];
 
   return (
-    <div className="flex w-[268px] shrink-0 flex-col border-r border-border bg-card">
+    <div className="flex h-full min-h-0 w-[268px] shrink-0 flex-col border-r border-border bg-card">
       <div className="flex border-b border-border px-2">
         {tabs.map((t) => (
           <button

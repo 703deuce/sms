@@ -298,7 +298,7 @@ export default function KimiAutomationBuilder({
   );
 
   return (
-    <div className="kimi-automations -mx-4 flex h-[calc(100dvh-4rem)] min-h-[640px] flex-col overflow-hidden md:-mx-6">
+    <div className="kimi-automations flex h-full min-h-0 w-full flex-col overflow-hidden">
       <WorkflowBuilder
         onBack={() => router.push("/automations")}
         controlled={controlled}
