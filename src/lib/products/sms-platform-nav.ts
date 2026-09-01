@@ -1,6 +1,8 @@
 import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BarChart3,
+  BookOpen,
+  Layers,
   LayoutDashboard,
   MessageSquare,
   Megaphone,
@@ -8,9 +10,9 @@ import {
   Sparkles,
   Sprout,
   Users,
-  Zap,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import { dripCampaignsListHref } from "@/lib/drip-campaigns/routes";
 
 export type SmsPlatformNavOptions = {
   conversationsBadge?: number;
@@ -59,11 +61,12 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       ],
     },
     {
-      label: "Automations",
-      href: "/automations",
-      icon: Zap,
+      label: "Drip Campaigns",
+      href: dripCampaignsListHref(),
+      icon: Layers,
       sectionLabel: "Automate",
     },
+    { label: "Playbooks", href: "/playbooks", icon: BookOpen },
     { label: "Auto Replies", href: "/auto-replies", icon: Reply },
     { label: "AI Replies", href: "/ai-replies", icon: Sparkles },
     ...buildAccountNavItems(),
@@ -78,6 +81,7 @@ export function getSmsPlatformPageTitle(pathname: string): string {
     if (pathname.includes("tab=messaging")) return "Messaging";
     return "Analytics";
   }
+  if (pathname.startsWith("/playbooks")) return "Playbooks";
   if (pathname.startsWith("/analytics")) {
     if (pathname.startsWith("/analytics/sources")) return "Lead Sources";
     if (pathname.startsWith("/analytics/mctb")) return "Missed Call Text Back";

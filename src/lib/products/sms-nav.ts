@@ -1,16 +1,18 @@
 import {
   BarChart3,
+  BookOpen,
   Hash,
   HelpCircle,
   Inbox,
+  Layers,
   LayoutDashboard,
   Megaphone,
   Settings,
   Sprout,
   Users,
-  Workflow,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import { dripCampaignsListHref } from "@/lib/drip-campaigns/routes";
 
 export type SmsNavOptions = {
   inboxBadge?: number;
@@ -39,11 +41,12 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Contacts", href: "/contacts", icon: Users },
     {
-      label: "Automations",
-      href: "/automations",
-      icon: Workflow,
+      label: "Drip Campaigns",
+      href: dripCampaignsListHref(),
+      icon: Layers,
       sectionLabel: "Automate & Grow",
     },
+    { label: "Playbooks", href: "/playbooks", icon: BookOpen },
     { label: "Grow", href: "/grow/keywords", icon: Sprout },
     {
       label: "Numbers",
@@ -70,6 +73,10 @@ export function getSmsPageTitle(pathname: string): string {
   if (pathname.startsWith("/send")) return "Send Message";
   if (pathname.startsWith("/campaigns")) return "Campaigns";
   if (pathname.startsWith("/contacts")) return "Contacts";
+  if (pathname.startsWith("/playbooks")) return "Playbooks";
+  if (pathname.startsWith("/drip-campaigns") || pathname.startsWith("/automations/drip-campaigns")) {
+    return "Drip Campaigns";
+  }
   if (pathname.startsWith("/automations")) return "Automations";
   if (pathname.includes("missed-call-text-back")) return "Missed Call Text Back";
   if (pathname.startsWith("/grow")) return "Grow";

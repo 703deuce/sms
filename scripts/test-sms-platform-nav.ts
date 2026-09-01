@@ -32,6 +32,9 @@ assert.ok(
   "Keywords child under List Growth",
 );
 assert.ok(smsLabels.includes("Analytics"));
+assert.ok(smsLabels.includes("Drip Campaigns"));
+assert.ok(smsLabels.includes("Playbooks"));
+assert.ok(!smsLabels.includes("Automations"), "Automations hidden from V1 SMS nav");
 assert.ok(!smsLabels.includes("Integrations"), "Integrations should not be in main nav");
 assert.ok(smsLabels.includes("Settings"));
 assert.ok(!smsLabels.includes("Account"), "Account should not be a separate nav item");

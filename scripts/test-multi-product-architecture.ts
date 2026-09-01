@@ -120,7 +120,7 @@ assert.ok(voiceLabels.includes("Dashboard"), "Voice nav includes Dashboard");
 assert.ok(voiceNavTrial.map((i) => i.label).includes("Try It"), "Trial voice nav includes Try It");
 assert.equal(voiceNav.length, 18, "Voice sidebar ships 18 items without Try It");
 assert.equal(voiceNavTrial.length, 19, "Voice sidebar ships 19 items with Try It");
-assert.equal(smsNav.length, 10, "SMS sidebar includes dashboard");
+assert.equal(smsNav.length, 11, "SMS sidebar includes dashboard, drip campaigns, and playbooks");
 assert.ok(SMS_CREATE_ACTIONS.length >= 5, "Create menu has primary actions");
 
 assert.equal(
