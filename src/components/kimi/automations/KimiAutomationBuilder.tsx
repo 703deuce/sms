@@ -21,6 +21,7 @@ type Props = {
   initialDescription?: string;
   initialDefinition: unknown;
   initialStatus: string;
+  startInSetup?: boolean;
 };
 
 export default function KimiAutomationBuilder({
@@ -29,6 +30,7 @@ export default function KimiAutomationBuilder({
   initialDescription,
   initialDefinition,
   initialStatus,
+  startInSetup = false,
 }: Props) {
   const router = useRouter();
   const builder = useAutomationBuilder({
@@ -243,6 +245,7 @@ export default function KimiAutomationBuilder({
       selectedId,
       configNode,
       saving: builder.saving,
+      startInSetup,
       onNameChange: (v: string) => {
         builder.setName(v);
         builder.setDirty(true);
@@ -290,6 +293,7 @@ export default function KimiAutomationBuilder({
       onSaveConfig,
       openConfig,
       selectedId,
+      startInSetup,
     ],
   );
 

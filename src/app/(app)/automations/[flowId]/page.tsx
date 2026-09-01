@@ -3,7 +3,6 @@ import {
   AutomationExecutionHistory,
   FlowActionButtons,
 } from "@/components/automations/flow-execution-history";
-import { DeploymentDiagnosticsPanel } from "@/components/automations/builder/deployment-diagnostics-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle, StatCard } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -105,11 +104,6 @@ export default async function AutomationDetailPage({
 
       {activeTab === "builder" && (
         <div className="space-y-6">
-          {(flow as { ownershipKind?: string | null }).ownershipKind ===
-            "agent_workflow" ||
-          Boolean((flow as { ownerAgentId?: string | null }).ownerAgentId) ? (
-            <DeploymentDiagnosticsPanel flowId={flowId} />
-          ) : null}
           <div className="grid gap-6 xl:grid-cols-3">
           <Card className="xl:col-span-2">
             <CardTitle>Flow builder</CardTitle>

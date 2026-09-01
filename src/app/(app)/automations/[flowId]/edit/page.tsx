@@ -1,14 +1,27 @@
 import { requireWorkspaceContext, loadAutomationById } from "@/lib/workspace-data";
+import { parseAutomationDefinition } from "@/lib/automations/types";
 import { notFound } from "next/navigation";
 import KimiAutomationBuilder from "@/components/kimi/automations/KimiAutomationBuilder";
-import { DeploymentDiagnosticsPanel } from "@/components/automations/builder/deployment-diagnostics-panel";
+
+function shouldStartInSetup(
+  flow: { name: string; definition: unknown; description?: string | null },
+  setupParam?: string,
+): boolean {
+  if (setupParam === "1") return true;
+  const def = parseAutomationDefinition(flow.definition);
+  const isFreshDraft =
+    def.nodes.length === 0 &&
+    (!flow.description || !String(flow.description).trim()) &&
+    /^New automation ·/.test(flow.name);
+  return isFreshDraft;
+}
 
 export default async function AutomationEditPage({
   params,
   searchParams,
 }: {
   params: Promise<{ flowId: string }>;
-  searchParams?: Promise<{ diagnostics?: string }>;
+  searchParams?: Promise<{ setup?: string; diagnostics?: string }>;
 }) {
   const { flowId } = await params;
   const sp = (await searchParams) || {};
@@ -16,20 +29,15 @@ export default async function AutomationEditPage({
   const flow = await loadAutomationById(workspaceId, flowId);
   if (!flow) notFound();
 
-  const showDiagnostics =
-    sp.diagnostics === "1" ||
-    (flow as { ownershipKind?: string | null }).ownershipKind === "agent_workflow" ||
-    Boolean((flow as { ownerAgentId?: string | null }).ownerAgentId);
-
   return (
-    <div className="kimi-automations space-y-4">
-      {showDiagnostics ? <DeploymentDiagnosticsPanel flowId={flowId} /> : null}
+    <div className="kimi-automations">
       <KimiAutomationBuilder
         flowId={flowId}
         initialName={flow.name}
-        initialDescription=""
+        initialDescription={flow.description || ""}
         initialDefinition={flow.definition}
         initialStatus={flow.status}
+        startInSetup={shouldStartInSetup(flow, sp.setup)}
       />
     </div>
   );

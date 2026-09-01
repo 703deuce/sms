@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useCallback, type Dispatch, type SetStateAction } from "react";
-import { ChevronDown, Map as MapIcon, Undo2, Redo2, ZoomIn, ZoomOut, Maximize, CheckCircle2 } from "lucide-react";
+import { Map as MapIcon, Undo2, Redo2, ZoomIn, ZoomOut, Maximize, CheckCircle2 } from "lucide-react";
 import BuilderPanel from "./BuilderPanel";
 import CanvasNode from "./CanvasNode";
 import ConfigModal from "./ConfigModal";
@@ -103,6 +103,7 @@ export type WorkflowBuilderControlledProps = {
   selectedId: string | null;
   configNode: CanvasNodeData | null;
   saving?: boolean;
+  startInSetup?: boolean;
   onNameChange: (v: string) => void;
   onDescriptionChange: (v: string) => void;
   onFrequencyChange: (v: string) => void;
@@ -125,8 +126,10 @@ export default function WorkflowBuilder({
   onBack: () => void;
   controlled?: WorkflowBuilderControlledProps;
 }) {
-  const [setupOpen, setSetupOpen] = useState(true);
-  const [buildOpen, setBuildOpen] = useState(true);
+  const [phase, setPhase] = useState<"setup" | "build">(
+    controlled?.startInSetup ? "setup" : "build",
+  );
+  const [toast, setToast] = useState(false);
   const [demoName, setDemoName] = useState("Email Collection");
   const [demoDescription, setDemoDescription] = useState("Asks new contacts for email");
   const [demoFrequency, setDemoFrequency] = useState("Only Once Ever");
@@ -165,7 +168,6 @@ export default function WorkflowBuilder({
   const configNode = controlled?.configNode ?? demoConfigNode;
   const setConfigNode = controlled?.onConfigNodeChange ?? setDemoConfigNode;
 
-  const [toast, setToast] = useState(false);
   const [pending, setPending] = useState<{ from: string; label: string; kind: "yes" | "no" | "neutral"; outcomeId: string; x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
@@ -305,6 +307,9 @@ export default function WorkflowBuilder({
     return { d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`, mx, my: (y1 + y2) / 2 - 6 };
   };
 
+  const pageTitle = name.trim() || "Untitled workflow";
+  const canAdvanceSetup = name.trim().length > 0;
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {toast && (
@@ -313,103 +318,119 @@ export default function WorkflowBuilder({
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border bg-card px-5 py-3">
-        <div>
-          <p className="text-[11px] text-muted-foreground">
-            <button onClick={onBack} className="hover:text-indigo-600 hover:underline">Automations</button>
-            {" / "}
-            <span className="text-foreground">Create Workflow</span>
-          </p>
-          <h1 className="mt-0.5 text-[18px] font-bold" style={{ color: "var(--navy)" }}>Create Workflow</h1>
-          <p className="text-[11.5px] text-muted-foreground">Build workflows by dragging objects onto the canvas and connecting them.</p>
-        </div>
-      </div>
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left column: setup + build */}
-        <div className="flex w-[520px] shrink-0">
-          {/* Setup */}
-          <div className="flex w-[252px] shrink-0 flex-col border-r border-border bg-card">
-            <div className="flex-1 overflow-y-auto panel-scroll">
-              <button
-                onClick={() => setSetupOpen(!setupOpen)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left"
-              >
-                <span className="flex items-center gap-2 text-[13px] font-bold" style={{ color: "var(--navy)" }}>
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">1</span>
-                  Setup
-                </span>
-                <ChevronDown size={14} className={`text-muted-foreground transition-transform ${setupOpen ? "" : "-rotate-90"}`} />
-              </button>
-              {setupOpen && (
-                <div className="space-y-3.5 px-4 pb-4">
-                  <div>
-                    <label className="mb-1 block text-[11.5px] font-semibold text-foreground">Name</label>
-                    <input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11.5px] font-semibold text-foreground">Description</label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      className="h-20 w-full resize-none rounded-lg border border-border bg-card p-2.5 text-[12.5px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11.5px] font-semibold text-foreground">Contacts Can Be In This Workflow...</label>
-                    <select
-                      value={frequency}
-                      onChange={(e) => setFrequency(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] outline-none focus:border-indigo-400"
-                    >
-                      <option>Once at a Time</option>
-                      <option>Only Once Ever</option>
-                      <option>Multiple Times</option>
-                    </select>
-                  </div>
+      {phase === "setup" ? (
+        <div className="flex flex-1 flex-col overflow-hidden bg-muted/20">
+          <div className="border-b border-border bg-card px-5 py-3">
+            <p className="text-[11px] text-muted-foreground">
+              <button onClick={onBack} className="hover:text-indigo-600 hover:underline">Automations</button>
+              {" / "}
+              <span className="text-foreground">New workflow</span>
+            </p>
+          </div>
+          <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
+            <div className="w-full max-w-lg rounded-[16px] border border-border bg-card p-6 shadow-sm">
+              <h1 className="text-[22px] font-bold" style={{ color: "var(--navy)" }}>Set up your workflow</h1>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Name your workflow and choose how contacts can enter it. You&apos;ll build the flow on the next screen.
+              </p>
+              <div className="mt-6 space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-foreground">Name</label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Welcome series"
+                    className="h-10 w-full rounded-lg border border-border bg-card px-3 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  />
                 </div>
-              )}
-
-              <button
-                onClick={() => setBuildOpen(!buildOpen)}
-                className="flex w-full items-center justify-between border-t border-border px-4 py-3 text-left"
-              >
-                <span className="flex items-center gap-2 text-[13px] font-bold" style={{ color: "var(--navy)" }}>
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-[10px] font-bold text-white">2</span>
-                  Build
-                </span>
-                <ChevronDown size={14} className={`text-muted-foreground transition-transform ${buildOpen ? "" : "-rotate-90"}`} />
-              </button>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-foreground">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="What does this workflow do?"
+                    className="h-24 w-full resize-none rounded-lg border border-border bg-card p-3 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-foreground">
+                    Contacts can be in this workflow…
+                  </label>
+                  <select
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-border bg-card px-3 text-[13px] outline-none focus:border-indigo-400"
+                  >
+                    <option>Once at a Time</option>
+                    <option>Only Once Ever</option>
+                    <option>Multiple Times</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="h-9 rounded-lg px-4 text-[13px] font-medium text-muted-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!canAdvanceSetup}
+                  onClick={() => setPhase("build")}
+                  className="h-9 rounded-lg bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-3 border-t border-border px-4 py-3">
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between border-b border-border bg-card px-5 py-2.5">
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground">
+                <button onClick={onBack} className="hover:text-indigo-600 hover:underline">Automations</button>
+                {" / "}
+                <span className="text-foreground">{pageTitle}</span>
+              </p>
+              <h1 className="truncate text-[16px] font-bold" style={{ color: "var(--navy)" }}>{pageTitle}</h1>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
               <button
+                type="button"
+                onClick={() => setPhase("setup")}
+                className="hidden h-8 rounded-lg px-3 text-[12px] font-medium text-muted-foreground hover:bg-muted sm:inline-flex"
+              >
+                Edit setup
+              </button>
+              <button
+                type="button"
                 onClick={() => setActive(!active)}
                 className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${active ? "bg-indigo-600" : "bg-gray-300"}`}
+                aria-label="Toggle active"
               >
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${active ? "left-[18px]" : "left-0.5"}`} />
               </button>
               <span className="text-[12px] font-semibold text-foreground">Active</span>
               <button
+                type="button"
                 onClick={() => void handleSaveWorkflow()}
                 disabled={controlled?.saving}
-                className="ml-auto h-8 rounded-lg bg-indigo-600 px-5 text-[12px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                className="h-8 rounded-lg bg-indigo-600 px-4 text-[12px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
               >
                 {controlled?.saving ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
 
-          {/* Build palette */}
-          {buildOpen && <BuilderPanel onAddItem={handleAddItem} />}
-        </div>
+          <div className="flex flex-1 overflow-hidden">
+            <BuilderPanel onAddItem={handleAddItem} />
 
-        {/* Canvas */}
-        <div className="relative flex-1 overflow-hidden">
+            {/* Canvas */}
+            <div className="relative flex-1 overflow-hidden">
           <div
             ref={canvasRef}
             className="canvas-dots absolute inset-0 overflow-hidden"
@@ -504,7 +525,9 @@ export default function WorkflowBuilder({
             </div>
           </div>
         </div>
-      </div>
+          </div>
+        </>
+      )}
 
       {configNode && controlled?.flowId ? (
         <KimiNodeConfigDrawer

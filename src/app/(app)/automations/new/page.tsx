@@ -62,12 +62,12 @@ export default function NewAutomationPage() {
         if (!flowId) throw new Error("No automation id returned");
 
         redirectedRef.current = true;
-        router.replace(`/automations/${flowId}/edit`);
+        router.replace(`/automations/${flowId}/edit?setup=1`);
 
         // Mobile browsers sometimes ignore router.replace — hard fallback
         window.setTimeout(() => {
           if (window.location.pathname.includes("/automations/new")) {
-            window.location.assign(`/automations/${flowId}/edit`);
+            window.location.assign(`/automations/${flowId}/edit?setup=1`);
           }
         }, 1500);
       } catch (err) {
