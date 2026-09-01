@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-08-31T04:42:12.350Z",
-  "concurrency": 7,
+  "updatedAt": "2026-09-01T16:08:45.273Z",
+  "concurrency": 1,
   "staggerMs": 3000,
   "jobs": [
     {
@@ -17,6 +17,25 @@
       "route": "/conversations",
       "status": "complete",
       "completedAt": "2026-08-31T04:36:13.698Z"
+    },
+    {
+      "route": "/ai-replies",
+      "status": "failed",
+      "startedAt": "2026-09-01T16:08:05.496Z",
+      "completedAt": "2026-09-01T16:08:45.273Z",
+      "error": "locator.click: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator('button:has-text(\"Next\")').first()\n    - locator resolved to <button disabled type=\"button\" class=\"h-9 rounded-lg bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50\">Next →</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not enabled\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not enabled\n    - retrying click action\n      - waiting 100ms\n    15 × waiting for element to be visible, enabled and stable\n       - element is not enabled\n     - retrying click action\n       - waiting 500ms\n"
+    },
+    {
+      "route": "/playbooks",
+      "status": "pending"
+    },
+    {
+      "route": "/ai-replies",
+      "status": "pending"
+    },
+    {
+      "route": "/playbooks",
+      "status": "pending"
     },
     {
       "route": "/auto-replies",
@@ -71,6 +90,20 @@
       "startedAt": "2026-08-31T04:36:16.707Z",
       "sessionId": "2026-08-31T04-36-16-995Z-c54b50",
       "completedAt": "2026-08-31T04:39:42.844Z"
+    },
+    {
+      "route": "/contacts/segments",
+      "status": "complete",
+      "startedAt": "2026-09-01T15:56:26.023Z",
+      "completedAt": "2026-09-01T16:01:33.794Z",
+      "sessionId": "2026-09-01T15-56-26-281Z-45c3d2"
+    },
+    {
+      "route": "/grow/forms",
+      "status": "complete",
+      "startedAt": "2026-09-01T16:02:56.042Z",
+      "sessionId": "2026-09-01T16-02-56-367Z-5b4d5a",
+      "completedAt": "2026-09-01T16:07:05.159Z"
     }
   ]
 }

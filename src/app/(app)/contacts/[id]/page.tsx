@@ -12,9 +12,16 @@ import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
 import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
 import { IntegrationTimelineCard } from "@/components/contacts/integration-timeline-card";
-import { ArrowLeft, MessageSquare, Shield } from "lucide-react";
+import {
+  ArrowLeft,
+  Inbox,
+  MessageSquare,
+  Shield,
+  Tag,
+  UserX,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 function formatDate(date: string | null) {
   if (!date) return "—";
@@ -22,16 +29,6 @@ function formatDate(date: string | null) {
     month: "short",
     day: "numeric",
     year: "numeric",
-  });
-}
-
-function formatDateTime(date: string) {
-  return new Date(date).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
 }
 
@@ -81,6 +78,67 @@ function consentHistoryFor(contact: Contact) {
   return events;
 }
 
+function initialsOf(contact: Contact) {
+  const first = contact.firstName?.trim()?.[0] || "";
+  const last = contact.lastName?.trim()?.[0] || "";
+  return (first + last).toUpperCase() || contact.phone.slice(-2);
+}
+
+function ProfileField({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: React.ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </dt>
+      <dd
+        className={
+          strong
+            ? "mt-1 truncate text-sm font-medium text-foreground"
+            : "mt-1 truncate text-sm text-foreground/80"
+        }
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function CardDescription({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function InlineEmpty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+      <p className="text-[13px] text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link
+      href="/contacts"
+      className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" />
+      Back to contacts
+    </Link>
+  );
+}
+
 export default async function ContactDetailPage({
   params,
 }: {
@@ -104,7 +162,18 @@ export default async function ContactDetailPage({
   const contact = await loadContactById(workspaceId, id);
 
   if (!contact) {
-    notFound();
+    return (
+      <div className="mx-auto flex min-h-[55vh] w-full max-w-xl flex-col justify-center py-8">
+        <BackLink />
+        <EmptyState
+          icon={<UserX className="h-5 w-5" />}
+          title="Contact not found"
+          description="This contact may have been deleted, or it belongs to a different workspace. Head back to your contacts list to keep working."
+          actionLabel="Back to contacts"
+          actionHref="/contacts"
+        />
+      </div>
+    );
   }
 
   const conversations: Conversation[] = await loadConversations(workspaceId);
@@ -115,83 +184,69 @@ export default async function ContactDetailPage({
 
   return (
     <div>
-      <PageHeader
-        title={`${contact.firstName} ${contact.lastName}`}
-        description={
-          contact.company
-            ? `${contact.company} · ${formatPhone(contact.phone)}`
-            : formatPhone(contact.phone)
-        }
-        actions={
-          <>
-            <Link href="/contacts">
-              <Button variant="outline">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-            </Link>
+      <div className="mb-5">
+        <BackLink />
+
+        <div className="surface flex flex-col gap-4 rounded-xl bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 font-display text-base font-semibold text-primary ring-1 ring-inset ring-primary/15">
+              {initialsOf(contact)}
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="truncate font-display text-xl font-semibold tracking-tight text-foreground">
+                  {contact.firstName} {contact.lastName}
+                </h1>
+                <StatusChip status={contact.status} />
+              </div>
+              <p className="mt-1 truncate text-[13px] text-muted-foreground">
+                {contact.company ? `${contact.company} · ` : ""}
+                <span className="tabular-nums">{formatPhone(contact.phone)}</span>
+                {contact.assignedUser ? ` · Assigned to ${contact.assignedUser}` : ""}
+                {" · Added "}
+                {formatDate(contact.dateAdded)}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <ClickToCallButton phone={contact.phone} />
             {contact.status === "Subscribed" ? (
               <Link href="/send/quick">
-                <Button>
-                  <MessageSquare className="h-4 w-4" />
+                <Button size="sm">
+                  <MessageSquare className="h-3.5 w-3.5" />
                   Send message
                 </Button>
               </Link>
             ) : (
-              <Button disabled>Send message</Button>
+              <Button size="sm" disabled>
+                <MessageSquare className="h-3.5 w-3.5" />
+                Send message
+              </Button>
             )}
-          </>
-        }
-      />
-
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <StatusChip status={contact.status} />
-        {contact.assignedUser ? (
-          <span className="text-sm text-muted-foreground">Assigned to {contact.assignedUser}</span>
-        ) : null}
-        <span className="text-sm text-muted-foreground">Added {formatDate(contact.dateAdded)}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-5">
           <Card>
             <CardTitle>Contact profile</CardTitle>
-            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Phone</dt>
-                <dd className="mt-1 font-medium">{formatPhone(contact.phone)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</dt>
-                <dd className="mt-1 font-medium">{contact.email || "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Consent source</dt>
-                <dd className="mt-1">{contact.consentSource}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Consent date</dt>
-                <dd className="mt-1">{formatDate(contact.consentDate)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last messaged</dt>
-                <dd className="mt-1">{formatDate(contact.lastMessaged)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last reply</dt>
-                <dd className="mt-1">{formatDate(contact.lastReply)}</dd>
-              </div>
+            <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+              <ProfileField label="Phone" value={formatPhone(contact.phone)} strong />
+              <ProfileField label="Email" value={contact.email || "—"} strong />
+              <ProfileField label="Company" value={contact.company || "—"} />
+              <ProfileField label="Consent source" value={contact.consentSource || "—"} />
+              <ProfileField label="Consent date" value={formatDate(contact.consentDate)} />
+              <ProfileField label="Last messaged" value={formatDate(contact.lastMessaged)} />
+              <ProfileField label="Last reply" value={formatDate(contact.lastReply)} />
             </dl>
           </Card>
 
           <Card>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-primary" />
-                Consent history
-              </CardTitle>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-primary" />
+              Consent history
+            </CardTitle>
             {consentHistory.length > 0 ? (
               <Table className="mt-4">
                 <THead>
@@ -205,31 +260,36 @@ export default async function ContactDetailPage({
                 <TBody>
                   {consentHistory.map((event) => (
                     <TR key={event.id}>
-                      <TD className="font-medium">{event.event}</TD>
+                      <TD className="font-medium text-foreground">{event.event}</TD>
                       <TD>{event.source}</TD>
-                      <TD className="text-muted-foreground">{formatDate(event.at)}</TD>
+                      <TD className="whitespace-nowrap tabular-nums text-muted-foreground">
+                        {formatDate(event.at)}
+                      </TD>
                       <TD className="text-muted-foreground">{event.detail}</TD>
                     </TR>
                   ))}
                 </TBody>
               </Table>
             ) : (
-              <p className="mt-4 text-sm text-muted-foreground">No consent events recorded.</p>
+              <InlineEmpty>No consent events recorded.</InlineEmpty>
             )}
           </Card>
 
           <Card>
             <CardTitle>Activity</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <CardDescription>
               Unified timeline of SMS, softphone calls, AI voice, and voicemail.
-            </p>
+            </CardDescription>
             {conversation ? (
-              <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium">Open inbox thread</p>
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3.5 py-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Inbox className="h-3.5 w-3.5" />
+                  </span>
+                  <p className="text-sm font-medium text-foreground">Open inbox thread</p>
                   <StatusChip status={conversation.status} />
                 </div>
-                <Link href="/conversations" className="mt-2 inline-block">
+                <Link href="/conversations">
                   <Button variant="outline" size="sm">
                     Open in inbox
                   </Button>
@@ -241,45 +301,48 @@ export default async function ContactDetailPage({
 
           <Card>
             <CardTitle>Integration timeline</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <CardDescription>
               CRM webhook events and mapping sync activity from Salesforce, Zoho, Pipedrive, and Calendly.
-            </p>
+            </CardDescription>
             <IntegrationTimelineCard contactId={contact.id} />
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-5">
           <Card>
             <CardTitle>Connected records</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <CardDescription>
               Salesforce, Zoho, Pipedrive, and Calendly records linked to this contact.
-            </p>
+            </CardDescription>
             <div className="mt-4">
               <ConnectedRecordsPanel contactId={contact.id} />
             </div>
             <Link
               href="/integrations/crm"
-              className="mt-4 inline-block text-sm underline text-muted-foreground"
+              className="mt-4 inline-block text-[13px] font-medium text-primary transition-colors hover:text-primary-hover"
             >
               Manage CRM integrations
             </Link>
           </Card>
 
           <Card>
-            <CardTitle>Lists</CardTitle>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              Lists
+            </CardTitle>
+            <div className="mt-3.5 flex flex-wrap gap-1.5">
               {contact.lists.length > 0 ? (
                 contact.lists.map((list) => (
                   <Link
                     key={list}
                     href="/contacts/lists"
-                    className="rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary/10 hover:text-primary"
+                    className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                   >
                     {list}
                   </Link>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">Not on any lists</p>
+                <p className="text-[13px] text-muted-foreground">Not on any lists</p>
               )}
             </div>
             <Button variant="outline" size="sm" className="mt-4 w-full">
@@ -288,48 +351,27 @@ export default async function ContactDetailPage({
           </Card>
 
           <Card>
-            <CardTitle>Tags</CardTitle>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Tag className="h-4 w-4 text-muted-foreground" />
+              Tags
+            </CardTitle>
+            <div className="mt-3.5 flex flex-wrap gap-1.5">
               {contact.tags.length > 0 ? (
                 contact.tags.map((tag) => (
-                  <Link
+                  <span
                     key={tag}
-                    href="/contacts/tags"
-                    className="rounded-full bg-primary/10 px-3 py-1 text-sm text-primary hover:bg-primary/20"
+                    className="inline-flex items-center rounded-full bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/15"
                   >
                     {tag}
-                  </Link>
+                  </span>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No tags applied</p>
+                <p className="text-[13px] text-muted-foreground">No tags applied</p>
               )}
             </div>
             <Button variant="outline" size="sm" className="mt-4 w-full">
-              Edit tags
+              Manage tags
             </Button>
-          </Card>
-
-          <Card>
-            <CardTitle>Quick actions</CardTitle>
-            <div className="mt-4 space-y-2">
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                Edit contact
-              </Button>
-              {contact.status === "Subscribed" ? (
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  Unsubscribe
-                </Button>
-              ) : null}
-              {contact.status !== "Blocked" ? (
-                <Button variant="outline" size="sm" className="w-full justify-start text-danger">
-                  Block contact
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  Unblock contact
-                </Button>
-              )}
-            </div>
           </Card>
         </div>
       </div>

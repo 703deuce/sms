@@ -89,20 +89,26 @@ export function SlickAudienceHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div>
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
         {breadcrumb ? (
           <p className="mb-1 text-[12px] font-medium text-primary">{breadcrumb}</p>
         ) : null}
         <div className="flex items-center gap-2.5">
-          <Icon className="h-6 w-6 text-primary" />
-          <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Icon className="h-5 w-5 text-primary" />
+          </span>
+          <h1 className="font-display text-[24px] font-semibold tracking-tight text-slate-900 sm:text-[26px]">
             {title}
           </h1>
         </div>
-        <p className="mt-1 text-[14px] text-slate-500">{description}</p>
+        <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-slate-500">
+          {description}
+        </p>
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+      ) : null}
     </div>
   );
 }
@@ -128,7 +134,7 @@ export function SlickTableToolbar({
         {filterSlot}
         <div className="relative min-w-0 flex-1 sm:max-w-md">
           <input
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none placeholder:text-slate-400 focus:border-primary"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"
             placeholder={searchPlaceholder}
           />
         </div>
@@ -138,7 +144,7 @@ export function SlickTableToolbar({
       ) : createHref ? (
         <a
           href={createHref}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-white no-underline hover:bg-primary/90"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-white no-underline shadow-sm transition hover:bg-primary/90"
         >
           {createLabel}
         </a>
@@ -146,7 +152,7 @@ export function SlickTableToolbar({
         <button
           type="button"
           onClick={onCreateClick}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-white hover:bg-primary/90"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-primary/90"
         >
           {createLabel}
         </button>

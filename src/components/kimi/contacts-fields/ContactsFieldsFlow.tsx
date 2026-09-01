@@ -3,6 +3,7 @@
  */
 "use client";
 import { useState } from "react";
+import "@/styles/contacts-fields.css";
 import AppShell from "./components/AppShell";
 import { View } from "./components/Sidebar";
 import ContactsList from "./components/ContactsList";
@@ -10,6 +11,8 @@ import ContactEdit from "./components/ContactEdit";
 import CustomFieldsList from "./components/CustomFieldsList";
 import CreateFieldForm from "./components/CreateFieldForm";
 import { initialFields, CustomField, FieldType, mergeTagFor } from "./mock-data";
+import { CheckCircle2 } from "lucide-react";
+
 export default function ContactsFieldsFlow() {
   const [view, setView] = useState<View>("fields");
   const [fields, setFields] = useState<CustomField[]>(initialFields);
@@ -39,7 +42,12 @@ export default function ContactsFieldsFlow() {
 
   return (
     <AppShell view={view} onNavigate={setView}>
-      {toast && <div className="tv-toast">{toast}</div>}
+      {toast && (
+        <div className="tv-toast">
+          <CheckCircle2 size={15} />
+          {toast}
+        </div>
+      )}
       {view === "fields" && (
         <CustomFieldsList
           fields={fields}

@@ -17,20 +17,20 @@
 .kimi-grow-forms .tv-tpl-card:hover{ box-shadow:0 10px 28px rgba(15,23,42,.14); transform:translateY(-2px); border-color:#c7d2fe; }
 
 /* Canvas previews */
-.kimi-grow-forms .tv-landing-preview{ display:flex; min-height:520px; border-radius:10px; overflow:hidden; box-shadow:0 6px 30px rgba(15,23,42,.22); }
-.kimi-grow-forms .tv-landing-form{ background:#1f3d2b; color:#f8fafc; padding:44px 40px; flex:1 1 52%; display:flex; flex-direction:column; justify-content:center; gap:12px; }
+.kimi-grow-forms .tv-landing-preview{ display:flex; min-height:540px; border-radius:12px; overflow:hidden; box-shadow:0 10px 40px rgba(15,23,42,.24), 0 0 0 1px rgba(15,23,42,.06); }
+.kimi-grow-forms .tv-landing-form{ background:#1f3d2b; color:#f8fafc; padding:48px 44px; flex:1 1 52%; display:flex; flex-direction:column; justify-content:center; gap:12px; }
 .kimi-grow-forms .tv-landing-img{ flex:1 1 48%; background:linear-gradient(160deg,#3e6b4a,#8fae8b 55%,#5b7d63); position:relative; }
 .kimi-grow-forms .tv-landing-img::after{ content:""; position:absolute; inset:0; background:radial-gradient(ellipse at 60% 30%, rgba(255,255,255,.25), transparent 60%); pointer-events:none; }
-.kimi-grow-forms .tv-embed-preview{ background:#0b0b0f; color:#f8fafc; padding:36px 32px; border-radius:10px; display:flex; flex-direction:column; gap:12px; min-height:420px; justify-content:center; box-shadow:0 6px 30px rgba(15,23,42,.22); }
+.kimi-grow-forms .tv-embed-preview{ background:#0b0b0f; color:#f8fafc; padding:40px 36px; border-radius:12px; display:flex; flex-direction:column; gap:12px; min-height:420px; justify-content:center; box-shadow:0 10px 40px rgba(15,23,42,.24), 0 0 0 1px rgba(15,23,42,.06); }
 
 /* Mock form elements on canvas */
-.kimi-grow-forms .tv-input-mock{ background:#fff; color:#94a3b8; border-radius:6px; padding:10px 14px; font-size:13px; box-shadow:0 1px 2px rgba(15,23,42,.12); }
-.kimi-grow-forms .tv-input-mock.tv-selected{ outline:2px solid #6366f1; outline-offset:1px; position:relative; }
-.kimi-grow-forms .tv-input-mock.tv-selected::before{ content:attr(data-tag); position:absolute; top:-20px; left:-2px; background:#6366f1; color:#fff; font-size:10px; font-weight:500; padding:1px 6px; border-radius:4px; letter-spacing:.02em; }
+.kimi-grow-forms .tv-input-mock{ background:#fff; color:#94a3b8; border-radius:6px; padding:11px 14px; font-size:13px; box-shadow:0 1px 2px rgba(15,23,42,.12); }
 .kimi-grow-forms .tv-btn-mock{ background:#c9b291; color:#1f2937; text-align:center; padding:12px; border-radius:6px; font-weight:600; font-size:14px; letter-spacing:.01em; cursor:pointer; transition:filter .15s ease; }
 .kimi-grow-forms .tv-btn-mock:hover{ filter:brightness(1.05); }
-.kimi-grow-forms .tv-btn-mock.tv-selected{ outline:2px solid #6366f1; outline-offset:1px; }
 .kimi-grow-forms .tv-btn-mock.tv-dark-btn{ background:#fff; }
+
+/* Selected block tag chip */
+.kimi-grow-forms .tv-block-tag{ position:absolute; top:-22px; left:-2px; z-index:5; background:#6366f1; color:#fff; font-size:10px; font-weight:600; padding:2px 7px; border-radius:4px; letter-spacing:.02em; pointer-events:none; box-shadow:0 2px 6px rgba(99,102,241,.35); white-space:nowrap; }
 
 /* Element tiles */
 .kimi-grow-forms .tv-element-tile{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; cursor:grab; font-size:11px; color:#475569; transition:border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease; }

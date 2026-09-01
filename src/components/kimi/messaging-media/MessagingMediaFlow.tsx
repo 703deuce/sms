@@ -57,8 +57,8 @@ export default function MessagingMediaFlow() {
   }
 
   return (
-    <div className="st-app">
-      <main className="st-main">
+    <div className="min-h-full bg-muted/30">
+      <main className="mx-auto w-full max-w-6xl px-6 py-7">
         {view === 'list' && <CampaignList extraCampaigns={campaigns} onCreate={handleCreate} />}
         {view === 'create' && draft && (
           <CreateCampaign
@@ -71,7 +71,15 @@ export default function MessagingMediaFlow() {
         {view === 'review' && draft && (
           <ReviewDetails draft={draft} onPrev={() => setView('create')} onSend={handleSend} />
         )}
-        {toast && <div className="st-toast">{toast}</div>}
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-lg border border-border bg-foreground px-4 py-2.5 text-[13px] font-medium text-background shadow-lg">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            </span>
+            {toast}
+          </div>
+        )}
       </main>
     </div>
   )

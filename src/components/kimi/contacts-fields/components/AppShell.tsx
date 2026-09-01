@@ -5,7 +5,9 @@ export default function AppShell({ view, onNavigate, children }: { view: View; o
   return (
     <div className="tv-app">
       <Sidebar view={view} onNavigate={onNavigate} />
-      <main className="tv-main">{children}</main>
+      <main className="tv-main">
+        <div className="tv-main-inner">{children}</div>
+      </main>
     </div>
   );
 }

@@ -11,20 +11,27 @@ export default function BulkActionsBar({ count, onAction, tags, teammates }:{
   const teammateList = teammates ?? TEAMMATES;
   const [s, setS] = usePopover(); const [a, setA] = usePopover(); const [t, setT] = usePopover(); const [m, setM] = usePopover();
   const Btn = ({ label, icon, onClick }:{ label: string; icon?: React.ReactNode; onClick?: ()=>void }) => (
-    <button className="tv-btn-ghost" onClick={onClick}>{icon}{label} <ChevronDown size={13} /></button>
+    <button className="tv-btn-ghost" onClick={onClick}
+      style={{ background: "#fff", border: "1px solid var(--tv-border)", boxShadow: "0 1px 2px rgba(16,24,40,.05)", borderRadius: 8, fontWeight: 600, color: "var(--tv-text-2)" }}>
+      {icon}{label} <ChevronDown size={13} style={{ opacity: 0.6 }} />
+    </button>
   );
   const MenuItem = ({ label, onClick }:{ label: string; onClick?: ()=>void }) => (
     <div className="tv-menu-item" onClick={onClick}>{label}</div>
   );
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, background: "var(--tv-panel)" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-        <span style={{ width: 52, height: 52, borderRadius: 9999, background: "var(--tv-primary-soft)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, background: "var(--tv-panel)" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <span style={{
+          width: 56, height: 56, borderRadius: 9999, background: "var(--tv-primary-soft)",
+          boxShadow: "0 0 0 8px color-mix(in srgb, var(--tv-primary) 4%, transparent)",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+        }}>
           <ListChecks size={24} color="var(--tv-primary)" strokeWidth={1.8} />
         </span>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.1 }}>{count} Conversation{count !== 1 ? "s" : ""} Selected</div>
-          <div style={{ fontSize: 12.5, color: "var(--tv-faint)", marginTop: 3 }}>Choose an action below.</div>
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.2, color: "var(--tv-text)" }}>{count} Conversation{count !== 1 ? "s" : ""} Selected</div>
+          <div style={{ fontSize: 12.5, color: "var(--tv-faint)", marginTop: 4 }}>Choose an action below.</div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>

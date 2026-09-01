@@ -30,17 +30,21 @@ export default function AppSidebar({ active, onNavigate }: Props) {
         {navSections[0].items.map((item) => {
           const Icon = iconMap[item.icon];
           return (
-            <button key={item.key} className="ttj-nav-item" onClick={() => onNavigate(item.key)}>
+            <button key={item.key} className="ttj-nav-item transition-colors" onClick={() => onNavigate(item.key)}>
               <Icon size={16} />
               <span>{item.label}</span>
             </button>
           );
         })}
 
-        <button className="ttj-nav-item ttj-nav-parent" onClick={() => setToolsOpen(!toolsOpen)}>
+        <button
+          className="ttj-nav-item ttj-nav-parent transition-colors"
+          onClick={() => setToolsOpen(!toolsOpen)}
+          aria-expanded={toolsOpen}
+        >
           <Wrench size={16} />
           <span>Tools</span>
-          <ChevronDown size={14} className={`ttj-chevron ${toolsOpen ? "open" : ""}`} />
+          <ChevronDown size={14} className={`ttj-chevron transition-transform duration-150 ${toolsOpen ? "open" : ""}`} />
         </button>
 
         {toolsOpen && (
@@ -48,7 +52,7 @@ export default function AppSidebar({ active, onNavigate }: Props) {
             {toolsSubNav.map((sub) => (
               <button
                 key={sub.key}
-                className={`ttj-subnav-item ${active === sub.key ? "active" : ""}`}
+                className={`ttj-subnav-item transition-colors ${active === sub.key ? "active" : ""}`}
                 onClick={() => onNavigate(sub.key)}
               >
                 {sub.label}
@@ -59,12 +63,12 @@ export default function AppSidebar({ active, onNavigate }: Props) {
       </nav>
 
       <div className="ttj-sidebar-footer">
-        <button className="ttj-nav-item">
+        <button className="ttj-nav-item transition-colors">
           <Bell size={16} />
           <span>Notifications</span>
           <span className="ttj-badge">8</span>
         </button>
-        <button className="ttj-nav-item">
+        <button className="ttj-nav-item transition-colors">
           <HelpCircle size={16} />
           <span>Help</span>
         </button>

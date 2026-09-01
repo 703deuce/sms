@@ -8,6 +8,7 @@ import type { SmsDashboardActivityPoint, SmsDashboardMetrics } from "@/lib/sms/d
 import {
   AlertCircle,
   ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
   Inbox,
   Megaphone,
@@ -28,6 +29,49 @@ const RANGE_OPTIONS = [
   { label: "90D", days: 90 },
 ];
 
+const METRIC_META: Record<ActivityMetric, { label: string; color: string }> = {
+  sent: { label: "Sent", color: "#6366f1" },
+  delivered: { label: "Delivered", color: "#10b981" },
+  replies: { label: "Replies", color: "#8b5cf6" },
+};
+
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: Array<{ value: T; label: string }>;
+  value: T;
+  onChange: (v: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-0.5"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={cn(
+            "rounded-md px-3 py-1.5 text-[12px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            value === o.value
+              ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ActivityChart({
   series,
   metric,
@@ -39,10 +83,12 @@ function ActivityChart({
 
   if (!series.length || !hasActivity) {
     return (
-      <div className="flex h-36 flex-col items-center justify-center rounded-[12px] border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
-        <Send className="h-7 w-7 text-muted-foreground/50" />
-        <p className="mt-3 text-[14px] font-medium text-foreground">No messages sent yet</p>
-        <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">
+      <div className="flex h-44 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Send className="h-4.5 w-4.5" />
+        </div>
+        <p className="mt-3 text-[13px] font-semibold text-foreground">No messages sent yet</p>
+        <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
           Send your first campaign to see delivery trends here.
         </p>
         <Link href="/campaigns/new/promotional" className="mt-4">
@@ -53,9 +99,7 @@ function ActivityChart({
   }
 
   const max = Math.max(1, ...series.map((p) => p[metric]));
-
-  const color =
-    metric === "sent" ? "#6366f1" : metric === "delivered" ? "#10b981" : "#8b5cf6";
+  const { color } = METRIC_META[metric];
   const width = Math.max(series.length * 12, 120);
 
   const points = series
@@ -66,24 +110,51 @@ function ActivityChart({
     })
     .join(" ");
 
+  const gridLines = [0.33, 0.66, 1].map((f) => 150 - f * 130);
+
   return (
     <div className="h-48">
       <svg viewBox={`0 0 ${width} 160`} className="h-full w-full" preserveAspectRatio="none">
+        {gridLines.map((y) => (
+          <line
+            key={y}
+            x1="4"
+            x2={width - 4}
+            y1={y}
+            y2={y}
+            stroke="currentColor"
+            className="text-border/50"
+            strokeWidth="1"
+            strokeDasharray="3 5"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        <line
+          x1="4"
+          x2={width - 4}
+          y1="150"
+          y2="150"
+          stroke="currentColor"
+          className="text-border"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
         <polyline
-          fill={`${color}18`}
+          fill={`${color}14`}
           stroke="none"
           points={`4,150 ${points} ${width - 4},150`}
         />
         <polyline
           fill="none"
           stroke={color}
-          strokeWidth="2.5"
+          strokeWidth="2.25"
           strokeLinecap="round"
           strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
           points={points}
         />
       </svg>
-      <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+      <div className="mt-2 flex justify-between text-[11px] font-medium text-muted-foreground">
         <span>{series[0]?.date.slice(5)}</span>
         <span>{series[series.length - 1]?.date.slice(5)}</span>
       </div>
@@ -107,35 +178,79 @@ function KpiStat({
   muted?: boolean;
 }) {
   const body = (
-    <div className="min-w-0">
-      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+        {href ? (
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
+        ) : null}
+      </div>
       <p
         className={cn(
-          "mt-1 font-semibold tracking-tight tabular-nums",
-          hero ? "text-[32px] text-foreground" : "text-[24px]",
-          muted ? "text-muted-foreground" : "text-foreground",
+          "mt-2 font-semibold tracking-tight tabular-nums",
+          hero ? "text-[30px] leading-none" : "text-[24px] leading-none",
+          muted ? "text-muted-foreground/70" : "text-foreground",
         )}
       >
         {value}
       </p>
-      {hint ? <p className="mt-1 text-[12px] text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className={cn("mt-2 text-[12px]", muted ? "text-muted-foreground/60" : "text-muted-foreground")}>
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 
   const cardClass = cn(
-    "rounded-[14px] border border-border bg-card p-5",
-    hero && "border-primary/20 bg-primary/[0.03] sm:col-span-2 xl:col-span-1",
+    "surface group h-full rounded-xl bg-card p-5",
+    hero && "border-primary/25 bg-primary/[0.04] sm:col-span-2 xl:col-span-1",
   );
 
   if (href) {
     return (
-      <Link href={href} className={cn("block transition hover:border-primary/30", cardClass)}>
+      <Link
+        href={href}
+        className={cn(
+          "block transition-all duration-150 hover:border-primary/40 hover:shadow-md",
+          cardClass,
+        )}
+      >
         {body}
       </Link>
     );
   }
 
   return <div className={cardClass}>{body}</div>;
+}
+
+function campaignStatusTone(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "completed" || s === "active") return "bg-emerald-50 text-emerald-700 ring-emerald-600/20";
+  if (s === "sending" || s === "scheduled") return "bg-blue-50 text-blue-700 ring-blue-600/20";
+  if (s === "failed" || s === "canceled") return "bg-rose-50 text-rose-700 ring-rose-600/20";
+  if (s === "draft") return "bg-muted text-muted-foreground ring-border";
+  return "bg-amber-50 text-amber-700 ring-amber-600/20";
+}
+
+function StatusPill({ status }: { status: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+        campaignStatusTone(status),
+      )}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {status}
+    </span>
+  );
+}
+
+function formatShortDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export function SmsDashboardView({ metrics }: Props) {
@@ -216,29 +331,32 @@ export function SmsDashboardView({ metrics }: Props) {
   );
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-5 pb-8">
+      {/* Header */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-foreground">{greeting}</h1>
-          <p className="mt-1 max-w-xl text-[14px] text-muted-foreground">
+          <h1 className="font-display text-[24px] font-semibold tracking-tight text-foreground">
+            {greeting}
+          </h1>
+          <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">
             Account health at a glance — messaging, delivery, and what needs your attention.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/campaigns/new/promotional">
-            <Button className="h-9 rounded-[10px] px-4">
+            <Button>
               <Megaphone className="h-4 w-4" />
               Send Campaign
             </Button>
           </Link>
           <Link href="/contacts">
-            <Button variant="outline" className="h-9 rounded-[10px] px-3">
+            <Button variant="outline">
               <Upload className="h-4 w-4" />
               Add Contacts
             </Button>
           </Link>
           <Link href="/inbox">
-            <Button variant="outline" className="h-9 rounded-[10px] px-3">
+            <Button variant="outline">
               <Inbox className="h-4 w-4" />
               View Inbox
             </Button>
@@ -246,6 +364,7 @@ export function SmsDashboardView({ metrics }: Props) {
         </div>
       </div>
 
+      {/* KPI row */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat
           label="Active Contacts"
@@ -279,81 +398,84 @@ export function SmsDashboardView({ metrics }: Props) {
         />
       </div>
 
-      <section className="rounded-[14px] border border-border bg-card p-5">
+      {/* Activity chart */}
+      <section className="surface rounded-xl bg-card p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-[15px] font-semibold text-foreground">Messaging Activity</h2>
-            <p className="text-[12px] text-muted-foreground">Volume over the selected period</p>
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
+              Messaging Activity
+            </h2>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              Volume over the selected period
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex rounded-[10px] border border-border bg-muted/40 p-0.5">
-              <span className="sr-only">Metric</span>
-              {(["sent", "delivered", "replies"] as ActivityMetric[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMetric(m)}
-                  className={cn(
-                    "rounded-[8px] px-3 py-1.5 text-[12px] font-medium capitalize transition",
-                    metric === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            <span className="hidden text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:inline">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <SegmentedControl
+              ariaLabel="Metric"
+              value={metric}
+              onChange={setMetric}
+              options={(["sent", "delivered", "replies"] as ActivityMetric[]).map((m) => ({
+                value: m,
+                label: METRIC_META[m].label,
+              }))}
+            />
+            <span className="hidden text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 sm:inline">
               Range
             </span>
-            <div className="inline-flex rounded-[10px] border border-border bg-muted/40 p-0.5">
-              {RANGE_OPTIONS.map((o) => (
-                <button
-                  key={o.days}
-                  type="button"
-                  onClick={() => setDays(o.days)}
-                  className={cn(
-                    "rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition",
-                    days === o.days ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              ariaLabel="Date range"
+              value={String(days)}
+              onChange={(v) => setDays(Number(v))}
+              options={RANGE_OPTIONS.map((o) => ({ value: String(o.days), label: o.label }))}
+            />
           </div>
         </div>
-        <div className={cn("mt-4", activityLoading && "opacity-60")}>
+        <div className={cn("mt-4 transition-opacity duration-200", activityLoading && "opacity-50")}>
           <ActivityChart series={activity} metric={metric} />
         </div>
       </section>
 
+      {/* Bottom grid */}
       <div className="grid gap-4 lg:grid-cols-5">
-        <section className="rounded-[14px] border border-border bg-card p-5 lg:col-span-3">
+        <section className="surface rounded-xl bg-card p-5 lg:col-span-3">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-[15px] font-semibold text-foreground">Recent Campaigns</h2>
+            <div>
+              <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
+                Recent Campaigns
+              </h2>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                Performance of your latest sends
+              </p>
+            </div>
             <Link
               href="/campaigns"
-              className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
+              className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-semibold text-primary transition-colors hover:text-primary-hover"
             >
               View all campaigns
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
           {campaignsWithActivity.length === 0 ? (
-            <div className="rounded-[12px] border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-              <Send className="mx-auto h-8 w-8 text-muted-foreground/60" />
-              <p className="mt-3 text-[14px] font-medium text-foreground">No sent campaigns yet</p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Send className="h-4.5 w-4.5" />
+              </div>
+              <p className="mt-3 text-[13px] font-semibold text-foreground">
+                No sent campaigns yet
+              </p>
+              <p className="mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">
                 {metrics.recentCampaigns.length > 0
                   ? "You have drafts ready — send one to see performance here."
                   : "Create a campaign to start reaching your audience."}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <Link href="/campaigns/new/promotional">
-                  <Button size="sm">Send your first campaign</Button>
+                  <Button size="sm">
+                    {metrics.recentCampaigns.length > 0 ? "Send your first campaign" : "Create campaign"}
+                  </Button>
                 </Link>
                 {metrics.recentCampaigns.length > 0 ? (
-                  <Link href="/campaigns/drafts">
+                  <Link href="/campaigns">
                     <Button size="sm" variant="outline">
                       View drafts
                     </Button>
@@ -362,29 +484,47 @@ export function SmsDashboardView({ metrics }: Props) {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-[13px]">
+            <div className="-mx-5 overflow-x-auto">
+              <table className="w-full min-w-[480px] text-left">
                 <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th className="pb-2 pr-3 text-left font-medium">Campaign</th>
-                    <th className="pb-2 pr-3 text-right font-medium">Sent</th>
-                    <th className="pb-2 pr-3 text-right font-medium">Delivered</th>
-                    <th className="pb-2 pr-3 text-right font-medium">Clicks</th>
-                    <th className="pb-2 pr-3 text-right font-medium">Replies</th>
+                  <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="py-2 pl-5 pr-3 font-semibold">Campaign</th>
+                    <th className="px-3 py-2 font-semibold">Status</th>
+                    <th className="px-3 py-2 text-right font-semibold">Sent</th>
+                    <th className="px-3 py-2 text-right font-semibold">Delivery</th>
+                    <th className="px-3 py-2 text-right font-semibold">Replies</th>
+                    <th className="py-2 pl-3 pr-5 text-right font-semibold">Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {campaignsWithActivity.map((c) => (
-                    <tr key={c.id} className="border-b border-border/60 last:border-0">
-                      <td className="py-2.5 pr-3">
-                        <Link href={`/campaigns/${c.id}`} className="font-medium text-foreground hover:text-primary">
+                    <tr
+                      key={c.id}
+                      className="group border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40"
+                    >
+                      <td className="py-3 pl-5 pr-3">
+                        <Link
+                          href={`/campaigns/${c.id}`}
+                          className="text-[13px] font-medium text-foreground transition-colors group-hover:text-primary"
+                        >
                           {c.name}
                         </Link>
                       </td>
-                      <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{formatNumber(c.sent)}</td>
-                      <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{formatPercent(c.deliveryRate)}</td>
-                      <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{formatNumber(c.clicks)}</td>
-                      <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{formatNumber(c.replies)}</td>
+                      <td className="px-3 py-3">
+                        <StatusPill status={c.status} />
+                      </td>
+                      <td className="px-3 py-3 text-right text-[13px] tabular-nums text-foreground">
+                        {formatNumber(c.sent)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-[13px] tabular-nums text-foreground">
+                        {formatPercent(c.deliveryRate)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-[13px] tabular-nums text-foreground">
+                        {formatNumber(c.replies)}
+                      </td>
+                      <td className="py-3 pl-3 pr-5 text-right text-[12px] text-muted-foreground">
+                        {formatShortDate(c.sentAt)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -393,54 +533,109 @@ export function SmsDashboardView({ metrics }: Props) {
           )}
         </section>
 
-        <section className="rounded-[14px] border border-border bg-card p-5 lg:col-span-2">
-          <h2 className="text-[15px] font-semibold text-foreground">Needs Attention</h2>
-          <ul className="mt-4 space-y-2.5">
-            {attentionItems.map((item) => (
-              <li key={item.label}>
-                <Link
-                  href={item.href || "#"}
-                  className={cn(
-                    "flex items-center gap-2 rounded-[10px] px-3 py-2.5 text-[13px] transition hover:bg-muted/50",
-                    item.tone === "warn" ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {item.tone === "warn" ? (
-                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                  )}
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          {/* Needs attention */}
+          <section className="surface rounded-xl bg-card p-5">
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
+              Needs Attention
+            </h2>
+            <ul className="mt-3 space-y-1">
+              {attentionItems.map((item) => {
+                const Icon = item.tone === "ok" ? CheckCircle2 : AlertCircle;
+                const inner = (
+                  <>
+                    <Icon
+                      className={cn(
+                        "mt-px h-4 w-4 shrink-0",
+                        item.tone === "ok" ? "text-emerald-600" : "text-amber-600",
+                      )}
+                    />
+                    <span className="flex-1 text-[13px] font-medium text-foreground">
+                      {item.label}
+                    </span>
+                    {item.href ? (
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-primary" />
+                    ) : null}
+                  </>
+                );
+                return (
+                  <li key={item.label}>
+                    {item.href ? (
+                      <Link
+                        href={item.href}
+                        className="group flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/60"
+                      >
+                        {inner}
+                      </Link>
+                    ) : (
+                      <div className="flex items-start gap-2.5 px-2.5 py-2">{inner}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
 
-          {metrics.recentReplies.length > 0 ? (
-            <div className="mt-5 border-t border-border pt-4">
-              <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">Latest replies</p>
-              <ul className="mt-3 space-y-3">
+          {/* Recent replies */}
+          <section className="surface flex-1 rounded-xl bg-card p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
+                Recent Replies
+              </h2>
+              <Link
+                href="/inbox"
+                className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-semibold text-primary transition-colors hover:text-primary-hover"
+              >
+                Open inbox
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            {metrics.recentReplies.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <MessageSquare className="h-4.5 w-4.5" />
+                </div>
+                <p className="mt-3 text-[13px] font-semibold text-foreground">No replies yet</p>
+                <p className="mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">
+                  When contacts respond to your campaigns, they’ll show up here.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-1">
                 {metrics.recentReplies.map((r) => (
                   <li key={r.id}>
                     <Link
                       href={`/inbox?conversation=${r.conversationId}`}
-                      className="block rounded-[10px] p-2 transition hover:bg-muted/40"
+                      className="group flex items-start gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/60"
                     >
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-[13px] font-medium text-foreground">{r.contactName}</span>
-                        <span className="ml-auto text-[11px] text-muted-foreground">
-                          {new Date(r.at).toLocaleDateString()}
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                        {r.contactName
+                          .split(" ")
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((p) => p[0]?.toUpperCase())
+                          .join("") || "?"}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[13px] font-medium text-foreground">
+                            {r.contactName}
+                          </span>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {formatShortDate(r.at)}
+                          </span>
                         </span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 pl-5 text-[12px] text-muted-foreground">{r.preview}</p>
+                        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">
+                          {r.preview}
+                        </span>
+                      </span>
                     </Link>
                   </li>
                 ))}
               </ul>
-            </div>
-          ) : null}
-        </section>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

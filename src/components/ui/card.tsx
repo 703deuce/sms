@@ -19,7 +19,10 @@ export function CardTitle({
 }: HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={cn("font-display text-sm font-semibold text-foreground", className)}
+      className={cn(
+        "font-display text-sm font-semibold tracking-tight text-foreground",
+        className,
+      )}
       {...props}
     />
   );
@@ -38,10 +41,10 @@ export function StatCard({
 }) {
   const content = (
     <>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
+      <p className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-foreground">
         {value}
       </p>
       {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
@@ -52,7 +55,7 @@ export function StatCard({
     return (
       <a
         href={href}
-        className="surface block rounded-xl bg-card p-5 transition hover:border-primary/40 hover:shadow-md"
+        className="surface block rounded-xl bg-card p-5 transition-all duration-150 hover:border-primary/40 hover:shadow-md"
       >
         {content}
       </a>

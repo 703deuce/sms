@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { MousePointerClick, Info, Smartphone, Search, ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MousePointerClick, Info, Smartphone, Search, ChevronDown, Check } from "lucide-react";
 import { Keyword, TapLink } from "../mock-data";
 
 interface Props {
@@ -20,6 +20,19 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
   const [active, setActive] = useState(true);
   const [kwOpen, setKwOpen] = useState(false);
   const [kwSearch, setKwSearch] = useState("");
+  const kwRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!kwOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (kwRef.current && !kwRef.current.contains(e.target as Node)) {
+        setKwOpen(false);
+        setKwSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [kwOpen]);
 
   const filteredKeywords = keywords.filter((k) =>
     k.keyword.toLowerCase().includes(kwSearch.toLowerCase())
@@ -56,18 +69,22 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
       </div>
 
       <div className="ttj-create-layout">
-        <div className="ttj-form-card">
+        <div className="ttj-form-card rounded-xl border border-border/60 bg-card shadow-sm">
           <div className="ttj-field">
             <label>Name <Info size={12} className="ttj-info-icon" /></label>
-            <input className="ttj-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Black Friday" />
+            <input className="ttj-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Black Friday" autoFocus />
           </div>
 
           <div className="ttj-field">
             <label>Keyword <Info size={12} className="ttj-info-icon" /></label>
-            <div className="ttj-dropdown-wrap">
-              <button className="ttj-input ttj-dropdown-btn" onClick={() => setKwOpen(!kwOpen)}>
+            <div className="ttj-dropdown-wrap" ref={kwRef}>
+              <button
+                className="ttj-input ttj-dropdown-btn"
+                onClick={() => setKwOpen(!kwOpen)}
+                aria-expanded={kwOpen}
+              >
                 <span>{keyword}</span>
-                <ChevronDown size={14} className="ttj-info-icon" />
+                <ChevronDown size={14} className={`ttj-info-icon transition-transform duration-150 ${kwOpen ? "rotate-180" : ""}`} />
               </button>
               {kwOpen && (
                 <div className="ttj-dropdown">
@@ -83,10 +100,11 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
                   {filteredKeywords.map((k) => (
                     <button
                       key={k.id}
-                      className="ttj-dropdown-item"
+                      className="ttj-dropdown-item flex items-center justify-between gap-2"
                       onClick={() => { setKeyword(k.keyword); setKwOpen(false); setKwSearch(""); }}
                     >
-                      {k.keyword}
+                      <span className="truncate">{k.keyword}</span>
+                      {k.keyword === keyword && <Check size={13} className="shrink-0 text-primary" />}
                     </button>
                   ))}
                   {filteredKeywords.length === 0 && (
@@ -99,7 +117,7 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
 
           <div className="ttj-field">
             <label>Number <Info size={12} className="ttj-info-icon" /></label>
-            <input className="ttj-input" value={number} disabled />
+            <input className="ttj-input opacity-60" value={number} disabled />
           </div>
 
           <div className="ttj-field">
@@ -118,18 +136,19 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
               className={`ttj-toggle ${active ? "on" : ""}`}
               onClick={() => setActive(!active)}
               aria-label="Toggle active"
+              aria-pressed={active}
             >
               <span className="ttj-toggle-knob" />
             </button>
           </div>
 
-          <div className="ttj-form-actions">
+          <div className="ttj-form-actions border-t border-border/60 pt-4">
             <button className="ttj-btn-primary" onClick={handleSave} disabled={!name.trim()}>Save</button>
             <button className="ttj-btn-ghost" onClick={onBack}>Back</button>
           </div>
         </div>
 
-        <div className="ttj-info-card">
+        <div className="ttj-info-card rounded-xl border border-border/60 bg-muted/20">
           <div className="ttj-info-illustration"><Smartphone size={40} /></div>
           <h3>Tap-to-Join Links</h3>
           <p>

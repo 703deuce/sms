@@ -8,34 +8,34 @@ export default function FormCreatedModal({
 }: { open: boolean; onClose: () => void; type: "landing" | "embed"; url: string; embedCode: string }) {
   return (
     <Modal open={open} onClose={onClose} width={440}>
-      <div className="p-6 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
+      <div className="p-7 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 ring-1 ring-emerald-100">
           <CheckCircle2 size={26} className="text-emerald-500" />
         </div>
-        <h3 className="mb-1 text-lg font-semibold tracking-tight text-foreground">Form Created</h3>
-        <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+        <h3 className="mb-1.5 font-display text-lg font-semibold tracking-tight text-foreground">Form Created</h3>
+        <p className="mb-6 text-[13px] leading-relaxed text-muted-foreground">
           {type === "landing"
             ? "Your form has been successfully created."
             : "Your form has been successfully created. You can paste its embed code into any page of the website where you want it to show."}
         </p>
-        <div className="mb-5 text-left">
+        <div className="mb-6 text-left">
           <div className="mb-1.5 text-xs font-medium text-foreground">{type === "landing" ? "Form URL" : "Form Embed Code"}</div>
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
-            <code className="flex-1 truncate text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+            <code className="flex-1 truncate font-mono text-xs text-muted-foreground">
               {type === "landing" ? url : embedCode}
             </code>
-            <button className="flex-none rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground" aria-label="Copy">
+            <button className="flex-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Copy">
               <Copy size={14} />
             </button>
           </div>
         </div>
         <div className="flex gap-3">
-          <button className="flex-1 rounded-md bg-indigo-600 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
+          <button className="flex-1 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary-hover active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             {type === "landing" ? "View Form" : "Copy Embed Code"}
           </button>
           <button
             onClick={onClose}
-            className="flex-1 rounded-md border border-border py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            className="flex-1 rounded-lg border border-border bg-card py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             Close
           </button>

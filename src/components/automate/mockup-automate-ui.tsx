@@ -1,8 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import type { LucideIcon, ReactNode } from "react";
+import { Check, ChevronLeft, ChevronRight, Search, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 export function MockupWizardStepper({
   steps,
@@ -22,20 +22,24 @@ export function MockupWizardStepper({
               <div className="flex items-center gap-2.5 px-2">
                 <span
                   className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold",
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold transition-colors duration-200",
                     isDone
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-emerald-500 text-white"
                       : isActive
-                        ? "bg-primary text-white"
-                        : "border border-slate-200 bg-white text-slate-400",
+                        ? "bg-primary text-white shadow-sm ring-4 ring-primary/15"
+                        : "border border-border bg-card text-muted-foreground",
                   )}
                 >
-                  {isDone ? "✓" : i + 1}
+                  {isDone ? <Check className="h-4 w-4" strokeWidth={3} /> : i + 1}
                 </span>
                 <span
                   className={cn(
                     "hidden text-[13px] font-semibold sm:inline",
-                    isActive ? "text-primary" : isDone ? "text-slate-700" : "text-slate-400",
+                    isActive
+                      ? "text-foreground"
+                      : isDone
+                        ? "text-foreground/80"
+                        : "text-muted-foreground",
                   )}
                 >
                   {label}
@@ -45,7 +49,7 @@ export function MockupWizardStepper({
                 <div
                   className={cn(
                     "mx-1 hidden h-px w-10 sm:block md:w-16",
-                    isDone ? "bg-primary/40" : "bg-slate-200",
+                    isDone ? "bg-emerald-400" : "bg-border",
                   )}
                 />
               ) : null}
@@ -66,8 +70,14 @@ export function MockupWizardSection({
 }) {
   return (
     <div className="mb-6 text-center">
-      <h2 className="font-display text-[22px] font-semibold text-slate-900">{title}</h2>
-      {description ? <p className="mt-1.5 text-[14px] text-slate-500">{description}</p> : null}
+      <h2 className="font-display text-[20px] font-semibold tracking-tight text-foreground">
+        {title}
+      </h2>
+      {description ? (
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -92,21 +102,22 @@ export function MockupWizardFooter({
   extraActions?: ReactNode;
 }) {
   return (
-    <div className="mt-8 flex items-center justify-between gap-3 border-t border-slate-100 pt-6">
+    <div className="mt-8 flex items-center justify-between gap-3 border-t border-border pt-5">
       <div>
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-border bg-card px-4 text-[13px] font-semibold text-foreground shadow-sm transition-colors hover:bg-muted/60"
           >
+            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
             {backLabel}
           </button>
         ) : onCancel ? (
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 items-center rounded-lg px-4 text-[13px] font-semibold text-slate-500 hover:text-slate-700"
+            className="inline-flex h-10 items-center rounded-lg px-4 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             Cancel
           </button>
@@ -119,9 +130,10 @@ export function MockupWizardFooter({
             type="button"
             disabled={nextDisabled || nextLoading}
             onClick={onNext}
-            className="inline-flex h-10 items-center rounded-lg bg-primary px-5 text-[13px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-1 rounded-lg bg-primary px-5 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
           >
             {nextLoading ? "Saving…" : nextLabel}
+            {!nextLoading ? <ChevronRight className="h-4 w-4" /> : null}
           </button>
         ) : null}
       </div>
@@ -147,22 +159,22 @@ export function MockupTriggerCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center rounded-xl border p-5 text-center transition",
+        "flex flex-col items-center rounded-xl border p-5 text-center transition-all duration-150",
         selected
-          ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50",
+          ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
+          : "border-border bg-card hover:border-primary/30 hover:bg-muted/40",
       )}
     >
       <span
         className={cn(
-          "mb-3 flex h-11 w-11 items-center justify-center rounded-full",
-          selected ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500",
+          "mb-3 flex h-11 w-11 items-center justify-center rounded-full transition-colors",
+          selected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
         )}
       >
         <Icon className="h-5 w-5" />
       </span>
-      <p className="text-[14px] font-semibold text-slate-900">{label}</p>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">{description}</p>
+      <p className="text-[14px] font-semibold text-foreground">{label}</p>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{description}</p>
     </button>
   );
 }
@@ -182,14 +194,14 @@ export function MockupListToolbar({
 }) {
   return (
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-1 items-center gap-2">
+      <div className="flex flex-1 flex-wrap items-center gap-2">
         {filterSlot}
         <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] outline-none placeholder:text-slate-400 focus:border-primary"
+            className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px] outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/30"
             placeholder={searchPlaceholder}
           />
         </div>
@@ -213,26 +225,26 @@ export function MockupTablePagination({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-[12px] text-slate-500">
-      <span>
-        Showing {start}-{end} of {total}
+    <div className="mt-4 flex items-center justify-between gap-3 border-t border-border px-1 pt-3 text-[12px] text-muted-foreground">
+      <span className="tabular-nums">
+        Showing {start}–{end} of {total}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           disabled={page <= 1}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
           aria-label="Previous page"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="px-2 font-medium text-slate-700">
+        <span className="min-w-[52px] px-1 text-center font-medium tabular-nums text-foreground">
           {page} of {totalPages}
         </span>
         <button
           type="button"
           disabled={page >= totalPages}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
           aria-label="Next page"
         >
           <ChevronRight className="h-4 w-4" />
@@ -252,17 +264,17 @@ export function MockupDetailTabs({
   onChange: (tab: string) => void;
 }) {
   return (
-    <div className="mb-6 flex gap-6 border-b border-slate-200">
+    <div className="mb-6 flex gap-6 border-b border-border">
       {tabs.map((tab) => (
         <button
           key={tab}
           type="button"
           onClick={() => onChange(tab)}
           className={cn(
-            "-mb-px border-b-2 pb-2.5 text-[13px] font-semibold transition",
+            "-mb-px border-b-2 pb-2.5 text-[13px] font-semibold transition-colors",
             active === tab
               ? "border-primary text-primary"
-              : "border-transparent text-slate-500 hover:text-slate-700",
+              : "border-transparent text-muted-foreground hover:text-foreground",
           )}
         >
           {tab}
@@ -279,13 +291,14 @@ export function MockupMessageToolbar({
 }) {
   const tokens = ["{{firstName}}", "{{lastName}}", "{{businessName}}"];
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+    <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
+      <span className="text-[11px] font-medium text-muted-foreground">Insert:</span>
       {tokens.map((token) => (
         <button
           key={token}
           type="button"
           onClick={() => onInsert(token)}
-          className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary"
+          className="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-1 font-mono text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
         >
           {token}
         </button>

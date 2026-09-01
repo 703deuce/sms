@@ -10,7 +10,7 @@ const Item = ({ active, icon, label, count, onClick, indent, chevron, expanded }
   chevron?: boolean; expanded?: boolean;
 }) => (
   <div onClick={onClick} className={"tv-rail-item" + (active ? " active" : "")}
-    style={indent ? { paddingLeft: 26 } : undefined}>
+    style={indent ? { paddingLeft: 28 } : undefined}>
     {chevron !== undefined && (
       <span style={{ display: "flex", color: "var(--tv-faint)", marginLeft: -4 }}>{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
     )}
@@ -23,11 +23,11 @@ const Item = ({ active, icon, label, count, onClick, indent, chevron, expanded }
 const Group = ({ title, children, defaultOpen = true }:{ title: string; children: React.ReactNode; defaultOpen?: boolean }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ marginTop: 12 }}>
+    <div style={{ marginTop: 14 }}>
       <div onClick={() => setOpen(!open)} className="tv-rail-group">
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{title}
       </div>
-      {open && <div style={{ marginTop: 3, display: "flex", flexDirection: "column", gap: 1 }}>{children}</div>}
+      {open && <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 1 }}>{children}</div>}
     </div>
   );
 };
@@ -54,19 +54,19 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates }
   };
 
   return (
-    <div style={{ width: 212, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 14px 10px" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1, letterSpacing: -0.2, margin: 0 }}>Inbox</h1>
+    <div style={{ width: 216, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 14px 12px" }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1, letterSpacing: -0.3, margin: 0, color: "var(--tv-text)" }}>Inbox</h1>
         <button className="tv-online-pill">
           <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#10b981" }} />Online <ChevronDown size={11} />
         </button>
       </div>
-      <div style={{ display: "flex", gap: 6, padding: "0 12px 12px" }}>
+      <div style={{ display: "flex", gap: 6, padding: "0 12px 14px" }}>
         <div style={{ position: "relative", flex: 1 }}>
           <Search size={13} style={{ position: "absolute", left: 9, top: 9, color: "var(--tv-faint)", pointerEvents: "none" }} />
-          <input className="tv-input" placeholder="Search" style={{ padding: "7px 8px 7px 28px" }} />
+          <input className="tv-input" placeholder="Search" style={{ padding: "7px 8px 7px 28px", borderRadius: 8 }} />
         </div>
-        <button className="tv-btn" style={{ padding: "7px 10px", borderRadius: 7 }} onClick={onNew} title="New Message"><MessageSquarePlus size={15} /></button>
+        <button className="tv-btn" style={{ padding: "7px 10px", borderRadius: 8, boxShadow: "0 1px 2px rgba(16,24,40,.1)" }} onClick={onNew} title="New Message"><MessageSquarePlus size={15} /></button>
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 8px 16px" }}>
         <Group title="MY CONVERSATIONS">

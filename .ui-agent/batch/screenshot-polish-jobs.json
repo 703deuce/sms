@@ -1,0 +1,167 @@
+{
+  "instruction": "Polish this UI: spacing, hierarchy, surfaces, tables, buttons, status pills, cards, and empty states. Keep all hooks, API calls, data loading, and navigation exactly as they are.",
+  "jobs": [
+    {
+      "id": "sms-dashboard",
+      "path": "/sms/dashboard",
+      "target": "src/components/sms/sms-dashboard-view.tsx",
+      "screenshot": ".ui-agent/screenshots/sms-dashboard.png"
+    },
+    {
+      "id": "conversations",
+      "path": "/conversations",
+      "target": "src/components/kimi/conversations/ConversationsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/conversations.png"
+    },
+    {
+      "id": "campaigns-list",
+      "path": "/campaigns",
+      "target": "src/components/kimi/campaigns/CampaignsUiFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/campaigns-list.png"
+    },
+    {
+      "id": "campaigns-create",
+      "path": "/campaigns/new",
+      "target": "src/components/kimi/campaigns/components/CreateCampaign.tsx",
+      "screenshot": ".ui-agent/screenshots/campaigns-create.png"
+    },
+    {
+      "id": "campaigns-review",
+      "path": "/campaigns/new/review",
+      "target": "src/components/campaigns/campaign-launch-review.tsx",
+      "screenshot": ".ui-agent/screenshots/campaigns-review.png"
+    },
+    {
+      "id": "campaign-detail",
+      "path": "/campaigns/cmtdlbtj90a594z3x331f304t",
+      "target": "src/components/campaigns/campaign-detail-view.tsx",
+      "screenshot": ".ui-agent/screenshots/campaign-detail.png"
+    },
+    {
+      "id": "sms-analytics",
+      "path": "/sms/analytics",
+      "target": "src/components/sms/sms-analytics-view.tsx",
+      "screenshot": ".ui-agent/screenshots/sms-analytics.png"
+    },
+    {
+      "id": "contacts",
+      "path": "/contacts",
+      "target": "src/components/kimi/contacts/ContactsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/contacts.png"
+    },
+    {
+      "id": "contacts-lists",
+      "path": "/contacts/lists",
+      "target": "src/components/kimi/contacts-lists/ContactsListsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/contacts-lists.png"
+    },
+    {
+      "id": "contacts-segments",
+      "path": "/contacts/segments",
+      "target": "src/components/kimi/contacts-segments/ContactsSegmentsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/contacts-segments.png"
+    },
+    {
+      "id": "contacts-fields",
+      "path": "/contacts/fields",
+      "target": "src/components/kimi/contacts-fields/ContactsFieldsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/contacts-fields.png"
+    },
+    {
+      "id": "contacts-detail",
+      "path": "/contacts/cmtifaf9w4u4z2d0s492c2u6n",
+      "target": "src/app/(app)/contacts/[id]/page.tsx",
+      "screenshot": ".ui-agent/screenshots/contacts-detail.png"
+    },
+    {
+      "id": "contacts-imports",
+      "path": "/contacts/imports",
+      "target": "src/components/kimi/contacts/ContactsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/contacts-imports.png"
+    },
+    {
+      "id": "grow-qr-codes",
+      "path": "/grow/qr-codes",
+      "target": "src/components/kimi/grow-qr-codes/GrowQrCodesFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/grow-qr-codes.png"
+    },
+    {
+      "id": "grow-forms",
+      "path": "/grow/forms",
+      "target": "src/components/kimi/grow-forms/GrowFormsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/grow-forms.png"
+    },
+    {
+      "id": "grow-tap-to-join",
+      "path": "/grow/tap-to-join",
+      "target": "src/components/kimi/grow-tap-to-join/GrowTapToJoinFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/grow-tap-to-join.png"
+    },
+    {
+      "id": "grow-keywords",
+      "path": "/grow/keywords",
+      "target": "src/components/kimi/grow-keywords/GrowKeywordsFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/grow-keywords.png"
+    },
+    {
+      "id": "drip-list",
+      "path": "/automations/drip-campaigns",
+      "target": "src/components/drip-campaigns/drip-campaigns-list.tsx",
+      "screenshot": ".ui-agent/screenshots/drip-campaigns-list.png"
+    },
+    {
+      "id": "drip-wizard",
+      "path": "/automations/drip-campaigns/new",
+      "target": "src/components/drip-campaigns/drip-campaign-wizard.tsx",
+      "screenshot": ".ui-agent/screenshots/drip-campaigns-new.png"
+    },
+    {
+      "id": "drip-detail",
+      "path": "/automations/drip-campaigns/cmte64l0e313p4o6d3z2b3w60",
+      "target": "src/components/drip-campaigns/drip-campaign-detail.tsx",
+      "screenshot": ".ui-agent/screenshots/drip-campaigns-detail.png"
+    },
+    {
+      "id": "playbooks",
+      "path": "/playbooks",
+      "target": "src/components/playbooks/playbooks-view.tsx",
+      "screenshot": ".ui-agent/screenshots/playbooks.png"
+    },
+    {
+      "id": "auto-replies",
+      "path": "/auto-replies",
+      "target": "src/components/kimi/auto-replies/AutoRepliesFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/auto-replies.png"
+    },
+    {
+      "id": "ai-replies",
+      "path": "/ai-replies",
+      "target": "src/components/ai-replies/ai-agents-view.tsx",
+      "screenshot": ".ui-agent/screenshots/ai-replies.png"
+    },
+    {
+      "id": "ai-replies-new",
+      "path": "/ai-replies/new",
+      "target": "src/components/ai-replies/ai-reply-wizard.tsx",
+      "screenshot": ".ui-agent/screenshots/ai-replies-new.png"
+    },
+    {
+      "id": "messaging-media",
+      "path": "/messaging/media",
+      "target": "src/components/kimi/messaging-media/MessagingMediaFlow.tsx",
+      "screenshot": ".ui-agent/screenshots/messaging-media.png"
+    },
+    {
+      "id": "getting-started",
+      "path": "/getting-started",
+      "target": "src/app/(app)/getting-started/page.tsx",
+      "screenshot": ".ui-agent/screenshots/getting-started.png"
+    },
+    {
+      "id": "settings-business",
+      "path": "/settings/business",
+      "target": "src/components/settings/business-settings-form.tsx",
+      "screenshot": ".ui-agent/screenshots/settings-business.png"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import KeywordsList from "./components/KeywordsList";
 import KeywordEdit from "./components/KeywordEdit";
 import InboxSettings from "./components/InboxSettings";
 import { Keyword } from "./mock-data";
+import { cn } from "@/lib/utils";
 import { MessageSquareReply, ShieldCheck, Tags, Inbox, LayoutGrid } from "lucide-react";
 
 type View = "overview" | "optin" | "compliance" | "keywords" | "keyword-edit" | "inbox";
@@ -36,8 +37,8 @@ export default function AutoRepliesFlow({ initialView = "overview" }: { initialV
   return (
     <div className="sandbox-root min-h-screen bg-background">
       {/* Feature sub-nav */}
-      <div className="border-b border-border bg-card sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
+      <div className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-6">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
@@ -45,21 +46,34 @@ export default function AutoRepliesFlow({ initialView = "overview" }: { initialV
               <button
                 key={t.id}
                 onClick={() => setView(t.id)}
-                className={`flex items-center gap-2 px-4 py-3.5 text-[13.5px] font-medium border-b-2 whitespace-nowrap transition-colors ${
+                className={cn(
+                  "relative flex items-center gap-2 whitespace-nowrap px-4 py-3.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
               >
-                <Icon size={15} />
+                <Icon
+                  size={15}
+                  className={cn(
+                    "transition-colors",
+                    active ? "text-primary" : "text-muted-foreground/70",
+                  )}
+                />
                 {t.label}
+                <span
+                  className={cn(
+                    "absolute inset-x-3 bottom-0 h-[2px] rounded-full transition-all duration-150",
+                    active ? "bg-primary opacity-100" : "opacity-0",
+                  )}
+                />
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="mx-auto max-w-6xl px-6 py-8">
         {view === "overview" && <AutoRepliesOverview onOpen={openSection} />}
         {view === "optin" && <OptInMessages onBack={() => setView("overview")} />}
         {view === "compliance" && <ComplianceMessaging onBack={() => setView("overview")} />}

@@ -2,6 +2,7 @@
 
 import { campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import { Button } from "@/components/ui/button";
+import { AlertTriangle, Pause, Play, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -32,7 +33,11 @@ export function CampaignActions({
   const [error, setError] = useState("");
 
   const normalized = normalizeStatus(status);
-  const actions: Array<{ action: Action; label: string; variant: "default" | "outline" | "danger" }> = [];
+  const actions: Array<{
+    action: Action;
+    label: string;
+    variant: "default" | "outline" | "danger";
+  }> = [];
 
   const showActivate =
     normalized === "DRAFT" || normalized === "SCHEDULED" || normalized === "PAUSED";
@@ -87,7 +92,11 @@ export function CampaignActions({
   const size = variant === "row" ? "sm" : "md";
 
   return (
-    <div className={variant === "row" ? "flex flex-wrap gap-1" : "flex flex-wrap items-center gap-2"}>
+    <div
+      className={
+        variant === "row" ? "flex flex-wrap gap-1" : "flex flex-wrap items-center gap-2"
+      }
+    >
       {actions.map((item) => (
         <Button
           key={item.action}
@@ -103,10 +112,28 @@ export function CampaignActions({
           disabled={loading !== null}
           onClick={() => runAction(item.action)}
         >
-          {loading === item.action ? "…" : item.label}
+          {loading === item.action ? (
+            "…"
+          ) : (
+            <>
+              {item.action === "pause" ? (
+                <Pause className="h-3.5 w-3.5" aria-hidden />
+              ) : item.action === "cancel" ? (
+                <XCircle className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <Play className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {item.label}
+            </>
+          )}
         </Button>
       ))}
-      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+      {error ? (
+        <p className="flex items-center gap-1 text-xs font-medium text-rose-600">
+          <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

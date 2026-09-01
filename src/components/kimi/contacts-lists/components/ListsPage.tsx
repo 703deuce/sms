@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Search, Users, ListPlus, ArrowUpDown, MoreVertical } from "lucide-react";
+import { Search, Users, ListPlus, ArrowUpDown, MoreVertical, ListX } from "lucide-react";
 import { ContactList } from "../mock-data";
 
 interface Props {
@@ -19,7 +19,7 @@ export default function ListsPage({ lists, onCreate }: Props) {
           <h1 className="page-title"><Users size={19} className="text-[#3b4ef5]" /> Lists</h1>
           <p className="page-subtitle">View and manage all of your contact lists.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
             <input
@@ -37,28 +37,34 @@ export default function ListsPage({ lists, onCreate }: Props) {
 
       <div className="table-card">
         <div className="table-head grid grid-cols-[1.1fr_1.3fr_190px_40px]">
-          <span className="flex items-center gap-1 cursor-pointer hover:text-[#44507a]">NAME <ArrowUpDown size={11} /></span>
+          <span className="flex items-center gap-1 cursor-pointer transition-colors hover:text-[#44507a]">NAME <ArrowUpDown size={11} /></span>
           <span>DESCRIPTION</span>
           <span className="text-right">CONTACTS</span>
           <span></span>
         </div>
         {visible.map((l) => (
-          <div key={l.id} className="table-row grid grid-cols-[1.1fr_1.3fr_190px_40px]">
+          <div key={l.id} className="table-row grid grid-cols-[1.1fr_1.3fr_190px_40px] transition-colors hover:bg-[#fafbfe]">
             <div>
               <div className="cell-primary">{l.name}</div>
               <div className="cell-sub">Created on {l.created}</div>
             </div>
             <div className="cell-body">{l.description}</div>
             <div className="flex items-center gap-2 justify-end">
-              <span className="w-7 h-7 rounded-full bg-[#eef1fe] text-[#3b4ef5] flex items-center justify-center"><Users size={13} /></span>
-              <span className="text-[13px] font-semibold text-[#0f1b3d] tabular-nums">{l.contacts.toLocaleString()}</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#eef1fe] text-[#3b4ef5]"><Users size={13} /></span>
+              <span className="text-[13px] font-semibold tabular-nums text-[#0f1b3d]">{l.contacts.toLocaleString()}</span>
               <span className="text-[11px] text-[#9aa3c0]">Contacts</span>
             </div>
-            <MoreVertical size={15} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" />
+            <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#eef1fe] hover:text-[#3b4ef5]">
+              <MoreVertical size={15} />
+            </button>
           </div>
         ))}
         {visible.length === 0 && (
-          <div className="px-5 py-10 text-center text-[13px] text-[#7a85a8]">No lists match your search.</div>
+          <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
+            <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef1fe] text-[#3b4ef5]"><ListX size={18} /></span>
+            <div className="text-[13px] font-semibold text-[#0f1b3d]">No lists found</div>
+            <div className="mt-1 text-[12.5px] text-[#7a85a8]">No lists match your search. Try a different term.</div>
+          </div>
         )}
         <div className="table-footer">
           <select className="input w-auto text-[12px] py-1.5">

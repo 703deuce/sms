@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search, Plus, MoreVertical, ListChecks, Pencil, Copy, QrCode, MousePointerClick, Trash2 } from "lucide-react";
 import { Keyword } from "../mock-data";
 
@@ -12,6 +12,18 @@ interface Props {
 export default function KeywordsPage({ keywords, onCreateTapLink }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu]);
 
   const filtered = keywords.filter((k) =>
     k.keyword.toLowerCase().includes(search.toLowerCase())
@@ -37,12 +49,12 @@ export default function KeywordsPage({ keywords, onCreateTapLink }: Props) {
         </div>
       </div>
 
-      <div className="ttj-table">
-        <div className="ttj-table-head ttj-kw-grid">
-          <span>KEYWORD</span><span>DESCRIPTION</span><span>STATUS</span><span />
+      <div className="ttj-table overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+        <div className="ttj-table-head ttj-kw-grid border-b border-border/60 bg-muted/30 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span>Keyword</span><span>Description</span><span>Status</span><span />
         </div>
         {filtered.map((kw) => (
-          <div key={kw.id} className="ttj-table-row ttj-kw-grid">
+          <div key={kw.id} className="ttj-table-row ttj-kw-grid border-b border-border/40 transition-colors last:border-b-0 hover:bg-muted/30">
             <div className="ttj-cell-main">
               <span className="ttj-cell-title">{kw.keyword}</span>
               <span className="ttj-cell-sub">{kw.lastSaved}</span>
@@ -54,9 +66,10 @@ export default function KeywordsPage({ keywords, onCreateTapLink }: Props) {
             <div>
               <span className={`ttj-status ${kw.status.toLowerCase()}`}>{kw.status}</span>
             </div>
-            <div className="ttj-row-actions">
+            <div className="ttj-row-actions" ref={openMenu === kw.id ? menuRef : null}>
               <button
                 className="ttj-icon-btn"
+                aria-label="Keyword actions"
                 onClick={() => setOpenMenu(openMenu === kw.id ? null : kw.id)}
               >
                 <MoreVertical size={16} />
@@ -72,15 +85,31 @@ export default function KeywordsPage({ keywords, onCreateTapLink }: Props) {
                   >
                     <MousePointerClick size={13} /> Create Tap-to-Join Link
                   </button>
+                  <div className="my-1 border-t border-border/60" />
                   <button className="ttj-menu-item danger"><Trash2 size={13} /> Delete</button>
                 </div>
               )}
             </div>
           </div>
         ))}
-        <div className="ttj-table-foot">
-          <select className="ttj-select-sm"><option>25 Per Page</option><option>50 Per Page</option></select>
-        </div>
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <ListChecks size={20} />
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {search ? "No keywords match your search" : "No keywords yet"}
+            </p>
+            <p className="mt-1 max-w-xs text-[13px] text-muted-foreground">
+              {search ? "Try a different search term." : "Create a keyword to start growing your list."}
+            </p>
+          </div>
+        )}
+        {filtered.length > 0 && (
+          <div className="ttj-table-foot border-t border-border/60 bg-muted/20">
+            <select className="ttj-select-sm"><option>25 Per Page</option><option>50 Per Page</option></select>
+          </div>
+        )}
       </div>
     </div>
   );

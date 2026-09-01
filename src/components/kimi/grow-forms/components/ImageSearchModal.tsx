@@ -12,10 +12,10 @@ export default function ImageSearchModal({
 
   return (
     <Modal open={open} onClose={onClose} width={880}>
-      <div className="p-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-7">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Search Images</h2>
+            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Search Images</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">Powered by Unsplash</p>
           </div>
           <div className="relative w-64">
@@ -23,18 +23,18 @@ export default function ImageSearchModal({
               value={q}
               onChange={(e) => { setQ(e.target.value); setSearched(true); }}
               placeholder="Search Images"
-              className="w-full rounded-md border border-border bg-background py-2 pl-3 pr-8 text-sm transition-shadow focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+              className="w-full rounded-lg border border-border bg-card py-2 pl-3 pr-8 text-sm shadow-sm transition placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
             <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           </div>
         </div>
         {!searched ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-20 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50">
-              <ImageIcon size={22} className="text-indigo-500" />
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-20 text-center">
+            <div className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+              <ImageIcon size={22} className="text-primary" />
             </div>
-            <div className="text-sm font-medium text-foreground">Search Millions of Hi-Resolution Images</div>
-            <div className="mt-1 text-xs text-muted-foreground">Or click to upload your own jpg, png, gif or svg — 100 MB or less</div>
+            <div className="text-sm font-semibold text-foreground">Search Millions of Hi-Resolution Images</div>
+            <div className="mt-1.5 text-xs text-muted-foreground">Or click to upload your own jpg, png, gif or svg — 100 MB or less</div>
           </div>
         ) : (
           <div className="tv-scroll grid grid-cols-3 gap-3 overflow-auto md:grid-cols-4" style={{ maxHeight: "56vh" }}>

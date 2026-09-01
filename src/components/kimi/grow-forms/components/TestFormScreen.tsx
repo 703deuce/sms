@@ -5,18 +5,20 @@ import { formDefaults } from "../mock-data";
 
 export default function TestFormScreen({ onBack }: { onBack: () => void }) {
   return (
-    <div className="tv-forms flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-6 bg-slate-950 p-8">
+    <div className="tv-forms flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-7 bg-slate-950 p-8">
       <div className="flex items-center gap-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50"
+          className="flex items-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50"
         >
           <ArrowLeft size={12} /> Back to Builder
         </button>
-        <span className="text-sm font-medium text-slate-200">Test Form — Double Opt-In Flow</span>
+        <span className="text-sm font-medium text-slate-200">
+          Test Form <span className="mx-1 text-slate-600">·</span> Double Opt-In Flow
+        </span>
       </div>
 
-      <div className="tv-phone">
+      <div className="tv-phone" style={{ boxShadow: "0 24px 64px -16px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06)" }}>
         {/* Status bar */}
         <div className="flex items-center justify-between bg-white px-5 pb-1 pt-2 text-[10px] font-semibold text-slate-900">
           <span>10:55</span>
@@ -27,7 +29,7 @@ export default function TestFormScreen({ onBack }: { onBack: () => void }) {
         <div className="flex items-center gap-2 border-b border-slate-100 bg-white px-3 py-2">
           <ChevronLeft size={18} className="text-blue-500" />
           <div className="flex flex-1 flex-col items-center gap-0.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-300 text-xs">👤</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs ring-1 ring-slate-300/60">👤</div>
             <span className="text-[10px] font-medium text-slate-700">+1 (888) 379-4654</span>
           </div>
           <span className="w-[18px]" />

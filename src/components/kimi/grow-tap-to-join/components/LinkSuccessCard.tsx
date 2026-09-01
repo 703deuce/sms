@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Smartphone, ArrowLeft, MessageSquare, Copy, Check, MousePointerClick,
-  ChevronLeft, Signal, Wifi, BatteryFull,
+  ChevronLeft, Signal, Wifi, BatteryFull, CircleCheck,
 } from "lucide-react";
 import { TapLink } from "../mock-data";
 
@@ -36,13 +36,24 @@ export default function LinkSuccessCard({ link, onBack }: Props) {
       </div>
 
       <div className="ttj-success-wrap">
-        <div className="ttj-success-card">
-          <div className="ttj-info-illustration"><Smartphone size={40} /></div>
+        <div className="ttj-success-card rounded-xl border border-border/60 bg-card shadow-sm">
+          <div className="ttj-info-illustration relative">
+            <Smartphone size={40} />
+            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+              <CircleCheck size={12} />
+            </span>
+          </div>
           <h3>Here&apos;s Your Link</h3>
+          <p className="mt-1 text-[13px] text-muted-foreground">Share it anywhere — social posts, emails, or your bio.</p>
           <div className="ttj-link-display">
-            <span>{link.url}</span>
-            <button className="ttj-icon-btn" onClick={copy} aria-label="Copy link">
-              {copied ? <Check size={15} color="#059669" /> : <Copy size={15} />}
+            <span className="truncate font-medium">{link.url}</span>
+            <button
+              className="ttj-icon-btn"
+              onClick={copy}
+              aria-label="Copy link"
+              title={copied ? "Copied" : "Copy link"}
+            >
+              {copied ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />}
             </button>
           </div>
           <div className="ttj-success-actions">

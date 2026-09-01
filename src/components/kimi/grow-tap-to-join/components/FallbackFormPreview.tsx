@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { X } from "lucide-react";
 
 interface Props {
@@ -7,12 +8,32 @@ interface Props {
 }
 
 export default function FallbackFormPreview({ onClose }: Props) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   return (
-    <div className="ttj-fallback-overlay" role="dialog" aria-modal="true">
-      <button className="ttj-fallback-close" onClick={onClose} aria-label="Close preview">
+    <div
+      className="ttj-fallback-overlay backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <button
+        className="ttj-fallback-close transition-colors hover:bg-muted"
+        onClick={onClose}
+        aria-label="Close preview"
+      >
         <X size={18} />
       </button>
-      <div className="ttj-fallback-card">
+      <div
+        className="ttj-fallback-card shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>Want 30% Off?</h2>
         <p>Join our VIP text list and receive a code for 30% off your purchase during our Black Friday/Cyber Monday sale.</p>
         <div className="ttj-fallback-grid">

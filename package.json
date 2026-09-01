@@ -18,6 +18,8 @@
     "ui:kimi-sidebar": "tsx scripts/ui-agent/kimi-sidebar.ts",
     "ui:kimi-capture-polish": "tsx scripts/ui-agent/capture-polish-target.ts",
     "ui:kimi-batch-polish": "tsx scripts/ui-agent/kimi-batch-polish.ts",
+    "ui:kimi-screenshot-batch": "tsx scripts/ui-agent/kimi-screenshot-batch.ts",
+    "ui:capture-screenshot-batch": "tsx scripts/ui-agent/capture-screenshot-batch.ts",
     "ui:refs": "tsx scripts/ui-agent/index.ts refs",
     "ui:approve": "tsx scripts/ui-agent/index.ts approve",
     "ui:integrate": "tsx scripts/ui-agent/index.ts integrate",

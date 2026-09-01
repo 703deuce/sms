@@ -48,29 +48,29 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
   return (
     <div onClick={() => actionsOpen && setActionsOpen(false)}>
       <h1 className="page-title"><Users size={19} className="text-[#3b4ef5]" /> Contacts</h1>
-      <p className="page-subtitle mb-5">View and manage all of your contacts.</p>
+      <p className="page-subtitle mb-6">View and manage all of your contacts.</p>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-4 mb-7">
         {stats.map((s) => (
-          <div key={s.label} className="metric-card">
-            <span className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${s.tone}`}>{s.icon}</span>
+          <div key={s.label} className="metric-card transition-shadow hover:shadow-md">
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${s.tone}`}>{s.icon}</span>
             <div className="flex items-center gap-1.5 text-[12px] font-medium text-[#7a85a8]">
               {s.label} <Info size={11} className="text-[#c3c9dd]" />
             </div>
-            <div className="text-[20px] font-bold tracking-tight text-[#0f1b3d] tabular-nums leading-none">{s.value}</div>
+            <div className="text-[20px] font-bold leading-none tracking-tight tabular-nums text-[#0f1b3d]">{s.value}</div>
           </div>
         ))}
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-2 relative" onClick={(e) => e.stopPropagation()}>
+        <div className="relative flex gap-2" onClick={(e) => e.stopPropagation()}>
           <button className="btn-secondary flex items-center gap-1.5" onClick={() => setFiltersOpen(true)}>
             <Filter size={13} /> Filter
           </button>
           {selected.size > 0 && (
             <div className="relative">
               <button className="btn-secondary flex items-center gap-1.5 border-[#3b4ef5]/40 text-[#3b4ef5]" onClick={() => setActionsOpen(!actionsOpen)}>
-                Actions ({selected.size}) <ChevronDown size={13} />
+                Actions ({selected.size}) <ChevronDown size={13} className={`transition-transform ${actionsOpen ? "rotate-180" : ""}`} />
               </button>
               {actionsOpen && (
                 <div className="menu-pop w-[220px]">
@@ -82,7 +82,7 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
                     { icon: <Ban size={14} />, label: "Unsubscribe & Delete", fn: () => setActionsOpen(false) },
                     { icon: <Trash2 size={14} />, label: "Delete", fn: () => setActionsOpen(false), danger: true },
                   ].map((a) => (
-                    <div key={a.label} onClick={a.fn} className={`menu-item ${a.danger ? "text-[#f04438]" : ""}`}>
+                    <div key={a.label} onClick={a.fn} className={`menu-item ${a.danger ? "text-[#f04438] hover:bg-[#feeeef]" : ""}`}>
                       {a.icon} {a.label}
                     </div>
                   ))}
@@ -91,7 +91,7 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
             <input className="input pl-8 w-[220px]" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -102,8 +102,8 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
 
       <div className="table-card">
         {selected.size === visible.length && visible.length > 0 && (
-          <div className="px-5 py-2 bg-[#eef1fe] text-[12px] text-[#3b4ef5] text-center border-b border-[#eceef5]">
-            All {visible.length} contacts on this page are selected. <span className="font-semibold underline cursor-pointer">Select all {contactStats.total.toLocaleString()} contacts.</span>
+          <div className="border-b border-[#eceef5] bg-[#eef1fe] px-5 py-2 text-center text-[12px] text-[#3b4ef5]">
+            All {visible.length} contacts on this page are selected. <span className="cursor-pointer font-semibold underline">Select all {contactStats.total.toLocaleString()} contacts.</span>
           </div>
         )}
         <div className="table-head grid grid-cols-[36px_1fr_1fr_1.1fr_1.2fr_1.2fr_1.3fr_32px]">
@@ -112,30 +112,38 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
           <span>LAST NAME</span><span>MOBILE NUMBER</span><span>EMAIL</span><span>OPT-IN STATUS</span><span>CREATED</span><span></span>
         </div>
         {visible.map((c) => (
-          <div key={c.id} className={`table-row grid grid-cols-[36px_1fr_1fr_1.1fr_1.2fr_1.2fr_1.3fr_32px] ${selected.has(c.id) ? "bg-[#fafbff]" : ""}`}>
+          <div key={c.id} className={`table-row grid grid-cols-[36px_1fr_1fr_1.1fr_1.2fr_1.2fr_1.3fr_32px] transition-colors ${selected.has(c.id) ? "bg-[#f4f6ff]" : "hover:bg-[#fafbfe]"}`}>
             <input type="checkbox" className="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-            <span className="text-[13px] font-medium text-[#3b4ef5] cursor-pointer hover:underline">{c.firstName}</span>
+            <span className="cursor-pointer text-[13px] font-medium text-[#3b4ef5] hover:underline">{c.firstName}</span>
             <span className="text-[13px] text-[#0f1b3d]">{c.lastName}</span>
             <span className="cell-body">{c.mobile}</span>
-            <span className="cell-body">{c.email || "—"}</span>
+            <span className="cell-body">{c.email || <span className="text-[#c3c9dd]">—</span>}</span>
             <span>
               <span className={`pill ${c.optIn === "Subscribed" ? "pill-green" : "pill-gray"}`}>{c.optIn}</span>
             </span>
             <span className="text-[12.5px] text-[#7a85a8]">{c.created}</span>
-            <Info size={13} className="text-[#c3c9dd] cursor-pointer hover:text-[#7a85a8]" />
+            <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#c3c9dd] transition-colors hover:bg-[#eef1fe] hover:text-[#7a85a8]">
+              <Info size={13} />
+            </button>
           </div>
         ))}
         {visible.length === 0 && (
-          <div className="px-5 py-10 text-center text-[13px] text-[#7a85a8]">No contacts match your search.</div>
+          <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
+            <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef1fe] text-[#3b4ef5]"><UserX size={18} /></span>
+            <div className="text-[13px] font-semibold text-[#0f1b3d]">No contacts found</div>
+            <div className="mt-1 text-[12.5px] text-[#7a85a8]">No contacts match your search. Try a different term.</div>
+          </div>
         )}
       </div>
 
       {filtersOpen && (
         <div className="modal-overlay" onClick={() => setFiltersOpen(false)}>
           <div className="modal-card p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
+            <div className="mb-5 flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-[15px] font-bold text-[#0f1b3d]"><Filter size={15} className="text-[#3b4ef5]" /> Contact Filters</h3>
-              <X size={16} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" onClick={() => setFiltersOpen(false)} />
+              <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#f1f3f9] hover:text-[#44507a]" onClick={() => setFiltersOpen(false)}>
+                <X size={16} />
+              </button>
             </div>
             {["Audience", "Source", "Opt-In Status"].map((f) => (
               <div key={f} className="mb-4">
@@ -143,7 +151,7 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
                 <input className="input" placeholder="Search" />
               </div>
             ))}
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex gap-3">
               <button className="btn-primary" onClick={() => setFiltersOpen(false)}>Apply 0 Filters</button>
               <button className="btn-secondary" onClick={() => setFiltersOpen(false)}>Clear Filters</button>
             </div>
@@ -154,18 +162,20 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
       {addOpen && (
         <div className="modal-overlay" onClick={() => setAddOpen(false)}>
           <div className="modal-card p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-1">
+            <div className="mb-1 flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-[15px] font-bold text-[#0f1b3d]"><ListPlus size={15} className="text-[#3b4ef5]" /> Add to Lists</h3>
-              <X size={16} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" onClick={() => setAddOpen(false)} />
+              <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#f1f3f9] hover:text-[#44507a]" onClick={() => setAddOpen(false)}>
+                <X size={16} />
+              </button>
             </div>
-            <p className="text-[12px] text-[#7a85a8] mb-4">Select up to 5 lists to add your selected contacts to.</p>
+            <p className="mb-4 text-[12px] text-[#7a85a8]">Select up to 5 lists to add your selected contacts to.</p>
             <div className="relative mb-3">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
               <input className="input pl-8" placeholder="Search" value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
             </div>
-            <div className="border border-[#eceef5] rounded-lg divide-y divide-[#f1f3f9] mb-5 overflow-hidden">
+            <div className="mb-5 divide-y divide-[#f1f3f9] overflow-hidden rounded-lg border border-[#eceef5]">
               {filteredLists.map((l) => (
-                <label key={l.id} className="flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer hover:bg-[#fafbfe] transition-colors">
+                <label key={l.id} className="flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 transition-colors hover:bg-[#fafbfe]">
                   <input type="checkbox" className="checkbox" checked={pickedLists.has(l.id)} onChange={() => togglePick(l.id)} />
                   <span className="text-[13px] text-[#0f1b3d]">{l.name}</span>
                 </label>

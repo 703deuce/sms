@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, X, MessageSquareText, List, Wifi, Signal, BatteryFull } from "lucide-react";
+import { ChevronDown, X, MessageSquareText, List, Wifi, Signal, BatteryFull } from "lucide-react";
 import { ContactList, keywordDetail } from "../mock-data";
 
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
 }
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
-  return <div className={`toggle ${on ? "on" : ""}`} onClick={onClick} />;
+  return <div className={`toggle ${on ? "on" : ""} transition-colors`} onClick={onClick} />;
 }
 
 export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, initialListName, onSave, onCancel }: Props) {
@@ -41,7 +41,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
 
   return (
     <div className="flex gap-10 pt-6">
-      <div className="flex-1 max-w-[620px]">
+      <div className="max-w-[620px] flex-1">
         <div className="breadcrumb">Tools / Keywords / <span>NashVIP</span></div>
         <h1 className="page-title"><MessageSquareText size={19} className="text-[#3b4ef5]" /> Edit Keyword</h1>
         <p className="page-subtitle mb-6">Edit your keyword and associated settings.</p>
@@ -52,7 +52,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
             <span className="step-badge">1</span>
             Setup <ChevronDown size={14} className="ml-auto text-[#9aa3c0]" />
           </div>
-          <div className="px-5 pb-5 space-y-4 border-t border-[#f1f3f9] pt-4">
+          <div className="space-y-4 border-t border-[#f1f3f9] px-5 pt-4 pb-5">
             <div>
               <label className="field-label">Keyword</label>
               <input ref={keywordRef} className="input" defaultValue={initialKeyword ?? keywordDetail.keyword} />
@@ -63,7 +63,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
             </div>
             <div>
               <label className="field-label flex justify-between">
-                Auto Response <span className="text-[#9aa3c0] font-normal">64/918</span>
+                Auto Response <span className="font-normal text-[#9aa3c0]">64/918</span>
               </label>
               <textarea ref={autoResponseRef} className="input h-[76px] resize-none" defaultValue={initialAutoResponse ?? keywordDetail.autoResponse} />
             </div>
@@ -72,20 +72,20 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
 
         {/* Contact Behavior section */}
         <div className="section-card mb-6">
-          <div className="section-head cursor-pointer" onClick={() => setBehaviorOpen(!behaviorOpen)}>
+          <div className="section-head cursor-pointer transition-colors hover:bg-[#fafbfe]" onClick={() => setBehaviorOpen(!behaviorOpen)}>
             <span className="step-badge">2</span>
             Contact Behavior <ChevronDown size={14} className={`ml-auto text-[#9aa3c0] transition-transform ${behaviorOpen ? "" : "-rotate-90"}`} />
           </div>
           {behaviorOpen && (
-            <div className="px-5 pb-5 border-t border-[#f1f3f9] pt-4 space-y-5">
+            <div className="space-y-5 border-t border-[#f1f3f9] px-5 pt-4 pb-5">
               <div>
-                <div className="text-[13px] font-semibold text-[#0f1b3d] mb-2">Create a subscribed contact when someone texts this keyword?</div>
+                <div className="mb-2 text-[13px] font-semibold text-[#0f1b3d]">Create a subscribed contact when someone texts this keyword?</div>
                 <div className="seg-control">
                   {["Yes", "No"].map((o) => (
                     <button
                       key={o}
                       onClick={() => setCreatesContact(o === "Yes")}
-                      className={`seg-option ${(createsContact ? "Yes" : "No") === o ? "active" : ""}`}
+                      className={`seg-option transition-all ${(createsContact ? "Yes" : "No") === o ? "active" : ""}`}
                     >
                       {o}
                     </button>
@@ -96,7 +96,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#0f1b3d]"><List size={13} className="text-[#7a85a8]" /> Add the contact to one or more lists</div>
-                  <div className="text-[12px] text-[#7a85a8] mt-1 max-w-[380px]">When a contact is created after texting this keyword, you can optionally add them to one or more lists.</div>
+                  <div className="mt-1 max-w-[380px] text-[12px] leading-relaxed text-[#7a85a8]">When a contact is created after texting this keyword, you can optionally add them to one or more lists.</div>
                 </div>
                 <Toggle on={addToLists} onClick={() => setAddToLists(!addToLists)} />
               </div>
@@ -104,17 +104,17 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
               {addToLists && (
                 <div className="relative">
                   <label className="field-label">Add to Lists</label>
-                  <div className="input flex items-center gap-2 cursor-pointer min-h-[38px]" onClick={() => setListDrop(!listDrop)}>
+                  <div className="input flex min-h-[38px] cursor-pointer items-center gap-2" onClick={() => setListDrop(!listDrop)}>
                     {selectedName && (
                       <span className="chip">
                         {selectedName}
                         <X size={11} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedList(null); }} />
                       </span>
                     )}
-                    <span className="text-[#9aa3c0] text-[13px]">{selectedName ? "" : "Search"}</span>
+                    <span className="text-[13px] text-[#9aa3c0]">{selectedName ? "" : "Search"}</span>
                   </div>
                   {listDrop && (
-                    <div className="menu-pop w-full mt-1">
+                    <div className="menu-pop mt-1 w-full">
                       {lists.map((l) => (
                         <div
                           key={l.id}
@@ -132,7 +132,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[13px] font-semibold text-[#0f1b3d]">Send an alternate response if a contact exists</div>
-                  <div className="text-[12px] text-[#7a85a8] mt-1 max-w-[380px]">If a person already exists as a contact when texting this keyword, you have the option to send a different auto-response than what's specified above. This is optional.</div>
+                  <div className="mt-1 max-w-[380px] text-[12px] leading-relaxed text-[#7a85a8]">If a person already exists as a contact when texting this keyword, you have the option to send a different auto-response than what's specified above. This is optional.</div>
                 </div>
                 <Toggle on={altResponse} onClick={() => setAltResponse(!altResponse)} />
               </div>
@@ -140,7 +140,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[13px] font-semibold text-[#0f1b3d]">Require Double Opt-In</div>
-                  <div className="text-[12px] text-[#7a85a8] mt-1 max-w-[380px]">When enabled, after someone texts your keyword, they'll receive a message asking them to confirm before subscribing.</div>
+                  <div className="mt-1 max-w-[380px] text-[12px] leading-relaxed text-[#7a85a8]">When enabled, after someone texts your keyword, they'll receive a message asking them to confirm before subscribing.</div>
                 </div>
                 <Toggle on={doubleOptIn} onClick={() => setDoubleOptIn(!doubleOptIn)} />
               </div>
@@ -167,8 +167,8 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
       </div>
 
       {/* Message preview phone */}
-      <div className="shrink-0 pt-14 sticky top-6 self-start">
-        <div className="text-[11px] font-semibold text-[#3b4ef5] bg-[#eef1fe] rounded-md px-2.5 py-1 w-fit mb-3">Message Preview</div>
+      <div className="sticky top-6 shrink-0 self-start pt-14">
+        <div className="mb-3 w-fit rounded-md bg-[#eef1fe] px-2.5 py-1 text-[11px] font-semibold text-[#3b4ef5]">Message Preview</div>
         <div className="phone-frame">
           <div className="phone-notch" />
           <div className="phone-status">

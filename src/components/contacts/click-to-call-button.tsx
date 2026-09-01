@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Phone } from "lucide-react";
+import { Phone, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -37,27 +37,32 @@ export function ClickToCallButton({ phone }: { phone: string }) {
   }
 
   return (
-    <div className="inline-flex flex-col gap-1">
+    <div className="inline-flex flex-col items-start gap-1.5">
       <div className="flex gap-2">
         <Button
           size="sm"
+          variant="outline"
           onClick={() => void dial("softphone")}
           disabled={Boolean(loading) || !phone}
-          className="gap-1"
         >
           <Phone className="h-3.5 w-3.5" />
           {loading === "softphone" ? "Opening…" : "Call"}
         </Button>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={() => void dial("ai")}
           disabled={Boolean(loading) || !phone}
         >
+          <Sparkles className="h-3.5 w-3.5" />
           {loading === "ai" ? "Dialing…" : "AI call"}
         </Button>
       </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/15">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

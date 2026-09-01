@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { applyAcceptedChanges } from "./apply-plan";
 import { captureCurrentSite } from "./capture-current";
 import { captureWalkthrough } from "./capture-walkthrough";
-import { REPO_ROOT, UI_AGENT_DIR } from "./config";
+import { REPO_ROOT, UI_AGENT_DIR, resolveUiAgentPath } from "./config";
 import { buildLabeledMedia } from "./reference-media";
 import { createPolishCheckpoint } from "./git-safety";
 import { KIMI_POLISH_FILE_PROTOCOL, KimiPolishFileWriter } from "./kimi-polish-files";
@@ -56,6 +56,12 @@ Do not overdecorate. Do not turn everything into cards. Do not add giant hero he
 
 ${KIMI_POLISH_FILE_PROTOCOL}`;
 
+function shouldSkipAfterCapture(options: CliOptions, target: string): boolean {
+  if (options.currentImages.length > 0) return true;
+  if (target.startsWith("src/")) return true;
+  return false;
+}
+
 function shouldUseDevBypass(): boolean {
   const raw = process.env.UI_AGENT_DEV_BYPASS?.trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "no") return false;
@@ -103,9 +109,20 @@ async function captureBefore(
   const dir = join(sessionDir(session.id), phase === "before" ? "before" : "after");
   mkdirSync(dir, { recursive: true });
 
+  if (phase === "before" && options.currentImages.length > 0) {
+    return buildLabeledMedia(
+      options.currentImages.map((imagePath, i) => ({
+        path: resolveUiAgentPath(imagePath),
+        label: `BEFORE_TRANSOVO_${i + 1}`,
+        purpose: "Manual screenshot of current Transovo page",
+      })),
+    );
+  }
+
   const email = process.env.UI_AGENT_SMOKE_EMAIL || process.env.SMOKE_EMAIL;
   const password = process.env.UI_AGENT_SMOKE_PASSWORD || process.env.SMOKE_PASSWORD;
   const useDevBypass = shouldUseDevBypass();
+  const capturePath = options.capturePath || session.target;
 
   let paths: string[] = [];
   const target = resolvePolishTarget(session.target);
@@ -123,7 +140,7 @@ async function captureBefore(
   } else {
     paths = await captureCurrentSite({
       baseUrl: options.baseUrl,
-      targetPath: session.target,
+      targetPath: capturePath,
       outputDir: dir,
       viewports: options.viewports,
       screenshots: true,
@@ -316,7 +333,13 @@ export async function runKimiPolishCommand(
   log("git checkpoint", `BEFORE_KIMI_POLISH=${checkpoint.commitHash}`);
 
   try {
-    updateProgress(session.id, { phase: "capture_before", message: "Capturing current page states…" });
+    updateProgress(session.id, {
+      phase: "capture_before",
+      message:
+        options.currentImages.length > 0
+          ? "Using manual screenshot(s)…"
+          : "Capturing current page states…",
+    });
     const beforeMedia = await captureBefore(options, session, "before");
 
     const referenceMedia = await resolvePolishReferenceMedia(options, session.target);
@@ -348,13 +371,13 @@ export async function runKimiPolishCommand(
       );
       allTouched = [...new Set([...allTouched, ...touched])];
 
-      if (options.apply && pass < maxPasses && shouldCaptureAfterPolish(options)) {
+      if (options.apply && pass < maxPasses && shouldCaptureAfterPolish(options) && !shouldSkipAfterCapture(options, session.target)) {
         updateProgress(session.id, { phase: "capture_after", message: "Capturing after state for review…" });
         await captureBefore({ ...options, walkthrough: options.walkthrough }, session, "after");
       }
     }
 
-    if (options.apply && shouldCaptureAfterPolish(options)) {
+    if (options.apply && shouldCaptureAfterPolish(options) && !shouldSkipAfterCapture(options, session.target)) {
       updateProgress(session.id, { phase: "capture_after", message: "Final after screenshots…" });
       await captureBefore(options, session, "after");
     } else if (options.apply && !isLocalBaseUrl(options.baseUrl)) {

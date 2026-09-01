@@ -6,9 +6,12 @@ export function Table({
   ...props
 }: HTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="surface overflow-hidden rounded-xl">
+    <div className="overflow-hidden rounded-lg border border-border">
       <div className="overflow-x-auto">
-        <table className={cn("w-full text-left text-sm", className)} {...props} />
+        <table
+          className={cn("w-full table-fixed text-left text-[13px]", className)}
+          {...props}
+        />
       </div>
     </div>
   );
@@ -20,7 +23,7 @@ export function THead({
 }: HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <thead
-      className={cn("border-b border-border bg-muted/60 text-muted-foreground", className)}
+      className={cn("border-b border-border bg-muted/50 text-muted-foreground", className)}
       {...props}
     />
   );
@@ -30,7 +33,7 @@ export function TBody({
   className,
   ...props
 }: HTMLAttributes<HTMLTableSectionElement>) {
-  return <tbody className={cn("divide-y divide-border", className)} {...props} />;
+  return <tbody className={cn("divide-y divide-border/70", className)} {...props} />;
 }
 
 export function TR({
@@ -39,7 +42,7 @@ export function TR({
 }: HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn("bg-card transition hover:bg-muted/40", className)}
+      className={cn("bg-card transition-colors hover:bg-muted/30", className)}
       {...props}
     />
   );
@@ -51,7 +54,10 @@ export function TH({
 }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
-      className={cn("px-4 py-3 text-xs font-semibold uppercase tracking-wide", className)}
+      className={cn(
+        "whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wider",
+        className,
+      )}
       {...props}
     />
   );
@@ -61,5 +67,5 @@ export function TD({
   className,
   ...props
 }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("px-4 py-3 align-middle", className)} {...props} />;
+  return <td className={cn("px-4 py-3.5 align-middle", className)} {...props} />;
 }

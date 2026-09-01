@@ -13,14 +13,24 @@ export default function AudienceSubNav({ active, onChange }: { active: AudienceT
   return (
     <div className="border-b border-border bg-card px-6">
       <div className="flex items-center gap-1 -mb-px">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mr-5 py-3">Audience</span>
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mr-5 py-3 select-none">
+          Audience
+        </span>
         {tabs.map(t => {
           const Icon = t.icon;
           const isActive = active === t.key;
           return (
-            <button key={t.key} onClick={() => onChange(t.key)}
-              className={`flex items-center gap-2 px-3.5 py-3 text-[13px] font-medium border-b-2 transition-colors ${isActive ? "border-indigo-600 text-indigo-700" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
-              <Icon className={`h-4 w-4 ${isActive ? "text-indigo-600" : "text-muted-foreground"}`} /> {t.label}
+            <button
+              key={t.key}
+              onClick={() => onChange(t.key)}
+              className={`relative flex items-center gap-2 px-3.5 py-3 text-[13px] font-medium border-b-2 transition-colors duration-150 ${
+                isActive
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+              }`}
+            >
+              <Icon className={`h-4 w-4 transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+              {t.label}
             </button>
           );
         })}

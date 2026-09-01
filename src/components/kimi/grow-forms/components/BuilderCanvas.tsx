@@ -14,10 +14,6 @@ const FIELD_PLACEHOLDERS: Record<FormFieldKey, string> = {
   dateOfBirth: "Date of birth",
 };
 
-function selClass(selected: boolean) {
-  return selected ? "tv-selected" : "";
-}
-
 function BlockShell({
   id,
   tag,
@@ -49,13 +45,14 @@ function BlockShell({
     <div
       data-tag={tag}
       data-block-id={id}
-      className={`cursor-pointer rounded transition-shadow ${className} ${selClass(isSel)}`}
-      style={{ ...style, outline: isSel ? "2px solid #6366f1" : undefined, outlineOffset: 4 }}
+      className={`relative cursor-pointer rounded transition-shadow ${className}`}
+      style={{ ...style, outline: isSel ? "2px solid #6366f1" : undefined, outlineOffset: 3 }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(selectedId);
       }}
     >
+      {isSel && tag ? <span className="tv-block-tag">{tag}</span> : null}
       {children}
     </div>
   );
@@ -167,7 +164,7 @@ export default function BuilderCanvas({
   const inner =
     view === "success" ? (
       <div className="tv-success-view" onClick={(e) => { e.stopPropagation(); onSelect(null); }}>
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15">
           <MessageCircle size={24} className="text-slate-200" />
         </div>
         <h2 className="text-xl font-semibold tracking-tight">{layout.successHeadline || DEFAULT_SUCCESS_HEADLINE}</h2>
@@ -208,7 +205,9 @@ export default function BuilderCanvas({
             e.stopPropagation();
             if (imageBlock) onSelect(imageBlock.id);
           }}
-        />
+        >
+          {selected === imageBlock?.id ? <span className="tv-block-tag" style={{ top: 8, left: 8 }}>Column</span> : null}
+        </div>
       )}
     </div>
   );

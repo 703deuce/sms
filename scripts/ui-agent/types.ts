@@ -242,6 +242,8 @@ export type CliOptions = {
   captureAfter?: boolean;
   /** Polish mode: do not auto-resolve route reference video from references.json */
   skipAutoReference?: boolean;
+  /** Polish mode: browser URL path when it differs from --target (e.g. /contacts/abc for target /contacts/[id]) */
+  capturePath?: string;
   baseUrl: string;
   viewports: ViewportPreset[];
   maxPasses: number;

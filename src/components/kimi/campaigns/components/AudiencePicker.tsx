@@ -65,15 +65,19 @@ export default function AudiencePicker({
         key={item.id}
         type="button"
         onClick={() => toggle(item)}
-        className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-[13px] transition-colors ${
-          isSel(item.id) ? "bg-indigo-50 text-indigo-700 font-medium" : "text-slate-700 hover:bg-slate-50"
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors duration-150 ${
+          isSel(item.id) ? "bg-indigo-50 font-medium text-indigo-700" : "text-slate-700 hover:bg-slate-50"
         }`}
       >
-        <span className={`flex h-6 w-6 items-center justify-center rounded-md ${isSel(item.id) ? "bg-indigo-100" : "bg-slate-100"}`}>
-          <Icon className={`w-3.5 h-3.5 ${isSel(item.id) ? "text-indigo-600" : "text-slate-400"}`} />
+        <span
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1 ${
+            isSel(item.id) ? "bg-indigo-100 ring-indigo-200/60" : "bg-slate-100 ring-slate-200/60"
+          }`}
+        >
+          <Icon className={`h-3.5 w-3.5 ${isSel(item.id) ? "text-indigo-600" : "text-slate-400"}`} />
         </span>
-        <span className="flex-1 text-left">{item.name}</span>
-        {isSel(item.id) && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+        <span className="flex-1 truncate text-left">{item.name}</span>
+        {isSel(item.id) && <Check className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}
       </button>
     );
   };
@@ -89,17 +93,18 @@ export default function AudiencePicker({
   return (
     <div className="relative">
       <div
-        className="input-field flex flex-wrap items-center gap-1.5 cursor-text min-h-[42px] !py-1.5"
+        className="input-field flex min-h-[42px] cursor-text flex-wrap items-center gap-1.5 !py-1.5"
         onClick={() => setOpen(!open)}
       >
         {selected.map((s) => (
           <span key={s.id} className="chip">
-            <List className="w-3 h-3" /> {s.name}
+            <List className="h-3 w-3" /> {s.name}
             <button
               type="button"
+              aria-label={`Remove ${s.name}`}
               onClick={(e) => { e.stopPropagation(); toggle(s); }}
             >
-              <X className="w-3 h-3" />
+              <X className="h-3 w-3" />
             </button>
           </span>
         ))}
@@ -108,20 +113,23 @@ export default function AudiencePicker({
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder={selected.length ? "" : "Search lists, segments…"}
-          className="flex-1 min-w-[80px] outline-none text-sm bg-transparent"
+          className="min-w-[80px] flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
         />
-        <Search className="w-4 h-4 text-slate-400 shrink-0" />
+        <Search className="h-4 w-4 shrink-0 text-slate-400" />
       </div>
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-2.5 fade-in max-h-64 overflow-y-auto">
+        <div className="fade-in absolute left-0 right-0 top-full z-30 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
           {loading ? (
-            <p className="px-2 py-3 text-[13px] text-slate-400">Loading audiences…</p>
+            <div className="flex items-center gap-2 px-2 py-3 text-[13px] text-slate-400">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-500" />
+              Loading audiences…
+            </div>
           ) : grouped.size === 0 ? (
             <p className="px-2 py-3 text-[13px] text-slate-400">No audiences found.</p>
           ) : (
             Array.from(grouped.entries()).map(([group, rows]) => (
               <div key={group}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.07em] text-slate-400 px-2 mb-1 mt-2 first:mt-0">
+                <p className="mb-1 mt-2 px-2 text-[10px] font-bold uppercase tracking-[0.07em] text-slate-400 first:mt-0">
                   {groupLabel(group)}
                 </p>
                 {rows.map((item) => <Row key={item.id} item={item} />)}

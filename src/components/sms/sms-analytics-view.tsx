@@ -6,12 +6,17 @@ import { MetricCard, SectionHeader } from "@/components/ui/metric";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
 import type { SmsAnalyticsPayload } from "@/lib/sms/analytics";
 import {
+  ArrowRight,
   BarChart3,
+  Check,
   Download,
   Inbox,
   Link2,
+  MousePointerClick,
   Send,
+  TriangleAlert,
   UserMinus,
+  UserPlus,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -44,7 +49,7 @@ function TrendChart({
   series,
   keys,
   colors,
-  height = 140,
+  height = 160,
 }: {
   series: Array<Record<string, number | string>>;
   keys: string[];
@@ -56,11 +61,14 @@ function TrendChart({
   if (!series.length || !hasData) {
     return (
       <div
-        className="flex flex-col items-center justify-center rounded-[12px] border border-dashed border-border bg-muted/20 px-4 py-8 text-center"
-        style={{ minHeight: Math.min(height, 120) }}
+        className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center"
+        style={{ minHeight: Math.min(height, 140) }}
       >
-        <p className="text-[14px] font-medium text-foreground">No data for this period</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <BarChart3 className="h-5 w-5" />
+        </div>
+        <p className="text-sm font-semibold text-foreground">No data for this period</p>
+        <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
           Analytics will appear after you send campaigns.
         </p>
       </div>
@@ -72,22 +80,24 @@ function TrendChart({
   return (
     <div className="flex items-end gap-1" style={{ height }}>
       {series.map((row) => (
-        <div key={String(row.date)} className="flex flex-1 flex-col items-center gap-1">
+        <div key={String(row.date)} className="group flex flex-1 flex-col items-center gap-1.5">
           <div className="flex w-full flex-1 items-end justify-center gap-0.5">
             {keys.map((key, i) => {
               const val = Number(row[key] || 0);
-              const h = Math.max(4, (val / max) * 100);
+              const h = Math.max(3, (val / max) * 100);
               return (
                 <div
                   key={key}
-                  className="w-2 rounded-t-sm"
+                  className="w-2 rounded-t-[3px] transition-opacity duration-150 group-hover:opacity-80"
                   style={{ height: `${h}%`, backgroundColor: colors[i] }}
                   title={`${key}: ${val}`}
                 />
               );
             })}
           </div>
-          <span className="text-[10px] text-muted-foreground">{String(row.date).slice(5)}</span>
+          <span className="text-[10px] tabular-nums text-muted-foreground">
+            {String(row.date).slice(5)}
+          </span>
         </div>
       ))}
     </div>
@@ -112,17 +122,21 @@ function FunnelStep({
 
   return (
     <div className={cn("flex flex-1 flex-col", !isLast && "border-r border-border pr-4")}>
-      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 text-[22px] font-semibold tabular-nums text-foreground">{formatNumber(value)}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1.5 font-display text-[22px] font-semibold tabular-nums tracking-tight text-foreground">
+        {formatNumber(value)}
+      </p>
       {label !== "Sent" ? (
-        <p className="mt-0.5 text-[12px] text-muted-foreground">{rateLabel}</p>
+        <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">{rateLabel}</p>
       ) : null}
     </div>
   );
 }
 
 function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-[12px] bg-muted/60", className)} />;
+  return <div className={cn("animate-pulse rounded-xl bg-muted/60", className)} />;
 }
 
 function MetricStrip({
@@ -140,15 +154,85 @@ function MetricStrip({
       )}
     >
       {items.map((m) => (
-        <div key={m.label} className="rounded-[12px] border border-border bg-card p-4">
-          <p className="text-[12px] text-muted-foreground">{m.label}</p>
-          <p className="mt-1 text-[22px] font-semibold tabular-nums text-foreground">{m.value}</p>
-          {m.hint ? <p className="mt-0.5 text-[12px] text-muted-foreground">{m.hint}</p> : null}
+        <div key={m.label} className="surface rounded-xl bg-card p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {m.label}
+          </p>
+          <p className="mt-1.5 font-display text-[22px] font-semibold tabular-nums tracking-tight text-foreground">
+            {m.value}
+          </p>
+          {m.hint ? (
+            <p className="mt-1 text-[12px] tabular-nums text-muted-foreground">{m.hint}</p>
+          ) : null}
         </div>
       ))}
     </div>
   );
 }
+
+function RatePill({ value, tone }: { value: number; tone: "good" | "warn" | "neutral" }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums",
+        tone === "good" && "bg-emerald-50 text-emerald-700",
+        tone === "warn" && "bg-amber-50 text-amber-700",
+        tone === "neutral" && "bg-muted text-muted-foreground",
+      )}
+    >
+      {formatPercent(value)}
+    </span>
+  );
+}
+
+function rateTone(value: number, goodAt: number): "good" | "warn" | "neutral" {
+  if (value <= 0) return "neutral";
+  return value >= goodAt ? "good" : "warn";
+}
+
+function TableShell({
+  head,
+  children,
+  emptyTitle,
+  emptyDescription,
+  isEmpty,
+}: {
+  head: React.ReactNode;
+  children: React.ReactNode;
+  emptyTitle: string;
+  emptyDescription: string;
+  isEmpty: boolean;
+}) {
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Inbox className="h-5 w-5" />
+        </div>
+        <p className="text-sm font-semibold text-foreground">{emptyTitle}</p>
+        <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+          {emptyDescription}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-left">
+        <thead>
+          <tr className="border-b border-border bg-muted/40">{head}</tr>
+        </thead>
+        <tbody className="divide-y divide-border">{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+const thClass =
+  "px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+const tdClass = "px-4 py-3 text-[13px] text-foreground";
+const tdNumClass = cn(tdClass, "text-right tabular-nums");
 
 export function SmsAnalyticsView() {
   const router = useRouter();
@@ -212,7 +296,10 @@ export function SmsAnalyticsView() {
 
   const topCampaigns = useMemo(() => {
     if (!data?.campaigns?.length) return [];
-    return [...data.campaigns].filter((c) => c.sent > 0).sort((a, b) => b.sent - a.sent).slice(0, 5);
+    return [...data.campaigns]
+      .filter((c) => c.sent > 0)
+      .sort((a, b) => b.sent - a.sent)
+      .slice(0, 5);
   }, [data]);
 
   const tabMeta = TABS.find((t) => t.id === tab) ?? TABS[0];
@@ -226,20 +313,23 @@ export function SmsAnalyticsView() {
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
-        <Skeleton className="h-56" />
+        <Skeleton className="h-64" />
       </div>
     );
   }
 
   if (error && !data) {
     return (
-      <div className="rounded-[14px] border border-border bg-card p-8 text-center">
-        <p className="text-[14px] font-medium text-foreground">Could not load analytics</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">{error}</p>
-        <Button className="mt-4" onClick={() => void load()}>
+      <Card className="flex flex-col items-center px-6 py-12 text-center">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-danger/10 text-danger">
+          <TriangleAlert className="h-5 w-5" />
+        </div>
+        <p className="text-sm font-semibold text-foreground">Could not load analytics</p>
+        <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-muted-foreground">{error}</p>
+        <Button size="sm" className="mt-5" onClick={() => void load()}>
           Try again
         </Button>
-      </div>
+      </Card>
     );
   }
 
@@ -253,7 +343,7 @@ export function SmsAnalyticsView() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <select
-              className="h-9 rounded-[10px] border border-border bg-background px-3 text-[13px]"
+              className="h-9 rounded-lg border border-border bg-card px-3 text-[13px] font-medium text-foreground shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30"
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
             >
@@ -264,16 +354,15 @@ export function SmsAnalyticsView() {
               ))}
             </select>
             <Button
-              variant="ghost"
-              className={cn(
-                "h-9 rounded-[10px] text-[13px]",
-                compare && "bg-muted text-foreground",
-              )}
+              variant={compare ? "secondary" : "ghost"}
+              size="md"
+              className={cn("text-[13px]", compare && "font-semibold")}
               onClick={() => setCompare((v) => !v)}
             >
+              {compare ? <Check className="h-4 w-4" /> : null}
               Compare previous period
             </Button>
-            <Button variant="outline" className="h-9 rounded-[10px] text-[13px]" disabled>
+            <Button variant="outline" size="md" className="text-[13px]" disabled>
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
@@ -281,14 +370,14 @@ export function SmsAnalyticsView() {
         }
       />
 
-      <div className="flex flex-wrap gap-1 overflow-x-auto border-b border-border">
+      <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => selectTab(t.id)}
             className={cn(
-              "-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold transition",
+              "-mb-px whitespace-nowrap border-b-2 px-3.5 pb-2.5 pt-1 text-[13px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tab === t.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground",
@@ -299,7 +388,9 @@ export function SmsAnalyticsView() {
         ))}
       </div>
 
-      {loading ? <p className="text-[12px] text-muted-foreground">Updating…</p> : null}
+      {loading ? (
+        <p className="text-[12px] font-medium text-muted-foreground">Updating…</p>
+      ) : null}
 
       {tab === "overview" ? (
         <div className="space-y-5">
@@ -341,27 +432,41 @@ export function SmsAnalyticsView() {
             />
           </div>
 
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Performance trend</h2>
-            <div className="mt-4">
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                Performance trend
+              </h2>
+            </div>
+            <div className="mt-5">
               <TrendChart
                 series={timeSeries}
                 keys={["sent", "delivered", "uniqueClicks", "replies"]}
                 colors={["#6366f1", "#10b981", "#f97316", "#8b5cf6"]}
               />
             </div>
-            <div className="mt-3 flex flex-wrap gap-4 text-[12px] text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-indigo-500" /> Sent</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Delivered</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-orange-500" /> Clicks</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-500" /> Replies</span>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3.5 text-[12px] font-medium text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-indigo-500" /> Sent
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Delivered
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-orange-500" /> Clicks
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-violet-500" /> Replies
+              </span>
             </div>
           </Card>
 
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Engagement funnel</h2>
-            <div className="mt-4 flex flex-col gap-4 sm:flex-row">
-              <FunnelStep label="Sent" value={kpis?.messagesSent || 0} />
+          <Card className="p-5">
+            <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+              Engagement funnel
+            </h2>
+            <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:gap-4">
+              <FunnelStep label="Sent" value={kpis?.messagesSent || 0} sentTotal={kpis?.messagesSent || 0} />
               <FunnelStep
                 label="Delivered"
                 value={kpis?.delivered || 0}
@@ -384,116 +489,114 @@ export function SmsAnalyticsView() {
             </div>
           </Card>
 
-          <Card className="rounded-[12px] p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-foreground">Top campaigns</h2>
-              <button type="button" onClick={() => selectTab("campaigns")} className="text-[13px] font-medium text-primary hover:underline">
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3">
+              <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                Top campaigns
+              </h2>
+              <Link
+                href="/sms/analytics?tab=campaigns"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary transition-colors hover:text-primary-hover"
+              >
                 View all
-              </button>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
-            {topCampaigns.length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground">
-                      <th className="pb-2 font-medium">Campaign</th>
-                      <th className="pb-2 text-right font-medium">Sent</th>
-                      <th className="pb-2 text-right font-medium">Delivery</th>
-                      <th className="pb-2 text-right font-medium">CTR</th>
-                      <th className="pb-2 text-right font-medium">Replies</th>
-                      <th className="pb-2 text-right font-medium">Opt-outs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topCampaigns.map((row) => (
-                      <tr key={row.id} className="border-b border-border/60 last:border-0">
-                        <td className="py-2.5">
-                          <Link href={`/campaigns/${row.id}`} className="font-medium text-foreground hover:text-primary">
-                            {row.name}
-                          </Link>
-                        </td>
-                        <td className="py-2.5 text-right tabular-nums">{formatNumber(row.sent)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.deliveryRate)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.clickRate)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.replyRate)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.optOutRate)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-[13px] text-muted-foreground">No sent campaigns in this period.</p>
-            )}
+            <TableShell
+              isEmpty={topCampaigns.length === 0}
+              emptyTitle="No sent campaigns in this period"
+              emptyDescription="Send a campaign to start seeing performance data here."
+              head={
+                <>
+                  <th className={thClass}>Campaign</th>
+                  <th className={cn(thClass, "text-right")}>Sent</th>
+                  <th className={cn(thClass, "text-right")}>Delivered</th>
+                  <th className={cn(thClass, "text-right")}>Clicks</th>
+                  <th className={cn(thClass, "text-right")}>Replies</th>
+                </>
+              }
+            >
+              {topCampaigns.map((c) => (
+                <tr key={c.id} className="transition-colors hover:bg-muted/40">
+                  <td className={cn(tdClass, "font-medium")}>{c.name}</td>
+                  <td className={tdNumClass}>{formatNumber(c.sent)}</td>
+                  <td className={tdNumClass}>
+                    <RatePill value={c.deliveryRate} tone={rateTone(c.deliveryRate, 90)} />
+                  </td>
+                  <td className={tdNumClass}>{formatNumber(c.clicks)}</td>
+                  <td className={tdNumClass}>{formatNumber(c.replies)}</td>
+                </tr>
+              ))}
+            </TableShell>
           </Card>
         </div>
       ) : null}
 
       {tab === "campaigns" ? (
-        <div className="space-y-5">
-          <MetricStrip
-            items={[
-              { label: "Sent", value: formatNumber(kpis?.messagesSent || 0) },
-              { label: "Delivered", value: formatNumber(kpis?.delivered || 0) },
-              { label: "Clicks", value: formatNumber(kpis?.uniqueClicks || 0) },
-              { label: "Replies", value: formatNumber(kpis?.replies || 0) },
-              { label: "Opt-outs", value: formatNumber(kpis?.optOuts || 0) },
-            ]}
-          />
-
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Campaign performance over time</h2>
-            <div className="mt-4">
-              <TrendChart series={timeSeries} keys={["sent", "delivered"]} colors={["#6366f1", "#10b981"]} />
-            </div>
-          </Card>
-
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Campaign performance</h2>
-            {data?.campaigns?.length ? (
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground">
-                      <th className="pb-2 font-medium">Campaign</th>
-                      <th className="pb-2 font-medium">Date</th>
-                      <th className="pb-2 text-right font-medium">Recipients</th>
-                      <th className="pb-2 text-right font-medium">Delivery</th>
-                      <th className="pb-2 text-right font-medium">CTR</th>
-                      <th className="pb-2 text-right font-medium">Replies</th>
-                      <th className="pb-2 text-right font-medium">Opt-outs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.campaigns.map((row) => (
-                      <tr key={row.id} className="border-b border-border/60 last:border-0">
-                        <td className="py-2.5">
-                          <Link href={`/campaigns/${row.id}`} className="font-medium text-foreground hover:text-primary">
-                            {row.name}
-                          </Link>
-                        </td>
-                        <td className="py-2.5 text-muted-foreground">
-                          {row.sentAt ? new Date(row.sentAt).toLocaleDateString() : "—"}
-                        </td>
-                        <td className="py-2.5 text-right tabular-nums">{formatNumber(row.sent)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.deliveryRate)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.clickRate)}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatPercent(row.replyRate)}</td>
-                        <td className="py-2.5 text-right tabular-nums">
-                          <span className={cn(row.optOutRate > 2 ? "font-semibold text-amber-600" : "")}>
-                            {formatPercent(row.optOutRate)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="mt-4 text-[13px] text-muted-foreground">No campaigns in this period.</p>
-            )}
-          </Card>
-        </div>
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
+            <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+              Campaign performance
+            </h2>
+            <span className="text-[12px] tabular-nums text-muted-foreground">
+              {data?.campaigns?.length || 0} campaigns
+            </span>
+          </div>
+          <TableShell
+            isEmpty={!data?.campaigns?.length}
+            emptyTitle="No campaigns in this period"
+            emptyDescription="Campaigns sent during the selected range will show up here."
+            head={
+              <>
+                <th className={thClass}>Campaign</th>
+                <th className={cn(thClass, "text-right")}>Sent</th>
+                <th className={cn(thClass, "text-right")}>Delivered</th>
+                <th className={cn(thClass, "text-right")}>Failed</th>
+                <th className={cn(thClass, "text-right")}>Delivery rate</th>
+                <th className={cn(thClass, "text-right")}>Click rate</th>
+                <th className={cn(thClass, "text-right")}>Reply rate</th>
+                <th className={cn(thClass, "text-right")}>Opt-out rate</th>
+              </>
+            }
+          >
+            {(data?.campaigns || []).map((c) => (
+              <tr key={c.id} className="transition-colors hover:bg-muted/40">
+                <td className={cn(tdClass, "max-w-[240px]")}>
+                  <p className="truncate font-medium">{c.name}</p>
+                  {c.sentAt ? (
+                    <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
+                      {new Date(c.sentAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  ) : null}
+                </td>
+                <td className={tdNumClass}>{formatNumber(c.sent)}</td>
+                <td className={tdNumClass}>{formatNumber(c.delivered)}</td>
+                <td className={cn(tdNumClass, c.failed > 0 && "text-danger")}>
+                  {formatNumber(c.failed)}
+                </td>
+                <td className={tdNumClass}>
+                  <RatePill value={c.deliveryRate} tone={rateTone(c.deliveryRate, 90)} />
+                </td>
+                <td className={tdNumClass}>
+                  <RatePill value={c.clickRate} tone={rateTone(c.clickRate, 2)} />
+                </td>
+                <td className={tdNumClass}>
+                  <RatePill value={c.replyRate} tone={rateTone(c.replyRate, 5)} />
+                </td>
+                <td className={tdNumClass}>
+                  <RatePill
+                    value={c.optOutRate}
+                    tone={c.optOutRate > 1 ? "warn" : "neutral"}
+                  />
+                </td>
+              </tr>
+            ))}
+          </TableShell>
+        </Card>
       ) : null}
 
       {tab === "audience" ? (
@@ -501,73 +604,113 @@ export function SmsAnalyticsView() {
           <MetricStrip
             columns={4}
             items={[
-              { label: "Active contacts", value: formatNumber(audience?.activeContacts || 0) },
-              { label: "New opt-ins", value: formatNumber(audience?.newOptIns || 0) },
-              { label: "Unsubscribes", value: formatNumber(audience?.unsubscribes || 0) },
+              {
+                label: "Active contacts",
+                value: formatNumber(audience?.activeContacts || 0),
+              },
+              {
+                label: "New opt-ins",
+                value: formatNumber(audience?.newOptIns || 0),
+              },
+              {
+                label: "Unsubscribes",
+                value: formatNumber(audience?.unsubscribes || 0),
+              },
               {
                 label: "Net growth",
-                value: formatNumber(audience?.netGrowth || 0),
-                hint: (audience?.netGrowth || 0) >= 0 ? "Growing" : "Shrinking",
+                value: `${(audience?.netGrowth || 0) >= 0 ? "+" : ""}${formatNumber(audience?.netGrowth || 0)}`,
               },
             ]}
           />
 
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Subscriber growth</h2>
-            <div className="mt-4">
-              <TrendChart
-                series={audience?.growthSeries || []}
-                keys={["optIns", "unsubscribes"]}
-                colors={["#10b981", "#ef4444"]}
-              />
-            </div>
-            <div className="mt-3 flex gap-4 text-[12px] text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Opt-ins</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Unsubscribes</span>
-            </div>
-          </Card>
-
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="rounded-[12px] p-5">
-              <h2 className="text-[14px] font-semibold text-foreground">Where subscribers came from</h2>
-              {audience?.sources?.length ? (
-                <ul className="mt-4 space-y-2.5">
-                  {audience.sources.map((s) => (
-                    <li key={s.source} className="flex items-center justify-between gap-4 text-[13px]">
-                      <span className="text-foreground">{s.source}</span>
-                      <span className="shrink-0 text-right tabular-nums text-muted-foreground">
-                        <span className="text-foreground">{formatNumber(s.count)}</span>
-                        <span className="mx-2 text-border">|</span>
-                        {formatPercent(s.share)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-4 text-[13px] text-muted-foreground">No opt-in source data for this period.</p>
-              )}
+            <Card className="p-5">
+              <div className="flex items-center gap-2">
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
+                <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                  Audience growth
+                </h2>
+              </div>
+              <div className="mt-5">
+                <TrendChart
+                  series={audience?.growthSeries || []}
+                  keys={["optIns", "unsubscribes"]}
+                  colors={["#10b981", "#f43f5e"]}
+                  height={140}
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3.5 text-[12px] font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Opt-ins
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" /> Unsubscribes
+                </span>
+              </div>
             </Card>
 
-            <Card className="rounded-[12px] p-5">
-              <h2 className="text-[14px] font-semibold text-foreground">Top lists</h2>
-              {audience?.topLists?.length ? (
-                <ul className="mt-4 space-y-2.5">
-                  {audience.topLists.map((l) => (
-                    <li key={l.id} className="flex items-center justify-between text-[13px]">
-                      <Link href="/contacts/lists" className="font-medium text-foreground hover:text-primary">
-                        {l.name}
-                      </Link>
-                      <span className="tabular-nums text-muted-foreground">
-                        {formatNumber(l.contacts)} {l.contacts === 1 ? "contact" : "contacts"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+            <Card className="p-5">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                  Subscriber sources
+                </h2>
+              </div>
+              {!audience?.sources?.length ? (
+                <div className="mt-5 flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
+                  <p className="text-sm font-semibold text-foreground">No sources yet</p>
+                  <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
+                    Opt-in sources will appear as contacts subscribe.
+                  </p>
+                </div>
               ) : (
-                <p className="mt-4 text-[13px] text-muted-foreground">No lists yet.</p>
+                <div className="mt-5 space-y-3.5">
+                  {audience.sources.map((s) => (
+                    <div key={s.source}>
+                      <div className="flex items-center justify-between text-[13px]">
+                        <span className="font-medium text-foreground">{s.source}</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {formatNumber(s.count)} · {formatPercent(s.share)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all duration-300"
+                          style={{ width: `${Math.max(2, s.share)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </Card>
           </div>
+
+          <Card className="overflow-hidden p-0">
+            <div className="px-5 pt-4 pb-3">
+              <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                Top lists
+              </h2>
+            </div>
+            <TableShell
+              isEmpty={!audience?.topLists?.length}
+              emptyTitle="No lists yet"
+              emptyDescription="Create a list to organize your audience."
+              head={
+                <>
+                  <th className={thClass}>List</th>
+                  <th className={cn(thClass, "text-right")}>Contacts</th>
+                </>
+              }
+            >
+              {(audience?.topLists || []).map((l) => (
+                <tr key={l.id} className="transition-colors hover:bg-muted/40">
+                  <td className={cn(tdClass, "font-medium")}>{l.name}</td>
+                  <td className={tdNumClass}>{formatNumber(l.contacts)}</td>
+                </tr>
+              ))}
+            </TableShell>
+          </Card>
         </div>
       ) : null}
 
@@ -576,39 +719,85 @@ export function SmsAnalyticsView() {
           <MetricStrip
             columns={4}
             items={[
-              { label: "Sent", value: formatNumber(kpis?.messagesSent || 0) },
               { label: "Delivered", value: formatNumber(kpis?.delivered || 0) },
-              { label: "Failed", value: formatNumber(kpis?.failed || 0) },
-              { label: "Delivery rate", value: formatPercent(kpis?.deliveryRate || 0) },
+              {
+                label: "Failed",
+                value: formatNumber(kpis?.failed || 0),
+                hint: (kpis?.failed || 0) > 0 ? "Review failure reasons below" : null,
+              },
+              { label: "Pending", value: formatNumber(kpis?.pending || 0) },
+              { label: "Opt-outs", value: formatNumber(kpis?.optOuts || 0) },
             ]}
           />
 
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Delivery trend</h2>
-            <div className="mt-4">
-              <TrendChart series={timeSeries} keys={["delivered", "failed"]} colors={["#10b981", "#ef4444"]} />
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <TriangleAlert className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                Failure reasons
+              </h2>
             </div>
+            {!data?.failureReasons?.length ? (
+              <div className="mt-5 flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
+                <p className="text-sm font-semibold text-foreground">No failures</p>
+                <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
+                  No failed messages in this period. Great deliverability.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-3.5">
+                {(() => {
+                  const total = data.failureReasons.reduce((s, r) => s + r.count, 0) || 1;
+                  return data.failureReasons.map((r) => {
+                    const share = (r.count / total) * 100;
+                    return (
+                      <div key={r.category}>
+                        <div className="flex items-center justify-between text-[13px]">
+                          <span className="font-medium text-foreground">{r.label}</span>
+                          <span className="tabular-nums text-muted-foreground">
+                            {formatNumber(r.count)} · {formatPercent(share)}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-danger transition-all duration-300"
+                            style={{ width: `${Math.max(2, share)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
           </Card>
 
-          <Card className="rounded-[12px] p-5">
-            <h2 className="text-[14px] font-semibold text-foreground">Failure reasons</h2>
-            {data?.failureReasons?.length ? (
-              <ul className="mt-4 space-y-2.5">
-                {data.failureReasons.map((row) => (
-                  <li key={row.category} className="flex items-center justify-between text-[13px]">
-                    <span className="text-foreground">{row.label}</span>
-                    <span className="font-semibold tabular-nums text-muted-foreground">{formatNumber(row.count)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-4 text-[13px] text-muted-foreground">No delivery failures in this period.</p>
-            )}
-            <p className="mt-4 text-[12px] text-muted-foreground">
-              <Link href="/sms/analytics?tab=messaging" className="font-medium text-primary hover:underline">
-                View message delivery log
-              </Link>
-            </p>
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <MousePointerClick className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                Delivery & engagement trend
+              </h2>
+            </div>
+            <div className="mt-5">
+              <TrendChart
+                series={timeSeries}
+                keys={["delivered", "failed", "optOuts"]}
+                colors={["#10b981", "#f43f5e", "#f97316"]}
+                height={140}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3.5 text-[12px] font-medium text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Delivered
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-rose-500" /> Failed
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-orange-500" /> Opt-outs
+              </span>
+            </div>
           </Card>
         </div>
       ) : null}

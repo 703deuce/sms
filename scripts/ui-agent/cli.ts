@@ -91,6 +91,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
       case "--no-reference":
         options.skipAutoReference = true;
         break;
+      case "--capture-path":
+        options.capturePath = nextValue(args, i++);
+        break;
       case "--capture-after":
         options.captureAfter = true;
         break;

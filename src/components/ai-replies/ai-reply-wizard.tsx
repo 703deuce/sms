@@ -11,9 +11,11 @@ import {
 } from "@/components/v1/v1-polish";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import {
   DEFAULT_AI_ADVANCED,
+  AI_REPLY_LENGTHS,
+  AI_REPLY_TONES,
   triggerSummary,
   type AiAdvancedConfig,
   type AiHandoffConfig,
@@ -24,7 +26,7 @@ import {
   type AiTriggerConfig,
 } from "@/lib/ai-replies/types";
 import { cn, formatPhone } from "@/lib/utils";
-import { Plus, Trash2, X } from "lucide-react";
+import { AlertCircle, Globe, Loader2, MessageCircleQuestion, Plus, Send, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -36,7 +38,35 @@ const WIZARD_STEPS: WizardStep[] = [
   { id: "publish", label: "Test & Publish", emoji: "🚀", hint: "Go live" },
 ];
 
+const TRIGGER_OPTIONS: Array<{ value: NonNullable<AiTriggerConfig["mode"]>; emoji: string; title: string; description: string }> = [
+  { value: "all_incoming", emoji: "📥", title: "All incoming", description: "Reply to every inbound text" },
+  { value: "keywords", emoji: "🔑", title: "Keywords", description: "Only when messages contain keywords" },
+  { value: "segment", emoji: "👥", title: "Segment", description: "Only contacts in a specific segment" },
+];
+
+const SCHEDULE_OPTIONS: Array<{ value: NonNullable<AiTriggerConfig["schedule"]>; label: string }> = [
+  { value: "always", label: "Always on" },
+  { value: "outside_hours", label: "Outside business hours" },
+  { value: "business_hours", label: "During business hours" },
+];
+
 type Props = { mode?: "create" | "edit"; initial?: AiReplyRecord };
+
+function Pill({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/[0.06] px-2.5 py-1 text-[12px] font-medium text-foreground">
+      {children}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove"
+        className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/15 hover:text-foreground"
+      >
+        <X className="h-2.5 w-2.5" strokeWidth={3} />
+      </button>
+    </span>
+  );
+}
 
 export function AiReplyWizard({ mode = "create", initial }: Props) {
   const router = useRouter();
@@ -67,6 +97,7 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
   const [phones, setPhones] = useState<Array<{ id: string; number: string; label: string }>>([]);
   const [segments, setSegments] = useState<Array<{ id: string; name: string }>>([]);
   const [keywordInput, setKeywordInput] = useState("");
+  const [handoffKeywordInput, setHandoffKeywordInput] = useState("");
   const [websiteInput, setWebsiteInput] = useState("");
   const [textInput, setTextInput] = useState("");
   const [qaQ, setQaQ] = useState("");
@@ -170,6 +201,9 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
     }
   }
 
+  const next = () => setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1));
+  const back = () => setStep((s) => Math.max(s - 1, 0));
+
   return (
     <div className="mx-auto max-w-[1100px] px-1 pb-10 text-[13px]">
       <V1Breadcrumb
@@ -179,10 +213,10 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
         ]}
       />
       <div className="mb-6">
-        <h1 className="text-[26px] font-bold tracking-tight text-foreground">
+        <h1 className="font-display text-[24px] font-bold tracking-tight text-foreground">
           {mode === "edit" ? `Edit ${name || "agent"}` : "Create AI agent"}
         </h1>
-        <p className="mt-1 text-[14px] text-muted-foreground">
+        <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
           {mode === "edit"
             ? "Update triggers, knowledge, and handoff rules for this agent."
             : "Set up an AI teammate that answers texts with your brand voice."}
@@ -191,318 +225,531 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
       <V1WizardStepper steps={WIZARD_STEPS} activeIndex={step} onStepClick={(i) => i < step && setStep(i)} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_300px]">
         <Card className="rounded-[14px] border-border p-6 shadow-sm">
+          {error ? (
+            <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-danger/25 bg-danger/[0.06] px-3.5 py-2.5 text-[13px] font-medium text-danger">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : null}
+
           {step === 0 ? (
-            <div className="space-y-4">
+            <div>
               <V1WizardSection
                 emoji="⚙️"
                 title="Basic settings"
                 description="Name your agent and choose which number it handles."
               />
-              <div>
-                <Label>AI Name</Label>
-                <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="General AI Reply" />
-              </div>
-              <div>
-                <Label>Description</Label>
-                <Textarea className="mt-1" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
-              </div>
-              <div>
-                <Label>Type</Label>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <V1ChoiceCard
-                    selected={replyType === "conversational"}
-                    emoji="💬"
-                    title="Conversational AI"
-                    description="Multi-turn dialogue with memory and context"
-                    onClick={() => setReplyType("conversational")}
-                  />
-                  <V1ChoiceCard
-                    selected={replyType === "single_prompt"}
-                    emoji="✨"
-                    title="Single prompt"
-                    description="One-shot responses per incoming message"
-                    onClick={() => setReplyType("single_prompt")}
-                  />
+              <div className="space-y-5">
+                <div>
+                  <Label>AI Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="General AI Reply" />
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this agent do?" />
+                </div>
+                <div>
+                  <Label>Type</Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <V1ChoiceCard
+                      selected={replyType === "conversational"}
+                      emoji="💬"
+                      title="Conversational AI"
+                      description="Multi-turn dialogue with memory and context"
+                      onClick={() => setReplyType("conversational")}
+                    />
+                    <V1ChoiceCard
+                      selected={replyType === "single_prompt"}
+                      emoji="✨"
+                      title="Single prompt"
+                      description="One-shot responses per incoming message"
+                      onClick={() => setReplyType("single_prompt")}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label>Tone</Label>
+                    <Select value={tone} onChange={(e) => setTone(e.target.value as typeof tone)}>
+                      {AI_REPLY_TONES.map((t) => (
+                        <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Response length</Label>
+                    <Select value={responseLength} onChange={(e) => setResponseLength(e.target.value as typeof responseLength)}>
+                      {AI_REPLY_LENGTHS.map((l) => (
+                        <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Assigned inbox / phone number</Label>
+                  <Select value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)}>
+                    <option value="">Select number</option>
+                    {phones.map((p) => (
+                      <option key={p.id} value={p.id}>{formatPhone(p.number)} — {p.label}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
-              <div>
-                <Label>Assigned inbox / phone number</Label>
-                <select className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)}>
-                  <option value="">Select number</option>
-                  {phones.map((p) => (
-                    <option key={p.id} value={p.id}>{formatPhone(p.number)} — {p.label}</option>
-                  ))}
-                </select>
-              </div>
+              <V1WizardFooter onCancel={() => router.push("/ai-replies")} onNext={next} nextLabel="Continue →" />
             </div>
           ) : null}
 
           {step === 1 ? (
-            <div className="space-y-4">
+            <div>
               <V1WizardSection
                 emoji="🎯"
                 title="Trigger condition"
                 description="When should this AI agent take over the conversation?"
               />
-              {(["all_incoming", "keywords", "segment"] as const).map((m) => (
-                <label key={m} className="flex items-center gap-2">
-                  <input type="radio" checked={trigger.mode === m} onChange={() => setTrigger((t) => ({ ...t, mode: m }))} />
-                  {m === "all_incoming" ? "All incoming messages" : m === "keywords" ? "Messages containing keywords" : "Specific segment"}
-                </label>
-              ))}
-              {trigger.mode === "keywords" ? (
-                <div>
-                  <div className="flex gap-2">
-                    <Input value={keywordInput} onChange={(e) => setKeywordInput(e.target.value)} placeholder="help, pricing" />
-                    <Button type="button" variant="outline" onClick={() => {
-                      if (!keywordInput.trim()) return;
-                      setTrigger((t) => ({ ...t, keywords: [...(t.keywords || []), keywordInput.trim()] }));
-                      setKeywordInput("");
-                    }}>Add</Button>
+              <div className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {TRIGGER_OPTIONS.map((opt) => (
+                    <V1ChoiceCard
+                      key={opt.value}
+                      selected={trigger.mode === opt.value}
+                      emoji={opt.emoji}
+                      title={opt.title}
+                      description={opt.description}
+                      onClick={() => setTrigger((t) => ({ ...t, mode: opt.value }))}
+                    />
+                  ))}
+                </div>
+
+                {trigger.mode === "keywords" ? (
+                  <div className="rounded-xl border border-border bg-muted/20 p-4">
+                    <Label className="mb-2">Trigger keywords</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={keywordInput}
+                        onChange={(e) => setKeywordInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (!keywordInput.trim()) return;
+                            setTrigger((t) => ({ ...t, keywords: [...(t.keywords || []), keywordInput.trim()] }));
+                            setKeywordInput("");
+                          }
+                        }}
+                        placeholder="help, pricing"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (!keywordInput.trim()) return;
+                          setTrigger((t) => ({ ...t, keywords: [...(t.keywords || []), keywordInput.trim()] }));
+                          setKeywordInput("");
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add
+                      </Button>
+                    </div>
+                    {(trigger.keywords || []).length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(trigger.keywords || []).map((k) => (
+                          <Pill key={k} onRemove={() => setTrigger((t) => ({ ...t, keywords: (t.keywords || []).filter((x) => x !== k) }))}>
+                            {k}
+                          </Pill>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2.5 text-[12px] text-muted-foreground">No keywords yet — add at least one.</p>
+                    )}
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(trigger.keywords || []).map((k) => (
-                      <span key={k} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[12px]">
-                        {k}
-                        <button type="button" onClick={() => setTrigger((t) => ({ ...t, keywords: (t.keywords || []).filter((x) => x !== k) }))}><X className="h-3 w-3" /></button>
-                      </span>
-                    ))}
+                ) : null}
+
+                {trigger.mode === "segment" ? (
+                  <div className="rounded-xl border border-border bg-muted/20 p-4">
+                    <Label className="mb-2">Segment</Label>
+                    <Select
+                      value={trigger.segmentId || ""}
+                      onChange={(e) => {
+                        const seg = segments.find((s) => s.id === e.target.value);
+                        setTrigger((t) => ({ ...t, segmentId: e.target.value || undefined, segmentName: seg?.name }));
+                      }}
+                    >
+                      <option value="">Select a segment</option>
+                      {segments.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
+
+                <div>
+                  <Label>Schedule</Label>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {SCHEDULE_OPTIONS.map((opt) => {
+                      const selected = (trigger.schedule || "always") === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setTrigger((t) => ({ ...t, schedule: opt.value }))}
+                          className={cn(
+                            "rounded-lg border px-3 py-2.5 text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            selected
+                              ? "border-primary/50 bg-primary/[0.06] text-foreground shadow-sm"
+                              : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              ) : null}
-              {trigger.mode === "segment" ? (
-                <select className="h-10 w-full rounded-lg border border-slate-200 px-3" value={trigger.segmentId || ""} onChange={(e) => {
-                  const seg = segments.find((s) => s.id === e.target.value);
-                  setTrigger((t) => ({ ...t, segmentId: e.target.value, segmentName: seg?.name }));
-                }}>
-                  <option value="">Select segment</option>
-                  {segments.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              ) : null}
-              <div>
-                <Label>Schedule</Label>
-                <select className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3" value={trigger.schedule || "always"} onChange={(e) => setTrigger((t) => ({ ...t, schedule: e.target.value as AiTriggerConfig["schedule"] }))}>
-                  <option value="always">Always</option>
-                  <option value="outside_hours">Outside business hours</option>
-                  <option value="business_hours">During business hours only</option>
-                </select>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label>Reply delay (seconds)</Label>
-                  <Input type="number" min={0} value={advanced.replyDelaySec ?? 3} onChange={(e) => setAdvanced((a) => ({ ...a, replyDelaySec: Number(e.target.value) }))} />
-                </div>
-                <div>
-                  <Label>Max replies per contact</Label>
-                  <Input type="number" min={1} value={advanced.maxRepliesPerContact ?? 10} onChange={(e) => setAdvanced((a) => ({ ...a, maxRepliesPerContact: Number(e.target.value) }))} />
-                </div>
-              </div>
-              <div>
-                <Label>Creativity (temperature)</Label>
-                <input type="range" min={0} max={1} step={0.1} className="mt-2 w-full" value={advanced.temperature ?? 0.5} onChange={(e) => setAdvanced((a) => ({ ...a, temperature: Number(e.target.value) }))} />
-              </div>
+              <V1WizardFooter onBack={back} onNext={next} nextLabel="Continue →" />
             </div>
           ) : null}
 
           {step === 2 ? (
-            <div className="space-y-5">
+            <div>
               <V1WizardSection
                 emoji="🧠"
-                title="Knowledge & persona"
-                description="Teach your agent how to speak and what it should know."
+                title="Knowledge & instructions"
+                description="Tell your agent what to say and what it should know."
               />
-              <div>
-                <Label>Instructions (system prompt)</Label>
-                <Textarea className="mt-1" rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="You are a helpful assistant for our business..." />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-5">
                 <div>
-                  <Label>Tone of voice</Label>
-                  <select className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3" value={tone} onChange={(e) => setTone(e.target.value as typeof tone)}>
-                    <option value="professional">Professional</option>
-                    <option value="friendly">Friendly</option>
-                    <option value="sales">Sales-oriented</option>
-                  </select>
+                  <Label>System instructions</Label>
+                  <Textarea rows={4} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
+                  <p className="mt-1.5 text-[12px] text-muted-foreground">
+                    This guides every response — include your brand voice and key policies.
+                  </p>
                 </div>
-                <div>
-                  <Label>Response length</Label>
-                  <div className="mt-2 flex gap-2">
-                    {(["short", "medium", "long"] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setResponseLength(l)}
-                        className={cn(
-                          "flex-1 rounded-lg border px-3 py-2 text-[12px] font-semibold capitalize",
-                          responseLength === l ? "border-primary bg-primary/5 text-primary" : "border-slate-200",
-                        )}
-                      >
-                        {l}
-                      </button>
-                    ))}
+
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <Label className="mb-2 flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                    Websites
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={websiteInput}
+                      onChange={(e) => setWebsiteInput(e.target.value)}
+                      placeholder="https://yoursite.com/faq"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (!websiteInput.trim()) return;
+                        setKnowledge((k) => ({ ...k, websites: [...(k.websites || []), websiteInput.trim()] }));
+                        setWebsiteInput("");
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add
+                    </Button>
                   </div>
+                  {(knowledge.websites || []).length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(knowledge.websites || []).map((w) => (
+                        <Pill key={w} onRemove={() => setKnowledge((k) => ({ ...k, websites: (k.websites || []).filter((x) => x !== w) }))}>
+                          {w}
+                        </Pill>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <Label className="mb-2">Text snippets</Label>
+                  <Textarea rows={2} value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder="Paste facts, hours, pricing…" />
+                  <div className="mt-2.5 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!textInput.trim()) return;
+                        setKnowledge((k) => ({ ...k, textSnippets: [...(k.textSnippets || []), textInput.trim()] }));
+                        setTextInput("");
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add snippet
+                    </Button>
+                  </div>
+                  {(knowledge.textSnippets || []).length > 0 ? (
+                    <ul className="mt-3 space-y-2">
+                      {(knowledge.textSnippets || []).map((s, i) => (
+                        <li key={i} className="flex items-start justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-[12px] leading-relaxed text-foreground">
+                          <span className="line-clamp-2">{s}</span>
+                          <button
+                            type="button"
+                            aria-label="Remove snippet"
+                            onClick={() => setKnowledge((k) => ({ ...k, textSnippets: (k.textSnippets || []).filter((_, x) => x !== i) }))}
+                            className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-danger"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <Label className="mb-2 flex items-center gap-1.5">
+                    <MessageCircleQuestion className="h-3.5 w-3.5 text-muted-foreground" />
+                    Q&A pairs
+                  </Label>
+                  <div className="space-y-2">
+                    <Input value={qaQ} onChange={(e) => setQaQ(e.target.value)} placeholder="Question" />
+                    <Textarea rows={2} value={qaA} onChange={(e) => setQaA(e.target.value)} placeholder="Answer" />
+                  </div>
+                  <div className="mt-2.5 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!qaQ.trim() || !qaA.trim()) return;
+                        setKnowledge((k) => ({ ...k, qaPairs: [...(k.qaPairs || []), { question: qaQ.trim(), answer: qaA.trim() }] }));
+                        setQaQ("");
+                        setQaA("");
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Q&A
+                    </Button>
+                  </div>
+                  {(knowledge.qaPairs || []).length > 0 ? (
+                    <ul className="mt-3 space-y-2">
+                      {(knowledge.qaPairs || []).map((qa, i) => (
+                        <li key={i} className="rounded-lg border border-border bg-card px-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[12px] font-semibold text-foreground">{qa.question}</p>
+                            <button
+                              type="button"
+                              aria-label="Remove Q&A"
+                              onClick={() => setKnowledge((k) => ({ ...k, qaPairs: (k.qaPairs || []).filter((_, x) => x !== i) }))}
+                              className="shrink-0 text-muted-foreground transition-colors hover:text-danger"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{qa.answer}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
               </div>
-              <div>
-                <Label>Websites</Label>
-                <div className="mt-1 flex gap-2">
-                  <Input value={websiteInput} onChange={(e) => setWebsiteInput(e.target.value)} placeholder="https://yoursite.com" />
-                  <Button type="button" variant="outline" onClick={() => {
-                    if (!websiteInput.trim()) return;
-                    setKnowledge((k) => ({ ...k, websites: [...(k.websites || []), websiteInput.trim()] }));
-                    setWebsiteInput("");
-                  }}><Plus className="h-4 w-4" /></Button>
-                </div>
-                <ul className="mt-2 space-y-1 text-[12px] text-slate-600">
-                  {(knowledge.websites || []).map((w) => (
-                    <li key={w} className="flex justify-between rounded border border-slate-100 px-2 py-1">
-                      {w}
-                      <button type="button" onClick={() => setKnowledge((k) => ({ ...k, websites: (k.websites || []).filter((x) => x !== w) }))}><Trash2 className="h-3 w-3" /></button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <Label>Text snippets</Label>
-                <Textarea rows={3} value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder="Business hours, pricing, policies..." />
-                <Button type="button" variant="outline" className="mt-2" onClick={() => {
-                  if (!textInput.trim()) return;
-                  setKnowledge((k) => ({ ...k, textSnippets: [...(k.textSnippets || []), textInput.trim()] }));
-                  setTextInput("");
-                }}>Add snippet</Button>
-              </div>
-              <div>
-                <Label>Q&A pairs</Label>
-                <Input className="mt-1" placeholder="Question" value={qaQ} onChange={(e) => setQaQ(e.target.value)} />
-                <Textarea className="mt-2" rows={2} placeholder="Answer" value={qaA} onChange={(e) => setQaA(e.target.value)} />
-                <Button type="button" variant="outline" className="mt-2" onClick={() => {
-                  if (!qaQ.trim() || !qaA.trim()) return;
-                  setKnowledge((k) => ({ ...k, qaPairs: [...(k.qaPairs || []), { question: qaQ.trim(), answer: qaA.trim() }] }));
-                  setQaQ(""); setQaA("");
-                }}>Add Q&A</Button>
-              </div>
+              <V1WizardFooter onBack={back} onNext={next} nextLabel="Continue →" />
             </div>
           ) : null}
 
           {step === 3 ? (
-            <div className="space-y-5">
+            <div>
               <V1WizardSection
                 emoji="🤝"
-                title="Lead capture & handoff"
-                description="Define when a human should take over and what to collect."
+                title="Human handoff"
+                description="Decide when the AI steps aside and a teammate takes over."
               />
-              <label className="flex items-center gap-2 font-semibold text-slate-900">
-                <input type="checkbox" checked={lead.enabled} onChange={(e) => setLead((l) => ({ ...l, enabled: e.target.checked }))} />
-                Lead capture
-              </label>
-              {lead.enabled ? (
-                <div className="space-y-2 pl-6">
-                  <label className="flex gap-2"><input type="checkbox" checked={lead.collectName !== false} onChange={(e) => setLead((l) => ({ ...l, collectName: e.target.checked }))} /> Name</label>
-                  <label className="flex gap-2"><input type="checkbox" checked={lead.collectEmail} onChange={(e) => setLead((l) => ({ ...l, collectEmail: e.target.checked }))} /> Email</label>
-                  <label className="flex gap-2"><input type="checkbox" checked={lead.collectPhone} onChange={(e) => setLead((l) => ({ ...l, collectPhone: e.target.checked }))} /> Phone</label>
-                  <label className="flex gap-2"><input type="checkbox" checked={lead.collectCompany} onChange={(e) => setLead((l) => ({ ...l, collectCompany: e.target.checked }))} /> Company</label>
-                  <Input placeholder="Notify email" value={lead.notifyEmail || ""} onChange={(e) => setLead((l) => ({ ...l, notifyEmail: e.target.value }))} />
+              <div className="space-y-5">
+                <button
+                  type="button"
+                  onClick={() => setHandoff((h) => ({ ...h, enabled: !h.enabled }))}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    handoff.enabled
+                      ? "border-primary/50 bg-primary/[0.05] shadow-sm"
+                      : "border-border bg-card hover:border-primary/30",
+                  )}
+                >
+                  <div>
+                    <p className="text-[14px] font-semibold text-foreground">Enable human handoff</p>
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
+                      Transfer the conversation to your team when the AI can&apos;t help.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200",
+                      handoff.enabled ? "bg-primary" : "bg-slate-200",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-[3px] h-4 w-4 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform duration-200",
+                        handoff.enabled ? "translate-x-[20px]" : "translate-x-[3px]",
+                      )}
+                    />
+                  </span>
+                </button>
+
+                {handoff.enabled ? (
+                  <>
+                    <div className="rounded-xl border border-border bg-muted/20 p-4">
+                      <Label className="mb-2">Handoff keywords</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={handoffKeywordInput}
+                          onChange={(e) => setHandoffKeywordInput(e.target.value)}
+                          placeholder="agent, human, help"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (!handoffKeywordInput.trim()) return;
+                            setHandoff((h) => ({ ...h, keywords: [...(h.keywords || []), handoffKeywordInput.trim()] }));
+                            setHandoffKeywordInput("");
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add
+                        </Button>
+                      </div>
+                      {(handoff.keywords || []).length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(handoff.keywords || []).map((k) => (
+                            <Pill key={k} onRemove={() => setHandoff((h) => ({ ...h, keywords: (h.keywords || []).filter((x) => x !== k) }))}>
+                              {k}
+                            </Pill>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div>
+                      <Label>Notify email</Label>
+                      <Input
+                        type="email"
+                        value={handoff.notifyEmail || ""}
+                        onChange={(e) => setHandoff((h) => ({ ...h, notifyEmail: e.target.value || undefined }))}
+                        placeholder="team@yourcompany.com"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <p className="text-[13px] font-semibold text-foreground">Advanced</p>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-[12px]">Max replies per contact</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={advanced.maxRepliesPerContact ?? 10}
+                        onChange={(e) => setAdvanced((a) => ({ ...a, maxRepliesPerContact: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[12px]">Reply delay (seconds)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={advanced.replyDelaySec ?? 3}
+                        onChange={(e) => setAdvanced((a) => ({ ...a, replyDelaySec: Number(e.target.value) }))}
+                      />
+                    </div>
+                  </div>
                 </div>
-              ) : null}
-              <label className="flex items-center gap-2 font-semibold text-slate-900">
-                <input type="checkbox" checked={handoff.enabled !== false} onChange={(e) => setHandoff((h) => ({ ...h, enabled: e.target.checked }))} />
-                Human handoff
-              </label>
-              {handoff.enabled !== false ? (
-                <div className="space-y-2 pl-6">
-                  <Input placeholder="Handoff keywords (comma separated)" value={(handoff.keywords || []).join(", ")} onChange={(e) => setHandoff((h) => ({ ...h, keywords: e.target.value.split(",").map((k) => k.trim()).filter(Boolean) }))} />
-                  <Input placeholder="Notify email" value={handoff.notifyEmail || ""} onChange={(e) => setHandoff((h) => ({ ...h, notifyEmail: e.target.value }))} />
-                  <label className="flex gap-2"><input type="checkbox" checked={advanced.notifyAgentIfStuck !== false} onChange={(e) => setAdvanced((a) => ({ ...a, notifyAgentIfStuck: e.target.checked }))} /> Notify agent if AI is stuck</label>
-                </div>
-              ) : null}
+              </div>
+              <V1WizardFooter onBack={back} onNext={next} nextLabel="Continue →" />
             </div>
           ) : null}
 
           {step === 4 ? (
-            <div className="space-y-4">
+            <div>
               <V1WizardSection
                 emoji="🚀"
-                title="Test your agent"
-                description="Send test messages before publishing to production."
+                title="Test & publish"
+                description="Send a test message in the preview, then publish when you're happy."
               />
-              <div className="rounded-[12px] border border-emerald-200 bg-emerald-50/50 p-4">
-                <p className="font-semibold text-foreground">✅ Ready to publish</p>
-                <p className="mt-1 text-[13px] text-muted-foreground">{name} · {triggerSummary(trigger)}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <Label>Test chat</Label>
-                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-                  {testHistory.map((m, i) => (
-                    <div key={i} className={cn("rounded-lg px-3 py-2 text-[13px]", m.role === "user" ? "ml-8 bg-primary/10" : "mr-8 bg-slate-100")}>
-                      {m.content}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Input value={testInput} onChange={(e) => setTestInput(e.target.value)} placeholder="Type a test message..." onKeyDown={(e) => e.key === "Enter" && void runTest()} />
-                  <Button type="button" disabled={testing} onClick={() => void runTest()}>Send</Button>
-                </div>
-                {testDebug.length ? (
-                  <div className="mt-3 rounded border border-slate-100 bg-white p-2 text-[12px] text-slate-500">
-                    <p className="font-semibold">Debug — knowledge used</p>
-                    {testDebug.map((d, i) => <p key={i}>{d}</p>)}
+              <div className="space-y-5">
+                <div>
+                  <Label>Test message</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={testInput}
+                      onChange={(e) => setTestInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          runTest();
+                        }
+                      }}
+                      placeholder="Ask something a customer would ask…"
+                    />
+                    <Button type="button" onClick={runTest} disabled={testing || !testInput.trim()}>
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {testing ? "Testing…" : "Send"}
+                    </Button>
                   </div>
-                ) : null}
+                  {testDebug.length > 0 ? (
+                    <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Knowledge used
+                      </p>
+                      <ul className="mt-1.5 space-y-1">
+                        {testDebug.map((d, i) => (
+                          <li key={i} className="text-[12px] text-muted-foreground">• {d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <p className="text-[13px] font-semibold text-foreground">Summary</p>
+                  <dl className="mt-3 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+                      <dt className="text-[12px] text-muted-foreground">Trigger</dt>
+                      <dd className="text-right text-[12px] font-medium text-foreground">{triggerSummary(trigger)}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+                      <dt className="text-[12px] text-muted-foreground">Number</dt>
+                      <dd className="text-right text-[12px] font-medium text-foreground">
+                        {selectedPhone ? formatPhone(selectedPhone.number) : "Not selected"}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+                      <dt className="text-[12px] text-muted-foreground">Knowledge sources</dt>
+                      <dd className="text-right text-[12px] font-medium text-foreground">
+                        {(knowledge.websites?.length || 0) + (knowledge.textSnippets?.length || 0) + (knowledge.qaPairs?.length || 0)}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+                      <dt className="text-[12px] text-muted-foreground">Handoff</dt>
+                      <dd className="text-right text-[12px] font-medium text-foreground">
+                        {handoff.enabled ? "Enabled" : "Disabled"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
+              <V1WizardFooter
+                onBack={back}
+                onNext={() => save(true)}
+                nextLabel={mode === "edit" ? "Save & publish" : "Publish agent 🚀"}
+                nextLoading={saving}
+                extraActions={
+                  <Button type="button" variant="outline" disabled={saving} onClick={() => save(false)}>
+                    Save as draft
+                  </Button>
+                }
+              />
             </div>
           ) : null}
-
-          {error ? <p className="mt-4 text-rose-600">{error}</p> : null}
-
-          <V1WizardFooter
-            onBack={step > 0 ? () => setStep((s) => s - 1) : undefined}
-            onCancel={step === 0 ? () => router.push("/ai-replies") : undefined}
-            onNext={
-              step < 4
-                ? () => setStep((s) => s + 1)
-                : () => void save(true)
-            }
-            nextLabel={step === 4 ? (saving ? "Publishing…" : "🚀 Publish agent") : "Next →"}
-            nextDisabled={
-              step === 0
-                ? !name.trim() || !phoneNumberId
-                : step === 2
-                  ? !systemPrompt.trim()
-                  : step === 4 && saving
-            }
-            nextLoading={step === 4 && saving}
-            extraActions={
-              step === 4 ? (
-                <Button type="button" variant="outline" disabled={saving} onClick={() => void save(false)}>
-                  Save as Draft
-                </Button>
-              ) : undefined
-            }
-          />
         </Card>
 
-        {step === 4 ? (
-          <Card className="h-fit rounded-xl border-slate-200 p-4 shadow-sm lg:sticky lg:top-6">
-            <p className="mb-2 text-[12px] font-semibold text-slate-500">Debug log</p>
-            {testDebug.length ? (
-              testDebug.map((d, i) => (
-                <p key={i} className="text-[12px] text-slate-600">
-                  {d}
-                </p>
-              ))
-            ) : (
-              <p className="text-[12px] text-slate-400">Run a test message to see context</p>
-            )}
-          </Card>
-        ) : (
-          <AiChatPreview
-            messages={testHistory}
-            senderLabel={selectedPhone?.number}
-            className="lg:sticky lg:top-6"
-          />
-        )}
+        <div className="lg:sticky lg:top-6">
+          <AiChatPreview messages={testHistory} senderLabel={name || "AI Agent"} />
+        </div>
       </div>
     </div>
   );

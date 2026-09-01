@@ -29,13 +29,16 @@ export function AttachedMediaThumbs({
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {urls.map((url) => (
-        <span key={url} className="relative inline-flex overflow-hidden rounded-md border border-border">
+        <span
+          key={url}
+          className="group relative inline-flex overflow-hidden rounded-lg border border-border shadow-sm"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt="" className="h-16 w-16 object-cover" />
           {onRemove ? (
             <button
               type="button"
-              className="absolute right-0.5 top-0.5 rounded bg-black/60 p-0.5 text-white"
+              className="absolute right-1 top-1 rounded-md bg-black/60 p-1 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
               aria-label="Remove picture"
               onClick={() => onRemove(url)}
             >
@@ -150,20 +153,20 @@ export function MediaPicker({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-[16px] border border-border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <p className="text-sm font-semibold">Attach pictures</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+          <p className="text-[14px] font-semibold tracking-tight">Attach pictures</p>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 hover:bg-muted"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="space-y-3 border-b border-border px-4 py-3">
+        <div className="space-y-3 border-b border-border px-5 py-4">
           <input
             ref={fileRef}
             type="file"
@@ -190,7 +193,7 @@ export function MediaPicker({
             <ImagePlus className="h-4 w-4" />
             {uploading ? "Uploading…" : "Upload a picture"}
           </Button>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
             JPG, PNG, GIF, or WebP · 1.5 MB max · up to {maxSelected} pictures · 3 credits each
           </p>
           <div className="flex gap-2">
@@ -199,21 +202,29 @@ export function MediaPicker({
               value={pasteUrl}
               onChange={(e) => setPasteUrl(e.target.value)}
               placeholder="Or paste a public HTTPS image URL"
-              className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+              className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/30"
             />
             <Button type="button" variant="outline" size="sm" onClick={() => void addPastedUrl()}>
               Add URL
             </Button>
           </div>
-          {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+          {error ? (
+            <p className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</p>
+          ) : null}
         </div>
         <div className="max-h-[360px] overflow-y-auto p-4">
           {loading ? (
-            <p className="text-center text-sm text-muted-foreground">Loading media…</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading media…</p>
           ) : assets.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground">
-              No pictures yet. Upload a file or paste a public image URL.
-            </p>
+            <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ImagePlus className="h-5 w-5" />
+              </span>
+              <p className="mt-3 text-[13px] font-medium text-foreground">No pictures yet</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Upload a file or paste a public image URL.
+              </p>
+            </div>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {assets.map((asset) => {
@@ -224,13 +235,15 @@ export function MediaPicker({
                       type="button"
                       onClick={() => toggle(asset.storageUrl)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-[10px] border px-3 py-2 text-left transition",
-                        active ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
+                        active
+                          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                          : "border-border hover:border-primary/30 hover:bg-muted/50",
                       )}
                     >
                       <span
                         className={cn(
-                          "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors",
                           active
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-card",
@@ -242,7 +255,7 @@ export function MediaPicker({
                       <img
                         src={asset.thumbnailUrl || asset.storageUrl}
                         alt=""
-                        className="h-10 w-10 shrink-0 rounded object-cover"
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{asset.name}</span>
@@ -257,19 +270,24 @@ export function MediaPicker({
             </ul>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              onConfirm(selected.slice(0, maxSelected));
-              onClose();
-            }}
-          >
-            Attach {selected.length ? `(${selected.length})` : ""}
-          </Button>
+        <div className="flex items-center justify-between border-t border-border px-5 py-3.5">
+          <p className="text-[12px] text-muted-foreground">
+            {selected.length} of {maxSelected} selected
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                onConfirm(selected.slice(0, maxSelected));
+                onClose();
+              }}
+            >
+              Attach {selected.length ? `(${selected.length})` : ""}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

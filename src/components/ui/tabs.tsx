@@ -11,7 +11,7 @@ export function Tabs({
 }) {
   const pathname = usePathname();
   return (
-    <div className="mb-5 flex flex-wrap gap-1 border-b border-border">
+    <div className="mb-6 flex flex-wrap gap-1 overflow-x-auto border-b border-border">
       {items.map((item) => {
         const active = pathname === item.href;
         return (
@@ -19,10 +19,10 @@ export function Tabs({
             key={item.href}
             href={item.href}
             className={cn(
-              "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition",
+              "-mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors",
               active
                 ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
             )}
           >
             {item.label}

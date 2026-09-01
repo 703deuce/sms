@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Users, ChevronLeft, ChevronDown, Loader2 } from "lucide-react";
+import { Users, ChevronLeft, ChevronDown, Loader2, CalendarClock, Wallet } from "lucide-react";
 import PhonePreview from "./PhonePreview";
 import {
   composeMessageBody,
@@ -101,44 +101,56 @@ export default function ReviewDetails({
   if (!campaignId) {
     return (
       <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
-        <p className="text-[13px] text-red-600">No campaign to review. Go back and save your draft first.</p>
-        <button type="button" onClick={onPrev} className="btn-ghost mt-4">Back</button>
+        <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="text-[13px] font-medium text-red-700">No campaign to review. Go back and save your draft first.</p>
+          <button type="button" onClick={onPrev} className="btn-ghost mt-3">Back</button>
+        </div>
       </div>
     );
   }
 
+  const sectionCard =
+    "rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+
   return (
     <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
-      <p className="text-[12px] text-slate-400">
-        Campaigns <span className="mx-1 text-slate-300">/</span> <span className="text-slate-600 font-medium">Create Campaign</span>
+      <p className="text-[12px] font-medium text-slate-400">
+        Campaigns <span className="mx-1.5 text-slate-300">/</span>{" "}
+        <span className="font-semibold text-slate-600">Create Campaign</span>
       </p>
-      <div className="grid grid-cols-[1fr_360px] gap-14 mt-4">
+      <div className="mt-4 grid grid-cols-[1fr_360px] gap-14">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight text-slate-900">Review Details</h1>
-          <p className="text-sm text-slate-500 mt-1.5">Confirm your campaign details.</p>
+          <p className="mt-1.5 text-sm text-slate-500">Confirm your campaign details.</p>
 
           <div className="mt-8 max-w-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[15px] font-bold text-slate-900">
-                Audience{" "}
-                <span className="ml-1 align-middle text-[10.5px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-md px-1.5 py-0.5">
+              <h3 className="flex items-center gap-2 text-[15px] font-bold text-slate-900">
+                Audience
+                <span className="rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-indigo-600">
                   Subscribed Contacts Only
                 </span>
               </h3>
-              <button type="button" onClick={onPrev} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Edit</button>
+              <button
+                type="button"
+                onClick={onPrev}
+                className="rounded-md px-2 py-1 text-[13px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                Edit
+              </button>
             </div>
-            <div className="review-card mt-3 flex items-center justify-between px-5 py-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-indigo-600" />
+            <div className={`${sectionCard} mt-3 flex items-center justify-between px-5 py-4`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 ring-1 ring-indigo-200/60">
+                  <Users className="h-5 w-5 text-indigo-600" />
                 </div>
-                <div className="space-y-0.5">
+                <div className="min-w-0 space-y-0.5">
                   {(review?.listNames?.length ? review.listNames : draft.audience.map((a) => a.name)).map((a) => (
-                    <p key={a} className="text-[13px] font-medium text-slate-700">{a}</p>
+                    <p key={a} className="truncate text-[13px] font-medium text-slate-700">{a}</p>
                   ))}
                 </div>
               </div>
-              <span className="text-[20px] font-bold tracking-tight text-slate-900 tabular-nums">
+              <span className="ml-4 shrink-0 text-[20px] font-bold tabular-nums tracking-tight text-slate-900">
                 {loading ? "…" : formatNumber(review?.finalRecipientCount ?? 0)}
               </span>
             </div>
@@ -147,16 +159,29 @@ export default function ReviewDetails({
           <div className="mt-7 max-w-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-[15px] font-bold text-slate-900">Timing</h3>
-              <button type="button" onClick={onPrev} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Edit</button>
+              <button
+                type="button"
+                onClick={onPrev}
+                className="rounded-md px-2 py-1 text-[13px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                Edit
+              </button>
             </div>
-            <div className="review-card mt-3 px-5 py-4 text-[13px] font-medium text-slate-700">{timingLabel(draft)}</div>
+            <div className={`${sectionCard} mt-3 flex items-center gap-3 px-5 py-4 text-[13px] font-medium text-slate-700`}>
+              <CalendarClock className="h-4 w-4 shrink-0 text-slate-400" />
+              {timingLabel(draft)}
+            </div>
           </div>
 
           <div className="mt-7 max-w-xl">
-            <h3 className="text-[15px] font-bold text-slate-900">Message Credit Summary</h3>
-            <div className="review-card mt-3 divide-y divide-slate-100">
+            <h3 className="flex items-center gap-2 text-[15px] font-bold text-slate-900">
+              <Wallet className="h-4 w-4 text-slate-400" /> Message Credit Summary
+            </h3>
+            <div className={`${sectionCard} mt-3 divide-y divide-slate-100`}>
               {loading ? (
-                <div className="px-5 py-4 text-[13px] text-slate-500">Calculating…</div>
+                <div className="flex items-center gap-2 px-5 py-4 text-[13px] text-slate-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" /> Calculating…
+                </div>
               ) : review ? (
                 [
                   ["Credits Available", formatNumber(review.availableSegments)],
@@ -171,24 +196,36 @@ export default function ReviewDetails({
               ) : null}
             </div>
             {review && !review.canSend && review.blockReason ? (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">{review.blockReason}</p>
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] leading-relaxed text-red-700">
+                {review.blockReason}
+              </p>
             ) : null}
           </div>
 
-          {error ? <p className="mt-4 text-[13px] text-red-600">{error}</p> : null}
+          {error ? (
+            <p className="mt-4 max-w-xl rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">{error}</p>
+          ) : null}
 
-          <div className="flex items-center justify-between max-w-xl mt-10">
-            <button type="button" onClick={onPrev} className="btn-ghost flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Prev</button>
+          <div className="mt-10 flex max-w-xl items-center justify-between border-t border-slate-200/80 pt-5">
+            <button type="button" onClick={onPrev} className="btn-ghost flex items-center gap-1">
+              <ChevronLeft className="h-4 w-4" /> Prev
+            </button>
             <div className="flex items-center gap-4">
-              <button type="button" onClick={() => void handleSaveDraft()} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Save Draft</button>
+              <button
+                type="button"
+                onClick={() => void handleSaveDraft()}
+                className="text-[13px] font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+              >
+                Save Draft
+              </button>
               <button
                 type="button"
                 onClick={() => void handleSend()}
                 disabled={launching || loading || !review?.canSend}
-                className="btn-primary flex items-center gap-1.5 !py-2.5 disabled:opacity-60"
+                className="btn-primary flex items-center gap-1.5 !py-2.5 shadow-sm disabled:opacity-60"
               >
-                {launching ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {actionLabel} <ChevronDown className="w-4 h-4" />
+                {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {actionLabel} <ChevronDown className="h-4 w-4" />
               </button>
             </div>
           </div>

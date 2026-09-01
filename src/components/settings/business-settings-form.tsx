@@ -6,7 +6,7 @@ import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { SectionHeader } from "@/components/ui/metric";
 import { Tabs } from "@/components/ui/tabs";
 import type { MessagingRegistration } from "@/lib/domain";
-import { Building2, CheckCircle2, Shield } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Building2, CheckCircle2, Clock3, Shield } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { settingsTabs } from "@/lib/settings-tabs";
@@ -123,7 +123,12 @@ export function BusinessSettingsForm({
         icon={Building2}
         iconTone="bg-indigo-50 text-indigo-600"
         actions={
-          <Button type="submit" form="business-settings-form" className="rounded-[10px]" disabled={saving}>
+          <Button
+            type="submit"
+            form="business-settings-form"
+            className="rounded-[10px]"
+            disabled={saving}
+          >
             {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
           </Button>
         }
@@ -131,11 +136,27 @@ export function BusinessSettingsForm({
 
       <Tabs items={settingsTabs} />
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? (
+        <div className="flex items-start gap-2.5 rounded-[10px] border border-rose-200/80 bg-rose-50/80 px-3.5 py-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+          <p className="text-[13px] font-medium leading-snug text-rose-800">{error}</p>
+        </div>
+      ) : null}
 
-      <Card>
-        <CardTitle>Account details</CardTitle>
-        <form id="business-settings-form" className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={save}>
+      <Card className="p-6">
+        <div className="flex items-center justify-between gap-3 border-b border-border/70 pb-4">
+          <div>
+            <CardTitle>Account details</CardTitle>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Core business identity used across messages, support, and registration records.
+            </p>
+          </div>
+        </div>
+        <form
+          id="business-settings-form"
+          className="mt-5 grid gap-x-5 gap-y-5 sm:grid-cols-2"
+          onSubmit={save}
+        >
           <div>
             <Label htmlFor="accountName">Account name</Label>
             <Input id="accountName" name="accountName" defaultValue={workspaceName} />
@@ -154,6 +175,7 @@ export function BusinessSettingsForm({
             <Input
               id="businessPhone"
               name="businessPhone"
+              placeholder="+1 (555) 000-0000"
               defaultValue={registration?.contactPhone || ""}
             />
           </div>
@@ -163,6 +185,7 @@ export function BusinessSettingsForm({
               id="supportEmail"
               name="supportEmail"
               type="email"
+              placeholder="support@example.com"
               defaultValue={registration?.contactEmail || ""}
             />
           </div>
@@ -173,15 +196,19 @@ export function BusinessSettingsForm({
               name="address"
               defaultValue={addressParts.join("\n")}
               rows={3}
+              placeholder={"123 Main Street\nCity, ST 00000"}
             />
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
+              Line 1: street. Line 2: city, state, postal code.
+            </p>
           </div>
         </form>
       </Card>
 
-      <Card>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <Card className="p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600">
                 <Shield className="h-4 w-4" />
               </span>
@@ -194,26 +221,31 @@ export function BusinessSettingsForm({
             <Link href="/compliance" className="mt-4 inline-flex">
               <Button variant="outline" size="sm" className="rounded-[10px]">
                 Edit compliance profile
+                <ArrowUpRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
           </div>
           <div
-            className={`w-full shrink-0 rounded-[12px] border p-4 lg:max-w-[280px] ${
+            className={`w-full shrink-0 rounded-[12px] border p-4 lg:max-w-[300px] ${
               complianceReady
-                ? "border-violet-200/80 bg-violet-50/80"
+                ? "border-emerald-200/70 bg-emerald-50/70"
                 : "border-amber-200/80 bg-amber-50/80"
             }`}
           >
             <div className="flex items-start gap-2.5">
-              <CheckCircle2
-                className={`mt-0.5 h-4 w-4 shrink-0 ${
-                  complianceReady ? "text-violet-600" : "text-amber-600"
+              <span
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                  complianceReady
+                    ? "bg-emerald-100 text-emerald-600"
+                    : "bg-amber-100 text-amber-600"
                 }`}
-              />
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              </span>
               <div>
                 <p
                   className={`text-[13px] font-semibold ${
-                    complianceReady ? "text-violet-900" : "text-amber-900"
+                    complianceReady ? "text-emerald-900" : "text-amber-900"
                   }`}
                 >
                   {complianceReady
@@ -221,13 +253,18 @@ export function BusinessSettingsForm({
                     : "Compliance profile needs attention"}
                 </p>
                 <p
-                  className={`mt-1 text-[12px] ${
-                    complianceReady ? "text-violet-800/80" : "text-amber-800/80"
+                  className={`mt-1 flex items-center gap-1 text-[12px] ${
+                    complianceReady ? "text-emerald-800/80" : "text-amber-800/80"
                   }`}
                 >
-                  {lastSynced
-                    ? `Last synced ${new Date(lastSynced).toLocaleString()}`
-                    : "Complete your compliance profile in the compliance center"}
+                  {lastSynced ? (
+                    <>
+                      <Clock3 className="h-3 w-3 shrink-0" />
+                      Last synced {new Date(lastSynced).toLocaleString()}
+                    </>
+                  ) : (
+                    "Complete your compliance profile in the compliance center"
+                  )}
                 </p>
               </div>
             </div>

@@ -2,7 +2,7 @@
 
 import { campaignUi } from "@/components/campaigns/broadcast/campaign-layout";
 import { cn } from "@/lib/utils";
-import { Info, Loader2, X } from "lucide-react";
+import { CheckCircle2, Info, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type TestMessageModalProps = {
@@ -68,12 +68,22 @@ export function TestMessageModal({ open, onClose, message, numberId }: TestMessa
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-[18px] font-bold text-[#111827]">Send Test Message</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#f3f4f6]">
-            <X className="h-5 w-5 text-[#6b7280]" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
+      <div className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[17px] font-bold tracking-tight text-[#111827]">Send Test Message</h2>
+            <p className="mt-0.5 text-[12.5px] text-[#6b7280]">
+              Verify how your message looks before it goes out.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="-mr-1 -mt-1 rounded-lg p-1.5 text-[#9ca3af] transition-colors hover:bg-[#f3f4f6] hover:text-[#6b7280]"
+            aria-label="Close"
+          >
+            <X className="h-4.5 w-4.5 h-[18px] w-[18px]" />
           </button>
         </div>
         <div>
@@ -81,7 +91,7 @@ export function TestMessageModal({ open, onClose, message, numberId }: TestMessa
           <select
             value={contactId}
             onChange={(e) => setContactId(e.target.value)}
-            className={cn(campaignUi.input, "mt-1.5")}
+            className={campaignUi.input}
           >
             {contacts.length === 0 ? (
               <option value="">No contacts available</option>
@@ -94,26 +104,33 @@ export function TestMessageModal({ open, onClose, message, numberId }: TestMessa
             )}
           </select>
         </div>
-        <div className="mt-4 flex gap-2 rounded-lg border border-[#c7d2fe] bg-[#eef2ff] p-3 text-[12px] text-[#4338ca]">
-          <Info className="h-4 w-4 shrink-0" />
+        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#c7d2fe] bg-[#eef2ff] px-3 py-2.5 text-[12px] leading-relaxed text-[#4338ca]">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>Test messages count toward your message credits.</p>
         </div>
         {sent ? (
-          <p className="mt-4 text-[13px] font-medium text-[#059669]">Test message sent.</p>
+          <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-700 ring-1 ring-emerald-200/70">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Test message sent.
+          </p>
         ) : null}
-        {error ? <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p> : null}
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={campaignUi.outlineBtn}>
+        {error ? (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-6 flex justify-end gap-2 border-t border-[#f3f4f6] pt-4">
+          <button type="button" onClick={onClose} className={cn(campaignUi.outlineBtn, "!h-9")}>
             Cancel
           </button>
           <button
             type="button"
             onClick={() => void sendTest()}
             disabled={sending || !message.trim()}
-            className={campaignUi.primaryBtn}
+            className={cn(campaignUi.primaryBtn, "!h-9")}
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Send Test
+            {sending ? "Sending…" : "Send Test"}
           </button>
         </div>
       </div>

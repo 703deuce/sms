@@ -19,19 +19,24 @@ const CARDS = [
 
 export default function SettingsHome({ onOpenInbox }:{ onOpenInbox: ()=>void }) {
   return (
-    <div className="ref-scroll" style={{ flex: 1, overflowY: "auto", padding: 32, background: "#fbfcfd" }}>
-      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>Settings</div>
-      <h2 style={{ fontSize: 22, fontWeight: 700 }}>Settings</h2>
-      <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 24px" }}>Manage functional settings for your brand / account.</p>
+    <div className="ref-scroll" style={{ flex: 1, overflowY: "auto", padding: "32px 36px", background: "#fbfcfd" }}>
+      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>Settings</div>
+      <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: "#111827", margin: 0 }}>Settings</h2>
+      <p style={{ fontSize: 13, color: "#6b7280", margin: "6px 0 26px" }}>Manage functional settings for your brand / account.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, maxWidth: 980 }}>
         {CARDS.map((c) => (
           <div key={c.title} onClick={c.go ? onOpenInbox : undefined}
-            style={{ background: "#fff", border: "1px solid var(--tv-border)", borderRadius: 10, padding: "18px 18px 16px", cursor: c.go ? "pointer" : "default", transition: "box-shadow .12s" }}
-            onMouseEnter={(e) => { if (c.go) e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,.08)"; }}
-            onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "")}>
-            <span style={{ width: 30, height: 30, borderRadius: 8, background: c.tint, display: "inline-flex", alignItems: "center", justifyContent: "center", color: c.color }}>{c.icon}</span>
-            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 10 }}>{c.title}</div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4, lineHeight: 1.5 }}>{c.desc}</div>
+            style={{
+              background: "#fff", border: "1px solid var(--tv-border)", borderRadius: 12, padding: "18px 18px 16px",
+              cursor: c.go ? "pointer" : "default",
+              transition: "box-shadow .15s, border-color .15s",
+              boxShadow: "0 1px 2px rgba(16,24,40,.04)",
+            }}
+            onMouseEnter={(e) => { if (c.go) { e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,24,40,.09)"; e.currentTarget.style.borderColor = "#d3d8e0"; } }}
+            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 1px 2px rgba(16,24,40,.04)"; e.currentTarget.style.borderColor = "var(--tv-border)"; }}>
+            <span style={{ width: 32, height: 32, borderRadius: 9, background: c.tint, display: "inline-flex", alignItems: "center", justifyContent: "center", color: c.color }}>{c.icon}</span>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 12, letterSpacing: -0.1, color: "#111827" }}>{c.title}</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 5, lineHeight: 1.55 }}>{c.desc}</div>
           </div>
         ))}
       </div>

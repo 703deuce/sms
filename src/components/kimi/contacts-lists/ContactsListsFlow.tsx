@@ -61,7 +61,7 @@ export default function ContactsListsFlow() {
     <div className="min-h-screen bg-[#f7f8fc] text-[#0f1b3d]">
       <main className="mx-auto max-w-[1160px] px-8 pb-16">
         {showTabs && (
-          <div className="page-tabs">
+          <div className="page-tabs mb-7">
             <button className={`page-tab ${activeTab === "contacts" ? "active" : ""}`} onClick={() => setPage("contacts")}>
               <Users size={14} /> Contacts
             </button>
@@ -80,7 +80,9 @@ export default function ContactsListsFlow() {
         {page === "keyword" && <KeywordEditor lists={lists} onSave={saveKeyword} onCancel={() => setPage("tools")} />}
       </main>
       {toast && (
-        <div className="toast"><CheckCircle2 size={14} /> {toast}</div>
+        <div className="toast fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg bg-[#0f1b3d] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg shadow-[#0f1b3d]/20 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 size={14} className="text-[#12b76a]" /> {toast}
+        </div>
       )}
     </div>
   );
@@ -91,11 +93,11 @@ export default function ContactsListsFlow() {
 function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKeyword: () => void }) {
   const [view, setView] = useState<"tools" | "keywords">("tools");
   const cards = [
-    { icon: <LayoutTemplate size={19} />, title: "Landing Pages", desc: "Build landing pages or embedded forms that collect contact data and opt people into your audience." },
-    { icon: <MonitorSmartphone size={19} />, title: "Website Popups", desc: "Create fully branded website popups that capture visitor information and allow them to subscribe." },
-    { icon: <MessageSquareText size={19} />, title: "Keywords", desc: "Establish keywords that users can text to join your lists or get automated replies.", onClick: () => setView("keywords") },
-    { icon: <QrCode size={19} />, title: "QR Codes", desc: "Generate a QR Code that opens a new message with your keyword and number pre-filled or sends users to a destination of your choice." },
-    { icon: <MousePointerClick size={19} />, title: "Tap-to-Join Links", desc: "Tap-to-join links open a new message with your keyword and number pre-filled, so the user can simply hit send to subscribe." },
+    { icon: <LayoutTemplate size={18} />, title: "Landing Pages", desc: "Build landing pages or embedded forms that collect contact data and opt people into your audience." },
+    { icon: <MonitorSmartphone size={18} />, title: "Website Popups", desc: "Create fully branded website popups that capture visitor information and allow them to subscribe." },
+    { icon: <MessageSquareText size={18} />, title: "Keywords", desc: "Establish keywords that users can text to join your lists or get automated replies.", onClick: () => setView("keywords") },
+    { icon: <QrCode size={18} />, title: "QR Codes", desc: "Generate a QR Code that opens a new message with your keyword and number pre-filled or sends users to a destination of your choice." },
+    { icon: <MousePointerClick size={18} />, title: "Tap-to-Join Links", desc: "Tap-to-join links open a new message with your keyword and number pre-filled, so the user can simply hit send to subscribe." },
   ];
 
   if (view === "keywords") {
@@ -107,7 +109,7 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
             <h1 className="page-title"><MessageSquareText size={19} className="text-[#3b4ef5]" /> Keywords</h1>
             <p className="page-subtitle">View and manage all of your keywords.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
               <input className="input pl-8 w-[220px]" placeholder="Search" />
@@ -120,7 +122,7 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
             <span>KEYWORD</span><span>DESCRIPTION</span><span className="text-right">CREATES CONTACTS</span><span></span>
           </div>
           {keywords.map((k) => (
-            <div key={k.id} className="table-row grid grid-cols-[1fr_1.6fr_220px_40px]">
+            <div key={k.id} className="table-row grid grid-cols-[1fr_1.6fr_220px_40px] transition-colors hover:bg-[#fafbfe]">
               <div>
                 <div className="cell-primary">{k.keyword}</div>
                 <div className="cell-sub">Last saved on {k.lastSaved}</div>
@@ -133,7 +135,9 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
                 </span>
                 <span className="pill pill-green">Yes</span>
               </div>
-              <MoreVertical size={15} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" onClick={k.id === "k5" ? onEditKeyword : undefined} />
+              <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#eef1fe] hover:text-[#3b4ef5]" onClick={k.id === "k5" ? onEditKeyword : undefined}>
+                <MoreVertical size={15} />
+              </button>
             </div>
           ))}
           <div className="table-footer">
@@ -141,7 +145,7 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
             <button className="btn-secondary" onClick={() => setView("tools")}>Back to Tools</button>
           </div>
         </div>
-        <div className="mt-3 text-[12px] text-[#7a85a8]">Tip: click the row menu on <b>NashVIP</b> to open the Edit Keyword screen.</div>
+        <div className="mt-3 text-[12px] text-[#7a85a8]">Tip: click the row menu on <span className="font-semibold text-[#44507a]">NashVIP</span> to open the Edit Keyword screen.</div>
       </div>
     );
   }
@@ -149,18 +153,22 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
   return (
     <div>
       <h1 className="page-title"><Wrench size={19} className="text-[#3b4ef5]" /> Tools</h1>
-      <p className="page-subtitle mb-6">Grow your contact base and engage with them using the tools below.</p>
-      <h2 className="text-[13px] font-bold uppercase tracking-wide text-[#7a85a8] mb-3">Audience Growth</h2>
+      <p className="page-subtitle mb-7">Grow your contact base and engage with them using the tools below.</p>
+      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-[#7a85a8]">Audience Growth</h2>
       <div className="grid grid-cols-2 gap-4">
         {cards.map((c) => (
-          <div key={c.title} onClick={c.onClick} className={`tool-card group ${c.onClick ? "cursor-pointer" : ""}`}>
-            <span className="tool-icon">{c.icon}</span>
+          <div
+            key={c.title}
+            onClick={c.onClick}
+            className={`tool-card group transition-all duration-150 ${c.onClick ? "cursor-pointer hover:border-[#3b4ef5]/40 hover:shadow-md" : ""}`}
+          >
+            <span className="tool-icon transition-colors group-hover:bg-[#e3e8fd] group-hover:text-[#3b4ef5]">{c.icon}</span>
             <div className="flex-1">
               <div className="flex items-center gap-1.5 text-[14px] font-bold text-[#0f1b3d]">
                 {c.title}
                 {c.onClick && <ArrowUpRight size={13} className="text-[#9aa3c0] opacity-0 transition-opacity group-hover:opacity-100" />}
               </div>
-              <div className="text-[12.5px] text-[#7a85a8] mt-1 leading-relaxed">{c.desc}</div>
+              <div className="mt-1 text-[12.5px] leading-relaxed text-[#7a85a8]">{c.desc}</div>
             </div>
           </div>
         ))}

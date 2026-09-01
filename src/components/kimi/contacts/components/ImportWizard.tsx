@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FileUp, UploadCloud, CheckCircle2, Columns3, ListChecks,
-  ChevronDown, Check, FileSpreadsheet, Users, X,
+  ChevronDown, Check, FileSpreadsheet, Users, X, ClipboardCheck, FileCheck2,
 } from "lucide-react";
 import { contactFieldOptions, contactLists as defaultContactLists, importColumns as defaultImportColumns, type ImportColumn } from "../mock-data";
 import { parseImportCsvColumns, type KimiImportPayload } from "@/lib/contacts/kimi-contacts-adapter";
@@ -22,10 +22,10 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       onClick={() => onChange(!on)}
       aria-pressed={on}
-      className={`w-11 h-6 rounded-full transition-colors duration-200 relative shrink-0 ${on ? "bg-primary" : "bg-muted border border-border"}`}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${on ? "bg-primary" : "border border-border bg-muted"}`}
     >
       <span
-        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${on ? "left-[22px]" : "left-0.5"}`}
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all duration-200 ${on ? "left-[22px]" : "left-0.5"}`}
       />
     </button>
   );
@@ -34,12 +34,14 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 function Header({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
     <>
-      <div className="text-xs text-muted-foreground mb-2">Contacts / Import Contacts</div>
+      <div className="mb-2 text-xs text-muted-foreground">Contacts / <span className="text-foreground">Import Contacts</span></div>
       <div className="flex items-center gap-2.5">
-        <Icon className="w-5 h-5 text-foreground" />
-        <h1 className="text-[22px] font-bold tracking-tight text-foreground">{title}</h1>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
+        </span>
+        <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">{title}</h1>
       </div>
-      <p className="text-[13px] text-muted-foreground mt-1 mb-6 max-w-2xl leading-relaxed">{subtitle}</p>
+      <p className="mb-6 mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">{subtitle}</p>
     </>
   );
 }
@@ -47,11 +49,11 @@ function Header({ icon: Icon, title, subtitle }: { icon: any; title: string; sub
 function Stepper({ step }: { step: Step }) {
   const activeIdx = STEPS.findIndex((s) => s.id === step);
   return (
-    <div className="flex items-center gap-2 mb-7">
+    <div className="mb-7 flex items-center gap-2">
       {STEPS.map((s, i) => (
         <div key={s.id} className="flex items-center gap-2">
           <span
-            className={`flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-semibold transition-colors ${
+            className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold transition-colors ${
               i < activeIdx
                 ? "bg-emerald-100 text-emerald-700"
                 : i === activeIdx
@@ -59,12 +61,12 @@ function Stepper({ step }: { step: Step }) {
                   : "bg-muted text-muted-foreground"
             }`}
           >
-            {i < activeIdx ? <Check className="w-3 h-3" /> : i + 1}
+            {i < activeIdx ? <Check className="h-3 w-3" /> : i + 1}
           </span>
           <span className={`text-xs font-medium ${i === activeIdx ? "text-foreground" : "text-muted-foreground"}`}>
             {s.label}
           </span>
-          {i < STEPS.length - 1 && <span className="w-6 h-px bg-border mx-1" />}
+          {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-border" />}
         </div>
       ))}
     </div>
@@ -157,8 +159,16 @@ export default function ImportWizard({
     (step === "review" && !confirmed) ||
     importing;
 
+  const optInOptions = [
+    "Subscribed",
+    "Not Subscribed",
+    "Use the assigned opt-in status column",
+  ];
+
+  const mappedCount = Object.values(mapping).filter((v) => v && v !== "None").length;
+
   return (
-    <div className="px-8 pt-6 pb-10 max-w-4xl flex flex-col min-h-screen" ref={dropdownRef}>
+    <div className="flex min-h-screen max-w-4xl flex-col px-8 pb-10 pt-6" ref={dropdownRef}>
       <Stepper step={step} />
 
       <div className="flex-1">
@@ -166,18 +176,18 @@ export default function ImportWizard({
           <>
             <Header icon={FileUp} title="Import Contacts" subtitle="Import or update existing contacts in bulk." />
             {file ? (
-              <div className="border-2 border-emerald-300 bg-emerald-50/60 rounded-xl p-10 text-center mb-8">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+              <div className="mb-8 rounded-xl border-2 border-emerald-300 bg-emerald-50/60 p-10 text-center">
+                <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500" />
                 <div className="text-sm font-semibold text-emerald-700">File Uploaded</div>
-                <div className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-2">
+                <div className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   {file}
-                  <button onClick={() => { setFile(null); setUploadedFile(null); }} className="text-muted-foreground hover:text-foreground transition-colors">
-                    <X className="w-3.5 h-3.5" />
+                  <button onClick={() => { setFile(null); setUploadedFile(null); }} className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-emerald-100 hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
             ) : (
-              <label className="block w-full border-2 border-dashed border-primary/40 bg-primary/[0.02] rounded-xl p-12 text-center hover:bg-primary/5 hover:border-primary/60 transition-colors mb-8 cursor-pointer">
+              <label className="mb-8 block w-full cursor-pointer rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.02] p-12 text-center transition-colors hover:border-primary/60 hover:bg-primary/5">
                 <input
                   type="file"
                   accept=".csv,text/csv"
@@ -200,17 +210,17 @@ export default function ImportWizard({
                     reader.readAsText(picked);
                   }}
                 />
-                <UploadCloud className="w-8 h-8 text-primary mx-auto mb-2" />
+                <UploadCloud className="mx-auto mb-2 h-8 w-8 text-primary" />
                 <div className="text-sm font-semibold text-primary">Click or Drag to Upload</div>
-                <div className="text-xs text-muted-foreground mt-1.5">.csv files only · 100 MB or less · 100k contacts or less</div>
+                <div className="mt-1.5 text-xs text-muted-foreground">.csv files only · 100 MB or less · 100k contacts or less</div>
               </label>
             )}
 
             <div className="space-y-7">
               <div className="flex items-start justify-between gap-6">
                 <div>
-                  <div className="text-sm font-semibold text-foreground mb-1">File Contains a Header Row</div>
-                  <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
+                  <div className="mb-1 text-sm font-semibold text-foreground">File Contains a Header Row</div>
+                  <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
                     If the file you're uploading has a first row that contains column names, it makes it easier to map your data to each contact field.
                   </p>
                 </div>
@@ -218,20 +228,20 @@ export default function ImportWizard({
               </div>
               <div className="flex items-start justify-between gap-6">
                 <div>
-                  <div className="text-sm font-semibold text-foreground mb-1">Update Existing Contacts</div>
-                  <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
+                  <div className="mb-1 text-sm font-semibold text-foreground">Update Existing Contacts</div>
+                  <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
                     In the event that a contact already exists, enabling this will update that contact's existing data with the new data in your file.
                   </p>
                 </div>
                 <Toggle on={updateExisting} onChange={setUpdateExisting} />
               </div>
               {updateExisting && (
-                <div className="flex items-start justify-between gap-6 pl-6 border-l-2 border-primary/20">
+                <div className="flex items-start justify-between gap-6 border-l-2 border-primary/20 pl-6">
                   <div>
-                    <div className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5">
-                      <FileSpreadsheet className="w-4 h-4 text-muted-foreground" /> Only Update Empty Fields
+                    <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <FileSpreadsheet className="h-4 w-4 text-muted-foreground" /> Only Update Empty Fields
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed max-w-md">Enabling this will only update contact fields that are empty.</p>
+                    <p className="max-w-md text-xs leading-relaxed text-muted-foreground">Enabling this will only update contact fields that are empty.</p>
                   </div>
                   <Toggle on={onlyEmpty} onChange={setOnlyEmpty} />
                 </div>
@@ -243,41 +253,40 @@ export default function ImportWizard({
         {step === "columns" && (
           <>
             <Header icon={Columns3} title="Assign Columns" subtitle="Below are all of the columns found in your file. Select a contact field on the right for each column you want to import. If your file contains a header row, some may already be selected for you." />
-            <div className="kc-card overflow-hidden">
-              <div className="grid grid-cols-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted/40 px-5 py-3">
+            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <div className="grid grid-cols-3 bg-muted/40 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Column Name</span><span>Sample Column Data</span><span>Contact Field</span>
               </div>
               {parsedColumns.map((col) => {
                 const assigned = mapping[col.name];
                 const matched = assigned && assigned !== "None";
                 return (
-                  <div key={col.name} className="grid grid-cols-3 items-center px-5 py-3.5 border-t border-border">
+                  <div key={col.name} className="grid grid-cols-3 items-center border-t border-border px-5 py-3.5">
                     <span className="text-[13px] font-medium text-foreground">{col.name}</span>
                     <span className="text-[13px] text-muted-foreground">{col.sample}</span>
                     <div className="relative">
                       <button
                         onClick={() => setOpenDropdown(openDropdown === col.name ? null : col.name)}
-                        className={`w-full flex items-center justify-between px-3 h-9 border rounded-lg text-[13px] transition-colors ${
-                          matched ? "border-emerald-400 bg-emerald-50/60" : "border-border hover:border-muted-foreground/40"
+                        className={`flex h-9 w-full items-center justify-between rounded-lg border px-3 text-[13px] transition-colors ${
+                          matched ? "border-emerald-400 bg-emerald-50/60 text-foreground" : "border-border text-muted-foreground hover:border-muted-foreground/40"
                         }`}
                       >
-                        <span className="flex items-center gap-2 text-foreground">
-                          {assigned}
-                          {matched && <Check className="w-4 h-4 text-emerald-500" />}
-                        </span>
-                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                        <span className={matched ? "font-medium" : ""}>{assigned || "None"}</span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${openDropdown === col.name ? "rotate-180" : ""}`} />
                       </button>
                       {openDropdown === col.name && (
-                        <div className="kc-menu absolute z-20 mt-1 w-full max-h-56 overflow-y-auto py-1.5">
+                        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card py-1.5 shadow-lg animate-in fade-in zoom-in-95 duration-100">
                           {contactFieldOptions.map((opt) => (
                             <button
                               key={opt}
-                              onClick={() => { setMapping({ ...mapping, [col.name]: opt }); setOpenDropdown(null); }}
-                              className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors hover:bg-accent ${
-                                opt === assigned ? "text-primary font-semibold" : "text-foreground"
-                              }`}
+                              onClick={() => {
+                                setMapping((prev) => ({ ...prev, [col.name]: opt }));
+                                setOpenDropdown(null);
+                              }}
+                              className={`flex w-full items-center justify-between px-3.5 py-2 text-left text-[13px] transition-colors hover:bg-muted ${assigned === opt ? "font-medium text-primary" : "text-foreground"}`}
                             >
                               {opt}
+                              {assigned === opt && <Check className="h-3.5 w-3.5" />}
                             </button>
                           ))}
                         </div>
@@ -287,151 +296,169 @@ export default function ImportWizard({
                 );
               })}
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {mappedCount} of {parsedColumns.length} columns mapped.
+            </p>
           </>
         )}
 
         {step === "optin" && (
           <>
-            <Header icon={CheckCircle2} title="Opt-In Status" subtitle="A contact's opt-in status determines whether or not they can receive campaigns, automated, and inbox messages from you. You can learn more about each opt-in status here." />
-            <label className="block text-[13px] font-medium text-foreground mb-1.5">Opt-In Status</label>
-            <div className="relative max-w-lg">
-              <button
-                onClick={() => setOptInOpen(!optInOpen)}
-                className="w-full flex items-center justify-between px-3 h-10 border border-border rounded-lg text-[13px] text-foreground bg-card transition hover:border-muted-foreground/40"
-              >
-                <span className={optInChoice ? "text-foreground" : "text-muted-foreground"}>
-                  {optInChoice || "Select a Status..."}
-                </span>
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-              </button>
-              {optInOpen && (
-                <div className="kc-menu absolute z-20 mt-1 w-full py-1.5">
-                  {["Select a Status...", "Not Subscribed", "Subscribed", "Unsubscribed", "Blocked", "Use the assigned opt-in status column"].map((opt) => (
-                    <button
-                      key={opt}
-                      onClick={() => { setOptInChoice(opt === "Select a Status..." ? "" : opt); setOptInOpen(false); }}
-                      className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
-                        opt === optInChoice ? "bg-primary/10 text-primary font-semibold" : "text-foreground hover:bg-accent"
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              )}
+            <Header icon={FileCheck2} title="Opt-In Status" subtitle="Choose the opt-in status that will be applied to the contacts in this import. This determines whether they can receive campaigns and messages from you." />
+            <div className="max-w-xl">
+              <div className="relative">
+                <button
+                  onClick={() => setOptInOpen(!optInOpen)}
+                  className={`flex h-10 w-full items-center justify-between rounded-lg border px-3 text-[13px] transition-colors ${
+                    optInChoice ? "border-border bg-card text-foreground" : "border-border bg-card text-muted-foreground hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <span>{optInChoice || "Select an option…"}</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${optInOpen ? "rotate-180" : ""}`} />
+                </button>
+                {optInOpen && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card py-1.5 shadow-lg animate-in fade-in zoom-in-95 duration-100">
+                    {optInOptions.map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => { setOptInChoice(opt); setOptInOpen(false); }}
+                        className={`flex w-full items-center justify-between px-3.5 py-2 text-left text-[13px] transition-colors hover:bg-muted ${optInChoice === opt ? "font-medium text-primary" : "text-foreground"}`}
+                      >
+                        {opt}
+                        {optInChoice === opt && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                Only import contacts as Subscribed if you have collected proper consent to message them.
+              </p>
             </div>
           </>
         )}
 
         {step === "lists" && (
           <>
-            <Header icon={ListChecks} title="Select Lists" subtitle="If you'd like to add these contacts to one or more lists, you can select them below." />
-            <label className="block text-[13px] font-medium text-foreground mb-1.5">Contact Lists</label>
-            <div className="max-w-lg relative">
-              <button
-                onClick={() => setListOpen(!listOpen)}
-                className="w-full flex items-center justify-between px-3 h-10 border border-border rounded-lg text-[13px] bg-card transition hover:border-muted-foreground/40"
+            <Header icon={ListChecks} title="Lists" subtitle="Optionally add the imported contacts to one or more lists." />
+            <div className="relative max-w-xl">
+              <div
+                className="flex min-h-10 cursor-text flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 transition focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/30"
+                onClick={() => setListOpen(true)}
               >
-                <span className={selectedLists.length ? "text-foreground truncate" : "text-muted-foreground"}>
-                  {selectedLists.length ? selectedLists.join(", ") : "Search"}
-                </span>
-                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-              </button>
-              {listOpen && (
-                <div className="kc-menu absolute z-20 w-full mt-1 max-h-56 overflow-y-auto py-1.5">
-                  {contactLists.map((l) => (
-                    <button
-                      key={l}
-                      onClick={() =>
-                        setSelectedLists(selectedLists.includes(l) ? selectedLists.filter((x) => x !== l) : [...selectedLists, l])
-                      }
-                      className="w-full text-left px-3.5 py-2 text-[13px] text-foreground hover:bg-accent transition-colors flex items-center gap-2"
-                    >
-                      {l}
-                      {selectedLists.includes(l) && <Check className="w-4 h-4 text-primary ml-auto" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedLists.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3 max-w-lg">
                 {selectedLists.map((l) => (
-                  <span key={l} className="flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-md">
+                  <span key={l} className="flex items-center gap-1 rounded-md bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
                     {l}
                     <button
-                      onClick={() => setSelectedLists(selectedLists.filter((x) => x !== l))}
-                      className="hover:bg-primary/15 rounded p-0.5 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setSelectedLists(selectedLists.filter((x) => x !== l)); }}
+                      className="rounded p-0.5 transition-colors hover:bg-primary/15"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="h-3 w-3" />
                     </button>
                   </span>
                 ))}
+                <span className="px-1 py-1 text-[13px] text-muted-foreground">
+                  {selectedLists.length ? "" : "Select lists…"}
+                </span>
               </div>
-            )}
+              {listOpen && (
+                <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card py-1.5 shadow-lg animate-in fade-in zoom-in-95 duration-100">
+                  {contactLists.filter((l) => !selectedLists.includes(l)).map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => { setSelectedLists([...selectedLists, l]); setListOpen(false); }}
+                      className="w-full px-3.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted"
+                    >
+                      {l}
+                    </button>
+                  ))}
+                  {contactLists.filter((l) => !selectedLists.includes(l)).length === 0 && (
+                    <div className="px-3.5 py-2 text-[13px] text-muted-foreground">All lists selected.</div>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
 
         {step === "review" && (
           <>
-            <Header icon={Users} title="Review Details" subtitle="Confirm your import details." />
-            <div className="kc-card p-5 max-w-2xl">
-              <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3.5 mb-4">
-                <span className="flex items-center gap-2.5 text-[13px] font-medium text-foreground">
-                  <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <Users className="w-4 h-4" />
+            <Header icon={ClipboardCheck} title="Review & Import" subtitle="Review your import settings below before starting the import." />
+            <div className="max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <div className="divide-y divide-border">
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-[13px] text-muted-foreground">File</span>
+                  <span className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+                    <FileSpreadsheet className="h-4 w-4 text-muted-foreground" /> {file || "—"}
                   </span>
-                  Contacts to Import
-                </span>
-                <span className="text-lg font-bold tracking-tight text-foreground">70</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-[13px] text-muted-foreground">Columns mapped</span>
+                  <span className="text-[13px] font-medium text-foreground">{mappedCount} of {parsedColumns.length}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-[13px] text-muted-foreground">Opt-in status</span>
+                  <span className="text-[13px] font-medium text-foreground">{optInChoice || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-[13px] text-muted-foreground">Lists</span>
+                  <span className="text-[13px] font-medium text-foreground">
+                    {selectedLists.length ? selectedLists.join(", ") : "None"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-[13px] text-muted-foreground">Header row</span>
+                  <span className="text-[13px] font-medium text-foreground">{headerRow ? "Yes" : "No"}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-[13px] text-muted-foreground">Update existing contacts</span>
+                  <span className="text-[13px] font-medium text-foreground">{updateExisting ? "Yes" : "No"}</span>
+                </div>
               </div>
-              <dl className="divide-y divide-border text-[13px]">
-                <div className="flex items-center justify-between py-3">
-                  <dt className="text-muted-foreground">File Contains Header Row</dt>
-                  <dd className="font-medium text-foreground">{headerRow ? "Yes" : "No"}</dd>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <dt className="text-muted-foreground">Update Existing Contacts</dt>
-                  <dd className="font-medium text-foreground">
-                    {updateExisting ? (onlyEmpty ? "Only Empty Fields" : "Yes") : "No"}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <dt className="text-muted-foreground">Opt-In Status</dt>
-                  <dd className="font-medium text-foreground">{optInChoice}</dd>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <dt className="text-muted-foreground">Lists to Add Contacts To</dt>
-                  <dd className="font-medium text-foreground">{selectedLists.length || "0"}</dd>
-                </div>
-              </dl>
             </div>
-            <label className="flex items-start gap-2.5 mt-5 max-w-2xl text-xs text-muted-foreground leading-relaxed cursor-pointer">
+
+            <label className="mt-5 flex max-w-xl cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
               <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="kc-check mt-0.5" />
               <span>
-                I confirm that the contacts in this file have consented to receive text messages from my brand in
-                compliance with the Transovo <span className="text-primary font-medium">Terms of Use</span> and{" "}
-                <span className="text-primary font-medium">Anti-Spam Policy</span>, recognizes the sender, and expect to
-                receive said messages from them.
+                I confirm that these contacts have consented to receive text messages from my brand in compliance with the
+                Transovo <span className="font-medium text-primary">Terms of Use</span> and <span className="font-medium text-primary">Anti-Spam Policy</span>.
               </span>
             </label>
+
+            {importError && (
+              <div className="mt-4 max-w-xl rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">
+                {importError}
+              </div>
+            )}
           </>
         )}
       </div>
 
-      {/* Sticky footer actions */}
-      {importError && (
-        <p className="text-sm text-red-600 mb-3">{importError}</p>
-      )}
-      <div className="flex items-center justify-between pt-6 mt-8 border-t border-border">
-        {step === "upload" ? (
-          <button onClick={onCancel} className="kc-btn-secondary px-8 h-10 text-[13px]">Cancel</button>
-        ) : (
-          <button onClick={prev} className="kc-btn-secondary px-8 h-10 text-[13px]">← Prev</button>
-        )}
-        <button onClick={next} disabled={nextDisabled} className="kc-btn-primary px-8 h-10 text-[13px]">
-          {nextLabel}
+      {/* Footer actions */}
+      <div className="mt-10 flex items-center justify-between border-t border-border pt-5">
+        <button
+          onClick={onCancel}
+          className="h-10 rounded-lg px-4 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Cancel
         </button>
+        <div className="flex items-center gap-3">
+          {step !== "upload" && (
+            <button
+              onClick={prev}
+              className="h-10 rounded-lg border border-border bg-card px-6 text-[13px] font-semibold text-foreground shadow-sm transition-colors hover:bg-muted/60"
+            >
+              Back
+            </button>
+          )}
+          <button
+            onClick={next}
+            disabled={nextDisabled}
+            className="h-10 rounded-lg bg-primary px-6 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+          >
+            {nextLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
