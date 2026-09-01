@@ -62,3 +62,4 @@ public/voicemail/
 !.ui-agent/batch/**
 # Kimi source drafts in src/kimi-drafts/ are tracked (not ignored)
 .sms-visual-review/
+.v1-visual-review/

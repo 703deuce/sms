@@ -1,4 +1,4 @@
-import { MessageSquareReply, ShieldCheck, Tags, Inbox, ArrowRight, Zap } from "lucide-react";
+import { MessageSquareReply, ShieldCheck, Tags, Inbox, ArrowRight } from "lucide-react";
 
 export type Section = "optin" | "compliance" | "keywords" | "inbox";
 
@@ -9,6 +9,7 @@ const cards: {
   icon: any;
   tint: string;
   stat: string;
+  emoji: string;
 }[] = [
   {
     id: "optin",
@@ -17,6 +18,7 @@ const cards: {
     icon: MessageSquareReply,
     tint: "bg-indigo-50 text-indigo-600",
     stat: "4 messages configured",
+    emoji: "✅",
   },
   {
     id: "compliance",
@@ -25,6 +27,7 @@ const cards: {
     icon: ShieldCheck,
     tint: "bg-teal-50 text-teal-600",
     stat: "4 statements · locked",
+    emoji: "🛡️",
   },
   {
     id: "keywords",
@@ -33,6 +36,7 @@ const cards: {
     icon: Tags,
     tint: "bg-violet-50 text-violet-600",
     stat: "5 keywords active",
+    emoji: "🏷️",
   },
   {
     id: "inbox",
@@ -41,48 +45,54 @@ const cards: {
     icon: Inbox,
     tint: "bg-amber-50 text-amber-600",
     stat: "Office hours aware",
+    emoji: "💬",
   },
 ];
 
 export default function AutoRepliesOverview({ onOpen }: { onOpen: (s: Section) => void }) {
   return (
     <div>
-      <div className="flex items-start justify-between mb-2">
+      <div className="mb-2 flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center">
-              <Zap size={18} className="text-white" />
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-indigo-600 text-[22px] shadow-sm">
+              ⚡
+            </span>
+            <div>
+              <h1 className="text-[26px] font-bold tracking-tight text-foreground">Auto-Replies</h1>
+              <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+                Manage the automated texts Transovo sends — opt-in confirmations, compliance, keyword replies,
+                and inbox auto-responses.
+              </p>
             </div>
-            <h1 className="text-[26px] font-bold text-foreground tracking-tight">Auto-Replies</h1>
           </div>
-          <p className="text-[14px] text-muted-foreground mt-2 max-w-2xl">
-            Manage the automated text messages Transovo sends on your behalf — opt-in confirmations,
-            compliance verbiage, keyword replies, and inbox auto-responses.
-          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-7">
+      <div className="mt-7 grid grid-cols-1 gap-5 md:grid-cols-2">
         {cards.map((c) => {
           const Icon = c.icon;
           return (
             <button
               key={c.id}
               onClick={() => onOpen(c.id)}
-              className="text-left bg-card border border-border rounded-2xl p-6 hover:shadow-lg hover:border-indigo-200 transition-all group"
+              className="group rounded-[14px] border border-border bg-card p-6 text-left transition hover:border-indigo-200 hover:shadow-md"
             >
               <div className="flex items-start justify-between">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${c.tint}`}>
-                  <Icon size={20} />
+                <div className="flex items-center gap-3">
+                  <span className="text-[24px]">{c.emoji}</span>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] ${c.tint}`}>
+                    <Icon size={18} />
+                  </div>
                 </div>
                 <ArrowRight
                   size={18}
-                  className="text-muted-foreground group-hover:text-indigo-600 group-hover:translate-x-1 transition-all"
+                  className="text-muted-foreground transition group-hover:translate-x-1 group-hover:text-indigo-600"
                 />
               </div>
-              <h3 className="text-[16px] font-semibold text-foreground mt-4">{c.title}</h3>
-              <p className="text-[13.5px] text-muted-foreground mt-1.5 leading-relaxed">{c.desc}</p>
-              <span className="inline-block mt-4 text-[12px] font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+              <h3 className="mt-4 text-[16px] font-semibold text-foreground">{c.title}</h3>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">{c.desc}</p>
+              <span className="mt-4 inline-block rounded-full bg-indigo-50 px-3 py-1 text-[12px] font-medium text-indigo-600">
                 {c.stat}
               </span>
             </button>

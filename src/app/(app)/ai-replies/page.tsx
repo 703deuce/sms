@@ -1,9 +1,10 @@
-import { AiRepliesList } from "@/components/ai-replies/ai-replies-list";
-import { getActiveWorkspaceId } from "@/lib/auth";
+import { AiAgentsView } from "@/components/ai-replies/ai-agents-view";
 import { listAiReplies } from "@/lib/ai-replies/service";
+import { requireWorkspaceContext } from "@/lib/workspace-data";
 
 export default async function AiRepliesPage() {
-  const workspaceId = await getActiveWorkspaceId();
-  const rows = workspaceId ? await listAiReplies(workspaceId) : [];
-  return <AiRepliesList initialRows={rows} />;
+  const { workspaceId } = await requireWorkspaceContext();
+  const rows = await listAiReplies(workspaceId);
+
+  return <AiAgentsView initialRows={rows} />;
 }

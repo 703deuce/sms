@@ -2,16 +2,16 @@
 
 import {
   formatSlickDateTime,
-  SlickAudienceHeader,
   SlickStatCard,
 } from "@/components/audience/slick-audience-ui";
 import { AiReplyStatusToggle } from "@/components/ai-replies/ai-reply-ui";
+import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
 import { MockupDetailTabs } from "@/components/automate/mockup-automate-ui";
 import { Card } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { aiReplyTypeLabel, type AiReplyRecord } from "@/lib/ai-replies/types";
 import { formatNumber, formatPercent } from "@/lib/utils";
-import { Clock, MessageSquare, Pencil, Sparkles, TrendingUp, Users } from "lucide-react";
+import { Clock, MessageSquare, Pencil, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -76,22 +76,27 @@ export function AiReplyDetail({ campaign: initial, stats, chart, sentiment, topQ
   }
 
   return (
-    <div className="text-[13px]">
-      <SlickAudienceHeader
-        breadcrumb="AI Agents"
+    <div className="mx-auto max-w-[1200px] px-1 pb-10 text-[13px]">
+      <V1Breadcrumb
+        items={[
+          { label: "AI Agents", href: "/ai-replies" },
+          { label: campaign.name },
+        ]}
+      />
+      <V1PageHeader
+        emoji={campaign.replyType === "conversational" ? "💬" : "✨"}
         title={campaign.name}
         description={`${aiReplyTypeLabel(campaign.replyType)} · ${campaign.description || "AI auto-responder"}`}
-        icon={Sparkles}
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <span
               className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${
                 campaign.status === "active"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-slate-100 text-slate-600"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-muted text-muted-foreground"
               }`}
             >
-              {campaign.status === "active" ? "Active" : "Paused"}
+              {campaign.status === "active" ? "🟢 Active" : "⏸ Paused"}
             </span>
             <AiReplyStatusToggle
               active={campaign.status === "active"}
@@ -100,9 +105,9 @@ export function AiReplyDetail({ campaign: initial, stats, chart, sentiment, topQ
             />
             <Link
               href={`/ai-replies/${campaign.id}/edit`}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 font-semibold text-slate-900 no-underline hover:bg-slate-50"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white no-underline hover:bg-indigo-700"
             >
-              <Pencil className="h-4 w-4" /> Edit Agent
+              <Pencil className="h-4 w-4" /> Edit agent
             </Link>
           </div>
         }

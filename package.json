@@ -98,6 +98,7 @@
     "test:transovo-callback": "tsx scripts/test-transovo-callback.ts",
     "test:e2e": "playwright test",
     "sms:visual-review": "tsx scripts/sms-kimi-visual-review.ts",
+    "v1:visual-review": "tsx scripts/v1-automate-kimi-visual-review.ts",
     "test:multi-product": "tsx scripts/test-multi-product-architecture.ts",
     "test:smart-routing-compiler": "tsx scripts/test-smart-routing-compiler.ts",
     "test:smart-routing-preprod": "tsx scripts/smart-routing-preprod-suite.ts",

@@ -102,6 +102,68 @@ export const POLISH_TARGETS: PolishTargetConfig[] = [
     ],
   },
   {
+    route: "/ai-replies",
+    steps: [
+      { id: "01_list", label: "AI agents list", path: "/ai-replies", fullPage: true },
+      { id: "02_wizard_setup", label: "Create agent — setup", path: "/ai-replies/new", fullPage: true },
+      {
+        id: "03_wizard_trigger",
+        label: "Create agent — trigger",
+        path: "/ai-replies/new",
+        actions: [
+          { type: "click", selector: 'button:has-text("Next")' },
+          { type: "wait", ms: 600 },
+        ],
+        fullPage: true,
+      },
+      {
+        id: "04_wizard_knowledge",
+        label: "Create agent — knowledge",
+        path: "/ai-replies/new",
+        actions: [
+          { type: "click", selector: 'button:has-text("Next")' },
+          { type: "wait", ms: 400 },
+          { type: "click", selector: 'button:has-text("Next")' },
+          { type: "wait", ms: 600 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/playbooks",
+    steps: [
+      { id: "01_hub", label: "Playbooks intent hub", path: "/playbooks", fullPage: true },
+      { id: "02_broadcast", label: "Broadcast playbook entry", path: "/campaigns/new?playbook=broadcast", fullPage: true },
+      { id: "03_sequence", label: "Sequence playbook entry", path: "/campaigns/new/welcome", fullPage: true },
+    ],
+  },
+  {
+    route: "/ai-replies",
+    steps: [
+      { id: "01_list", label: "AI agents list", path: "/ai-replies", fullPage: true },
+      { id: "02_wizard_setup", label: "Create agent — setup", path: "/ai-replies/new", fullPage: true },
+      {
+        id: "03_wizard_trigger",
+        label: "Create agent — trigger",
+        path: "/ai-replies/new",
+        actions: [
+          { type: "click", selector: 'button:has-text("Next")' },
+          { type: "wait", ms: 600 },
+        ],
+        fullPage: true,
+      },
+    ],
+  },
+  {
+    route: "/playbooks",
+    steps: [
+      { id: "01_hub", label: "Playbooks intent hub", path: "/playbooks", fullPage: true },
+      { id: "02_broadcast", label: "Broadcast playbook entry", path: "/campaigns/new?playbook=broadcast", fullPage: true },
+      { id: "03_sequence", label: "Sequence playbook entry", path: "/campaigns/new/welcome", fullPage: true },
+    ],
+  },
+  {
     route: "/auto-replies",
     referenceVideoName: "Setting Up SMS Auto-Responses in SlickText SlickText Tutorials - SlickText (360p)",
     steps: [

@@ -2,10 +2,13 @@
 
 import { AiChatPreview } from "@/components/ai-replies/ai-reply-ui";
 import {
-  MockupWizardFooter,
-  MockupWizardSection,
-  MockupWizardStepper,
-} from "@/components/automate/mockup-automate-ui";
+  V1Breadcrumb,
+  V1ChoiceCard,
+  V1WizardFooter,
+  V1WizardSection,
+  V1WizardStepper,
+  type WizardStep,
+} from "@/components/v1/v1-polish";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -22,11 +25,16 @@ import {
 } from "@/lib/ai-replies/types";
 import { cn, formatPhone } from "@/lib/utils";
 import { Plus, Trash2, X } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const STEPS = ["Setup", "Trigger", "Knowledge", "Handoff", "Test & Publish"];
+const WIZARD_STEPS: WizardStep[] = [
+  { id: "setup", label: "Setup", emoji: "⚙️", hint: "Name & number" },
+  { id: "trigger", label: "Trigger", emoji: "🎯", hint: "When to reply" },
+  { id: "knowledge", label: "Knowledge", emoji: "🧠", hint: "What it knows" },
+  { id: "handoff", label: "Handoff", emoji: "🤝", hint: "Human takeover" },
+  { id: "publish", label: "Test & Publish", emoji: "🚀", hint: "Go live" },
+];
 
 type Props = { mode?: "create" | "edit"; initial?: AiReplyRecord };
 
@@ -163,25 +171,32 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
   }
 
   return (
-    <div className="text-[13px]">
+    <div className="mx-auto max-w-[1100px] px-1 pb-10 text-[13px]">
+      <V1Breadcrumb
+        items={[
+          { label: "AI Agents", href: "/ai-replies" },
+          { label: mode === "edit" ? "Edit agent" : "Create agent" },
+        ]}
+      />
       <div className="mb-6">
-        <p className="mb-1 text-[12px] font-medium text-primary">
-          <Link href="/ai-replies" className="hover:underline">AI Replies</Link>
-          <span className="mx-2 text-slate-400">/</span>
-          {mode === "edit" ? "Edit" : "Create"}
-        </p>
-        <h1 className="font-display text-[28px] font-semibold text-slate-900">
-          {mode === "edit" ? "Edit AI Reply" : "Create AI Reply"}
+        <h1 className="text-[26px] font-bold tracking-tight text-foreground">
+          {mode === "edit" ? `Edit ${name || "agent"}` : "Create AI agent"}
         </h1>
+        <p className="mt-1 text-[14px] text-muted-foreground">
+          {mode === "edit"
+            ? "Update triggers, knowledge, and handoff rules for this agent."
+            : "Set up an AI teammate that answers texts with your brand voice."}
+        </p>
       </div>
 
-      <MockupWizardStepper steps={STEPS} activeIndex={step} />
+      <V1WizardStepper steps={WIZARD_STEPS} activeIndex={step} onStepClick={(i) => i < step && setStep(i)} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-        <Card className="rounded-xl border-slate-200 p-6 shadow-sm">
+        <Card className="rounded-[14px] border-border p-6 shadow-sm">
           {step === 0 ? (
             <div className="space-y-4">
-              <MockupWizardSection
+              <V1WizardSection
+                emoji="⚙️"
                 title="Basic settings"
                 description="Name your agent and choose which number it handles."
               />
@@ -196,26 +211,20 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
               <div>
                 <Label>Type</Label>
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  {(["conversational", "single_prompt"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setReplyType(t)}
-                      className={cn(
-                        "rounded-xl border p-4 text-left",
-                        replyType === t ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-slate-200",
-                      )}
-                    >
-                      <p className="font-semibold text-slate-900">
-                        {t === "conversational" ? "Conversational AI" : "Single Prompt"}
-                      </p>
-                      <p className="mt-1 text-[12px] text-slate-500">
-                        {t === "conversational"
-                          ? "Multi-turn dialogue with context"
-                          : "One-shot responses per message"}
-                      </p>
-                    </button>
-                  ))}
+                  <V1ChoiceCard
+                    selected={replyType === "conversational"}
+                    emoji="💬"
+                    title="Conversational AI"
+                    description="Multi-turn dialogue with memory and context"
+                    onClick={() => setReplyType("conversational")}
+                  />
+                  <V1ChoiceCard
+                    selected={replyType === "single_prompt"}
+                    emoji="✨"
+                    title="Single prompt"
+                    description="One-shot responses per incoming message"
+                    onClick={() => setReplyType("single_prompt")}
+                  />
                 </div>
               </div>
               <div>
@@ -232,7 +241,8 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 1 ? (
             <div className="space-y-4">
-              <MockupWizardSection
+              <V1WizardSection
+                emoji="🎯"
                 title="Trigger condition"
                 description="When should this AI agent take over the conversation?"
               />
@@ -298,7 +308,8 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 2 ? (
             <div className="space-y-5">
-              <MockupWizardSection
+              <V1WizardSection
+                emoji="🧠"
                 title="Knowledge & persona"
                 description="Teach your agent how to speak and what it should know."
               />
@@ -377,7 +388,8 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 3 ? (
             <div className="space-y-5">
-              <MockupWizardSection
+              <V1WizardSection
+                emoji="🤝"
                 title="Lead capture & handoff"
                 description="Define when a human should take over and what to collect."
               />
@@ -410,13 +422,14 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {step === 4 ? (
             <div className="space-y-4">
-              <MockupWizardSection
+              <V1WizardSection
+                emoji="🚀"
                 title="Test your agent"
                 description="Send test messages before publishing to production."
               />
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                <p className="font-semibold text-slate-900">Ready to publish</p>
-                <p className="mt-1 text-[13px] text-slate-600">{name} · {triggerSummary(trigger)}</p>
+              <div className="rounded-[12px] border border-emerald-200 bg-emerald-50/50 p-4">
+                <p className="font-semibold text-foreground">✅ Ready to publish</p>
+                <p className="mt-1 text-[13px] text-muted-foreground">{name} · {triggerSummary(trigger)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
                 <Label>Test chat</Label>
@@ -443,7 +456,7 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
 
           {error ? <p className="mt-4 text-rose-600">{error}</p> : null}
 
-          <MockupWizardFooter
+          <V1WizardFooter
             onBack={step > 0 ? () => setStep((s) => s - 1) : undefined}
             onCancel={step === 0 ? () => router.push("/ai-replies") : undefined}
             onNext={
@@ -451,7 +464,7 @@ export function AiReplyWizard({ mode = "create", initial }: Props) {
                 ? () => setStep((s) => s + 1)
                 : () => void save(true)
             }
-            nextLabel={step === 4 ? (saving ? "Publishing…" : "Publish Agent") : "Next"}
+            nextLabel={step === 4 ? (saving ? "Publishing…" : "🚀 Publish agent") : "Next →"}
             nextDisabled={
               step === 0
                 ? !name.trim() || !phoneNumberId

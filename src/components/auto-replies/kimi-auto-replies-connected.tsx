@@ -28,12 +28,12 @@ import type { AutoRepliesInitialView } from "@/components/kimi/auto-replies/Auto
 
 type View = AutoRepliesInitialView;
 
-const tabs: { id: View; label: string; icon: ComponentType<{ size?: number }> }[] = [
-  { id: "overview", label: "Overview", icon: LayoutGrid },
-  { id: "optin", label: "Opt-In Messages", icon: MessageSquareReply },
-  { id: "compliance", label: "Compliance", icon: ShieldCheck },
-  { id: "keywords", label: "Keywords", icon: Tags },
-  { id: "inbox", label: "Inbox Auto-Response", icon: Inbox },
+const tabs: { id: View; label: string; emoji: string; icon: ComponentType<{ size?: number }> }[] = [
+  { id: "overview", label: "Overview", emoji: "🏠", icon: LayoutGrid },
+  { id: "optin", label: "Opt-In Messages", emoji: "✅", icon: MessageSquareReply },
+  { id: "compliance", label: "Compliance", emoji: "🛡️", icon: ShieldCheck },
+  { id: "keywords", label: "Keywords", emoji: "🏷️", icon: Tags },
+  { id: "inbox", label: "Inbox Auto-Response", emoji: "💬", icon: Inbox },
 ];
 
 const defaultOptInBodies = Object.fromEntries(optInMessages.map((m) => [m.id, m.body]));
@@ -110,6 +110,7 @@ export function KimiAutoRepliesConnected({ initialView = "overview" }: Props) {
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
+                <span className="text-[14px]">{t.emoji}</span>
                 <Icon size={15} />
                 {t.label}
               </button>
