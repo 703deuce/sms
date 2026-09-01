@@ -53,6 +53,15 @@ const TARGETS: CaptureTarget[] = [
   },
   { name: "playbooks-hub", path: "/playbooks", waitFor: "text=Playbooks" },
   { name: "playbook-broadcast", path: "/campaigns/new?playbook=broadcast", waitFor: "text=Campaign" },
+  {
+    name: "campaign-detail-completed",
+    path: "/campaigns",
+    waitFor: "text=Campaigns",
+    actions: [
+      { type: "click", selector: "table tbody tr a, a[href^='/campaigns/']" },
+      { type: "wait", ms: 1200 },
+    ],
+  },
 ];
 
 const REVIEW_SYSTEM = `You are a senior SaaS product designer reviewing Transovo — an SMS marketing platform for small businesses.
