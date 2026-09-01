@@ -24,6 +24,11 @@ export const NUMBERS_PRODUCT_PATH_PREFIXES = [
   "/my-numbers",
 ] as const;
 
+/** First-class SMS product surfaces that stay reachable while standalone SMS is hidden. */
+export function isSmsFirstClassProductRoute(pathname: string): boolean {
+  return pathname === "/sms/dashboard" || pathname.startsWith("/sms/analytics");
+}
+
 /** Routes that require SMS entitlement (hidden standalone product). */
 export function isSmsProductPath(pathname: string): boolean {
   if (pathname.startsWith("/sms/") || pathname === "/sms") return true;

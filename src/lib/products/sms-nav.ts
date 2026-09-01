@@ -25,11 +25,16 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
 
   return [
     {
+      label: "Dashboard",
+      href: "/sms/dashboard",
+      icon: LayoutDashboard,
+      sectionLabel: "Main",
+    },
+    {
       label: "Inbox",
       href: "/inbox",
       icon: Inbox,
       badge: inboxBadge > 0 ? inboxBadge : undefined,
-      sectionLabel: "Main",
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Contacts", href: "/contacts", icon: Users },
@@ -46,7 +51,7 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
       icon: Hash,
       sectionLabel: "Manage",
     },
-    { label: "Reports", href: "/reports", icon: BarChart3 },
+    { label: "Analytics", href: "/sms/analytics", icon: BarChart3 },
     {
       label: "Settings",
       href: "/settings",
@@ -59,6 +64,7 @@ export function buildSmsNav(options: SmsNavOptions = {}): NavItem[] {
 
 export function getSmsPageTitle(pathname: string): string {
   if (pathname === "/dashboard") return "";
+  if (pathname.startsWith("/sms/dashboard")) return "Dashboard";
   if (pathname.startsWith("/inbox")) return "Inbox";
   if (pathname.startsWith("/send")) return "Send Message";
   if (pathname.startsWith("/campaigns")) return "Campaigns";
@@ -68,6 +74,7 @@ export function getSmsPageTitle(pathname: string): string {
   if (pathname.startsWith("/grow")) return "Grow";
   if (pathname.startsWith("/surveys")) return "Surveys";
   if (pathname.startsWith("/numbers")) return "Numbers";
+  if (pathname.startsWith("/sms/analytics")) return "Analytics";
   if (pathname.startsWith("/reports")) return "Reports";
   if (pathname.startsWith("/compliance")) return "Compliance";
   if (pathname.startsWith("/integrations")) return "Integrations";

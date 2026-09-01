@@ -146,7 +146,9 @@ export async function middleware(request: NextRequest) {
   }
 
   // Legacy /sms/* prefix → flat SMS routes (deep links, marketing CTAs).
-  if (pathname === "/sms" || pathname.startsWith("/sms/")) {
+  // Keep first-class SMS product routes at /sms/dashboard and /sms/analytics.
+  const smsProductRoutes = pathname === "/sms/dashboard" || pathname.startsWith("/sms/analytics");
+  if (!smsProductRoutes && (pathname === "/sms" || pathname.startsWith("/sms/"))) {
     const url = request.nextUrl.clone();
     url.pathname = pathname === "/sms" ? "/inbox" : pathname.slice(4) || "/inbox";
     return NextResponse.redirect(url);
