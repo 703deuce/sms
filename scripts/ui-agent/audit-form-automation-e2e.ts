@@ -100,6 +100,34 @@ const UNIT_CHECKS: Check[] = [
       return null;
     },
   },
+  {
+    name: "bridge-wait-reply-dynamic",
+    run: async () => {
+      const def: AutomationDefinition = {
+        version: 1,
+        nodes: [
+          {
+            id: "w1",
+            type: "logic",
+            position: { x: 0, y: 0 },
+            data: {
+              blockType: "wait_for_reply",
+              label: "Wait",
+              config: { extractData: true, dataType: "email" },
+            },
+          },
+        ],
+        edges: [],
+      };
+      const kimi = definitionToKimi(def);
+      const outputs = kimi.nodes[0]?.outputs || [];
+      const ids = outputs.map((o) => o.outcomeId);
+      if (!ids.includes("email_found") && !ids.includes("reply_no_email")) {
+        return `expected email extraction outcomes, got ${ids.join(",")}`;
+      }
+      return null;
+    },
+  },
 ];
 
 async function runUiChecks(page: import("playwright").Page): Promise<Array<{ name: string; error: string }>> {
@@ -277,6 +305,101 @@ async function runUiChecks(page: import("playwright").Page): Promise<Array<{ nam
     return null;
   });
 
+  await check("ui-form-reload-persist-styles", async () => {
+    const formId = await page.evaluate(async () => {
+      const res = await fetch("/api/growth/forms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `Reload Style ${Date.now()}` }),
+      });
+      const json = await res.json();
+      return json.data?.id as string | undefined;
+    });
+    if (!formId) return "create form failed";
+
+    const layout = {
+      version: 1,
+      formType: "embed",
+      blocks: [
+        {
+          id: "h1",
+          type: "header",
+          props: { content: "Reload Test", style: { color: "#0000ff", fontSize: 30 } },
+        },
+        { id: "p1", type: "field", props: { fieldKey: "phone", placeholder: "Mobile" } },
+        { id: "b1", type: "button", props: { content: "Go", style: { backgroundColor: "#ff00ff" } } },
+      ],
+    };
+    await page.evaluate(
+      async ({ id, layout }) => {
+        await fetch(`/api/growth/forms/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ layout, fields: ["phone"] }),
+        });
+      },
+      { id: formId, layout },
+    );
+
+    await page.goto(`${BASE}/grow/forms`, { waitUntil: "networkidle", timeout: 90000 });
+    await page.evaluate(async (id) => {
+      const rows = await fetch("/api/growth/forms").then((r) => r.json());
+      const form = rows.data?.find((f: { id: string }) => f.id === id);
+      if (!form) throw new Error("form not in list");
+    }, formId);
+
+    const style = await page.evaluate(async (id) => {
+      const r = await fetch(`/api/growth/forms/${id}`);
+      const j = await r.json();
+      return j.data?.config?.layout?.blocks?.[0]?.props?.style?.color as string | undefined;
+    }, formId);
+    if (style !== "#0000ff") return `reload style failed (got ${style ?? "null"})`;
+    return null;
+  });
+
+  await check("ui-automation-condition-config", async () => {
+    const flowId = await page.evaluate(async () => {
+      const res = await fetch("/api/automations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `Condition Flow ${Date.now()}` }),
+      });
+      const json = await res.json();
+      return json.data?.id as string | undefined;
+    });
+    if (!flowId) return "create automation failed";
+
+    await page.goto(`${BASE}/automations/${flowId}/edit`, { waitUntil: "networkidle", timeout: 90000 });
+    await page.getByRole("button", { name: /^Conditions$/i }).click();
+    await page.locator(".palette-tile").filter({ hasText: /Contact Field Matches/i }).first().click();
+    await page.waitForTimeout(400);
+
+    const conditionCard = page.locator(".node-card").last();
+    await conditionCard.waitFor({ state: "visible", timeout: 10000 });
+    await conditionCard.hover();
+    await conditionCard.locator("button").nth(1).click();
+    await page.waitForSelector("text=Configure this step", { timeout: 10000 });
+
+    const operator = page.locator("select").filter({ has: page.locator('option[value="has_no_value"]') }).first();
+    await operator.selectOption("has_no_value");
+    await page.locator(".drawer-enter").getByRole("button", { name: /^Save$/i }).click();
+    await page.waitForTimeout(500);
+
+    await page.getByRole("button", { name: /^Save$/i }).first().click();
+    await page.waitForTimeout(1500);
+
+    const operatorSaved = await page.evaluate(async (id) => {
+      const r = await fetch(`/api/automations/${id}`);
+      const j = await r.json();
+      const node = (j.data?.definition?.nodes || []).find(
+        (n: { data?: { blockType?: string } }) => n.data?.blockType === "condition_customer_field",
+      );
+      return node?.data?.config?.operator as string | undefined;
+    }, flowId);
+    if (operatorSaved !== "has_no_value") return `condition operator not saved (got ${operatorSaved ?? "null"})`;
+    return null;
+  });
+
   return failures;
 }
 
@@ -304,7 +427,7 @@ async function main() {
 
   const all = [...unitFailures, ...uiFailures];
   console.log(`\nUnit: ${UNIT_CHECKS.length - unitFailures.length}/${UNIT_CHECKS.length}`);
-  console.log(`UI: ${5 - uiFailures.length}/5`);
+  console.log(`UI: ${7 - uiFailures.length}/7`);
   console.log(`Total failures: ${all.length}`);
   if (all.length) {
     console.log("\nFailures:");

@@ -46,6 +46,11 @@ export default function KimiAutomationBuilder({
     initialStatus === "Active" || initialStatus === "ACTIVE",
   );
   const hydratedRef = useRef(false);
+  const definitionRef = useRef(builder.definition);
+
+  useEffect(() => {
+    definitionRef.current = builder.definition;
+  }, [builder.definition]);
 
   useEffect(() => {
     if (hydratedRef.current) return;
@@ -57,7 +62,8 @@ export default function KimiAutomationBuilder({
 
   const pushKimiToBuilder = useCallback(
     (nodes: CanvasNodeData[], edges: CanvasEdge[]) => {
-      const next = kimiToDefinition(nodes, edges, builder.definition);
+      const next = kimiToDefinition(nodes, edges, definitionRef.current);
+      definitionRef.current = next;
       builder.setDefinition(next, false);
       builder.setDirty(true);
     },
@@ -184,7 +190,7 @@ export default function KimiAutomationBuilder({
 
   async function saveDraft(publishAfter = false) {
     builder.setSaving(true);
-    const definition = kimiToDefinition(kimiNodes, kimiEdges, builder.definition);
+    const definition = kimiToDefinition(kimiNodes, kimiEdges, definitionRef.current);
     try {
       const res = await fetch(`/api/automations/${flowId}`, {
         method: "PATCH",
@@ -198,6 +204,7 @@ export default function KimiAutomationBuilder({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
+      definitionRef.current = definition;
       builder.setDefinition(definition, false);
       builder.setDirty(false);
       builder.setLastSaved(new Date());

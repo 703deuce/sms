@@ -374,6 +374,48 @@ export function ParityNodeConfig({
     );
   }
 
+  if (block === "condition_customer_field") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label>Field</Label>
+          <Select
+            value={String(cfg.field || "email")}
+            onChange={(e) => setConfig({ field: e.target.value })}
+          >
+            {CONTACT_FIELD_OPTIONS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>Operator</Label>
+          <Select
+            value={String(cfg.operator || "has_no_value")}
+            onChange={(e) => setConfig({ operator: e.target.value })}
+          >
+            {TEXT_OPERATORS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {!["has_no_value", "has_value"].includes(String(cfg.operator || "")) && (
+          <div>
+            <Label>Value</Label>
+            <Input
+              value={String(cfg.value ?? "")}
+              onChange={(e) => setConfig({ value: e.target.value })}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (block === "customer_field_changed" || block === "wait_for_customer_field_change") {
     return (
       <div className="space-y-3">
