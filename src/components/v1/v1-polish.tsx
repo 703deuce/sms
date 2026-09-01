@@ -183,7 +183,7 @@ export function V1WizardFooter({
 export function V1Breadcrumb({
   items,
 }: {
-  items: Array<{ label: string; href?: string }>;
+  items: Array<{ label: string; href?: string; onClick?: () => void }>;
 }) {
   return (
     <p className="mb-3 text-[12px] text-muted-foreground">
@@ -194,6 +194,14 @@ export function V1Breadcrumb({
             <Link href={item.href} className="font-medium text-indigo-600 hover:underline">
               {item.label}
             </Link>
+          ) : item.onClick ? (
+            <button
+              type="button"
+              onClick={item.onClick}
+              className="font-medium text-indigo-600 hover:underline"
+            >
+              {item.label}
+            </button>
           ) : (
             <span className="text-foreground">{item.label}</span>
           )}

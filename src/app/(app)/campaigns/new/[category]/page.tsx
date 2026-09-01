@@ -3,15 +3,15 @@
 import { CATEGORY_ICONS } from "@/components/campaigns/category-icons";
 import { AttachedMediaThumbs, MediaPicker } from "@/components/messaging/media-picker";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/page-header";
+import { V1Breadcrumb, V1PageHeader, V1WizardSection } from "@/components/v1/v1-polish";
 import {
   DEFAULT_MESSAGES,
   getCampaignCategory,
   type CampaignCategoryId,
 } from "@/lib/campaigns/catalog";
 import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
+import { ENGINE_LABELS, PLAYBOOK_EMOJIS } from "@/lib/v1/playbook-emojis";
 import { cn, estimateSmsSegments } from "@/lib/utils";
 import { ArrowLeft, Check, ImagePlus, Send } from "lucide-react";
 import Link from "next/link";
@@ -110,14 +110,21 @@ export default function NewCategoryCampaignPage() {
 
   if (!category) {
     return (
-      <div className="p-8">
-        <p className="text-slate-600">Unknown campaign category.</p>
-        <Link href="/playbooks" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover">Back to playbooks</Link>
+      <div className="mx-auto max-w-[1200px] px-1 pb-10">
+        <p className="text-muted-foreground">Unknown campaign category.</p>
+        <Link
+          href="/playbooks"
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          Back to playbooks
+        </Link>
       </div>
     );
   }
 
   const Icon = CATEGORY_ICONS[category.icon] || Send;
+  const emoji = PLAYBOOK_EMOJIS[category.id];
+  const engine = ENGINE_LABELS[category.engine];
   const needsTrigger = ["follow_up", "welcome", "missed_call", "review", "lead_nurture", "win_back", "status_update", "payment"].includes(
     category.id,
   );
@@ -198,31 +205,53 @@ export default function NewCategoryCampaignPage() {
   }
 
   return (
-    <div>
-      <PageHeader
+    <div className="mx-auto max-w-[1200px] px-1 pb-10">
+      <V1Breadcrumb
+        items={[
+          { label: "Playbooks", href: "/playbooks" },
+          { label: category.title },
+        ]}
+      />
+
+      <V1PageHeader
+        emoji={emoji}
         title={category.title}
         description={category.description}
         actions={
-          <Link href="/playbooks" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"><ArrowLeft className="h-4 w-4" />
-              All types</Link>
+          <Link
+            href="/playbooks"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13px] font-semibold text-foreground shadow-sm hover:bg-muted"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            All playbooks
+          </Link>
         }
       />
 
-      <div className="mb-6 flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className={cn("rounded-xl p-2.5", category.tone)}>
+      <div className="mb-6 flex items-start gap-3 rounded-[14px] border border-indigo-100 bg-indigo-50/40 p-4">
+        <div className={cn("rounded-[12px] p-2.5", category.tone)}>
           <Icon className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm text-slate-600">
+          <p className="text-[13px] text-foreground">
+            <span className="font-semibold">{engine.emoji} {engine.label}</span>
+            {" · "}
             Configure this {category.engine} once. Same engine covers:{" "}
             {category.examples.join(", ")}.
           </p>
-          <p className="mt-1 text-xs text-slate-500">Options: {category.options.join(" · ")}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Options: {category.options.join(" · ")}
+          </p>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="space-y-4 p-5">
+        <div className="space-y-4 rounded-[14px] border border-border bg-card p-5 shadow-sm">
+          <V1WizardSection
+            emoji="✏️"
+            title="Campaign details"
+            description="Name your sequence and choose who receives it."
+          />
           <div>
             <Label htmlFor="name">Campaign name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -264,7 +293,7 @@ export default function NewCategoryCampaignPage() {
                   onChange={(e) => setFollowUpCount(e.target.value)}
                 />
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-foreground sm:col-span-2">
                 <input
                   type="checkbox"
                   checked={stopOnReply}
@@ -305,7 +334,7 @@ export default function NewCategoryCampaignPage() {
             <div>
               <Label>Contact lists</Label>
               {lists.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-600">
+                <p className="mt-2 text-sm text-muted-foreground">
                   No lists yet. <Link href="/contacts/imports" className="underline">Import contacts</Link> first.
                 </p>
               ) : (
@@ -352,7 +381,7 @@ export default function NewCategoryCampaignPage() {
               <Label htmlFor="message">Message</Label>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => setShowMedia(true)}
               >
                 <ImagePlus className="h-3.5 w-3.5" />
@@ -370,7 +399,7 @@ export default function NewCategoryCampaignPage() {
               urls={mediaUrls}
               onRemove={(url) => setMediaUrls((prev) => prev.filter((u) => u !== url))}
             />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {mediaUrls.length
                 ? `Pictures send as MMS · ${MASS_TEXT_MMS_CREDIT_MULTIPLIER} credits per recipient`
                 : `${segmentsEstimate.characters} characters · ${segmentsEstimate.segments} SMS segment${
@@ -396,8 +425,8 @@ export default function NewCategoryCampaignPage() {
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-sm",
                     scheduleMode === id
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white text-slate-700",
+                      ? "border-indigo-600 bg-indigo-600 text-white"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {label}
@@ -416,7 +445,7 @@ export default function NewCategoryCampaignPage() {
 
           {error && <p className="text-sm text-rose-600">{error}</p>}
           {done && (
-            <p className="flex items-center gap-2 text-sm text-violet-700">
+            <p className="flex items-center gap-2 text-sm text-indigo-700">
               <Check className="h-4 w-4" /> Campaign created
             </p>
           )}
@@ -432,13 +461,18 @@ export default function NewCategoryCampaignPage() {
                     ? "Schedule campaign"
                     : "Send campaign"}
             </Button>
-            <Link href="/playbooks" className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">Cancel</Link>
+            <Link
+              href="/playbooks"
+              className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Cancel
+            </Link>
           </div>
-        </Card>
+        </div>
 
-        <Card className="h-fit p-5">
-          <h3 className="font-semibold text-slate-900">Preview</h3>
-          <div className="mt-4 rounded-2xl bg-slate-900 p-4 text-sm text-white">
+        <div className="h-fit rounded-[14px] border border-border bg-card p-5 shadow-sm">
+          <h3 className="font-semibold text-foreground">Preview</h3>
+          <div className="mt-4 rounded-[14px] bg-slate-900 p-4 text-sm text-white">
             <p className="whitespace-pre-wrap">{message}</p>
             {mediaUrls.length ? (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -449,8 +483,8 @@ export default function NewCategoryCampaignPage() {
               </div>
             ) : null}
           </div>
-          <p className="mt-3 text-xs text-slate-500">Audience: {audienceLabel}</p>
-        </Card>
+          <p className="mt-3 text-xs text-muted-foreground">Audience: {audienceLabel}</p>
+        </div>
       </div>
       <MediaPicker
         open={showMedia}

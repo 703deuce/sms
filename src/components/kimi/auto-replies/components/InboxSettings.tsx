@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Inbox, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { inboxDefaults } from "../mock-data";
+import { AutoReplySubScreen, AutoReplyToggleRow } from "./AutoReplySubScreen";
 import MessageEditor from "./MessageEditor";
 import Toggle from "./Toggle";
 import Toast from "./Toast";
@@ -11,32 +12,32 @@ const baseToggles = [
   {
     id: "inboxOn",
     title: "Inbox On",
-    desc: "Engage in real-time, one-on-one messaging using your text number. Manage conversations, collaborate with team members and connect with contacts using this powerful two-way messaging tool.",
+    desc: "Engage in real-time, one-on-one messaging using your text number. Manage conversations and collaborate with team members.",
   },
   {
     id: "start",
     title: "Allow Starting Conversations",
-    desc: "This determines whether or not team members have the ability to start conversations or reply to existing ones that are closed. This does not apply to inbox managers and account owners.",
+    desc: "Whether team members can start conversations or reply to closed ones. Does not apply to inbox managers and account owners.",
   },
   {
     id: "assign",
     title: "Allow Conversation Assignment",
-    desc: "This determines whether or not team members have the ability to assign conversations to other teammates. This does not apply to inbox managers and account owners.",
+    desc: "Whether team members can assign conversations to other teammates. Does not apply to inbox managers and account owners.",
   },
   {
     id: "tag",
     title: "Allow Conversation Tagging",
-    desc: "This determines whether or not team members have the ability to tag conversations. This does not apply to inbox managers and account owners.",
+    desc: "Whether team members can tag conversations. Does not apply to inbox managers and account owners.",
   },
   {
     id: "unassign",
     title: "Unassign Conversations When Closed",
-    desc: "This determines whether or not a conversation should be automatically unassigned when it's closed.",
+    desc: "Automatically unassign a conversation when it's closed.",
   },
   {
     id: "unread",
     title: "Mark Conversations as Unread When Assigned",
-    desc: "This determines whether or not a conversation should be marked as unread when it's assigned to a team member.",
+    desc: "Mark a conversation as unread when it's assigned to a team member.",
   },
 ];
 
@@ -88,6 +89,7 @@ export default function InboxSettings({
   const [inside, setInside] = useState(initialAwayInsideMessage ?? inboxDefaults.insideMessage);
   const [outside, setOutside] = useState(initialAwayMessage ?? inboxDefaults.outsideMessage);
   const [toast, setToast] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const toggleDay = (d: string) =>
     setActiveDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
@@ -96,51 +98,76 @@ export default function InboxSettings({
     if (initialInboxToggles) setToggles(initialInboxToggles);
   }, [initialInboxToggles]);
 
-  return (
-    <div>
-      <Toast message={toast} />
-      <p className="ar-breadcrumb">Auto-Replies / Inbox / General</p>
-      <div className="flex items-center gap-2.5">
-        <span className="ar-title-icon bg-teal-50 text-teal-600">
-          <Inbox size={17} />
-        </span>
-        <h1 className="ar-title">General Inbox Settings</h1>
-      </div>
-      <p className="ar-subtitle">Manage general inbox rules and behaviors.</p>
+  const save = () => {
+    const finish = () => {
+      setToast("Inbox settings saved.");
+      setTimeout(() => setToast(null), 2500);
+    };
+    if (onSave) {
+      const awayMessage = autoOn ? (officeOn ? outside : single) : "";
+      const awayInsideMessage = autoOn && officeOn ? inside : "";
+      setSaving(true);
+      void onSave({
+        awayMessage,
+        awayInsideMessage,
+        awayEnabled: autoOn,
+        officeHoursEnabled: officeOn,
+        activeDays,
+        timezone: initialTimezone,
+        inboxToggles: toggles,
+      })
+        .then(finish)
+        .catch(() => {
+          setToast("Save failed.");
+          setTimeout(() => setToast(null), 2500);
+        })
+        .finally(() => setSaving(false));
+      return;
+    }
+    finish();
+  };
 
-      <div className="mt-7 space-y-6 max-w-3xl">
+  return (
+    <AutoReplySubScreen
+      emoji="💬"
+      title="General Inbox Settings"
+      description="Manage general inbox rules, office hours, and auto-responses for new inbound conversations."
+      breadcrumb={[{ label: "Inbox" }]}
+      onBack={onBack}
+      onSave={save}
+      saving={saving}
+    >
+      <Toast message={toast} />
+
+      <div className="mt-2 max-w-3xl space-y-4">
         {baseToggles.map((t) => (
-          <div key={t.id} className="ar-toggle-row">
-            <div>
-              <h3 className="ar-setting-title">{t.title}</h3>
-              <p className="ar-setting-desc">{t.desc}</p>
-            </div>
-            <Toggle
-              on={toggles[t.id]}
-              onChange={(v) => setToggles({ ...toggles, [t.id]: v })}
-            />
-          </div>
+          <AutoReplyToggleRow
+            key={t.id}
+            title={t.title}
+            description={t.desc}
+            control={
+              <Toggle
+                on={toggles[t.id]}
+                onChange={(v) => setToggles({ ...toggles, [t.id]: v })}
+              />
+            }
+          />
         ))}
 
-        {/* Office hours */}
-        <div className="ar-toggle-row">
-          <div>
-            <h3 className="ar-setting-title">Office Hours</h3>
-            <p className="ar-setting-desc">
-              Specify the days and times that teammates are generally online and available. Setting
-              office hours lets you send different auto-responses inside and outside those times.
-            </p>
-          </div>
-          <Toggle on={officeOn} onChange={setOfficeOn} />
-        </div>
+        <AutoReplyToggleRow
+          title="Office Hours"
+          description="Set days and times teammates are available. Send different auto-responses inside and outside office hours."
+          control={<Toggle on={officeOn} onChange={setOfficeOn} />}
+        />
 
         {officeOn && (
-          <div className="ar-panel space-y-2">
+          <div className="ar-panel space-y-2 rounded-[12px]">
             {days.map((d) => {
               const active = activeDays.includes(d);
               return (
                 <div key={d} className="flex items-center gap-3">
                   <button
+                    type="button"
                     className={`day-pill w-32 text-center ${active ? "active" : ""}`}
                     onClick={() => toggleDay(d)}
                   >
@@ -148,17 +175,17 @@ export default function InboxSettings({
                   </button>
                   <div
                     className={`flex items-center gap-2 ${
-                      active ? "" : "opacity-40 pointer-events-none"
+                      active ? "" : "pointer-events-none opacity-40"
                     }`}
                   >
-                    <button className="time-select">
+                    <button type="button" className="time-select">
                       9:00 am <ChevronDown size={13} />
                     </button>
                     <span className="text-[13px] text-muted-foreground">To</span>
-                    <button className="time-select">
+                    <button type="button" className="time-select">
                       5:00 pm <ChevronDown size={13} />
                     </button>
-                    <span className="text-[12.5px] text-muted-foreground font-medium">
+                    <span className="text-[12.5px] font-medium text-muted-foreground">
                       {initialTimezone || "CDT"}
                     </span>
                   </div>
@@ -168,20 +195,14 @@ export default function InboxSettings({
           </div>
         )}
 
-        {/* Inbox auto-response */}
-        <div className="ar-toggle-row">
-          <div>
-            <h3 className="ar-setting-title">Inbox Auto-Response</h3>
-            <p className="ar-setting-desc">
-              Send a standard automated response in conversations that are opened as a result of a
-              new inbound message.
-            </p>
-          </div>
-          <Toggle on={autoOn} onChange={setAutoOn} />
-        </div>
+        <AutoReplyToggleRow
+          title="Inbox Auto-Response"
+          description="Send a standard automated response when a new inbound message opens a conversation."
+          control={<Toggle on={autoOn} onChange={setAutoOn} />}
+        />
 
         {autoOn && !officeOn && (
-          <div className="ar-panel">
+          <div className="ar-panel rounded-[12px]">
             <MessageEditor
               label="Auto-Response Message"
               value={single}
@@ -192,7 +213,7 @@ export default function InboxSettings({
         )}
 
         {autoOn && officeOn && (
-          <div className="ar-panel space-y-5">
+          <div className="ar-panel space-y-5 rounded-[12px]">
             <MessageEditor
               label="Auto-Response Message Inside of Office Hours"
               value={inside}
@@ -208,43 +229,6 @@ export default function InboxSettings({
           </div>
         )}
       </div>
-
-      <div className="ar-save-row">
-        <button
-          onClick={() => {
-            const finish = () => {
-              setToast("Inbox settings saved.");
-              setTimeout(() => setToast(null), 2500);
-            };
-            if (onSave) {
-              const awayMessage = autoOn ? (officeOn ? outside : single) : "";
-              const awayInsideMessage = autoOn && officeOn ? inside : "";
-              void onSave({
-                awayMessage,
-                awayInsideMessage,
-                awayEnabled: autoOn,
-                officeHoursEnabled: officeOn,
-                activeDays,
-                timezone: initialTimezone,
-                inboxToggles: toggles,
-              })
-                .then(finish)
-                .catch(() => {
-                  setToast("Save failed.");
-                  setTimeout(() => setToast(null), 2500);
-                });
-              return;
-            }
-            finish();
-          }}
-          className="ar-btn-primary"
-        >
-          Save
-        </button>
-        <button onClick={onBack} className="ar-btn-secondary">
-          Back
-        </button>
-      </div>
-    </div>
+    </AutoReplySubScreen>
   );
 }

@@ -14,7 +14,11 @@ import {
   saveComposeDraft,
   type CampaignComposeDraft,
 } from "@/lib/campaigns/compose-draft";
+import { getCampaignCategory } from "@/lib/campaigns/catalog";
+import { seedBroadcastComposeFromPlaybook } from "@/lib/campaigns/playbook-broadcast";
 import { estimateSmsSegments } from "@/lib/utils";
+import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
+import { PLAYBOOK_EMOJIS } from "@/lib/v1/playbook-emojis";
 import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
 import {
   loadDefaultSendingNumber,
@@ -67,13 +71,31 @@ export default function CreateCampaign({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [eligibleCount, setEligibleCount] = useState(0);
+  const [playbookId, setPlaybookId] = useState<string | null>(null);
 
   useEffect(() => {
+    const playbook = searchParams.get("playbook");
     const duplicateId = searchParams.get("duplicate");
     const editId = searchParams.get("edit");
     const segmentId = searchParams.get("segmentId");
     const loadId = duplicateId || editId;
+    const fromPlaybook = Boolean(playbook && !duplicateId && !editId);
+    setPlaybookId(fromPlaybook ? playbook : null);
+
     let loaded = loadComposeDraft();
+    if (fromPlaybook) {
+      loaded = { ...defaultComposeDraft(), timezone: loaded.timezone };
+    }
+    const seeded = seedBroadcastComposeFromPlaybook(
+      playbook,
+      { name: loaded.name, message: loaded.message },
+      { force: fromPlaybook },
+    );
+    loaded.name = seeded.name;
+    loaded.message = seeded.message;
+    if (seeded.categoryId) {
+      loaded.playbookCategoryId = seeded.categoryId;
+    }
 
     const applySegmentAudience = (seg: { id: string; name: string }) => {
       setDraft((d) => {
@@ -237,6 +259,12 @@ export default function CreateCampaign({
     return modes;
   }, []);
 
+  const playbookCategory = playbookId ? getCampaignCategory(playbookId) : undefined;
+  const playbookEmoji =
+    playbookCategory && playbookCategory.id in PLAYBOOK_EMOJIS
+      ? PLAYBOOK_EMOJIS[playbookCategory.id as keyof typeof PLAYBOOK_EMOJIS]
+      : "📣";
+
   return (
     <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
       {showAI && (
@@ -260,24 +288,50 @@ export default function CreateCampaign({
         />
       )}
 
-      <div className="flex items-center justify-between">
-        <p className="text-[12px] text-slate-400">
-          Campaigns <span className="mx-1 text-slate-300">/</span> <span className="text-slate-600 font-medium">Create Campaign</span>
-        </p>
-        <button type="button" className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
-          <HelpCircle className="w-4 h-4 text-slate-400" />
-        </button>
-      </div>
+      <div className="mx-auto max-w-[1100px]">
+        {playbookCategory ? (
+          <V1Breadcrumb
+            items={[
+              { label: "Playbooks", href: "/playbooks" },
+              { label: playbookCategory.title },
+            ]}
+          />
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] text-slate-400">
+              Campaigns <span className="mx-1 text-slate-300">/</span>{" "}
+              <span className="font-medium text-slate-600">Create Campaign</span>
+            </p>
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-slate-100"
+            >
+              <HelpCircle className="h-4 w-4 text-slate-400" />
+            </button>
+          </div>
+        )}
 
-      <div className="grid grid-cols-[1fr_360px] gap-14 mt-4">
+      <div className="mt-4 grid grid-cols-[1fr_360px] gap-14">
         <div>
-          <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight text-slate-900">
-            <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-indigo-50">
-              <Megaphone className="w-5 h-5 text-indigo-600" />
-            </span>
-            Create Campaign
-          </h1>
-          <p className="text-sm text-slate-500 mt-1.5">Create a campaign to reach your contacts at scale.</p>
+          {playbookCategory ? (
+            <V1PageHeader
+              emoji={playbookEmoji}
+              title={playbookCategory.title}
+              description={`${playbookCategory.description} Pre-filled name and message — customize before sending.`}
+            />
+          ) : (
+            <>
+              <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight text-slate-900">
+                <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-indigo-50">
+                  <Megaphone className="h-5 w-5 text-indigo-600" />
+                </span>
+                Create Campaign
+              </h1>
+              <p className="mt-1.5 text-sm text-slate-500">
+                Create a campaign to reach your contacts at scale.
+              </p>
+            </>
+          )}
 
           <label className="block text-[13px] font-semibold text-slate-700 mt-7 mb-1.5">Campaign Name</label>
           <input
@@ -430,6 +484,7 @@ export default function CreateCampaign({
         </div>
 
         <PhonePreview message={previewBody} />
+      </div>
       </div>
     </div>
   );
