@@ -1,5 +1,6 @@
-import { MessagingAnalyticsDashboard } from "@/components/analytics/messaging-analytics-dashboard";
+import { redirect } from "next/navigation";
 
-export default function AnalyticsOverviewPage() {
-  return <MessagingAnalyticsDashboard />;
+/** Legacy analytics route → new SMS Analytics hub. */
+export default function AnalyticsRedirectPage() {
+  redirect("/sms/analytics");
 }

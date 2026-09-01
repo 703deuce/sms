@@ -25,7 +25,7 @@ export function productLogoHome(product: ProductKey): string {
     case "numbers":
       return "/personal";
     case "sms":
-      return "/dashboard";
+      return "/sms/dashboard";
     default:
       return "/app";
   }

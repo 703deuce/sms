@@ -25,7 +25,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
   return [
     {
       label: "Dashboard",
-      href: "/dashboard",
+      href: "/sms/dashboard",
       icon: LayoutDashboard,
       sectionLabel: "Main",
     },
@@ -36,7 +36,7 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
       badge: badge > 0 ? badge : undefined,
     },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
-    { label: "Analytics", href: "/analytics", icon: BarChart3 },
+    { label: "Analytics", href: "/sms/analytics", icon: BarChart3 },
     {
       label: "Audience",
       href: "/contacts",
@@ -72,6 +72,12 @@ export function buildSmsPlatformNav(options: SmsPlatformNavOptions = {}): NavIte
 
 export function getSmsPlatformPageTitle(pathname: string): string {
   if (pathname.startsWith("/conversations")) return "Conversations";
+  if (pathname.startsWith("/sms/analytics")) {
+    if (pathname.includes("tab=campaigns")) return "Campaigns";
+    if (pathname.includes("tab=audience")) return "Audience";
+    if (pathname.includes("tab=messaging")) return "Messaging";
+    return "Analytics";
+  }
   if (pathname.startsWith("/analytics")) {
     if (pathname.startsWith("/analytics/sources")) return "Lead Sources";
     if (pathname.startsWith("/analytics/mctb")) return "Missed Call Text Back";

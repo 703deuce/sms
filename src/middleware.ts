@@ -10,11 +10,8 @@ import {
   isBusinessOnlyPath,
   isPersonalOnlyPath,
 } from "@/lib/workspace/capabilities";
-import {
-  isNumbersPlatformOnlyLaunch,
-  isPortInHiddenAtLaunch,
-  isSmsMarketingHiddenAtLaunch,
-} from "@/lib/workspace/platform-launch";
+import { isSmsMarketingHiddenAtLaunch, isPortInHiddenAtLaunch, isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import { isVerifyLaunchEnabled } from "@/lib/products/v1-product-status";
 
 function isDevAuthBypassEnabled() {
   const raw = process.env.DEV_AUTH_BYPASS?.trim().toLowerCase();
@@ -64,6 +61,7 @@ const publicExact = new Set([
   "/sms-marketing",
   "/maintenance",
   "/app",
+  "/fax",
 ]);
 
 const authPages = new Set(["/login", "/signup", "/forgot-password"]);
@@ -132,6 +130,14 @@ function isPublicPath(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (!isVerifyLaunchEnabled()) {
+    if (pathname === "/phone-verification" || pathname.startsWith("/verify")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+  }
 
   if (isSmsMarketingHiddenAtLaunch() && pathname === "/sms-marketing") {
     const url = request.nextUrl.clone();
@@ -243,6 +249,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (session && !isPublic) {
+    if (pathname === "/fax") {
+      return siteRedirect(request, "/fax/overview");
+    }
+
     const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,

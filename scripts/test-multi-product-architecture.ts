@@ -120,7 +120,7 @@ assert.ok(voiceLabels.includes("Dashboard"), "Voice nav includes Dashboard");
 assert.ok(voiceNavTrial.map((i) => i.label).includes("Try It"), "Trial voice nav includes Try It");
 assert.equal(voiceNav.length, 18, "Voice sidebar ships 18 items without Try It");
 assert.equal(voiceNavTrial.length, 19, "Voice sidebar ships 19 items with Try It");
-assert.equal(smsNav.length, 9, "SMS sidebar preserved without dashboard");
+assert.equal(smsNav.length, 10, "SMS sidebar includes dashboard");
 assert.ok(SMS_CREATE_ACTIONS.length >= 5, "Create menu has primary actions");
 
 assert.equal(
@@ -166,6 +166,24 @@ assert.equal(
   }),
   "/dashboard",
   "Hidden SMS routes redirect to voice home",
+);
+assert.equal(
+  productAccessDeniedRedirect("/sms/dashboard", {
+    hasVoice: true,
+    hasNumbers: false,
+    hasSms: false,
+  }),
+  null,
+  "SMS dashboard stays reachable while standalone SMS is hidden",
+);
+assert.equal(
+  productAccessDeniedRedirect("/sms/analytics", {
+    hasVoice: true,
+    hasNumbers: false,
+    hasSms: false,
+  }),
+  null,
+  "SMS analytics stays reachable while standalone SMS is hidden",
 );
 
 console.log("test-multi-product-architecture: all checks passed");

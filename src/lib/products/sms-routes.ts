@@ -31,6 +31,8 @@ export const SMS_DEEP_ROUTE_PREFIXES = [
 /** Core SMS app prefixes (sidebar sections + deep routes). */
 export const SMS_APP_ROUTE_PREFIXES = [
   "/sms",
+  "/sms/dashboard",
+  "/sms/analytics",
   "/dashboard",
   "/conversations",
   "/inbox",
@@ -84,14 +86,17 @@ export function isSmsShellRoute(pathname: string): boolean {
 
 /** Sidebar-visible SMS nav hrefs (flat — no children in menu). */
 export const SMS_SIDEBAR_HREFS = [
+  "/sms/dashboard",
   "/dashboard",
   "/conversations",
+  "/sms/analytics",
+  "/analytics",
   "/campaigns",
   "/contacts",
   "/automations",
   "/grow",
   "/numbers",
-  "/analytics",
+  "/reports",
   "/settings",
 ] as const;
 

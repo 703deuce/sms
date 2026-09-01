@@ -1,5 +1,6 @@
 import {
   isNumbersProductPath,
+  isSmsFirstClassProductRoute,
   isSmsProductPath,
   productOfferPath,
 } from "@/lib/products/paths";
@@ -48,7 +49,11 @@ export function productAccessDeniedRedirect(
   if (SMS_PREVIEW_ACCESS && isSmsProductPath(pathname) && !access.hasSms) {
     return null;
   }
-  if (isSmsStandaloneHidden() && isSmsProductPath(pathname)) {
+  if (
+    isSmsStandaloneHidden() &&
+    isSmsProductPath(pathname) &&
+    !isSmsFirstClassProductRoute(pathname)
+  ) {
     if (access.hasSms) return null;
     return access.hasVoice ? productHomePath("voice") : "/app";
   }

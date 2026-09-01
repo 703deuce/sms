@@ -69,6 +69,35 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
       }
     }
   },
+  "fax": {
+    "stripeProductId": "prod_fax_placeholder",
+    "tiers": {
+      "starter": {
+        "stripePriceId": "price_fax_starter_placeholder",
+        "monthlyPriceCents": 999,
+        "includedPages": 200
+      },
+      "business": {
+        "stripePriceId": "price_fax_business_placeholder",
+        "monthlyPriceCents": 1499,
+        "includedPages": 500
+      },
+      "pro": {
+        "stripePriceId": "price_fax_pro_placeholder",
+        "monthlyPriceCents": 2499,
+        "includedPages": 1000
+      }
+    }
+  },
+  "verify": {
+    "stripeProductId": "prod_verify_placeholder",
+    "packs": {
+      "1000": { "stripePriceId": "price_verify_1000_placeholder", "amountCents": 999, "credits": 1000 },
+      "5000": { "stripePriceId": "price_verify_5000_placeholder", "amountCents": 1999, "credits": 5000 },
+      "10000": { "stripePriceId": "price_verify_10000_placeholder", "amountCents": 3499, "credits": 10000 },
+      "50000": { "stripePriceId": "price_verify_50000_placeholder", "amountCents": 9900, "credits": 50000 }
+    }
+  },
   "discounts": {
     "dualProduct": {
       "stripeCouponId": "metJ8xAZ",

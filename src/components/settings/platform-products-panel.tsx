@@ -76,6 +76,7 @@ export function PlatformProductsPanel({
   const srProducts = products.filter((p) => p.family === "smart_routing");
   const cfProducts = products.filter((p) => p.family === "call_forwarding");
   const atProducts = products.filter((p) => p.family === "ai_transcription");
+  const faxProducts = products.filter((p) => p.family === "fax");
   const addonProducts = products.filter((p) => p.family === "addon");
 
   const resolvedHighlight =
@@ -228,8 +229,7 @@ export function PlatformProductsPanel({
     <Card className="mt-4">
       <CardTitle>Platform products</CardTitle>
       <p className="mt-2 text-sm text-muted-foreground">
-        Choose any MCTB tier with any Smart Routing tier. Subscribe to both and save 20%. AI
-        Transcription is an optional add-on with its own tier — independent of Smart Routing.
+        V1 launch products: Missed Call Text Back and Fax. Subscribe to both MCTB + Smart Routing and save 20% when Smart Routing returns.
       </p>
       {dualDiscountActive ? (
         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
@@ -260,13 +260,15 @@ export function PlatformProductsPanel({
             selectedMctb,
             (t) => setSelectedMctb(t as MctbTier),
           )}
-          {renderTierColumn(
-            "Smart Routing",
-            "smart_routing",
-            srProducts,
-            selectedSr,
-            (t) => setSelectedSr(t as SmartRoutingTier),
-          )}
+          {srProducts.length > 0
+            ? renderTierColumn(
+                "Smart Routing",
+                "smart_routing",
+                srProducts,
+                selectedSr,
+                (t) => setSelectedSr(t as SmartRoutingTier),
+              )
+            : null}
         </div>
       )}
       {!loading && cfProducts.length > 0 ? (
@@ -385,6 +387,49 @@ export function PlatformProductsPanel({
                         </Button>
                       </>
                     ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      {!loading && faxProducts.length > 0 ? (
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Transovo Fax
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Reliable online fax with transparent page accounting. Manage or cancel your plan anytime.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {faxProducts.map((product) => {
+              const isActive = activeTier("fax") === product.tier;
+              return (
+                <div key={product.productKey} className="rounded-lg border border-border p-4">
+                  <p className="font-medium capitalize">{product.tier}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{product.description}</p>
+                  <p className="mt-3 text-sm font-semibold tabular-nums">
+                    {formatCurrency(product.amountCents / 100)}
+                    <span className="text-xs font-normal text-muted-foreground"> / month</span>
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!isActive ? (
+                      <Button
+                        size="sm"
+                        disabled={checkoutKey === product.productKey}
+                        onClick={() => startCheckout(product.productKey)}
+                      >
+                        Subscribe
+                      </Button>
+                    ) : (
+                      <a
+                        href="/fax/billing"
+                        className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+                      >
+                        Manage plan
+                      </a>
+                    )}
                   </div>
                 </div>
               );
