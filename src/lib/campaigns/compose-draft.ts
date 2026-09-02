@@ -74,6 +74,12 @@ export function clearComposeDraft() {
   sessionStorage.removeItem(CAMPAIGN_COMPOSE_STORAGE_KEY);
 }
 
+/** Fresh composer state — clears any saved session draft. */
+export function startFreshComposeDraft(): CampaignComposeDraft {
+  clearComposeDraft();
+  return defaultComposeDraft();
+}
+
 const FOOTER = "\n\nReply STOP to opt out. Msg & data rates may apply.";
 
 export function composeMessageBody(message: string): string {

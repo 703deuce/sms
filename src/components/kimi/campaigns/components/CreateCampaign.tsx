@@ -12,6 +12,7 @@ import {
   defaultComposeDraft,
   loadComposeDraft,
   saveComposeDraft,
+  startFreshComposeDraft,
   type CampaignComposeDraft,
 } from "@/lib/campaigns/compose-draft";
 import { getCampaignCategory } from "@/lib/campaigns/catalog";
@@ -80,9 +81,10 @@ export default function CreateCampaign({
     const segmentId = searchParams.get("segmentId");
     const loadId = duplicateId || editId;
     const fromPlaybook = Boolean(playbook && !duplicateId && !editId);
+    const isFreshCreate = !loadId && !fromPlaybook && !segmentId;
     setPlaybookId(fromPlaybook ? playbook : null);
 
-    let loaded = loadComposeDraft();
+    let loaded = isFreshCreate ? startFreshComposeDraft() : loadComposeDraft();
     if (fromPlaybook) {
       loaded = { ...defaultComposeDraft(), timezone: loaded.timezone };
     }
@@ -264,6 +266,7 @@ export default function CreateCampaign({
     playbookCategory && playbookCategory.id in PLAYBOOK_EMOJIS
       ? PLAYBOOK_EMOJIS[playbookCategory.id as keyof typeof PLAYBOOK_EMOJIS]
       : "📣";
+  const messageHasMergeFields = /\{\{[^}]+\}\}/.test(draft.message);
 
   return (
     <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
@@ -362,8 +365,16 @@ export default function CreateCampaign({
             <textarea
               value={draft.message}
               onChange={(e) => handleMessageChange(e.target.value)}
-              className="w-full h-36 resize-none outline-none p-3 text-[13.5px] leading-relaxed text-slate-800 rounded-t-xl bg-transparent"
+              placeholder="Write your message here. Use {{first_name}} to personalize each text."
+              className="w-full h-36 resize-none outline-none p-3 text-[13.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 rounded-t-xl bg-transparent"
             />
+            {messageHasMergeFields ? (
+              <p className="border-t border-indigo-100 bg-indigo-50/60 px-3 py-2 text-[12px] leading-relaxed text-indigo-800">
+                Starter template — replace placeholders like{" "}
+                <span className="font-mono text-[11px]">{"{{first_name}}"}</span> with your own
+                wording before sending.
+              </p>
+            ) : null}
             {trackPrompt && (
               <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50/60">
                 <span className="text-[12px] text-slate-500">Track the <span className="font-medium text-slate-700">{trackPrompt}</span> link?</span>

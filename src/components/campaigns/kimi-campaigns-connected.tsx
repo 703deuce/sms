@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import CampaignsList from "@/components/kimi/campaigns/components/CampaignsList";
 import CreateCampaign from "@/components/kimi/campaigns/components/CreateCampaign";
 import ReviewDetails from "@/components/kimi/campaigns/components/ReviewDetails";
+import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
 
 export type CampaignsInitialView = "list" | "create" | "review";
 
@@ -22,5 +23,5 @@ export function KimiCampaignsConnected({ initialView = "list" }: { initialView?:
     return <ReviewDetails onPrev={() => router.push("/campaigns/new")} />;
   }
 
-  return <CampaignsList onCreate={() => router.push("/campaigns/new")} />;
+  return <CampaignsList onCreate={() => { startFreshComposeDraft(); router.push("/campaigns/new"); }} />;
 }
