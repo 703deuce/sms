@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Pencil, X, Loader2 } from "lucide-react";
 import type { Conversation } from "@/components/kimi/conversations/mock-data";
 import { formatPhone } from "@/lib/utils";
+
+type ContactRecord = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  status?: string | null;
+};
 
 type Props = {
   convo: Conversation;
@@ -11,14 +21,48 @@ type Props = {
 };
 
 export function ConversationsContactPanel({ convo, onClose }: Props) {
-  const [firstName, ...rest] = convo.name.split(" ").filter(Boolean);
-  const lastName = rest.join(" ");
+  const [contact, setContact] = useState<ContactRecord | null>(null);
+  const [loading, setLoading] = useState(!!convo.contactId);
 
-  const fields: Array<{ label: string; value: string; href?: string }> = [
+  useEffect(() => {
+    if (!convo.contactId) {
+      setContact(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/contacts/${convo.contactId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled) setContact(json?.data ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setContact(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [convo.contactId]);
+
+  const firstName = contact?.firstName || convo.name.split(" ")[0] || "—";
+  const lastName =
+    contact?.lastName ||
+    convo.name.split(" ").slice(1).join(" ") ||
+    "—";
+  const phone = contact?.phone || convo.phone;
+  const email = contact?.email || convo.email || "—";
+  const status = contact?.status || "—";
+
+  const fields: Array<{ label: string; value: string }> = [
     { label: "First Name", value: firstName || "—" },
     { label: "Last Name", value: lastName || "—" },
-    { label: "Mobile Number", value: convo.phone ? formatPhone(convo.phone) : "—" },
-    { label: "Email", value: convo.email || "—" },
+    { label: "Mobile Number", value: phone ? formatPhone(phone) : "—" },
+    { label: "Email", value: email },
+    { label: "Subscription", value: status },
   ];
 
   return (
@@ -111,28 +155,34 @@ export function ConversationsContactPanel({ convo, onClose }: Props) {
         >
           CONTACT DETAILS
         </div>
-        {fields.map((field) => (
-          <div
-            key={field.label}
-            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13 }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10.5, color: "var(--tv-faint)", marginBottom: 2.5 }}>
-                {field.label}
-              </div>
-              <div className={"tv-field-value" + (field.value === "—" ? " empty" : "")}>
-                {field.value}
-              </div>
-            </div>
-            {convo.contactId ? (
-              <Link href={`/contacts/${convo.contactId}`} title={`Edit ${field.label.toLowerCase()}`}>
-                <Pencil size={12} color="#d1d5db" style={{ cursor: "pointer", flexShrink: 0 }} />
-              </Link>
-            ) : (
-              <Pencil size={12} color="#d1d5db" style={{ flexShrink: 0, opacity: 0.35 }} />
-            )}
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+            <Loader2 size={18} className="animate-spin" color="var(--tv-faint)" />
           </div>
-        ))}
+        ) : (
+          fields.map((field) => (
+            <div
+              key={field.label}
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13 }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, color: "var(--tv-faint)", marginBottom: 2.5 }}>
+                  {field.label}
+                </div>
+                <div className={"tv-field-value" + (field.value === "—" ? " empty" : "")}>
+                  {field.value}
+                </div>
+              </div>
+              {convo.contactId ? (
+                <Link href={`/contacts/${convo.contactId}`} title={`Edit ${field.label.toLowerCase()}`}>
+                  <Pencil size={12} color="#d1d5db" style={{ cursor: "pointer", flexShrink: 0 }} />
+                </Link>
+              ) : (
+                <Pencil size={12} color="#d1d5db" style={{ flexShrink: 0, opacity: 0.35 }} />
+              )}
+            </div>
+          ))
+        )}
         <Link
           href="/conversations/saved-replies"
           style={{

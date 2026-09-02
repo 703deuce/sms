@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash, Settings } from "lucide-react";
 import { TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
 
 export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string; sub?: string };
@@ -39,11 +39,12 @@ const SUBS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "closed", label: "Closed", icon: <CheckCircle2 size={13} /> },
 ];
 
-export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, searchQuery, onSearchChange }:{
+export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, searchQuery, onSearchChange, onOpenSettings }:{
   sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void;
   tags?: Tag[]; teammates?: Teammate[];
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
+  onOpenSettings?: () => void;
 }) {
   const tagList = tags ?? TAGS;
   const teammateList = teammates ?? TEAMMATES;
@@ -75,6 +76,11 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
           />
         </div>
         <button className="tv-btn" style={{ padding: "7px 10px", borderRadius: 8, boxShadow: "0 1px 2px rgba(16,24,40,.1)" }} onClick={onNew} title="New Message"><MessageSquarePlus size={15} /></button>
+        {onOpenSettings ? (
+          <button className="tv-icon-btn" style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid var(--tv-border)" }} onClick={onOpenSettings} title="Inbox settings">
+            <Settings size={15} />
+          </button>
+        ) : null}
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 8px 16px" }}>
         <Group title="MY CONVERSATIONS">

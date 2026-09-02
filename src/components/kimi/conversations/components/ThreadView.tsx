@@ -11,10 +11,12 @@ const MenuItem = ({ children, onClick }:{ children: React.ReactNode; onClick?: (
   <div className="tv-menu-item" onClick={onClick}>{children}</div>
 );
 
-export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, onDownloadTranscript, tags: tagsProp, teammates: teammatesProp }:{
+export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, onDownloadTranscript, tags: tagsProp, teammates: teammatesProp, liveMode, ComposerSlot }:{
   convo: Conversation; onUpdate: (c: Conversation)=>void; onToggleContact: ()=>void; contactOpen: boolean; onOpenTagsSettings: ()=>void;
   onDownloadTranscript?: () => void;
   tags?: Tag[]; teammates?: Teammate[];
+  liveMode?: boolean;
+  ComposerSlot?: React.ComponentType<{ onSend: (t: string, mediaUrls?: string[]) => void; onNote: (t: string) => void }>;
 }) {
   const tagCatalog = tagsProp ?? TAGS;
   const teammateCatalog = teammatesProp ?? TEAMMATES;
@@ -26,28 +28,43 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
   const [pendingTags, setPendingTags] = useState<string[]>(convo.tags);
 
   const ev = (text: string): Message => ({ id: "e" + Date.now() + Math.random(), kind: "event", eventText: text });
-  const now = "On Tuesday, August 27th, 2024 @ 4:30 pm by Me";
+  const now = liveMode
+    ? new Date().toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) + " by Me"
+    : "On Tuesday, August 27th, 2024 @ 4:30 pm by Me";
 
   const setStatus = (s: Conversation["status"]) => {
     const label = s === "open" ? "Marked As Open" : s === "pending" ? "Marked As Pending" : "Marked As Closed";
-    const msgs = [...convo.messages, ev(`${label} — ${now}`)];
-    if (s === "closed") msgs.push(ev(`Conversation Unassigned to Me — ${now}`));
+    const msgs = liveMode
+      ? convo.messages
+      : [...convo.messages, ev(`${label} — ${now}`)];
+    if (!liveMode && s === "closed") msgs.push(ev(`Conversation Unassigned to Me — ${now}`));
     onUpdate({ ...convo, status: s, assignee: s === "closed" ? null : convo.assignee, messages: msgs });
     setStatusOpen(false);
   };
   const assign = (id: string | null) => {
     const name = id === null ? "No One" : id === "me" ? "Me" : teammateCatalog.find((t) => t.id === id)?.name ?? "";
-    onUpdate({ ...convo, assignee: id, messages: [...convo.messages, ev(`Conversation Assigned to ${name} — ${now}`)] });
+    const msgs = liveMode
+      ? convo.messages
+      : [...convo.messages, ev(`Conversation Assigned to ${name} — ${now}`)];
+    onUpdate({ ...convo, assignee: id, messages: msgs });
     setAssignOpen(false);
   };
   const applyTags = () => {
     const added = pendingTags.filter((t) => !convo.tags.includes(t));
-    const msgs = [...convo.messages, ...added.map((t) => ev(`Conversation Tagged as ${tagCatalog.find((x) => x.id === t)?.name} — ${now}`))];
+    const msgs = liveMode
+      ? convo.messages
+      : [...convo.messages, ...added.map((t) => ev(`Conversation Tagged as ${tagCatalog.find((x) => x.id === t)?.name} — ${now}`))];
     onUpdate({ ...convo, tags: pendingTags, messages: msgs });
     setTagOpen(false);
   };
-  const send = (text: string) => onUpdate({ ...convo, messages: [...convo.messages, { id: "m" + Date.now(), kind: "outbound", author: "Me", text, time: "4:30 pm" }] });
-  const note = (text: string) => onUpdate({ ...convo, messages: [...convo.messages, { id: "n" + Date.now(), kind: "note", author: "Note From Me", text, time: "Tuesday, August 27th, 2024 @ 4:30 pm" }] });
+  const send = (text: string, mediaUrls?: string[]) => {
+    const time = liveMode ? new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "4:30 pm";
+    const msg: Message = mediaUrls?.length
+      ? { id: "m" + Date.now(), kind: "mms", author: "Me", image: mediaUrls[0], caption: text, time }
+      : { id: "m" + Date.now(), kind: "outbound", author: "Me", text, time };
+    onUpdate({ ...convo, messages: [...convo.messages, msg] });
+  };
+  const note = (text: string) => onUpdate({ ...convo, messages: [...convo.messages, { id: "n" + Date.now(), kind: "note", author: "Note From Me", text, time: liveMode ? new Date().toLocaleString() : "Tuesday, August 27th, 2024 @ 4:30 pm" }] });
   const markUnread = () => { onUpdate({ ...convo, unread: true }); setMoreOpen(false); };
 
   const visible = convo.messages.filter((m) => {
@@ -122,6 +139,16 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
               </label>
             ))}
             <button className="tv-btn" style={{ width: "100%", justifyContent: "center", marginTop: 8 }} onClick={applyTags}>Set Tags</button>
+            {onOpenTagsSettings ? (
+              <button
+                type="button"
+                className="tv-btn-ghost"
+                style={{ width: "100%", justifyContent: "center", marginTop: 8, fontSize: 12 }}
+                onClick={() => { setTagOpen(false); onOpenTagsSettings(); }}
+              >
+                Manage tags
+              </button>
+            ) : null}
           </div>
         </Popover>
         <button className={"tv-icon-btn" + (contactOpen ? " active" : "")} onClick={onToggleContact} title="Contact Details">
@@ -194,7 +221,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
         })}
       </div>
 
-      <Composer onSend={send} onNote={note} />
+      {ComposerSlot ? <ComposerSlot onSend={send} onNote={note} /> : <Composer onSend={(t) => send(t)} onNote={note} />}
     </div>
   );
 }

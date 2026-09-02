@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { useRouter } from "next/navigation";
 import { SlidersHorizontal, BadgeCheck, ListChecks, Puzzle, Code2, PhoneOutgoing, Inbox as InboxIcon, ShoppingCart, Link2, BarChart2, ShieldCheck, FileCode2 } from "lucide-react";
 
 const CARDS = [
@@ -17,7 +18,36 @@ const CARDS = [
   { icon: <FileCode2 size={16} />, tint: "#f1f5f9", color: "#475569", title: "Transovo Tag", desc: "Access the code snippet that powers Transovo-related features on your website." },
 ];
 
-export default function SettingsHome({ onOpenInbox }:{ onOpenInbox: ()=>void }) {
+const SETTINGS_ROUTES: Record<string, string> = {
+  General: "/settings/messaging",
+  "Brand Info": "/settings/brand",
+  "Custom Fields": "/settings/custom-fields",
+  Integrations: "/settings/integrations",
+  "API & Webhooks": "/settings/api",
+  "Sending Numbers": "/settings/numbers",
+  Ecommerce: "/settings/ecommerce",
+  "Link Domains": "/settings/link-domains",
+  "UTM Parameters": "/settings/utm",
+  Compliance: "/settings/compliance",
+  "Transovo Tag": "/settings/tag",
+};
+
+export default function SettingsHome({
+  onOpenInbox,
+  cardHref,
+}: {
+  onOpenInbox: () => void;
+  cardHref?: (title: string) => string | undefined;
+}) {
+  const router = useRouter();
+  const openCard = (title: string, go?: string) => {
+    if (go) {
+      onOpenInbox();
+      return;
+    }
+    const href = cardHref?.(title) ?? SETTINGS_ROUTES[title];
+    if (href) router.push(href);
+  };
   return (
     <div className="ref-scroll" style={{ flex: 1, overflowY: "auto", padding: "32px 36px", background: "#fbfcfd" }}>
       <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>Settings</div>
@@ -25,14 +55,14 @@ export default function SettingsHome({ onOpenInbox }:{ onOpenInbox: ()=>void }) 
       <p style={{ fontSize: 13, color: "#6b7280", margin: "6px 0 26px" }}>Manage functional settings for your brand / account.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14, maxWidth: 980 }}>
         {CARDS.map((c) => (
-          <div key={c.title} onClick={c.go ? onOpenInbox : undefined}
+          <div key={c.title} onClick={() => openCard(c.title, c.go)}
             style={{
               background: "#fff", border: "1px solid var(--tv-border)", borderRadius: 12, padding: "18px 18px 16px",
-              cursor: c.go ? "pointer" : "default",
+              cursor: c.go || cardHref?.(c.title) || SETTINGS_ROUTES[c.title] ? "pointer" : "default",
               transition: "box-shadow .15s, border-color .15s",
               boxShadow: "0 1px 2px rgba(16,24,40,.04)",
             }}
-            onMouseEnter={(e) => { if (c.go) { e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,24,40,.09)"; e.currentTarget.style.borderColor = "#d3d8e0"; } }}
+            onMouseEnter={(e) => { if (c.go || cardHref?.(c.title) || SETTINGS_ROUTES[c.title]) { e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,24,40,.09)"; e.currentTarget.style.borderColor = "#d3d8e0"; } }}
             onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 1px 2px rgba(16,24,40,.04)"; e.currentTarget.style.borderColor = "var(--tv-border)"; }}>
             <span style={{ width: 32, height: 32, borderRadius: 9, background: c.tint, display: "inline-flex", alignItems: "center", justifyContent: "center", color: c.color }}>{c.icon}</span>
             <div style={{ fontSize: 14, fontWeight: 700, marginTop: 12, letterSpacing: -0.1, color: "#111827" }}>{c.title}</div>

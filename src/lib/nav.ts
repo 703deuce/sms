@@ -175,16 +175,16 @@ export const appNav: NavItem[] = [
   },
   {
     label: "Messaging",
-    href: "/inbox",
+    href: "/conversations",
     icon: MessageSquare,
     children: [
       {
         type: "group",
         label: "Inbox",
         children: [
-          { label: "All Conversations", href: "/inbox" },
-          { label: "Assigned to Me", href: "/inbox/mine" },
-          { label: "Unassigned", href: "/inbox/unassigned" },
+          { label: "All Conversations", href: "/conversations" },
+          { label: "Assigned to Me", href: "/conversations?filter=mine" },
+          { label: "Unassigned", href: "/conversations?filter=unassigned" },
         ],
       },
       {
@@ -518,11 +518,8 @@ export const pageTitles: Record<string, string> = {
   "/send/quick": "Quick Send",
   "/send/test": "Test Message",
   "/send/ai": "AI Campaign Composer",
-  "/inbox": "Inbox",
-  "/inbox/mine": "Assigned to Me",
-  "/inbox/unassigned": "Unassigned",
-  "/inbox/archived": "Archived",
-  "/inbox/saved-replies": "Saved Replies",
+  "/conversations": "Inbox",
+  "/conversations/saved-replies": "Saved Replies",
   "/messaging/media": "Media Library",
   "/messaging/links": "Link Tracking",
   "/messaging/payments": "Text-to-pay",

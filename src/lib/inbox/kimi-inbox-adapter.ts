@@ -116,7 +116,11 @@ function mapApiMessage(m: ApiConversation["messages"][number], contactName: stri
   };
 }
 
-export function mapApiConversationToKimi(c: ApiConversation, ctx: KimiInboxContext): Conversation {
+export function mapApiConversationToKimi(
+  c: ApiConversation,
+  ctx: KimiInboxContext,
+  tagCatalog: Tag[] = [],
+): Conversation {
   const name = c.contactName || c.phone || "Unknown";
   return {
     id: c.id,
@@ -129,13 +133,17 @@ export function mapApiConversationToKimi(c: ApiConversation, ctx: KimiInboxConte
     unread: c.unread,
     status: apiStatusToKimi(c.status),
     assignee: resolveAssigneeId(c.assignedTo, ctx),
-    tags: c.tags || [],
+    tags: apiTagNamesToKeys(c.tags || [], tagCatalog),
     phone: c.phone,
     messages: (c.messages || []).map((m) => mapApiMessage(m, name)),
   };
 }
 
-export function mapListItemToKimi(item: InboxListItem, ctx: KimiInboxContext): Conversation {
+export function mapListItemToKimi(
+  item: InboxListItem,
+  ctx: KimiInboxContext,
+  tagCatalog: Tag[] = [],
+): Conversation {
   const first = item.contact?.firstName || "";
   const last = item.contact?.lastName || "";
   const name = `${first} ${last}`.trim() || item.contact?.phone || "Unknown";
@@ -150,7 +158,7 @@ export function mapListItemToKimi(item: InboxListItem, ctx: KimiInboxContext): C
     unread: item.unread,
     status: apiStatusToKimi(item.status),
     assignee: resolveAssigneeId(item.assignedTo, ctx),
-    tags: item.tags || [],
+    tags: apiTagNamesToKeys(item.tags || [], tagCatalog),
     phone: item.contact?.phone || "",
     messages: [],
   };
@@ -174,13 +182,18 @@ export function buildTeammates(ctx: KimiInboxContext): Teammate[] {
   return [me, ...others];
 }
 
+/** Conversation tags in the API are stored by name — Kimi tag ids must match names. */
+export function canonicalTagId(name: string): string {
+  return name;
+}
+
 export function buildTagsFromConversations(convos: Conversation[]): Tag[] {
   const names = new Set<string>();
   for (const c of convos) {
     for (const t of c.tags) names.add(t);
   }
   return Array.from(names).map((name, i) => ({
-    id: name,
+    id: canonicalTagId(name),
     name,
     color: AVATAR_COLORS[i % AVATAR_COLORS.length],
     description: "",
@@ -190,14 +203,43 @@ export function buildTagsFromConversations(convos: Conversation[]): Tag[] {
 }
 
 export function inboxTagDefinitionsToKimi(rows: InboxTagDefinition[]): Tag[] {
-  return rows.map((r) => ({
-    id: r.id,
+  return rows.map((r, i) => ({
+    id: canonicalTagId(r.name),
     name: r.name,
-    color: r.color || AVATAR_COLORS[0],
+    color: r.color || AVATAR_COLORS[i % AVATAR_COLORS.length],
     description: r.description || "",
     created: r.created || "",
     untagOnClose: r.untagOnClose ?? false,
   }));
+}
+
+export function mergeTagCatalog(persisted: Tag[], fromConvos: Tag[]): Tag[] {
+  const byName = new Map<string, Tag>();
+  for (const t of [...persisted, ...fromConvos]) {
+    byName.set(t.name, { ...t, id: canonicalTagId(t.name) });
+  }
+  return Array.from(byName.values());
+}
+
+/** Resolve a Kimi tag key (id or legacy persisted id) to the API tag name. */
+export function tagKeyToApiName(tagKey: string, catalog: Tag[]): string {
+  const byId = catalog.find((t) => t.id === tagKey);
+  if (byId) return byId.name;
+  const byName = catalog.find((t) => t.name === tagKey);
+  if (byName) return byName.name;
+  return tagKey;
+}
+
+export function tagKeysToApiNames(tagKeys: string[], catalog: Tag[]): string[] {
+  return Array.from(new Set(tagKeys.map((k) => tagKeyToApiName(k, catalog))));
+}
+
+/** Map API tag names onto canonical Kimi tag keys. */
+export function apiTagNamesToKeys(tagNames: string[], catalog: Tag[]): string[] {
+  return tagNames.map((name) => {
+    const hit = catalog.find((t) => t.name === name);
+    return hit ? hit.id : canonicalTagId(name);
+  });
 }
 
 export type InboxQuery = {
@@ -209,8 +251,10 @@ export type InboxQuery = {
   contactId?: string;
 };
 
-export function inboxQueryFromFilter(sel: FilterSel): InboxQuery {
-  const q: InboxQuery = { product: "all" };
+export function inboxQueryFromFilter(sel: FilterSel, product = "all"): InboxQuery {
+  const q: InboxQuery = {
+    product: product === "all" ? "all" : product,
+  };
   if (sel.kind === "mine") {
     q.filter = "mine";
     if (sel.key === "unread") q.unread = true;
@@ -337,11 +381,17 @@ export async function syncConversationUpdate(
   prev: Conversation,
   next: Conversation,
   ctx: KimiInboxContext,
+  tagCatalog: Tag[] = [],
 ): Promise<ApiConversation | null> {
   if (next.messages.length > prev.messages.length) {
     const added = next.messages[next.messages.length - 1];
-    if (added.kind === "outbound" && added.text) {
-      return patchConversation(prev.id, { action: "reply", body: added.text });
+    if ((added.kind === "outbound" || added.kind === "mms") && (added.text || added.caption || added.image)) {
+      const mediaUrls = added.image ? [added.image] : undefined;
+      return patchConversation(prev.id, {
+        action: "reply",
+        body: (added.text || added.caption || "").trim(),
+        mediaUrls,
+      });
     }
     if (added.kind === "note" && added.text) {
       return patchConversation(prev.id, { action: "note", body: added.text });
@@ -358,7 +408,7 @@ export async function syncConversationUpdate(
   const tagsChanged =
     next.tags.length !== prev.tags.length || next.tags.some((t, i) => t !== prev.tags[i]);
   if (tagsChanged) {
-    return patchConversation(prev.id, { tags: next.tags });
+    return patchConversation(prev.id, { tags: tagKeysToApiNames(next.tags, tagCatalog) });
   }
   if (next.unread !== prev.unread) {
     return patchConversation(prev.id, { unread: next.unread });
