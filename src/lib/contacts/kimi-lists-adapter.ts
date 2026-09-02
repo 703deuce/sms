@@ -89,7 +89,12 @@ export async function fetchContactsForLists(): Promise<Contact[]> {
       lastName: mapped.lastName,
       mobile: mapped.mobile,
       email: mapped.email,
-      optIn: mapped.status === "Subscribed" ? "Subscribed" : "Not Subscribed",
+      optIn:
+        mapped.status === "Subscribed"
+          ? "Subscribed"
+          : mapped.status === "Unsubscribed"
+            ? "Unsubscribed"
+            : "Not Subscribed",
       created: mapped.created,
     } satisfies Contact;
   });

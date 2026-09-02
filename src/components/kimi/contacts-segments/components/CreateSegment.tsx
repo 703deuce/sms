@@ -28,7 +28,7 @@ function seedGroups(editing?: Segment | null): Group[] {
   return [{ id: nid(), conditions: [newCond()] }];
 }
 
-export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment, onSaveError, onPreviewCount }: {
+export default function CreateSegment({ editing, onBack, onSaved, onViewContacts, onCreateCampaign, onSaveSegment, onSaveError, onPreviewCount, listOptions = [] }: {
   editing?: Segment | null;
   onBack: () => void;
   onSaved: (seg: Segment, mode: "segments" | "contacts" | "campaign") => void;
@@ -42,6 +42,7 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
   }) => Promise<Segment>;
   onSaveError?: (message: string) => void;
   onPreviewCount?: (groups: KimiConditionGroup[]) => Promise<number>;
+  listOptions?: string[];
 }) {
   const [name, setName] = useState(editing?.name ?? "");
   const [groups, setGroups] = useState<Group[]>(() => seedGroups(editing));
@@ -103,9 +104,6 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
       contacts: displayCount ?? matched,
     };
     const finish = (seg: Segment) => {
-      const existing: Segment[] = (window as any).__transovoSegments ?? [];
-      const next = editing ? existing.map(s => s.id === seg.id ? seg : s) : [...existing, seg];
-      (window as any).__transovoSegments = next;
       setSaveMenu(false);
       onSaved(seg, mode);
     };
@@ -184,7 +182,12 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
                       <div className="h-px flex-1 bg-amber-100" />
                     </div>
                   )}
-                  <ConditionRow cond={c} onChange={(nc) => updateCond(g.id, nc)} onRemove={() => removeCond(g.id, c.id)} />
+                  <ConditionRow
+                    cond={c}
+                    listOptions={listOptions}
+                    onChange={(nc) => updateCond(g.id, nc)}
+                    onRemove={() => removeCond(g.id, c.id)}
+                  />
                 </div>
               ))}
             </div>

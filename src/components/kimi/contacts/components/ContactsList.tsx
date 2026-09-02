@@ -275,6 +275,12 @@ export default function ContactsList({
       </div>
       <p className="mb-6 mt-1 text-[13px] text-muted-foreground">View and manage all of your contacts.</p>
 
+      {stats.contacts > contacts.length && (
+        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-[12px] text-primary">
+          Showing {contacts.length.toLocaleString()} of {stats.contacts.toLocaleString()} contacts. Refine your search or use filters to find specific contacts.
+        </div>
+      )}
+
       <div className="mb-7 flex items-center gap-16">
         <StatCard icon={Users} label="Contacts" value={stats.contacts.toLocaleString()} tint="bg-indigo-50 text-indigo-600" />
         <StatCard icon={UserCheck} label="Subscribed Contacts" value={stats.subscribed.toLocaleString()} tint="bg-emerald-50 text-emerald-600" />

@@ -85,7 +85,7 @@ export function KimiQrCodesConnected() {
                 defaultKeyword={defaultKeyword}
                 keywordOptions={keywords.map((k) => ({ name: k.name }))}
                 webformOptions={webforms}
-                onDownload={async ({ action, keyword, webform, url }) => {
+                onDownload={async ({ action, keyword, webform, url, color }) => {
                   setError("");
                   const formUrl = webforms.find((f) => f.value === webform)?.url;
                   const targetUrl =
@@ -102,6 +102,7 @@ export function KimiQrCodesConnected() {
                     name: `QR ${action === "keyword" ? keyword : action === "webform" ? webform : "link"}`,
                     targetUrl,
                     targetType: action,
+                    color,
                   });
                   await reload();
                   setView("list");

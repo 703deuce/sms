@@ -5,6 +5,8 @@ export interface Keyword {
   lastSaved: string;
   connectedLists: number;
   status: "Active" | "Inactive";
+  autoReply?: string;
+  listName?: string;
 }
 
 export const keywords: Keyword[] = [

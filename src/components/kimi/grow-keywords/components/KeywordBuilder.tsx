@@ -16,7 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import PhonePreview from "./PhonePreview";
-import { contactLists as defaultContactLists } from "../mock-data";
+import { contactLists as defaultContactLists, type Keyword } from "../mock-data";
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -123,11 +123,14 @@ export default function KeywordBuilder({
   onSaved,
   contactLists = defaultContactLists,
   onSaveKeyword,
+  editingKeyword,
 }: {
   onBack: () => void;
   onSaved: () => void;
   contactLists?: string[];
+  editingKeyword?: Keyword | null;
   onSaveKeyword?: (payload: {
+    keywordId?: string;
     keyword: string;
     listName?: string;
     confirmation?: string;
@@ -135,17 +138,22 @@ export default function KeywordBuilder({
     status?: string;
   }) => void | Promise<void>;
 }) {
+  const isEdit = Boolean(editingKeyword);
   const [setupOpen, setSetupOpen] = useState(true);
   const [behaviorOpen, setBehaviorOpen] = useState(false);
 
-  const [keyword, setKeyword] = useState("");
-  const [description, setDescription] = useState("");
+  const [keyword, setKeyword] = useState(editingKeyword?.name ?? "");
+  const [description, setDescription] = useState(editingKeyword?.description ?? "");
   const [autoResponse, setAutoResponse] = useState(
-    "Thanks for subscribing to Transovo Tutorials text alerts."
+    editingKeyword?.autoReply || "Thanks for subscribing to Transovo Tutorials text alerts.",
   );
 
-  const [createContact, setCreateContact] = useState<"yes" | "no">("yes");
-  const [selectedLists, setSelectedLists] = useState<string[]>([]);
+  const [createContact, setCreateContact] = useState<"yes" | "no">(
+    editingKeyword?.listName ? "yes" : "yes",
+  );
+  const [selectedLists, setSelectedLists] = useState<string[]>(
+    editingKeyword?.listName ? [editingKeyword.listName] : [],
+  );
   const [listSearch, setListSearch] = useState("");
   const [listDropOpen, setListDropOpen] = useState(false);
   const [alternateOn, setAlternateOn] = useState(false);
@@ -156,7 +164,7 @@ export default function KeywordBuilder({
     "You've resubscribed to Transovo Tutorials text alerts."
   );
   const [doubleOptIn, setDoubleOptIn] = useState(false);
-  const [active, setActive] = useState(false);
+  const [active, setActive] = useState(editingKeyword ? editingKeyword.status === "Active" : true);
   const [saving, setSaving] = useState(false);
 
   const filteredLists = contactLists.filter(
@@ -173,6 +181,7 @@ export default function KeywordBuilder({
     if (onSaveKeyword && keyword.trim()) {
       void Promise.resolve(
         onSaveKeyword({
+          keywordId: editingKeyword?.id,
           keyword: keyword.trim(),
           listName: createContact === "yes" ? selectedLists[0] : undefined,
           confirmation: description.trim() || autoResponse,
@@ -202,7 +211,7 @@ export default function KeywordBuilder({
           Keywords
         </button>
         <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground">Create Keyword</span>
+        <span className="text-foreground">{isEdit ? "Edit Keyword" : "Create Keyword"}</span>
       </nav>
 
       <div className="flex items-start gap-9">
@@ -214,10 +223,10 @@ export default function KeywordBuilder({
             </div>
             <div>
               <h1 className="font-display text-[20px] font-semibold tracking-tight text-foreground">
-                Create Keyword
+                {isEdit ? "Edit Keyword" : "Create Keyword"}
               </h1>
               <p className="mt-0.5 text-[13px] text-muted-foreground">
-                Create a new keyword and auto response message.
+                {isEdit ? "Edit your keyword and auto response message." : "Create a new keyword and auto response message."}
               </p>
             </div>
           </div>
@@ -467,7 +476,7 @@ export default function KeywordBuilder({
                 onClick={handleSave}
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                {saving ? "Saving…" : "Save Keyword"}
+                {saving ? "Saving…" : isEdit ? "Save Changes" : "Save Keyword"}
               </button>
             </div>
           </div>

@@ -12,7 +12,7 @@ export interface Contact {
   lastName: string;
   mobile: string;
   email: string;
-  optIn: "Subscribed" | "Not Subscribed";
+  optIn: "Subscribed" | "Not Subscribed" | "Unsubscribed";
   created: string;
 }
 

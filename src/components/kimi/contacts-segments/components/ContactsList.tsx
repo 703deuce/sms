@@ -20,7 +20,7 @@ function StatusChip({ status }: { status: Contact["status"] }) {
   );
 }
 
-export default function ContactsList({ contacts: contactsProp }: { contacts?: Contact[] }) {
+export default function ContactsList({ contacts: contactsProp, totalContacts }: { contacts?: Contact[]; totalContacts?: number }) {
   const [q, setQ] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const source = contactsProp ?? mockContacts;
@@ -29,6 +29,11 @@ export default function ContactsList({ contacts: contactsProp }: { contacts?: Co
     <div className="p-6 max-w-6xl mx-auto seg-fade">
       <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground mb-1">Contacts</h1>
       <p className="text-sm text-muted-foreground mb-6">View and manage all of your contacts.</p>
+      {totalContacts && totalContacts > source.length && (
+        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-[12px] text-primary">
+          Showing {source.length.toLocaleString()} of {totalContacts.toLocaleString()} contacts.
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <div className="relative w-72">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />

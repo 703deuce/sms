@@ -33,6 +33,7 @@ export async function createQrCode(payload: {
   name: string;
   targetUrl: string;
   targetType?: string;
+  color?: string;
 }): Promise<QrCodeRow> {
   const res = await fetch("/api/growth/qr", {
     method: "POST",

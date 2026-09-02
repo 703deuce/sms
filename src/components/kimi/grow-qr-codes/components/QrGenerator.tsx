@@ -17,7 +17,7 @@ export default function QrGenerator({
   defaultKeyword?: string;
   keywordOptions?: Array<{ name: string }>;
   webformOptions?: Array<{ value: string; label: string }>;
-  onDownload?: (ctx: { action: string; keyword: string; webform: string; url: string }) => Promise<void>;
+  onDownload?: (ctx: { action: string; keyword: string; webform: string; url: string; color: string }) => Promise<void>;
 }) {
   const keywordRows = keywordOptions?.length ? keywordOptions : keywords;
   const webformRows = webformOptions?.length ? webformOptions : webforms;
@@ -143,7 +143,7 @@ export default function QrGenerator({
 
       <div className="mt-10 flex items-center justify-end gap-3 border-t border-border pt-5">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button onClick={() => void onDownload?.({ action, keyword, webform, url })}>
+        <Button onClick={() => void onDownload?.({ action, keyword, webform, url, color })}>
           <Download size={15} /> Download
         </Button>
       </div>

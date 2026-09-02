@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Search, Plus, MoreVertical, Pencil, Code2, Copy, Trash2, LayoutList, ListChecks } from "lucide-react";
+import { Search, Plus, MoreVertical, Pencil, Code2, Copy, Trash2, LayoutList, ListChecks, ExternalLink } from "lucide-react";
 import { webForms as seedForms, WebForm } from "../mock-data";
 
 export default function WebFormsList({
@@ -10,6 +10,7 @@ export default function WebFormsList({
   onEdit,
   onClone,
   onCopyEmbed,
+  onOpenForm,
 }: {
   forms?: WebForm[];
   onCreate: () => void;
@@ -17,6 +18,7 @@ export default function WebFormsList({
   onEdit?: (id: string) => void;
   onClone?: (id: string) => void;
   onCopyEmbed?: (id: string) => void | Promise<void>;
+  onOpenForm?: (id: string) => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [rows, setRows] = useState<WebForm[]>(formsProp ?? seedForms);
@@ -142,6 +144,14 @@ export default function WebFormsList({
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted" onClick={() => { setMenuFor(null); onEdit?.(f.id); }}><Pencil size={14} className="text-muted-foreground" /> Edit</button>
+                      {f.publicUrl && (
+                        <button
+                          className="flex w-full items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+                          onClick={() => { setMenuFor(null); onOpenForm?.(f.id); }}
+                        >
+                          <ExternalLink size={14} className="text-muted-foreground" /> Open Form
+                        </button>
+                      )}
                       <button
                         className="flex w-full items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
                         onClick={() => { setMenuFor(null); void onCopyEmbed?.(f.id); }}

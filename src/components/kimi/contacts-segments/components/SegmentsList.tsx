@@ -12,18 +12,7 @@ export default function SegmentsList({ segments: segmentsProp, onCreate, onViewC
 }) {
   const [query, setQuery] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [items, setItems] = useState<Segment[]>(() => {
-    if (segmentsProp) return segmentsProp;
-    if (typeof window !== "undefined") {
-      const saved = (window as any).__transovoSegments;
-      if (saved) return saved;
-    }
-    return initialSegments;
-  });
-
-  useEffect(() => {
-    if (segmentsProp) setItems(segmentsProp);
-  }, [segmentsProp]);
+  const items = segmentsProp ?? initialSegments;
 
   useEffect(() => {
     if (!menuFor) return;
@@ -81,9 +70,9 @@ export default function SegmentsList({ segments: segmentsProp, onCreate, onViewC
               </button>
               <p className="text-xs text-muted-foreground mt-0.5">Created {s.createdAt}</p>
             </div>
-            <button className="text-[13px] text-muted-foreground text-left truncate">
+            <span className="text-[13px] text-muted-foreground text-left truncate">
               {s.description?.trim() ? s.description : <span className="italic text-muted-foreground/70">—</span>}
-            </button>
+            </span>
             <button
               onClick={() => onViewContacts(s)}
               className="group flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
@@ -116,10 +105,10 @@ export default function SegmentsList({ segments: segmentsProp, onCreate, onViewC
                   </button>
                   <div className="my-1 h-px bg-border" />
                   <button
-                    onClick={() => { const next = items.filter(x => x.id !== s.id); setItems(next); (window as any).__transovoSegments = next; setMenuFor(null); onDelete?.(s.id); }}
+                    onClick={() => { setMenuFor(null); onDelete?.(s.id); }}
                     className="w-full px-3 py-2 text-sm text-left hover:bg-red-50 text-red-600 flex items-center gap-2.5 transition-colors"
                   >
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                    <Trash2 className="h-3.5 w-3.5" /> Delete Segment
                   </button>
                 </div>
               )}
@@ -127,48 +116,23 @@ export default function SegmentsList({ segments: segmentsProp, onCreate, onViewC
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="px-4 py-16 border-t border-border flex flex-col items-center text-center">
-            <span className="h-12 w-12 rounded-full bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center mb-3.5">
-              <PieSlice />
+          <div className="px-4 py-14 border-t border-border flex flex-col items-center text-center">
+            <span className="h-11 w-11 rounded-xl bg-muted flex items-center justify-center mb-3">
+              <Search className="h-5 w-5 text-muted-foreground" />
             </span>
-            <p className="text-sm font-medium text-foreground">{query ? "No segments found" : "No segments yet"}</p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-xs leading-relaxed">
-              {query
-                ? "Try a different search term."
-                : "Build dynamic segments from contact fields, lists, links and campaigns."}
-            </p>
-            {!query && (
-              <button
-                onClick={onCreate}
-                className="seg-btn-primary mt-4 h-9 px-4 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-150 active:scale-[0.98]"
-              >
-                <Plus className="h-4 w-4" /> Create Segment
-              </button>
-            )}
+            <p className="text-sm font-medium text-foreground">No segments found</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs">No segments match your search. Try a different term.</p>
           </div>
         )}
       </div>
-
-      {filtered.length > 0 && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {filtered.length} {filtered.length === 1 ? "segment" : "segments"}
-          </p>
-          <select className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30">
-            <option>25 Per Page</option><option>50 Per Page</option><option>100 Per Page</option>
-          </select>
-        </div>
-      )}
     </div>
   );
 }
 
 export function PieSlice() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-      <circle cx="12" cy="12" r="9" fill="none" stroke="#4f46e5" strokeWidth="2" />
-      <path d="M12 3 A9 9 0 0 1 20.7 9 L12 12 Z" fill="#2dd4bf" />
-      <path d="M12 3 A9 9 0 0 0 4.5 16.5 L12 12 Z" fill="#6366f1" opacity="0.35" />
+    <svg viewBox="0 0 16 16" className="h-4 w-4 text-primary" fill="currentColor">
+      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5V8h5.5A5.5 5.5 0 0 0 8 2.5z" />
     </svg>
   );
 }

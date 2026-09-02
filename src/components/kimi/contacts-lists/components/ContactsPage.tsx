@@ -103,6 +103,12 @@ export default function ContactsPage({
       <h1 className="page-title"><Users size={19} className="text-[#3b4ef5]" /> Contacts</h1>
       <p className="page-subtitle mb-6">View and manage all of your contacts.</p>
 
+      {stats.contacts > contacts.length && (
+        <div className="mb-4 rounded-lg border border-[#dce2ff] bg-[#eef1fe] px-4 py-2.5 text-[12px] text-[#3b4ef5]">
+          Showing {contacts.length.toLocaleString()} of {stats.contacts.toLocaleString()} contacts. Refine your search or use filters to find specific contacts.
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-4 mb-7">
         {statCards.map((s) => (
           <div key={s.label} className="metric-card transition-shadow hover:shadow-md">

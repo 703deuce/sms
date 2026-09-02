@@ -189,12 +189,15 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
           onDelete={(id) => void handleDelete(id)}
         />
       )}
-      {view.name === "audience" && view.tab === "contacts" && <ContactsList contacts={audienceContacts} />}
+      {view.name === "audience" && view.tab === "contacts" && (
+        <ContactsList contacts={audienceContacts} totalContacts={dashboardStats.totalContacts} />
+      )}
       {view.name === "audience" && view.tab === "lists" && <ListsList lists={audienceLists} />}
 
       {view.name === "create" && (
         <CreateSegment
           editing={view.editing}
+          listOptions={audienceLists.map((l) => l.name)}
           onBack={() => setView({ name: "audience", tab: "segments" })}
           onSaved={handleSaved}
           onViewContacts={(s) => setView({ name: "contacts", segment: s })}

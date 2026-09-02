@@ -34,13 +34,15 @@ function Dropdown({ label, open, onToggle, children, width = "w-60" }: any) {
   );
 }
 
-export default function ConditionRow({ cond, onChange, onRemove }: {
+export default function ConditionRow({ cond, onChange, onRemove, listOptions = [] }: {
   cond: ConditionState;
   onChange: (c: ConditionState) => void;
   onRemove: () => void;
+  listOptions?: string[];
 }) {
-  const [openMenu, setOpenMenu] = useState<"property" | "condition" | "states" | null>(null);
+  const [openMenu, setOpenMenu] = useState<"property" | "condition" | "states" | "lists" | null>(null);
   const [stateSearch, setStateSearch] = useState("");
+  const [listSearch, setListSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,7 +52,11 @@ export default function ConditionRow({ cond, onChange, onRemove }: {
   }, []);
 
   const isState = cond.property === "State";
+  const isListMembership = cond.property === "List Membership";
   const noValue = noValueConditions.includes(cond.condition);
+  const filteredLists = listOptions.filter((name) =>
+    name.toLowerCase().includes(listSearch.toLowerCase()),
+  );
 
   return (
     <div ref={ref} className="rounded-xl border border-border bg-muted/30 p-3 flex items-center gap-3 flex-wrap seg-fade">
@@ -144,6 +150,42 @@ export default function ConditionRow({ cond, onChange, onRemove }: {
               </div>
             )}
           </div>
+        ) : isListMembership ? (
+          <Dropdown
+            label={cond.value || "Select a list"}
+            open={openMenu === "lists"}
+            onToggle={() => setOpenMenu(openMenu === "lists" ? null : "lists")}
+            width="w-64"
+          >
+            <div className="px-2 py-1.5 border-b border-border">
+              <input
+                autoFocus
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="Search lists..."
+                className="seg-input w-full h-8 px-2 rounded-md border border-border text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 transition"
+              />
+            </div>
+            {filteredLists.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-muted-foreground">No lists found.</div>
+            ) : (
+              filteredLists.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => {
+                    onChange({ ...cond, value: name });
+                    setOpenMenu(null);
+                    setListSearch("");
+                  }}
+                  className={`w-full px-3 py-1.5 text-sm text-left transition-colors hover:bg-primary/5 hover:text-primary ${
+                    cond.value === name ? "bg-primary/5 text-primary font-medium" : "text-foreground"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))
+            )}
+          </Dropdown>
         ) : (
           <input
             value={cond.value}

@@ -7,18 +7,19 @@ import { useCallback, useEffect, useState } from "react";
 import KeywordsList from "@/components/kimi/grow-keywords/components/KeywordsList";
 import KeywordBuilder from "@/components/kimi/grow-keywords/components/KeywordBuilder";
 import type { Keyword } from "@/components/kimi/grow-keywords/mock-data";
-import { createKeyword, deleteKeyword, fetchContactListNames, fetchKeywords, cloneKeyword } from "@/lib/growth/kimi-keywords-adapter";
-import { useRouter } from "next/navigation";
+import { createKeyword, deleteKeyword, fetchContactListNames, fetchKeywords, cloneKeyword, updateKeyword } from "@/lib/growth/kimi-keywords-adapter";
 import { CheckCircle2 } from "lucide-react";
+
+type View = "list" | "create" | "edit";
 
 type Props = { initialKeywords?: Keyword[] };
 
 export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
-  const router = useRouter();
-  const [view, setView] = useState<"list" | "create">("list");
+  const [view, setView] = useState<View>("list");
   const [keywords, setKeywords] = useState<Keyword[]>(initialKeywords);
+  const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
   const [contactLists, setContactLists] = useState<string[]>([]);
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
@@ -35,7 +36,13 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
     }
   }, [initialKeywords.length, reload]);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3200);
+  };
+
   const handleSaved = async (payload: {
+    keywordId?: string;
     keyword: string;
     listName?: string;
     confirmation?: string;
@@ -43,11 +50,16 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
     status?: string;
   }) => {
     try {
-      await createKeyword(payload);
+      if (payload.keywordId) {
+        await updateKeyword(payload.keywordId, payload);
+        showToast("Keyword updated.");
+      } else {
+        await createKeyword(payload);
+        showToast("Keyword created.");
+      }
       await reload();
+      setEditingKeyword(null);
       setView("list");
-      setToast(true);
-      setTimeout(() => setToast(false), 3200);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -66,8 +78,7 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
     try {
       await cloneKeyword(id, keywords);
       await reload();
-      setToast(true);
-      setTimeout(() => setToast(false), 3200);
+      showToast("Keyword cloned.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Clone failed");
     }
@@ -80,23 +91,36 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
         {view === "list" ? (
           <KeywordsList
             keywords={keywords}
-            onCreate={() => setView("create")}
+            onCreate={() => {
+              setEditingKeyword(null);
+              setView("create");
+            }}
             onDelete={(id) => void handleDelete(id)}
             onClone={(id) => void handleClone(id)}
-            onEdit={(id) => router.push(`/contacts/lists?editKeyword=${encodeURIComponent(id)}`)}
+            onEdit={(id) => {
+              const kw = keywords.find((k) => k.id === id);
+              if (!kw) return;
+              setEditingKeyword(kw);
+              setView("edit");
+            }}
             onCreateQr={(id) => {
               const kw = keywords.find((k) => k.id === id);
-              router.push(kw ? `/grow/qr-codes?keyword=${encodeURIComponent(kw.name)}` : "/grow/qr-codes");
+              window.location.assign(kw ? `/grow/qr-codes?keyword=${encodeURIComponent(kw.name)}` : "/grow/qr-codes");
             }}
             onCreateTap={(id) => {
               const kw = keywords.find((k) => k.id === id);
-              router.push(kw ? `/grow/tap-to-join?keyword=${encodeURIComponent(kw.name)}` : "/grow/tap-to-join");
+              window.location.assign(kw ? `/grow/tap-to-join?keyword=${encodeURIComponent(kw.name)}` : "/grow/tap-to-join");
             }}
           />
         ) : (
           <KeywordBuilder
+            key={editingKeyword?.id ?? "create"}
+            editingKeyword={editingKeyword}
             contactLists={contactLists}
-            onBack={() => setView("list")}
+            onBack={() => {
+              setEditingKeyword(null);
+              setView("list");
+            }}
             onSaved={() => setView("list")}
             onSaveKeyword={handleSaved}
           />
@@ -104,7 +128,7 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
       </main>
       {toast && (
         <div className="kw-toast">
-          <CheckCircle2 size={16} /> Keyword created.
+          <CheckCircle2 size={16} /> {toast}
         </div>
       )}
     </div>

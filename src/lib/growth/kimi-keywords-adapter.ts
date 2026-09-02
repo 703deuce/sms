@@ -21,6 +21,7 @@ export function mapApiKeywordToKimi(k: {
   keyword: string;
   confirmation?: string | null;
   listName?: string | null;
+  autoReply?: string | null;
   status?: string;
   updatedAt?: string;
 }): Keyword {
@@ -31,6 +32,8 @@ export function mapApiKeywordToKimi(k: {
     lastSaved: formatSaved(k.updatedAt),
     connectedLists: k.listName ? 1 : 0,
     status: k.status === "Inactive" ? "Inactive" : "Active",
+    autoReply: k.autoReply || undefined,
+    listName: k.listName || undefined,
   };
 }
 
@@ -60,7 +63,13 @@ export async function createKeyword(payload: {
 
 export async function updateKeyword(
   id: string,
-  payload: { keyword?: string; listName?: string; confirmation?: string; autoReply?: string },
+  payload: {
+    keyword?: string;
+    listName?: string;
+    confirmation?: string;
+    autoReply?: string;
+    status?: string;
+  },
 ): Promise<Keyword> {
   const res = await fetch(`/api/growth/keywords/${id}`, {
     method: "PATCH",

@@ -245,6 +245,10 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
               setError(err instanceof Error ? err.message : "Could not copy embed code");
             }
           }}
+          onOpenForm={(id) => {
+            const form = forms.find((f) => f.id === id);
+            if (form?.publicUrl) window.open(form.publicUrl, "_blank", "noopener,noreferrer");
+          }}
         />
       )}
       {view === "create" && editingFormId && (

@@ -4,6 +4,13 @@ import { getPrisma } from "@/lib/db";
 import { generateListGrowthPublicSlug } from "@/lib/growth/tap-to-join";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 
+function buildQrImageUrl(data: string, color?: string) {
+  const params = new URLSearchParams({ size: "512x512", data });
+  const normalized = color?.replace("#", "").trim();
+  if (normalized) params.set("color", normalized);
+  return `https://api.qrserver.com/v1/create-qr-code/?${params.toString()}`;
+}
+
 export async function GET() {
   try {
     const auth = await requireSession();
@@ -16,9 +23,7 @@ export async function GET() {
     const data = rows.map((qr) => ({
       ...qr,
       trackedUrl: qr.publicSlug ? `${base}/q/${qr.publicSlug}` : qr.targetUrl,
-      qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(
-        qr.publicSlug ? `${base}/q/${qr.publicSlug}` : qr.targetUrl,
-      )}`,
+      qrImageUrl: buildQrImageUrl(qr.publicSlug ? `${base}/q/${qr.publicSlug}` : qr.targetUrl),
     }));
     return NextResponse.json({ data });
   } catch (err) {
@@ -34,6 +39,7 @@ export async function POST(request: Request) {
       name?: string;
       targetType?: string;
       targetUrl?: string;
+      color?: string;
     };
     const name = (body.name || "").trim();
     const targetUrl = (body.targetUrl || "").trim();
@@ -54,7 +60,7 @@ export async function POST(request: Request) {
       },
     });
     return NextResponse.json(
-      { data: { ...created, trackedUrl, qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(trackedUrl)}` } },
+      { data: { ...created, trackedUrl, qrImageUrl: buildQrImageUrl(trackedUrl, body.color) } },
       { status: 201 },
     );
   } catch (err) {

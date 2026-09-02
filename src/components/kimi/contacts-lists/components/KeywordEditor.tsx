@@ -46,7 +46,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
   return (
     <div className="flex gap-10 pt-6">
       <div className="max-w-[620px] flex-1">
-        <div className="breadcrumb">Tools / Keywords / <span>NashVIP</span></div>
+        <div className="breadcrumb">Tools / Keywords / <span>{initialKeyword ?? "Keyword"}</span></div>
         <h1 className="page-title"><MessageSquareText size={19} className="text-[#3b4ef5]" /> Edit Keyword</h1>
         <p className="page-subtitle mb-6">Edit your keyword and associated settings.</p>
 
