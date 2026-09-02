@@ -6,23 +6,26 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import InboxRail, { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 import ConversationList from "@/components/kimi/conversations/components/ConversationList";
 import ThreadView from "@/components/kimi/conversations/components/ThreadView";
-import ContactPanel from "@/components/kimi/conversations/components/ContactPanel";
 import BulkActionsBar from "@/components/kimi/conversations/components/BulkActionsBar";
 import TagsSettings from "@/components/kimi/conversations/components/TagsSettings";
 import SettingsHome from "@/components/kimi/conversations/components/SettingsHome";
 import InboxSettings from "@/components/kimi/conversations/components/InboxSettings";
 import type { Conversation, Tag } from "@/components/kimi/conversations/mock-data";
+import { ConversationsContactPanel } from "@/components/inbox/conversations-contact-panel";
 import { MessageSquarePlus, MessagesSquare, SendHorizonal, X, Loader2 } from "lucide-react";
 import {
   buildTagsFromConversations,
   buildTeammates,
   inboxTagDefinitionsToKimi,
+  downloadTranscript,
   fetchConversation,
+  fetchConversationForContact,
+  fetchContactSummary,
   fetchInboxList,
   inboxQueryFromFilter,
   kimiStatusToApi,
@@ -68,6 +71,9 @@ type Props = {
   teamMembers: User[];
   currentUserId: string;
   currentUserName: string;
+  initialConversationId?: string | null;
+  initialContactId?: string | null;
+  initialDraft?: string;
 };
 
 export function KimiConversationsConnected({
@@ -75,11 +81,22 @@ export function KimiConversationsConnected({
   teamMembers,
   currentUserId,
   currentUserName,
+  initialConversationId = null,
+  initialContactId = null,
+  initialDraft = "",
 }: Props) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlFilter = searchParams.get("filter");
   const urlUnread = searchParams.get("unread");
-  const urlConversation = searchParams.get("conversation");
+  const urlConversation = searchParams.get("conversation") || initialConversationId;
+  const urlContactId =
+    searchParams.get("contactId") ||
+    searchParams.get("contact") ||
+    initialContactId;
+  const urlDraft = searchParams.get("draft")
+    ? decodeURIComponent(searchParams.get("draft")!)
+    : initialDraft;
 
   const ctx = useMemo<KimiInboxContext>(
     () => ({ currentUserId, currentUserName, teamMembers }),
@@ -119,6 +136,7 @@ export function KimiConversationsConnected({
   const [selectedId, setSelectedId] = useState<string | null>(
     () => urlConversation || initialConversations[0]?.id || null,
   );
+  const [searchQuery, setSearchQuery] = useState("");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [contactOpen, setContactOpen] = useState(false);
   const [newMsgOpen, setNewMsgOpen] = useState(false);
@@ -131,10 +149,48 @@ export function KimiConversationsConnected({
   }, [initialSel]);
 
   useEffect(() => {
+    if (!urlContactId) return;
+    let cancelled = false;
+    void fetchConversationForContact(urlContactId)
+      .then(async (data) => {
+        if (cancelled) return;
+        if (data) {
+          const mapped = mapApiConversationToKimi(data, ctx);
+          setConvos((prev) => (prev.some((c) => c.id === mapped.id) ? prev : [mapped, ...prev]));
+          setSelectedId(mapped.id);
+          if (urlDraft) {
+            setNewMsgOpen(true);
+            setComposeTo(mapped.phone);
+            setComposeQuery(mapped.name);
+            setComposeMessage(urlDraft);
+          }
+          return;
+        }
+        const contact = await fetchContactSummary(urlContactId);
+        if (!contact || cancelled) return;
+        setNewMsgOpen(true);
+        setComposeTo(contact.phone);
+        setComposeQuery(contact.name);
+        if (urlDraft) setComposeMessage(urlDraft);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [urlContactId, ctx, urlDraft]);
+
+  useEffect(() => {
+    if (urlDraft && !urlContactId) {
+      setNewMsgOpen(true);
+      setComposeMessage(urlDraft);
+    }
+  }, [urlDraft, urlContactId]);
+
+  useEffect(() => {
     if (!urlConversation) return;
     setSelectedId(urlConversation);
     let cancelled = false;
-    fetchConversation(urlConversation)
+    void fetchConversation(urlConversation)
       .then((data) => {
         if (cancelled) return;
         const mapped = mapApiConversationToKimi(data, ctx);
@@ -152,14 +208,24 @@ export function KimiConversationsConnected({
 
   const [composeQuery, setComposeQuery] = useState("");
   const [composeTo, setComposeTo] = useState("");
-  const [composeMessage, setComposeMessage] = useState("");
+  const [composeMessage, setComposeMessage] = useState(urlDraft || "");
   const [composeContacts, setComposeContacts] = useState<Array<{ id: string; name: string; phone: string }>>([]);
   const [composeSending, setComposeSending] = useState(false);
 
   const reloadList = useCallback(async () => {
     try {
       const rows = await fetchInboxList(inboxQueryFromFilter(sel));
-      setConvos(rows.map((r) => mapListItemToKimi(r, ctx)));
+      setConvos((prev) => {
+        const prevById = new Map(prev.map((c) => [c.id, c]));
+        return rows.map((r) => {
+          const mapped = mapListItemToKimi(r, ctx);
+          const existing = prevById.get(mapped.id);
+          if (existing?.messages.length) {
+            return { ...mapped, messages: existing.messages };
+          }
+          return mapped;
+        });
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load conversations");
     }
@@ -235,8 +301,13 @@ export function KimiConversationsConnected({
   }, [convos, tags, teammates]);
 
   const filtered = useMemo(
-    () =>
-      convos.filter((c) => {
+    () => {
+      const needle = searchQuery.trim().toLowerCase();
+      return convos.filter((c) => {
+        if (needle) {
+          const haystack = `${c.name} ${c.phone} ${c.preview}`.toLowerCase();
+          if (!haystack.includes(needle)) return false;
+        }
         if (sel.kind === "mine") {
           if (c.assignee !== "me") return false;
           if (sel.key === "unread") return !!c.unread;
@@ -255,15 +326,17 @@ export function KimiConversationsConnected({
         }
         if (c.assignee !== sel.key) return false;
         return sel.sub ? c.status === sel.sub : true;
-      }),
-    [convos, sel],
+      });
+    },
+    [convos, sel, searchQuery],
   );
 
   useEffect(() => {
-    if (selectedId && !filtered.some((c) => c.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [filtered, selectedId]);
+    if (!selectedId) return;
+    if (filtered.some((c) => c.id === selectedId)) return;
+    if (convos.some((c) => c.id === selectedId)) return;
+    setSelectedId(null);
+  }, [filtered, selectedId, convos]);
 
   const title =
     sel.kind === "mine"
@@ -366,6 +439,9 @@ export function KimiConversationsConnected({
 
   const pickConvo = (c: Conversation) => {
     setSelectedId(c.id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("conversation", c.id);
+    router.replace(`/conversations?${params.toString()}`, { scroll: false });
     if (c.unread) {
       setConvos((prev) => prev.map((x) => (x.id === c.id ? { ...x, unread: false } : x)));
       void patchConversation(c.id, { unread: false }).catch(() => undefined);
@@ -376,13 +452,31 @@ export function KimiConversationsConnected({
     if (!composeTo.trim() || !composeMessage.trim()) return;
     setComposeSending(true);
     setError("");
+    const to = composeTo.trim();
+    const message = composeMessage.trim();
     try {
-      await sendNewMessage({ to: composeTo.trim(), message: composeMessage.trim() });
+      await sendNewMessage({ to, message });
       setNewMsgOpen(false);
       setComposeTo("");
       setComposeMessage("");
       setComposeQuery("");
-      await reloadList();
+      const rows = await fetchInboxList(inboxQueryFromFilter(sel));
+      const mapped = rows.map((r) => mapListItemToKimi(r, ctx));
+      setConvos((prev) => {
+        const prevById = new Map(prev.map((c) => [c.id, c]));
+        return mapped.map((m) => {
+          const existing = prevById.get(m.id);
+          return existing?.messages.length ? { ...m, messages: existing.messages } : m;
+        });
+      });
+      const normalized = to.replace(/\D/g, "");
+      const match = mapped.find((c) => c.phone.replace(/\D/g, "") === normalized);
+      if (match) {
+        setSelectedId(match.id);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("conversation", match.id);
+        router.replace(`/conversations?${params.toString()}`, { scroll: false });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send message");
     } finally {
@@ -439,11 +533,26 @@ export function KimiConversationsConnected({
               setSel(s);
               setSelectedId(null);
               setChecked(new Set());
+              const params = new URLSearchParams();
+              if (s.kind === "mine" && s.key === "all") params.set("filter", "mine");
+              else if (s.kind === "all" && s.key === "unassigned") params.set("filter", "unassigned");
+              else if (s.kind === "all" && s.key === "unread") params.set("filter", "unread");
+              else if (s.kind === "all" && s.key === "open") params.set("filter", "open");
+              else if (s.kind === "all" && s.key === "pending") params.set("filter", "pending");
+              else if (s.kind === "all" && s.key === "closed") params.set("filter", "closed");
+              else if (s.kind === "mine" && s.key === "unread") {
+                params.set("filter", "mine");
+                params.set("unread", "1");
+              }
+              const suffix = params.toString();
+              router.replace(suffix ? `/conversations?${suffix}` : "/conversations", { scroll: false });
             }}
             counts={counts}
             tags={tags}
             teammates={teammates}
             onNew={() => setNewMsgOpen(true)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
           <ConversationList
             title={title}
@@ -468,9 +577,10 @@ export function KimiConversationsConnected({
                 contactOpen={contactOpen}
                 onToggleContact={() => setContactOpen(!contactOpen)}
                 onOpenTagsSettings={() => setView("tags")}
+                onDownloadTranscript={() => downloadTranscript(selected)}
               />
               {contactOpen && (
-                <ContactPanel convo={selected} onClose={() => setContactOpen(false)} />
+                <ConversationsContactPanel convo={selected} onClose={() => setContactOpen(false)} />
               )}
             </>
           ) : (

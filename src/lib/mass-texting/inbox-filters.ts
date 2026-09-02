@@ -5,10 +5,11 @@ export type InboxListFilters = {
   product?: MassTextConversationProductSource | "all";
   phoneNumberId?: string;
   campaignId?: string;
+  contactId?: string;
   unread?: boolean;
   filter?: string;
   assigneeId?: string | null;
-  status?: "CLOSED";
+  status?: "OPEN" | "PENDING" | "CLOSED";
 };
 
 export function parseInboxSearchParams(
@@ -29,9 +30,21 @@ export function parseInboxSearchParams(
     product: product ?? "all",
     phoneNumberId: searchParams.get("phoneNumberId") || undefined,
     campaignId: searchParams.get("campaignId") || undefined,
+    contactId: searchParams.get("contactId") || undefined,
     unread: searchParams.get("unread") === "1" || searchParams.get("unread") === "true",
     filter: searchParams.get("filter") || undefined,
+    assigneeId: searchParams.get("assigneeId") || undefined,
+    status: parseStatusParam(searchParams.get("status")),
   };
+}
+
+function parseStatusParam(raw: string | null): InboxListFilters["status"] | undefined {
+  if (!raw) return undefined;
+  const s = raw.toLowerCase();
+  if (s === "open") return "OPEN";
+  if (s === "pending") return "PENDING";
+  if (s === "closed" || s === "archived") return "CLOSED";
+  return undefined;
 }
 
 export function buildConversationWhere(
@@ -46,13 +59,16 @@ export function buildConversationWhere(
   }
   if (filters.phoneNumberId) where.phoneNumberId = filters.phoneNumberId;
   if (filters.campaignId) where.campaignId = filters.campaignId;
+  if (filters.contactId) where.contactId = filters.contactId;
   if (filters.unread) where.unread = true;
+  if (filters.status) where.status = filters.status;
 
   const legacy = filters.filter;
   if (legacy === "unassigned") where.assigneeId = null;
   if (legacy === "unread") where.unread = true;
   if (legacy === "archived") where.status = "CLOSED";
   if (legacy === "mine" && userId) where.assigneeId = userId;
+  if (filters.assigneeId) where.assigneeId = filters.assigneeId;
 
   return where;
 }

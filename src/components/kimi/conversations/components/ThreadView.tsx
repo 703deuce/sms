@@ -11,8 +11,9 @@ const MenuItem = ({ children, onClick }:{ children: React.ReactNode; onClick?: (
   <div className="tv-menu-item" onClick={onClick}>{children}</div>
 );
 
-export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, tags: tagsProp, teammates: teammatesProp }:{
+export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, onDownloadTranscript, tags: tagsProp, teammates: teammatesProp }:{
   convo: Conversation; onUpdate: (c: Conversation)=>void; onToggleContact: ()=>void; contactOpen: boolean; onOpenTagsSettings: ()=>void;
+  onDownloadTranscript?: () => void;
   tags?: Tag[]; teammates?: Teammate[];
 }) {
   const tagCatalog = tagsProp ?? TAGS;
@@ -132,7 +133,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
             <div className="tv-menu-label">MARK CONVERSATION</div>
             <MenuItem onClick={markUnread}><EyeOff size={14} color="#6b7280" /> Unread</MenuItem>
             <div className="tv-menu-label" style={{ paddingTop: 8 }}>DOWNLOADS</div>
-            <MenuItem><Download size={14} color="#6b7280" /> Message Transcript</MenuItem>
+            <MenuItem onClick={onDownloadTranscript}><Download size={14} color="#6b7280" /> Message Transcript</MenuItem>
             <div className="tv-menu-label" style={{ paddingTop: 8 }}>CONVERSATION FILTERS</div>
             {([
               ["inbox", "Inbox Messages", <MessageSquare key="i" size={14} color="#6b7280" />],

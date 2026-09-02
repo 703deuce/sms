@@ -120,6 +120,7 @@ export function mapApiConversationToKimi(c: ApiConversation, ctx: KimiInboxConte
   const name = c.contactName || c.phone || "Unknown";
   return {
     id: c.id,
+    contactId: c.contactId,
     name,
     initials: initials(name),
     color: hashColor(name),
@@ -140,6 +141,7 @@ export function mapListItemToKimi(item: InboxListItem, ctx: KimiInboxContext): C
   const name = `${first} ${last}`.trim() || item.contact?.phone || "Unknown";
   return {
     id: item.id,
+    contactId: item.contact?.id,
     name,
     initials: initials(name),
     color: hashColor(name),
@@ -202,6 +204,9 @@ export type InboxQuery = {
   filter?: "mine" | "unassigned" | "unread" | "archived";
   unread?: boolean;
   product?: string;
+  status?: "open" | "pending" | "closed";
+  assigneeId?: string;
+  contactId?: string;
 };
 
 export function inboxQueryFromFilter(sel: FilterSel): InboxQuery {
@@ -209,9 +214,16 @@ export function inboxQueryFromFilter(sel: FilterSel): InboxQuery {
   if (sel.kind === "mine") {
     q.filter = "mine";
     if (sel.key === "unread") q.unread = true;
+    if (sel.key === "open" || sel.key === "pending") q.status = sel.key;
   } else if (sel.kind === "all") {
     if (sel.key === "unassigned") q.filter = "unassigned";
     else if (sel.key === "unread") q.unread = true;
+    else if (sel.key === "open" || sel.key === "pending" || sel.key === "closed") {
+      q.status = sel.key;
+    }
+  } else if (sel.kind === "teammate") {
+    q.assigneeId = sel.key;
+    if (sel.sub === "open" || sel.sub === "pending") q.status = sel.sub;
   }
   return q;
 }
@@ -221,10 +233,33 @@ export async function fetchInboxList(query: InboxQuery = { product: "all" }): Pr
   params.set("product", query.product || "all");
   if (query.filter) params.set("filter", query.filter);
   if (query.unread) params.set("unread", "1");
+  if (query.status) params.set("status", query.status);
+  if (query.assigneeId) params.set("assigneeId", query.assigneeId);
+  if (query.contactId) params.set("contactId", query.contactId);
   const res = await fetch(`/api/inbox?${params.toString()}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load conversations");
   return json.data || [];
+}
+
+export async function fetchConversationForContact(contactId: string): Promise<ApiConversation | null> {
+  const rows = await fetchInboxList({ product: "all", contactId });
+  if (!rows.length) return null;
+  return fetchConversation(rows[0]!.id);
+}
+
+export async function fetchContactSummary(
+  contactId: string,
+): Promise<{ id: string; name: string; phone: string } | null> {
+  const res = await fetch(`/api/contacts/${contactId}`);
+  const json = await res.json();
+  if (!res.ok || !json.data) return null;
+  const c = json.data;
+  return {
+    id: c.id,
+    name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone || "Contact",
+    phone: c.phone,
+  };
 }
 
 export async function fetchConversation(id: string): Promise<ApiConversation> {

@@ -39,9 +39,11 @@ const SUBS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "closed", label: "Closed", icon: <CheckCircle2 size={13} /> },
 ];
 
-export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates }:{
+export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, searchQuery, onSearchChange }:{
   sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void;
   tags?: Tag[]; teammates?: Teammate[];
+  searchQuery?: string;
+  onSearchChange?: (value: string) => void;
 }) {
   const tagList = tags ?? TAGS;
   const teammateList = teammates ?? TEAMMATES;
@@ -64,7 +66,13 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates }
       <div style={{ display: "flex", gap: 6, padding: "0 12px 14px" }}>
         <div style={{ position: "relative", flex: 1 }}>
           <Search size={13} style={{ position: "absolute", left: 9, top: 9, color: "var(--tv-faint)", pointerEvents: "none" }} />
-          <input className="tv-input" placeholder="Search" style={{ padding: "7px 8px 7px 28px", borderRadius: 8 }} />
+          <input
+            className="tv-input"
+            placeholder="Search"
+            style={{ padding: "7px 8px 7px 28px", borderRadius: 8 }}
+            value={searchQuery ?? ""}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+          />
         </div>
         <button className="tv-btn" style={{ padding: "7px 10px", borderRadius: 8, boxShadow: "0 1px 2px rgba(16,24,40,.1)" }} onClick={onNew} title="New Message"><MessageSquarePlus size={15} /></button>
       </div>
