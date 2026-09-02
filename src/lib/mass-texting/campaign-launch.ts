@@ -182,9 +182,6 @@ export async function launchCampaignWithAudit(input: {
     }
   }
 
-  const { refreshMassTextingSendState } = await import("@/lib/mass-texting/send-readiness");
-  await refreshMassTextingSendState(input.workspaceId);
-
   const review = await buildPreSendReview(input.workspaceId, input.campaignId);
   if (!review) return { ok: false, error: "Campaign not found" };
 

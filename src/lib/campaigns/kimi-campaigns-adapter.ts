@@ -231,13 +231,25 @@ export async function launchCampaign(
   _finalRecipientCount: number,
   confirmLargeSend = false,
 ): Promise<void> {
-  const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ confirmLargeSend }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Launch failed");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmLargeSend }),
+      signal: controller.signal,
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Launch failed");
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Launch timed out — try again in a moment");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function previewAudience(
