@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronDown, UserCheck, Tag as TagIcon, MoreVertical, EyeOff, Download, MessageSquare, FileText, CalendarDays, StickyNote, Users, Check } from "lucide-react";
 import type { Conversation, Message, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { Popover, usePopover } from "./Popover";
@@ -33,6 +33,12 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
   const [teammateQuery, setTeammateQuery] = useState("");
   const [tagQuery, setTagQuery] = useState("");
 
+  useEffect(() => {
+    setPendingTags(convo.tags);
+    setTeammateQuery("");
+    setTagQuery("");
+  }, [convo.id, convo.tags]);
+
   const filteredTeammates = teammateCatalog.filter((t) =>
     !teammateQuery.trim() ? true : t.name.toLowerCase().includes(teammateQuery.trim().toLowerCase()),
   );
@@ -49,12 +55,26 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
     : "On Tuesday, August 27th, 2024 @ 4:30 pm by Me";
 
   const setStatus = (s: Conversation["status"]) => {
-    const label = s === "open" ? "Marked As Open" : s === "pending" ? "Marked As Pending" : "Marked As Closed";
+    const label =
+      s === "open"
+        ? "Marked As Open"
+        : s === "pending"
+          ? "Marked As Pending"
+          : s === "snoozed"
+            ? "Marked As Snoozed"
+            : s === "spam"
+              ? "Marked As Spam"
+              : "Marked As Closed";
     const msgs = liveMode
       ? convo.messages
       : [...convo.messages, ev(`${label} — ${now}`)];
     if (!liveMode && s === "closed") msgs.push(ev(`Conversation Unassigned to Me — ${now}`));
-    onUpdate({ ...convo, status: s, assignee: s === "closed" ? null : convo.assignee, messages: msgs });
+    onUpdate({
+      ...convo,
+      status: s,
+      assignee: s === "closed" || s === "spam" ? null : convo.assignee,
+      messages: msgs,
+    });
     setStatusOpen(false);
   };
   const assign = (id: string | null) => {

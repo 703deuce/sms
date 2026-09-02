@@ -119,7 +119,7 @@ export function filterSelToSearchParams(
   params.delete("status");
   params.delete("tag");
   params.delete("assigneeId");
-  params.delete("q");
+  // Preserve `q` — managed by the search box debounce, not rail selection.
 
   if (sel.kind === "mine") {
     params.set("filter", "mine");

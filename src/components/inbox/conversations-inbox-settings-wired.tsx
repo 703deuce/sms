@@ -11,7 +11,13 @@ import {
   patchMessagingRuntimeSettings,
 } from "@/lib/auto-replies/kimi-messaging-settings-adapter";
 
-export function ConversationsInboxSettingsWired({ onBack }: { onBack: () => void }) {
+export function ConversationsInboxSettingsWired({
+  onBack,
+  onSaved,
+}: {
+  onBack: () => void;
+  onSaved?: (perms: import("@/lib/messaging/messaging-settings").InboxPermissionsJson) => void;
+}) {
   const [loading, setLoading] = useState(true);
   const [awayMessage, setAwayMessage] = useState("");
   const [awayInsideMessage, setAwayInsideMessage] = useState("");
@@ -54,7 +60,7 @@ export function ConversationsInboxSettingsWired({ onBack }: { onBack: () => void
       initialTimezone={timezone}
       initialInboxToggles={inboxToggles}
       onSave={async (payload) => {
-        await patchMessagingRuntimeSettings({
+        const saved = await patchMessagingRuntimeSettings({
           awayMessage: payload.awayMessage || null,
           awayInsideMessage: payload.awayInsideMessage || null,
           awayEnabled: payload.awayEnabled,
@@ -67,6 +73,7 @@ export function ConversationsInboxSettingsWired({ onBack }: { onBack: () => void
             ? kimiTogglesToInboxPermissions(payload.inboxToggles)
             : undefined,
         });
+        if (saved.inboxPermissionsJson) onSaved?.(saved.inboxPermissionsJson);
       }}
     />
   );

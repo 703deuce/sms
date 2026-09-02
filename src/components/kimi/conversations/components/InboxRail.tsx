@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash, Settings, Ban, AlarmClock } from "lucide-react";
 import type { Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { presenceColor, presenceLabel, presencePillStyles } from "@/lib/inbox/team-presence";
@@ -61,14 +61,25 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
   };
 
   const [presenceOpen, setPresenceOpen] = useState(false);
+  const presenceRef = useRef<HTMLDivElement>(null);
   const pillStyle = presencePillStyles(myPresenceStatus);
   const presenceDot = presenceColor(myPresenceStatus);
+
+  useEffect(() => {
+    if (!presenceOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (presenceRef.current?.contains(e.target as Node)) return;
+      setPresenceOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [presenceOpen]);
 
   return (
     <div style={{ width: 216, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 14px 12px" }}>
         <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1, letterSpacing: -0.3, margin: 0, color: "var(--tv-text)" }}>Inbox</h1>
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative" }} ref={presenceRef}>
           <button
             className="tv-online-pill"
             title="Set your status"

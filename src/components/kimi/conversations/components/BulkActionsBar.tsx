@@ -39,7 +39,9 @@ export default function BulkActionsBar({ count, onAction, tags, teammates, allow
         <Popover open={s} onOpenChange={setS} align="left" width={190} trigger={<Btn label="Set Status" icon={<CheckSquare size={14} />} />}>
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">CONVERSATION STATUS</div>
-            {["Open", "Pending", "Closed"].map((x) => <MenuItem key={x} label={x} onClick={() => { onAction("status:" + x.toLowerCase()); setS(false); }} />)}
+            {["Open", "Pending", "Closed", "Snoozed", "Spam"].map((x) => (
+              <MenuItem key={x} label={x} onClick={() => { onAction("status:" + x.toLowerCase()); setS(false); }} />
+            ))}
           </div>
         </Popover>
         {allowAssign ? (
