@@ -7,12 +7,12 @@ import { TapLink } from "../mock-data";
 interface Props {
   links: TapLink[];
   onCreate: () => void;
+  onEdit: (link: TapLink) => void;
   onDelete: (id: string) => void;
   onClone: (link: TapLink) => void;
-  onOpenFallback: () => void;
 }
 
-export default function LinksListPage({ links, onCreate, onDelete, onClone, onOpenFallback }: Props) {
+export default function LinksListPage({ links, onCreate, onEdit, onDelete, onClone }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -82,9 +82,17 @@ export default function LinksListPage({ links, onCreate, onDelete, onClone, onOp
               </button>
               {openMenu === link.id && (
                 <div className="ttj-menu">
-                  <button className="ttj-menu-item"><Pencil size={13} /> Edit</button>
+                  <button className="ttj-menu-item" onClick={() => { onEdit(link); setOpenMenu(null); }}><Pencil size={13} /> Edit</button>
                   <button className="ttj-menu-item" onClick={() => { onClone(link); setOpenMenu(null); }}><Copy size={13} /> Clone</button>
-                  <button className="ttj-menu-item" onClick={() => { onOpenFallback(); setOpenMenu(null); }}><ExternalLink size={13} /> Open Url</button>
+                  <button
+                    className="ttj-menu-item"
+                    onClick={() => {
+                      if (link.url) window.open(link.url, "_blank", "noopener,noreferrer");
+                      setOpenMenu(null);
+                    }}
+                  >
+                    <ExternalLink size={13} /> Open Url
+                  </button>
                   <button className="ttj-menu-item" onClick={() => { navigator.clipboard?.writeText(link.url); setOpenMenu(null); }}><Link2 size={13} /> Copy Url</button>
                   <div className="my-1 border-t border-border/60" />
                   <button className="ttj-menu-item danger" onClick={() => { onDelete(link.id); setOpenMenu(null); }}><Trash2 size={13} /> Delete</button>

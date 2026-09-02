@@ -66,11 +66,19 @@ export async function fetchContactStats(): Promise<KimiContactStats> {
   };
 }
 
-export async function fetchContactById(id: string): Promise<KimiContact | null> {
+export async function fetchContactById(id: string): Promise<(KimiContact & {
+  lists: string[];
+  customFields?: Record<string, string>;
+}) | null> {
   const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`);
   const json = await res.json();
   if (!res.ok) return null;
-  return mapApiContactToKimi(json.data as ApiContact);
+  const mapped = mapApiContactToKimi(json.data as ApiContact);
+  return {
+    ...mapped,
+    lists: (json.data as ApiContact).lists || [],
+    customFields: (json.data as ApiContact).customFields,
+  };
 }
 
 export async function updateContact(
@@ -81,6 +89,8 @@ export async function updateContact(
     email?: string;
     phone?: string;
     optInLabel?: string;
+    listIds?: string[];
+    customFields?: Record<string, string>;
   },
 ): Promise<void> {
   const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, {
@@ -92,6 +102,8 @@ export async function updateContact(
       email: payload.email,
       phone: payload.phone,
       status: payload.optInLabel ? mapOptInLabelToApiStatus(payload.optInLabel) : undefined,
+      listIds: payload.listIds,
+      customFields: payload.customFields,
     }),
   });
   const json = await res.json();
@@ -105,7 +117,8 @@ export async function createContact(payload: {
   email?: string;
   status?: string;
   optInLabel?: string;
-}): Promise<void> {
+  listIds?: string[];
+}): Promise<string> {
   const status = mapOptInLabelToApiStatus(payload.optInLabel || payload.status || "Subscribed");
   const res = await fetch("/api/contacts", {
     method: "POST",
@@ -120,6 +133,20 @@ export async function createContact(payload: {
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not create contact");
+  const contactId = json.data?.id as string | undefined;
+  if (contactId && payload.listIds?.length) {
+    await updateContact(contactId, { listIds: payload.listIds });
+  }
+  return contactId || "";
+}
+
+export type ContactListOption = { id: string; name: string };
+
+export async function fetchContactListOptions(): Promise<ContactListOption[]> {
+  const res = await fetch("/api/contacts/lists");
+  const json = await res.json();
+  if (!res.ok) return [];
+  return (json.data || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
 }
 
 export type KimiImportPayload = {
@@ -280,8 +307,6 @@ export async function deleteContacts(ids: string[]): Promise<{ deleted: number; 
 }
 
 export async function fetchContactLists(): Promise<string[]> {
-  const res = await fetch("/api/contacts/lists");
-  const json = await res.json();
-  if (!res.ok) return [];
-  return (json.data || []).map((l: { name: string }) => l.name);
+  const options = await fetchContactListOptions();
+  return options.map((l) => l.name);
 }

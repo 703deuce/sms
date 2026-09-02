@@ -8,7 +8,7 @@ import ListsPage from "./components/ListsPage";
 import CreateListPage from "./components/CreateListPage";
 import ContactsPage from "./components/ContactsPage";
 import KeywordEditor from "./components/KeywordEditor";
-import { initialLists, contacts as mockContacts, keywords as mockKeywords, ContactList, Keyword } from "./mock-data";
+import { initialLists, contacts as mockContacts, keywords as mockKeywords, contactStats, ContactList, Keyword } from "./mock-data";
 import {
   Users,
   ListTodo,
@@ -75,7 +75,14 @@ export default function ContactsListsFlow() {
         )}
         {page === "lists" && <ListsPage lists={lists} onCreate={() => setPage("createList")} />}
         {page === "createList" && <CreateListPage onBack={() => setPage("lists")} onSave={saveList} />}
-        {page === "contacts" && <ContactsPage contacts={mockContacts} lists={lists} onAddToLists={addToLists} />}
+        {page === "contacts" && (
+          <ContactsPage
+            contacts={mockContacts}
+            lists={lists}
+            stats={{ contacts: contactStats.total, subscribed: contactStats.subscribed, unsubscribed: contactStats.unsubscribed }}
+            onAddToLists={addToLists}
+          />
+        )}
         {page === "tools" && <ToolsPage keywords={keywords} onEditKeyword={() => setPage("keyword")} />}
         {page === "keyword" && <KeywordEditor lists={lists} onSave={saveKeyword} onCancel={() => setPage("tools")} />}
       </main>

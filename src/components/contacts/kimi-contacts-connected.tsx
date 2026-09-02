@@ -12,6 +12,7 @@ import type { Contact } from "@/components/kimi/contacts/mock-data";
 import {
   createContact,
   deleteContacts,
+  fetchContactListOptions,
   fetchContactStats,
   fetchContacts,
   fetchContactLists,
@@ -39,17 +40,27 @@ export function KimiContactsConnected({
   const [importModal, setImportModal] = useState(false);
   const [error, setError] = useState("");
   const [contactLists, setContactLists] = useState<string[]>([]);
+  const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
 
   const reload = useCallback(async () => {
-    const [rows, s, lists] = await Promise.all([fetchContacts(), fetchContactStats(), fetchContactLists()]);
+    const [rows, s, lists, options] = await Promise.all([
+      fetchContacts(),
+      fetchContactStats(),
+      fetchContactLists(),
+      fetchContactListOptions(),
+    ]);
     setContacts(rows);
     setStats(s);
     setContactLists(lists);
+    setListOptions(options);
   }, []);
 
   useEffect(() => {
-    void fetchContactLists()
-      .then(setContactLists)
+    void Promise.all([fetchContactLists(), fetchContactListOptions()])
+      .then(([lists, options]) => {
+        setContactLists(lists);
+        setListOptions(options);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -65,24 +76,29 @@ export function KimiContactsConnected({
     mobile: string;
     email: string;
     optIn: string;
+    selectedLists?: string[];
   }) => {
     if (!formData?.mobile?.trim()) {
       setError("Mobile number is required");
       return;
     }
+    const listIds = (formData.selectedLists || [])
+      .map((name) => listOptions.find((l) => l.name === name)?.id)
+      .filter((id): id is string => Boolean(id));
     try {
-        await createContact({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.mobile,
-          email: formData.email || undefined,
-          optInLabel: formData.optIn || "Subscribed",
-        });
+      await createContact({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.mobile,
+        email: formData.email || undefined,
+        optInLabel: formData.optIn || "Subscribed",
+        listIds,
+      });
       await reload();
     } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save contact");
-        return;
-      }
+      setError(err instanceof Error ? err.message : "Could not save contact");
+      return;
+    }
     setView("list");
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 3000);

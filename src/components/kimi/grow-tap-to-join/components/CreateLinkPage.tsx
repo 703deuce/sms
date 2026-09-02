@@ -7,17 +7,26 @@ import { Keyword, TapLink } from "../mock-data";
 interface Props {
   keywords: Keyword[];
   prefillKeyword?: string;
+  initialLink?: TapLink;
   defaultNumber?: string;
   onSave: (link: TapLink) => void;
   onBack: () => void;
 }
 
-export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber, onSave, onBack }: Props) {
-  const [name, setName] = useState(prefillKeyword === "BlackFriday" ? "Black Friday" : "");
-  const [keyword, setKeyword] = useState(prefillKeyword || "Join");
-  const number = defaultNumber || "";
-  const [fallback, setFallback] = useState("");
-  const [active, setActive] = useState(true);
+export default function CreateLinkPage({
+  keywords,
+  prefillKeyword,
+  initialLink,
+  defaultNumber,
+  onSave,
+  onBack,
+}: Props) {
+  const isEdit = Boolean(initialLink);
+  const [name, setName] = useState(initialLink?.name || (prefillKeyword === "BlackFriday" ? "Black Friday" : ""));
+  const [keyword, setKeyword] = useState(initialLink?.keyword || prefillKeyword || "Join");
+  const number = initialLink?.number || defaultNumber || "";
+  const [fallback, setFallback] = useState(initialLink?.fallbackUrl || "");
+  const [active, setActive] = useState(initialLink ? initialLink.status === "Active" : true);
   const [kwOpen, setKwOpen] = useState(false);
   const [kwSearch, setKwSearch] = useState("");
   const kwRef = useRef<HTMLDivElement | null>(null);
@@ -41,29 +50,29 @@ export default function CreateLinkPage({ keywords, prefillKeyword, defaultNumber
   const handleSave = () => {
     if (!name.trim() || !number.trim()) return;
     onSave({
-      id: `link-${Date.now()}`,
+      id: initialLink?.id || `link-${Date.now()}`,
       name,
       keyword,
       number,
       fallbackUrl: fallback,
       status: active ? "Active" : "Inactive",
-      createdAt: "Created just now",
-      all: 0,
-      unique: 0,
-      bot: 0,
-      url: `https://trnv.io/${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: initialLink?.createdAt || "Created just now",
+      all: initialLink?.all ?? 0,
+      unique: initialLink?.unique ?? 0,
+      bot: initialLink?.bot ?? 0,
+      url: initialLink?.url || `https://trnv.io/${Math.random().toString(36).slice(2, 7)}`,
     });
   };
 
   return (
     <div className="ttj-page">
-      <div className="ttj-breadcrumb">Tools / Tap-to-Join Links / <span>Create Link</span></div>
+      <div className="ttj-breadcrumb">Tools / Tap-to-Join Links / <span>{isEdit ? "Edit Link" : "Create Link"}</span></div>
       <div className="ttj-page-header">
         <div className="ttj-page-title-row">
           <div className="ttj-page-icon"><MousePointerClick size={20} /></div>
           <div>
-            <h1>Create Link</h1>
-            <p>Create a Tap-to-Join link.</p>
+            <h1>{isEdit ? "Edit Link" : "Create Link"}</h1>
+            <p>{isEdit ? "Update your Tap-to-Join link." : "Create a Tap-to-Join link."}</p>
           </div>
         </div>
       </div>

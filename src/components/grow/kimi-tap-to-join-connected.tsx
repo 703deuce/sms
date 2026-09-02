@@ -16,6 +16,7 @@ import {
   deleteTapLink,
   fetchTapKeywords,
   fetchTapLinks,
+  updateTapLink,
 } from "@/lib/growth/kimi-tap-to-join-adapter";
 import { loadDefaultSendingNumber } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { useSearchParams } from "next/navigation";
@@ -23,6 +24,7 @@ import { useSearchParams } from "next/navigation";
 type View =
   | { name: "links" }
   | { name: "create"; prefillKeyword?: string }
+  | { name: "edit"; link: TapLink }
   | { name: "success"; link: TapLink }
   | { name: "fallback" };
 
@@ -55,6 +57,16 @@ export function KimiTapToJoinConnected() {
   const handleSave = async (link: TapLink) => {
     setError("");
     try {
+      if (view.name === "edit") {
+        const updated = await updateTapLink(view.link.id, {
+          name: link.name,
+          keyword: link.keyword,
+          status: link.status,
+        });
+        setLinks((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+        setView({ name: "links" });
+        return;
+      }
       const created = await createTapLink({
         name: link.name,
         keyword: link.keyword,
@@ -63,7 +75,7 @@ export function KimiTapToJoinConnected() {
       setLinks((prev) => [created, ...prev]);
       setView({ name: "success", link: created });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create link");
+      setError(err instanceof Error ? err.message : "Could not save link");
     }
   };
 
@@ -96,17 +108,18 @@ export function KimiTapToJoinConnected() {
           <LinksListPage
             links={links}
             onCreate={() => setView({ name: "create" })}
+            onEdit={(link) => setView({ name: "edit", link })}
             onDelete={(id) => void handleDelete(id)}
             onClone={handleClone}
-            onOpenFallback={() => setView({ name: "fallback" })}
           />
         )}
-        {view.name === "create" && (
+        {(view.name === "create" || view.name === "edit") && (
           <CreateLinkPage
             keywords={keywords}
-            prefillKeyword={view.prefillKeyword}
+            prefillKeyword={view.name === "create" ? view.prefillKeyword : undefined}
+            initialLink={view.name === "edit" ? view.link : undefined}
             defaultNumber={defaultNumber}
-            onSave={handleSave}
+            onSave={(link) => void handleSave(link)}
             onBack={() => setView({ name: "links" })}
           />
         )}

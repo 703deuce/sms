@@ -1,15 +1,26 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Users, UserCheck, UserX, Search, Filter, ChevronDown, X, UserPlus, UserMinus, Download, Ban, Trash2, ListPlus, Info, ArrowUpDown } from "lucide-react";
-import { Contact, ContactList, contactStats } from "../mock-data";
+import { Contact, ContactList } from "../mock-data";
+import type { KimiContactStats } from "@/lib/contacts/kimi-contacts-adapter";
 
 interface Props {
   contacts: Contact[];
   lists: ContactList[];
+  stats: KimiContactStats;
   onAddToLists: (contactIds: string[], listIds: string[]) => void;
+  onDeleteContacts?: (contactIds: string[]) => void | Promise<void>;
+  onUnsubscribeContacts?: (contactIds: string[]) => void | Promise<void>;
 }
 
-export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
+export default function ContactsPage({
+  contacts,
+  lists,
+  stats,
+  onAddToLists,
+  onDeleteContacts,
+  onUnsubscribeContacts,
+}: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -17,6 +28,7 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
   const [pickedLists, setPickedLists] = useState<Set<string>>(new Set());
   const [listSearch, setListSearch] = useState("");
   const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const visible = useMemo(
     () => contacts.filter((c) => (c.firstName + " " + c.lastName).toLowerCase().includes(search.toLowerCase())),
@@ -39,11 +51,23 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
 
   const filteredLists = lists.filter((l) => l.name.toLowerCase().includes(listSearch.toLowerCase()));
 
-  const stats = [
-    { label: "Contacts", value: contactStats.total.toLocaleString(), icon: <Users size={16} />, tone: "bg-[#eef1fe] text-[#3b4ef5]" },
-    { label: "Subscribed Contacts", value: contactStats.subscribed.toLocaleString(), icon: <UserCheck size={16} />, tone: "bg-[#e7f8f0] text-[#12b76a]" },
-    { label: "Unsubscribed Contacts", value: String(contactStats.unsubscribed), icon: <UserX size={16} />, tone: "bg-[#feeeef] text-[#f04438]" },
+  const statCards = [
+    { label: "Contacts", value: stats.contacts.toLocaleString(), icon: <Users size={16} />, tone: "bg-[#eef1fe] text-[#3b4ef5]" },
+    { label: "Subscribed Contacts", value: stats.subscribed.toLocaleString(), icon: <UserCheck size={16} />, tone: "bg-[#e7f8f0] text-[#12b76a]" },
+    { label: "Unsubscribed Contacts", value: String(stats.unsubscribed), icon: <UserX size={16} />, tone: "bg-[#feeeef] text-[#f04438]" },
   ];
+
+  const runBulkAction = async (action: () => void | Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setActionsOpen(false);
+    try {
+      await action();
+      setSelected(new Set());
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div onClick={() => actionsOpen && setActionsOpen(false)}>
@@ -51,7 +75,7 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
       <p className="page-subtitle mb-6">View and manage all of your contacts.</p>
 
       <div className="grid grid-cols-3 gap-4 mb-7">
-        {stats.map((s) => (
+        {statCards.map((s) => (
           <div key={s.label} className="metric-card transition-shadow hover:shadow-md">
             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${s.tone}`}>{s.icon}</span>
             <div className="flex items-center gap-1.5 text-[12px] font-medium text-[#7a85a8]">
@@ -78,9 +102,29 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
                     { icon: <UserPlus size={14} />, label: "Add to Lists", fn: () => { setActionsOpen(false); setAddOpen(true); } },
                     { icon: <UserMinus size={14} />, label: "Remove From Lists", fn: () => setActionsOpen(false) },
                     { icon: <Download size={14} />, label: "Download", fn: () => setActionsOpen(false) },
-                    { icon: <Ban size={14} />, label: "Unsubscribe", fn: () => setActionsOpen(false) },
-                    { icon: <Ban size={14} />, label: "Unsubscribe & Delete", fn: () => setActionsOpen(false) },
-                    { icon: <Trash2 size={14} />, label: "Delete", fn: () => setActionsOpen(false), danger: true },
+                    {
+                      icon: <Ban size={14} />,
+                      label: "Unsubscribe",
+                      fn: () => void runBulkAction(async () => {
+                        if (onUnsubscribeContacts) await onUnsubscribeContacts(Array.from(selected));
+                      }),
+                    },
+                    {
+                      icon: <Ban size={14} />,
+                      label: "Unsubscribe & Delete",
+                      fn: () => void runBulkAction(async () => {
+                        if (onUnsubscribeContacts) await onUnsubscribeContacts(Array.from(selected));
+                        if (onDeleteContacts) await onDeleteContacts(Array.from(selected));
+                      }),
+                    },
+                    {
+                      icon: <Trash2 size={14} />,
+                      label: "Delete",
+                      fn: () => void runBulkAction(async () => {
+                        if (onDeleteContacts) await onDeleteContacts(Array.from(selected));
+                      }),
+                      danger: true,
+                    },
                   ].map((a) => (
                     <div key={a.label} onClick={a.fn} className={`menu-item ${a.danger ? "text-[#f04438] hover:bg-[#feeeef]" : ""}`}>
                       {a.icon} {a.label}
@@ -103,7 +147,7 @@ export default function ContactsPage({ contacts, lists, onAddToLists }: Props) {
       <div className="table-card">
         {selected.size === visible.length && visible.length > 0 && (
           <div className="border-b border-[#eceef5] bg-[#eef1fe] px-5 py-2 text-center text-[12px] text-[#3b4ef5]">
-            All {visible.length} contacts on this page are selected. <span className="cursor-pointer font-semibold underline">Select all {contactStats.total.toLocaleString()} contacts.</span>
+            All {visible.length} contacts on this page are selected. <span className="cursor-pointer font-semibold underline">Select all {stats.contacts.toLocaleString()} contacts.</span>
           </div>
         )}
         <div className="table-head grid grid-cols-[36px_1fr_1fr_1.1fr_1.2fr_1.2fr_1.3fr_32px]">

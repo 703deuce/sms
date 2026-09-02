@@ -52,9 +52,9 @@ export default function GrowTapToJoinFlow() {
           <LinksListPage
             links={links}
             onCreate={() => setView({ name: "create" })}
+            onEdit={(link) => setView({ name: "create" })}
             onDelete={handleDelete}
             onClone={handleClone}
-            onOpenFallback={() => setView({ name: "fallback" })}
           />
         )}
         {view.name === "create" && (

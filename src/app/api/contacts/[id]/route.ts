@@ -38,6 +38,7 @@ export async function PATCH(
       company?: string;
       tagNames?: string[];
       listIds?: string[];
+      customFields?: Record<string, string>;
     };
 
     const existing = await getPrisma().contact.findFirst({
@@ -75,6 +76,7 @@ export async function PATCH(
           : undefined,
         assignedUser: body.assignedUser === undefined ? undefined : body.assignedUser,
         company: body.company ?? undefined,
+        ...(body.customFields !== undefined ? { customFields: body.customFields } : {}),
       },
     });
 

@@ -6,6 +6,24 @@ import { Modal } from "./ui";
 export default function FormCreatedModal({
   open, onClose, type, url, embedCode,
 }: { open: boolean; onClose: () => void; type: "landing" | "embed"; url: string; embedCode: string }) {
+  const displayValue = type === "landing" ? url : embedCode;
+
+  const copyValue = async () => {
+    try {
+      await navigator.clipboard.writeText(displayValue);
+    } catch {
+      /* clipboard may be unavailable */
+    }
+  };
+
+  const viewForm = () => {
+    if (type === "landing" && url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    void copyValue();
+  };
+
   return (
     <Modal open={open} onClose={onClose} width={440}>
       <div className="p-7 text-center">
@@ -22,15 +40,24 @@ export default function FormCreatedModal({
           <div className="mb-1.5 text-xs font-medium text-foreground">{type === "landing" ? "Form URL" : "Form Embed Code"}</div>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
             <code className="flex-1 truncate font-mono text-xs text-muted-foreground">
-              {type === "landing" ? url : embedCode}
+              {displayValue}
             </code>
-            <button className="flex-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Copy">
+            <button
+              type="button"
+              onClick={() => void copyValue()}
+              className="flex-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Copy"
+            >
               <Copy size={14} />
             </button>
           </div>
         </div>
         <div className="flex gap-3">
-          <button className="flex-1 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary-hover active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
+          <button
+            type="button"
+            onClick={viewForm}
+            className="flex-1 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary-hover active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
             {type === "landing" ? "View Form" : "Copy Embed Code"}
           </button>
           <button

@@ -84,6 +84,39 @@ export async function createTapLink(payload: {
   return mapTapToJoinToKimi(json.data);
 }
 
+export async function updateTapLink(
+  id: string,
+  payload: {
+    name?: string;
+    keyword?: string;
+    keywordId?: string;
+    phoneE164?: string;
+    status?: "Active" | "Inactive";
+  },
+): Promise<TapLink> {
+  let keywordId = payload.keywordId;
+  if (!keywordId && payload.keyword) {
+    const keywords = await fetchKeywords();
+    const match = keywords.find(
+      (k) => k.name.toUpperCase() === payload.keyword!.trim().toUpperCase(),
+    );
+    keywordId = match?.id;
+  }
+
+  const res = await fetch(`/api/growth/tap-to-join/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: payload.name,
+      keywordId,
+      status: payload.status === "Inactive" ? "Paused" : payload.status === "Active" ? "Active" : undefined,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not update link");
+  return mapTapToJoinToKimi(json.data);
+}
+
 export async function deleteTapLink(id: string): Promise<void> {
   const res = await fetch(`/api/growth/tap-to-join/${id}`, { method: "DELETE" });
   if (!res.ok) {

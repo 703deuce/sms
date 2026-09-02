@@ -15,6 +15,7 @@ import {
   fetchContactListNames,
   fetchWebForms,
   fetchWebFormById,
+  fetchFormShareMeta,
   updateWebForm,
 } from "@/lib/growth/kimi-forms-adapter";
 import type { FormLayout } from "@/lib/forms/layout";
@@ -213,6 +214,17 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
             if (form) openFormEditor(form);
           }}
           onClone={(id) => void handleCloneForm(id)}
+          onCopyEmbed={async (id) => {
+            try {
+              const meta = await fetchFormShareMeta(id);
+              const code =
+                meta.embedCode ||
+                `<script async src="https://static.transovo.io/forms/scripts/embed/${id}"></script>`;
+              await navigator.clipboard.writeText(code);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not copy embed code");
+            }
+          }}
         />
       )}
       {view === "create" && editingFormId && (

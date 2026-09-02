@@ -34,11 +34,24 @@ export async function POST(request: Request) {
       },
     });
     if (body.contactIds?.length) {
+      let addedCount = 0;
       for (const contactId of body.contactIds) {
-        await getPrisma().contactListMember.create({
+        const created = await getPrisma().contactListMember.create({
           data: { listId: list.id, contactId },
         }).catch(() => null);
+        if (created) addedCount += 1;
       }
+      return NextResponse.json(
+        {
+          data: {
+            id: list.id,
+            name: list.name,
+            description: list.description || "",
+            contactCount: addedCount,
+          },
+        },
+        { status: 201 },
+      );
     }
     return NextResponse.json(
       {

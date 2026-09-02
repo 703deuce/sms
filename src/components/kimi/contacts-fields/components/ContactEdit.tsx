@@ -1,5 +1,5 @@
 "use client";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Users, Lightbulb, X } from "lucide-react";
 import { contacts, CustomField, type Contact } from "../mock-data";
 
@@ -9,18 +9,22 @@ type SavePayload = {
   mobile: string;
   email: string;
   optIn: string;
+  selectedLists: string[];
+  customFields: Record<string, string>;
 };
 
 export default function ContactEdit({
   contactId,
   fields,
   contact: contactProp,
+  listOptions = [],
   onBack,
   onSave,
 }: {
   contactId: string;
   fields: CustomField[];
   contact?: Contact;
+  listOptions?: Array<{ id: string; name: string }>;
   onBack?: () => void;
   onSave?: (payload: SavePayload) => Promise<void>;
 }) {
@@ -30,15 +34,35 @@ export default function ContactEdit({
   const mobileRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const optInRef = useRef<HTMLSelectElement>(null);
+  const customFieldRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({});
+  const [selectedLists, setSelectedLists] = useState<string[]>(c.lists);
+  const [listQuery, setListQuery] = useState("");
+  const [listOpen, setListOpen] = useState(false);
+
+  const availableLists = listOptions
+    .map((l) => l.name)
+    .filter((name) => name.toLowerCase().includes(listQuery.toLowerCase()) && !selectedLists.includes(name));
+
+  const fieldKey = (field: CustomField) => field.mergeTag.replace(/^\{\{|\}\}$/g, "");
 
   const handleSave = () => {
     if (!onSave) return;
+    const customFields: Record<string, string> = {};
+    for (const field of fields) {
+      const key = fieldKey(field);
+      const el = customFieldRefs.current[key];
+      if (!el) continue;
+      const value = "value" in el ? el.value.trim() : "";
+      if (value) customFields[key] = value;
+    }
     void onSave({
       firstName: firstRef.current?.value ?? c.firstName,
       lastName: lastRef.current?.value ?? c.lastName,
       mobile: mobileRef.current?.value ?? c.mobile,
       email: emailRef.current?.value ?? c.email,
       optIn: optInRef.current?.value ?? c.optIn,
+      selectedLists,
+      customFields,
     });
   };
 
@@ -82,27 +106,82 @@ export default function ContactEdit({
             Custom fields allow you to store custom data on your contacts. You can manage your custom fields{" "}
             <button className="tv-link">here</button>.
           </p>
-          {fields.map((f) => (
-            <div className="tv-field-group" key={f.id}>
-              <label className="tv-label">{f.name}</label>
-              {f.type === "Yes / No" ? (
-                <select className="tv-select tv-select-full"><option>None</option><option>Yes</option><option>No</option></select>
-              ) : f.type === "Date" ? (
-                <input type="date" className="tv-input tv-input-full" />
-              ) : (
-                <input className="tv-input tv-input-full" type={f.type === "Number" ? "number" : "text"} />
-              )}
-            </div>
-          ))}
+          {fields.map((f) => {
+            const key = fieldKey(f);
+            const initialValue = c.customFields?.[key] || "";
+            return (
+              <div className="tv-field-group" key={f.id}>
+                <label className="tv-label">{f.name}</label>
+                {f.type === "Yes / No" ? (
+                  <select
+                    ref={(el) => { customFieldRefs.current[key] = el; }}
+                    className="tv-select tv-select-full"
+                    defaultValue={initialValue || "None"}
+                  >
+                    <option>None</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                  </select>
+                ) : f.type === "Date" ? (
+                  <input
+                    ref={(el) => { customFieldRefs.current[key] = el; }}
+                    type="date"
+                    className="tv-input tv-input-full"
+                    defaultValue={initialValue}
+                  />
+                ) : (
+                  <input
+                    ref={(el) => { customFieldRefs.current[key] = el; }}
+                    className="tv-input tv-input-full"
+                    type={f.type === "Number" ? "number" : "text"}
+                    defaultValue={initialValue}
+                  />
+                )}
+              </div>
+            );
+          })}
 
           <h3 className="tv-section-title">Lists</h3>
           <p className="tv-section-sub">Select one or more optional lists for this contact to be on. You can manage your contact lists <button className="tv-link">here</button>.</p>
-          <div className="tv-tag-box">
-            {c.lists.map((l) => (
-              <span key={l} className="tv-tag">{l} <X size={12} style={{ cursor: "pointer" }} /></span>
+          <div className="tv-tag-box" onClick={() => setListOpen(true)}>
+            {selectedLists.map((l) => (
+              <span key={l} className="tv-tag">
+                {l}
+                <X
+                  size={12}
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedLists(selectedLists.filter((x) => x !== l));
+                  }}
+                />
+              </span>
             ))}
-            <input placeholder="Search" className="tv-tag-input" />
+            <input
+              placeholder="Search"
+              className="tv-tag-input"
+              value={listQuery}
+              onChange={(e) => { setListQuery(e.target.value); setListOpen(true); }}
+            />
           </div>
+          {listOpen && availableLists.length > 0 && (
+            <div className="menu-pop mt-1 w-full">
+              {availableLists.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="menu-item w-full text-left"
+                  onClick={() => {
+                    setSelectedLists([...selectedLists, name]);
+                    setListQuery("");
+                    setListOpen(false);
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
 
           <h3 className="tv-section-title">Opt-In Status</h3>
           <div className="tv-field-group">

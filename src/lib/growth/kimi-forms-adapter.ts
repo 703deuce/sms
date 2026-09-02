@@ -142,6 +142,16 @@ export async function fetchWebFormById(id: string): Promise<{
   return json.data;
 }
 
+export async function fetchFormShareMeta(id: string): Promise<{ url: string | null; embedCode: string | null }> {
+  const res = await fetch(`/api/growth/forms/${id}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not load form");
+  return {
+    url: json.data?.url || null,
+    embedCode: json.data?.embedCode || null,
+  };
+}
+
 export async function fetchContactListNames(): Promise<string[]> {
   const res = await fetch("/api/contacts/lists");
   const json = await res.json();

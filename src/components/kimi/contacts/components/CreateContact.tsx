@@ -21,6 +21,7 @@ export default function CreateContact({
     mobile: string;
     email: string;
     optIn: string;
+    selectedLists?: string[];
   }) => void | Promise<void>;
   contactLists?: string[];
 }) {
@@ -202,6 +203,7 @@ export default function CreateContact({
                   mobile,
                   email,
                   optIn: optIn || "Subscribed",
+                  selectedLists,
                 })
               }
               className="h-10 rounded-lg bg-primary px-10 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.98]"

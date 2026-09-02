@@ -20,6 +20,12 @@ import {
   updateKeywordForList,
 } from "@/lib/contacts/kimi-lists-adapter";
 import {
+  deleteContacts,
+  fetchContactStats,
+  updateContact,
+  type KimiContactStats,
+} from "@/lib/contacts/kimi-contacts-adapter";
+import {
   Users, ListTodo, Wrench, LayoutTemplate, MonitorSmartphone, MessageSquareText,
   QrCode, MousePointerClick, Search, MoreVertical, CheckCircle2, ArrowUpRight,
 } from "lucide-react";
@@ -35,14 +41,33 @@ export function KimiListsConnected() {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [contactStats, setContactStats] = useState<KimiContactStats>({
+    contacts: 0,
+    subscribed: 0,
+    unsubscribed: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const clearKeywordEditParam = useCallback(() => {
+    if (!searchParams.get("editKeyword")) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("editKeyword");
+    const qs = next.toString();
+    router.replace(qs ? `/contacts/lists?${qs}` : "/contacts/lists");
+  }, [router, searchParams]);
+
   const reload = useCallback(async () => {
-    const [l, c, k] = await Promise.all([fetchLists(), fetchContactsForLists(), fetchKeywordsForLists()]);
+    const [l, c, k, stats] = await Promise.all([
+      fetchLists(),
+      fetchContactsForLists(),
+      fetchKeywordsForLists(),
+      fetchContactStats().catch(() => ({ contacts: 0, subscribed: 0, unsubscribed: 0 })),
+    ]);
     setLists(l);
     setContacts(c);
     setKeywords(k);
+    setContactStats(stats);
   }, []);
 
   useEffect(() => {
@@ -88,10 +113,16 @@ export function KimiListsConnected() {
 
   const saveList = async (name: string, description: string) => {
     setError("");
-    await createList(name, description);
-    await reload();
-    goToPage("lists");
-    showToast("List created.");
+    try {
+      await createList(name, description);
+      await reload();
+      goToPage("lists");
+      showToast("List created.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not create list";
+      setError(message);
+      throw err;
+    }
   };
 
   const addToLists = async (contactIds: string[], listIds: string[]) => {
@@ -126,6 +157,7 @@ export function KimiListsConnected() {
       await reload();
       setPage("tools");
       setEditingKeyword(null);
+      clearKeywordEditParam();
       showToast("Keyword saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save keyword");
@@ -161,7 +193,24 @@ export function KimiListsConnected() {
         {page === "createList" && (
           <CreateListPage onBack={() => goToPage("lists")} onSave={saveList} />
         )}
-        {page === "contacts" && <ContactsPage contacts={contacts} lists={lists} onAddToLists={addToLists} />}
+        {page === "contacts" && (
+          <ContactsPage
+            contacts={contacts}
+            lists={lists}
+            stats={contactStats}
+            onAddToLists={addToLists}
+            onDeleteContacts={async (ids) => {
+              await deleteContacts(ids);
+              await reload();
+              showToast(`${ids.length} contact${ids.length === 1 ? "" : "s"} deleted.`);
+            }}
+            onUnsubscribeContacts={async (ids) => {
+              await Promise.all(ids.map((id) => updateContact(id, { optInLabel: "Unsubscribed" })));
+              await reload();
+              showToast(`${ids.length} contact${ids.length === 1 ? "" : "s"} unsubscribed.`);
+            }}
+          />
+        )}
         {page === "tools" && (
           <ToolsPage
             keywords={keywords}
@@ -180,7 +229,11 @@ export function KimiListsConnected() {
             initialAutoResponse={editingKeyword.autoResponse}
             initialListName={editingKeyword.listName}
             onSave={(payload) => void saveKeyword(payload)}
-            onCancel={() => { setEditingKeyword(null); setPage("tools"); }}
+            onCancel={() => {
+              setEditingKeyword(null);
+              setPage("tools");
+              clearKeywordEditParam();
+            }}
           />
         )}
       </main>
@@ -194,11 +247,11 @@ export function KimiListsConnected() {
 function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKeyword: (k: Keyword) => void }) {
   const [view, setView] = useState<"tools" | "keywords">("tools");
   const cards = [
-    { icon: <LayoutTemplate size={19} />, title: "Landing Pages", desc: "Build landing pages or embedded forms that collect contact data and opt people into your audience." },
-    { icon: <MonitorSmartphone size={19} />, title: "Website Popups", desc: "Create fully branded website popups that capture visitor information and allow them to subscribe." },
+    { icon: <LayoutTemplate size={19} />, title: "Landing Pages", desc: "Build landing pages or embedded forms that collect contact data and opt people into your audience.", href: "/grow/forms" },
+    { icon: <MonitorSmartphone size={19} />, title: "Website Popups", desc: "Create fully branded website popups that capture visitor information and allow them to subscribe.", href: "/grow/forms" },
     { icon: <MessageSquareText size={19} />, title: "Keywords", desc: "Establish keywords that users can text to join your lists or get automated replies.", onClick: () => setView("keywords") },
-    { icon: <QrCode size={19} />, title: "QR Codes", desc: "Generate a QR Code that opens a new message with your keyword and number pre-filled or sends users to a destination of your choice." },
-    { icon: <MousePointerClick size={19} />, title: "Tap-to-Join Links", desc: "Tap-to-join links open a new message with your keyword and number pre-filled, so the user can simply hit send to subscribe." },
+    { icon: <QrCode size={19} />, title: "QR Codes", desc: "Generate a QR Code that opens a new message with your keyword and number pre-filled or sends users to a destination of your choice.", href: "/grow/qr-codes" },
+    { icon: <MousePointerClick size={19} />, title: "Tap-to-Join Links", desc: "Tap-to-join links open a new message with your keyword and number pre-filled, so the user can simply hit send to subscribe.", href: "/grow/tap-to-join" },
   ];
 
   if (view === "keywords") {
@@ -255,12 +308,19 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
       <h2 className="text-[13px] font-bold uppercase tracking-wide text-[#7a85a8] mb-3">Audience Growth</h2>
       <div className="grid grid-cols-2 gap-4">
         {cards.map((c) => (
-          <div key={c.title} onClick={c.onClick} className={`tool-card group ${c.onClick ? "cursor-pointer" : ""}`}>
+          <div
+            key={c.title}
+            onClick={() => {
+              if (c.onClick) c.onClick();
+              else if (c.href) window.location.assign(c.href);
+            }}
+            className={`tool-card group ${c.onClick || c.href ? "cursor-pointer" : ""}`}
+          >
             <span className="tool-icon">{c.icon}</span>
             <div className="flex-1">
               <div className="flex items-center gap-1.5 text-[14px] font-bold text-[#0f1b3d]">
                 {c.title}
-                {c.onClick && <ArrowUpRight size={13} className="text-[#9aa3c0] opacity-0 transition-opacity group-hover:opacity-100" />}
+                {(c.onClick || c.href) && <ArrowUpRight size={13} className="text-[#9aa3c0] opacity-0 transition-opacity group-hover:opacity-100" />}
               </div>
               <div className="text-[12.5px] text-[#7a85a8] mt-1 leading-relaxed">{c.desc}</div>
             </div>

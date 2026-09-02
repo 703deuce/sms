@@ -19,7 +19,7 @@ import {
   mapKimiToDefinition,
   persistCustomFields,
 } from "@/lib/contacts/kimi-fields-adapter";
-import { fetchContacts, fetchContactStats, fetchContactById, updateContact } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchContacts, fetchContactStats, fetchContactById, fetchContactListOptions, updateContact } from "@/lib/contacts/kimi-contacts-adapter";
 import type { Contact } from "@/components/kimi/contacts-fields/mock-data";
 
 type Props = {
@@ -36,6 +36,7 @@ export function KimiFieldsConnected({ initialFields }: Props) {
   const [contactStats, setContactStats] = useState({ total: 0, subscribed: 0, unsubscribed: 0 });
   const [editContactId, setEditContactId] = useState("");
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -76,6 +77,7 @@ export function KimiFieldsConnected({ initialFields }: Props) {
       void reload().catch((err) => setError(err instanceof Error ? err.message : "Load failed"));
     }
     void reloadContacts().catch(() => undefined);
+    void fetchContactListOptions().then(setListOptions).catch(() => undefined);
   }, [initialFields.length, reload, reloadContacts]);
 
   const handleSaveField = async (name: string, type: FieldType, desc: string) => {
@@ -143,7 +145,8 @@ export function KimiFieldsConnected({ initialFields }: Props) {
                   email: row.email,
                   optIn: row.status === "Subscribed" ? "Subscribed" : "Unsubscribed",
                   created: row.created,
-                  lists: [],
+                  lists: row.lists || [],
+                  customFields: row.customFields,
                 });
                 setView("contactEdit");
               })
@@ -156,15 +159,21 @@ export function KimiFieldsConnected({ initialFields }: Props) {
           contactId={editContactId}
           contact={editingContact}
           fields={fields}
+          listOptions={listOptions}
           onBack={() => { setView("contacts"); setEditingContact(null); }}
           onSave={async (payload) => {
             setError("");
+            const listIds = payload.selectedLists
+              .map((name) => listOptions.find((l) => l.name === name)?.id)
+              .filter((id): id is string => Boolean(id));
             await updateContact(editContactId, {
               firstName: payload.firstName,
               lastName: payload.lastName,
               email: payload.email,
               phone: payload.mobile,
               optInLabel: payload.optIn,
+              listIds,
+              customFields: payload.customFields,
             });
             await reloadContacts();
             setView("contacts");

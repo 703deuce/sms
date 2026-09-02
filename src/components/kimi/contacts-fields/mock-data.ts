@@ -18,6 +18,7 @@ export interface Contact {
   optIn: "Subscribed" | "Unsubscribed";
   created: string;
   lists: string[];
+  customFields?: Record<string, string>;
 }
 
 export const initialFields: CustomField[] = [
