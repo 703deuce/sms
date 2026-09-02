@@ -35,12 +35,15 @@ export default function ListsList({ lists: listsProp }: { lists?: ContactList[] 
         </div>
         {filtered.map(l => (
           <div key={l.id} className="seg-row grid grid-cols-[1fr_180px_180px_40px] gap-3 px-4 py-3.5 border-t border-border first:border-t-0 items-center text-sm transition-colors hover:bg-muted/40">
-            <span className="font-medium text-foreground flex items-center gap-2.5">
+            <Link
+              href="/contacts/lists"
+              className="font-medium text-foreground flex items-center gap-2.5 hover:text-primary transition-colors"
+            >
               <span className="h-7 w-7 rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 flex items-center justify-center shrink-0">
                 <ListChecks className="h-3.5 w-3.5" />
               </span>
               {l.name}
-            </span>
+            </Link>
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <Users className="h-4 w-4" /> <span className="tabular-nums font-medium text-foreground">{l.contacts.toLocaleString()}</span>
             </span>

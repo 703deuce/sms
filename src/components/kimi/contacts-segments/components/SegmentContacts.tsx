@@ -2,6 +2,7 @@
 import { ArrowLeft, Search, Users, Download, MoreVertical, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Segment, contacts as mockContacts, type Contact } from "../mock-data";
+import { downloadContactsCsv } from "@/lib/contacts/download-csv";
 import { PieSlice } from "./SegmentsList";
 
 export default function SegmentContacts({
@@ -20,6 +21,20 @@ export default function SegmentContacts({
   const filtered = source.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
   const total = segment.contacts || source.length;
 
+  const exportContacts = () => {
+    const slug = segment.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "segment";
+    downloadContactsCsv(
+      filtered.map((c) => ({
+        firstName: c.firstName,
+        lastName: c.lastName,
+        mobile: c.phone,
+        email: c.email,
+        optIn: c.status,
+      })),
+      `${slug}-contacts.csv`,
+    );
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto seg-fade">
       <button
@@ -34,7 +49,12 @@ export default function SegmentContacts({
           <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground truncate">{segment.name}</h1>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
-          <button className="h-9 px-3.5 rounded-lg border border-border bg-card hover:bg-muted/70 text-sm font-medium text-foreground flex items-center gap-2 transition-colors shadow-sm">
+          <button
+            type="button"
+            onClick={exportContacts}
+            disabled={filtered.length === 0}
+            className="h-9 px-3.5 rounded-lg border border-border bg-card hover:bg-muted/70 text-sm font-medium text-foreground flex items-center gap-2 transition-colors shadow-sm disabled:pointer-events-none disabled:opacity-50"
+          >
             <Download className="h-4 w-4" /> Export
           </button>
           <button onClick={onEdit} className="seg-btn-primary h-9 px-4 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-[0.98]">

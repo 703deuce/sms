@@ -10,11 +10,13 @@ interface Props {
   initialDescription?: string;
   initialAutoResponse?: string;
   initialListName?: string;
+  initialStatus?: "Active" | "Inactive";
   onSave: (payload: {
     listId: string | null;
     keyword: string;
     description: string;
     autoResponse: string;
+    status: "Active" | "Inactive";
   }) => void;
   onCancel: () => void;
 }
@@ -23,7 +25,7 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return <div className={`toggle ${on ? "on" : ""} transition-colors`} onClick={onClick} />;
 }
 
-export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, initialListName, onSave, onCancel }: Props) {
+export default function KeywordEditor({ lists, keywordId: _keywordId, initialKeyword, initialDescription, initialAutoResponse, initialListName, initialStatus, onSave, onCancel }: Props) {
   const keywordRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLInputElement>(null);
   const autoResponseRef = useRef<HTMLTextAreaElement>(null);
@@ -32,6 +34,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
   const [altResponse, setAltResponse] = useState(false);
   const [doubleOptIn, setDoubleOptIn] = useState(false);
   const [createsContact, setCreatesContact] = useState(true);
+  const [active, setActive] = useState(initialStatus !== "Inactive");
   const [selectedList, setSelectedList] = useState<string | null>(
     () => lists.find((l) => l.name === initialListName)?.id ?? null,
   );
@@ -148,21 +151,28 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
           )}
         </div>
 
-        <div className="flex gap-3">
-          <button
-            className="btn-primary"
-            onClick={() =>
-              onSave({
-                listId: addToLists ? selectedList : null,
-                keyword: keywordRef.current?.value ?? initialKeyword ?? "",
-                description: descriptionRef.current?.value ?? initialDescription ?? "",
-                autoResponse: autoResponseRef.current?.value ?? initialAutoResponse ?? "",
-              })
-            }
-          >
-            Save
-          </button>
-          <button className="btn-secondary" onClick={onCancel}>Cancel</button>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Toggle on={active} onClick={() => setActive(!active)} />
+            <span className="text-[13px] font-medium text-[#0f1b3d]">{active ? "Active" : "Inactive"}</span>
+          </div>
+          <div className="flex gap-3">
+            <button
+              className="btn-primary"
+              onClick={() =>
+                onSave({
+                  listId: addToLists ? selectedList : null,
+                  keyword: keywordRef.current?.value ?? initialKeyword ?? "",
+                  description: descriptionRef.current?.value ?? initialDescription ?? "",
+                  autoResponse: autoResponseRef.current?.value ?? initialAutoResponse ?? "",
+                  status: active ? "Active" : "Inactive",
+                })
+              }
+            >
+              Save
+            </button>
+            <button className="btn-secondary" onClick={onCancel}>Cancel</button>
+          </div>
         </div>
       </div>
 

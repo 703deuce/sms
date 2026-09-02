@@ -25,6 +25,7 @@ export interface Keyword {
   createsContacts: boolean;
   autoResponse?: string;
   listName?: string;
+  status?: "Active" | "Inactive";
 }
 
 export const initialLists: ContactList[] = [

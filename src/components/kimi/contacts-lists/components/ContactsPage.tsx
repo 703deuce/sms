@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { Users, UserCheck, UserX, Search, Filter, ChevronDown, X, UserPlus, UserMinus, Download, Ban, Trash2, ListPlus, Info, ArrowUpDown, Upload } from "lucide-react";
 import { Contact, ContactList } from "../mock-data";
@@ -214,7 +215,9 @@ export default function ContactsPage({
         {visible.map((c) => (
           <div key={c.id} className={`table-row grid grid-cols-[36px_1fr_1fr_1.1fr_1.2fr_1.2fr_1.3fr_32px] transition-colors ${selected.has(c.id) ? "bg-[#f4f6ff]" : "hover:bg-[#fafbfe]"}`}>
             <input type="checkbox" className="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-            <span className="cursor-pointer text-[13px] font-medium text-[#3b4ef5] hover:underline">{c.firstName}</span>
+            <Link href={`/contacts/${c.id}`} className="text-[13px] font-medium text-[#3b4ef5] hover:underline">
+              {c.firstName}
+            </Link>
             <span className="text-[13px] text-[#0f1b3d]">{c.lastName}</span>
             <span className="cell-body">{c.mobile}</span>
             <span className="cell-body">{c.email || <span className="text-[#c3c9dd]">—</span>}</span>

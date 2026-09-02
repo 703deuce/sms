@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Smartphone, ArrowLeft, MessageSquare, Copy, Check, MousePointerClick,
-  ChevronLeft, Signal, Wifi, BatteryFull, CircleCheck,
+  ChevronLeft, Signal, Wifi, BatteryFull, CircleCheck, ExternalLink,
 } from "lucide-react";
 import { TapLink } from "../mock-data";
 
@@ -58,6 +58,15 @@ export default function LinkSuccessCard({ link, onBack }: Props) {
           </div>
           <div className="ttj-success-actions">
             <button className="ttj-link-btn" onClick={onBack}><ArrowLeft size={13} /> Back to Links</button>
+            {link.url && (
+              <button
+                type="button"
+                className="ttj-link-btn"
+                onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink size={13} /> Open Url
+              </button>
+            )}
             <button className="ttj-link-btn" onClick={() => setTesting(!testing)}>
               <MessageSquare size={13} /> {testing ? "Hide Preview" : "Text the Link"}
             </button>

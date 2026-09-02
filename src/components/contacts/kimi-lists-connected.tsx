@@ -142,6 +142,7 @@ export function KimiListsConnected() {
     keyword: string;
     description: string;
     autoResponse: string;
+    status: "Active" | "Inactive";
   }) => {
     if (!editingKeyword) {
       setPage("tools");
@@ -155,6 +156,7 @@ export function KimiListsConnected() {
         listName: listName || undefined,
         confirmation: payload.description,
         autoReply: payload.autoResponse,
+        status: payload.status,
       });
       await reload();
       setPage("tools");
@@ -245,6 +247,7 @@ export function KimiListsConnected() {
             initialDescription={editingKeyword.description}
             initialAutoResponse={editingKeyword.autoResponse}
             initialListName={editingKeyword.listName}
+            initialStatus={editingKeyword.status}
             onSave={(payload) => void saveKeyword(payload)}
             onCancel={() => {
               setEditingKeyword(null);

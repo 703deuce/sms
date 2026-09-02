@@ -37,6 +37,7 @@ export function mapApiKeywordToKimi(k: {
   listName?: string | null;
   confirmation?: string | null;
   autoReply?: string | null;
+  status?: string | null;
   updatedAt?: string;
 }): Keyword {
   return {
@@ -48,6 +49,7 @@ export function mapApiKeywordToKimi(k: {
     createsContacts: true,
     autoResponse: k.autoReply || "",
     listName: k.listName || undefined,
+    status: k.status === "Inactive" ? "Inactive" : "Active",
   };
 }
 
@@ -133,7 +135,13 @@ export async function removeContactsFromLists(listIds: string[], contactIds: str
 
 export async function updateKeywordForList(
   keywordId: string,
-  payload: { listName?: string; keyword?: string; confirmation?: string; autoReply?: string },
+  payload: {
+    listName?: string;
+    keyword?: string;
+    confirmation?: string;
+    autoReply?: string;
+    status?: "Active" | "Inactive";
+  },
 ): Promise<Keyword> {
   const res = await fetch(`/api/growth/keywords/${keywordId}`, {
     method: "PATCH",

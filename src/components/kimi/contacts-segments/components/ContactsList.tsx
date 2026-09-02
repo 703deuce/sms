@@ -1,5 +1,6 @@
 "use client";
 import { Search, Plus, MoreVertical, Upload, SearchX } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { contacts as mockContacts, type Contact } from "../mock-data";
 
@@ -38,12 +39,18 @@ export default function ContactsList({ contacts: contactsProp }: { contacts?: Co
           />
         </div>
         <div className="flex gap-2.5">
-          <button className="h-9 px-3.5 rounded-lg border border-border bg-card hover:bg-muted/70 text-sm font-medium text-foreground flex items-center gap-2 transition-colors shadow-sm">
+          <Link
+            href="/contacts/imports"
+            className="h-9 px-3.5 rounded-lg border border-border bg-card hover:bg-muted/70 text-sm font-medium text-foreground flex items-center gap-2 transition-colors shadow-sm"
+          >
             <Upload className="h-4 w-4" /> Import
-          </button>
-          <button className="seg-btn-primary h-9 px-4 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-150 active:scale-[0.98]">
+          </Link>
+          <Link
+            href="/contacts/create"
+            className="seg-btn-primary h-9 px-4 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-150 active:scale-[0.98]"
+          >
             <Plus className="h-4 w-4" /> Add Contact
-          </button>
+          </Link>
         </div>
       </div>
       <div className="seg-card rounded-xl border border-border bg-card overflow-hidden">
