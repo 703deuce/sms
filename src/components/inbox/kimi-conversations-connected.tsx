@@ -1,7 +1,7 @@
 /**
  * Backend adapter shell for Kimi conversations inbox.
  * Orchestrates the unchanged Kimi presentation components with real /api/inbox data.
- * Kimi UI files under components/kimi/conversations/ are not modified.
+ * Kimi UI files under components/kimi/conversations/ are not modified for backend work.
  */
 "use client";
 
@@ -860,7 +860,7 @@ export function KimiConversationsConnected({
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--tv-border)", background: "#fff" }}>
+          <div className="tv-product-filters-bar">
             <InboxProductFilters basePath="/conversations" />
           </div>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>

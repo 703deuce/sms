@@ -32,29 +32,35 @@ export function KimiMediaConnected({ initialView = "list" }: { initialView?: Med
 
   if (initialView === "create") {
     return (
-      <CreateCampaign
-        onCancel={() => router.push(MEDIA_HOME)}
-        paths={mediaCampaignPaths}
-      />
+      <div className="kimi-surface kimi-campaigns">
+        <CreateCampaign
+          onCancel={() => router.push(MEDIA_HOME)}
+          paths={mediaCampaignPaths}
+        />
+      </div>
     );
   }
 
   if (initialView === "review") {
     return (
-      <ReviewDetails
-        onPrev={() => router.push(`${MEDIA_HOME}?create=1`)}
-        paths={mediaReviewPaths}
-      />
+      <div className="kimi-surface kimi-campaigns">
+        <ReviewDetails
+          onPrev={() => router.push(`${MEDIA_HOME}?create=1`)}
+          paths={mediaReviewPaths}
+        />
+      </div>
     );
   }
 
   return (
-    <CampaignsList
+    <div className="kimi-surface kimi-campaigns">
+      <CampaignsList
       title="MMS Campaigns"
       subtitle="View and manage campaigns that include media attachments."
       rowFilter={isMmsCampaign}
       onCreate={() => router.push(`${MEDIA_HOME}?create=1`)}
       editCampaignPath={(id) => `${MEDIA_HOME}?create=1&edit=${id}`}
     />
+    </div>
   );
 }

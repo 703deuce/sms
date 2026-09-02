@@ -407,13 +407,10 @@ export default function CreateCampaign({
             />
           ) : (
             <>
-              <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight text-slate-900">
-                <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-indigo-50">
-                  <Megaphone className="h-5 w-5 text-indigo-600" />
-                </span>
-                Create Campaign
+              <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
+                <Megaphone className="w-6 h-6 text-indigo-500" /> Create Campaign
               </h1>
-              <p className="mt-1.5 text-sm text-slate-500">
+              <p className="text-sm text-slate-500 mt-1">
                 Create a campaign to reach your contacts at scale.
               </p>
             </>

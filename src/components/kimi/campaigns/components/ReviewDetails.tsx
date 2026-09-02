@@ -130,32 +130,30 @@ export default function ReviewDetails({
     );
   }
 
-  const sectionCard =
-    "rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+  const sectionCard = "review-card";
 
   return (
     <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
-      <p className="text-[12px] font-medium text-slate-400">
-        Campaigns <span className="mx-1.5 text-slate-300">/</span>{" "}
-        <span className="font-semibold text-slate-600">Create Campaign</span>
+      <p className="text-[12px] text-slate-400">
+        Campaigns / <span className="text-slate-600">Create Campaign</span>
       </p>
-      <div className="mt-4 grid grid-cols-[1fr_360px] gap-14">
+      <div className="grid grid-cols-[1fr_360px] gap-14 mt-4">
         <div>
-          <h1 className="text-[22px] font-bold tracking-tight text-slate-900">Review Details</h1>
-          <p className="mt-1.5 text-sm text-slate-500">Confirm your campaign details.</p>
+          <h1 className="text-[22px] font-bold text-slate-900">Review Details</h1>
+          <p className="text-sm text-slate-500 mt-1">Confirm your campaign details.</p>
 
           <div className="mt-8 max-w-xl">
             <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-[15px] font-bold text-slate-900">
-                Audience
-                <span className="rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-indigo-600">
-                  Subscribed Contacts Only
+              <h3 className="text-[15px] font-bold text-slate-900">
+                Audience{" "}
+                <span className="ml-1 text-[11px] font-medium text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5">
+                  (Subscribed Contacts Only)
                 </span>
               </h3>
               <button
                 type="button"
                 onClick={() => onPrev(campaignId)}
-                className="rounded-md px-2 py-1 text-[13px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                className="text-[13px] font-semibold text-indigo-600"
               >
                 Edit
               </button>
@@ -183,7 +181,7 @@ export default function ReviewDetails({
               <button
                 type="button"
                 onClick={() => onPrev(campaignId)}
-                className="rounded-md px-2 py-1 text-[13px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                className="text-[13px] font-semibold text-indigo-600"
               >
                 Edit
               </button>
@@ -241,7 +239,7 @@ export default function ReviewDetails({
             <p className="mt-4 max-w-xl rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">{error}</p>
           ) : null}
 
-          <div className="mt-10 flex max-w-xl items-center justify-between border-t border-slate-200/80 pt-5">
+          <div className="mt-10 flex max-w-xl items-center justify-between">
             <button type="button" onClick={() => onPrev(campaignId)} className="btn-ghost flex items-center gap-1">
               <ChevronLeft className="h-4 w-4" /> Prev
             </button>
@@ -249,7 +247,7 @@ export default function ReviewDetails({
               <button
                 type="button"
                 onClick={() => void handleSaveDraft()}
-                className="text-[13px] font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+                className="text-[13px] font-semibold text-indigo-600"
               >
                 Save Draft
               </button>
@@ -262,7 +260,7 @@ export default function ReviewDetails({
                   !review?.canSend ||
                   (review.finalRecipientCount >= 1000 && !confirmLargeSend)
                 }
-                className="btn-primary flex items-center gap-1.5 !py-2.5 shadow-sm disabled:opacity-60"
+                className="btn-primary flex items-center gap-1.5 !py-2.5"
               >
                 {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {actionLabel}

@@ -14,7 +14,7 @@ function MediaPageContent() {
     viewParam === "review" ? "review" : viewParam === "1" || viewParam === "create" ? "create" : "list";
 
   return (
-    <div className="kimi-surface kimi-messaging-media">
+    <div className="kimi-surface kimi-campaigns kimi-messaging-media">
       <KimiMediaConnected initialView={initialView} />
     </div>
   );

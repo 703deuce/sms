@@ -60,6 +60,11 @@
 .kimi-campaigns .status-pill.sent{ background: #e7f8ef; color: #15803d; }
 .kimi-campaigns .status-pill.draft{ background: #fff; color: #475569; border: 1px solid #dbe1ea; }
 .kimi-campaigns .status-pill.draft::before{ background: #94a3b8; }
+.kimi-campaigns .status-pill.scheduled{ background: #eef2ff; color: #4338ca; }
+.kimi-campaigns .status-pill.sending{ background: #fffbeb; color: #b45309; }
+.kimi-campaigns .status-pill.paused{ background: #f5f3ff; color: #6d28d9; }
+.kimi-campaigns .status-pill.failed{ background: #fef2f2; color: #b91c1c; }
+.kimi-campaigns .status-pill.canceled{ background: #f1f5f9; color: #64748b; }
 
 /* ---------- Audience chips ---------- */
 
@@ -183,7 +188,8 @@
   z-index: 30;
   overflow: hidden;
 }
-.kimi-campaigns .kebab-menu button{
+.kimi-campaigns .kebab-menu button,
+.kimi-campaigns .kebab-menu a{
   display: flex;
   align-items: center;
   gap: 8px;
@@ -194,9 +200,50 @@
   color: #334155;
   border-radius: 8px;
   transition: background .12s ease;
+  text-decoration: none;
 }
-.kimi-campaigns .kebab-menu button:hover{ background: #f4f6fb; }
-.kimi-campaigns .kebab-menu button svg{ color: #94a3b8; }
+.kimi-campaigns .kebab-menu button:hover,
+.kimi-campaigns .kebab-menu a:hover{ background: #f4f6fb; }
+.kimi-campaigns .kebab-menu button svg,
+.kimi-campaigns .kebab-menu a svg{ color: #94a3b8; }
+
+/* ---------- Filter menu ---------- */
+
+.kimi-campaigns .filter-menu{
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: #fff;
+  border: 1px solid #e6eaf1;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15,23,42,.14);
+  width: 176px;
+  padding: 4px;
+  z-index: 30;
+  overflow: hidden;
+}
+.kimi-campaigns .filter-menu button{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  border-radius: 8px;
+  transition: background .12s ease;
+}
+.kimi-campaigns .filter-menu button:hover{ background: #f4f6fb; }
+.kimi-campaigns .filter-menu button.active{ color: #4f46e5; font-weight: 600; }
+.kimi-campaigns .filter-badge{
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
 
 /* ---------- Buttons ---------- */
 

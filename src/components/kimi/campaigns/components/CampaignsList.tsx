@@ -3,7 +3,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Search, SlidersHorizontal, Users, MessageSquare, MoreVertical, BarChart2, Copy, Megaphone, Check, CheckCircle2, ChevronDown, Plus, PencilLine,
+  Search,
+  SlidersHorizontal,
+  Users,
+  MessageSquare,
+  MoreVertical,
+  BarChart2,
+  Copy,
+  Megaphone,
+  Check,
+  PencilLine,
 } from "lucide-react";
 import {
   duplicateCampaign,
@@ -28,32 +37,15 @@ const FILTER_OPTIONS = [
   { id: "canceled", label: "Canceled" },
 ];
 
-function statusPillClasses(status: string): string {
+function statusPillVariant(status: string): string {
   const s = normalizeCampaignStatus(status);
-  if (s === "completed" || s === "sent")
-    return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/70";
-  if (s === "scheduled")
-    return "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/70";
-  if (s === "sending" || s === "queued")
-    return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/70";
-  if (s === "paused")
-    return "bg-violet-50 text-violet-700 ring-1 ring-violet-200/70";
-  if (s === "failed")
-    return "bg-rose-50 text-rose-700 ring-1 ring-rose-200/70";
-  if (s === "canceled" || s === "cancelled")
-    return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
-  return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
-}
-
-function statusDot(status: string): string {
-  const s = normalizeCampaignStatus(status);
-  if (s === "completed" || s === "sent") return "bg-emerald-500";
-  if (s === "scheduled") return "bg-indigo-500";
-  if (s === "sending" || s === "queued") return "bg-amber-500";
-  if (s === "paused") return "bg-violet-500";
-  if (s === "failed") return "bg-rose-500";
-  if (s === "canceled" || s === "cancelled") return "bg-slate-400";
-  return "bg-slate-400";
+  if (s === "completed" || s === "sent") return "sent";
+  if (s === "scheduled") return "scheduled";
+  if (s === "sending" || s === "queued") return "sending";
+  if (s === "paused") return "paused";
+  if (s === "failed") return "failed";
+  if (s === "canceled" || s === "cancelled") return "canceled";
+  return "draft";
 }
 
 export default function CampaignsList({
@@ -62,7 +54,7 @@ export default function CampaignsList({
   rowFilter,
   fetchStatus,
   title = "Campaigns",
-  subtitle = "Create and manage your text message campaigns.",
+  subtitle = "View and manage all of your campaigns.",
   defaultFilter = "all",
   lockFilter = false,
 }: {
@@ -158,209 +150,206 @@ export default function CampaignsList({
 
   return (
     <div className="flex-1 min-h-screen bg-[#f6f7fb]">
-      {toast && (
+      {toast ? (
         <div className="toast">
           <Check className="w-4 h-4" /> {toast}
         </div>
-      )}
-      <header className="px-8 pt-8 pb-6">
-        <h1 className="flex items-center gap-3 text-[22px] font-bold tracking-tight text-slate-900">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/10 ring-1 ring-indigo-600/10">
-            <Megaphone className="w-5 h-5 text-indigo-600" />
-          </span>
-          {title}
+      ) : null}
+
+      <header className="px-8 pt-7 pb-4">
+        <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
+          <Megaphone className="w-6 h-6 text-indigo-500" /> {title}
         </h1>
-        <p className="mt-1.5 pl-[52px] text-[13.5px] text-slate-500">{subtitle}</p>
+        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
       </header>
 
-      <div className="flex items-center gap-3 px-8">
+      <div className="px-8 flex items-center gap-3">
         {!lockFilter ? (
-        <div className="relative" data-campaign-filter-root>
-          <button
-            type="button"
-            onClick={() => setFilterOpen((v) => !v)}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-[13px] font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-          >
-            <SlidersHorizontal className="w-4 h-4 text-slate-400" />
-            Filter
-            {filter !== "all" ? (
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600 ring-1 ring-indigo-200/60">
-                {activeFilterLabel}
-              </span>
+          <div className="relative" data-campaign-filter-root>
+            <button
+              type="button"
+              onClick={() => setFilterOpen((v) => !v)}
+              className="btn-ghost flex items-center gap-2 !py-2"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filter
+              {filter !== "all" ? <span className="filter-badge">{activeFilterLabel}</span> : null}
+            </button>
+            {filterOpen ? (
+              <div className="filter-menu fade-in">
+                {FILTER_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      setFilter(option.id);
+                      setFilterOpen(false);
+                    }}
+                    className={filter === option.id ? "active" : undefined}
+                  >
+                    {option.label}
+                    {filter === option.id ? <Check className="w-3.5 h-3.5" /> : null}
+                  </button>
+                ))}
+              </div>
             ) : null}
-          </button>
-          {filterOpen && (
-            <div className="absolute left-0 top-full z-20 mt-1.5 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl fade-in">
-              {FILTER_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => { setFilter(option.id); setFilterOpen(false); }}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition-colors hover:bg-slate-50 ${filter === option.id ? "font-semibold text-indigo-600" : "text-slate-700"}`}
-                >
-                  {option.label}
-                  {filter === option.id ? <Check className="w-3.5 h-3.5" /> : null}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
         ) : null}
-        <div className="relative ml-auto w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="relative flex-1 max-w-sm ml-auto">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search campaigns"
-            className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            placeholder="Search"
+            className="input-field !pl-9"
           />
         </div>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[0.98]"
-        >
-          <Plus className="h-4 w-4" /> Create Campaign
+        <button type="button" className="btn-primary" onClick={onCreate}>
+          Create Campaign
         </button>
       </div>
 
-      <div className="px-8 pb-10 pt-5">
+      <div className="px-8 mt-5 pb-10">
         {error ? (
           <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
         ) : null}
-        <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-          <div className="grid grid-cols-[minmax(0,2fr)_1.2fr_32px_1.2fr_130px_44px] items-center gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-2.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-400">
+
+        <div className="camp-table">
+          <div className="camp-row camp-head !bg-transparent border-b border-slate-200 !py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             <span>Campaign</span>
             <span>Audience</span>
-            <span></span>
+            <span />
             <span>Performance</span>
             <span className="text-right">Status</span>
-            <span></span>
+            <span />
           </div>
+
           {loading ? (
-            <div className="px-6 py-16 text-center">
-              <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-500" />
-              <p className="mt-3 text-[13px] text-slate-500">Loading campaigns…</p>
+            <div className="camp-row !cursor-default hover:!bg-white">
+              <div className="col-span-full flex flex-col items-center py-10 text-center" style={{ gridColumn: "1 / -1" }}>
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-500" />
+                <p className="mt-3 text-[13px] text-slate-500">Loading campaigns…</p>
+              </div>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 ring-1 ring-indigo-100">
-                <Megaphone className="h-5.5 h-[22px] w-[22px] text-indigo-500" />
-              </span>
-              <p className="mt-4 text-sm font-semibold text-slate-800">No campaigns found</p>
-              <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-slate-400">
-                Create your first bulk SMS campaign to reach your audience.
-              </p>
-              <button
-                type="button"
-                onClick={onCreate}
-                className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98]"
-              >
-                <Plus className="w-4 h-4" /> Create Campaign
-              </button>
+            <div className="camp-row !cursor-default hover:!bg-white">
+              <div className="col-span-full flex flex-col items-center py-12 text-center" style={{ gridColumn: "1 / -1" }}>
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 ring-1 ring-indigo-100">
+                  <Megaphone className="h-5 w-5 text-indigo-500" />
+                </span>
+                <p className="mt-4 text-sm font-semibold text-slate-800">No campaigns found</p>
+                <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-slate-400">
+                  Create your first bulk SMS campaign to reach your audience.
+                </p>
+                <button type="button" className="btn-primary mt-5" onClick={onCreate}>
+                  Create Campaign
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {filtered.map((c) => {
-                const norm = normalizeCampaignStatus(c.status);
-                const isSent = norm === "completed" || norm === "sent";
-                const statusLabel = displayCampaignStatus(c.status);
-                const recipients = isSent
-                  ? c.sent ?? 0
-                  : c.recipientCount && c.recipientCount > 0
-                    ? c.recipientCount
-                    : 0;
-                const savedAt = formatSavedAt(c.createdAt);
-                const scheduleAt =
-                  norm === "scheduled" && c.scheduledAt ? formatScheduledAt(c.scheduledAt) : "";
+            filtered.map((c) => {
+              const norm = normalizeCampaignStatus(c.status);
+              const isSent = norm === "completed" || norm === "sent";
+              const statusLabel = displayCampaignStatus(c.status);
+              const recipients = isSent
+                ? c.sent ?? 0
+                : c.recipientCount && c.recipientCount > 0
+                  ? c.recipientCount
+                  : 0;
+              const savedAt = formatSavedAt(c.createdAt);
+              const scheduleAt =
+                norm === "scheduled" && c.scheduledAt ? formatScheduledAt(c.scheduledAt) : "";
 
-                return (
-                  <div
-                    key={c.id}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelected(c.id === selected ? null : c.id);
-                      }
-                    }}
-                    onClick={() => setSelected(c.id === selected ? null : c.id)}
-                    className={`grid cursor-pointer grid-cols-[minmax(0,2fr)_1.2fr_32px_1.2fr_130px_44px] items-center gap-4 px-5 py-4 transition-colors ${
-                      selected === c.id ? "bg-indigo-50/40" : "hover:bg-slate-50/70"
-                    }`}
-                  >
+              return (
+                <div
+                  key={c.id}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected(c.id === selected ? null : c.id);
+                    }
+                  }}
+                  onClick={() => setSelected(c.id === selected ? null : c.id)}
+                  className={`camp-row cursor-pointer ${selected === c.id ? "selected" : ""}`}
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/campaigns/${c.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="block truncate text-[14px] font-semibold text-slate-800 hover:text-indigo-600"
+                    >
+                      {c.name}
+                    </Link>
+                    <p className="text-[12px] text-slate-400 mt-0.5">
+                      {scheduleAt || savedAt || "—"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600 min-w-0">
+                    <Users className="w-4 h-4 text-indigo-400 shrink-0" />
                     <div className="min-w-0">
-                      <Link
-                        href={`/campaigns/${c.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="block truncate text-[14px] font-semibold text-slate-800 transition-colors hover:text-indigo-600"
-                      >
-                        {c.name}
-                      </Link>
-                      <p className="mt-0.5 text-[12px] text-slate-400">
-                        {scheduleAt ? `Scheduled ${scheduleAt}` : savedAt || "—"}
-                      </p>
-                    </div>
-                    <div className="flex min-w-0 items-center gap-2.5 text-slate-600">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 ring-1 ring-indigo-100/70">
-                        <Users className="w-3.5 h-3.5 text-indigo-500" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold leading-tight text-slate-700">
-                          {recipients > 0 ? formatNumber(recipients) : "—"}
-                        </p>
-                        <p className="truncate text-[11px] text-slate-400">{c.audience || "Audience"}</p>
-                      </div>
-                    </div>
-                    <MessageSquare className="w-4 h-4 justify-self-center text-slate-300" />
-                    <div className="flex items-center gap-6">
-                      {isSent ? (
-                        <>
-                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.clicks ?? 0)}</p><p className="text-[11px] text-slate-400">Clicks</p></div>
-                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.replies ?? 0)}</p><p className="text-[11px] text-slate-400">Replies</p></div>
-                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.optOuts ?? 0)}</p><p className="text-[11px] text-slate-400">Opt-outs</p></div>
-                        </>
-                      ) : <span className="text-[12px] text-slate-300">Not sent yet</span>}
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${statusPillClasses(c.status)}`}>
-                        {isSent ? (
-                          <CheckCircle2 className="w-3 h-3" />
-                        ) : (
-                          <span className={`h-1.5 w-1.5 rounded-full ${statusDot(c.status)}`} />
-                        )}
-                        {statusLabel}
-                      </span>
-                    </div>
-                    <div className="relative justify-self-end" data-campaign-menu={c.id}>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === c.id ? null : c.id); }}
-                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                        aria-label="Campaign actions"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {menuFor === c.id && (
-                        <div className="kebab-menu fade-in" onClick={(e) => e.stopPropagation()}>
-                          <Link href={`/campaigns/${c.id}`} onClick={() => setMenuFor(null)}>
-                            <BarChart2 className="w-4 h-4" /> Analytics
-                          </Link>
-                          <button type="button" onClick={() => void clone(c)}><Copy className="w-4 h-4" /> Clone</button>
-                          {(norm === "draft" || norm === "scheduled" || norm === "paused") && (
-                            <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
-                              <PencilLine className="w-4 h-4" /> Edit
-                            </Link>
-                          )}
-                        </div>
-                      )}
+                      <p className="text-[13px] font-semibold">{recipients > 0 ? formatNumber(recipients) : "—"}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{c.audience || "Audience"}</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <MessageSquare className="w-4 h-4 text-slate-300 justify-self-center" />
+                  <div className="flex items-center gap-6">
+                    {isSent ? (
+                      <>
+                        <div>
+                          <p className="text-[13px] font-semibold text-slate-800">{formatNumber(c.clicks ?? 0)}</p>
+                          <p className="text-[11px] text-slate-400">Clicks</p>
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-semibold text-slate-800">{formatNumber(c.replies ?? 0)}</p>
+                          <p className="text-[11px] text-slate-400">Replies</p>
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-semibold text-slate-800">{formatNumber(c.optOuts ?? 0)}</p>
+                          <p className="text-[11px] text-slate-400">Opt-outs</p>
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-[12px] text-slate-300">Not sent yet</span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className={`status-pill ${statusPillVariant(c.status)}`}>{statusLabel}</span>
+                  </div>
+                  <div className="relative justify-self-end" data-campaign-menu={c.id}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuFor(menuFor === c.id ? null : c.id);
+                      }}
+                      className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400"
+                      aria-label="Campaign actions"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {menuFor === c.id ? (
+                      <div className="kebab-menu fade-in" onClick={(e) => e.stopPropagation()}>
+                        <Link href={`/campaigns/${c.id}`} onClick={() => setMenuFor(null)}>
+                          <BarChart2 className="w-4 h-4" /> Analytics
+                        </Link>
+                        <button type="button" onClick={() => void clone(c)}>
+                          <Copy className="w-4 h-4" /> Clone
+                        </button>
+                        {(norm === "draft" || norm === "scheduled" || norm === "paused") && (
+                          <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
+                            <PencilLine className="w-4 h-4" /> Edit
+                          </Link>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
+
         {!loading && filtered.length > 0 ? (
           <p className="mt-3 px-1 text-[12px] text-slate-400">
             {filtered.length} {filtered.length === 1 ? "campaign" : "campaigns"}

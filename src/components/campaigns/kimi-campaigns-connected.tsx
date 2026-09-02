@@ -1,5 +1,9 @@
 "use client";
 
+/**
+ * Backend adapter shell for Kimi campaigns.
+ * Wire APIs and navigation here — do not change presentation under components/kimi/campaigns/.
+ */
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import CampaignsList from "@/components/kimi/campaigns/components/CampaignsList";
@@ -36,17 +40,12 @@ export function KimiCampaignsConnected({ initialView = "list" }: { initialView?:
     );
   }
 
-  return (
-    <div>
-      <div className="border-b border-slate-200/80 bg-white px-8 pt-6">
-        <CampaignNavTabs />
-      </div>
-      <CampaignsList
-        onCreate={() => {
-          startFreshComposeDraft();
-          router.push("/campaigns/new");
-        }}
-      />
-    </div>
+  return navShell(
+    <CampaignsList
+      onCreate={() => {
+        startFreshComposeDraft();
+        router.push("/campaigns/new");
+      }}
+    />,
   );
 }

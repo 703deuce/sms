@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 const PRODUCT_CHIPS: Array<
   | { label: string; product: string | null; unread?: never }
@@ -36,7 +35,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
   }
 
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
+    <div className="tv-product-filters">
       {PRODUCT_CHIPS.map((chip) => {
         const isUnreadChip = "unread" in chip;
         const active = isUnreadChip
@@ -55,12 +54,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
                   : { product: "product" in chip ? chip.product : null, unread: false },
               )
             }
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
-              active
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-card text-muted-foreground hover:text-foreground",
-            )}
+            className={"tv-chip" + (active ? " active" : "")}
           >
             {chip.label}
           </button>
@@ -69,7 +63,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
       <button
         type="button"
         onClick={() => setFilter({ product: null, unread: false })}
-        className="rounded-full border border-border px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+        className="tv-chip tv-chip-clear"
       >
         Clear filters
       </button>
