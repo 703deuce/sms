@@ -20,9 +20,24 @@ export async function POST(request: Request) {
       destinationUrl?: string;
       mediaUrls?: string[];
       senderPoolId?: string;
+      inboxCompose?: boolean;
     };
 
     const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
+
+    if (body.inboxCompose) {
+      const { getMessagingRuntimeSettings, resolveInboxPermissions } = await import(
+        "@/lib/messaging/messaging-settings"
+      );
+      const runtime = await getMessagingRuntimeSettings(workspaceId);
+      const perms = resolveInboxPermissions(runtime.inboxPermissionsJson);
+      if (perms.inboxEnabled === false) {
+        return NextResponse.json({ error: "Inbox is disabled for this workspace" }, { status: 403 });
+      }
+      if (perms.allowStartConversations === false) {
+        return NextResponse.json({ error: "Starting conversations is disabled" }, { status: 403 });
+      }
+    }
     const to = body.to || body.customerPhone;
     const message = body.message || body.body || body.customMessage;
 

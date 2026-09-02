@@ -159,6 +159,7 @@ export function KimiConversationsConnected({
   const [settingsReturn, setSettingsReturn] = useState<View>("inbox");
   const [error, setError] = useState("");
   const updateInFlightRef = useRef(false);
+  const listRequestRef = useRef(0);
 
   const listQueryExtra = useMemo(
     () => ({
@@ -283,7 +284,27 @@ export function KimiConversationsConnected({
   useEffect(() => {
     if (!urlConversation) return;
     if (urlConversation !== selectedId) setSelectedId(urlConversation);
-  }, [urlConversation, selectedId]);
+    let cancelled = false;
+    void fetchConversation(urlConversation)
+      .then((data) => {
+        if (cancelled) return;
+        const mapped = mapConvo(data);
+        setApiConvoById((prev) => ({ ...prev, [data.id]: data }));
+        setConvos((prev) =>
+          prev.some((c) => c.id === mapped.id)
+            ? prev.map((c) => (c.id === mapped.id ? mapped : c))
+            : [mapped, ...prev],
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not open conversation");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlConversation, selectedId, mapConvo]);
 
   const [composeQuery, setComposeQuery] = useState("");
   const [composeTo, setComposeTo] = useState("");
@@ -302,14 +323,17 @@ export function KimiConversationsConnected({
   const presenceBootstrapped = useRef(false);
 
   const reloadList = useCallback(async (): Promise<Conversation[]> => {
+    const requestId = ++listRequestRef.current;
     setListLoading(true);
     try {
       const page = await fetchInboxListPage({
         ...inboxQueryFromFilter(sel, urlProduct, listQueryExtra),
         take: INBOX_LIST_DEFAULT_TAKE,
       });
+      if (requestId !== listRequestRef.current) return [];
       setListHasMore(page.pagination.hasMore);
       setListCursor(page.pagination.nextCursor);
+      const pinId = urlConversation || selectedId;
       let merged: Conversation[] = [];
       setConvos((prev) => {
         const prevById = new Map(prev.map((c) => [c.id, c]));
@@ -321,16 +345,22 @@ export function KimiConversationsConnected({
           }
           return mapped;
         });
+        if (pinId && !merged.some((c) => c.id === pinId)) {
+          const pinned = prevById.get(pinId);
+          if (pinned) merged = [pinned, ...merged];
+        }
         return merged;
       });
       return merged;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load conversations");
+      if (requestId === listRequestRef.current) {
+        setError(err instanceof Error ? err.message : "Could not load conversations");
+      }
       return [];
     } finally {
-      setListLoading(false);
+      if (requestId === listRequestRef.current) setListLoading(false);
     }
-  }, [sel, urlProduct, mapRow, listQueryExtra]);
+  }, [sel, urlProduct, mapRow, listQueryExtra, urlConversation, selectedId]);
 
   const loadMoreList = useCallback(async () => {
     if (!listHasMore || !listCursor || listLoading) return;
@@ -362,6 +392,7 @@ export function KimiConversationsConnected({
   }, [listHasMore, listCursor, listLoading, sel, urlProduct, mapRow, listQueryExtra]);
 
   useEffect(() => {
+    if (view !== "inbox") return;
     const loadPresence = () => {
       void fetch("/api/phone/presence")
         .then((r) => (r.ok ? r.json() : null))
@@ -388,7 +419,7 @@ export function KimiConversationsConnected({
     loadPresence();
     const timer = setInterval(loadPresence, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [view]);
 
   const setPresenceStatus = useCallback((status: string) => {
     setMyPresenceStatus(status);
@@ -406,7 +437,7 @@ export function KimiConversationsConnected({
   }, []);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (view !== "inbox" || !selectedId) return;
     const timer = setInterval(() => {
       if (updateInFlightRef.current) return;
       void fetchConversation(selectedId)
@@ -419,21 +450,26 @@ export function KimiConversationsConnected({
         .catch(() => undefined);
     }, 15000);
     return () => clearInterval(timer);
-  }, [selectedId, mapConvo]);
+  }, [selectedId, mapConvo, view]);
 
   useEffect(() => {
     void reloadList();
   }, [reloadList]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (view !== "inbox" || !selectedId) return;
     let cancelled = false;
     fetchConversation(selectedId)
       .then((data) => {
         if (cancelled) return;
         const mapped = mapConvo(data);
         setApiConvoById((prev) => ({ ...prev, [data.id]: data }));
-        setConvos((prev) => prev.map((c) => (c.id === selectedId ? mapped : c)));
+        setConvos((prev) => {
+          if (prev.some((c) => c.id === selectedId)) {
+            return prev.map((c) => (c.id === selectedId ? mapped : c));
+          }
+          return [mapped, ...prev];
+        });
         if (mapped.unread) {
           void patchConversation(selectedId, { unread: false }).catch(() => undefined);
           setConvos((prev) => prev.map((c) => (c.id === selectedId ? { ...mapped, unread: false } : c)));
@@ -445,7 +481,7 @@ export function KimiConversationsConnected({
     return () => {
       cancelled = true;
     };
-  }, [selectedId, ctx, mapConvo]);
+  }, [selectedId, mapConvo, view]);
 
   useEffect(() => {
     if (!newMsgOpen) return;
@@ -525,8 +561,9 @@ export function KimiConversationsConnected({
     if (!selectedId) return;
     if (filtered.some((c) => c.id === selectedId)) return;
     if (convos.some((c) => c.id === selectedId)) return;
+    if (urlConversation === selectedId) return;
     setSelectedId(null);
-  }, [filtered, selectedId, convos]);
+  }, [filtered, selectedId, convos, urlConversation]);
 
   const title =
     sel.kind === "mine"
@@ -666,13 +703,15 @@ export function KimiConversationsConnected({
   };
 
   const handleComposeSend = async () => {
+    if (!canStartConversations) return;
     const to = (composePicked ? composeTo : composeQuery).trim();
     if (!to || !composeMessage.trim()) return;
     setComposeSending(true);
     setError("");
     const message = composeMessage.trim();
+    const fromE164 = phoneNumbers.find((n) => n.id === composeNumberId)?.number;
     try {
-      await sendNewMessage({ to, message, numberId: composeNumberId || undefined });
+      await sendNewMessage({ to, message, fromE164, inboxCompose: true });
       setNewMsgOpen(false);
       setComposeTo("");
       setComposeQuery("");

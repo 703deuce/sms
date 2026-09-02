@@ -453,7 +453,9 @@ export async function sendNewMessage(input: {
   to: string;
   message: string;
   numberId?: string;
+  fromE164?: string;
   mediaUrls?: string[];
+  inboxCompose?: boolean;
 }): Promise<void> {
   const res = await fetch("/api/sms/send", {
     method: "POST",
@@ -461,8 +463,9 @@ export async function sendNewMessage(input: {
     body: JSON.stringify({
       to: input.to,
       message: input.message,
-      from: input.numberId,
+      from: input.fromE164,
       mediaUrls: input.mediaUrls,
+      inboxCompose: input.inboxCompose,
     }),
   });
   const json = await res.json();

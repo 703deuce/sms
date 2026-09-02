@@ -239,7 +239,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       to,
       finalBody,
       input.mediaUrls,
-      poolFrom || preferredFrom || input.from,
+      poolFrom || input.from || preferredFrom,
     );
     providerAccepted = true;
     providerSid = result.sid;

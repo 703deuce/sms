@@ -56,6 +56,17 @@ export function inboxFiltersFromUrlParams(
   const campaignId = typeof params.campaignId === "string" ? params.campaignId : undefined;
   if (campaignId) filters.campaignId = campaignId;
 
+  if (
+    !filters.filter &&
+    !filters.assigneeId &&
+    !filters.tag &&
+    !filters.unread &&
+    !filters.status &&
+    !filters.contactId
+  ) {
+    filters.filter = "mine";
+  }
+
   return filters;
 }
 
