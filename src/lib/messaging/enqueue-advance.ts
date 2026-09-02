@@ -138,15 +138,31 @@ export async function reclaimStuckJobs(staleMs = 10 * 60 * 1000) {
   return result.count;
 }
 
-export async function claimDueJobs(limit = 25) {
+export type ClaimDueJobsOptions = {
+  jobTypes?: string[];
+  queueNames?: string[];
+};
+
+/** Atomically claim due jobs (CAS updateMany — safe with Supabase compat and multi-replica). */
+export async function claimDueJobs(limit = 25, options?: ClaimDueJobsOptions) {
   const prisma = getPrisma();
   await reclaimStuckJobs();
   const now = new Date();
+
+  const where: {
+    status: { in: string[] };
+    runAfter: { lte: Date };
+    jobType?: { in: string[] };
+    queueName?: { in: string[] };
+  } = {
+    status: { in: ["pending", "deferred"] },
+    runAfter: { lte: now },
+  };
+  if (options?.jobTypes?.length) where.jobType = { in: options.jobTypes };
+  if (options?.queueNames?.length) where.queueName = { in: options.queueNames };
+
   const due = await prisma.jobQueue.findMany({
-    where: {
-      status: { in: ["pending", "deferred"] },
-      runAfter: { lte: now },
-    },
+    where,
     orderBy: [{ priority: "asc" }, { runAfter: "asc" }],
     take: limit,
   });

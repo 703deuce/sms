@@ -2,24 +2,28 @@
 
 Drip campaigns, AI reply delays, automations, and campaigns all use the **Postgres `job_queue`** (with optional BullMQ dual-write when Redis is configured).
 
-## Production default (no Coolify changes)
+## Production default (recommended): dedicated SMS worker
 
-The **web container** start command is already:
+For scheduled campaigns and production-scale dispatch, run the **SMS worker** in a separate Coolify container:
 
 ```bash
-node scripts/start-production.mjs
+npm run worker:sms
 ```
 
-That script starts **two processes in the same container**:
+Full Coolify configuration: **[SMS_WORKER_CONTAINER_SETUP.md](./SMS_WORKER_CONTAINER_SETUP.md)**
 
-| Process | Role |
-|---------|------|
-| **web** | Next.js (` .next/standalone/server.js`) |
-| **job-worker** | `npm run worker:all` — polls every 5s (or BullMQ consumers) |
+On the **web** app set:
 
-The web process sets `DISABLE_INPROCESS_WORKER=1` so jobs are **not** drained twice.
+```bash
+EMBEDDED_JOB_WORKER=0
+DISABLE_INPROCESS_WORKER=1
+```
 
-You do **not** need a separate Coolify service for SMS/automation jobs. Your existing **transovo-voice** container stays on Python/LiveKit only — do not repoint it unless you want voice and jobs split later.
+## Legacy: embedded worker in web container
+
+The web container start command `node scripts/start-production.mjs` can still spawn `worker:all` in the same container when `EMBEDDED_JOB_WORKER` is not `0`.
+
+**Do not** run embedded `worker:all` and `worker:sms` at the same time — that can double-send.
 
 ### Logs to expect on deploy
 

@@ -1505,6 +1505,19 @@ model JobQueue {
   @@map("job_queue")
 }
 
+/// Persisted heartbeat for background workers (SMS dispatch, etc.).
+model WorkerHeartbeat {
+  workerKey   String   @id
+  workerId    String
+  lastBeatAt  DateTime
+  metricsJson Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lastBeatAt])
+  @@map("worker_heartbeats")
+}
+
 /// Inbound automation webhooks (Zapier/Make/n8n) — not outbound Webhook destinations.
 model IntegrationWebhookEndpoint {
   id                String   @id @default(cuid())

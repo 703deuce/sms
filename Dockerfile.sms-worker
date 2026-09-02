@@ -1,0 +1,30 @@
+# Transovo SMS dispatch worker — Node image for Coolify (repurposed voice worker slot).
+# Build: docker build -f Dockerfile.sms-worker -t transovo-sms-worker .
+# Run requires DATABASE_URL and the same env vars as the web app for Telnyx/Twilio.
+
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
+COPY . .
+
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--import ./scripts/preload-server-only.mjs"
+ENV SMS_WORKER_HEALTH_PORT=8082
+
+EXPOSE 8082
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${SMS_WORKER_HEALTH_PORT}/health" || exit 1
+
+CMD ["npm", "run", "worker:sms"]

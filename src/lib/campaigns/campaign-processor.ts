@@ -1,6 +1,11 @@
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { processSequenceWaits } from "./sequence-runner";
+import { activateDueScheduledCampaigns } from "@/lib/messaging/dispatch/activate-scheduled-campaigns";
+import { selectDueCampaignMessagesFairly } from "@/lib/messaging/dispatch/fair-queue";
+import { assertDispatchAllowed } from "@/lib/messaging/dispatch/kill-switches";
+import { canDispatchNow } from "@/lib/messaging/dispatch/rate-limiter";
+import { getWorkspaceLimits } from "@/lib/settings/limits";
 
 const SEND_BATCH = 100;
 
@@ -23,60 +28,42 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
 
   const now = new Date();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const workspaceFilter = workspaceId ? { workspaceId } : {};
 
-  // Activate due scheduled campaigns. Mass Texting requires a launch audit
-  // (credits reserved + A2P) — never flip a draft-scheduled blast to SENDING.
-  const dueScheduled = await prisma.campaign.findMany({
-    where: {
-      ...workspaceFilter,
-      status: "SCHEDULED",
-      OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
-    },
-    take: 80,
-    select: { id: true, workspaceId: true, configJson: true },
-  });
-  const { campaignConfigIsMassText } = await import("@/lib/mass-texting/campaign-send");
-  const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
-  for (const campaign of dueScheduled) {
-    if (campaignConfigIsMassText(campaign.configJson)) {
-      const broadcastConfig = readBroadcastConfig(campaign.configJson);
-      if (broadcastConfig?.scheduleMode === "recurring") {
-        continue;
-      }
-      const audit = await prisma.campaignLaunchAudit.findFirst({
-        where: { workspaceId: campaign.workspaceId, campaignId: campaign.id },
-        select: { id: true },
-      });
-      if (!audit) continue;
-    }
-    await prisma.campaign.updateMany({
-      where: { id: campaign.id, status: "SCHEDULED" },
-      data: { status: "SENDING" },
-    });
-  }
+  await activateDueScheduledCampaigns(workspaceId);
 
-  const due = await prisma.campaignMessage.findMany({
-    where: {
-      ...workspaceFilter,
-      status: "queued",
-      scheduledFor: { lte: now },
-      campaign: { status: "SENDING" },
-    },
-    take: SEND_BATCH * 2,
-    orderBy: { scheduledFor: "asc" },
-    include: { campaign: true },
-  });
+  const due = await selectDueCampaignMessagesFairly(SEND_BATCH * 2, workspaceId);
+  const campaignIds = [...new Set(due.map((m) => m.campaignId))];
+  const campaigns = campaignIds.length
+    ? await prisma.campaign.findMany({
+        where: { id: { in: campaignIds } },
+      })
+    : [];
+  const campaignById = new Map(campaigns.map((c) => [c.id, c]));
 
   let enqueued = 0;
+  let rateLimited = 0;
   const sentTodayByCampaign = new Map<string, number>();
+  const limitsCache = new Map<string, Awaited<ReturnType<typeof getWorkspaceLimits>>>();
 
   for (const msg of due) {
     if (enqueued >= SEND_BATCH) break;
 
-    const campaign = msg.campaign;
+    const campaign = campaignById.get(msg.campaignId);
+    if (!campaign) continue;
+
+    const gate = await assertDispatchAllowed({
+      workspaceId: msg.workspaceId,
+      campaignId: msg.campaignId,
+    });
+    if (!gate.allowed) {
+      await prisma.campaignMessage.update({
+        where: { id: msg.id },
+        data: { scheduledFor: new Date(now.getTime() + 60_000), error: gate.reason },
+      });
+      continue;
+    }
+
     if (!inSendWindow(now, campaign.sendWindowStart, campaign.sendWindowEnd)) {
-      // Push out of the due window so other campaigns are not starved
       await prisma.campaignMessage.update({
         where: { id: msg.id },
         data: {
@@ -101,8 +88,7 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
         });
         sentTodayByCampaign.set(campaign.id, Number(sentToday ?? 0));
       }
-      const sentCount = Number(sentToday ?? 0);
-      if (sentCount >= campaign.dailySendLimit) {
+      if (sentToday >= campaign.dailySendLimit) {
         const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
         await prisma.campaignMessage.update({
           where: { id: msg.id },
@@ -110,7 +96,37 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
         });
         continue;
       }
-      sentTodayByCampaign.set(campaign.id, sentCount + 1);
+      sentTodayByCampaign.set(campaign.id, sentToday + 1);
+    }
+
+    let limitsRow = limitsCache.get(msg.workspaceId);
+    if (limitsRow === undefined) {
+      limitsRow = await getWorkspaceLimits(msg.workspaceId);
+      limitsCache.set(msg.workspaceId, limitsRow);
+    }
+
+    const config =
+      campaign.configJson && typeof campaign.configJson === "object"
+        ? (campaign.configJson as Record<string, unknown>)
+        : {};
+    const senderKey = typeof config.numberId === "string" ? config.numberId : undefined;
+
+    const rate = canDispatchNow({
+      workspaceId: msg.workspaceId,
+      campaignId: msg.campaignId,
+      senderKey,
+      workspaceLimits: limitsRow ?? undefined,
+    });
+    if (!rate.allowed) {
+      rateLimited += 1;
+      await prisma.campaignMessage.update({
+        where: { id: msg.id },
+        data: {
+          scheduledFor: new Date(now.getTime() + 5_000),
+          error: rate.reason || "rate_limited",
+        },
+      });
+      continue;
     }
 
     await enqueueJob({
@@ -123,7 +139,7 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
     enqueued += 1;
   }
 
-  return { waits, enqueued };
+  return { waits, enqueued, rateLimited };
 }
 
 export async function processCampaignSendBatch() {

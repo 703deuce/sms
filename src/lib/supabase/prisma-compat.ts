@@ -84,6 +84,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   campaignMessage: "campaign_messages",
   suppression: "review_request_suppression",
   jobQueue: "job_queue",
+  workerHeartbeat: "worker_heartbeats",
   integrationWebhookEndpoint: "integration_webhook_endpoints",
   integrationWebhookEvent: "integration_webhook_events",
   conversation: "Conversation",

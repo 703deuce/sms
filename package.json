@@ -40,6 +40,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "migrate:workspace-types": "tsx scripts/migrate-workspace-types.ts",
     "worker:all": "tsx scripts/worker-all.ts",
+    "worker:sms": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/worker-sms.ts",
+    "test:sms-worker": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-sms-worker.ts",
     "test:call-handling-mode": "tsx scripts/test-call-handling-mode.ts",
     "test:call-handling-mctb-isolation": "tsx scripts/test-call-handling-mctb-isolation.ts",
     "test:call-forwarding-sms-extract": "tsx scripts/test-call-forwarding-sms-extract.ts",
