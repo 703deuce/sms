@@ -28,6 +28,15 @@ import { Suspense, useEffect, useState, type CSSProperties } from "react";
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
 const APP_HEADER_HEIGHT = "4rem";
 
+/** Inbox + automation builder: fixed viewport, scroll inside panels only. */
+function isFixedViewportSmsRoute(pathname: string): boolean {
+  return (
+    pathname === "/conversations" ||
+    pathname.startsWith("/conversations/") ||
+    /^\/automations\/[^/]+\/edit/.test(pathname)
+  );
+}
+
 /** Automation builder/list — unchanged legacy chrome (excludes drip campaigns). */
 function isLegacyAutomationRoute(pathname: string): boolean {
   if (pathname.startsWith("/automations/drip-campaigns") || pathname.startsWith("/drip-campaigns")) {
@@ -140,7 +149,12 @@ export function AppShell({
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const legacyAutomation = isLegacyAutomationRoute(pathname);
+  const fixedViewport = isFixedViewportSmsRoute(pathname);
   const isFullBleed = isSmsFullBleedRoute(pathname);
+  const isKimiFullBleed =
+    isFullBleed &&
+    isKimiIntegratedRoute(pathname) &&
+    !pathname.startsWith("/automations");
   const hideChromeTitle =
     realtorMode &&
     (pathname.startsWith("/realtor/setup") ||
@@ -251,9 +265,13 @@ export function AppShell({
           className={
             legacyAutomation
               ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
-              : isFullBleed
+              : fixedViewport
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                : "flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
+                : isFullBleed
+                  ? isKimiFullBleed
+                    ? "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
+                    : "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
+                  : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
           }
         >
           {children}

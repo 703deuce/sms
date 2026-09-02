@@ -18,7 +18,9 @@
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   color: var(--tv-text);
   background: var(--tv-bg);
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   display: flex;
   overflow: hidden;
 }
