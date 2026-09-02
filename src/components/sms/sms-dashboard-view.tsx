@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import type { SmsDashboardActivityPoint, SmsDashboardMetrics } from "@/lib/sms/dashboard-metrics";
@@ -97,18 +97,31 @@ function ActivityChart({
   const hasActivity = series.some((p) => p[metric] > 0);
 
   if (!series.length || !hasActivity) {
+    const emptyCta =
+      metric === "replies" ? (
+        <Link href="/conversations" className="mt-4">
+          <Button size="sm">Open inbox</Button>
+        </Link>
+      ) : (
+        <Link href="/campaigns/new/promotion" className="mt-4">
+          <Button size="sm">Create campaign</Button>
+        </Link>
+      );
+
     return (
       <div className="flex h-44 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Send className="h-4.5 w-4.5" />
+          {metric === "replies" ? (
+            <MessageSquare className="h-4.5 w-4.5" />
+          ) : (
+            <Send className="h-4.5 w-4.5" />
+          )}
         </div>
         <p className="mt-3 text-[13px] font-semibold text-foreground">{EMPTY_ACTIVITY_COPY[metric].title}</p>
         <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
           {EMPTY_ACTIVITY_COPY[metric].body}
         </p>
-        <Link href="/campaigns/new/promotion" className="mt-4">
-          <Button size="sm">Create campaign</Button>
-        </Link>
+        {emptyCta}
       </div>
     );
   }
@@ -273,6 +286,7 @@ export function SmsDashboardView({ metrics }: Props) {
   const [metric, setMetric] = useState<ActivityMetric>("sent");
   const [activity, setActivity] = useState(metrics.messagingActivity);
   const [activityLoading, setActivityLoading] = useState(false);
+  const skipInitialActivityFetch = useRef(true);
 
   const loadActivity = useCallback(async (d: number) => {
     setActivityLoading(true);
@@ -282,13 +296,17 @@ export function SmsDashboardView({ metrics }: Props) {
       const json = await res.json();
       setActivity(json.data?.series || []);
     } catch {
-      setActivity(metrics.messagingActivity);
+      // Keep the current chart data on transient failures.
     } finally {
       setActivityLoading(false);
     }
-  }, [metrics.messagingActivity]);
+  }, []);
 
   useEffect(() => {
+    if (skipInitialActivityFetch.current && days === 30) {
+      skipInitialActivityFetch.current = false;
+      return;
+    }
     void loadActivity(days);
   }, [days, loadActivity]);
 
@@ -309,10 +327,17 @@ export function SmsDashboardView({ metrics }: Props) {
         tone: "warn",
       });
     }
-    if (metrics.attention.contactsNeedingAttention > 0) {
+    if (metrics.attention.invalidContacts > 0) {
       items.push({
-        label: `${formatNumber(metrics.attention.contactsNeedingAttention)} contact${metrics.attention.contactsNeedingAttention === 1 ? "" : "s"} need attention`,
-        href: "/contacts/validation",
+        label: `${formatNumber(metrics.attention.invalidContacts)} invalid contact${metrics.attention.invalidContacts === 1 ? "" : "s"}`,
+        href: "/contacts/invalid",
+        tone: "warn",
+      });
+    }
+    if (metrics.attention.blockedContacts > 0) {
+      items.push({
+        label: `${formatNumber(metrics.attention.blockedContacts)} blocked contact${metrics.attention.blockedContacts === 1 ? "" : "s"}`,
+        href: "/contacts/blocked",
         tone: "warn",
       });
     }
@@ -325,8 +350,7 @@ export function SmsDashboardView({ metrics }: Props) {
     }
     if (items.length === 0) {
       items.push({
-        label: "Compliance healthy",
-        href: "/compliance",
+        label: "All clear — nothing needs attention",
         tone: "ok",
       });
     }
@@ -342,9 +366,11 @@ export function SmsDashboardView({ metrics }: Props) {
   }, []);
 
   const campaignsWithActivity = useMemo(
-    () => metrics.recentCampaigns.filter((c) => c.sent > 0),
+    () => metrics.recentCampaigns.filter((c) => c.sent > 0).slice(0, 8),
     [metrics.recentCampaigns],
   );
+
+  const hasDraftCampaigns = metrics.draftCampaignCount > 0;
 
   return (
     <div className="space-y-5 pb-8">
@@ -380,7 +406,7 @@ export function SmsDashboardView({ metrics }: Props) {
         </div>
       </div>
 
-      {/* KPI row */}
+      {/* KPI grid */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat
           label="Active Contacts"
@@ -414,9 +440,6 @@ export function SmsDashboardView({ metrics }: Props) {
           href="/conversations"
           muted={metrics.replies === 0}
         />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat
           label="Credits remaining"
           value={formatNumber(metrics.creditsRemaining)}
@@ -516,17 +539,17 @@ export function SmsDashboardView({ metrics }: Props) {
                 No sent campaigns yet
               </p>
               <p className="mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">
-                {metrics.recentCampaigns.length > 0
+                {hasDraftCampaigns
                   ? "You have drafts ready — send one to see performance here."
                   : "Create a campaign to start reaching your audience."}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <Link href="/campaigns/new/promotion">
                   <Button size="sm">
-                    {metrics.recentCampaigns.length > 0 ? "Send your first campaign" : "Create campaign"}
+                    {hasDraftCampaigns ? "Send your first campaign" : "Create campaign"}
                   </Button>
                 </Link>
-                {metrics.recentCampaigns.length > 0 ? (
+                {hasDraftCampaigns ? (
                   <Link href="/campaigns">
                     <Button size="sm" variant="outline">
                       View drafts
@@ -621,7 +644,7 @@ export function SmsDashboardView({ metrics }: Props) {
               Needs Attention
             </h2>
             <ul className="mt-3 space-y-1">
-              {attentionItems.map((item) => {
+              {attentionItems.map((item, index) => {
                 const Icon = item.tone === "ok" ? CheckCircle2 : AlertCircle;
                 const inner = (
                   <>
@@ -640,7 +663,7 @@ export function SmsDashboardView({ metrics }: Props) {
                   </>
                 );
                 return (
-                  <li key={item.label}>
+                  <li key={`${item.label}-${index}`}>
                     {item.href ? (
                       <Link
                         href={item.href}
