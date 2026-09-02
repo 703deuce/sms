@@ -25,6 +25,7 @@ export type BroadcastRecurrence = {
   endDate?: string;
   endAfter?: number;
   weekdays?: number[];
+  runsCompleted?: number;
 };
 
 export type BroadcastCampaignConfig = {

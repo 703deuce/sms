@@ -102,7 +102,7 @@ export function CampaignLaunchReview({
     setLaunching(true);
     setError("");
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/launch`, {
+      const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -7,6 +7,10 @@ import {
   type AudienceSelection,
   type CampaignComposeDraft,
 } from "@/lib/campaigns/compose-draft";
+import {
+  formatRecurrenceSummary,
+  validateRecurrence,
+} from "@/lib/campaigns/recurrence-format";
 
 export type CampaignListRow = {
   id: string;
@@ -115,7 +119,9 @@ export function timingLabel(draft: CampaignComposeDraft): string {
   if (draft.scheduleMode === "later" && draft.scheduledDate) {
     return `Scheduled for ${draft.scheduledDate} ${draft.scheduledTime || ""} (${draft.timezone})`;
   }
-  if (draft.scheduleMode === "recurring") return "Recurring campaign";
+  if (draft.scheduleMode === "recurring" && draft.recurrence) {
+    return formatRecurrenceSummary(draft.recurrence, draft.timezone);
+  }
   return "Scheduled";
 }
 
@@ -156,6 +162,10 @@ export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<st
     if (when.getTime() <= Date.now()) {
       throw new Error("Scheduled time must be in the future.");
     }
+  }
+  if (draft.scheduleMode === "recurring") {
+    const recurrenceError = validateRecurrence(draft.recurrence);
+    if (recurrenceError) throw new Error(recurrenceError);
   }
   const payload = toBroadcastPayload(draft);
   const url = draft.campaignId

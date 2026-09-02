@@ -1,6 +1,7 @@
 "use client";
 
 import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
+import { campaignDetailIsKimiBroadcast } from "@/lib/campaigns/mass-text-detection";
 import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
 import {
   campaignStatusEmoji,
@@ -179,6 +180,153 @@ function matchesRecipientFilter(status: string, filter: string): boolean {
   return s.includes(filter.toLowerCase().replace(/-/g, ""));
 }
 
+function EngagementTable({
+  rows,
+  field,
+  emptyLabel,
+}: {
+  rows: RecipientRow[];
+  field: "clickedAt" | "repliedAt" | "optedOutAt";
+  emptyLabel: string;
+}) {
+  const engaged = rows.filter((r) => r[field]);
+  return (
+    <div className="overflow-x-auto rounded-[14px] border border-border bg-card shadow-sm">
+      <table className="w-full min-w-[640px] text-left text-[13px]">
+        <thead>
+          <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase text-muted-foreground">
+            <th className="px-4 py-3">Contact</th>
+            <th className="px-4 py-3">Phone</th>
+            <th className="px-4 py-3">When</th>
+            <th className="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {engaged.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                {emptyLabel}
+              </td>
+            </tr>
+          ) : (
+            engaged.map((r) => (
+              <tr key={r.id} className="hover:bg-muted/20">
+                <td className="px-4 py-3 font-medium">{r.name}</td>
+                <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
+                <td className="px-4 py-3 text-muted-foreground">{formatTs(r[field])}</td>
+                <td className="px-4 py-3">
+                  <RecipientStatus status={r.status} />
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+type ActivityItem = {
+  id: string;
+  at: string;
+  emoji: string;
+  label: string;
+  detail: string;
+};
+
+function ActivityFeed({
+  timeline,
+  recipients,
+}: {
+  timeline: CampaignTimelineEvent[];
+  recipients: RecipientRow[];
+}) {
+  const items = useMemo(() => {
+    const rows: ActivityItem[] = timeline.map((event, idx) => ({
+      id: `timeline-${idx}`,
+      at: event.at,
+      emoji: event.emoji,
+      label: event.label,
+      detail: event.detail,
+    }));
+
+    for (const recipient of recipients) {
+      if (recipient.deliveredAt) {
+        rows.push({
+          id: `${recipient.id}-delivered`,
+          at: recipient.deliveredAt,
+          emoji: "✅",
+          label: "Delivered",
+          detail: `${recipient.name} (${recipient.phone})`,
+        });
+      }
+      if (recipient.clickedAt) {
+        rows.push({
+          id: `${recipient.id}-clicked`,
+          at: recipient.clickedAt,
+          emoji: "👆",
+          label: "Link clicked",
+          detail: `${recipient.name} (${recipient.phone})`,
+        });
+      }
+      if (recipient.repliedAt) {
+        rows.push({
+          id: `${recipient.id}-replied`,
+          at: recipient.repliedAt,
+          emoji: "💬",
+          label: "Reply received",
+          detail: `${recipient.name} (${recipient.phone})`,
+        });
+      }
+      if (recipient.optedOutAt) {
+        rows.push({
+          id: `${recipient.id}-optout`,
+          at: recipient.optedOutAt,
+          emoji: "🚫",
+          label: "Opted out",
+          detail: `${recipient.name} (${recipient.phone})`,
+        });
+      }
+      if (recipient.failureReason) {
+        rows.push({
+          id: `${recipient.id}-failed`,
+          at: recipient.deliveredAt || new Date(0).toISOString(),
+          emoji: "⚠️",
+          label: "Delivery failed",
+          detail: `${recipient.name}: ${recipient.failureReason}`,
+        });
+      }
+    }
+
+    return rows.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }, [timeline, recipients]);
+
+  return (
+    <div className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
+      {items.length === 0 ? (
+        <p className="py-8 text-center text-[13px] text-muted-foreground">
+          Activity will appear here as the campaign sends and recipients engage.
+        </p>
+      ) : (
+        <ol className="space-y-4">
+          {items.map((item) => (
+            <li key={item.id} className="flex gap-3 border-b border-border/60 pb-4 last:border-0 last:pb-0">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
+                {item.emoji}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-foreground">{item.label}</p>
+                <p className="text-[11px] text-muted-foreground">{formatTs(item.at)}</p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">{item.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export function CampaignResultsView({
   campaign,
   recipients = [],
@@ -267,12 +415,14 @@ export function CampaignResultsView({
             <Link href="/campaigns">
               <Button variant="outline">← Back</Button>
             </Link>
-            <Link href={`/campaigns/new?duplicate=${campaign.id}`}>
-              <Button variant="outline">
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicate
-              </Button>
-            </Link>
+            {campaignDetailIsKimiBroadcast(campaign.configJson) ? (
+              <Link href={`/campaigns/new?duplicate=${campaign.id}`}>
+                <Button variant="outline">
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicate
+                </Button>
+              </Link>
+            ) : null}
             <CampaignActions
               campaignId={campaign.id}
               status={campaign.status}
@@ -467,16 +617,32 @@ export function CampaignResultsView({
         </div>
       ) : null}
 
-      {tab !== "overview" && tab !== "recipients" ? (
-        <div className="mt-4 rounded-[14px] border border-dashed border-border bg-muted/20 px-6 py-12 text-center">
-          <p className="text-[15px] font-semibold text-foreground">
-            {RESULT_TABS.find((t) => t.id === tab)?.emoji}{" "}
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </p>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Detailed {tab} data appears as engagement is recorded.
-          </p>
-        </div>
+      {tab === "clicks" ? (
+        <EngagementTable
+          rows={recipients}
+          field="clickedAt"
+          emptyLabel="No link clicks recorded yet."
+        />
+      ) : null}
+
+      {tab === "replies" ? (
+        <EngagementTable
+          rows={recipients}
+          field="repliedAt"
+          emptyLabel="No replies recorded yet."
+        />
+      ) : null}
+
+      {tab === "opt-outs" ? (
+        <EngagementTable
+          rows={recipients}
+          field="optedOutAt"
+          emptyLabel="No opt-outs recorded yet."
+        />
+      ) : null}
+
+      {tab === "activity" ? (
+        <ActivityFeed timeline={timelineProp} recipients={recipients} />
       ) : null}
     </div>
   );

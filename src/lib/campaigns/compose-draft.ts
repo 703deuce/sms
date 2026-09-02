@@ -31,10 +31,12 @@ export type CampaignComposeDraft = {
     sendHour: number;
     sendMinute: number;
     ampm: "AM" | "PM";
+    timezone: string;
     endMode: "never" | "on" | "after";
     endDate?: string;
     endAfter?: number;
     weekdays?: number[];
+    runsCompleted?: number;
   };
   campaignId?: string;
   trackedLinks: Array<{ url: string; name: string; tracked: boolean }>;

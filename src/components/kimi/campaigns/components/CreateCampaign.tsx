@@ -20,7 +20,11 @@ import { seedBroadcastComposeFromPlaybook } from "@/lib/campaigns/playbook-broad
 import { estimateSmsSegments } from "@/lib/utils";
 import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
 import { PLAYBOOK_EMOJIS } from "@/lib/v1/playbook-emojis";
-import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
+import RecurringModal from "./RecurringModal";
+import {
+  formatRecurrenceSummary,
+  validateRecurrence,
+} from "@/lib/campaigns/recurrence-format";
 import {
   loadDefaultSendingNumber,
   previewAudience,
@@ -70,6 +74,8 @@ export default function CreateCampaign({
   const [showTest, setShowTest] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [recurringOpen, setRecurringOpen] = useState(false);
+  const [recurringSummary, setRecurringSummary] = useState("");
   const [trackPrompt, setTrackPrompt] = useState<string | null>(null);
   const [linkName, setLinkName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -176,12 +182,18 @@ export default function CreateCampaign({
           saveComposeDraft(next);
           setDraft(next);
           setMode(scheduleToMode(next.scheduleMode));
+          if (next.recurrence) {
+            setRecurringSummary(formatRecurrenceSummary(next.recurrence, next.timezone));
+          }
         })
         .catch(() => setError("Could not load campaign"))
         .finally(() => setLoadingCampaign(false));
     } else {
       setDraft(loaded);
       setMode(scheduleToMode(loaded.scheduleMode));
+      if (loaded.recurrence) {
+        setRecurringSummary(formatRecurrenceSummary(loaded.recurrence, loaded.timezone));
+      }
     }
 
     loadDefaultSendingNumber().then((num) => {
@@ -284,19 +296,18 @@ export default function CreateCampaign({
 
   const laterIncomplete =
     mode === "Later" && (!draft.scheduledDate || !draft.scheduledTime);
+  const recurringIncomplete =
+    mode === "Recurring" && Boolean(validateRecurrence(draft.recurrence));
   const canReview =
     !loadingCampaign &&
     !saving &&
     Boolean(draft.name.trim()) &&
     Boolean(draft.message.trim()) &&
     draft.audience.length > 0 &&
-    !laterIncomplete;
+    !laterIncomplete &&
+    !recurringIncomplete;
 
-  const scheduleModes = useMemo(() => {
-    const modes: SendMode[] = ["Now", "Later"];
-    if (MASS_TEXT_RECURRING_PRODUCTION_ENABLED) modes.push("Recurring");
-    return modes;
-  }, []);
+  const scheduleModes: SendMode[] = ["Now", "Later", "Recurring"];
 
   const playbookCategory = playbookId ? getCampaignCategory(playbookId) : undefined;
   const playbookEmoji =
@@ -327,6 +338,18 @@ export default function CreateCampaign({
           onConfirm={(urls) => { updateDraft({ mediaUrls: urls }); setShowMedia(false); }}
         />
       )}
+      {recurringOpen ? (
+        <RecurringModal
+          timezone={draft.timezone}
+          initial={draft.recurrence}
+          onClose={() => setRecurringOpen(false)}
+          onSet={(recurrence, summary) => {
+            updateDraft({ recurrence, scheduleMode: "recurring" });
+            setRecurringSummary(summary);
+            setRecurringOpen(false);
+          }}
+        />
+      ) : null}
 
       <div className="mx-auto max-w-[1100px]">
         {playbookCategory ? (
@@ -493,7 +516,11 @@ export default function CreateCampaign({
               <button
                 key={m}
                 type="button"
-                onClick={() => { setMode(m); updateDraft({ scheduleMode: modeToSchedule(m) }); }}
+                onClick={() => {
+                  setMode(m);
+                  updateDraft({ scheduleMode: modeToSchedule(m) });
+                  if (m === "Recurring") setRecurringOpen(true);
+                }}
                 className={`flex-1 ${mode === m ? "on" : ""}`}
               >
                 {m}
@@ -525,6 +552,31 @@ export default function CreateCampaign({
             </div>
           )}
 
+          {mode === "Recurring" ? (
+            <div className="mt-4 max-w-md fade-in">
+              {recurringSummary ? (
+                <p className="flex items-center justify-between rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-[12px] text-indigo-800">
+                  <span>{recurringSummary}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRecurringOpen(true)}
+                    className="ml-2 shrink-0 font-semibold text-indigo-600 hover:text-indigo-700"
+                  >
+                    Edit
+                  </button>
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRecurringOpen(true)}
+                  className="btn-ghost w-full border border-dashed border-indigo-200 text-indigo-600"
+                >
+                  Configure recurring schedule
+                </button>
+              )}
+            </div>
+          ) : null}
+
           {draft.mediaUrls.length > 0 ? (
             <p className="mt-3 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
               MMS attachments may be blocked at review until MMS is enabled for your workspace.
@@ -533,6 +585,12 @@ export default function CreateCampaign({
 
           {laterIncomplete ? (
             <p className="mt-3 text-[13px] text-amber-700">Select a date and time to schedule this campaign.</p>
+          ) : null}
+
+          {recurringIncomplete ? (
+            <p className="mt-3 text-[13px] text-amber-700">
+              {validateRecurrence(draft.recurrence)}
+            </p>
           ) : null}
 
           {error ? <p className="mt-4 text-[13px] text-red-600">{error}</p> : null}

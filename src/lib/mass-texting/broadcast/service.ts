@@ -5,6 +5,7 @@ import { attachMediaToFirstSmsStep } from "@/lib/campaigns/sequence-engine";
 import { massTextProductConfigPatch } from "@/lib/mass-texting/campaign-send";
 import { normalizeMediaUrls } from "@/lib/mass-texting/mms";
 import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
+import { computeBroadcastNextRun } from "@/lib/campaigns/recurrence-format";
 import { audienceSummaryLabel, enrollBroadcastAudience } from "./audience";
 import type {
   BroadcastCampaignConfig,
@@ -37,15 +38,7 @@ function buildBroadcastSequence(message: string, mediaUrls: string[]) {
 }
 
 function recurrenceNextRun(recurrence: BroadcastRecurrence): Date {
-  const hour =
-    recurrence.ampm === "PM" && recurrence.sendHour < 12
-      ? recurrence.sendHour + 12
-      : recurrence.ampm === "AM" && recurrence.sendHour === 12
-        ? 0
-        : recurrence.sendHour;
-  const next = new Date(recurrence.startDate);
-  next.setHours(hour, recurrence.sendMinute, 0, 0);
-  return next;
+  return computeBroadcastNextRun(recurrence, new Date()) ?? new Date(recurrence.startDate);
 }
 
 function buildConfig(input: BroadcastCampaignInput): BroadcastCampaignConfig {
@@ -209,6 +202,12 @@ export async function updateBroadcastCampaign(
     if (scheduledAt.getTime() <= Date.now()) {
       throw new Error("Scheduled time must be in the future");
     }
+  }
+  if (scheduleMode === "recurring") {
+    if (!MASS_TEXT_RECURRING_PRODUCTION_ENABLED) {
+      throw new Error("Recurring campaigns are not enabled");
+    }
+    if (!merged.recurrence) throw new Error("Recurrence settings are required");
   }
 
   const config = buildConfig(merged);

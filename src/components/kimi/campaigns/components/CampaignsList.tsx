@@ -53,17 +53,21 @@ export default function CampaignsList({
   rowFilter,
   title = "Campaigns",
   subtitle = "Create and manage your text message campaigns.",
+  defaultFilter = "all",
+  lockFilter = false,
 }: {
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
   rowFilter?: (row: CampaignListRow) => boolean;
   title?: string;
   subtitle?: string;
+  defaultFilter?: string;
+  lockFilter?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<CampaignListRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(defaultFilter);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -134,6 +138,7 @@ export default function CampaignsList({
       </header>
 
       <div className="flex items-center gap-3 px-8">
+        {!lockFilter ? (
         <div className="relative">
           <button
             type="button"
@@ -164,6 +169,7 @@ export default function CampaignsList({
             </div>
           )}
         </div>
+        ) : null}
         <div className="relative ml-auto w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
