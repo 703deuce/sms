@@ -155,6 +155,7 @@ export async function buildPreSendReview(
     const isMms = mmsStepCount > 0;
     const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
     let estimatedSegments = 0;
+    let pricedRecipients = 0;
     const acceptedByPhone = new Map(accepted.map((r) => [r.phone, r]));
     for (const recipient of recipients) {
       if (!recipient.phone || !acceptedByPhone.has(recipient.phone)) continue;
@@ -177,6 +178,11 @@ export async function buildPreSendReview(
         });
         estimatedSegments += priced.credits;
       }
+      pricedRecipients += 1;
+    }
+    const eligibleTotal = enrolled.length > 0 ? accepted.length : preview.eligibleCount || accepted.length;
+    if (pricedRecipients > 0 && eligibleTotal > pricedRecipients) {
+      estimatedSegments = Math.ceil((estimatedSegments / pricedRecipients) * eligibleTotal);
     }
     const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
     const { assertWorkspaceMessagingSendAllowed } = await import(
@@ -200,8 +206,7 @@ export async function buildPreSendReview(
       duplicateRemoved,
       invalidRemoved,
       suppressedRemoved,
-      finalRecipientCount:
-        enrolled.length > 0 ? accepted.length : preview.eligibleCount || accepted.length,
+      finalRecipientCount: eligibleTotal,
       estimatedSegments,
       mmsCount: accepted.length * mmsStepCount,
       messagePreview: body.slice(0, 280),

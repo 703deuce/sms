@@ -19,7 +19,7 @@ type ResolvedContact = {
 async function contactsFromList(workspaceId: string, listId: string): Promise<ResolvedContact[]> {
   const prisma = getPrisma();
   const members = await prisma.contactListMember.findMany({
-    where: { listId, contact: { workspaceId } },
+    where: { listId, contact: { workspaceId, status: "SUBSCRIBED" } },
     include: { contact: true },
   });
   return members
@@ -39,7 +39,7 @@ async function contactsFromSegment(workspaceId: string, segmentId: string): Prom
   const contactIds = await resolveSegmentContactIds(workspaceId, segment.conditions);
   if (!contactIds.length) return [];
   const contacts = await prisma.contact.findMany({
-    where: { workspaceId, id: { in: contactIds } },
+    where: { workspaceId, id: { in: contactIds }, status: "SUBSCRIBED" },
   });
   return contacts
     .filter((c: (typeof contacts)[number]) => c.phone)
@@ -68,7 +68,9 @@ async function contactsFromAllEligible(workspaceId: string): Promise<ResolvedCon
 
 async function contactsFromIndividual(workspaceId: string, contactId: string): Promise<ResolvedContact[]> {
   const prisma = getPrisma();
-  const c = await prisma.contact.findFirst({ where: { id: contactId, workspaceId } });
+  const c = await prisma.contact.findFirst({
+    where: { id: contactId, workspaceId, status: "SUBSCRIBED" },
+  });
   if (!c?.phone) return [];
   return [
     {
@@ -145,7 +147,7 @@ export async function previewBroadcastAudience(
   const invalidRemoved = rejected.filter(
     (r) => r.reason === "invalid_phone" || r.reason === "missing_address",
   ).length;
-  const unsubscribedRemoved = 0;
+  const unsubscribedRemoved = rejected.filter((r) => r.reason === "unsubscribed").length;
 
   const acceptedPhones = new Set(accepted.map((a) => a.phone).filter(Boolean));
   const eligible = afterExclude.filter((c) => acceptedPhones.has(c.phone));

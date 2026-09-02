@@ -51,6 +51,7 @@ export default function CampaignsList({
   onCreate,
   editCampaignPath,
   rowFilter,
+  fetchStatus,
   title = "Campaigns",
   subtitle = "Create and manage your text message campaigns.",
   defaultFilter = "all",
@@ -59,6 +60,7 @@ export default function CampaignsList({
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
   rowFilter?: (row: CampaignListRow) => boolean;
+  fetchStatus?: string;
   title?: string;
   subtitle?: string;
   defaultFilter?: string;
@@ -78,7 +80,7 @@ export default function CampaignsList({
   const reload = useCallback(() => {
     setLoading(true);
     setError("");
-    fetchCampaigns()
+    fetchCampaigns({ status: fetchStatus, take: 200 })
       .then((data) => (rowFilter ? data.filter(rowFilter) : data))
       .then(setRows)
       .catch((err) => {
@@ -86,7 +88,7 @@ export default function CampaignsList({
         setRows([]);
       })
       .finally(() => setLoading(false));
-  }, [rowFilter]);
+  }, [rowFilter, fetchStatus]);
 
   useEffect(() => {
     reload();
@@ -230,7 +232,9 @@ export default function CampaignsList({
                 const isSent = norm === "completed" || norm === "sent";
                 const statusLabel = displayCampaignStatus(c.status);
                 const recipients = isSent ? c.sent ?? 0 : 0;
-                const savedAt = formatSavedAt(c.scheduledAt || c.createdAt);
+                const savedAt = formatSavedAt(c.createdAt);
+                const scheduleAt =
+                  norm === "scheduled" && c.scheduledAt ? formatSavedAt(c.scheduledAt) : "";
 
                 return (
                   <div
@@ -248,7 +252,9 @@ export default function CampaignsList({
                       >
                         {c.name}
                       </Link>
-                      <p className="mt-0.5 text-[12px] text-slate-400">{savedAt || "—"}</p>
+                      <p className="mt-0.5 text-[12px] text-slate-400">
+                        {scheduleAt ? `Scheduled ${scheduleAt}` : savedAt || "—"}
+                      </p>
                     </div>
                     <div className="flex min-w-0 items-center gap-2.5 text-slate-600">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 ring-1 ring-indigo-100/70">
@@ -296,9 +302,9 @@ export default function CampaignsList({
                             <BarChart2 className="w-4 h-4" /> Analytics
                           </Link>
                           <button type="button" onClick={() => void clone(c)}><Copy className="w-4 h-4" /> Clone</button>
-                          {norm === "draft" && (
+                          {(norm === "draft" || norm === "scheduled") && (
                             <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
-                              <PencilLine className="w-4 h-4" /> Edit draft
+                              <PencilLine className="w-4 h-4" /> Edit
                             </Link>
                           )}
                         </div>

@@ -21,10 +21,8 @@ import { estimateSmsSegments } from "@/lib/utils";
 import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
 import { PLAYBOOK_EMOJIS } from "@/lib/v1/playbook-emojis";
 import RecurringModal from "./RecurringModal";
-import {
-  formatRecurrenceSummary,
-  validateRecurrence,
-} from "@/lib/campaigns/recurrence-format";
+import { formatRecurrenceSummary, validateRecurrence } from "@/lib/campaigns/recurrence-format";
+import { zonedIsoToLocalDateTime } from "@/lib/campaigns/schedule-time";
 import {
   loadDefaultSendingNumber,
   previewAudience,
@@ -84,6 +82,7 @@ export default function CreateCampaign({
   const [audiencePreviewError, setAudiencePreviewError] = useState("");
   const [eligibleCount, setEligibleCount] = useState(0);
   const [playbookId, setPlaybookId] = useState<string | null>(null);
+  const [numbers, setNumbers] = useState<Array<{ id: string; number: string }>>([]);
 
   useEffect(() => {
     const playbook = searchParams.get("playbook");
@@ -158,7 +157,15 @@ export default function CreateCampaign({
           };
           const config = c.configJson;
           const include = config?.audience?.include || [];
-          const scheduled = c.scheduledAt ? new Date(c.scheduledAt) : null;
+          const tz = config?.timezone || loaded.timezone;
+          const scheduleMode = duplicateId ? "now" : config?.scheduleMode || "now";
+          let scheduledDate: string | undefined;
+          let scheduledTime: string | undefined;
+          if (c.scheduledAt && scheduleMode === "later") {
+            const local = zonedIsoToLocalDateTime(c.scheduledAt, tz);
+            scheduledDate = local.date;
+            scheduledTime = local.time;
+          }
           const next: CampaignComposeDraft = {
             ...defaultComposeDraft(),
             campaignId: editId ? c.id : undefined,
@@ -173,11 +180,11 @@ export default function CreateCampaign({
             numberId: config?.numberId || "",
             mediaUrls: config?.mediaUrls || [],
             trackedLinks: config?.trackedLinks || [],
-            scheduleMode: duplicateId ? "now" : config?.scheduleMode || "now",
-            timezone: config?.timezone || loaded.timezone,
+            scheduleMode,
+            timezone: tz,
             recurrence: config?.recurrence,
-            scheduledDate: scheduled ? scheduled.toISOString().slice(0, 10) : undefined,
-            scheduledTime: scheduled ? scheduled.toTimeString().slice(0, 5) : undefined,
+            scheduledDate,
+            scheduledTime,
           };
           saveComposeDraft(next);
           setDraft(next);
@@ -205,6 +212,17 @@ export default function CreateCampaign({
         return next;
       });
     });
+
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json) => {
+        const rows = (json.data || []).map((n: { id: string; number: string }) => ({
+          id: n.id,
+          number: n.number,
+        }));
+        setNumbers(rows);
+      })
+      .catch(() => setNumbers([]));
   }, [searchParams]);
 
   useEffect(() => {
@@ -404,6 +422,28 @@ export default function CreateCampaign({
             className="input-field max-w-md"
           />
 
+          <label className="block text-[13px] font-semibold text-slate-700 mt-5 mb-1.5">Send From</label>
+          <div className="max-w-md">
+            <select
+              value={draft.numberId}
+              onChange={(e) => {
+                const selected = numbers.find((n) => n.id === e.target.value);
+                updateDraft({
+                  numberId: e.target.value,
+                  senderLabel: selected?.number || "",
+                });
+              }}
+              className="input-field !text-[13px]"
+            >
+              <option value="">Select a number</option>
+              {numbers.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.number}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <label className="block text-[13px] font-semibold text-slate-700 mt-5 mb-1.5">Audience</label>
           <div className="max-w-md">
             <AudiencePicker
@@ -529,24 +569,35 @@ export default function CreateCampaign({
           </div>
 
           {mode === "Later" && (
-            <div className="flex items-end gap-2 mt-4 max-w-md fade-in">
-              <div className="flex-1">
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Date</label>
-                <input
-                  type="date"
-                  min={new Date().toISOString().slice(0, 10)}
-                  value={draft.scheduledDate || ""}
-                  onChange={(e) => updateDraft({ scheduledDate: e.target.value })}
-                  className="input-field !text-[13px]"
-                />
+            <div className="flex flex-col gap-3 mt-4 max-w-md fade-in">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-[12px] font-semibold text-slate-600 mb-1">Date</label>
+                  <input
+                    type="date"
+                    min={new Date().toISOString().slice(0, 10)}
+                    value={draft.scheduledDate || ""}
+                    onChange={(e) => updateDraft({ scheduledDate: e.target.value })}
+                    className="input-field !text-[13px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-600 mb-1">Time</label>
+                  <input
+                    type="time"
+                    value={draft.scheduledTime || ""}
+                    onChange={(e) => updateDraft({ scheduledTime: e.target.value })}
+                    className="input-field !text-[13px]"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Time</label>
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Timezone</label>
                 <input
-                  type="time"
-                  value={draft.scheduledTime || ""}
-                  onChange={(e) => updateDraft({ scheduledTime: e.target.value })}
+                  value={draft.timezone}
+                  onChange={(e) => updateDraft({ timezone: e.target.value })}
                   className="input-field !text-[13px]"
+                  placeholder="America/New_York"
                 />
               </div>
             </div>

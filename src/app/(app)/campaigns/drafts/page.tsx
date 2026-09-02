@@ -13,6 +13,7 @@ export default function CampaignDraftsPage() {
         title="Draft campaigns"
         subtitle="Campaigns saved but not yet scheduled or sent."
         defaultFilter="draft"
+        fetchStatus="draft"
         lockFilter
         rowFilter={statusRowFilter("draft")}
       />

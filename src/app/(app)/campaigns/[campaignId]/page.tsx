@@ -43,7 +43,7 @@ export default async function CampaignDetailPage({
   });
   const segments = estimateSmsSegments(campaign.body);
   const timeline = await buildCampaignTimelineFromData(workspaceId, campaign);
-  const activity = auditLogs.map((audit) => ({
+  const activity = auditLogs.map((audit: (typeof auditLogs)[number]) => ({
     id: audit.id,
     event: audit.metadata &&
       typeof audit.metadata === "object" &&
@@ -105,7 +105,7 @@ export default async function CampaignDetailPage({
       campaign={campaign}
       campaignId={campaignId}
       timeline={timeline}
-      activity={activity.map((log) => ({
+      activity={activity.map((log: (typeof activity)[number]) => ({
         id: log.id,
         event: log.event,
         detail: log.detail,

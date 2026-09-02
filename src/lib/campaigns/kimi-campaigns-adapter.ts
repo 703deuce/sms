@@ -25,6 +25,7 @@ export type CampaignListRow = {
   optOuts?: number;
   scheduledAt?: string | null;
   createdAt?: string;
+  updatedAt?: string;
   configJson?: unknown;
 };
 
@@ -130,8 +131,16 @@ export function timingLabel(draft: CampaignComposeDraft): string {
   return "Scheduled";
 }
 
-export async function fetchCampaigns(): Promise<CampaignListRow[]> {
-  const res = await fetch("/api/mass-texting/campaigns");
+export async function fetchCampaigns(opts?: {
+  status?: string;
+  take?: number;
+}): Promise<CampaignListRow[]> {
+  const params = new URLSearchParams();
+  params.set("take", String(opts?.take ?? 200));
+  if (opts?.status && opts.status !== "all") {
+    params.set("status", opts.status);
+  }
+  const res = await fetch(`/api/mass-texting/campaigns?${params.toString()}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load campaigns");
   return json.data || [];
@@ -200,11 +209,14 @@ export async function fetchLaunchReview(campaignId: string): Promise<LaunchRevie
 export async function launchCampaign(
   campaignId: string,
   finalRecipientCount: number,
+  confirmLargeSend = false,
 ): Promise<void> {
   const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ confirmLargeSend: finalRecipientCount >= 1000 }),
+    body: JSON.stringify({
+      confirmLargeSend: confirmLargeSend || finalRecipientCount >= 1000,
+    }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Launch failed");

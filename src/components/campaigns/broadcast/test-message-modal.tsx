@@ -21,6 +21,8 @@ export function TestMessageModal({ open, onClose, message, numberId }: TestMessa
 
   useEffect(() => {
     if (!open) return;
+    setSent(false);
+    setError("");
     fetch("/api/contacts?take=50")
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((json) => {

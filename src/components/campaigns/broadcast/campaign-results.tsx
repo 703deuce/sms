@@ -351,7 +351,8 @@ export function CampaignResultsView({
   const [live, setLive] = useState(campaign);
   const [liveRecipients, setLiveRecipients] = useState(recipients);
 
-  const isSending = ["SENDING", "Sending", "sending"].includes(campaign.status);
+  const liveStatus = live.status || campaign.status;
+  const isSending = ["SENDING", "Sending", "sending"].includes(liveStatus);
 
   useEffect(() => {
     setLive(campaign);
@@ -467,7 +468,7 @@ export function CampaignResultsView({
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <StatusChip status={campaign.status} />
+        <StatusChip status={liveStatus} />
         {isSending ? (
           <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[12px] font-semibold text-amber-700">
             📤 Live updating…

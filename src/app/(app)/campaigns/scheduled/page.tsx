@@ -13,6 +13,7 @@ export default function CampaignScheduledPage() {
         title="Scheduled campaigns"
         subtitle="Upcoming sends queued for delivery."
         defaultFilter="scheduled"
+        fetchStatus="scheduled"
         lockFilter
         rowFilter={statusRowFilter("scheduled")}
       />

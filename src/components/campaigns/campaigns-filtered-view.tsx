@@ -14,12 +14,14 @@ export function CampaignsFilteredView({
   subtitle,
   defaultFilter = "all",
   rowFilter,
+  fetchStatus,
   lockFilter = false,
 }: {
   title: string;
   subtitle: string;
   defaultFilter?: string;
   rowFilter?: (row: CampaignListRow) => boolean;
+  fetchStatus?: string;
   lockFilter?: boolean;
 }) {
   const router = useRouter();
@@ -35,6 +37,7 @@ export function CampaignsFilteredView({
         defaultFilter={defaultFilter}
         lockFilter={lockFilter}
         rowFilter={rowFilter}
+        fetchStatus={fetchStatus}
         onCreate={() => {
           startFreshComposeDraft();
           router.push("/campaigns/new");

@@ -13,6 +13,7 @@ export default function CampaignFailedPage() {
         title="Failed campaigns"
         subtitle="Campaigns that did not complete successfully."
         defaultFilter="failed"
+        fetchStatus="failed"
         lockFilter
         rowFilter={(row) => {
           const failed = statusRowFilter("failed")(row);

@@ -538,13 +538,32 @@ export async function sendCampaignMessageById(messageId: string) {
         const { settleCampaignReservation } = await import(
           "@/lib/mass-texting/credit-accounting"
         );
+        const { reconcileCampaignStatus } = await import("@/lib/campaigns/sequence-runner");
+        await reconcileCampaignStatus(message.campaignId);
+        const campaign = await prisma.campaign.findUnique({
+          where: { id: message.campaignId },
+          select: { status: true },
+        });
+        const activeRecipients = await prisma.campaignRecipient.count({
+          where: {
+            campaignId: message.campaignId,
+            workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+          },
+        });
         const open = await prisma.campaignMessage.count({
           where: {
             campaignId: message.campaignId,
             status: { in: ["queued", "sending"] },
           },
         });
-        if (open === 0) await settleCampaignReservation(message.campaignId);
+        if (
+          activeRecipients === 0 &&
+          open === 0 &&
+          campaign &&
+          (campaign.status === "COMPLETED" || campaign.status === "FAILED" || campaign.status === "CANCELED")
+        ) {
+          await settleCampaignReservation(message.campaignId);
+        }
       } catch {
         // settlement is best-effort
       }

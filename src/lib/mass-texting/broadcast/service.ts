@@ -5,7 +5,7 @@ import { attachMediaToFirstSmsStep } from "@/lib/campaigns/sequence-engine";
 import { massTextProductConfigPatch } from "@/lib/mass-texting/campaign-send";
 import { normalizeMediaUrls } from "@/lib/mass-texting/mms";
 import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
-import { computeBroadcastNextRun } from "@/lib/campaigns/recurrence-format";
+import { computeBroadcastNextRun, validateRecurrence } from "@/lib/campaigns/recurrence-format";
 import { audienceSummaryLabel, enrollBroadcastAudience } from "./audience";
 import type {
   BroadcastCampaignConfig,
@@ -78,14 +78,19 @@ export async function listBroadcastCampaigns(
   const take = opts?.take ?? 50;
   const skip = opts?.skip ?? 0;
   const rows = await prisma.campaign.findMany({
-    where: { workspaceId },
+    where: {
+      workspaceId,
+      ...(opts?.status && opts.status !== "all"
+        ? { status: opts.status.toUpperCase() as "DRAFT" | "SCHEDULED" | "SENDING" | "COMPLETED" | "FAILED" | "PAUSED" | "CANCELED" }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
-    take: take + skip + 100,
+    take: Math.min(500, take + skip + 50),
   });
-  const filtered = rows.filter((c) => isBroadcastCampaign(c.configJson));
+  const filtered = rows.filter((c: (typeof rows)[number]) => isBroadcastCampaign(c.configJson));
   if (opts?.status && opts.status !== "all") {
     const status = opts.status.toUpperCase();
-    return filtered.filter((c) => c.status === status).slice(skip, skip + take);
+    return filtered.filter((c: (typeof filtered)[number]) => c.status === status).slice(skip, skip + take);
   }
   return filtered.slice(skip, skip + take);
 }
@@ -117,6 +122,8 @@ export async function createBroadcastCampaign(
       throw new Error("Recurring campaigns are not enabled yet");
     }
     if (!input.recurrence) throw new Error("Recurrence settings are required");
+    const recurrenceError = validateRecurrence(input.recurrence);
+    if (recurrenceError) throw new Error(recurrenceError);
   }
   if (input.scheduleMode === "later") {
     const scheduledAt = resolveScheduledAt(input);
@@ -208,6 +215,8 @@ export async function updateBroadcastCampaign(
       throw new Error("Recurring campaigns are not enabled");
     }
     if (!merged.recurrence) throw new Error("Recurrence settings are required");
+    const recurrenceError = validateRecurrence(merged.recurrence);
+    if (recurrenceError) throw new Error(recurrenceError);
   }
 
   const config = buildConfig(merged);
@@ -273,12 +282,12 @@ export async function cancelBroadcastCampaign(workspaceId: string, campaignId: s
   const prisma = getPrisma();
   const campaign = await getBroadcastCampaign(workspaceId, campaignId);
   if (!campaign) throw new Error("Campaign not found");
-  if (campaign.status !== "SCHEDULED" && campaign.status !== "DRAFT") {
-    throw new Error("Only draft or scheduled campaigns can be canceled");
+  if (!["DRAFT", "SCHEDULED", "PAUSED", "SENDING"].includes(campaign.status)) {
+    throw new Error("Only draft, scheduled, paused, or sending campaigns can be canceled");
   }
 
   await prisma.campaignMessage.updateMany({
-    where: { campaignId, status: "queued" },
+    where: { campaignId, status: { in: ["queued", "sending"] } },
     data: { status: "cancelled", error: "campaign_canceled" },
   });
   await prisma.campaignRecipient.updateMany({

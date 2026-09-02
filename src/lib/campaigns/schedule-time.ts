@@ -42,6 +42,22 @@ export function zonedLocalDateTimeToIso(
   return zonedLocalDateTimeToUtc(date, time, timeZone).toISOString();
 }
 
+/** Convert a UTC ISO timestamp into local date/time strings for a timezone. */
+export function zonedIsoToLocalDateTime(
+  iso: string,
+  timeZone: string,
+): { date: string; time: string } {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return { date: "", time: "" };
+  }
+  const parts = getZonedParts(date, timeZone);
+  return {
+    date: `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`,
+    time: `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`,
+  };
+}
+
 function getZonedParts(date: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,

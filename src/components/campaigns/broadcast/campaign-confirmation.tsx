@@ -73,6 +73,27 @@ export function CampaignQueueView() {
   const cancelledRef = useRef(false);
   const router = useRouter();
 
+  const runLaunch = async () => {
+    if (!campaignId) return;
+    setLaunching(true);
+    setError("");
+    try {
+      const review = await fetchLaunchReview(campaignId);
+      await launchCampaign(
+        campaignId,
+        review.finalRecipientCount,
+        review.finalRecipientCount >= 1000,
+      );
+      clearComposeDraft();
+      router.push(`/campaigns/${campaignId}`);
+    } catch (err) {
+      launchedRef.current = false;
+      setError(err instanceof Error ? err.message : "Could not launch campaign");
+    } finally {
+      setLaunching(false);
+    }
+  };
+
   useEffect(() => {
     if (!campaignId || cancelledRef.current || launchedRef.current) return;
     if (seconds > 0) {
@@ -81,21 +102,7 @@ export function CampaignQueueView() {
     }
 
     launchedRef.current = true;
-    setLaunching(true);
-    setError("");
-    void (async () => {
-      try {
-        const review = await fetchLaunchReview(campaignId);
-        await launchCampaign(campaignId, review.finalRecipientCount);
-        clearComposeDraft();
-        router.push(`/campaigns/${campaignId}`);
-      } catch (err) {
-        launchedRef.current = false;
-        setError(err instanceof Error ? err.message : "Could not launch campaign");
-      } finally {
-        setLaunching(false);
-      }
-    })();
+    void runLaunch();
   }, [seconds, campaignId, router]);
 
   async function cancelSend() {
@@ -149,9 +156,23 @@ export function CampaignQueueView() {
         </p>
       ) : null}
       {!launching ? (
-        <button type="button" onClick={() => void cancelSend()} className={cn(campaignUi.outlineBtn, "mt-6")}>
-          Cancel Send
-        </button>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button type="button" onClick={() => void cancelSend()} className={cn(campaignUi.outlineBtn)}>
+            Cancel Send
+          </button>
+          {error ? (
+            <button
+              type="button"
+              onClick={() => {
+                launchedRef.current = true;
+                void runLaunch();
+              }}
+              className={campaignUi.primaryBtn}
+            >
+              Try Again
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

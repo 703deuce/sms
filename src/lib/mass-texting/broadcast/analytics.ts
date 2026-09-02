@@ -50,6 +50,7 @@ export async function listBroadcastRecipients(
           id: true,
           status: true,
           sentAt: true,
+          deliveredAt: true,
           deliveredCounted: true,
           clickedCounted: true,
           providerId: true,
@@ -83,7 +84,7 @@ export async function listBroadcastRecipients(
       status,
       skippedReason: row.stopReason,
       sentAt: sentMsg?.sentAt?.toISOString() ?? null,
-      deliveredAt: deliveredMsg?.updatedAt?.toISOString() ?? null,
+          deliveredAt: deliveredMsg?.deliveredAt?.toISOString() ?? deliveredMsg?.updatedAt?.toISOString() ?? null,
       clickedAt: clickedMsg?.updatedAt?.toISOString() ?? null,
       repliedAt:
         typeof meta.repliedAt === "string"

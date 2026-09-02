@@ -43,13 +43,18 @@ export default function CampaignCalendarPage() {
   const router = useRouter();
   const [rows, setRows] = useState<CampaignListRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState(() => new Date());
 
   const reload = useCallback(() => {
     setLoading(true);
-    fetchCampaigns()
+    fetchCampaigns({ take: 200 })
       .then((data) => setRows(data.filter((c) => c.scheduledAt)))
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not load calendar");
+        setRows([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -175,6 +180,12 @@ export default function CampaignCalendarPage() {
             </button>
           </div>
         </div>
+
+        {error ? (
+          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            {error}
+          </p>
+        ) : null}
 
         {loading ? (
           <p className="text-[13px] text-slate-500">Loading calendar…</p>

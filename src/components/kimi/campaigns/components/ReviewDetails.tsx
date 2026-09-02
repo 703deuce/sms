@@ -38,6 +38,7 @@ export default function ReviewDetails({
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState("");
+  const [confirmLargeSend, setConfirmLargeSend] = useState(false);
 
   const loadReview = useCallback(async () => {
     if (!campaignId) return;
@@ -85,6 +86,10 @@ export default function ReviewDetails({
 
   async function handleSend() {
     if (!campaignId || !review?.canSend) return;
+    if (review.finalRecipientCount >= 1000 && !confirmLargeSend) {
+      setError("Confirm the large send checkbox before launching.");
+      return;
+    }
     setLaunching(true);
     setError("");
     try {
@@ -92,7 +97,7 @@ export default function ReviewDetails({
         router.push(queuePath(campaignId));
         return;
       }
-      await launchCampaign(campaignId, review.finalRecipientCount);
+      await launchCampaign(campaignId, review.finalRecipientCount, confirmLargeSend);
       router.push(successPath(campaignId, draft.scheduleMode));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Launch failed");
@@ -212,6 +217,20 @@ export default function ReviewDetails({
                 {review.blockReason}
               </p>
             ) : null}
+            {review && review.finalRecipientCount >= 1000 ? (
+              <label className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={confirmLargeSend}
+                  onChange={(e) => setConfirmLargeSend(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  I confirm sending to {formatNumber(review.finalRecipientCount)} recipients
+                  ({formatNumber(review.requiredSegments)} credits required).
+                </span>
+              </label>
+            ) : null}
           </div>
 
           {error ? (
@@ -233,7 +252,12 @@ export default function ReviewDetails({
               <button
                 type="button"
                 onClick={() => void handleSend()}
-                disabled={launching || loading || !review?.canSend}
+                disabled={
+                  launching ||
+                  loading ||
+                  !review?.canSend ||
+                  (review.finalRecipientCount >= 1000 && !confirmLargeSend)
+                }
                 className="btn-primary flex items-center gap-1.5 !py-2.5 shadow-sm disabled:opacity-60"
               >
                 {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
