@@ -81,8 +81,8 @@ export default function SegmentsList({ segments: segmentsProp, onCreate, onViewC
               </button>
               <p className="text-xs text-muted-foreground mt-0.5">Created {s.createdAt}</p>
             </div>
-            <button className="text-[13px] text-muted-foreground italic hover:text-primary text-left flex items-center gap-1.5 transition-colors truncate">
-              Add description <Pencil className="h-3 w-3 shrink-0" />
+            <button className="text-[13px] text-muted-foreground text-left truncate">
+              {s.description?.trim() ? s.description : <span className="italic text-muted-foreground/70">—</span>}
             </button>
             <button
               onClick={() => onViewContacts(s)}

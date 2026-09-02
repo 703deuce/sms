@@ -29,6 +29,7 @@ export default function CreateLinkPage({
   const [active, setActive] = useState(initialLink ? initialLink.status === "Active" : true);
   const [kwOpen, setKwOpen] = useState(false);
   const [kwSearch, setKwSearch] = useState("");
+  const [saveError, setSaveError] = useState("");
   const kwRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -48,7 +49,15 @@ export default function CreateLinkPage({
   );
 
   const handleSave = () => {
-    if (!name.trim() || !number.trim()) return;
+    if (!name.trim()) {
+      setSaveError("Link name is required.");
+      return;
+    }
+    if (!number.trim()) {
+      setSaveError("A sending number is required. Configure a phone number in Settings before creating a link.");
+      return;
+    }
+    setSaveError("");
     onSave({
       id: initialLink?.id || `link-${Date.now()}`,
       name,
@@ -152,6 +161,7 @@ export default function CreateLinkPage({
           </div>
 
           <div className="ttj-form-actions border-t border-border/60 pt-4">
+            {saveError && <p className="mb-3 text-[13px] text-red-600">{saveError}</p>}
             <button className="ttj-btn-primary" onClick={handleSave} disabled={!name.trim()}>Save</button>
             <button className="ttj-btn-ghost" onClick={onBack}>Back</button>
           </div>

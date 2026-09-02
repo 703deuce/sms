@@ -69,9 +69,26 @@ export default function ContactsList({ contacts: contactsProp }: { contacts?: Co
             <span className="text-muted-foreground truncate">{c.email}</span>
             <span className="text-muted-foreground">{c.state}</span>
             <span><StatusChip status={c.status} /></span>
-            <button className="h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center transition-colors">
-              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                className="h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+                onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}
+              >
+                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+              </button>
+              {menuFor === c.id && (
+                <div className="absolute right-0 top-8 z-10 min-w-[140px] rounded-lg border border-border bg-card py-1 shadow-lg text-sm">
+                  <Link
+                    href={`/contacts/${c.id}`}
+                    className="block px-3 py-2 hover:bg-muted"
+                    onClick={() => setMenuFor(null)}
+                  >
+                    View contact
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {filtered.length === 0 && (

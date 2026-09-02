@@ -23,8 +23,9 @@ import {
   updateSegment,
 } from "@/lib/contacts/kimi-segments-adapter";
 import { kimiGroupsToSegmentConditions } from "@/lib/contacts/kimi-segment-condition-map";
-import { fetchContacts } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchContacts, fetchContactStats } from "@/lib/contacts/kimi-contacts-adapter";
 import { fetchLists } from "@/lib/contacts/kimi-lists-adapter";
+import { fetchInboxList } from "@/lib/inbox/kimi-inbox-adapter";
 import { Send, CheckCircle2, LayoutDashboard } from "lucide-react";
 
 type View =
@@ -46,6 +47,11 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   const [savedSegment, setSavedSegment] = useState<Segment | null>(null);
   const [campaignSent, setCampaignSent] = useState(false);
   const [error, setError] = useState("");
+  const [dashboardStats, setDashboardStats] = useState({
+    totalContacts: 0,
+    subscribedContacts: 0,
+    unreadMessages: 0,
+  });
 
   const reload = useCallback(async () => {
     const rows = await fetchSegments();
@@ -84,6 +90,19 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
     }
     void loadAudience().catch(() => undefined);
   }, [initialSegments.length, reload, loadAudience]);
+
+  useEffect(() => {
+    void Promise.all([
+      fetchContactStats().catch(() => ({ contacts: 0, subscribed: 0, unsubscribed: 0 })),
+      fetchInboxList({ product: "all", unread: true }).catch(() => []),
+    ]).then(([stats, unreadRows]) => {
+      setDashboardStats({
+        totalContacts: stats.contacts,
+        subscribedContacts: stats.subscribed,
+        unreadMessages: unreadRows.length,
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (view.name !== "contacts") return;
@@ -157,7 +176,9 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
       </div>
       <AudienceSubNav active={view.name === "audience" ? view.tab : "segments"} onChange={goTab} />
 
-      {view.name === "home" && <Dashboard onGoSegments={() => setView({ name: "audience", tab: "segments" })} />}
+      {view.name === "home" && (
+        <Dashboard onGoSegments={() => setView({ name: "audience", tab: "segments" })} stats={dashboardStats} />
+      )}
 
       {view.name === "audience" && view.tab === "segments" && (
         <SegmentsList

@@ -44,7 +44,10 @@ export default function ContactsPage({
     () =>
       contacts.filter((c) => {
         if (statusFilter !== "all" && c.optIn !== statusFilter) return false;
-        return (c.firstName + " " + c.lastName).toLowerCase().includes(search.toLowerCase());
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        const haystack = `${c.firstName} ${c.lastName} ${c.mobile} ${c.email || ""}`.toLowerCase();
+        return haystack.includes(q);
       }),
     [contacts, search, statusFilter],
   );

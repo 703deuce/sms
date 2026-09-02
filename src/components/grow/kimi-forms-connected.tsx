@@ -34,6 +34,7 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
   const [view, setView] = useState<View>("list");
   const [testPreview, setTestPreview] = useState<FormTestPreview | null>(null);
   const [embedCode, setEmbedCode] = useState<string>("");
+  const [toast, setToast] = useState<string | null>(null);
   const [forms, setForms] = useState<WebForm[]>(initialForms);
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [editingFormName, setEditingFormName] = useState<string>("");
@@ -59,6 +60,11 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
   } | null>(null);
   const [contactLists, setContactLists] = useState<string[]>([]);
   const [error, setError] = useState("");
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2600);
+  };
 
   const reload = useCallback(async () => {
     const rows = await fetchWebForms();
@@ -211,6 +217,11 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg">
+          {toast}
+        </div>
+      )}
       {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
       {view === "list" && (
         <WebFormsList
@@ -229,6 +240,7 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
                 meta.embedCode ||
                 `<script async src="https://static.transovo.io/forms/scripts/embed/${id}"></script>`;
               await navigator.clipboard.writeText(code);
+              showToast("Embed code copied.");
             } catch (err) {
               setError(err instanceof Error ? err.message : "Could not copy embed code");
             }

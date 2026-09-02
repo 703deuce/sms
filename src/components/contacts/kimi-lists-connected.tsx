@@ -304,22 +304,24 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
           </div>
         </div>
         <div className="table-card">
-          <div className="table-head grid grid-cols-[1fr_1.6fr_220px_40px]">
-            <span>KEYWORD</span><span>DESCRIPTION</span><span className="text-right">CREATES CONTACTS</span><span></span>
+          <div className="table-head grid grid-cols-[1fr_1.6fr_120px_120px_40px]">
+            <span>KEYWORD</span><span>DESCRIPTION</span><span className="text-right">STATUS</span><span className="text-right">LISTS</span><span></span>
           </div>
           {filteredKeywords.map((k) => (
-            <div key={k.id} className="table-row grid grid-cols-[1fr_1.6fr_220px_40px]">
+            <div key={k.id} className="table-row grid grid-cols-[1fr_1.6fr_120px_120px_40px]">
               <div>
                 <div className="cell-primary">{k.keyword}</div>
                 <div className="cell-sub">Last saved on {k.lastSaved}</div>
               </div>
               <div className="cell-body">{k.description}</div>
-              <div className="flex items-center gap-3 justify-end">
-                <span className="flex items-center gap-1.5 text-[12px] text-[#7a85a8]">
-                  <span className="count-badge">{k.connectedLists}</span>
-                  Connected List{k.connectedLists === 1 ? "" : "s"}
+              <div className="flex justify-end">
+                <span className={`pill ${k.status === "Inactive" ? "pill-gray" : "pill-green"}`}>
+                  {k.status || "Active"}
                 </span>
-                <span className="pill pill-green">Yes</span>
+              </div>
+              <div className="flex items-center gap-1.5 justify-end text-[12px] text-[#7a85a8]">
+                <span className="count-badge">{k.connectedLists}</span>
+                Connected
               </div>
               <MoreVertical size={15} className="text-[#9aa3c0] cursor-pointer hover:text-[#44507a]" onClick={() => onEditKeyword(k)} />
             </div>

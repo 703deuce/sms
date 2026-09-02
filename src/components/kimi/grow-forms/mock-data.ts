@@ -7,6 +7,7 @@ export type WebForm = {
   status: "Active" | "Inactive";
   lastSaved: string;
   thumb: string;
+  publicUrl?: string;
 };
 
 export const webForms: WebForm[] = [

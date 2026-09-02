@@ -35,6 +35,7 @@ export function mapOptInFormToKimi(f: {
     status: f.status === "Inactive" ? "Inactive" : "Active",
     lastSaved: formatSaved(f.updatedAt || f.createdAt),
     thumb: "forest",
+    publicUrl: f.url || undefined,
   };
 }
 

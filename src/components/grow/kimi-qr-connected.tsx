@@ -37,7 +37,7 @@ export function KimiQrCodesConnected() {
   const [query, setQuery] = useState("");
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [qrCodes, setQrCodes] = useState<QrCodeRow[]>([]);
-  const [webforms, setWebforms] = useState<Array<{ value: string; label: string }>>([]);
+  const [webforms, setWebforms] = useState<Array<{ value: string; label: string; url?: string }>>([]);
   const [defaultKeyword, setDefaultKeyword] = useState<string | undefined>(queryKeyword);
   const [error, setError] = useState("");
 
@@ -49,7 +49,7 @@ export function KimiQrCodesConnected() {
     ]);
     setKeywords(keywordRows);
     setQrCodes(qrRows);
-    setWebforms(forms.map((f) => ({ value: f.id, label: f.name })));
+    setWebforms(forms.map((f) => ({ value: f.id, label: f.name, url: f.publicUrl })));
   }, []);
 
   useEffect(() => {
@@ -87,12 +87,17 @@ export function KimiQrCodesConnected() {
                 webformOptions={webforms}
                 onDownload={async ({ action, keyword, webform, url }) => {
                   setError("");
+                  const formUrl = webforms.find((f) => f.value === webform)?.url;
                   const targetUrl =
                     action === "url"
                       ? url
                       : action === "webform"
-                        ? `/forms/${webform}`
+                        ? formUrl || `/f/${webform}`
                         : `sms:?body=${encodeURIComponent(keyword)}`;
+                  if (action === "webform" && !formUrl) {
+                    setError("Could not resolve the public form URL. Open the form in Forms and try again.");
+                    return;
+                  }
                   await createQrCode({
                     name: `QR ${action === "keyword" ? keyword : action === "webform" ? webform : "link"}`,
                     targetUrl,

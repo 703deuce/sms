@@ -34,7 +34,7 @@ export default function ContactsList({
         if (statusFilter !== "all" && c.optIn !== statusFilter) return false;
         const q = search.trim().toLowerCase();
         if (!q) return true;
-        return `${c.firstName} ${c.lastName} ${c.mobile}`.toLowerCase().includes(q);
+        return `${c.firstName} ${c.lastName} ${c.mobile} ${c.email || ""}`.toLowerCase().includes(q);
       }),
     [rows, search, statusFilter],
   );
@@ -99,14 +99,12 @@ export default function ContactsList({
         <table className="tv-table">
           <thead>
             <tr>
-              <th style={{ width: 40 }}><input type="checkbox" className="tv-check" disabled /></th>
               <th>First Name</th><th>Last Name</th><th>Mobile Number</th><th>Opt-In Status</th><th>Created</th><th style={{ width: 52 }} />
             </tr>
           </thead>
           <tbody>
             {visible.map((c) => (
               <tr key={c.id} className={menuFor === c.id ? "tv-row-active" : ""}>
-                <td><input type="checkbox" className="tv-check" disabled /></td>
                 <td className="tv-cell-strong">
                   <Link href={`/contacts/${c.id}`} className="text-[#3b4ef5] hover:underline">
                     {c.firstName}
@@ -121,9 +119,13 @@ export default function ContactsList({
                   {menuFor === c.id && (
                     <div className="tv-dropdown" style={{ right: 0, top: 36, textAlign: "left" }}>
                       <button onClick={() => { setMenuFor(null); onEdit(c.id); }}><Pencil size={13} /> Edit</button>
-                      <button onClick={() => { setMenuFor(null); window.location.assign("/conversations"); }}>
+                      <Link
+                        href={`/conversations?contactId=${encodeURIComponent(c.id)}`}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-[#f4f6ff]"
+                        onClick={() => setMenuFor(null)}
+                      >
                         <MessageSquare size={13} /> Chat
-                      </button>
+                      </Link>
                       <button
                         onClick={() => {
                           setMenuFor(null);

@@ -6,6 +6,7 @@ import { lists as mockLists, type ContactList } from "../mock-data";
 
 export default function ListsList({ lists: listsProp }: { lists?: ContactList[] }) {
   const [q, setQ] = useState("");
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const source = listsProp ?? mockLists;
   const filtered = source.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
   return (
@@ -48,9 +49,26 @@ export default function ListsList({ lists: listsProp }: { lists?: ContactList[] 
               <Users className="h-4 w-4" /> <span className="tabular-nums font-medium text-foreground">{l.contacts.toLocaleString()}</span>
             </span>
             <span className="text-muted-foreground">{l.createdAt}</span>
-            <button className="h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center transition-colors">
-              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                className="h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+                onClick={() => setMenuFor(menuFor === l.id ? null : l.id)}
+              >
+                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+              </button>
+              {menuFor === l.id && (
+                <div className="absolute right-0 top-8 z-10 min-w-[150px] rounded-lg border border-border bg-card py-1 shadow-lg text-sm">
+                  <Link
+                    href="/contacts/lists"
+                    className="block px-3 py-2 hover:bg-muted"
+                    onClick={() => setMenuFor(null)}
+                  >
+                    Manage lists
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {filtered.length === 0 && (
