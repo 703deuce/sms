@@ -4,14 +4,23 @@ import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { assertWorkspaceMessagingSendAllowed } from "@/lib/messaging/unified-send-gate";
 import { getMassTextingBillingSummary } from "@/lib/mass-texting/billing-account";
 import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
-import { refreshMassTextingSendState } from "@/lib/mass-texting/send-readiness";
+import {
+  refreshMassTextingSendState,
+  syncMassTextingSendStateFromTelnyx,
+} from "@/lib/mass-texting/send-readiness";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
 
-    await refreshMassTextingSendState(auth.workspaceId);
+    const syncTelnyx = new URL(request.url).searchParams.get("sync") === "telnyx";
+    if (syncTelnyx) {
+      await syncMassTextingSendStateFromTelnyx(auth.workspaceId);
+    } else {
+      await refreshMassTextingSendState(auth.workspaceId);
+    }
+
     const [registration, billing, credits, a2p] = await Promise.all([
       getRegistrationByWorkspace(auth.workspaceId),
       getMassTextingBillingSummary(auth.workspaceId),

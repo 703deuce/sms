@@ -46,6 +46,28 @@ assert.ok(
   "launch-review requires mass texting entitlement",
 );
 
+const massLaunchReviewRoute = read("src/app/api/mass-texting/campaigns/[id]/launch-review/route.ts");
+assert.ok(
+  !massLaunchReviewRoute.includes("refreshMassTextingSendState"),
+  "mass-texting launch-review must not sync Telnyx on every page load",
+);
+
+const unifiedGate = read("src/lib/messaging/unified-send-gate.ts");
+assert.ok(
+  unifiedGate.includes("if (options?.syncTelnyx)"),
+  "A2P gate is DB-first; Telnyx sync is opt-in via syncTelnyx",
+);
+
+const sendReadiness = read("src/lib/mass-texting/send-readiness.ts");
+assert.ok(
+  sendReadiness.includes("syncMassTextingSendStateFromTelnyx"),
+  "explicit Telnyx sync helper exists for compliance refresh",
+);
+assert.ok(
+  !sendReadiness.includes("assertWorkspaceMessagingSendAllowed(workspaceId, { syncTelnyx: true })"),
+  "send-readiness does not Telnyx-sync on every lifecycle refresh",
+);
+
 const recurrence = read("src/lib/campaigns/recurrence.ts");
 assert.ok(
   recurrence.includes("massTextingRequiresLaunchAudit"),

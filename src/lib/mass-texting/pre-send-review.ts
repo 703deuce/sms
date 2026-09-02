@@ -35,6 +35,14 @@ export type PreSendReview = {
   acceptedPhones: string[];
 };
 
+async function loadMessagingSendGate(workspaceId: string) {
+  const { assertWorkspaceMessagingSendAllowed } = await import(
+    "@/lib/messaging/unified-send-gate"
+  );
+  // Cached messagingRegistration only — Telnyx sync is explicit (compliance refresh / webhooks).
+  return assertWorkspaceMessagingSendAllowed(workspaceId);
+}
+
 export async function buildPreSendReview(
   workspaceId: string,
   campaignId: string,
@@ -62,7 +70,6 @@ export async function buildPreSendReview(
 
   if (isBroadcastCampaign(config) && config.audience) {
     const audience = config.audience as import("@/lib/mass-texting/broadcast/types").BroadcastAudienceDefinition;
-    const preview = await previewBroadcastAudience(workspaceId, audience, campaignId);
     type ContactRow = {
       id: string;
       firstName: string | null;
@@ -75,6 +82,10 @@ export async function buildPreSendReview(
       where: { campaignId, workspaceId },
       select: { phone: true, email: true, contactId: true, displayName: true },
     });
+    const preview =
+      enrolled.length > 0
+        ? null
+        : await previewBroadcastAudience(workspaceId, audience, campaignId);
     const contactIds = enrolled
       .map((r: (typeof enrolled)[number]) => r.contactId)
       .filter(Boolean) as string[];
@@ -82,9 +93,9 @@ export async function buildPreSendReview(
       ? await prisma.contact.findMany({
           where: { workspaceId, id: { in: contactIds } },
         })
-      : preview.eligibleSample.length
+      : preview!.eligibleSample.length
         ? await prisma.contact.findMany({
-            where: { workspaceId, id: { in: preview.eligibleSample.map((s) => s.contactId) } },
+            where: { workspaceId, id: { in: preview!.eligibleSample.map((s) => s.contactId) } },
           })
         : [];
     const byId = new Map<string, ContactRow>(contacts.map((c) => [c.id, c]));
@@ -112,7 +123,7 @@ export async function buildPreSendReview(
             : null,
       });
     }
-    if (!recipients.length) {
+    if (!recipients.length && preview) {
       const resolved = await previewBroadcastAudience(workspaceId, audience, campaignId);
       for (const sample of resolved.eligibleSample) {
         const contact = byId.get(sample.contactId);
@@ -130,10 +141,11 @@ export async function buildPreSendReview(
       }
     }
     const listNames = [audienceSummaryLabel(audience)];
-    const rawContactCount = preview.selectedCount;
-    const duplicateRemoved = preview.duplicateRemoved + preview.excludedCount;
-    const invalidRemoved = preview.invalidRemoved;
-    const suppressedRemoved = preview.suppressedRemoved;
+    const rawContactCount = preview?.selectedCount ?? enrolled.length;
+    const duplicateRemoved =
+      (preview?.duplicateRemoved ?? 0) + (preview?.excludedCount ?? 0);
+    const invalidRemoved = preview?.invalidRemoved ?? 0;
+    const suppressedRemoved = preview?.suppressedRemoved ?? 0;
     // Enrolled rows are already on this campaign — don't treat as "already_enrolled" rejects.
     const validationCampaignId = enrolled.length > 0 ? null : campaignId;
     const { accepted, rejected } = await validateBulkRecipients(
@@ -179,12 +191,9 @@ export async function buildPreSendReview(
       }
     }
     const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
-    const { assertWorkspaceMessagingSendAllowed } = await import(
-      "@/lib/messaging/unified-send-gate"
-    );
     const sender = await resolveMassTextSendingNumber(workspaceId);
     const availability = await getSegmentAvailability(workspaceId);
-    const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
+    const a2p = await loadMessagingSendGate(workspaceId);
     const canSend =
       a2p.allowed &&
       availability.canSend &&
@@ -201,7 +210,9 @@ export async function buildPreSendReview(
       invalidRemoved,
       suppressedRemoved,
       finalRecipientCount:
-        enrolled.length > 0 ? accepted.length : preview.eligibleCount || accepted.length,
+        enrolled.length > 0
+          ? accepted.length
+          : preview?.eligibleCount || accepted.length,
       estimatedSegments,
       mmsCount: accepted.length * mmsStepCount,
       messagePreview: body.slice(0, 280),
@@ -219,7 +230,7 @@ export async function buildPreSendReview(
         : !a2p.allowed
           ? a2p.reason || "Messaging A2P not ready"
           : shortage > 0
-            ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+            ? `This send needs ${estimatedSegments} messages but your account does not have enough remaining`
             : availability.blockReason,
       mmsBlocked,
       acceptedPhones: accepted
@@ -384,12 +395,9 @@ export async function buildPreSendReview(
   }
 
   const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
-  const { assertWorkspaceMessagingSendAllowed } = await import(
-    "@/lib/messaging/unified-send-gate"
-  );
   const sender = await resolveMassTextSendingNumber(workspaceId);
   const availability = await getSegmentAvailability(workspaceId);
-  const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
+  const a2p = await loadMessagingSendGate(workspaceId);
   const canSend =
     a2p.allowed &&
     availability.canSend &&
@@ -424,7 +432,7 @@ export async function buildPreSendReview(
       : !a2p.allowed
         ? a2p.reason || "Messaging A2P not ready"
         : shortage > 0
-          ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+          ? `This send needs ${estimatedSegments} messages but your account does not have enough remaining`
           : availability.blockReason,
     mmsBlocked,
     acceptedPhones: accepted

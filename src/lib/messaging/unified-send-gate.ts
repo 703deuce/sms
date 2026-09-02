@@ -12,6 +12,14 @@ export type UnifiedMessagingSendGate = {
   phoneE164: string | null;
 };
 
+export type MessagingSendGateOptions = {
+  /**
+   * When true, reconcile live Telnyx 10DLC state before gating (compliance refresh,
+   * post-registration change, explicit sync). Default false — read cached DB state.
+   */
+  syncTelnyx?: boolean;
+};
+
 async function resolveSendingPhoneE164(workspaceId: string): Promise<string | null> {
   const { resolveMassTextSendingNumber } = await import(
     "@/lib/mass-texting/messaging-registration"
@@ -58,13 +66,17 @@ export async function syncWorkspaceMessagingFromTelnyx(
 
 /**
  * Single A2P gate for MCTB, Mass Texting, and transactional SMS.
- * One approved low-volume / mixed Telnyx campaign on the number is sufficient.
+ * DB-first: reads messagingRegistration from Postgres. Telnyx is synced only when
+ * options.syncTelnyx is true (explicit refresh, registration change, webhooks).
  */
 export async function assertWorkspaceMessagingSendAllowed(
   workspaceId: string,
+  options?: MessagingSendGateOptions,
 ): Promise<UnifiedMessagingSendGate> {
   const phoneE164 = await resolveSendingPhoneE164(workspaceId);
-  await syncWorkspaceMessagingFromTelnyx(workspaceId, phoneE164);
+  if (options?.syncTelnyx) {
+    await syncWorkspaceMessagingFromTelnyx(workspaceId, phoneE164);
+  }
 
   const reg = await getRegistrationByWorkspace(workspaceId);
   if (!reg) {
