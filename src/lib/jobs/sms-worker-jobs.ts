@@ -33,16 +33,33 @@ export async function enqueueCampaignSendBatchTick() {
 /**
  * Drain SMS-related DB jobs only. Safe to run in a dedicated worker replica;
  * claiming uses CAS updateMany so multiple replicas do not double-process.
+ *
+ * When QUEUE_DRIVER=bullmq, the SMS worker container must also run
+ * `startSmsDispatchBullmqWorkers()` — this function only syncs the DB outbox
+ * to Redis and reports BullMQ consumer metrics (jobs are processed by Workers).
  */
 export async function processSmsWorkerDueJobs(limit = 40) {
   if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
-    const { syncDbOutboxToBullmq } = await import("@/lib/jobs/bullmq");
+    const { syncDbOutboxToBullmq, getSmsDispatchBullmqStatus } = await import(
+      "@/lib/jobs/bullmq"
+    );
     const outbox = await syncDbOutboxToBullmq(50);
+    const bullmq = getSmsDispatchBullmqStatus();
+    if (!bullmq.ready) {
+      console.error(
+        JSON.stringify({
+          event: "bullmq_consumer_not_ready",
+          queues: bullmq.queues,
+          hint: "startSmsDispatchBullmqWorkers() must run at worker boot",
+        }),
+      );
+    }
     return {
-      processed: 0,
+      processed: bullmq.metrics.completed,
       results: [] as Array<{ id: string; jobType: string; ok: boolean; error?: string }>,
       mode: "bullmq" as const,
       outbox,
+      bullmq,
     };
   }
 

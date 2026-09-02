@@ -2,7 +2,8 @@
  * Transovo SMS dispatch worker — runs 24/7 in a dedicated container (repurposed voice worker).
  *
  * Start: npm run worker:sms
- * Requires DATABASE_URL. Optional Redis when QUEUE_DRIVER=bullmq.
+ * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+ * When QUEUE_DRIVER=bullmq, also requires REDIS_URL (rediss:// TCP/TLS — not Upstash REST).
  */
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -18,6 +19,8 @@ const WORKER_ID = process.env.WORKER_ID?.trim() || randomUUID();
 const POLL_MS = Number(process.env.WORKER_POLL_MS || 3_000);
 const HEALTH_PORT = Number(process.env.SMS_WORKER_HEALTH_PORT || 8082);
 const JOB_BATCH = Number(process.env.SMS_WORKER_JOB_BATCH || 40);
+const USE_BULLMQ =
+  process.env.QUEUE_DRIVER === "bullmq" && Boolean(process.env.REDIS_URL?.trim());
 
 let shuttingDown = false;
 let cycleInFlight = false;
@@ -25,6 +28,8 @@ let lastCycleAt = 0;
 let lastCycleOk = true;
 let lastCycleError: string | null = null;
 let lastMetrics: Record<string, unknown> = {};
+let bullmqBootStatus: Record<string, unknown> | null = null;
+let lastBullmqCompleted = 0;
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -38,6 +43,9 @@ function requireEnv(name: string): string {
 function verifyWorkerBootEnv() {
   requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (USE_BULLMQ) {
+    requireEnv("REDIS_URL");
+  }
 }
 
 function startHealthServer() {
@@ -46,13 +54,23 @@ function startHealthServer() {
     if (path === "/health" || path === "/") {
       const staleMs = lastCycleAt ? Date.now() - lastCycleAt : null;
       const maxStale = Number(process.env.SMS_WORKER_MAX_STALE_MS || POLL_MS * 10);
-      const healthy = lastCycleOk && !shuttingDown && staleMs != null && staleMs < maxStale;
+      const bullmqReady = Boolean(
+        bullmqBootStatus && (bullmqBootStatus as { ready?: boolean }).ready,
+      );
+      const healthy =
+        lastCycleOk &&
+        !shuttingDown &&
+        staleMs != null &&
+        staleMs < maxStale &&
+        (!USE_BULLMQ || bullmqReady);
       res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           ok: healthy,
           workerKey: WORKER_KEY,
           workerId: WORKER_ID,
+          queueDriver: USE_BULLMQ ? "bullmq" : "db",
+          bullmq: bullmqBootStatus,
           lastCycleAt: lastCycleAt ? new Date(lastCycleAt).toISOString() : null,
           lastCycleError,
           shuttingDown,
@@ -76,18 +94,39 @@ async function runCycle() {
   if (shuttingDown || cycleInFlight) return;
   cycleInFlight = true;
   const started = Date.now();
+  const phaseMs: Record<string, number> = {};
   try {
+    const t0 = Date.now();
     const scheduler = await runSmsSchedulerCycle();
+    phaseMs.scheduler = Date.now() - t0;
+
+    const t1 = Date.now();
     const jobs = await processSmsWorkerDueJobs(JOB_BATCH);
+    phaseMs.jobs = Date.now() - t1;
+
+    const t2 = Date.now();
     const metrics = await collectDispatchMetrics();
+    phaseMs.metrics = Date.now() - t2;
+
+    const bullmqCompleted =
+      jobs.mode === "bullmq" ? jobs.bullmq?.metrics.completed ?? 0 : jobs.processed;
+    const jobsProcessedThisCycle = Math.max(0, bullmqCompleted - lastBullmqCompleted);
+    lastBullmqCompleted = bullmqCompleted;
+
     lastMetrics = {
       cycleMs: Date.now() - started,
-      jobsProcessed: jobs.processed,
+      phaseMs,
+      jobsProcessed: jobsProcessedThisCycle,
+      jobsProcessedTotal: bullmqCompleted,
       messagesEnqueued: scheduler.messagesEnqueued,
+      messagesSkippedAlreadyQueued: scheduler.messagesSkippedAlreadyQueued,
       campaignsActivated: scheduler.campaignsActivated,
       waitsAdvanced: scheduler.waitsAdvanced,
       reservationsReleased: scheduler.reservationsReleased,
       deliveriesReconciled: scheduler.deliveriesReconciled,
+      queueDriver: jobs.mode,
+      bullmq: jobs.mode === "bullmq" ? jobs.bullmq : undefined,
+      outbox: jobs.mode === "bullmq" ? jobs.outbox : undefined,
       ...metrics,
     };
     await recordWorkerHeartbeat(WORKER_KEY, WORKER_ID, lastMetrics);
@@ -96,7 +135,7 @@ async function runCycle() {
     lastCycleError = null;
 
     if (
-      jobs.processed > 0 ||
+      jobsProcessedThisCycle > 0 ||
       scheduler.messagesEnqueued > 0 ||
       scheduler.campaignsActivated > 0 ||
       scheduler.waitsAdvanced > 0
@@ -106,8 +145,11 @@ async function runCycle() {
           event: "worker_cycle",
           workerId: WORKER_ID,
           ...scheduler,
-          jobsProcessed: jobs.processed,
+          jobsProcessed: jobsProcessedThisCycle,
+          jobsProcessedTotal: bullmqCompleted,
           cycleMs: Date.now() - started,
+          phaseMs,
+          queueDriver: jobs.mode,
         }),
       );
     }
@@ -123,13 +165,28 @@ async function runCycle() {
 async function main() {
   verifyWorkerBootEnv();
 
+  if (USE_BULLMQ) {
+    try {
+      const { startSmsDispatchBullmqWorkers, getSmsDispatchBullmqStatus } = await import(
+        "../src/lib/jobs/bullmq"
+      );
+      await startSmsDispatchBullmqWorkers();
+      bullmqBootStatus = getSmsDispatchBullmqStatus();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(JSON.stringify({ event: "worker_boot_failed", reason: "bullmq", error: message }));
+      process.exit(1);
+    }
+  }
+
   console.log(
     JSON.stringify({
       event: "worker_started",
       workerKey: WORKER_KEY,
       workerId: WORKER_ID,
       pollMs: POLL_MS,
-      queueDriver: process.env.QUEUE_DRIVER || "db",
+      queueDriver: USE_BULLMQ ? "bullmq" : "db",
+      bullmq: bullmqBootStatus,
     }),
   );
 
@@ -157,6 +214,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(JSON.stringify({ event: "worker_boot_failed", error: err instanceof Error ? err.message : String(err) }));
   process.exit(1);
 });

@@ -3,11 +3,11 @@ import "server-only";
 import { activateDueScheduledCampaigns } from "@/lib/messaging/dispatch/activate-scheduled-campaigns";
 import { enqueueDueCampaignMessages } from "@/lib/campaigns/campaign-processor";
 import { reclaimStuckSendingMessages } from "@/lib/campaigns/campaign-message-send";
-import { processSequenceWaits } from "@/lib/campaigns/sequence-runner";
 
 export type SchedulerCycleResult = {
   campaignsActivated: number;
   messagesEnqueued: number;
+  messagesSkippedAlreadyQueued: number;
   waitsAdvanced: number;
   reservationsReleased: number;
   deliveriesReconciled: number;
@@ -39,8 +39,8 @@ export async function runSmsSchedulerCycle(workspaceId?: string): Promise<Schedu
   await reclaimStuckSendingMessages();
 
   const campaignsActivated = await activateDueScheduledCampaigns(workspaceId);
-  const waits = workspaceId ? { advanced: 0 } : await processSequenceWaits();
   const dispatch = await enqueueDueCampaignMessages(workspaceId);
+  const waits = dispatch.waits;
 
   let deliveriesReconciled = 0;
   if (!workspaceId && shouldRunDeliveryReconciliation()) {
@@ -60,6 +60,7 @@ export async function runSmsSchedulerCycle(workspaceId?: string): Promise<Schedu
   return {
     campaignsActivated,
     messagesEnqueued: dispatch.enqueued,
+    messagesSkippedAlreadyQueued: dispatch.skippedAlreadyQueued,
     waitsAdvanced: waits.advanced,
     reservationsReleased,
     deliveriesReconciled,

@@ -41,6 +41,7 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
   const campaignById = new Map(campaigns.map((c) => [c.id, c]));
 
   let enqueued = 0;
+  let skippedAlreadyQueued = 0;
   let rateLimited = 0;
   const sentTodayByCampaign = new Map<string, number>();
   const limitsCache = new Map<string, Awaited<ReturnType<typeof getWorkspaceLimits>>>();
@@ -129,17 +130,32 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
       continue;
     }
 
+    const idempotencyKey = `send-campaign-message:${msg.id}`;
+    const existingJob = await prisma.jobQueue.findUnique({
+      where: { idempotencyKey },
+      select: { status: true },
+    });
+    if (
+      existingJob &&
+      (existingJob.status === "pending" ||
+        existingJob.status === "deferred" ||
+        existingJob.status === "processing")
+    ) {
+      skippedAlreadyQueued += 1;
+      continue;
+    }
+
     await enqueueJob({
       jobType: msg.channel === "email" ? "send_campaign_email" : "send_campaign_sms",
       queueName: msg.channel === "email" ? "email-send" : "sms-send",
       workspaceId: msg.workspaceId,
       payload: { messageId: msg.id },
-      idempotencyKey: `send-campaign-message:${msg.id}`,
+      idempotencyKey,
     });
     enqueued += 1;
   }
 
-  return { waits, enqueued, rateLimited };
+  return { waits, enqueued, skippedAlreadyQueued, rateLimited };
 }
 
 export async function processCampaignSendBatch() {

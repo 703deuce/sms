@@ -1,4 +1,4 @@
-import { DelayedError, Queue, UnrecoverableError, Worker } from "bullmq";
+import { DelayedError, Queue, UnrecoverableError, Worker, type Job } from "bullmq";
 import IORedis from "ioredis";
 import { handleJob } from "./job-handlers";
 import { JobDeferredError, JobFailedError } from "@/lib/messaging/types";
@@ -7,9 +7,42 @@ import { getPrisma } from "@/lib/db";
 
 let sharedConnection: IORedis | null = null;
 const queueCache = new Map<string, Queue>();
+const workerCache = new Map<string, Worker>();
+
+/** Queues consumed by the dedicated SMS dispatch worker (`npm run worker:sms`). */
+export const SMS_DISPATCH_BULLMQ_QUEUES = [
+  "review-campaign",
+  "sms-send",
+  "email-send",
+] as const;
+
+export type SmsDispatchBullmqQueue = (typeof SMS_DISPATCH_BULLMQ_QUEUES)[number];
 
 /** Stored on job data so DB outbox can be completed after sanitize. */
 const IDEMPOTENCY_FIELD = "__idempotencyKey";
+
+type BullmqJobMetrics = {
+  received: number;
+  completed: number;
+  failed: number;
+  lastReceivedAt: string | null;
+  lastCompletedAt: string | null;
+  lastFailedAt: string | null;
+  lastError: string | null;
+};
+
+const smsDispatchMetrics: BullmqJobMetrics = {
+  received: 0,
+  completed: 0,
+  failed: 0,
+  lastReceivedAt: null,
+  lastCompletedAt: null,
+  lastFailedAt: null,
+  lastError: null,
+};
+
+let smsDispatchWorkersReady = false;
+let smsDispatchWorkersReadyAt: string | null = null;
 
 /**
  * BullMQ rejects custom job ids that contain `:`.
@@ -19,13 +52,59 @@ export function toBullmqJobId(id: string): string {
   return id.replace(/:/g, "_");
 }
 
-function connection() {
-  const url = process.env.REDIS_URL;
+function logBullmq(event: string, fields: Record<string, unknown>) {
+  console.log(JSON.stringify({ event, ...fields }));
+}
+
+/** Upstash/BullMQ require the Redis protocol URL — not REST. */
+export function assertBullmqRedisUrl(url: string): void {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error("REDIS_URL is empty");
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    throw new Error(
+      "REDIS_URL must be a Redis protocol URL (rediss:// or redis://), not an HTTP REST URL. " +
+        "In Upstash: copy the Redis TCP/TLS connection string.",
+    );
+  }
+  if (trimmed.includes("UPSTASH_REDIS_REST_URL") || trimmed.includes("rest.upstash.io")) {
+    throw new Error(
+      "REDIS_URL appears to be an Upstash REST endpoint. BullMQ requires rediss:// TCP/TLS.",
+    );
+  }
+  if (!/^rediss?:\/\//i.test(trimmed)) {
+    throw new Error(
+      `REDIS_URL must start with redis:// or rediss:// (got ${trimmed.slice(0, 32)}...)`,
+    );
+  }
+}
+
+export function getBullmqRedisUrl(): string {
+  const url = process.env.REDIS_URL?.trim();
   if (!url) throw new Error("REDIS_URL required for BullMQ");
+  assertBullmqRedisUrl(url);
+  return url;
+}
+
+function connection() {
+  const url = getBullmqRedisUrl();
   if (!sharedConnection) {
     sharedConnection = new IORedis(url, { maxRetriesPerRequest: null });
   }
   return sharedConnection;
+}
+
+/** Verify Redis is reachable before reporting worker_started. */
+export async function verifyBullmqConnection(timeoutMs = 10_000): Promise<void> {
+  const conn = connection();
+  await Promise.race([
+    conn.ping(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Redis ping timed out after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
+  logBullmq("bullmq_connected", { redisUrlScheme: getBullmqRedisUrl().split("://")[0] });
 }
 
 function getQueue(queueName: string) {
@@ -37,12 +116,211 @@ function getQueue(queueName: string) {
   return queue;
 }
 
-async function syncDbJob(idempotencyKey: string | undefined, outcome: "completed" | "failed", error?: string) {
+async function syncDbJob(
+  idempotencyKey: string | undefined,
+  outcome: "completed" | "failed",
+  error?: string,
+) {
   if (!idempotencyKey) return;
   const job = await getPrisma().jobQueue.findUnique({ where: { idempotencyKey } });
   if (!job) return;
   if (outcome === "completed") await completeJob(job.id);
   else await failJob(job.id, error || "failed", undefined, undefined, true);
+}
+
+function createWorkerProcessor(queueName: string) {
+  return async (job: Job) => {
+    const raw = { ...((job.data || {}) as Record<string, unknown>) };
+    const idempotencyKey =
+      (typeof raw[IDEMPOTENCY_FIELD] === "string" && raw[IDEMPOTENCY_FIELD]) ||
+      job.id ||
+      undefined;
+    delete raw[IDEMPOTENCY_FIELD];
+
+    logBullmq("bullmq_job_received", {
+      queueName,
+      bullmqJobId: job.id,
+      jobType: job.name,
+      idempotencyKey,
+      attempt: job.attemptsMade + 1,
+    });
+
+    if (SMS_DISPATCH_BULLMQ_QUEUES.includes(queueName as SmsDispatchBullmqQueue)) {
+      smsDispatchMetrics.received += 1;
+      smsDispatchMetrics.lastReceivedAt = new Date().toISOString();
+    }
+
+    try {
+      if (job.name === "send_campaign_sms" || job.name === "send_campaign_email") {
+        logBullmq("bullmq_send_started", {
+          queueName,
+          bullmqJobId: job.id,
+          messageId: raw.messageId,
+          jobType: job.name,
+        });
+      }
+
+      await handleJob(job.name, raw);
+      await syncDbJob(idempotencyKey, "completed");
+
+      if (job.name === "send_campaign_sms" || job.name === "send_campaign_email") {
+        logBullmq("bullmq_send_completed", {
+          queueName,
+          bullmqJobId: job.id,
+          messageId: raw.messageId,
+          jobType: job.name,
+        });
+      }
+
+      if (SMS_DISPATCH_BULLMQ_QUEUES.includes(queueName as SmsDispatchBullmqQueue)) {
+        smsDispatchMetrics.completed += 1;
+        smsDispatchMetrics.lastCompletedAt = new Date().toISOString();
+      }
+
+      logBullmq("bullmq_job_completed", {
+        queueName,
+        bullmqJobId: job.id,
+        jobType: job.name,
+        idempotencyKey,
+      });
+    } catch (err) {
+      if (err instanceof JobDeferredError) {
+        if (idempotencyKey) {
+          const row = await getPrisma().jobQueue.findUnique({
+            where: { idempotencyKey },
+          });
+          if (row) {
+            await failJob(row.id, err.message, err.deferMs, err.soft);
+          }
+        }
+        await job.moveToDelayed(Date.now() + err.deferMs, job.token);
+        throw new DelayedError();
+      }
+
+      const message = err instanceof Error ? err.message : String(err);
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code?: unknown }).code)
+          : undefined;
+
+      logBullmq("bullmq_job_failed", {
+        queueName,
+        bullmqJobId: job.id,
+        jobType: job.name,
+        idempotencyKey,
+        error: message,
+        code,
+        attempt: job.attemptsMade + 1,
+      });
+
+      if (SMS_DISPATCH_BULLMQ_QUEUES.includes(queueName as SmsDispatchBullmqQueue)) {
+        smsDispatchMetrics.failed += 1;
+        smsDispatchMetrics.lastFailedAt = new Date().toISOString();
+        smsDispatchMetrics.lastError = message;
+      }
+
+      if (err instanceof JobFailedError) {
+        await syncDbJob(idempotencyKey, "failed", message);
+        throw new UnrecoverableError(message);
+      }
+      throw err;
+    }
+  };
+}
+
+const readyQueues = new Set<string>();
+
+function markQueueReady(queueName: string) {
+  readyQueues.add(queueName);
+  if (
+    SMS_DISPATCH_BULLMQ_QUEUES.every((q) => readyQueues.has(q)) &&
+    !smsDispatchWorkersReady
+  ) {
+    smsDispatchWorkersReady = true;
+    smsDispatchWorkersReadyAt = new Date().toISOString();
+    logBullmq("bullmq_sms_dispatch_workers_ready", {
+      queues: [...SMS_DISPATCH_BULLMQ_QUEUES],
+    });
+  }
+}
+
+function attachWorkerLifecycleLogs(worker: Worker, queueName: string) {
+  worker.on("ready", () => {
+    logBullmq("bullmq_worker_ready", { queueName });
+    if (SMS_DISPATCH_BULLMQ_QUEUES.includes(queueName as SmsDispatchBullmqQueue)) {
+      markQueueReady(queueName);
+    }
+  });
+  worker.on("error", (err) => {
+    logBullmq("bullmq_worker_error", {
+      queueName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+  worker.on("failed", (job, err) => {
+    if (!job) return;
+    logBullmq("bullmq_worker_job_failed_event", {
+      queueName,
+      bullmqJobId: job.id,
+      jobType: job.name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
+function startWorkersForQueues(queues: readonly string[]) {
+  const conn = connection();
+  for (const name of queues) {
+    if (workerCache.has(name)) continue;
+    void getQueue(name);
+    const worker = new Worker(name, createWorkerProcessor(name), {
+      connection: conn,
+      concurrency: name.endsWith("send") ? 5 : 2,
+    });
+    attachWorkerLifecycleLogs(worker, name);
+    workerCache.set(name, worker);
+  }
+}
+
+/**
+ * Start BullMQ consumers for the dedicated SMS dispatch worker container.
+ * Must be called from `npm run worker:sms` when QUEUE_DRIVER=bullmq.
+ */
+export async function startSmsDispatchBullmqWorkers(): Promise<void> {
+  await verifyBullmqConnection();
+  startWorkersForQueues(SMS_DISPATCH_BULLMQ_QUEUES);
+
+  const deadline = Date.now() + Number(process.env.SMS_BULLMQ_READY_TIMEOUT_MS || 15_000);
+  while (!smsDispatchWorkersReady && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!smsDispatchWorkersReady) {
+    throw new Error(
+      "BullMQ SMS dispatch workers did not become ready within timeout — check REDIS_URL",
+    );
+  }
+}
+
+export function getSmsDispatchBullmqStatus() {
+  return {
+    ready: smsDispatchWorkersReady,
+    readyAt: smsDispatchWorkersReadyAt,
+    queues: [...SMS_DISPATCH_BULLMQ_QUEUES],
+    metrics: { ...smsDispatchMetrics },
+  };
+}
+
+export function resetSmsDispatchBullmqMetricsForTests() {
+  smsDispatchMetrics.received = 0;
+  smsDispatchMetrics.completed = 0;
+  smsDispatchMetrics.failed = 0;
+  smsDispatchMetrics.lastReceivedAt = null;
+  smsDispatchMetrics.lastCompletedAt = null;
+  smsDispatchMetrics.lastFailedAt = null;
+  smsDispatchMetrics.lastError = null;
+  smsDispatchWorkersReady = false;
+  smsDispatchWorkersReadyAt = null;
+  readyQueues.clear();
 }
 
 export async function startBullmqWorkers() {
@@ -51,18 +329,14 @@ export async function startBullmqWorkers() {
   const queues = [
     "default",
     "maintenance",
-    "review-campaign",
-    "sms-send",
-    "email-send",
+    ...SMS_DISPATCH_BULLMQ_QUEUES,
     "review-import",
     "automations",
     "voice-calls",
-    // CRM provider-isolated queues (+ legacy "integrations")
     "integrations",
     "crm-salesforce",
     "crm-zoho",
     "crm-pipedrive",
-    // External native integration queues
     "ext-calendly",
     "ext-activecampaign",
     "ext-mailchimp",
@@ -75,51 +349,8 @@ export async function startBullmqWorkers() {
     "ext-klaviyo",
   ] as const;
 
-  for (const name of queues) {
-    void getQueue(name);
-
-    const isCrm = name.startsWith("crm-") || name === "integrations";
-    void new Worker(
-      name,
-      async (job) => {
-        const raw = { ...((job.data || {}) as Record<string, unknown>) };
-        const idempotencyKey =
-          (typeof raw[IDEMPOTENCY_FIELD] === "string" && raw[IDEMPOTENCY_FIELD]) ||
-          job.id ||
-          undefined;
-        delete raw[IDEMPOTENCY_FIELD];
-        try {
-          await handleJob(job.name, raw);
-          await syncDbJob(idempotencyKey, "completed");
-        } catch (err) {
-          if (err instanceof JobDeferredError) {
-            // Mirror soft defer into DB outbox so cron doesn't promote early forever
-            if (idempotencyKey) {
-              const row = await getPrisma().jobQueue.findUnique({
-                where: { idempotencyKey },
-              });
-              if (row) {
-                await failJob(row.id, err.message, err.deferMs, err.soft);
-              }
-            }
-            await job.moveToDelayed(Date.now() + err.deferMs, job.token);
-            throw new DelayedError();
-          }
-          const message = err instanceof Error ? err.message : String(err);
-          if (err instanceof JobFailedError) {
-            await syncDbJob(idempotencyKey, "failed", message);
-            throw new UnrecoverableError(message);
-          }
-          throw err;
-        }
-      },
-      {
-        connection: conn,
-        // Isolate CRM concurrency per provider queue; send queues stay higher.
-        concurrency: name.endsWith("send") ? 5 : isCrm ? 3 : 2,
-      },
-    );
-  }
+  startWorkersForQueues(queues);
+  void conn;
 }
 
 export async function enqueueBullmq(
@@ -134,7 +365,6 @@ export async function enqueueBullmq(
   const jobId = rawJobId ? toBullmqJobId(rawJobId) : undefined;
   const payload = rawJobId ? { ...data, [IDEMPOTENCY_FIELD]: rawJobId } : data;
 
-  // If a prior run completed/failed under the same jobId, remove it so re-advance works
   if (jobId) {
     const existing = await queue.getJob(jobId);
     if (existing) {
@@ -142,8 +372,6 @@ export async function enqueueBullmq(
       if (state === "completed" || state === "failed") {
         await existing.remove();
       } else if (state === "delayed") {
-        // Wake immediately when requested (compliance webhook / refresh), else bump delay.
-        // Race-safe: job may leave delayed between getState() and promote().
         try {
           if (opts?.wake || !opts?.delay) {
             await existing.promote();
@@ -154,6 +382,13 @@ export async function enqueueBullmq(
           const msg = err instanceof Error ? err.message : String(err);
           if (!/not in the delayed state/i.test(msg)) throw err;
         }
+        logBullmq("bullmq_job_already_queued", {
+          queueName,
+          bullmqJobId: jobId,
+          jobType: jobName,
+          state,
+          action: "promoted_or_delayed",
+        });
         return;
       } else if (
         state === "waiting" ||
@@ -161,19 +396,33 @@ export async function enqueueBullmq(
         state === "active" ||
         state === "waiting-children"
       ) {
+        logBullmq("bullmq_job_already_queued", {
+          queueName,
+          bullmqJobId: jobId,
+          jobType: jobName,
+          state,
+          action: "skipped_duplicate",
+        });
         return;
       }
     }
   }
 
-  await queue.add(jobName, payload, {
+  const added = await queue.add(jobName, payload, {
     jobId,
     delay: opts?.delay,
     removeOnComplete: 1000,
     removeOnFail: 5000,
-    // Registration polls need many soft retries; send jobs stay modest
     attempts: isRegistration ? 500 : 8,
     backoff: { type: "exponential", delay: 15_000 },
+  });
+
+  logBullmq("bullmq_job_enqueued", {
+    queueName,
+    bullmqJobId: added.id,
+    jobType: jobName,
+    idempotencyKey: rawJobId,
+    delayMs: opts?.delay ?? 0,
   });
 }
 
@@ -191,6 +440,7 @@ export async function syncDbOutboxToBullmq(limit = 50) {
   });
 
   let synced = 0;
+  let skipped = 0;
   for (const job of due) {
     try {
       const delay = Math.max(0, job.runAfter.getTime() - Date.now());
@@ -206,8 +456,13 @@ export async function syncDbOutboxToBullmq(limit = 50) {
       );
       synced += 1;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/already_queued|skipped_duplicate/i.test(message)) {
+        skipped += 1;
+        continue;
+      }
       console.warn("[syncDbOutboxToBullmq] failed for", job.id, err);
     }
   }
-  return { synced };
+  return { synced, skipped, examined: due.length };
 }

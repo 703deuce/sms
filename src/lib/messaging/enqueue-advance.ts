@@ -91,7 +91,16 @@ export async function enqueueJob(input: EnqueueJobInput) {
         wake: Boolean(input.wake) || delay === 0,
       });
     } catch (err) {
-      console.warn("[enqueueJob] BullMQ dual-write failed; DB queue still holds the job", err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        JSON.stringify({
+          event: "bullmq_enqueue_failed",
+          jobType: input.jobType,
+          queueName,
+          idempotencyKey: input.idempotencyKey,
+          error: message,
+        }),
+      );
     }
   } else {
     // Web-container drain: kick soon so CRM/sync/push don't wait on the poll interval.

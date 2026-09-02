@@ -159,12 +159,21 @@ Example: `DISPATCH_SENDER_MPS=25` → ~25 segments/sec per number (~3.3 min for 
 |----------|---------|---------|
 | `SMS_DELIVERY_RECONCILE_MS` | `60000` | Poll interval for stale delivery statuses |
 
-**Optional BullMQ** (not default)
+**BullMQ (production with Redis)**
 
 | Variable | Notes |
 |----------|-------|
 | `QUEUE_DRIVER` | Set `bullmq` to enable Redis queue |
-| `REDIS_URL` | Required when `QUEUE_DRIVER=bullmq` |
+| `REDIS_URL` | **Required** when `QUEUE_DRIVER=bullmq`. Must be a Redis protocol URL (`rediss://` or `redis://`). **Upstash:** use the TCP/TLS connection string — not the REST URL/token pair. |
+| `SMS_BULLMQ_READY_TIMEOUT_MS` | Max wait for BullMQ consumers to become ready at boot (default `15000`) |
+
+When `QUEUE_DRIVER=bullmq`, `npm run worker:sms` **must** start BullMQ consumers for `review-campaign`, `sms-send`, and `email-send`. The worker will **exit on boot** if Redis is unreachable or consumers do not become ready. Look for log events:
+
+- `bullmq_connected`
+- `bullmq_worker_ready` (per queue)
+- `bullmq_sms_dispatch_workers_ready`
+
+If you see `messagesEnqueued` > 0 but `jobsProcessed` = 0 every cycle, BullMQ consumers are not running or Redis is misconfigured.
 
 **Telnyx optional**
 
