@@ -111,7 +111,8 @@ export async function PATCH(
         data: {
           conversationId: id,
           direction: "out",
-          body: replyBody || (replyMedia.length ? "[Media attachment]" : ""),
+          body: replyBody || (replyMedia.length ? "" : ""),
+          mediaUrls: replyMedia,
           userName: auth.session.name,
           fromE164: replyFrom ?? null,
         },

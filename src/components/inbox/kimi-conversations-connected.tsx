@@ -28,7 +28,7 @@ import {
   fetchConversation,
   fetchConversationForContact,
   fetchContactSummary,
-  fetchInboxList,
+  fetchInboxListPage,
   inboxQueryFromFilter,
   kimiStatusToApi,
   mapApiConversationToKimi,
@@ -49,6 +49,7 @@ import {
   filterSelFromUrlParams,
   filterSelToSearchParams,
 } from "@/lib/inbox/conversation-url-filters";
+import { INBOX_LIST_DEFAULT_TAKE } from "@/lib/inbox/inbox-pagination";
 import {
   fetchMessagingRuntimeSettings,
   inboxTagsFromSettings,
@@ -288,13 +289,25 @@ export function KimiConversationsConnected({
   const [composeContacts, setComposeContacts] = useState<Array<{ id: string; name: string; phone: string }>>([]);
   const [composeSending, setComposeSending] = useState(false);
   const [composeNumberId, setComposeNumberId] = useState("");
+  const [listHasMore, setListHasMore] = useState(false);
+  const [listCursor, setListCursor] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [myPresenceStatus, setMyPresenceStatus] = useState("available");
+  const [presenceByUserId, setPresenceByUserId] = useState<Record<string, string>>({});
+  const composeFromRef = useRef<string | undefined>(undefined);
 
   const reloadList = useCallback(async () => {
+    setListLoading(true);
     try {
-      const rows = await fetchInboxList(inboxQueryFromFilter(sel, productFilter, listQueryExtra));
+      const page = await fetchInboxListPage({
+        ...inboxQueryFromFilter(sel, productFilter, listQueryExtra),
+        take: INBOX_LIST_DEFAULT_TAKE,
+      });
+      setListHasMore(page.pagination.hasMore);
+      setListCursor(page.pagination.nextCursor);
       setConvos((prev) => {
         const prevById = new Map(prev.map((c) => [c.id, c]));
-        return rows.map((r) => {
+        return page.rows.map((r) => {
           const mapped = mapRow(r);
           const existing = prevById.get(mapped.id);
           if (existing?.messages.length) {
@@ -305,8 +318,82 @@ export function KimiConversationsConnected({
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load conversations");
+    } finally {
+      setListLoading(false);
     }
-  }, [sel, ctx, tags, tagDefinitions, productFilter, mapRow, listQueryExtra]);
+  }, [sel, productFilter, mapRow, listQueryExtra]);
+
+  const loadMoreList = useCallback(async () => {
+    if (!listHasMore || !listCursor || listLoading) return;
+    setListLoading(true);
+    try {
+      const page = await fetchInboxListPage({
+        ...inboxQueryFromFilter(sel, productFilter, listQueryExtra),
+        take: INBOX_LIST_DEFAULT_TAKE,
+        cursor: listCursor,
+      });
+      setListHasMore(page.pagination.hasMore);
+      setListCursor(page.pagination.nextCursor);
+      setConvos((prev) => {
+        const prevById = new Map(prev.map((c) => [c.id, c]));
+        const appended = page.rows.map((r) => {
+          const mapped = mapRow(r);
+          const existing = prevById.get(mapped.id);
+          return existing?.messages.length ? { ...mapped, messages: existing.messages } : mapped;
+        });
+        const merged = new Map(prev.map((c) => [c.id, c]));
+        for (const row of appended) merged.set(row.id, row);
+        return Array.from(merged.values());
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load more conversations");
+    } finally {
+      setListLoading(false);
+    }
+  }, [listHasMore, listCursor, listLoading, sel, productFilter, mapRow, listQueryExtra]);
+
+  useEffect(() => {
+    const loadPresence = () => {
+      void fetch("/api/phone/presence")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (!json) return;
+          const rows = (json.data || []) as Array<{ userId: string; status: string }>;
+          const map: Record<string, string> = {};
+          for (const row of rows) map[row.userId] = row.status;
+          setPresenceByUserId(map);
+          const mine = rows.find((r) => r.userId === json.me);
+          if (mine?.status) {
+            setMyPresenceStatus(mine.status);
+          } else if (json.me) {
+            void fetch("/api/phone/presence", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "available", queueAvailable: true }),
+            }).catch(() => undefined);
+          }
+        })
+        .catch(() => undefined);
+    };
+    loadPresence();
+    const timer = setInterval(loadPresence, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const setPresenceStatus = useCallback((status: string) => {
+    setMyPresenceStatus(status);
+    void fetch("/api/phone/presence", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, queueAvailable: status !== "dnd" }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!json?.data) return;
+        setPresenceByUserId((prev) => ({ ...prev, [json.data.userId]: json.data.status }));
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -464,7 +551,10 @@ export function KimiConversationsConnected({
         ),
       );
       try {
-        const data = await syncConversationUpdate(prev, next, ctx, tags);
+        const data = await syncConversationUpdate(prev, next, ctx, tags, {
+          fromE164: composeFromRef.current,
+        });
+        composeFromRef.current = undefined;
         if (data) {
           const mapped = mapConvo(data);
           setConvos((p) => p.map((x) => (x.id === next.id ? mapped : x)));
@@ -570,15 +660,12 @@ export function KimiConversationsConnected({
       setComposeMessage("");
       setComposeQuery("");
       clearEphemeralUrlParams();
-      const rows = await fetchInboxList(inboxQueryFromFilter(sel, productFilter, listQueryExtra));
-      const mapped = rows.map((r) => mapRow(r));
-      setConvos((prev) => {
-        const prevById = new Map(prev.map((c) => [c.id, c]));
-        return mapped.map((m) => {
-          const existing = prevById.get(m.id);
-          return existing?.messages.length ? { ...m, messages: existing.messages } : m;
-        });
+      await reloadList();
+      const page = await fetchInboxListPage({
+        ...inboxQueryFromFilter(sel, productFilter, listQueryExtra),
+        take: INBOX_LIST_DEFAULT_TAKE,
       });
+      const mapped = page.rows.map((r) => mapRow(r));
       const normalized = to.replace(/\D/g, "");
       const match = mapped.find((c) => c.phone.replace(/\D/g, "") === normalized);
       if (match) {
@@ -719,6 +806,9 @@ export function KimiConversationsConnected({
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onOpenSettings={() => { setSettingsReturn("inbox"); setView("inboxSettings"); }}
+            myPresenceStatus={myPresenceStatus}
+            onPresenceChange={setPresenceStatus}
+            presenceByUserId={presenceByUserId}
           />
           <ConversationList
             title={title}
@@ -733,6 +823,9 @@ export function KimiConversationsConnected({
             sortOrder={sortOrder}
             onToggleSort={() => setSortOrder((s) => (s === "newest" ? "oldest" : "newest"))}
             className={selectedId ? "conversations-list--mobile-hidden" : ""}
+            hasMore={listHasMore}
+            loadingMore={listLoading}
+            onLoadMore={() => void loadMoreList()}
           />
           {checked.size > 0 ? (
             <BulkActionsBar
@@ -750,6 +843,7 @@ export function KimiConversationsConnected({
                 tags={tags}
                 teammates={teammates}
                 onUpdate={(c) => void update(c)}
+                composeFromRef={composeFromRef}
                 contactOpen={contactOpen}
                 onToggleContact={() => setContactOpen(!contactOpen)}
                 onOpenTagsSettings={() => { setSettingsReturn("inbox"); setView("tags"); }}

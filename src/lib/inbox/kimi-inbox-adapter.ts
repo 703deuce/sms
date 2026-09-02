@@ -102,8 +102,7 @@ export function resolveAssigneeApiId(
 
 function mapApiMessage(m: ApiConversation["messages"][number], contactName: string): Message {
   const body = m.body || "";
-  const isMediaPlaceholder =
-    body === "[Media attachment]" || body.startsWith("[Inbound MMS") || body.startsWith("[MMS");
+  const media = m.mediaUrls?.filter(Boolean) ?? [];
   if (m.direction === "note") {
     return {
       id: m.id,
@@ -115,6 +114,21 @@ function mapApiMessage(m: ApiConversation["messages"][number], contactName: stri
   }
   const outbound = m.direction === "out";
   const isAi = outbound && (m.user === "AI" || m.user?.toLowerCase().includes("ai "));
+  if (media.length > 0) {
+    return {
+      id: m.id,
+      kind: "mms",
+      author: outbound ? (isAi ? "AI" : m.user || "Me") : contactName,
+      initials: outbound ? undefined : initials(contactName),
+      image: media[0],
+      images: media,
+      caption: body || undefined,
+      time: formatMessageTime(m.at),
+      isAi,
+    };
+  }
+  const isMediaPlaceholder =
+    body === "[Media attachment]" || body.startsWith("[Inbound MMS") || body.startsWith("[MMS");
   if (isMediaPlaceholder) {
     return {
       id: m.id,
@@ -292,12 +306,23 @@ export type InboxQuery = {
   phoneNumberId?: string;
   campaignId?: string;
   q?: string;
+  take?: number;
+  cursor?: string;
+};
+
+export type InboxListPage = {
+  rows: InboxListItem[];
+  pagination: {
+    take: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
 };
 
 export function inboxQueryFromFilter(
   sel: FilterSel,
   product = "all",
-  extra: Pick<InboxQuery, "phoneNumberId" | "campaignId" | "q"> = {},
+  extra: Pick<InboxQuery, "phoneNumberId" | "campaignId" | "q" | "take" | "cursor"> = {},
 ): InboxQuery {
   const q: InboxQuery = {
     product: product === "all" ? "all" : product,
@@ -335,7 +360,7 @@ export function inboxQueryFromFilter(
   return q;
 }
 
-export async function fetchInboxList(query: InboxQuery = { product: "all" }): Promise<InboxListItem[]> {
+export async function fetchInboxListPage(query: InboxQuery = { product: "all" }): Promise<InboxListPage> {
   const params = new URLSearchParams();
   params.set("product", query.product || "all");
   if (query.filter) params.set("filter", query.filter);
@@ -347,10 +372,20 @@ export async function fetchInboxList(query: InboxQuery = { product: "all" }): Pr
   if (query.phoneNumberId) params.set("phoneNumberId", query.phoneNumberId);
   if (query.campaignId) params.set("campaignId", query.campaignId);
   if (query.q) params.set("q", query.q);
+  if (query.take) params.set("take", String(query.take));
+  if (query.cursor) params.set("cursor", query.cursor);
   const res = await fetch(`/api/inbox?${params.toString()}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load conversations");
-  return json.data || [];
+  return {
+    rows: json.data || [],
+    pagination: json.pagination || { take: 50, hasMore: false, nextCursor: null },
+  };
+}
+
+export async function fetchInboxList(query: InboxQuery = { product: "all" }): Promise<InboxListItem[]> {
+  const page = await fetchInboxListPage(query);
+  return page.rows;
 }
 
 export async function fetchConversationForContact(contactId: string): Promise<ApiConversation | null> {
@@ -456,17 +491,19 @@ export async function syncConversationUpdate(
   next: Conversation,
   ctx: KimiInboxContext,
   tagCatalog: Tag[] = [],
+  opts?: { fromE164?: string },
 ): Promise<ApiConversation | null> {
   if (next.messages.length > prev.messages.length) {
     const added = next.messages[next.messages.length - 1];
     if ((added.kind === "outbound" || added.kind === "mms") && (added.text || added.caption || added.image)) {
-      const mediaUrls = added.image ? [added.image] : undefined;
+      const mediaUrls = added.images?.length ? added.images : added.image ? [added.image] : undefined;
       const body = (added.text || added.caption || "").trim();
       if (!body && !mediaUrls?.length) return null;
       return patchConversation(prev.id, {
         action: "reply",
         body,
         mediaUrls,
+        from: opts?.fromE164,
       });
     }
     if (added.kind === "note" && added.text) {

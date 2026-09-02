@@ -1577,6 +1577,7 @@ model ConversationMessage {
   conversationId    String
   direction         String
   body              String
+  mediaUrls         String[] @default([])
   userName          String?
   providerMessageId String?  @unique
   fromE164          String?

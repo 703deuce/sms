@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { mapConversation } from "@/lib/mappers";
+import { formatMessagePreview } from "@/lib/inbox/message-preview";
+import {
+  decodeInboxCursor,
+  encodeInboxCursor,
+  parseInboxTake,
+} from "@/lib/inbox/inbox-pagination";
 import {
   buildConversationWhere,
   parseInboxSearchParams,
@@ -14,12 +19,23 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const filters = parseInboxSearchParams(searchParams);
-    const where = buildConversationWhere(auth.workspaceId, filters, auth.session.userId);
+    const take = parseInboxTake(searchParams.get("take"));
+    const baseWhere = buildConversationWhere(auth.workspaceId, filters, auth.session.userId);
+    const cursor = decodeInboxCursor(filters.cursor);
+
+    const cursorFilter = cursor
+      ? {
+          OR: [
+            { updatedAt: { lt: new Date(cursor.updatedAt) } },
+            { updatedAt: new Date(cursor.updatedAt), id: { lt: cursor.id } },
+          ],
+        }
+      : null;
 
     const data = await getPrisma().conversation.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-      take: 250,
+      where: cursorFilter ? { AND: [baseWhere, cursorFilter] } : baseWhere,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: take + 1,
       include: {
         contact: true,
         assignee: { select: { id: true, name: true, email: true } },
@@ -27,7 +43,15 @@ export async function GET(request: Request) {
       },
     });
 
-    const campaignIds = [...new Set(data.map((c: (typeof data)[number]) => c.campaignId).filter(Boolean))] as string[];
+    const hasMore = data.length > take;
+    const page = hasMore ? data.slice(0, take) : data;
+    const last = page[page.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeInboxCursor({ updatedAt: new Date(last.updatedAt).toISOString(), id: last.id })
+        : null;
+
+    const campaignIds = [...new Set(page.map((c: (typeof page)[number]) => c.campaignId).filter(Boolean))] as string[];
     const campaigns =
       campaignIds.length > 0
         ? await getPrisma().campaign.findMany({
@@ -38,8 +62,9 @@ export async function GET(request: Request) {
     const campaignNames = new Map(campaigns.map((c: (typeof campaigns)[number]) => [c.id, c.name]));
 
     return NextResponse.json({
-      data: data.map((c: (typeof data)[number]) => {
+      data: page.map((c: (typeof page)[number]) => {
         const productSource = prismaProductSourceToApp(c.productSource);
+        const lastMsg = c.messages[0];
         return {
           id: c.id,
           status: c.status,
@@ -59,12 +84,23 @@ export async function GET(request: Request) {
                 lastName: c.contact.lastName,
               }
             : null,
-          lastMessage: c.messages[0]?.body || "",
+          lastMessage: lastMsg
+            ? formatMessagePreview({
+                body: lastMsg.body,
+                mediaUrls: lastMsg.mediaUrls,
+                direction: lastMsg.direction,
+              })
+            : "",
           updatedAt: c.updatedAt,
           tags: c.tags || [],
         };
       }),
       filters,
+      pagination: {
+        take,
+        hasMore,
+        nextCursor,
+      },
     });
   } catch (err) {
     return jsonError(err, 500);

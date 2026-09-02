@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Image, Smile, Braces, SendHorizonal } from "lucide-react";
 import { TemplatePicker } from "@/components/inbox/template-picker";
 import { MediaPicker } from "@/components/messaging/media-picker";
+import { EmojiPickerPopover } from "@/components/messaging/emoji-picker-popover";
 import type { Teammate } from "@/lib/inbox/conversation-types";
 
 type Props = {
-  onSend: (text: string, mediaUrls?: string[]) => void;
+  onSend: (text: string, mediaUrls?: string[], fromE164?: string) => void;
   onNote: (text: string) => void;
   disabled?: boolean;
   prefill?: string;
@@ -35,6 +36,9 @@ export function ConversationsComposer({
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiBtnRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const note = tab === "note";
 
   useEffect(() => {
@@ -57,6 +61,23 @@ export function ConversationsComposer({
     onPrefillApplied?.();
   }, [prefill, onPrefillApplied]);
 
+  const insertEmoji = (emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setText((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
   const send = () => {
     if (disabled) return;
     const body = text.trim();
@@ -65,7 +86,8 @@ export function ConversationsComposer({
       if (!body) return;
       onNote(body);
     } else {
-      onSend(body, mediaUrls.length ? mediaUrls : undefined);
+      const fromE164 = phoneNumbers.find((n) => n.id === fromNumberId)?.number;
+      onSend(body, mediaUrls.length ? mediaUrls : undefined, fromE164);
     }
     setText("");
     setMediaUrls([]);
@@ -97,6 +119,7 @@ export function ConversationsComposer({
             }}
           >
             <textarea
+              ref={textareaRef}
               className="tv-input"
               value={text}
               onChange={(e) => {
@@ -199,9 +222,24 @@ export function ConversationsComposer({
               >
                 <Image size={16} />
               </button>
-              <button type="button" className="tv-composer-tool" title="Emoji" disabled>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <button
+                type="button"
+                ref={emojiBtnRef}
+                className="tv-composer-tool"
+                title="Emoji"
+                disabled={disabled || note}
+                onClick={() => setEmojiOpen((v) => !v)}
+              >
                 <Smile size={16} />
               </button>
+              <EmojiPickerPopover
+                open={emojiOpen}
+                onClose={() => setEmojiOpen(false)}
+                onSelect={insertEmoji}
+                anchorRef={emojiBtnRef}
+              />
+            </div>
               <button
                 type="button"
                 className="tv-composer-tool"

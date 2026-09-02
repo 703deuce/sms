@@ -27,6 +27,7 @@ export type Message = {
   time?: string;
   eventText?: string;
   image?: string;
+  images?: string[];
   caption?: string;
   isAi?: boolean;
 };

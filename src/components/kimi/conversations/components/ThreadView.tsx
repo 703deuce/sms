@@ -76,7 +76,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
   const send = (text: string, mediaUrls?: string[]) => {
     const time = liveMode ? new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "4:30 pm";
     const msg: Message = mediaUrls?.length
-      ? { id: "m" + Date.now(), kind: "mms", author: "Me", image: mediaUrls[0], caption: text, time }
+      ? { id: "m" + Date.now(), kind: "mms", author: "Me", image: mediaUrls[0], images: mediaUrls, caption: text, time }
       : { id: "m" + Date.now(), kind: "outbound", author: "Me", text, time };
     onUpdate({ ...convo, messages: [...convo.messages, msg] });
   };
@@ -241,17 +241,24 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
               </div>
             </div>
           );
-          if (m.kind === "mms") return (
-            <div key={m.id} className="tv-msg-row out">
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", maxWidth: "72%" }}>
-                {m.image && <img src={m.image} alt="" className="tv-mms-img" />}
-                {m.caption && (
-                  <div className="tv-bubble tv-bubble-out" style={{ marginTop: 6 }}>{m.caption}</div>
-                )}
+          if (m.kind === "mms") {
+            const out = !m.initials;
+            const imgs = m.images?.length ? m.images : m.image ? [m.image] : [];
+            return (
+            <div key={m.id} className={"tv-msg-row" + (out ? " out" : "")}>
+              {!out && <span className="tv-avatar" style={{ width: 26, height: 26, fontSize: 10, background: convo.color }}>{m.initials ?? convo.initials}</span>}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: out ? "flex-end" : "flex-start", maxWidth: "72%" }}>
+                {imgs.map((url) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={url} src={url} alt="" className="tv-mms-img" style={{ marginBottom: imgs.length > 1 ? 6 : 0 }} />
+                ))}
+                {m.caption ? (
+                  <div className={"tv-bubble " + (out ? "tv-bubble-out" : "tv-bubble-in")} style={{ marginTop: imgs.length ? 6 : 0 }}>{m.caption}</div>
+                ) : null}
                 <div className="tv-msg-meta"><span>{m.author}{m.isAi ? " · AI" : ""}</span><span>·</span><span>{m.time}</span></div>
               </div>
             </div>
-          );
+          );}
           const out = m.kind === "outbound";
           return (
             <div key={m.id} className={"tv-msg-row" + (out ? " out" : "")}>

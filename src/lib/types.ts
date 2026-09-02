@@ -124,6 +124,7 @@ export type Conversation = {
     id: string;
     direction: "in" | "out" | "note";
     body: string;
+    mediaUrls?: string[];
     at: string;
     user?: string;
   }>;

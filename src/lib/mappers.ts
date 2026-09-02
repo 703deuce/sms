@@ -13,6 +13,7 @@ import {
   prismaProductSourceToApp,
   productSourceLabel,
 } from "@/lib/mass-texting/product-source";
+import { formatMessagePreview } from "@/lib/inbox/message-preview";
 
 function titleCaseStatus(value: string): StatusChip {
   const map: Record<string, StatusChip> = {
@@ -214,6 +215,7 @@ export function mapConversation(c: {
     id: string;
     direction: string;
     body: string;
+    mediaUrls?: string[];
     userName: string | null;
     createdAt: Date | string;
   }>;
@@ -226,12 +228,22 @@ export function mapConversation(c: {
       ? (c.repeatCaller as { missedToday: number; total: number })
       : undefined;
   const productSource = prismaProductSourceToApp(c.productSource);
+  const sortedMessages = (c.messages || [])
+    .slice()
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const lastMsg = sortedMessages[sortedMessages.length - 1] ?? sortedMessages[0];
   return {
     id: c.id,
     contactId: c.contactId,
     contactName: name,
     phone: c.contact?.phone || "",
-    lastMessage: c.messages?.[c.messages.length - 1]?.body || c.messages?.[0]?.body || "",
+    lastMessage: lastMsg
+      ? formatMessagePreview({
+          body: lastMsg.body,
+          mediaUrls: lastMsg.mediaUrls,
+          direction: lastMsg.direction,
+        })
+      : "",
     assignedTo: c.assignee?.name || null,
     status: titleCaseStatus(c.status) as Conversation["status"],
     tags: c.tags || [],
@@ -244,13 +256,7 @@ export function mapConversation(c: {
     campaignId: c.campaignId ?? null,
     campaignName: c.campaignName ?? null,
     repeatCaller,
-    messages: (c.messages || [])
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      )
-      .map((m) => ({
+    messages: sortedMessages.map((m) => ({
         id: m.id,
         direction: (m.direction === "in" || m.direction === "inbound"
           ? "in"
@@ -258,6 +264,7 @@ export function mapConversation(c: {
             ? "note"
             : "out") as "in" | "out" | "note",
         body: m.body,
+        mediaUrls: m.mediaUrls?.filter(Boolean) ?? [],
         at: new Date(m.createdAt).toISOString(),
         user: m.userName || undefined,
       })),

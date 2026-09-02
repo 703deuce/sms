@@ -12,6 +12,8 @@ export type InboxListFilters = {
   status?: "OPEN" | "PENDING" | "CLOSED" | "SNOOZED" | "SPAM";
   tag?: string;
   q?: string;
+  take?: number;
+  cursor?: string;
 };
 
 export function parseInboxSearchParams(
@@ -39,6 +41,8 @@ export function parseInboxSearchParams(
     status: parseStatusParam(searchParams.get("status")),
     tag: searchParams.get("tag") || undefined,
     q: searchParams.get("q")?.trim() || undefined,
+    take: searchParams.get("take") ? Number(searchParams.get("take")) : undefined,
+    cursor: searchParams.get("cursor") || undefined,
   };
 }
 

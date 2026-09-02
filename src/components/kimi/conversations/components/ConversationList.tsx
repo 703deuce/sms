@@ -16,6 +16,9 @@ export default function ConversationList({
   sortOrder = "newest",
   onToggleSort,
   className = "",
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: {
   title: string;
   subtitle: string;
@@ -29,6 +32,9 @@ export default function ConversationList({
   sortOrder?: "newest" | "oldest";
   onToggleSort?: () => void;
   className?: string;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }) {
   return (
     <div
@@ -120,6 +126,19 @@ export default function ConversationList({
             </div>
           );
         })}
+        {hasMore ? (
+          <div style={{ padding: "12px 14px", borderTop: "1px solid var(--tv-border-soft)" }}>
+            <button
+              type="button"
+              className="tv-btn-ghost"
+              disabled={loadingMore}
+              onClick={onLoadMore}
+              style={{ width: "100%", justifyContent: "center", borderRadius: 8 }}
+            >
+              {loadingMore ? "Loading…" : "Load more conversations"}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

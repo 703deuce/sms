@@ -20,10 +20,7 @@ function formatInboundMessageBody(body: string, mediaUrls?: string[] | null): st
   const trimmed = (body || "").trim();
   const mediaCount = mediaUrls?.filter(Boolean).length || 0;
   if (trimmed) return trimmed;
-  if (mediaCount > 0) {
-    const label = mediaCount === 1 ? "1 attachment" : `${mediaCount} attachments`;
-    return `[${label} received — image preview not available in this inbox yet. Contact support if you need the file.]`;
-  }
+  if (mediaCount > 0) return "";
   return "(empty)";
 }
 
@@ -100,6 +97,7 @@ async function recordInboundReceipt(input: {
   to?: string;
   body: string;
   providerMessageId?: string;
+  mediaUrls?: string[];
 }) {
   if (!input.providerMessageId) return;
   const prisma = getPrisma();
@@ -150,6 +148,7 @@ async function recordInboundReceipt(input: {
         conversationId,
         direction: "inbound",
         body: input.body || "(empty)",
+        mediaUrls: input.mediaUrls?.filter(Boolean) ?? [],
         providerMessageId: input.providerMessageId,
       },
     });
@@ -514,11 +513,13 @@ export async function processInboundMessage(input: {
 
   try {
     const displayBody = formatInboundMessageBody(body, input.mediaUrls);
+    const inboundMedia = input.mediaUrls?.filter(Boolean) ?? [];
     await prisma.conversationMessage.create({
       data: {
         conversationId: conversation.id,
         direction: "inbound",
         body: displayBody,
+        mediaUrls: inboundMedia,
         providerMessageId: input.providerMessageId || null,
       },
     });

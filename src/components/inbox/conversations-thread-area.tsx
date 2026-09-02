@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, type MutableRefObject } from "react";
 import ThreadView from "@/components/kimi/conversations/components/ThreadView";
 import type { Conversation, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { ConversationsComposer } from "@/components/inbox/conversations-composer";
@@ -25,6 +25,7 @@ type Props = {
   composerDisabledReason?: string;
   onBack?: () => void;
   phoneNumbers?: Array<{ id: string; number: string; label?: string }>;
+  composeFromRef?: MutableRefObject<string | undefined>;
 };
 
 export function ConversationsThreadArea({
@@ -42,12 +43,43 @@ export function ConversationsThreadArea({
   composerDisabledReason,
   onBack,
   phoneNumbers = [],
+  composeFromRef,
 }: Props) {
   const assist = useInboxAiAssist(convo.id);
   const [prefill, setPrefill] = useState("");
+  const [viewers, setViewers] = useState<Array<{ userId: string; userName: string }>>([]);
 
   useEffect(() => {
     setPrefill("");
+  }, [convo.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const heartbeat = () => {
+      void fetch(`/api/inbox/${convo.id}/presence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }).catch(() => undefined);
+    };
+    const poll = () => {
+      void fetch(`/api/inbox/${convo.id}/presence`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (cancelled) return;
+          setViewers(json?.data?.viewers || []);
+        })
+        .catch(() => undefined);
+    };
+    heartbeat();
+    poll();
+    const hb = setInterval(heartbeat, 20000);
+    const pl = setInterval(poll, 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(hb);
+      clearInterval(pl);
+    };
   }, [convo.id]);
 
   const Composer = useCallback(
@@ -67,7 +99,10 @@ export function ConversationsThreadArea({
           </div>
         ) : null}
         <ConversationsComposer
-          onSend={onSend}
+          onSend={(text, mediaUrls, fromE164) => {
+            if (composeFromRef) composeFromRef.current = fromE164;
+            onSend(text, mediaUrls);
+          }}
           onNote={onNote}
           disabled={disabled || composerDisabled}
           prefill={prefill}
@@ -78,7 +113,7 @@ export function ConversationsThreadArea({
         />
       </>
     ),
-    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers],
+    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef],
   );
 
   return (
@@ -87,6 +122,11 @@ export function ConversationsThreadArea({
       style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}
     >
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+        {viewers.length > 0 ? (
+          <div style={{ padding: "8px 16px 0", background: "#fff", fontSize: 12, color: "#6b7280" }}>
+            Also viewing: {viewers.map((v) => v.userName).join(", ")}
+          </div>
+        ) : null}
         {assist.session?.status === "ai_active" ? (
           <div style={{ padding: "8px 16px 0", background: "#fff" }}>
             <InboxAiBanner session={assist.session} onTakeover={() => void assist.takeover()} />

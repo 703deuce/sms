@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash, Settings, Ban, AlarmClock } from "lucide-react";
 import type { Tag, Teammate } from "@/lib/inbox/conversation-types";
+import { presenceColor, presenceLabel, presencePillStyles } from "@/lib/inbox/team-presence";
 
 export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string; sub?: string };
 
@@ -39,12 +40,15 @@ const SUBS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "closed", label: "Closed", icon: <CheckCircle2 size={13} /> },
 ];
 
-export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, searchQuery, onSearchChange, onOpenSettings }:{
+export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, searchQuery, onSearchChange, onOpenSettings, myPresenceStatus = "available", onPresenceChange, presenceByUserId = {} }:{
   sel: FilterSel; onSel: (s: FilterSel)=>void; counts: Record<string, number>; onNew: ()=>void;
   tags?: Tag[]; teammates?: Teammate[];
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
   onOpenSettings?: () => void;
+  myPresenceStatus?: string;
+  onPresenceChange?: (status: string) => void;
+  presenceByUserId?: Record<string, string>;
 }) {
   const tagList = tags ?? [];
   const teammateList = teammates ?? [];
@@ -56,13 +60,71 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
     setExpanded((p) => ({ ...p, [expandKey]: !p[expandKey] }));
   };
 
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const pillStyle = presencePillStyles(myPresenceStatus);
+  const presenceDot = presenceColor(myPresenceStatus);
+
   return (
     <div style={{ width: 216, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 14px 12px" }}>
         <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1, letterSpacing: -0.3, margin: 0, color: "var(--tv-text)" }}>Inbox</h1>
-        <button className="tv-online-pill" title="You are online" type="button" style={{ cursor: "default" }}>
-          <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#10b981" }} />Online
-        </button>
+        <div style={{ position: "relative" }}>
+          <button
+            className="tv-online-pill"
+            title="Set your status"
+            type="button"
+            style={pillStyle}
+            onClick={() => onPresenceChange && setPresenceOpen((v) => !v)}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: 9999, background: presenceDot }} />
+            {presenceLabel(myPresenceStatus)}
+          </button>
+          {presenceOpen && onPresenceChange ? (
+            <div
+              className="ref-pop"
+              style={{
+                position: "absolute",
+                top: "100%",
+                right: 0,
+                marginTop: 6,
+                background: "#fff",
+                border: "1px solid var(--tv-border)",
+                borderRadius: 10,
+                padding: 6,
+                minWidth: 160,
+                boxShadow: "0 10px 28px rgba(16,24,40,.14)",
+                zIndex: 30,
+              }}
+            >
+              {(["available", "away", "busy", "dnd"] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => {
+                    onPresenceChange(status);
+                    setPresenceOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 10px",
+                    border: "none",
+                    background: myPresenceStatus === status ? "var(--tv-primary-soft)" : "transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: 9999, background: presenceColor(status) }} />
+                  {presenceLabel(status)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
       <div style={{ display: "flex", gap: 6, padding: "0 12px 14px" }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -125,7 +187,14 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
                 <div onClick={() => pickMain("teammate", t.id, "tm:" + t.id)}
                   className={"tv-rail-item" + (is("teammate", t.id) ? " active" : "")}>
                   <span style={{ display: "flex", color: "var(--tv-faint)", marginLeft: -4 }}>{exp ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-                  <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color }}>{t.initials}</span>
+                  <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color, position: "relative" }}>{t.initials}
+                    {presenceByUserId[t.id] ? (
+                      <span style={{
+                        position: "absolute", right: -1, bottom: -1, width: 7, height: 7, borderRadius: 9999,
+                        background: presenceColor(presenceByUserId[t.id]!), border: "1.5px solid #fff",
+                      }} />
+                    ) : null}
+                  </span>
                   <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
                   <span className="tv-count">{counts["tm:" + t.id] ?? 0}</span>
                 </div>
