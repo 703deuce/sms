@@ -4,8 +4,8 @@
 "use client";
 
 import { useState } from "react";
-import AppSidebar from "./components/AppSidebar";
-import KeywordsPage from "./components/KeywordsPage";
+import { Tabs } from "@/components/ui/tabs";
+import { listGrowthTabs } from "@/lib/list-growth-tabs";
 import LinksListPage from "./components/LinksListPage";
 import CreateLinkPage from "./components/CreateLinkPage";
 import LinkSuccessCard from "./components/LinkSuccessCard";
@@ -14,7 +14,6 @@ import { keywords as initialKeywords, tapLinks as initialLinks, TapLink } from "
 
 type View =
   | { name: "links" }
-  | { name: "keywords" }
   | { name: "create"; prefillKeyword?: string }
   | { name: "success"; link: TapLink }
   | { name: "fallback" };
@@ -47,14 +46,8 @@ export default function GrowTapToJoinFlow() {
 
   return (
     <div className="ttj-root">
-      <AppSidebar
-        active={view.name === "keywords" ? "keywords" : "tap-to-join"}
-        onNavigate={(key) => {
-          if (key === "keywords") setView({ name: "keywords" });
-          else if (key === "tap-to-join") setView({ name: "links" });
-        }}
-      />
       <main className="ttj-main">
+        {view.name === "links" && <Tabs items={[...listGrowthTabs]} />}
         {view.name === "links" && (
           <LinksListPage
             links={links}
@@ -62,12 +55,6 @@ export default function GrowTapToJoinFlow() {
             onDelete={handleDelete}
             onClone={handleClone}
             onOpenFallback={() => setView({ name: "fallback" })}
-          />
-        )}
-        {view.name === "keywords" && (
-          <KeywordsPage
-            keywords={initialKeywords}
-            onCreateTapLink={(kw) => setView({ name: "create", prefillKeyword: kw })}
           />
         )}
         {view.name === "create" && (

@@ -4,12 +4,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import AppSidebar from "@/components/kimi/grow-tap-to-join/components/AppSidebar";
-import KeywordsPage from "@/components/kimi/grow-tap-to-join/components/KeywordsPage";
 import LinksListPage from "@/components/kimi/grow-tap-to-join/components/LinksListPage";
 import CreateLinkPage from "@/components/kimi/grow-tap-to-join/components/CreateLinkPage";
 import LinkSuccessCard from "@/components/kimi/grow-tap-to-join/components/LinkSuccessCard";
 import FallbackFormPreview from "@/components/kimi/grow-tap-to-join/components/FallbackFormPreview";
+import { Tabs } from "@/components/ui/tabs";
+import { listGrowthTabs } from "@/lib/list-growth-tabs";
 import type { TapLink, Keyword } from "@/components/kimi/grow-tap-to-join/mock-data";
 import {
   createTapLink,
@@ -22,7 +22,6 @@ import { useSearchParams } from "next/navigation";
 
 type View =
   | { name: "links" }
-  | { name: "keywords" }
   | { name: "create"; prefillKeyword?: string }
   | { name: "success"; link: TapLink }
   | { name: "fallback" };
@@ -90,14 +89,8 @@ export function KimiTapToJoinConnected() {
 
   return (
     <div className="ttj-root">
-      <AppSidebar
-        active={view.name === "keywords" ? "keywords" : "tap-to-join"}
-        onNavigate={(key) => {
-          if (key === "keywords") setView({ name: "keywords" });
-          else if (key === "tap-to-join") setView({ name: "links" });
-        }}
-      />
       <main className="ttj-main">
+        {view.name === "links" && <Tabs items={[...listGrowthTabs]} />}
         {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
         {view.name === "links" && (
           <LinksListPage
@@ -106,12 +99,6 @@ export function KimiTapToJoinConnected() {
             onDelete={(id) => void handleDelete(id)}
             onClone={handleClone}
             onOpenFallback={() => setView({ name: "fallback" })}
-          />
-        )}
-        {view.name === "keywords" && (
-          <KeywordsPage
-            keywords={keywords}
-            onCreateTapLink={(kw) => setView({ name: "create", prefillKeyword: kw })}
           />
         )}
         {view.name === "create" && (
