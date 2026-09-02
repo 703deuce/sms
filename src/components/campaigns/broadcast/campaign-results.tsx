@@ -168,6 +168,17 @@ function MessagePreview({ body }: { body?: string }) {
   );
 }
 
+function matchesRecipientFilter(status: string, filter: string): boolean {
+  const s = status.toLowerCase();
+  if (filter === "All") return true;
+  if (filter === "Delivered") return s.includes("delivered");
+  if (filter === "Failed") return s.includes("failed");
+  if (filter === "Clicked") return s.includes("click");
+  if (filter === "Replied") return s.includes("repl");
+  if (filter === "Opt-Outs") return s.includes("opt");
+  return s.includes(filter.toLowerCase().replace(/-/g, ""));
+}
+
 export function CampaignResultsView({
   campaign,
   recipients = [],
@@ -234,9 +245,7 @@ export function CampaignResultsView({
   const filteredRecipients = useMemo(() => {
     let rows = recipients;
     if (recipientFilter !== "All") {
-      rows = rows.filter((r) =>
-        r.status.toLowerCase().includes(recipientFilter.toLowerCase().replace("-", "")),
-      );
+      rows = rows.filter((r) => matchesRecipientFilter(r.status, recipientFilter));
     }
     const q = search.trim().toLowerCase();
     if (q) {

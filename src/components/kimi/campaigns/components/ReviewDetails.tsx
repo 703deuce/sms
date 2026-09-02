@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Users, ChevronLeft, ChevronDown, Loader2, CalendarClock, Wallet } from "lucide-react";
+import { Users, ChevronLeft, Loader2, CalendarClock, Wallet } from "lucide-react";
 import PhonePreview from "./PhonePreview";
 import {
   composeMessageBody,
@@ -23,7 +23,7 @@ export default function ReviewDetails({
   onPrev,
   paths,
 }: {
-  onPrev: () => void;
+  onPrev: (campaignId?: string) => void;
   paths?: ReviewNavPaths;
 }) {
   const router = useRouter();
@@ -46,6 +46,17 @@ export default function ReviewDetails({
     try {
       const data = await fetchLaunchReview(campaignId);
       setReview(data);
+      if (data.scheduledAt) {
+        const when = new Date(data.scheduledAt);
+        if (!Number.isNaN(when.getTime())) {
+          setDraft((prev) => ({
+            ...prev,
+            scheduleMode: "later",
+            scheduledDate: when.toISOString().slice(0, 10),
+            scheduledTime: when.toTimeString().slice(0, 5),
+          }));
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load review");
     } finally {
@@ -76,12 +87,12 @@ export default function ReviewDetails({
     setLaunching(true);
     setError("");
     try {
-      await launchCampaign(campaignId, review.finalRecipientCount);
       if (draft.scheduleMode === "now") {
         router.push(queuePath(campaignId));
-      } else {
-        router.push(successPath(campaignId, draft.scheduleMode));
+        return;
       }
+      await launchCampaign(campaignId, review.finalRecipientCount);
+      router.push(successPath(campaignId, draft.scheduleMode));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Launch failed");
     } finally {
@@ -103,7 +114,7 @@ export default function ReviewDetails({
       <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
         <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 px-5 py-4">
           <p className="text-[13px] font-medium text-red-700">No campaign to review. Go back and save your draft first.</p>
-          <button type="button" onClick={onPrev} className="btn-ghost mt-3">Back</button>
+          <button type="button" onClick={() => onPrev()} className="btn-ghost mt-3">Back</button>
         </div>
       </div>
     );
@@ -133,7 +144,7 @@ export default function ReviewDetails({
               </h3>
               <button
                 type="button"
-                onClick={onPrev}
+                onClick={() => onPrev(campaignId)}
                 className="rounded-md px-2 py-1 text-[13px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
               >
                 Edit
@@ -145,8 +156,8 @@ export default function ReviewDetails({
                   <Users className="h-5 w-5 text-indigo-600" />
                 </div>
                 <div className="min-w-0 space-y-0.5">
-                  {(review?.listNames?.length ? review.listNames : draft.audience.map((a) => a.name)).map((a) => (
-                    <p key={a} className="truncate text-[13px] font-medium text-slate-700">{a}</p>
+                  {(review?.listNames?.length ? review.listNames : draft.audience.map((a) => a.name)).map((a, i) => (
+                    <p key={`${a}-${i}`} className="truncate text-[13px] font-medium text-slate-700">{a}</p>
                   ))}
                 </div>
               </div>
@@ -161,7 +172,7 @@ export default function ReviewDetails({
               <h3 className="text-[15px] font-bold text-slate-900">Timing</h3>
               <button
                 type="button"
-                onClick={onPrev}
+                onClick={() => onPrev(campaignId)}
                 className="rounded-md px-2 py-1 text-[13px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
               >
                 Edit
@@ -207,7 +218,7 @@ export default function ReviewDetails({
           ) : null}
 
           <div className="mt-10 flex max-w-xl items-center justify-between border-t border-slate-200/80 pt-5">
-            <button type="button" onClick={onPrev} className="btn-ghost flex items-center gap-1">
+            <button type="button" onClick={() => onPrev(campaignId)} className="btn-ghost flex items-center gap-1">
               <ChevronLeft className="h-4 w-4" /> Prev
             </button>
             <div className="flex items-center gap-4">
@@ -225,7 +236,7 @@ export default function ReviewDetails({
                 className="btn-primary flex items-center gap-1.5 !py-2.5 shadow-sm disabled:opacity-60"
               >
                 {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {actionLabel} <ChevronDown className="h-4 w-4" />
+                {actionLabel}
               </button>
             </div>
           </div>

@@ -41,6 +41,15 @@ export default function NewCategoryCampaignPage() {
   const categoryId = String(params.category || "") as CampaignCategoryId;
   const category = getCampaignCategory(categoryId);
 
+  useEffect(() => {
+    if (category?.engine === "broadcast") {
+      const q = searchParams.toString();
+      router.replace(
+        q ? `/campaigns/new?playbook=${categoryId}&${q}` : `/campaigns/new?playbook=${categoryId}`,
+      );
+    }
+  }, [category, categoryId, router, searchParams]);
+
   const [name, setName] = useState(category ? `${category.title}` : "New campaign");
   const [message, setMessage] = useState(
     category ? DEFAULT_MESSAGES[category.id] : DEFAULT_MESSAGES.custom,

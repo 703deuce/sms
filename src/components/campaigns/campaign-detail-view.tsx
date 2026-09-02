@@ -8,7 +8,7 @@ import {
   campaignStatusEmoji,
   formatCampaignDateTime,
 } from "@/lib/campaigns/campaign-detail-helpers";
-import { campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
+import { campaignDetailIsKimiBroadcast, campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import { mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
 import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
 import type { Campaign } from "@/lib/types";
@@ -131,15 +131,16 @@ export function CampaignDetailView({ campaign, campaignId, activity }: Props) {
             <Link href="/campaigns">
               <Button variant="ghost">← Back</Button>
             </Link>
-            {campaign.status === "Draft" ? (
+            {campaign.status === "Draft" && campaignDetailIsKimiBroadcast(campaign.configJson) ? (
               <Link href={`/campaigns/new?edit=${campaignId}`}>
                 <Button>Continue editing</Button>
               </Link>
-            ) : (
+            ) : null}
+            {campaign.status !== "Draft" && campaignDetailIsKimiBroadcast(campaign.configJson) ? (
               <Link href={`/campaigns/new?duplicate=${campaignId}`}>
                 <Button variant="outline">Duplicate</Button>
               </Link>
-            )}
+            ) : null}
             <CampaignActions
               campaignId={campaignId}
               status={campaign.status}
@@ -167,7 +168,9 @@ export function CampaignDetailView({ campaign, campaignId, activity }: Props) {
       </div>
 
       <div className="mb-6">
-        <CampaignLaunchReview campaignId={campaignId} status={campaign.status} />
+        {campaignLooksLikeMassText(campaign.configJson) ? (
+          <CampaignLaunchReview campaignId={campaignId} status={campaign.status} />
+        ) : null}
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

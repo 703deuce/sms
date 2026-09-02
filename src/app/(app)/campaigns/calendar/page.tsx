@@ -121,7 +121,7 @@ export default async function CampaignCalendarPage() {
           title="No scheduled campaigns"
           description="Campaigns with a scheduled send time will appear on the calendar."
           actionLabel="Schedule campaign"
-          actionHref="/send"
+          actionHref="/campaigns/new"
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-3">

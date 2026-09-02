@@ -125,6 +125,15 @@ export async function createBroadcastCampaign(
     }
     if (!input.recurrence) throw new Error("Recurrence settings are required");
   }
+  if (input.scheduleMode === "later") {
+    const scheduledAt = resolveScheduledAt(input);
+    if (!scheduledAt) {
+      throw new Error("Scheduled date and time are required");
+    }
+    if (scheduledAt.getTime() <= Date.now()) {
+      throw new Error("Scheduled time must be in the future");
+    }
+  }
 
   const mediaUrls = normalizeMediaUrls(input.mediaUrls);
   const config = buildConfig(input);
@@ -179,13 +188,28 @@ export async function updateBroadcastCampaign(
     audience,
     numberId: input.numberId ?? prevConfig?.numberId,
     scheduleMode,
-    scheduledAt: input.scheduledAt,
+    scheduledAt:
+      input.scheduledAt !== undefined
+        ? input.scheduledAt
+        : scheduleMode === "later" && existing.scheduledAt
+          ? existing.scheduledAt.toISOString()
+          : undefined,
     timezone: input.timezone ?? prevConfig?.timezone,
     recurrence: input.recurrence ?? prevConfig?.recurrence,
     mediaUrls,
     trackLinks: input.trackLinks ?? prevConfig?.trackLinks,
     trackedLinks: input.trackedLinks ?? prevConfig?.trackedLinks,
   };
+
+  if (scheduleMode === "later") {
+    const scheduledAt = resolveScheduledAt(merged);
+    if (!scheduledAt) {
+      throw new Error("Scheduled date and time are required");
+    }
+    if (scheduledAt.getTime() <= Date.now()) {
+      throw new Error("Scheduled time must be in the future");
+    }
+  }
 
   const config = buildConfig(merged);
   const scheduledAt = resolveScheduledAt(merged);

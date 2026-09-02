@@ -59,7 +59,7 @@ export default async function CampaignDraftsPage() {
           title="No drafts yet"
           description="Start a new campaign in the Send wizard and save it as a draft to continue later."
           actionLabel="Create campaign"
-          actionHref="/send"
+          actionHref="/campaigns/new"
         />
       ) : (
         <Card>

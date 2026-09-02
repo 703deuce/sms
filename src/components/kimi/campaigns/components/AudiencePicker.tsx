@@ -167,8 +167,19 @@ export default function AudiencePicker({
     return group;
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const root = document.getElementById("audience-picker-root");
+      if (root?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
   return (
-    <div className="relative">
+    <div className="relative" id="audience-picker-root">
       <div
         className="input-field flex min-h-[42px] cursor-text flex-wrap items-center gap-1.5 !py-1.5"
         onClick={() => setOpen(!open)}

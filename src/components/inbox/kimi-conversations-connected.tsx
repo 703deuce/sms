@@ -693,6 +693,12 @@ export function KimiConversationsConnected({
     [router, searchParams, urlProduct, searchQuery, urlPhoneNumberId, urlCampaignId],
   );
 
+  useEffect(() => {
+    if (!selectedId && urlConversation) {
+      syncUrl(sel, { clearConversation: true });
+    }
+  }, [selectedId, urlConversation, sel, syncUrl]);
+
   const pickConvo = (c: Conversation) => {
     setSelectedId(c.id);
     syncUrl(sel, { conversationId: c.id });

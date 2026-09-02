@@ -145,6 +145,18 @@ export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<st
   if (draft.audience.length === 0) {
     throw new Error("Select at least one audience.");
   }
+  if (draft.scheduleMode === "later" && (!draft.scheduledDate || !draft.scheduledTime)) {
+    throw new Error("Select a date and time for scheduled sends.");
+  }
+  if (draft.scheduleMode === "later" && draft.scheduledDate && draft.scheduledTime) {
+    const when = new Date(`${draft.scheduledDate}T${draft.scheduledTime}`);
+    if (Number.isNaN(when.getTime())) {
+      throw new Error("Invalid scheduled date or time.");
+    }
+    if (when.getTime() <= Date.now()) {
+      throw new Error("Scheduled time must be in the future.");
+    }
+  }
   const payload = toBroadcastPayload(draft);
   const url = draft.campaignId
     ? `/api/mass-texting/campaigns/${draft.campaignId}`
@@ -189,7 +201,7 @@ export async function previewAudience(
     body: JSON.stringify({ audience, campaignId }),
   });
   const json = await res.json();
-  if (!res.ok) return 0;
+  if (!res.ok) throw new Error(json.error || "Could not preview audience");
   return json.data?.eligibleCount ?? 0;
 }
 

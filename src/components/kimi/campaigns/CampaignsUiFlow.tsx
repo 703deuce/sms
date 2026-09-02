@@ -24,7 +24,9 @@ export default function CampaignsUiFlow({ initialView = "list" }: { initialView?
   if (initialView === "review") {
     return (
       <ReviewDetails
-        onPrev={() => router.push("/campaigns/new")}
+        onPrev={(campaignId) =>
+          router.push(campaignId ? `/campaigns/new?edit=${campaignId}` : "/campaigns/new")
+        }
       />
     );
   }

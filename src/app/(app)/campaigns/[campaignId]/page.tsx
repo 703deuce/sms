@@ -1,8 +1,7 @@
 import { CampaignDetailView } from "@/components/campaigns/campaign-detail-view";
 import { CampaignResultsView } from "@/components/campaigns/broadcast/campaign-results";
-import { buildCampaignTimeline } from "@/lib/campaigns/campaign-detail-helpers";
 import { listBroadcastRecipients } from "@/lib/mass-texting/broadcast/analytics";
-import { isBroadcastCampaign } from "@/lib/mass-texting/broadcast/service";
+import { buildCampaignTimeline } from "@/lib/campaigns/campaign-detail-helpers";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { estimateSmsSegments } from "@/lib/utils";
@@ -55,10 +54,7 @@ export default async function CampaignDetailPage({
     statusNorm === "failed";
 
   if (showResultsView) {
-    const recipients =
-      isBroadcastCampaign(campaign.configJson)
-        ? await listBroadcastRecipients(workspaceId, campaignId)
-        : [];
+    const recipients = await listBroadcastRecipients(workspaceId, campaignId);
     return (
       <CampaignResultsView
         campaign={{

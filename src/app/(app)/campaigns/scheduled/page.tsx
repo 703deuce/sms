@@ -53,7 +53,7 @@ export default async function CampaignScheduledPage() {
             <Link href="/campaigns/calendar">
               <Button variant="outline">Calendar view</Button>
             </Link>
-            <Link href="/campaigns/new/promotional">
+            <Link href="/campaigns/new">
               <Button>Schedule campaign</Button>
             </Link>
           </>
@@ -68,7 +68,7 @@ export default async function CampaignScheduledPage() {
           title="Nothing scheduled"
           description="Schedule a campaign to see it here. Sends respect account quiet hours and A2P limits."
           actionLabel="Schedule campaign"
-          actionHref="/campaigns/new/promotional"
+          actionHref="/campaigns/new"
         />
       ) : (
         <Card>

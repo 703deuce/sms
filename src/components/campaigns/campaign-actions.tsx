@@ -49,10 +49,15 @@ export function CampaignActions({
       variant: "default",
     });
   }
-  if (normalized === "SENDING") {
+  if (normalized === "SENDING" && !isMassText) {
     actions.push({ action: "pause", label: "Pause", variant: "outline" });
   }
-  if (normalized !== "CANCELED" && normalized !== "COMPLETED" && normalized !== "FAILED") {
+  if (
+    normalized !== "CANCELED" &&
+    normalized !== "COMPLETED" &&
+    normalized !== "FAILED" &&
+    !(isMassText && normalized === "SENDING")
+  ) {
     actions.push({ action: "cancel", label: "Cancel", variant: "danger" });
   }
 

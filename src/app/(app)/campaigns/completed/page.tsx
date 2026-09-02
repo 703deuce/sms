@@ -63,7 +63,7 @@ export default async function CampaignCompletedPage() {
           title="No completed campaigns"
           description="Once a campaign finishes sending, it will appear here with delivery and engagement stats."
           actionLabel="Send campaign"
-          actionHref="/campaigns/new/promotional"
+          actionHref="/campaigns/new"
         />
       ) : (
         <>

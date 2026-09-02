@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { displayCampaignStatus, fetchCampaigns } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { getCampaignCategory } from "@/lib/campaigns/catalog";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -34,12 +35,23 @@ export default function AllCampaignsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/campaigns")
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Failed to load campaigns");
-        return r.json();
-      })
-      .then((json) => setCampaigns(json.data || []))
+    fetchCampaigns()
+      .then((rows) =>
+        setCampaigns(
+          rows.map((c) => ({
+            id: c.id,
+            name: c.name,
+            status: displayCampaignStatus(c.status),
+            audience: c.audience,
+            sent: c.sent,
+            delivered: c.delivered,
+            replies: c.replies,
+            scheduledAt: c.scheduledAt,
+            createdAt: c.createdAt,
+            configJson: c.configJson,
+          })),
+        ),
+      )
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, []);

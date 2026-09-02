@@ -20,7 +20,13 @@ export function KimiCampaignsConnected({ initialView = "list" }: { initialView?:
   }
 
   if (initialView === "review") {
-    return <ReviewDetails onPrev={() => router.push("/campaigns/new")} />;
+    return (
+      <ReviewDetails
+        onPrev={(campaignId) =>
+          router.push(campaignId ? `/campaigns/new?edit=${campaignId}` : "/campaigns/new")
+        }
+      />
+    );
   }
 
   return <CampaignsList onCreate={() => { startFreshComposeDraft(); router.push("/campaigns/new"); }} />;

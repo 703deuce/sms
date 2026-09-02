@@ -73,7 +73,9 @@ export default function CreateCampaign({
   const [trackPrompt, setTrackPrompt] = useState<string | null>(null);
   const [linkName, setLinkName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadingCampaign, setLoadingCampaign] = useState(false);
   const [error, setError] = useState("");
+  const [audiencePreviewError, setAudiencePreviewError] = useState("");
   const [eligibleCount, setEligibleCount] = useState(0);
   const [playbookId, setPlaybookId] = useState<string | null>(null);
 
@@ -87,7 +89,7 @@ export default function CreateCampaign({
     const isFreshCreate = !loadId && !fromPlaybook && !segmentId;
     setPlaybookId(fromPlaybook ? playbook : null);
 
-    let loaded = isFreshCreate ? startFreshComposeDraft() : loadComposeDraft();
+    let loaded = isFreshCreate || segmentId ? startFreshComposeDraft() : loadComposeDraft();
     if (fromPlaybook) {
       loaded = { ...defaultComposeDraft(), timezone: loaded.timezone };
     }
@@ -125,6 +127,7 @@ export default function CreateCampaign({
     }
 
     if (loadId) {
+      setLoadingCampaign(true);
       fetch(`/api/mass-texting/campaigns/${loadId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
@@ -174,7 +177,8 @@ export default function CreateCampaign({
           setDraft(next);
           setMode(scheduleToMode(next.scheduleMode));
         })
-        .catch(() => undefined);
+        .catch(() => setError("Could not load campaign"))
+        .finally(() => setLoadingCampaign(false));
     } else {
       setDraft(loaded);
       setMode(scheduleToMode(loaded.scheduleMode));
@@ -194,12 +198,19 @@ export default function CreateCampaign({
   useEffect(() => {
     if (draft.audience.length === 0) {
       setEligibleCount(0);
+      setAudiencePreviewError("");
       return;
     }
     let cancelled = false;
+    setAudiencePreviewError("");
     previewAudience(draftAudiencePayload(draft), draft.campaignId)
       .then((count) => { if (!cancelled) setEligibleCount(count); })
-      .catch(() => { if (!cancelled) setEligibleCount(0); });
+      .catch((err) => {
+        if (!cancelled) {
+          setEligibleCount(0);
+          setAudiencePreviewError(err instanceof Error ? err.message : "Could not preview audience");
+        }
+      });
     return () => { cancelled = true; };
   }, [draft.audience, draft.excludeAudience, draft.campaignId]);
 
@@ -259,9 +270,27 @@ export default function CreateCampaign({
     const next = { ...draft, scheduleMode: modeToSchedule(mode) };
     setDraft(next);
     saveComposeDraft(next);
-    const id = await saveCampaignDraft(next);
-    if (id) router.push(reviewPath(id));
+    setSaving(true);
+    setError("");
+    try {
+      const id = await saveCampaignDraft(next);
+      router.push(reviewPath(id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save campaign");
+    } finally {
+      setSaving(false);
+    }
   }
+
+  const laterIncomplete =
+    mode === "Later" && (!draft.scheduledDate || !draft.scheduledTime);
+  const canReview =
+    !loadingCampaign &&
+    !saving &&
+    Boolean(draft.name.trim()) &&
+    Boolean(draft.message.trim()) &&
+    draft.audience.length > 0 &&
+    !laterIncomplete;
 
   const scheduleModes = useMemo(() => {
     const modes: SendMode[] = ["Now", "Later"];
@@ -361,6 +390,9 @@ export default function CreateCampaign({
             {eligibleCount > 0 && (
               <p className="mt-1.5 text-[12px] text-emerald-600">{eligibleCount.toLocaleString()} eligible contacts</p>
             )}
+            {audiencePreviewError ? (
+              <p className="mt-1.5 text-[12px] text-red-600">{audiencePreviewError}</p>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between max-w-md mt-5 mb-1.5">
@@ -475,6 +507,7 @@ export default function CreateCampaign({
                 <label className="block text-[12px] font-semibold text-slate-600 mb-1">Date</label>
                 <input
                   type="date"
+                  min={new Date().toISOString().slice(0, 10)}
                   value={draft.scheduledDate || ""}
                   onChange={(e) => updateDraft({ scheduledDate: e.target.value })}
                   className="input-field !text-[13px]"
@@ -492,7 +525,23 @@ export default function CreateCampaign({
             </div>
           )}
 
+          {draft.mediaUrls.length > 0 ? (
+            <p className="mt-3 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+              MMS attachments may be blocked at review until MMS is enabled for your workspace.
+            </p>
+          ) : null}
+
+          {laterIncomplete ? (
+            <p className="mt-3 text-[13px] text-amber-700">Select a date and time to schedule this campaign.</p>
+          ) : null}
+
           {error ? <p className="mt-4 text-[13px] text-red-600">{error}</p> : null}
+
+          {loadingCampaign ? (
+            <p className="mt-4 flex items-center gap-2 text-[13px] text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading campaign…
+            </p>
+          ) : null}
 
           <div className="flex items-center justify-between max-w-md mt-12">
             <button type="button" onClick={onCancel} className="btn-ghost">Cancel</button>
@@ -508,7 +557,7 @@ export default function CreateCampaign({
               <button
                 type="button"
                 onClick={() => void handleReview()}
-                disabled={saving || !draft.name || !draft.message || draft.audience.length === 0}
+                disabled={!canReview}
                 className="btn-primary flex items-center gap-1.5"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

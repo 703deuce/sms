@@ -8,3 +8,8 @@ export function campaignLooksLikeMassText(configJson: unknown): boolean {
     config.massTexting === true
   );
 }
+
+export function campaignDetailIsKimiBroadcast(configJson: unknown): boolean {
+  if (!configJson || typeof configJson !== "object") return false;
+  return (configJson as Record<string, unknown>).broadcastVersion === 1;
+}

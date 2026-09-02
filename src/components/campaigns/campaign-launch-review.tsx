@@ -78,7 +78,7 @@ export function CampaignLaunchReview({
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/launch-review`);
+      const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch-review`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not load launch review");
       setReview(json.data);
@@ -204,7 +204,7 @@ export function CampaignLaunchReview({
             Buy more credits or upgrade before launching. This is not a server error.
           </p>
           <a
-            href="/sms/settings"
+            href="/settings/billing"
             className="mt-2 inline-block text-[13px] font-medium text-amber-950 underline underline-offset-2 hover:text-amber-800"
           >
             Buy More Credits / Upgrade
