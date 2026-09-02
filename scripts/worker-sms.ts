@@ -35,6 +35,11 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function verifyWorkerBootEnv() {
+  requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+}
+
 function startHealthServer() {
   const server = createServer((req, res) => {
     const path = req.url?.split("?")[0] || "/";
@@ -116,7 +121,7 @@ async function runCycle() {
 }
 
 async function main() {
-  requireEnv("DATABASE_URL");
+  verifyWorkerBootEnv();
 
   console.log(
     JSON.stringify({

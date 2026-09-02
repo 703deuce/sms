@@ -169,6 +169,8 @@ export async function claimDueJobs(limit = 25, options?: ClaimDueJobsOptions) {
 
   const claimed = [];
   for (const job of due) {
+    // Do not use `{ increment: 1 }` here — Supabase compat read-modify-writes without
+    // the status predicate on update, which allows double-claim under concurrency.
     const updated = await prisma.jobQueue.updateMany({
       where: {
         id: job.id,
@@ -177,7 +179,7 @@ export async function claimDueJobs(limit = 25, options?: ClaimDueJobsOptions) {
       data: {
         status: "processing",
         lockedAt: now,
-        attempts: { increment: 1 },
+        attempts: job.attempts + 1,
       },
     });
     if (updated.count === 1) {
@@ -185,6 +187,23 @@ export async function claimDueJobs(limit = 25, options?: ClaimDueJobsOptions) {
     }
   }
   return claimed;
+}
+
+/** Claim a single job by id (CAS). Returns true when this caller won the claim. */
+export async function claimJobById(jobId: string): Promise<boolean> {
+  const prisma = getPrisma();
+  const job = await prisma.jobQueue.findUnique({ where: { id: jobId } });
+  if (!job || !["pending", "deferred"].includes(job.status)) return false;
+  const now = new Date();
+  const updated = await prisma.jobQueue.updateMany({
+    where: { id: jobId, status: { in: ["pending", "deferred"] } },
+    data: {
+      status: "processing",
+      lockedAt: now,
+      attempts: job.attempts + 1,
+    },
+  });
+  return updated.count === 1;
 }
 
 export async function completeJob(jobId: string) {

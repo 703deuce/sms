@@ -710,6 +710,18 @@ CREATE TABLE IF NOT EXISTS "job_queue" (
 );
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "worker_heartbeats" (
+    "workerKey" TEXT NOT NULL,
+    "workerId" TEXT NOT NULL,
+    "lastBeatAt" TIMESTAMP(3) NOT NULL,
+    "metricsJson" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "worker_heartbeats_pkey" PRIMARY KEY ("workerKey")
+);
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "integration_webhook_endpoints" (
     "id" TEXT NOT NULL,
     "workspaceId" TEXT NOT NULL,
@@ -3111,6 +3123,9 @@ CREATE INDEX IF NOT EXISTS "job_queue_status_priority_runAfter_queueName_idx" ON
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "job_queue_jobType_status_idx" ON "job_queue"("jobType", "status");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "worker_heartbeats_lastBeatAt_idx" ON "worker_heartbeats"("lastBeatAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "integration_webhook_endpoints_token_key" ON "integration_webhook_endpoints"("token");

@@ -10,6 +10,7 @@ import { randomBytes } from "node:crypto";
 import { getPrisma } from "../src/lib/db";
 import {
   claimDueJobs,
+  claimJobById,
   enqueueJob,
   reclaimStuckJobs,
 } from "../src/lib/messaging/enqueue-advance";
@@ -27,7 +28,7 @@ import { runSmsSchedulerCycle } from "../src/lib/messaging/dispatch/scheduler";
 import { recordWorkerHeartbeat, getWorkerHeartbeat } from "../src/lib/messaging/dispatch/heartbeat";
 import { enqueueDueCampaignMessages } from "../src/lib/campaigns/campaign-processor";
 import { sendCampaignMessageById } from "../src/lib/campaigns/campaign-message-send";
-import { processSmsWorkerDueJobs, SMS_WORKER_JOB_TYPES } from "../src/lib/jobs/sms-worker-jobs";
+import { SMS_WORKER_JOB_TYPES } from "../src/lib/jobs/sms-worker-jobs";
 
 function suffix() {
   return randomBytes(4).toString("hex");
@@ -73,15 +74,6 @@ async function seedQueuedMessage(input: {
   });
 }
 
-async function claimJobById(jobId: string) {
-  const prisma = getPrisma();
-  const now = new Date();
-  const updated = await prisma.jobQueue.updateMany({
-    where: { id: jobId, status: { in: ["pending", "deferred"] } },
-    data: { status: "processing", lockedAt: now, attempts: { increment: 1 } },
-  });
-  return updated.count;
-}
 
 async function testSkipLockedClaiming() {
   const prisma = getPrisma();
@@ -97,8 +89,8 @@ async function testSkipLockedClaiming() {
     });
     const before = await prisma.jobQueue.findUniqueOrThrow({ where: { id: job.id } });
     assert.equal(before.status, "pending");
-    assert.equal(await claimJobById(job.id), 1);
-    assert.equal(await claimJobById(job.id), 0, "second claim must not succeed");
+    assert.equal(await claimJobById(job.id) ? 1 : 0, 1);
+    assert.equal(await claimJobById(job.id) ? 1 : 0, 0, "second claim must not succeed");
     await prisma.jobQueue.update({
       where: { id: job.id },
       data: { status: "completed", completedAt: new Date(), lockedAt: null },

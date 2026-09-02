@@ -5,14 +5,16 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { loadAdminCustomers, loadAdminUsageTotals } from "@/lib/admin-data";
+import { loadSmsWorkerHealth } from "@/lib/messaging/dispatch/worker-health";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminMonitoringPage() {
-  const [adminCustomers, usageTotals] = await Promise.all([
+  const [adminCustomers, usageTotals, smsWorker] = await Promise.all([
     loadAdminCustomers(),
     loadAdminUsageTotals(),
+    loadSmsWorkerHealth(),
   ]);
 
   const highVolumeAccounts = adminCustomers
@@ -40,6 +42,28 @@ export default async function AdminMonitoringPage() {
         <StatCard label="High-volume accounts" value={formatNumber(highVolumeAccounts.length)} />
         <StatCard label="Elevated risk" value={formatNumber(highRiskAccounts.length)} />
       </div>
+
+      <Card className="mb-6">
+        <CardTitle>SMS dispatch worker</CardTitle>
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
+          <StatusChip status={smsWorker.healthy ? "Healthy" : "Unhealthy"} />
+          <span className="text-muted-foreground">
+            Last heartbeat:{" "}
+            {smsWorker.ageSeconds != null
+              ? `${smsWorker.ageSeconds} second${smsWorker.ageSeconds === 1 ? "" : "s"} ago`
+              : smsWorker.tableMissing
+                ? "table missing — run migration"
+                : "never recorded"}
+          </span>
+          {smsWorker.workerId ? (
+            <span className="text-muted-foreground">Worker ID: {smsWorker.workerId}</span>
+          ) : null}
+          <span className="text-muted-foreground">
+            Due messages: {formatNumber(smsWorker.metrics.dueCount ?? 0)} · Queued jobs:{" "}
+            {formatNumber(smsWorker.metrics.queuedCount ?? 0)}
+          </span>
+        </div>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>

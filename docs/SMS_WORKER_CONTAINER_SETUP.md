@@ -89,27 +89,40 @@ This prevents double-draining the queue (embedded `worker:all` + separate SMS wo
 
 ### Required environment variables (SMS worker)
 
-Copy from your **web** application unless noted.
+| Variable | Notes |
+|----------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (worker DB access) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (same as web) |
+| `NODE_ENV` | Set `production` |
+| `MESSAGING_PROVIDER` | `telnyx` or `twilio` (see `src/lib/messaging/provider-config.ts`) |
 
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `DATABASE_URL` | **Yes** | Same Session pooler URI as web (Supabase port 5432). Worker exits on boot if missing. |
-| `NODE_ENV` | **Yes** | `production` |
-| `MESSAGING_PROVIDER` | **Yes** (live) | `telnyx` or `twilio` |
-| `TELNYX_API_KEY` | Yes (Telnyx) | Outbound SMS |
-| `TELNYX_PUBLIC_KEY` | Yes (Telnyx) | Webhook verification (web handles webhooks; worker sends) |
-| `TELNYX_MODE` | Recommended | `live` |
-| `TWILIO_ACCOUNT_SID` | Yes (Twilio) | If using Twilio path |
-| `TWILIO_AUTH_TOKEN` or `TWILIO_ACCOUNT_AUTH_TOKEN` | Yes (Twilio) | |
-| `MESSAGING_ADAPTER` | If Twilio | `twilio` |
-| `INTEGRATION_SECRET_KEY` | Recommended | Encrypts stored provider tokens |
-| `APP_URL` | Recommended | Used by some send-side URL generation |
+**Telnyx live sends** (when `MESSAGING_PROVIDER=telnyx`):
 
-**Not required on worker** (web only): `NEXT_PUBLIC_*`, Stripe publishable keys, OAuth client secrets for UI login.
+| Variable | Notes |
+|----------|-------|
+| `TELNYX_API_KEY` | Outbound SMS API key |
+| `TELNYX_MODE` | Set `live` in production |
+
+**Twilio live sends** (when `MESSAGING_PROVIDER=twilio` or `MESSAGING_ADAPTER=twilio`):
+
+| Variable | Notes |
+|----------|-------|
+| `TWILIO_ACCOUNT_SID` | Parent/subaccount SID |
+| `TWILIO_AUTH_TOKEN` | Primary auth token (aliases accepted: `TWILIO_ACCOUNT_AUTH_TOKEN`, `TWILIO_PARENT_AUTH_TOKEN`) |
+| `TWILIO_MODE` | Set `live` in production |
+
+**Strongly recommended** (token decryption + URL helpers):
+
+| Variable | Notes |
+|----------|-------|
+| `INTEGRATION_SECRET_KEY` | Decrypts stored provider credentials at rest |
+| `APP_URL` | Canonical app URL (fallback: `NEXT_PUBLIC_APP_URL`) |
 
 ---
 
-### Worker-specific environment variables
+### Optional environment variables (SMS worker)
+
+**Worker runtime**
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
@@ -118,22 +131,69 @@ Copy from your **web** application unless noted.
 | `SMS_WORKER_HEALTH_PORT` | `8082` | HTTP `/health` endpoint |
 | `SMS_WORKER_MAX_STALE_MS` | `WORKER_POLL_MS * 10` | Health fails if no successful cycle within this window |
 | `WORKER_ID` | random UUID | Instance id in logs/heartbeat |
-| `DISPATCH_PLATFORM_MPS` | `50` | Platform-wide messages/sec token bucket |
+| `NODE_OPTIONS` | — | Must include `--import ./scripts/preload-server-only.mjs` (set by `npm run worker:sms`) |
+
+**Dispatch rate limits** (change without code deploy — restart worker to pick up)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DISPATCH_PLATFORM_MPS` | `50` | Platform-wide messages/sec |
 | `DISPATCH_TENANT_MPS` | `10` | Per-workspace default messages/sec |
 | `DISPATCH_CAMPAIGN_MPS` | `5` | Per-campaign messages/sec |
-| `DISPATCH_SENDER_MPS` | `1` | Per sending number messages/sec |
-| `SMS_DELIVERY_RECONCILE_MS` | `60000` | How often worker polls stale delivery statuses |
-| `SMS_DISPATCH_PAUSED` | unset | `1` = emergency platform-wide SMS dispatch pause |
-| `MESSAGING_OUTBOUND_PAUSED` | unset | `1` = same as above (alias) |
-| `SMS_DISPATCH_PAUSED_TELNYX` | unset | `1` = pause Telnyx sends only |
-| `SMS_DISPATCH_PAUSED_TWILIO` | unset | `1` = pause Twilio sends only |
+| `DISPATCH_SENDER_MPS` | `1` | Per sending-number messages/sec |
 
-Optional BullMQ (not default):
+Example: `DISPATCH_SENDER_MPS=25` → ~25 segments/sec per number (~3.3 min for 5,000 recipients). Tune per your Telnyx/Twilio approved throughput.
+
+**Kill switches**
+
+| Variable | Purpose |
+|----------|---------|
+| `SMS_DISPATCH_PAUSED` | `1` or `true` = stop all new SMS dispatch |
+| `MESSAGING_OUTBOUND_PAUSED` | Alias for platform pause |
+| `SMS_DISPATCH_PAUSED_TELNYX` | `1` = pause Telnyx sends only |
+| `SMS_DISPATCH_PAUSED_TWILIO` | `1` = pause Twilio sends only |
+
+**Delivery reconciliation**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SMS_DELIVERY_RECONCILE_MS` | `60000` | Poll interval for stale delivery statuses |
+
+**Optional BullMQ** (not default)
 
 | Variable | Notes |
 |----------|-------|
-| `QUEUE_DRIVER` | `bullmq` to enable Redis queue |
+| `QUEUE_DRIVER` | Set `bullmq` to enable Redis queue |
 | `REDIS_URL` | Required when `QUEUE_DRIVER=bullmq` |
+
+**Telnyx optional**
+
+| Variable | Purpose |
+|----------|---------|
+| `TELNYX_API_BASE_URL` | Override API base (default `https://api.telnyx.com/v2`) |
+| `TELNYX_ORG_ID` | Org scoping when needed |
+| `TELNYX_USE_TWEXIT` | `true`/`false` Twexit routing |
+| `TELNYX_DEFAULT_MESSAGING_PROFILE_ID` | Platform admin profile only |
+| `TELNYX_HTTP_LOG` | `1` = verbose HTTP logging |
+
+**Twilio optional**
+
+| Variable | Purpose |
+|----------|---------|
+| `TWILIO_API_KEY_SID` | API key auth (optional) |
+| `TWILIO_API_KEY_SECRET` | API key secret (alias: `TWILIO_API_SECRET`) |
+| `TWILIO_PRIMARY_PROFILE_SID` | ISV primary profile |
+| `MESSAGING_ADAPTER` | Set `twilio` when using Twilio adapter path |
+
+**Not required on worker** (web only): `NEXT_PUBLIC_*` analytics keys, Stripe publishable keys, OAuth client secrets for UI login, `TELNYX_PUBLIC_KEY` (webhook verification stays on web).
+
+---
+
+### Deprecated / do not use
+
+| Variable | Notes |
+|----------|-------|
+| `DATABASE_URL` | **Not used by the worker runtime** (Supabase compat uses `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`) |
 
 ---
 
@@ -147,10 +207,16 @@ Optional BullMQ (not default):
 
 ### Health check
 
-**Docker / Coolify healthcheck:**
+**Docker / Coolify healthcheck** (`Dockerfile.sms-worker` includes `curl`):
 
 ```bash
 curl -fsS http://127.0.0.1:8082/health
+```
+
+**Nixpacks build** (no `curl` guaranteed) — use Node instead:
+
+```bash
+node -e "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ```
 
 Returns `200` when the worker completed a cycle within `SMS_WORKER_MAX_STALE_MS`. Returns `503` if the worker is stale, shutting down, or last cycle errored.
@@ -186,19 +252,17 @@ The implementation uses **CAS `updateMany` claiming** on `job_queue` (compatible
 
 ### Migration command
 
-After deploying code with the `WorkerHeartbeat` model, run **once** on your database (from web container or CI):
+The `worker_heartbeats` table is in the normal schema path:
 
 ```bash
 npm run db:deploy
 ```
 
-Or if you use `db push` in dev/staging:
+This applies `prisma/migrations/20260902180000_worker_heartbeats/migration.sql`.
 
-```bash
-npm run db:push
-```
+Fresh installs also include the table via `supabase/schema.sql` → `npm run db:bootstrap`.
 
-This creates `worker_heartbeats`. No other schema changes are required for the worker beyond what campaigns already use.
+One-time SQL fallback (if you cannot run migrate deploy): `supabase/sms-worker-heartbeat.sql`
 
 ---
 
@@ -236,6 +300,8 @@ From repo root on a machine with `DATABASE_URL`:
 npm run test:sms-worker
 ```
 
+This runs `scripts/test-sms-worker.ts` (13 scenarios) **and** `scripts/test-sms-worker-cert.ts` (concurrent claiming, crash recovery, rate-limit independence, large-vs-small tenant fairness).
+
 Also run existing campaign safety tests:
 
 ```bash
@@ -257,12 +323,12 @@ Actions **outside** the repository that you must perform in Coolify/providers:
 
 1. **Repoint the voice worker Coolify application** from Python/LiveKit start command to `npm run worker:sms` (same repo, Nixpacks or `Dockerfile.sms-worker`).
 2. **Set `EMBEDDED_JOB_WORKER=0` and `DISABLE_INPROCESS_WORKER=1` on the web app** so only the SMS worker drains campaign jobs.
-3. **Copy `DATABASE_URL` and live messaging env vars** (`TELNYX_*` or `TWILIO_*`) from web to the worker container.
-4. **Run `npm run db:deploy`** (or `db:push`) once to create `worker_heartbeats`.
-5. **Configure Coolify healthcheck** to `curl -fsS http://127.0.0.1:8082/health` on the worker container (port 8082 internal).
+3. **Copy Supabase + messaging env vars** from web to worker (see exact list above — not `DATABASE_URL`).
+4. **Run `npm run db:deploy`** once to create `worker_heartbeats` (or apply `supabase/sms-worker-heartbeat.sql`).
+5. **Configure Coolify healthcheck** — `curl -fsS http://127.0.0.1:8082/health` with `Dockerfile.sms-worker`, or Node `fetch` one-liner for Nixpacks (see Health check section).
 6. **Set replica count to 1** initially; increase later when volume requires it.
 7. **Telnyx/Twilio webhooks** stay on the **web** app URL (`APP_URL/api/telnyx/messaging`, etc.) — no webhook changes needed on the worker.
-8. **Monitor `worker_heartbeats`** — alert if `lastBeatAt` is older than 2 minutes in production.
+8. **Monitor worker health** at `/admin/monitoring` (SMS dispatch worker card) or `worker_heartbeats` table — alert if heartbeat age > 2 minutes.
 9. **Emergency stop:** set `SMS_DISPATCH_PAUSED=1` on the worker (and optionally web) env, redeploy/restart worker — stops new sends without corrupting completed records.
 10. **Voice/LiveKit:** if you still need AI voice, keep a separate Python container or disable voice features until re-homed; this worker slot is now SMS dispatch only.
 
