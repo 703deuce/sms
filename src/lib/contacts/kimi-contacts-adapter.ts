@@ -257,6 +257,28 @@ export async function importContacts(payload: KimiImportPayload): Promise<{ crea
   };
 }
 
+export async function deleteContact(id: string): Promise<void> {
+  const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Could not delete contact");
+}
+
+export async function deleteContacts(ids: string[]): Promise<{ deleted: number; failed: number }> {
+  let deleted = 0;
+  let failed = 0;
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        await deleteContact(id);
+        deleted += 1;
+      } catch {
+        failed += 1;
+      }
+    }),
+  );
+  return { deleted, failed };
+}
+
 export async function fetchContactLists(): Promise<string[]> {
   const res = await fetch("/api/contacts/lists");
   const json = await res.json();

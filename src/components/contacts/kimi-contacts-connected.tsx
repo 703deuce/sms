@@ -11,6 +11,7 @@ import { ImportStartedModal } from "@/components/kimi/contacts/components/Modal"
 import type { Contact } from "@/components/kimi/contacts/mock-data";
 import {
   createContact,
+  deleteContacts,
   fetchContactStats,
   fetchContacts,
   fetchContactLists,
@@ -87,6 +88,14 @@ export function KimiContactsConnected({
     setTimeout(() => setSavedToast(false), 3000);
   };
 
+  const handleDeleteContacts = async (ids: string[]) => {
+    const { deleted, failed } = await deleteContacts(ids);
+    if (failed > 0 && deleted === 0) {
+      throw new Error("Could not delete contacts");
+    }
+    await reload();
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <main className="flex-1 min-w-0">
@@ -97,6 +106,7 @@ export function KimiContactsConnected({
             stats={stats}
             onCreateOne={() => setView("create")}
             onImportList={() => setView("import")}
+            onDeleteContacts={handleDeleteContacts}
             savedToast={savedToast}
           />
         )}
