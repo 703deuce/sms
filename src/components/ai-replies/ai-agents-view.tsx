@@ -152,7 +152,7 @@ export function AiAgentsView({ initialRows }: { initialRows: AiReplyRecord[] }) 
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-visible rounded-xl border border-border bg-card shadow-sm">
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-border bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-xs">

@@ -11,7 +11,8 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /** Serializable icon keys — server pages must not pass component references into this client menu. */
 export type RowActionIcon =
@@ -47,18 +48,56 @@ const defaultKeywordActions: RowAction[] = [
   { label: "Delete", icon: "trash", destructive: true, onClick: () => undefined },
 ];
 
+const MENU_MIN_WIDTH = 200;
+const MENU_ESTIMATED_HEIGHT = 220;
+
 export function RowActionsMenu({
   actions = defaultKeywordActions,
 }: {
   actions?: RowAction[];
 }) {
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updateMenuPosition = () => {
+    const button = buttonRef.current;
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < MENU_ESTIMATED_HEIGHT && rect.top > spaceBelow;
+
+    setMenuStyle({
+      position: "fixed",
+      top: openUp ? rect.top - 6 : rect.bottom + 6,
+      right: Math.max(8, window.innerWidth - rect.right),
+      transform: openUp ? "translateY(-100%)" : undefined,
+      zIndex: 60,
+      minWidth: MENU_MIN_WIDTH,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setOpen(false);
+      }
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -114,9 +153,31 @@ export function RowActionsMenu({
     );
   }
 
+  const menu =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={menuStyle}
+            className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/5"
+          >
+            {regular.map(renderAction)}
+            {destructive.length > 0 ? (
+              <>
+                {regular.length > 0 ? <div className="mx-2 my-1.5 h-px bg-slate-100" /> : null}
+                {destructive.map(renderAction)}
+              </>
+            ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div ref={rootRef} className="relative inline-flex">
       <button
+        ref={buttonRef}
         type="button"
         aria-label="Row actions"
         aria-haspopup="menu"
@@ -129,20 +190,7 @@ export function RowActionsMenu({
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-30 mt-1.5 min-w-[200px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/5"
-        >
-          {regular.map(renderAction)}
-          {destructive.length > 0 ? (
-            <>
-              {regular.length > 0 ? <div className="mx-2 my-1.5 h-px bg-slate-100" /> : null}
-              {destructive.map(renderAction)}
-            </>
-          ) : null}
-        </div>
-      ) : null}
+      {menu}
     </div>
   );
 }
