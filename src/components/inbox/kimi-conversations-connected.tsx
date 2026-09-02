@@ -6,6 +6,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import InboxRail, { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 import ConversationList from "@/components/kimi/conversations/components/ConversationList";
@@ -42,6 +43,26 @@ import {
 
 type View = "inbox" | "settings" | "inboxSettings" | "tags";
 
+function filterFromUrlParam(filter: string | null): FilterSel | null {
+  switch (filter) {
+    case "mine":
+      return { kind: "mine", key: "all" };
+    case "unread":
+      return { kind: "all", key: "unread" };
+    case "unassigned":
+      return { kind: "all", key: "unassigned" };
+    case "archived":
+    case "closed":
+      return { kind: "all", key: "closed" };
+    case "open":
+      return { kind: "all", key: "open" };
+    case "pending":
+      return { kind: "all", key: "pending" };
+    default:
+      return null;
+  }
+}
+
 type Props = {
   initialConversations: ApiConversation[];
   teamMembers: User[];
@@ -55,10 +76,20 @@ export function KimiConversationsConnected({
   currentUserId,
   currentUserName,
 }: Props) {
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams.get("filter");
+  const urlUnread = searchParams.get("unread");
+  const urlConversation = searchParams.get("conversation");
+
   const ctx = useMemo<KimiInboxContext>(
     () => ({ currentUserId, currentUserName, teamMembers }),
     [currentUserId, currentUserName, teamMembers],
   );
+
+  const initialSel = useMemo((): FilterSel => {
+    if (urlUnread === "1") return { kind: "all", key: "unread" };
+    return filterFromUrlParam(urlFilter) ?? { kind: "mine", key: "all" };
+  }, [urlFilter, urlUnread]);
 
   const teammates = useMemo(() => buildTeammates(ctx), [ctx]);
 
@@ -84,16 +115,40 @@ export function KimiConversationsConnected({
     }
     return Array.from(byId.values());
   }, [convos, extraTags, persistedTags]);
-  const [sel, setSel] = useState<FilterSel>({ kind: "mine", key: "all" });
+  const [sel, setSel] = useState<FilterSel>(initialSel);
   const [selectedId, setSelectedId] = useState<string | null>(
-    () => initialConversations[0]?.id ?? null,
+    () => urlConversation || initialConversations[0]?.id || null,
   );
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [contactOpen, setContactOpen] = useState(false);
   const [newMsgOpen, setNewMsgOpen] = useState(false);
   const [view, setView] = useState<View>("inbox");
   const [error, setError] = useState("");
-  const skipInitialReload = useRef(true);
+  const skipInitialReload = useRef(!urlFilter && urlUnread !== "1");
+
+  useEffect(() => {
+    setSel(initialSel);
+  }, [initialSel]);
+
+  useEffect(() => {
+    if (!urlConversation) return;
+    setSelectedId(urlConversation);
+    let cancelled = false;
+    fetchConversation(urlConversation)
+      .then((data) => {
+        if (cancelled) return;
+        const mapped = mapApiConversationToKimi(data, ctx);
+        setConvos((prev) => (prev.some((c) => c.id === mapped.id) ? prev : [mapped, ...prev]));
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not open conversation");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlConversation, ctx]);
 
   const [composeQuery, setComposeQuery] = useState("");
   const [composeTo, setComposeTo] = useState("");

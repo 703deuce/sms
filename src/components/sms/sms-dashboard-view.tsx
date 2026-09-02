@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { cn, formatNumber, formatPercent } from "@/lib/utils";
+import { cn, formatNumber, formatPercent, formatPhone } from "@/lib/utils";
 import type { SmsDashboardActivityPoint, SmsDashboardMetrics } from "@/lib/sms/dashboard-metrics";
 import {
   AlertCircle,
@@ -91,7 +91,7 @@ function ActivityChart({
         <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
           Send your first campaign to see delivery trends here.
         </p>
-        <Link href="/campaigns/new/promotional" className="mt-4">
+        <Link href="/campaigns/new/promotion" className="mt-4">
           <Button size="sm">Create campaign</Button>
         </Link>
       </div>
@@ -282,7 +282,7 @@ export function SmsDashboardView({ metrics }: Props) {
     if (metrics.attention.unreadConversations > 0) {
       items.push({
         label: `${formatNumber(metrics.attention.unreadConversations)} unread conversation${metrics.attention.unreadConversations === 1 ? "" : "s"}`,
-        href: "/inbox",
+        href: "/conversations?filter=unread",
         tone: "warn",
       });
     }
@@ -296,7 +296,7 @@ export function SmsDashboardView({ metrics }: Props) {
     if (metrics.attention.contactsNeedingAttention > 0) {
       items.push({
         label: `${formatNumber(metrics.attention.contactsNeedingAttention)} contact${metrics.attention.contactsNeedingAttention === 1 ? "" : "s"} need attention`,
-        href: "/contacts",
+        href: "/contacts/validation",
         tone: "warn",
       });
     }
@@ -343,19 +343,19 @@ export function SmsDashboardView({ metrics }: Props) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/campaigns/new/promotional">
+          <Link href="/campaigns/new/promotion">
             <Button>
               <Megaphone className="h-4 w-4" />
               Send Campaign
             </Button>
           </Link>
-          <Link href="/contacts">
+          <Link href="/contacts/imports">
             <Button variant="outline">
               <Upload className="h-4 w-4" />
-              Add Contacts
+              Import Contacts
             </Button>
           </Link>
-          <Link href="/inbox">
+          <Link href="/conversations">
             <Button variant="outline">
               <Inbox className="h-4 w-4" />
               View Inbox
@@ -393,8 +393,42 @@ export function SmsDashboardView({ metrics }: Props) {
           label="Replies"
           value={formatNumber(metrics.replies)}
           hint={`${formatPercent(metrics.replyRate)} response rate`}
-          href="/inbox"
+          href="/conversations"
           muted={metrics.replies === 0}
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiStat
+          label="Credits remaining"
+          value={formatNumber(metrics.creditsRemaining)}
+          hint="SMS segments available"
+          href="/settings/billing"
+        />
+        <KpiStat
+          label="Sending number"
+          value={metrics.sendingNumber ? formatPhone(metrics.sendingNumber) : "Not assigned"}
+          hint={metrics.sendingNumber ? "10DLC sending line" : "Configure in Settings → Numbers"}
+          href="/numbers"
+          muted={!metrics.sendingNumber}
+        />
+        <KpiStat
+          label="A2P registration"
+          value={metrics.a2pStatus}
+          hint={metrics.complianceHealthy ? "Ready to send" : "Complete compliance setup"}
+          href="/compliance"
+          muted={!metrics.complianceHealthy}
+        />
+        <KpiStat
+          label="Scheduled campaigns"
+          value={formatNumber(metrics.upcomingScheduled.length)}
+          hint={
+            metrics.upcomingScheduled.length > 0
+              ? "Upcoming sends"
+              : "No campaigns scheduled"
+          }
+          href="/campaigns/scheduled"
+          muted={metrics.upcomingScheduled.length === 0}
         />
       </div>
 
@@ -469,7 +503,7 @@ export function SmsDashboardView({ metrics }: Props) {
                   : "Create a campaign to start reaching your audience."}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <Link href="/campaigns/new/promotional">
+                <Link href="/campaigns/new/promotion">
                   <Button size="sm">
                     {metrics.recentCampaigns.length > 0 ? "Send your first campaign" : "Create campaign"}
                   </Button>
@@ -534,6 +568,35 @@ export function SmsDashboardView({ metrics }: Props) {
         </section>
 
         <div className="flex flex-col gap-4 lg:col-span-2">
+          {metrics.upcomingScheduled.length > 0 && (
+            <section className="surface rounded-xl bg-card p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
+                  Upcoming scheduled
+                </h2>
+                <Link
+                  href="/campaigns/scheduled"
+                  className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-semibold text-primary transition-colors hover:text-primary-hover"
+                >
+                  View schedule
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <ul className="space-y-2">
+                {metrics.upcomingScheduled.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 text-[13px]">
+                    <Link href={`/campaigns/${c.id}`} className="font-medium hover:text-primary">
+                      {c.name}
+                    </Link>
+                    <span className="shrink-0 text-muted-foreground">
+                      {new Date(c.scheduledAt).toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Needs attention */}
           <section className="surface rounded-xl bg-card p-5">
             <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
@@ -583,7 +646,7 @@ export function SmsDashboardView({ metrics }: Props) {
                 Recent Replies
               </h2>
               <Link
-                href="/inbox"
+                href="/conversations"
                 className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-semibold text-primary transition-colors hover:text-primary-hover"
               >
                 Open inbox
@@ -605,7 +668,7 @@ export function SmsDashboardView({ metrics }: Props) {
                 {metrics.recentReplies.map((r) => (
                   <li key={r.id}>
                     <Link
-                      href={`/inbox?conversation=${r.conversationId}`}
+                      href={`/conversations?conversation=${encodeURIComponent(r.conversationId)}`}
                       className="group flex items-start gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/60"
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">

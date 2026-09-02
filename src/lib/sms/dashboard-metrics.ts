@@ -2,6 +2,8 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { mapCampaign } from "@/lib/mappers";
+import { campaignConfigIsMassText } from "@/lib/mass-texting/campaign-send";
+import { resolveMassTextSendingNumber } from "@/lib/mass-texting/messaging-registration";
 
 export type SmsDashboardActivityPoint = {
   date: string;
@@ -42,6 +44,9 @@ export type SmsDashboardMetrics = {
     replies: number;
     sentAt: string | null;
   }>;
+  upcomingScheduled: Array<{ id: string; name: string; scheduledAt: string }>;
+  creditsRemaining: number;
+  sendingNumber: string | null;
   messagingActivity: SmsDashboardActivityPoint[];
 };
 
@@ -122,13 +127,16 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
     activeContacts,
     contactsAddedThisMonth,
     campaigns,
+    audits,
     registration,
+    sender,
     messagingActivity,
     unreadConversations,
     failedMessages30d,
     contactsNeedingAttention,
     recentInbound,
     messages30d,
+    replies30d,
   ] = await Promise.all([
     prisma.contact.count({
       where: { ...contactBaseWhere(workspaceId), status: "SUBSCRIBED" },
@@ -143,9 +151,26 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
     prisma.campaign.findMany({
       where: { workspaceId },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 20,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        sent: true,
+        delivered: true,
+        replies: true,
+        clicks: true,
+        scheduledAt: true,
+        createdAt: true,
+        configJson: true,
+      },
+    }),
+    prisma.campaignLaunchAudit.findMany({
+      where: { workspaceId },
+      select: { campaignId: true },
     }),
     prisma.messagingRegistration.findUnique({ where: { workspaceId } }),
+    resolveMassTextSendingNumber(workspaceId),
     loadSmsDashboardActivity(workspaceId, 30),
     prisma.conversation.count({
       where: { workspaceId, unread: true, status: "OPEN" },
@@ -190,15 +215,44 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
       },
       select: { status: true },
     }),
+    prisma.conversationMessage.count({
+      where: {
+        direction: "inbound",
+        createdAt: { gte: thirtyDaysAgo },
+        conversation: { workspaceId },
+      },
+    }),
   ]);
+
+  const launchedIds = new Set(audits.map((a: { campaignId: string }) => a.campaignId));
+  const massTextCampaigns = campaigns.filter(
+    (c) => launchedIds.has(c.id) || campaignConfigIsMassText(c.configJson),
+  );
 
   let delivered30d = 0;
   for (const m of messages30d) {
     if (DELIVERED_STATUSES.includes(m.status.toLowerCase())) delivered30d += 1;
   }
   const messagesSent30Days = messages30d.length;
-  const replies = campaigns.reduce((sum, c) => sum + (c.replies || 0), 0);
-  const totalSent = campaigns.reduce((sum, c) => sum + (c.sent || 0), 0);
+
+  const { getSegmentAvailability } = await import("@/lib/mass-texting/credit-accounting");
+  const unifiedCredits = await getSegmentAvailability(workspaceId);
+
+  const upcomingScheduled = massTextCampaigns
+    .filter(
+      (c) =>
+        c.status === "SCHEDULED" &&
+        c.scheduledAt &&
+        c.scheduledAt >= new Date(),
+    )
+    .slice(0, 5)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      scheduledAt: c.scheduledAt!.toISOString(),
+    }));
+
+  const recentSource = massTextCampaigns.slice(0, 8);
 
   const campaignOk = (registration?.campaignStatus || "").toLowerCase() === "approved";
   const brandOk = (registration?.brandStatus || "").toLowerCase() === "approved";
@@ -220,19 +274,39 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
       };
     });
 
-  const recentCampaigns = campaigns.map((c) => {
-    const mapped = mapCampaign(c);
-    return {
-      id: mapped.id,
-      name: mapped.name,
-      status: mapped.status,
-      sent: mapped.sent,
-      deliveryRate: pct(mapped.delivered, mapped.sent),
-      clicks: mapped.clicks,
-      replies: mapped.replies,
-      sentAt: mapped.scheduledAt || c.createdAt.toISOString(),
-    };
-  });
+  const recentCampaigns = await Promise.all(
+    recentSource.map(async (c) => {
+      const mapped = mapCampaign(c);
+      const [rowSent, rowDelivered, lastSent] = await Promise.all([
+        prisma.campaignMessage.count({
+          where: { campaignId: c.id, status: { in: SENT_STATUSES } },
+        }),
+        prisma.campaignMessage.count({
+          where: { campaignId: c.id, status: { in: DELIVERED_STATUSES } },
+        }),
+        prisma.campaignMessage.findFirst({
+          where: { campaignId: c.id, sentAt: { not: null } },
+          orderBy: { sentAt: "desc" },
+          select: { sentAt: true },
+        }),
+      ]);
+      const sent = rowSent > 0 ? rowSent : mapped.sent;
+      const delivered = rowSent > 0 ? rowDelivered : mapped.delivered;
+      return {
+        id: mapped.id,
+        name: mapped.name,
+        status: mapped.status,
+        sent,
+        deliveryRate: pct(delivered, sent),
+        clicks: mapped.clicks,
+        replies: mapped.replies,
+        sentAt:
+          lastSent?.sentAt?.toISOString() ??
+          mapped.scheduledAt ??
+          c.createdAt.toISOString(),
+      };
+    }),
+  );
 
   return {
     activeContacts,
@@ -240,8 +314,8 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
     messagesSent30Days,
     deliveryRate: pct(delivered30d, messagesSent30Days),
     deliveredCount: delivered30d,
-    replies,
-    replyRate: pct(replies, totalSent),
+    replies: replies30d,
+    replyRate: pct(replies30d, messagesSent30Days),
     complianceHealthy,
     a2pStatus,
     attention: {
@@ -251,6 +325,9 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
     },
     recentReplies,
     recentCampaigns,
+    upcomingScheduled,
+    creditsRemaining: unifiedCredits.available,
+    sendingNumber: sender?.phoneE164 ?? registration?.phoneE164 ?? null,
     messagingActivity,
   };
 }
