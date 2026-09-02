@@ -141,11 +141,14 @@ export default function CreateLinkPage({
           <div className="ttj-field">
             <label>Non-Mobile Fallback URL <Info size={12} className="ttj-info-icon" /></label>
             <input
-              className="ttj-input"
+              className="ttj-input opacity-60"
               value={fallback}
-              onChange={(e) => setFallback(e.target.value)}
-              placeholder="https://stforms.co/sl/bfcm"
+              disabled
+              placeholder="Coming soon"
             />
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
+              Fallback URLs are not saved yet. Desktop visitors will use the standard tap-to-join flow.
+            </p>
           </div>
 
           <div className="ttj-field ttj-toggle-row">

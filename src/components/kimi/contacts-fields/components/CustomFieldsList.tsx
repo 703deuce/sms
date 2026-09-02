@@ -56,7 +56,7 @@ export default function CustomFieldsList({
                   {f.description ? (
                     <span className="tv-cell-desc">{f.description}</span>
                   ) : (
-                    <button className="tv-link tv-link-muted">
+                    <button className="tv-link tv-link-muted" onClick={() => onEdit(f.id)}>
                       Add Description <Pencil size={12} />
                     </button>
                   )}

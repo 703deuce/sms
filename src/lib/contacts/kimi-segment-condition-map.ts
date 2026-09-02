@@ -26,15 +26,21 @@ function mapOptInStatus(value: string): string {
 function mapOperator(condition: string): SegmentOperator | null {
   switch (condition) {
     case "Is":
-    case "Is Less Than":
-    case "Is Less Than Or Equal To":
-    case "Is Greater Than":
-    case "Is Greater Than or Equal To":
-    case "Is Between":
       return "equals";
     case "Is Not":
-    case "Is Not Between":
       return "not_equals";
+    case "Is Less Than":
+      return "lt";
+    case "Is Less Than Or Equal To":
+      return "lte";
+    case "Is Greater Than":
+      return "gt";
+    case "Is Greater Than or Equal To":
+      return "gte";
+    case "Is Between":
+      return "between";
+    case "Is Not Between":
+      return "not_between";
     case "Is Known":
       return "exists";
     case "Is Not Known":
@@ -172,6 +178,12 @@ export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditio
     if (op === "exists") return "Is Known";
     if (op === "not_exists") return "Is Not Known";
     if (op === "not_equals") return "Is Not";
+    if (op === "lt") return "Is Less Than";
+    if (op === "lte") return "Is Less Than Or Equal To";
+    if (op === "gt") return "Is Greater Than";
+    if (op === "gte") return "Is Greater Than or Equal To";
+    if (op === "between") return "Is Between";
+    if (op === "not_between") return "Is Not Between";
     return "Is";
   };
 

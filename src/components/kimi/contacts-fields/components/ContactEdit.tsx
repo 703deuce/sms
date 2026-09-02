@@ -75,7 +75,9 @@ export default function ContactEdit({
           <h1 className="tv-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {c.firstName} {c.lastName} <span className={`tv-pill ${c.optIn === "Subscribed" ? "tv-pill-green" : "tv-pill-red"}`}>{c.optIn}</span>
           </h1>
-          <p className="tv-subtitle" style={{ marginBottom: 0 }}>Created on {c.created} CDT via Manual Creation.</p>
+          <p className="tv-subtitle" style={{ marginBottom: 0 }}>
+            {c.created ? `Created ${c.created}.` : "Contact profile"}
+          </p>
         </div>
       </div>
       <div className="tv-two-col" style={{ marginTop: 22 }}>

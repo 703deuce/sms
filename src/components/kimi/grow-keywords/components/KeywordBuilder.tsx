@@ -291,6 +291,9 @@ export default function KeywordBuilder({
 
             {behaviorOpen && (
               <div className="border-t border-border px-5 py-5">
+                <p className="mb-5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground">
+                  Only list assignment, auto-response, and active status are saved today. Other behavior options below are preview-only.
+                </p>
                 <div className="mb-6">
                   <FieldLabel>
                     Create a subscribed contact when someone texts this keyword?

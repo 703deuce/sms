@@ -67,7 +67,6 @@ export default function LinksListPage({ links, onCreate, onEdit, onDelete, onClo
               <Info size={13} className="ttj-info-icon" />
               <div className="ttj-stat"><strong>{link.all}</strong><span>All</span></div>
               <div className="ttj-stat"><strong>{link.unique}</strong><span>Unique</span></div>
-              <div className="ttj-stat"><strong>{link.bot}</strong><span>Bot</span></div>
             </div>
             <div>
               <span className={`ttj-status ${link.status.toLowerCase()}`}>{link.status}</span>

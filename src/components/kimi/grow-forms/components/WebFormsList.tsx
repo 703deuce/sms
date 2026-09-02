@@ -101,9 +101,13 @@ export default function WebFormsList({
                 </td>
                 <td className="px-4 py-3.5 text-[13px] text-muted-foreground">
                   {f.description || (
-                    <span className="inline-flex cursor-pointer items-center gap-1 text-[13px] text-primary transition-colors hover:text-primary-hover hover:underline">
+                    <button
+                      type="button"
+                      className="inline-flex cursor-pointer items-center gap-1 text-[13px] text-primary transition-colors hover:text-primary-hover hover:underline"
+                      onClick={(e) => { e.stopPropagation(); onEdit?.(f.id); }}
+                    >
                       Add Description <Pencil size={11} />
-                    </span>
+                    </button>
                   )}
                 </td>
                 <td className="px-4 py-3.5 text-[13px] text-foreground/90">{f.type}</td>

@@ -67,7 +67,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
             </div>
             <div>
               <label className="field-label flex justify-between">
-                Auto Response <span className="font-normal text-[#9aa3c0]">64/918</span>
+                Auto Response <span className="font-normal text-[#9aa3c0]">{autoResponse.length}/918</span>
               </label>
               <textarea
                 ref={autoResponseRef}
@@ -87,6 +87,9 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
           </div>
           {behaviorOpen && (
             <div className="space-y-5 border-t border-[#f1f3f9] px-5 pt-4 pb-5">
+              <p className="rounded-lg border border-[#eceef5] bg-[#fafbfe] px-3 py-2 text-[12px] leading-relaxed text-[#7a85a8]">
+                Only list assignment and auto-response are saved today. Other behavior options below are preview-only.
+              </p>
               <div>
                 <div className="mb-2 text-[13px] font-semibold text-[#0f1b3d]">Create a subscribed contact when someone texts this keyword?</div>
                 <div className="seg-control">

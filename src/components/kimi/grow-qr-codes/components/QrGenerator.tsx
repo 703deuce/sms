@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { QrCode as QrIcon, ChevronDown, Check, Download, Pipette, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { keywords, qrActions, webforms } from '../mock-data';
+import { qrActions } from '../mock-data';
 import QrCode from './QrCode';
 import ColorPicker from './ColorPicker';
 
@@ -19,18 +19,38 @@ export default function QrGenerator({
   webformOptions?: Array<{ value: string; label: string }>;
   onDownload?: (ctx: { action: string; keyword: string; webform: string; url: string; color: string }) => Promise<void>;
 }) {
-  const keywordRows = keywordOptions?.length ? keywordOptions : keywords;
-  const webformRows = webformOptions?.length ? webformOptions : webforms;
+  const keywordRows = keywordOptions ?? [];
+  const webformRows = webformOptions ?? [];
+  const initialKeyword = useMemo(
+    () => defaultKeyword || keywordRows[0]?.name || "",
+    [defaultKeyword, keywordRows],
+  );
+  const initialWebform = useMemo(() => webformRows[0]?.value || "", [webformRows]);
   const [action, setAction] = useState('keyword');
-  const [keyword, setKeyword] = useState(defaultKeyword ?? 'Jot');
-  const [webform, setWebform] = useState('signup');
+  const [keyword, setKeyword] = useState(initialKeyword);
+  const [webform, setWebform] = useState(initialWebform);
   const [url, setUrl] = useState('');
   const [color, setColor] = useState('#3e4a57');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<'action' | 'keyword' | 'webform' | null>(null);
   const [kwSearch, setKwSearch] = useState('');
 
+  useEffect(() => {
+    if (defaultKeyword) setKeyword(defaultKeyword);
+    else if (!keyword && keywordRows[0]?.name) setKeyword(keywordRows[0].name);
+  }, [defaultKeyword, keyword, keywordRows]);
+
+  useEffect(() => {
+    if (!webform && webformRows[0]?.value) setWebform(webformRows[0].value);
+  }, [webform, webformRows]);
+
   const filtered = keywordRows.filter((k) => k.name.toLowerCase().includes(kwSearch.toLowerCase()));
+  const canDownload =
+    action === "url"
+      ? Boolean(url.trim())
+      : action === "keyword"
+        ? Boolean(keyword.trim())
+        : Boolean(webform.trim());
 
   const select = (
     label: string, value: string, opts: { value: string; label: string }[],
@@ -99,8 +119,16 @@ export default function QrGenerator({
       <div className="flex gap-8" onClick={(e) => e.stopPropagation()}>
         <div className="surface w-[400px] shrink-0 space-y-5 self-start rounded-xl bg-card p-6">
           {select('What do you want this QR code to do?', action, qrActions, 'action', setAction)}
-          {action === 'keyword' && select('Select a Keyword', keyword, keywordRows.map((k) => ({ value: k.name, label: k.name })), 'keyword', setKeyword, true)}
-          {action === 'webform' && select('Select a Web Form', webform, webformRows, 'webform', setWebform)}
+          {action === 'keyword' && (
+            keywordRows.length > 0
+              ? select('Select a Keyword', keyword, keywordRows.map((k) => ({ value: k.name, label: k.name })), 'keyword', setKeyword, true)
+              : <p className="text-[13px] text-muted-foreground">Create a keyword in Grow → Keywords before generating a QR code.</p>
+          )}
+          {action === 'webform' && (
+            webformRows.length > 0
+              ? select('Select a Web Form', webform, webformRows, 'webform', setWebform)
+              : <p className="text-[13px] text-muted-foreground">Create a web form in Grow → Forms before generating a QR code.</p>
+          )}
           {action === 'url' && (
             <div>
               <label className="mb-1.5 block text-[13px] font-semibold text-foreground">Destination URL</label>
@@ -143,7 +171,7 @@ export default function QrGenerator({
 
       <div className="mt-10 flex items-center justify-end gap-3 border-t border-border pt-5">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button onClick={() => void onDownload?.({ action, keyword, webform, url, color })}>
+        <Button disabled={!canDownload} onClick={() => void onDownload?.({ action, keyword, webform, url, color })}>
           <Download size={15} /> Download
         </Button>
       </div>

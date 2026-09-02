@@ -1,8 +1,8 @@
 "use client";
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Users, ChevronDown, Save, Eye, PieChart as PieIcon, Send, Loader2 } from "lucide-react";
 import ConditionRow, { ConditionState } from "./ConditionRow";
-import { computeMatched, Segment } from "../mock-data";
+import { Segment } from "../mock-data";
 import { PieSlice } from "./SegmentsList";
 import type { KimiConditionGroup } from "@/lib/contacts/kimi-segment-condition-map";
 import { segmentConditionsToKimiGroups } from "@/lib/contacts/kimi-segment-condition-map";
@@ -51,13 +51,11 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
   const [saveMenu, setSaveMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const matched = useMemo(() => computeMatched(name, groups), [groups, name]);
-
   useEffect(() => {
     if (!onPreviewCount) {
-      setCalculating(true);
-      const t = setTimeout(() => { setDisplayCount(matched); setCalculating(false); }, 450);
-      return () => clearTimeout(t);
+      setDisplayCount(0);
+      setCalculating(false);
+      return;
     }
     let cancelled = false;
     setCalculating(true);
@@ -80,7 +78,7 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
       cancelled = true;
       clearTimeout(t);
     };
-  }, [groups, matched, onPreviewCount]);
+  }, [groups, onPreviewCount]);
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setSaveMenu(false); };
@@ -101,7 +99,7 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
       id: editing?.id ?? `s_${Date.now()}`,
       name: name || "Untitled Segment",
       createdAt: editing?.createdAt ?? "Today @ " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      contacts: displayCount ?? matched,
+      contacts: displayCount ?? 0,
     };
     const finish = (seg: Segment) => {
       setSaveMenu(false);
@@ -111,7 +109,7 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
       void onSaveSegment({
         name: name || "Untitled Segment",
         editing,
-        contactCount: displayCount ?? matched,
+        contactCount: displayCount ?? 0,
         groups,
       })
         .then(finish)
@@ -156,7 +154,9 @@ export default function CreateSegment({ editing, onBack, onSaved, onViewContacts
               <p className="text-xl font-bold leading-6 tracking-tight text-foreground tabular-nums h-6">
                 {calculating
                   ? <Loader2 className="h-4 w-4 animate-spin text-primary mt-1 ml-auto" />
-                  : (displayCount ?? 0).toLocaleString()}
+                  : displayCount == null
+                    ? "—"
+                    : displayCount.toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">Matched contacts</p>
             </div>

@@ -25,12 +25,25 @@ export function mapOptInFormToKimi(f: {
   url?: string | null;
   updatedAt?: string;
   createdAt?: string;
+  config?: unknown;
 }): WebForm {
+  const config =
+    f.config && typeof f.config === "object" ? (f.config as Record<string, unknown>) : {};
+  const description =
+    typeof config.description === "string" && config.description.trim()
+      ? config.description.trim()
+      : "";
+  const formType =
+    config.contactMode === "update" || config.layout
+      ? "Landing Page"
+      : f.url?.includes("/embed/")
+        ? "Website Embed"
+        : "Landing Page";
   return {
     id: f.id,
     name: f.name,
-    description: f.listName || "",
-    type: "Landing Page",
+    description,
+    type: formType,
     connectedLists: f.listName ? 1 : 0,
     status: f.status === "Inactive" ? "Inactive" : "Active",
     lastSaved: formatSaved(f.updatedAt || f.createdAt),

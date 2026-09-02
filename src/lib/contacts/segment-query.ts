@@ -6,7 +6,13 @@ export type SegmentOperator =
   | "contains"
   | "not_contains"
   | "exists"
-  | "not_exists";
+  | "not_exists"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "between"
+  | "not_between";
 
 export type SegmentRule = {
   /**
@@ -105,6 +111,53 @@ function stringVal(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "string") return v;
   return String(v);
+}
+
+function parseNumeric(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseBetweenValue(raw: string): { min: number; max: number } | null {
+  const parts = raw.split(/[-–—,]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const min = Number(parts[0]);
+  const max = Number(parts[1]);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return { min: Math.min(min, max), max: Math.max(min, max) };
+}
+
+function matchNumeric(actual: number | null, rule: SegmentRule): boolean {
+  if (actual == null) {
+    return rule.op === "not_exists";
+  }
+  const target = parseNumeric(rule.value);
+  const between = rule.value ? parseBetweenValue(rule.value) : null;
+  switch (rule.op) {
+    case "equals":
+      return target != null && actual === target;
+    case "not_equals":
+      return target != null && actual !== target;
+    case "gt":
+      return target != null && actual > target;
+    case "gte":
+      return target != null && actual >= target;
+    case "lt":
+      return target != null && actual < target;
+    case "lte":
+      return target != null && actual <= target;
+    case "between":
+      return between != null && actual >= between.min && actual <= between.max;
+    case "not_between":
+      return between != null && (actual < between.min || actual > between.max);
+    case "exists":
+      return true;
+    case "not_exists":
+      return false;
+    default:
+      return target != null && actual === target;
+  }
 }
 
 function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
@@ -296,6 +349,17 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
         ? (contact.customFields as Record<string, unknown>)
         : {};
     const raw = cf[key];
+    if (
+      key === "age" ||
+      rule.op === "gt" ||
+      rule.op === "gte" ||
+      rule.op === "lt" ||
+      rule.op === "lte" ||
+      rule.op === "between" ||
+      rule.op === "not_between"
+    ) {
+      return matchNumeric(parseNumeric(raw), rule);
+    }
     const val = stringVal(raw).toLowerCase();
     const present = raw !== undefined && raw !== null && stringVal(raw) !== "";
     switch (rule.op) {
