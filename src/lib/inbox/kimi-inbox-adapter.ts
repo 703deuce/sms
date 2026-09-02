@@ -471,10 +471,16 @@ export async function sendNewMessage(input: {
 
 export function downloadTranscript(convo: Conversation) {
   const lines = convo.messages
-    .filter((m) => m.kind === "inbound" || m.kind === "outbound" || m.kind === "note")
+    .filter((m) => m.kind === "inbound" || m.kind === "outbound" || m.kind === "note" || m.kind === "mms")
     .map((m) => {
       const who = m.kind === "inbound" ? convo.name : m.author || "You";
-      return `[${m.time}] ${who}: ${m.text || ""}`;
+      let mediaNote = "";
+      if (m.kind === "mms") {
+        const urls = m.images?.length ? m.images : m.image ? [m.image] : [];
+        mediaNote = urls.length ? ` [MMS: ${urls.join(", ")}]` : " [MMS]";
+      }
+      const text = m.text || m.caption || "";
+      return `[${m.time}] ${who}: ${text}${mediaNote}`;
     });
   const blob = new Blob([lines.join("\n\n")], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -510,21 +516,22 @@ export async function syncConversationUpdate(
       return patchConversation(prev.id, { action: "note", body: added.text });
     }
   }
+
+  const patch: Record<string, unknown> = {};
   if (next.status !== prev.status) {
-    return patchConversation(prev.id, { status: kimiStatusToApi(next.status) });
+    patch.status = kimiStatusToApi(next.status);
   }
   if (next.assignee !== prev.assignee) {
-    return patchConversation(prev.id, {
-      assigneeId: resolveAssigneeApiId(next.assignee, ctx),
-    });
+    patch.assigneeId = resolveAssigneeApiId(next.assignee, ctx);
   }
   const tagsChanged =
     next.tags.length !== prev.tags.length || next.tags.some((t, i) => t !== prev.tags[i]);
   if (tagsChanged) {
-    return patchConversation(prev.id, { tags: tagKeysToApiNames(next.tags, tagCatalog) });
+    patch.tags = tagKeysToApiNames(next.tags, tagCatalog);
   }
   if (next.unread !== prev.unread) {
-    return patchConversation(prev.id, { unread: next.unread });
+    patch.unread = next.unread;
   }
-  return null;
+  if (Object.keys(patch).length === 0) return null;
+  return patchConversation(prev.id, patch);
 }

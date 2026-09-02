@@ -266,10 +266,11 @@ export async function loadCampaignById(workspaceId: string, id: string) {
 export async function loadConversations(
   workspaceId: string,
   filters?: import("@/lib/mass-texting/inbox-filters").InboxListFilters,
+  userId?: string,
 ): Promise<Conversation[]> {
   const { buildConversationWhere } = await import("@/lib/mass-texting/inbox-filters");
   const { INBOX_LIST_DEFAULT_TAKE } = await import("@/lib/inbox/inbox-pagination");
-  const where = buildConversationWhere(workspaceId, filters ?? { product: "all" });
+  const where = buildConversationWhere(workspaceId, filters ?? { product: "all" }, userId);
   const rows = await getPrisma().conversation.findMany({
     where,
     orderBy: { updatedAt: "desc" },
@@ -277,7 +278,7 @@ export async function loadConversations(
     include: {
       contact: true,
       assignee: { select: { id: true, name: true, email: true } },
-      messages: { orderBy: { createdAt: "asc" }, take: 100 },
+      messages: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
 

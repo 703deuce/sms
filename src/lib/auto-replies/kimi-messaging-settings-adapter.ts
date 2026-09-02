@@ -115,9 +115,23 @@ export async function persistInboxTag(
   return inboxTagsFromSettings(saved.inboxTagsJson);
 }
 
+export async function migrateConversationTags(input: {
+  rename?: { from: string; to: string };
+  remove?: string;
+}): Promise<void> {
+  const res = await fetch("/api/inbox/tags", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Could not update conversation tags");
+}
+
 export async function deleteInboxTag(tagName: string): Promise<InboxTagDefinition[]> {
   const settings = await fetchMessagingRuntimeSettings();
   const existing = inboxTagsFromSettings(settings.inboxTagsJson);
+  await migrateConversationTags({ remove: tagName });
   const next = existing.filter((t) => t.name !== tagName && t.id !== tagName);
   const saved = await patchMessagingRuntimeSettings({ inboxTagsJson: next });
   return inboxTagsFromSettings(saved.inboxTagsJson);
@@ -129,6 +143,10 @@ export async function updateInboxTag(
 ): Promise<InboxTagDefinition[]> {
   const settings = await fetchMessagingRuntimeSettings();
   const existing = inboxTagsFromSettings(settings.inboxTagsJson);
+  const nextName = patch.name?.trim();
+  if (nextName && nextName !== tagName) {
+    await migrateConversationTags({ rename: { from: tagName, to: nextName } });
+  }
   const next = existing.map((t) =>
     t.name === tagName || t.id === tagName ? { ...t, ...patch, name: patch.name ?? t.name } : t,
   );

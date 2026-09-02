@@ -5,16 +5,19 @@ import { mapConversation } from "@/lib/mappers";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { parseMentionsFromNote } from "@/lib/inbox/parse-mentions";
 import { loadTeamMembers } from "@/lib/workspace-data";
+import { assertInboxEnabled } from "@/lib/inbox/inbox-access";
 
 async function loadFull(workspaceId: string, id: string) {
-  return getPrisma().conversation.findFirst({
+  const row = await getPrisma().conversation.findFirst({
     where: { id, workspaceId },
     include: {
       contact: true,
       assignee: { select: { id: true, name: true, email: true } },
-      messages: { orderBy: { createdAt: "asc" }, take: 200 },
+      messages: { orderBy: { createdAt: "desc" }, take: 200 },
     },
   });
+  if (!row) return null;
+  return { ...row, messages: [...row.messages].reverse() };
 }
 
 async function loadCampaignName(workspaceId: string, campaignId: string | null | undefined) {
@@ -33,6 +36,7 @@ export async function GET(
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    await assertInboxEnabled(auth.workspaceId);
     const { id } = await params;
     const row = await loadFull(auth.workspaceId, id);
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

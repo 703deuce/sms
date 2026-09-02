@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { KimiConversationsConnected } from "@/components/inbox/kimi-conversations-connected";
 import { inboxFiltersFromUrlParams } from "@/lib/inbox/conversation-url-filters";
+import { loadInboxPermissions } from "@/lib/inbox/inbox-access";
 import {
   loadConversations,
   loadTeamMembers,
@@ -15,9 +16,10 @@ export default async function ConversationsPage({
   const { workspaceId, session } = await requireWorkspaceContext();
   const params = await searchParams;
   const listFilters = inboxFiltersFromUrlParams(params);
-  const [conversations, teamMembers] = await Promise.all([
-    loadConversations(workspaceId, listFilters),
+  const [conversations, teamMembers, inboxPermissions] = await Promise.all([
+    loadConversations(workspaceId, listFilters, session.userId),
     loadTeamMembers(workspaceId),
+    loadInboxPermissions(workspaceId),
   ]);
 
   const currentMember = teamMembers.find((m) => m.id === session.userId);
@@ -38,6 +40,7 @@ export default async function ConversationsPage({
           teamMembers={teamMembers}
           currentUserId={session.userId}
           currentUserName={currentMember?.name ?? session.name ?? "You"}
+          initialPermissions={inboxPermissions}
           initialConversationId={initialConversationId}
           initialContactId={initialContactId}
           initialDraft={initialDraft}

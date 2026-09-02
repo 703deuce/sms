@@ -26,9 +26,7 @@ export function InboxContactDrawer({
     ? `${contact.firstName} ${contact.lastName}`.trim()
     : conversation?.contactName || "Contact";
 
-  const subscribed =
-    contact?.status === "Subscribed" ||
-    (!contact && conversation && conversation.status !== "Closed");
+  const subscribed = contact?.status === "Subscribed";
 
   return (
     <>

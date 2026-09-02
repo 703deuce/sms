@@ -224,6 +224,9 @@
   .kimi-conversations .conversations-list--mobile-hidden {
     display: none !important;
   }
+  .kimi-conversations .conversations-rail--mobile-hidden {
+    display: none !important;
+  }
   .kimi-conversations .conversations-thread--mobile-full {
     flex: 1 !important;
     width: 100% !important;

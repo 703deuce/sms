@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState, type MutableRefObject } from "react";
+import React, { useCallback, useEffect, useMemo, useState, type MutableRefObject } from "react";
 import ThreadView from "@/components/kimi/conversations/components/ThreadView";
 import type { Conversation, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { ConversationsComposer } from "@/components/inbox/conversations-composer";
@@ -9,6 +9,7 @@ import {
   InboxAiBanner,
   useInboxAiAssist,
 } from "@/components/ai-replies/inbox-ai-assist-panel";
+import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 
 type Props = {
   convo: Conversation;
@@ -48,6 +49,15 @@ export function ConversationsThreadArea({
   const assist = useInboxAiAssist(convo.id);
   const [prefill, setPrefill] = useState("");
   const [viewers, setViewers] = useState<Array<{ userId: string; userName: string }>>([]);
+
+  const defaultFromNumberId = useMemo(() => {
+    if (convo.fromE164 && phoneNumbers.length) {
+      const target = normalizePhoneE164(convo.fromE164);
+      const match = phoneNumbers.find((n) => normalizePhoneE164(n.number) === target);
+      if (match) return match.id;
+    }
+    return phoneNumbers[0]?.id || "";
+  }, [convo.fromE164, convo.id, phoneNumbers]);
 
   useEffect(() => {
     setPrefill("");
@@ -109,11 +119,11 @@ export function ConversationsThreadArea({
           onPrefillApplied={() => setPrefill("")}
           teammates={teammates}
           phoneNumbers={phoneNumbers}
-          defaultFromNumberId={phoneNumbers[0]?.id}
+          defaultFromNumberId={defaultFromNumberId}
         />
       </>
     ),
-    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef],
+    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef, defaultFromNumberId],
   );
 
   return (

@@ -12,11 +12,13 @@ import {
   parseInboxSearchParams,
 } from "@/lib/mass-texting/inbox-filters";
 import { prismaProductSourceToApp, productSourceLabel } from "@/lib/mass-texting/product-source";
+import { assertInboxEnabled } from "@/lib/inbox/inbox-access";
 
 export async function GET(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    await assertInboxEnabled(auth.workspaceId);
     const { searchParams } = new URL(request.url);
     const filters = parseInboxSearchParams(searchParams);
     const take = parseInboxTake(searchParams.get("take"));

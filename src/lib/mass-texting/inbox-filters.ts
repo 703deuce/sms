@@ -39,7 +39,7 @@ export function parseInboxSearchParams(
     filter: searchParams.get("filter") || undefined,
     assigneeId: searchParams.get("assigneeId") || undefined,
     status: parseStatusParam(searchParams.get("status")),
-    tag: searchParams.get("tag") || undefined,
+    tag: searchParams.get("tag") ? decodeURIComponent(searchParams.get("tag")!) : undefined,
     q: searchParams.get("q")?.trim() || undefined,
     take: searchParams.get("take") ? Number(searchParams.get("take")) : undefined,
     cursor: searchParams.get("cursor") || undefined,

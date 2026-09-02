@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -67,12 +66,13 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
           </button>
         );
       })}
-      <Link
-        href={basePath}
+      <button
+        type="button"
+        onClick={() => setFilter({ product: null, unread: false })}
         className="rounded-full border border-border px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
       >
         Clear filters
-      </Link>
+      </button>
     </div>
   );
 }
