@@ -35,6 +35,21 @@ const METRIC_META: Record<ActivityMetric, { label: string; color: string }> = {
   replies: { label: "Replies", color: "#8b5cf6" },
 };
 
+const EMPTY_ACTIVITY_COPY: Record<ActivityMetric, { title: string; body: string }> = {
+  sent: {
+    title: "No messages sent yet",
+    body: "Send your first campaign to see delivery trends here.",
+  },
+  delivered: {
+    title: "No deliveries yet",
+    body: "Delivered volume will appear after your first campaign sends.",
+  },
+  replies: {
+    title: "No replies yet",
+    body: "When contacts respond, reply volume will show up on this chart.",
+  },
+};
+
 function SegmentedControl<T extends string>({
   options,
   value,
@@ -87,9 +102,9 @@ function ActivityChart({
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Send className="h-4.5 w-4.5" />
         </div>
-        <p className="mt-3 text-[13px] font-semibold text-foreground">No messages sent yet</p>
+        <p className="mt-3 text-[13px] font-semibold text-foreground">{EMPTY_ACTIVITY_COPY[metric].title}</p>
         <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
-          Send your first campaign to see delivery trends here.
+          {EMPTY_ACTIVITY_COPY[metric].body}
         </p>
         <Link href="/campaigns/new/promotion" className="mt-4">
           <Button size="sm">Create campaign</Button>
@@ -263,6 +278,7 @@ export function SmsDashboardView({ metrics }: Props) {
     setActivityLoading(true);
     try {
       const res = await fetch(`/api/sms/dashboard/activity?days=${d}`);
+      if (!res.ok) throw new Error("activity fetch failed");
       const json = await res.json();
       setActivity(json.data?.series || []);
     } catch {
@@ -381,12 +397,14 @@ export function SmsDashboardView({ metrics }: Props) {
           label="Messages Sent"
           value={formatNumber(metrics.messagesSent30Days)}
           hint="Last 30 days"
+          href="/sms/analytics"
           muted={metrics.messagesSent30Days === 0}
         />
         <KpiStat
           label="Delivery Rate"
           value={formatPercent(metrics.deliveryRate)}
           hint={`${formatNumber(metrics.deliveredCount)} delivered`}
+          href="/sms/analytics?tab=messaging"
           muted={metrics.messagesSent30Days === 0}
         />
         <KpiStat

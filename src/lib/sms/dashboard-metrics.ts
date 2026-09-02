@@ -113,7 +113,16 @@ export async function loadSmsDashboardActivity(
     buckets.set(key, row);
   }
 
-  return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const series: SmsDashboardActivityPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = dayKey(d);
+    series.push(buckets.get(key) || { date: key, sent: 0, delivered: 0, replies: 0 });
+  }
+
+  return series;
 }
 
 export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsDashboardMetrics> {
@@ -245,6 +254,7 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
         c.scheduledAt &&
         c.scheduledAt >= new Date(),
     )
+    .sort((a, b) => a.scheduledAt!.getTime() - b.scheduledAt!.getTime())
     .slice(0, 5)
     .map((c) => ({
       id: c.id,
@@ -274,39 +284,41 @@ export async function loadSmsDashboardMetrics(workspaceId: string): Promise<SmsD
       };
     });
 
-  const recentCampaigns = await Promise.all(
-    recentSource.map(async (c) => {
-      const mapped = mapCampaign(c);
-      const [rowSent, rowDelivered, lastSent] = await Promise.all([
-        prisma.campaignMessage.count({
-          where: { campaignId: c.id, status: { in: SENT_STATUSES } },
-        }),
-        prisma.campaignMessage.count({
-          where: { campaignId: c.id, status: { in: DELIVERED_STATUSES } },
-        }),
-        prisma.campaignMessage.findFirst({
-          where: { campaignId: c.id, sentAt: { not: null } },
-          orderBy: { sentAt: "desc" },
-          select: { sentAt: true },
-        }),
-      ]);
-      const sent = rowSent > 0 ? rowSent : mapped.sent;
-      const delivered = rowSent > 0 ? rowDelivered : mapped.delivered;
-      return {
-        id: mapped.id,
-        name: mapped.name,
-        status: mapped.status,
-        sent,
-        deliveryRate: pct(delivered, sent),
-        clicks: mapped.clicks,
-        replies: mapped.replies,
-        sentAt:
-          lastSent?.sentAt?.toISOString() ??
-          mapped.scheduledAt ??
-          c.createdAt.toISOString(),
-      };
-    }),
-  );
+  const recentCampaigns = (
+    await Promise.all(
+      recentSource.map(async (c) => {
+        const mapped = mapCampaign(c);
+        const [rowSent, rowDelivered, lastSent] = await Promise.all([
+          prisma.campaignMessage.count({
+            where: { campaignId: c.id, status: { in: SENT_STATUSES } },
+          }),
+          prisma.campaignMessage.count({
+            where: { campaignId: c.id, status: { in: DELIVERED_STATUSES } },
+          }),
+          prisma.campaignMessage.findFirst({
+            where: { campaignId: c.id, sentAt: { not: null } },
+            orderBy: { sentAt: "desc" },
+            select: { sentAt: true },
+          }),
+        ]);
+        const sent = rowSent > 0 ? rowSent : mapped.sent;
+        const delivered = rowSent > 0 ? rowDelivered : mapped.delivered;
+        return {
+          id: mapped.id,
+          name: mapped.name,
+          status: mapped.status,
+          sent,
+          deliveryRate: pct(delivered, sent),
+          clicks: mapped.clicks,
+          replies: mapped.replies,
+          sentAt:
+            lastSent?.sentAt?.toISOString() ??
+            mapped.scheduledAt ??
+            c.createdAt.toISOString(),
+        };
+      }),
+    )
+  ).sort((a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime());
 
   return {
     activeContacts,
