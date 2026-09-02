@@ -23,7 +23,7 @@ function StatusChip({ status }: { status: Contact["status"] }) {
 export default function ContactsList({ contacts: contactsProp, totalContacts }: { contacts?: Contact[]; totalContacts?: number }) {
   const [q, setQ] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const source = contactsProp ?? mockContacts;
+  const source = contactsProp !== undefined ? contactsProp : mockContacts;
   const filtered = source.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="p-6 max-w-6xl mx-auto seg-fade">
@@ -44,7 +44,13 @@ export default function ContactsList({ contacts: contactsProp, totalContacts }: 
             className="seg-input w-full h-9 rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/30"
           />
         </div>
-        <div className="flex gap-2.5">
+        <div className="flex gap-2.5 items-center">
+          <Link
+            href="/contacts"
+            className="h-9 px-3.5 rounded-lg border border-border bg-card hover:bg-muted/70 text-sm font-medium text-foreground flex items-center gap-2 transition-colors shadow-sm"
+          >
+            View all contacts
+          </Link>
           <Link
             href="/contacts/imports"
             className="h-9 px-3.5 rounded-lg border border-border bg-card hover:bg-muted/70 text-sm font-medium text-foreground flex items-center gap-2 transition-colors shadow-sm"

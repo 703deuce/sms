@@ -55,12 +55,12 @@ export default function KeywordsList({
   onCreateQr?: (id: string) => void;
   onCreateTap?: (id: string) => void;
 }) {
-  const [keywords, setKeywords] = useState<Keyword[]>(keywordsProp ?? initialKeywords);
+  const [keywords, setKeywords] = useState<Keyword[]>(keywordsProp !== undefined ? keywordsProp : initialKeywords);
   const [query, setQuery] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   useEffect(() => {
-    if (keywordsProp) setKeywords(keywordsProp);
+    if (keywordsProp !== undefined) setKeywords(keywordsProp);
   }, [keywordsProp]);
 
   const filtered = keywords.filter(

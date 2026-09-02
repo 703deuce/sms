@@ -10,10 +10,8 @@ import SegmentsList from "@/components/kimi/contacts-segments/components/Segment
 import CreateSegment from "@/components/kimi/contacts-segments/components/CreateSegment";
 import SegmentContacts from "@/components/kimi/contacts-segments/components/SegmentContacts";
 import SegmentSavedModal from "@/components/kimi/contacts-segments/components/SegmentSavedModal";
-import ContactsList from "@/components/kimi/contacts-segments/components/ContactsList";
-import ListsList from "@/components/kimi/contacts-segments/components/ListsList";
 import Dashboard from "@/components/kimi/contacts-segments/components/Dashboard";
-import type { Contact, ContactList, Segment } from "@/components/kimi/contacts-segments/mock-data";
+import type { Contact, Segment } from "@/components/kimi/contacts-segments/mock-data";
 import {
   createSegment,
   deleteSegment,
@@ -23,7 +21,7 @@ import {
   updateSegment,
 } from "@/lib/contacts/kimi-segments-adapter";
 import { kimiGroupsToSegmentConditions } from "@/lib/contacts/kimi-segment-condition-map";
-import { fetchContacts, fetchContactStats } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchContactStats } from "@/lib/contacts/kimi-contacts-adapter";
 import { fetchLists } from "@/lib/contacts/kimi-lists-adapter";
 import { fetchInboxList } from "@/lib/inbox/kimi-inbox-adapter";
 import { Send, CheckCircle2, LayoutDashboard } from "lucide-react";
@@ -41,9 +39,8 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   const router = useRouter();
   const [view, setView] = useState<View>({ name: "audience", tab: "segments" });
   const [segments, setSegments] = useState<Segment[]>(initialSegments);
-  const [audienceContacts, setAudienceContacts] = useState<Contact[]>([]);
-  const [audienceLists, setAudienceLists] = useState<ContactList[]>([]);
   const [segmentContacts, setSegmentContacts] = useState<Contact[]>([]);
+  const [listOptions, setListOptions] = useState<string[]>([]);
   const [savedSegment, setSavedSegment] = useState<Segment | null>(null);
   const [campaignSent, setCampaignSent] = useState(false);
   const [error, setError] = useState("");
@@ -59,29 +56,8 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   }, []);
 
   const loadAudience = useCallback(async () => {
-    const [apiContacts, apiLists] = await Promise.all([fetchContacts(), fetchLists()]);
-    setAudienceContacts(
-      apiContacts.map((c) => ({
-        id: c.id,
-        phone: c.mobile,
-        firstName: c.firstName,
-        lastName: c.lastName,
-        email: c.email,
-        state: "",
-        age: null,
-        status: (c.status === "Subscribed" || c.status === "Unsubscribed"
-          ? c.status
-          : "Unsubscribed") as "Subscribed" | "Unsubscribed",
-      })),
-    );
-    setAudienceLists(
-      apiLists.map((l) => ({
-        id: l.id,
-        name: l.name,
-        contacts: l.contacts,
-        createdAt: l.created,
-      })),
-    );
+    const apiLists = await fetchLists();
+    setListOptions(apiLists.map((l) => l.name));
   }, []);
 
   useEffect(() => {
@@ -127,7 +103,17 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
       .catch(() => setSegmentContacts([]));
   }, [view]);
 
-  const goTab = (tab: AudienceTab) => setView({ name: "audience", tab });
+  const goTab = (tab: AudienceTab) => {
+    if (tab === "contacts") {
+      router.push("/contacts");
+      return;
+    }
+    if (tab === "lists") {
+      router.push("/contacts/lists");
+      return;
+    }
+    setView({ name: "audience", tab });
+  };
 
   const handleSaved = (seg: Segment, mode: "segments" | "contacts" | "campaign") => {
     void reload();
@@ -189,15 +175,11 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
           onDelete={(id) => void handleDelete(id)}
         />
       )}
-      {view.name === "audience" && view.tab === "contacts" && (
-        <ContactsList contacts={audienceContacts} totalContacts={dashboardStats.totalContacts} />
-      )}
-      {view.name === "audience" && view.tab === "lists" && <ListsList lists={audienceLists} />}
 
       {view.name === "create" && (
         <CreateSegment
           editing={view.editing}
-          listOptions={audienceLists.map((l) => l.name)}
+          listOptions={listOptions}
           onBack={() => setView({ name: "audience", tab: "segments" })}
           onSaved={handleSaved}
           onViewContacts={(s) => setView({ name: "contacts", segment: s })}

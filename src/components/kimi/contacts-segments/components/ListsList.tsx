@@ -7,7 +7,7 @@ import { lists as mockLists, type ContactList } from "../mock-data";
 export default function ListsList({ lists: listsProp }: { lists?: ContactList[] }) {
   const [q, setQ] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const source = listsProp ?? mockLists;
+  const source = listsProp !== undefined ? listsProp : mockLists;
   const filtered = source.filter(l => l.name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="p-6 max-w-6xl mx-auto seg-fade">
@@ -37,7 +37,7 @@ export default function ListsList({ lists: listsProp }: { lists?: ContactList[] 
         {filtered.map(l => (
           <div key={l.id} className="seg-row grid grid-cols-[1fr_180px_180px_40px] gap-3 px-4 py-3.5 border-t border-border first:border-t-0 items-center text-sm transition-colors hover:bg-muted/40">
             <Link
-              href="/contacts/lists"
+              href={`/contacts/lists?listId=${encodeURIComponent(l.id)}`}
               className="font-medium text-foreground flex items-center gap-2.5 hover:text-primary transition-colors"
             >
               <span className="h-7 w-7 rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 flex items-center justify-center shrink-0">
@@ -60,11 +60,11 @@ export default function ListsList({ lists: listsProp }: { lists?: ContactList[] 
               {menuFor === l.id && (
                 <div className="absolute right-0 top-8 z-10 min-w-[150px] rounded-lg border border-border bg-card py-1 shadow-lg text-sm">
                   <Link
-                    href="/contacts/lists"
+                    href={`/contacts/lists?listId=${encodeURIComponent(l.id)}`}
                     className="block px-3 py-2 hover:bg-muted"
                     onClick={() => setMenuFor(null)}
                   >
-                    Manage lists
+                    View list
                   </Link>
                 </div>
               )}

@@ -5,11 +5,12 @@ import { ContactList } from "../mock-data";
 
 interface Props {
   lists: ContactList[];
+  highlightListId?: string | null;
   onCreate: () => void;
   onDelete?: (id: string) => void | Promise<void>;
 }
 
-export default function ListsPage({ lists, onCreate, onDelete }: Props) {
+export default function ListsPage({ lists, highlightListId, onCreate, onDelete }: Props) {
   const [search, setSearch] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +64,12 @@ export default function ListsPage({ lists, onCreate, onDelete }: Props) {
           <span></span>
         </div>
         {visible.map((l) => (
-          <div key={l.id} className="table-row grid grid-cols-[1.1fr_1.3fr_190px_40px] transition-colors hover:bg-[#fafbfe]">
+          <div
+            key={l.id}
+            className={`table-row grid grid-cols-[1.1fr_1.3fr_190px_40px] transition-colors hover:bg-[#fafbfe] ${
+              highlightListId === l.id ? "bg-[#eef1fe] ring-1 ring-inset ring-[#3b4ef5]/30" : ""
+            }`}
+          >
             <div>
               <div className="cell-primary">{l.name}</div>
               <div className="cell-sub">Created on {l.created}</div>

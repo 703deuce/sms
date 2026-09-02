@@ -12,7 +12,7 @@ export default function SegmentsList({ segments: segmentsProp, onCreate, onViewC
 }) {
   const [query, setQuery] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const items = segmentsProp ?? initialSegments;
+  const items = segmentsProp !== undefined ? segmentsProp : initialSegments;
 
   useEffect(() => {
     if (!menuFor) return;

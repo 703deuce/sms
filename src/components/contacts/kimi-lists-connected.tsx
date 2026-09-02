@@ -37,6 +37,7 @@ export function KimiListsConnected() {
   const searchParams = useSearchParams();
   const editKeywordId = searchParams.get("editKeyword");
   const createRequested = searchParams.get("create") === "1";
+  const highlightListId = searchParams.get("listId");
   const [page, setPage] = useState<Page>(createRequested ? "createList" : "lists");
   const [lists, setLists] = useState<ContactList[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -196,6 +197,7 @@ export function KimiListsConnected() {
         {page === "lists" && (
           <ListsPage
             lists={lists}
+            highlightListId={highlightListId}
             onCreate={() => goToPage("createList")}
             onDelete={async (id) => {
               await deleteList(id);

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { Users, Lightbulb, X } from "lucide-react";
 import { contacts, CustomField, type Contact } from "../mock-data";
@@ -204,7 +205,7 @@ export default function ContactEdit({
             <div>
               <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--tv-navy)" }}>Need to update multiple contacts?</div>
               <p style={{ fontSize: 12.5, color: "var(--tv-muted)", margin: "6px 0 10px", lineHeight: 1.5 }}>You can easily upload a list using our import tool.</p>
-              <button className="tv-link" style={{ fontWeight: 600 }}>Import a List</button>
+              <Link href="/contacts/imports" className="tv-link" style={{ fontWeight: 600 }}>Import a List</Link>
             </div>
           </div>
         </div>

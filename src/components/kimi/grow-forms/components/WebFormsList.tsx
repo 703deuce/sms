@@ -21,7 +21,7 @@ export default function WebFormsList({
   onOpenForm?: (id: string) => void;
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [rows, setRows] = useState<WebForm[]>(formsProp ?? seedForms);
+  const [rows, setRows] = useState<WebForm[]>(formsProp !== undefined ? formsProp : seedForms);
   const [q, setQ] = useState("");
 
   useEffect(() => {

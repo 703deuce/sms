@@ -360,11 +360,15 @@ export default function FormBuilder({
                     <option value="update">Updates Contacts</option>
                   </select>
                 </Field>
-                <Field label="Contact Lists" hint="When your form is submitted, contacts can be added to a list.">
+                <Field label="Contact Lists" hint="When your form is submitted, contacts are added to one list.">
                   <div className="border border-border rounded-md">
                     {listOptions.map((l) => (
-                      <button key={l.id} onClick={() => setChosenLists((c) => c.includes(l.name) ? c.filter((x) => x !== l.name) : [...c, l.name])}
-                        className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-muted ${chosenLists.includes(l.name) ? "text-indigo-600 font-medium" : "text-foreground"}`}>
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => setChosenLists(chosenLists.includes(l.name) ? [] : [l.name])}
+                        className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-muted ${chosenLists.includes(l.name) ? "text-indigo-600 font-medium" : "text-foreground"}`}
+                      >
                         ☰ {l.name} {chosenLists.includes(l.name) && "✓"}
                       </button>
                     ))}

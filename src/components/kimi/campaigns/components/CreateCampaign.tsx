@@ -31,6 +31,8 @@ import {
 
 type SendMode = "Now" | "Later" | "Recurring";
 
+const COMMON_EMOJIS = ["😀", "🎉", "❤️", "👍", "🔥", "✨", "📣", "🎁", "💰", "📅", "👋", "⭐"];
+
 const MERGE_FIELDS = [
   { label: "First Name", value: "{{first_name}}" },
   { label: "Last Name", value: "{{last_name}}" },
@@ -67,6 +69,7 @@ export default function CreateCampaign({
   const [showMedia, setShowMedia] = useState(false);
   const [showTest, setShowTest] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const [trackPrompt, setTrackPrompt] = useState<string | null>(null);
   const [linkName, setLinkName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -225,6 +228,11 @@ export default function CreateCampaign({
   const insertTag = (tag: string) => {
     updateDraft({ message: `${draft.message} ${tag}`.trim() });
     setShowMerge(false);
+  };
+
+  const insertEmoji = (emoji: string) => {
+    updateDraft({ message: `${draft.message}${emoji}` });
+    setShowEmoji(false);
   };
 
   async function persistDraft(): Promise<string | null> {
@@ -408,9 +416,25 @@ export default function CreateCampaign({
             )}
             <div className="composer-toolbar relative flex items-center gap-1.5 px-2.5 py-2 border-t border-slate-100">
               <button type="button" title="Attach a File" onClick={() => setShowMedia(true)}><Paperclip className="w-4 h-4" /></button>
-              <button type="button" title="Emojis"><Smile className="w-4 h-4" /></button>
               <div className="relative">
-                <button type="button" title="Merge Tags" onClick={() => setShowMerge(!showMerge)}><Braces className="w-4 h-4" /></button>
+                <button type="button" title="Emojis" onClick={() => { setShowEmoji(!showEmoji); setShowMerge(false); }}><Smile className="w-4 h-4" /></button>
+                {showEmoji && (
+                  <div className="absolute bottom-9 left-0 z-20 grid grid-cols-6 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                    {COMMON_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => insertEmoji(emoji)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-indigo-50 transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <button type="button" title="Merge Tags" onClick={() => { setShowMerge(!showMerge); setShowEmoji(false); }}><Braces className="w-4 h-4" /></button>
                 {showMerge && (
                   <div className="absolute bottom-9 left-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 w-64 p-2 fade-in">
                     {MERGE_FIELDS.map((t) => (

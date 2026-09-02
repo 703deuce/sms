@@ -19,7 +19,7 @@ export default function SegmentContacts({
 }) {
   const [q, setQ] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const source = contactsProp ?? mockContacts;
+  const source = contactsProp !== undefined ? contactsProp : mockContacts;
   const filtered = source.filter(c => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
   const total = segment.contacts || source.length;
 
