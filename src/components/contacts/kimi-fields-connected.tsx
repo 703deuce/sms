@@ -5,6 +5,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppShell from "@/components/kimi/contacts-fields/components/AppShell";
 import { View } from "@/components/kimi/contacts-fields/components/Sidebar";
 import ContactsList from "@/components/kimi/contacts-fields/components/ContactsList";
@@ -19,7 +20,7 @@ import {
   mapKimiToDefinition,
   persistCustomFields,
 } from "@/lib/contacts/kimi-fields-adapter";
-import { fetchContacts, fetchContactStats, fetchContactById, fetchContactListOptions, updateContact } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchContacts, fetchContactStats, fetchContactById, fetchContactListOptions, updateContact, deleteContact } from "@/lib/contacts/kimi-contacts-adapter";
 import type { Contact } from "@/components/kimi/contacts-fields/mock-data";
 
 type Props = {
@@ -27,6 +28,7 @@ type Props = {
 };
 
 export function KimiFieldsConnected({ initialFields }: Props) {
+  const router = useRouter();
   const [view, setView] = useState<View>("fields");
   const [apiFields, setApiFields] = useState<CustomFieldDefinition[]>(initialFields);
   const [fields, setFields] = useState<CustomField[]>(() =>
@@ -37,6 +39,7 @@ export function KimiFieldsConnected({ initialFields }: Props) {
   const [editContactId, setEditContactId] = useState("");
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -82,21 +85,37 @@ export function KimiFieldsConnected({ initialFields }: Props) {
 
   const handleSaveField = async (name: string, type: FieldType, desc: string) => {
     setError("");
-    const newDef = mapKimiToDefinition({
-      id: `f${Date.now()}`,
-      name,
-      created: "",
-      description: desc,
-      mergeTag: `{{${name.trim().toLowerCase().replace(/\s+/g, "_")}}}`,
-      type,
-    });
-    const next = [...apiFields, newDef];
+    const wasEdit = Boolean(editingField);
+    const next = editingField
+      ? apiFields.map((f) => {
+          const key = editingField.mergeTag.replace(/^\{\{|\}\}$/g, "");
+          if (f.key !== key) return f;
+          const updated = mapKimiToDefinition({
+            ...editingField,
+            name,
+            description: desc,
+            type,
+          });
+          return { ...updated, key };
+        })
+      : [
+          ...apiFields,
+          mapKimiToDefinition({
+            id: `f${Date.now()}`,
+            name,
+            created: "",
+            description: desc,
+            mergeTag: `{{${name.trim().toLowerCase().replace(/\s+/g, "_")}}}`,
+            type,
+          }),
+        ];
     try {
       const saved = await persistCustomFields(next);
       setApiFields(saved);
       setFields(saved.filter((f) => !f.system).map(mapDefinitionToKimi));
+      setEditingField(null);
       setView("fields");
-      showToast("Custom field created.");
+      showToast(wasEdit ? "Custom field updated." : "Custom field created.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -123,15 +142,61 @@ export function KimiFieldsConnected({ initialFields }: Props) {
       {toast && <div className="tv-toast">{toast}</div>}
       {error && <div className="tv-toast text-red-600">{error}</div>}
       {view === "fields" && (
-        <CustomFieldsList fields={fields} onCreate={() => setView("createField")} onDelete={(id) => void handleDelete(id)} />
+        <CustomFieldsList
+          fields={fields}
+          onCreate={() => {
+            setEditingField(null);
+            setView("createField");
+          }}
+          onEdit={(id) => {
+            const field = fields.find((f) => f.id === id);
+            if (!field) return;
+            setEditingField(field);
+            setView("createField");
+          }}
+          onDelete={(id) => void handleDelete(id)}
+        />
       )}
       {view === "createField" && (
-        <CreateFieldForm onSave={handleSaveField} onBack={() => setView("fields")} />
+        <CreateFieldForm
+          editingKey={editingField ? editingField.mergeTag.replace(/^\{\{|\}\}$/g, "") : undefined}
+          initialName={editingField?.name}
+          initialType={editingField?.type}
+          initialDesc={editingField?.description}
+          onSave={handleSaveField}
+          onBack={() => {
+            setEditingField(null);
+            setView("fields");
+          }}
+        />
       )}
       {view === "contacts" && (
         <ContactsList
           contacts={contactRows}
           stats={contactStats}
+          onCreateContact={() => router.push("/contacts/create")}
+          onUnsubscribe={async (id) => {
+            setError("");
+            try {
+              await updateContact(id, { optInLabel: "Unsubscribed" });
+              await reloadContacts();
+              showToast("Contact unsubscribed.");
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not unsubscribe contact");
+            }
+          }}
+          onDeleteContact={async (id) => {
+            setError("");
+            if (!window.confirm("Unsubscribe and delete this contact?")) return;
+            try {
+              await updateContact(id, { optInLabel: "Unsubscribed" });
+              await deleteContact(id);
+              await reloadContacts();
+              showToast("Contact deleted.");
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not delete contact");
+            }
+          }}
           onEdit={(id) => {
             setEditContactId(id);
             void fetchContactById(id)

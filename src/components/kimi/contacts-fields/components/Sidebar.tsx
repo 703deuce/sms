@@ -1,9 +1,11 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { Home, Users, Megaphone, Inbox, Workflow, BarChart3, Wrench, Bell, LifeBuoy, ChevronDown, Sparkles, ChevronsLeft } from "lucide-react";
 
 export type View = "contacts" | "contactEdit" | "fields" | "createField";
 
 export default function Sidebar({ view, onNavigate }: { view: View; onNavigate: (v: View) => void }) {
+  const router = useRouter();
   const item = (label: string, icon: React.ReactNode, active = false, onClick?: () => void, sub = false) => (
     <button key={label} className={`tv-nav-item ${active ? "active" : ""} ${sub ? "tv-nav-sub" : ""}`} onClick={onClick}>
       {icon}
@@ -23,8 +25,8 @@ export default function Sidebar({ view, onNavigate }: { view: View; onNavigate: 
           <ChevronDown size={14} />
         </button>
         {item("Contacts", <></>, view === "contacts" || view === "contactEdit", () => onNavigate("contacts"), true)}
-        {item("Lists", <></>, false, undefined, true)}
-        {item("Segments", <></>, false, undefined, true)}
+        {item("Lists", <></>, false, () => router.push("/contacts/lists"), true)}
+        {item("Segments", <></>, false, () => router.push("/contacts/segments"), true)}
         {item("Campaigns", <Megaphone size={16} strokeWidth={2} />)}
         {item("Inbox", <Inbox size={16} strokeWidth={2} />)}
         {item("Workflows", <Workflow size={16} strokeWidth={2} />)}

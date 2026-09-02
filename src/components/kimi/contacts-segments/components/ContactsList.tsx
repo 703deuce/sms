@@ -1,7 +1,7 @@
 "use client";
-import { Search, Plus, MoreVertical, Upload, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { Search, Plus, MoreVertical, Upload, SearchX } from "lucide-react";
 import { contacts as mockContacts, type Contact } from "../mock-data";
 
 function StatusChip({ status }: { status: Contact["status"] }) {
@@ -60,7 +60,9 @@ export default function ContactsList({ contacts: contactsProp }: { contacts?: Co
         {filtered.map(c => (
           <div key={c.id} className="seg-row grid grid-cols-[160px_1fr_1fr_120px_120px_40px] gap-3 px-4 py-3 border-t border-border first:border-t-0 items-center text-sm transition-colors hover:bg-muted/40">
             <span className="font-medium text-primary tabular-nums">{c.phone}</span>
-            <span className="font-medium text-foreground">{c.firstName} {c.lastName}</span>
+            <Link href={`/contacts/${c.id}`} className="font-medium text-foreground hover:text-primary hover:underline">
+              {c.firstName} {c.lastName}
+            </Link>
             <span className="text-muted-foreground truncate">{c.email}</span>
             <span className="text-muted-foreground">{c.state}</span>
             <span><StatusChip status={c.status} /></span>

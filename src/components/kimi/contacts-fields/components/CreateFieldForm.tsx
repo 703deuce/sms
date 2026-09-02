@@ -1,24 +1,49 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ClipboardList, Info, Check, ChevronDown } from "lucide-react";
 import { dataTypeOptions, FieldType } from "../mock-data";
 
 export default function CreateFieldForm({
-  onSave, onBack,
-}: { onSave: (name: string, type: FieldType, desc: string) => void; onBack: () => void }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<FieldType | "">("");
-  const [desc, setDesc] = useState("");
+  onSave,
+  onBack,
+  initialName = "",
+  initialType = "" as FieldType | "",
+  initialDesc = "",
+  editingKey,
+}: {
+  onSave: (name: string, type: FieldType, desc: string) => void;
+  onBack: () => void;
+  initialName?: string;
+  initialType?: FieldType | "";
+  initialDesc?: string;
+  editingKey?: string;
+}) {
+  const [name, setName] = useState(initialName);
+  const [type, setType] = useState<FieldType | "">(initialType);
+  const [desc, setDesc] = useState(initialDesc);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setName(initialName);
+    setType(initialType);
+    setDesc(initialDesc);
+  }, [initialName, initialType, initialDesc, editingKey]);
+
+  const isEdit = Boolean(editingKey);
 
   return (
     <div>
-      <div className="tv-breadcrumb">Settings <span className="tv-crumb-sep">/</span> Custom Fields <span className="tv-crumb-sep">/</span> <span className="tv-crumb-current">Create Field</span></div>
+      <div className="tv-breadcrumb">
+        Settings <span className="tv-crumb-sep">/</span> Custom Fields <span className="tv-crumb-sep">/</span>{" "}
+        <span className="tv-crumb-current">{isEdit ? "Edit Field" : "Create Field"}</span>
+      </div>
       <div className="tv-page-head">
         <div className="tv-head-icon"><ClipboardList size={17} /></div>
         <div>
-          <h1 className="tv-title">Create Custom Field</h1>
-          <p className="tv-subtitle" style={{ marginBottom: 0 }}>Create a new custom field to store on contact profiles.</p>
+          <h1 className="tv-title">{isEdit ? "Edit Custom Field" : "Create Custom Field"}</h1>
+          <p className="tv-subtitle" style={{ marginBottom: 0 }}>
+            {isEdit ? "Update this custom field's settings." : "Create a new custom field to store on contact profiles."}
+          </p>
         </div>
       </div>
       <div className="tv-form-card" style={{ marginTop: 20 }}>
@@ -58,7 +83,9 @@ export default function CreateFieldForm({
         </div>
 
         <div className="tv-form-actions">
-          <button className="tv-btn tv-btn-primary" style={{ minWidth: 110 }} disabled={!name || !type} onClick={() => onSave(name, type as FieldType, desc)}>Save</button>
+          <button className="tv-btn tv-btn-primary" style={{ minWidth: 110 }} disabled={!name || !type} onClick={() => onSave(name, type as FieldType, desc)}>
+            {isEdit ? "Save Changes" : "Save"}
+          </button>
           <button className="tv-btn tv-btn-ghost" style={{ minWidth: 110 }} onClick={onBack}>Back</button>
         </div>
       </div>

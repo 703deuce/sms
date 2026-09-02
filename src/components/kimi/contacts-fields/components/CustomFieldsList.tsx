@@ -7,8 +7,8 @@ const pillFor = (t: string) =>
   t === "Text" ? "tv-pill-green" : t === "Number" ? "tv-pill-purple" : t === "Date" ? "tv-pill-blue" : "tv-pill-amber";
 
 export default function CustomFieldsList({
-  fields, onCreate, onDelete,
-}: { fields: CustomField[]; onCreate: () => void; onDelete: (id: string) => void }) {
+  fields, onCreate, onEdit, onDelete,
+}: { fields: CustomField[]; onCreate: () => void; onEdit: (id: string) => void; onDelete: (id: string) => void }) {
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const filtered = fields.filter((f) => f.name.toLowerCase().includes(q.toLowerCase()));
@@ -73,7 +73,7 @@ export default function CustomFieldsList({
                 </td>
                 <td><span className={`tv-pill ${pillFor(f.type)}`}>{f.type}</span></td>
                 <td className="tv-row-actions">
-                  <button className="tv-icon-btn" title="Edit Field"><Pencil size={14} /></button>
+                  <button className="tv-icon-btn" title="Edit Field" onClick={() => onEdit(f.id)}><Pencil size={14} /></button>
                   <button className="tv-icon-btn danger" title="Delete Field" onClick={() => onDelete(f.id)}><Trash2 size={14} /></button>
                 </td>
               </tr>

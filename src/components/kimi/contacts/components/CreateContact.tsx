@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { UserPlus, Lightbulb, X, ChevronDown } from "lucide-react";
 import { contactLists as defaultContactLists } from "../mock-data";
@@ -111,7 +112,7 @@ export default function CreateContact({
             <h3 className={sectionTitleCls}>Custom Fields</h3>
             <p className={sectionDescCls}>
               Custom fields allow you to store custom data on your contacts. You can manage your custom fields{" "}
-              <span className="cursor-pointer font-medium text-primary hover:underline">here</span>.
+              <Link href="/contacts/fields" className="font-medium text-primary hover:underline">here</Link>.
             </p>
             <div className="space-y-4">
               <div><label className={labelCls}>Favorite Sports Team</label><input className={inputCls} /></div>
@@ -124,7 +125,7 @@ export default function CreateContact({
             <h3 className={sectionTitleCls}>Lists</h3>
             <p className={sectionDescCls}>
               Select one or more optional lists for this contact to be on. You can manage your contact lists{" "}
-              <span className="cursor-pointer font-medium text-primary hover:underline">here</span>.
+              <Link href="/contacts/lists" className="font-medium text-primary hover:underline">here</Link>.
             </p>
             <div className="relative">
               <div
@@ -227,7 +228,9 @@ export default function CreateContact({
             <div>
               <div className="mb-1 text-[13px] font-semibold text-foreground">Need to add multiple contacts?</div>
               <p className="mb-2 text-xs leading-relaxed text-muted-foreground">You can easily upload a list using our import tool.</p>
-              <span className="cursor-pointer text-xs font-semibold text-primary hover:underline">Import a List</span>
+              <Link href="/contacts/imports" className="text-xs font-semibold text-primary hover:underline">
+                Import a List
+              </Link>
             </div>
           </div>
         </aside>

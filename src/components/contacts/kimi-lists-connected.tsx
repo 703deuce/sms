@@ -266,6 +266,7 @@ export function KimiListsConnected() {
 
 function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKeyword: (k: Keyword) => void }) {
   const [view, setView] = useState<"tools" | "keywords">("tools");
+  const [search, setSearch] = useState("");
   const cards = [
     { icon: <LayoutTemplate size={19} />, title: "Landing Pages", desc: "Build landing pages or embedded forms that collect contact data and opt people into your audience.", href: "/grow/forms" },
     { icon: <MonitorSmartphone size={19} />, title: "Website Popups", desc: "Create fully branded website popups that capture visitor information and allow them to subscribe.", href: "/grow/forms" },
@@ -275,6 +276,12 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
   ];
 
   if (view === "keywords") {
+    const filteredKeywords = keywords.filter((k) => {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return `${k.keyword} ${k.description}`.toLowerCase().includes(q);
+    });
+
     return (
       <div>
         <div className="breadcrumb">Tools / <span>Keywords</span></div>
@@ -286,7 +293,12 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
-              <input className="input pl-8 w-[220px]" placeholder="Search" />
+              <input
+                className="input pl-8 w-[220px]"
+                placeholder="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
             <button className="btn-primary" onClick={() => window.location.assign("/grow/keywords")}>Create Keyword</button>
           </div>
@@ -295,7 +307,7 @@ function ToolsPage({ keywords, onEditKeyword }: { keywords: Keyword[]; onEditKey
           <div className="table-head grid grid-cols-[1fr_1.6fr_220px_40px]">
             <span>KEYWORD</span><span>DESCRIPTION</span><span className="text-right">CREATES CONTACTS</span><span></span>
           </div>
-          {keywords.map((k) => (
+          {filteredKeywords.map((k) => (
             <div key={k.id} className="table-row grid grid-cols-[1fr_1.6fr_220px_40px]">
               <div>
                 <div className="cell-primary">{k.keyword}</div>
