@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const data = await getPrisma().conversation.findMany({
       where,
       orderBy: { updatedAt: "desc" },
-      take: 100,
+      take: 250,
       include: {
         contact: true,
         assignee: { select: { id: true, name: true, email: true } },

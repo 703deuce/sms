@@ -1,21 +1,86 @@
 "use client";
 import React from "react";
-import { Inbox as InboxIcon } from "lucide-react";
+import { ArrowDownUp, Inbox as InboxIcon } from "lucide-react";
 import { Conversation } from "../mock-data";
 
-export default function ConversationList({ title, subtitle, convos, selectedId, onSelect, checked, onCheck, allChecked, onCheckAll }:{
-  title: string; subtitle: string; convos: Conversation[]; selectedId: string | null;
-  onSelect: (c: Conversation)=>void; checked: Set<string>; onCheck: (id: string, v: boolean)=>void;
-  allChecked: boolean; onCheckAll: (v: boolean)=>void;
+export default function ConversationList({
+  title,
+  subtitle,
+  convos,
+  selectedId,
+  onSelect,
+  checked,
+  onCheck,
+  allChecked,
+  onCheckAll,
+  sortOrder = "newest",
+  onToggleSort,
+  className = "",
+}: {
+  title: string;
+  subtitle: string;
+  convos: Conversation[];
+  selectedId: string | null;
+  onSelect: (c: Conversation) => void;
+  checked: Set<string>;
+  onCheck: (id: string, v: boolean) => void;
+  allChecked: boolean;
+  onCheckAll: (v: boolean) => void;
+  sortOrder?: "newest" | "oldest";
+  onToggleSort?: () => void;
+  className?: string;
 }) {
   return (
-    <div style={{ width: 304, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--tv-border)", minHeight: 57 }}>
-        <input type="checkbox" checked={allChecked} onChange={(e) => onCheckAll(e.target.checked)} style={{ accentColor: "var(--tv-primary)", width: 15, height: 15, cursor: "pointer", flexShrink: 0 }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: "var(--tv-text)" }}>{title}</div>
+    <div
+      className={className}
+      style={{
+        width: 304,
+        borderRight: "1px solid var(--tv-border)",
+        background: "#fff",
+        display: "flex",
+        flexDirection: "column",
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "12px 14px",
+          borderBottom: "1px solid var(--tv-border)",
+          minHeight: 57,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={allChecked}
+          onChange={(e) => onCheckAll(e.target.checked)}
+          style={{
+            accentColor: "var(--tv-primary)",
+            width: 15,
+            height: 15,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: "var(--tv-text)" }}>
+            {title}
+          </div>
           <div style={{ fontSize: 11, color: "var(--tv-faint)", marginTop: 1.5 }}>{subtitle}</div>
         </div>
+        {onToggleSort ? (
+          <button
+            type="button"
+            className="tv-icon-btn"
+            title={sortOrder === "newest" ? "Newest first" : "Oldest first"}
+            onClick={onToggleSort}
+            style={{ width: 28, height: 28, flexShrink: 0 }}
+          >
+            <ArrowDownUp size={14} />
+          </button>
+        ) : null}
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto" }}>
         {convos.length === 0 && (

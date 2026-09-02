@@ -84,9 +84,20 @@ export async function PATCH(
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    const { getMessagingRuntimeSettings, resolveInboxPermissions } =
+      await import("@/lib/messaging/messaging-settings");
+    const runtime = await getMessagingRuntimeSettings(auth.workspaceId);
+    const perms = resolveInboxPermissions(runtime.inboxPermissionsJson);
+    if (perms.inboxEnabled === false) {
+      return NextResponse.json({ error: "Inbox is disabled for this workspace" }, { status: 403 });
+    }
+
     const replyMedia = body.mediaUrls?.filter(Boolean) ?? [];
     const replyBody = body.body?.trim() ?? "";
     if (body.action === "reply" && (replyBody || replyMedia.length)) {
+      if (perms.allowStartConversations === false && existing.status === "CLOSED") {
+        return NextResponse.json({ error: "Cannot reply to closed conversations" }, { status: 403 });
+      }
       const to = existing.contact.phone;
       const replyFrom = body.from || existing.fromE164 || undefined;
       await sendQuickSms({
@@ -174,6 +185,13 @@ export async function PATCH(
       const runtime = await getMessagingRuntimeSettings(auth.workspaceId);
       const perms = resolveInboxPermissions(runtime.inboxPermissionsJson);
       const tagDefs = Array.isArray(runtime.inboxTagsJson) ? runtime.inboxTagsJson : [];
+
+      if (body.assigneeId !== undefined && perms.allowAssignment === false) {
+        return NextResponse.json({ error: "Conversation assignment is disabled" }, { status: 403 });
+      }
+      if (body.tags !== undefined && perms.allowTagging === false) {
+        return NextResponse.json({ error: "Conversation tagging is disabled" }, { status: 403 });
+      }
 
       let assigneeId =
         body.assigneeId === undefined ? existing.assigneeId : body.assigneeId;

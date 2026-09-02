@@ -11,6 +11,8 @@ const PRODUCT_CHIPS: Array<
   { label: "All", product: null },
   { label: "Missed Call Text Back", product: "mctb" },
   { label: "Mass Texting", product: "mass_text" },
+  { label: "Manual", product: "manual" },
+  { label: "Automation", product: "automation" },
   { label: "Unread", unread: true },
 ];
 

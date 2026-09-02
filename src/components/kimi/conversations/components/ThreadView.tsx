@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { ChevronDown, UserCheck, Tag as TagIcon, MoreVertical, EyeOff, Download, MessageSquare, FileText, CalendarDays, StickyNote, Users, Check } from "lucide-react";
-import { Conversation, Message, TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
+import type { Conversation, Message, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { Popover, usePopover } from "./Popover";
 import Composer from "./Composer";
 
@@ -11,15 +11,19 @@ const MenuItem = ({ children, onClick }:{ children: React.ReactNode; onClick?: (
   <div className="tv-menu-item" onClick={onClick}>{children}</div>
 );
 
-export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, onDownloadTranscript, tags: tagsProp, teammates: teammatesProp, liveMode, ComposerSlot }:{
+export default function ThreadView({ convo, onUpdate, onToggleContact, contactOpen, onOpenTagsSettings, onDownloadTranscript, tags: tagsProp, teammates: teammatesProp, liveMode, ComposerSlot, allowAssign = true, allowTag = true, composerDisabled = false, onBack }:{
   convo: Conversation; onUpdate: (c: Conversation)=>void; onToggleContact: ()=>void; contactOpen: boolean; onOpenTagsSettings: ()=>void;
   onDownloadTranscript?: () => void;
   tags?: Tag[]; teammates?: Teammate[];
   liveMode?: boolean;
-  ComposerSlot?: React.ComponentType<{ onSend: (t: string, mediaUrls?: string[]) => void; onNote: (t: string) => void }>;
+  ComposerSlot?: React.ComponentType<{ onSend: (t: string, mediaUrls?: string[]) => void; onNote: (t: string) => void; disabled?: boolean }>;
+  allowAssign?: boolean;
+  allowTag?: boolean;
+  composerDisabled?: boolean;
+  onBack?: () => void;
 }) {
-  const tagCatalog = tagsProp ?? TAGS;
-  const teammateCatalog = teammatesProp ?? TEAMMATES;
+  const tagCatalog = tagsProp ?? [];
+  const teammateCatalog = teammatesProp ?? [];
   const [statusOpen, setStatusOpen] = usePopover();
   const [assignOpen, setAssignOpen] = usePopover();
   const [tagOpen, setTagOpen] = usePopover();
@@ -88,7 +92,16 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
   });
 
   const assignee = teammateCatalog.find((t) => t.id === convo.assignee);
-  const statusCls = convo.status === "open" ? "tv-status-open" : convo.status === "pending" ? "tv-status-pending" : "tv-status-closed";
+  const statusCls =
+    convo.status === "open"
+      ? "tv-status-open"
+      : convo.status === "pending"
+        ? "tv-status-pending"
+        : convo.status === "snoozed"
+          ? "tv-status-pending"
+          : convo.status === "spam"
+            ? "tv-status-closed"
+            : "tv-status-closed";
 
   const Toggle = ({ on, onClick }:{ on: boolean; onClick: ()=>void }) => <button className={"tv-toggle" + (on ? " on" : "")} onClick={onClick} />;
 
@@ -96,10 +109,26 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, background: "#fff" }}>
       {/* header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--tv-border)", minHeight: 57 }}>
+        {onBack ? (
+          <button type="button" className="tv-btn-ghost" onClick={onBack} style={{ padding: "4px 8px", fontSize: 12 }}>
+            ← Back
+          </button>
+        ) : null}
         <span className="tv-avatar" style={{ width: 32, height: 32, fontSize: 12, background: convo.color }}>{convo.initials}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.1 }}>{convo.name}</div>
-          <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}>
+            {convo.productSourceLabel ? (
+              <span className="tv-chip" style={{ fontSize: 10 }}>{convo.productSourceLabel}</span>
+            ) : null}
+            {convo.campaignName ? (
+              <span className="tv-chip" style={{ fontSize: 10 }}>Campaign: {convo.campaignName}</span>
+            ) : null}
+            {convo.repeatCaller ? (
+              <span className="tv-chip" style={{ fontSize: 10, color: "#b45309" }}>
+                Repeat caller ({convo.repeatCaller.missedToday} today)
+              </span>
+            ) : null}
             {convo.tags.map((tid) => {
               const t = tagCatalog.find((x) => x.id === tid); if (!t) return null;
               return <span key={tid} className="tv-chip"><TagIcon size={10} color={t.color} fill={t.color} />{t.name}</span>;
@@ -112,12 +141,13 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
         }>
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">CONVERSATION STATUS</div>
-            {(["pending", "closed", "open"] as const).filter((s) => s !== convo.status).map((s) => (
+            {(["pending", "closed", "snoozed", "spam", "open"] as const).filter((s) => s !== convo.status).map((s) => (
               <MenuItem key={s} onClick={() => setStatus(s)}><span style={{ textTransform: "capitalize" }}>{s}</span></MenuItem>
             ))}
           </div>
         </Popover>
         {/* assign */}
+        {allowAssign ? (
         <Popover open={assignOpen} onOpenChange={setAssignOpen} width={220} trigger={
           <button className="tv-icon-btn" title="Assign" style={{ width: "auto", padding: "0 8px", gap: 6, display: "inline-flex" }}>
             {assignee ? <span className="tv-avatar" style={{ width: 18, height: 18, fontSize: 8, background: assignee.color }}>{assignee.initials}</span> : <UserCheck size={15} />}
@@ -136,7 +166,8 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
             ))}
           </div>
         </Popover>
-        {/* tag */}
+        ) : null}
+        {allowTag ? (
         <Popover open={tagOpen} onOpenChange={(v) => { setPendingTags(convo.tags); setTagOpen(v); }} width={240} trigger={
           <button className="tv-icon-btn" title="Tag"><TagIcon size={15} /></button>
         }>
@@ -163,6 +194,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
             ) : null}
           </div>
         </Popover>
+        ) : null}
         <button className={"tv-icon-btn" + (contactOpen ? " active" : "")} onClick={onToggleContact} title="Contact Details">
           <Users size={15} />
         </button>
@@ -216,7 +248,7 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
                 {m.caption && (
                   <div className="tv-bubble tv-bubble-out" style={{ marginTop: 6 }}>{m.caption}</div>
                 )}
-                <div className="tv-msg-meta"><span>{m.author}</span><span>·</span><span>{m.time}</span></div>
+                <div className="tv-msg-meta"><span>{m.author}{m.isAi ? " · AI" : ""}</span><span>·</span><span>{m.time}</span></div>
               </div>
             </div>
           );
@@ -226,14 +258,14 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
               {!out && <span className="tv-avatar" style={{ width: 26, height: 26, fontSize: 10, background: convo.color }}>{m.initials ?? convo.initials}</span>}
               <div style={{ display: "flex", flexDirection: "column", alignItems: out ? "flex-end" : "flex-start", maxWidth: "72%" }}>
                 <div className={"tv-bubble " + (out ? "tv-bubble-out" : "tv-bubble-in")}>{m.text}</div>
-                <div className="tv-msg-meta"><span>{m.author}</span><span>·</span><span>{m.time}</span></div>
+                <div className="tv-msg-meta"><span>{m.author}{m.isAi ? " · AI" : ""}</span><span>·</span><span>{m.time}</span></div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {ComposerSlot ? <ComposerSlot onSend={send} onNote={note} /> : <Composer onSend={(t) => send(t)} onNote={note} />}
+      {ComposerSlot ? <ComposerSlot onSend={send} onNote={note} disabled={composerDisabled} /> : <Composer onSend={(t) => send(t)} onNote={note} />}
     </div>
   );
 }

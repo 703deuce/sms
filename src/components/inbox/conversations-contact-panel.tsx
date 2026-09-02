@@ -1,215 +1,62 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Pencil, X, Loader2 } from "lucide-react";
-import type { Conversation } from "@/components/kimi/conversations/mock-data";
-import { formatPhone } from "@/lib/utils";
-
-type ContactRecord = {
-  id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  status?: string | null;
-};
+import type { Contact, Conversation as ApiConversation } from "@/lib/types";
+import type { Conversation } from "@/lib/inbox/conversation-types";
+import { InboxContactDrawer } from "@/components/inbox/inbox-contact-drawer";
+import { fetchContactById } from "@/lib/inbox/kimi-inbox-adapter";
 
 type Props = {
   convo: Conversation;
+  apiConvo?: ApiConversation | null;
   onClose: () => void;
 };
 
-export function ConversationsContactPanel({ convo, onClose }: Props) {
-  const [contact, setContact] = useState<ContactRecord | null>(null);
-  const [loading, setLoading] = useState(!!convo.contactId);
+export function ConversationsContactPanel({ convo, apiConvo = null, onClose }: Props) {
+  const [contact, setContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     if (!convo.contactId) {
       setContact(null);
-      setLoading(false);
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    fetch(`/api/contacts/${convo.contactId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (!cancelled) setContact(json?.data ?? null);
+    void fetchContactById(convo.contactId)
+      .then((data) => {
+        if (!cancelled) setContact(data);
       })
       .catch(() => {
         if (!cancelled) setContact(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [convo.contactId]);
 
-  const firstName = contact?.firstName || convo.name.split(" ")[0] || "—";
-  const lastName =
-    contact?.lastName ||
-    convo.name.split(" ").slice(1).join(" ") ||
-    "—";
-  const phone = contact?.phone || convo.phone;
-  const email = contact?.email || convo.email || "—";
-  const status = contact?.status || "—";
-
-  const fields: Array<{ label: string; value: string }> = [
-    { label: "First Name", value: firstName || "—" },
-    { label: "Last Name", value: lastName || "—" },
-    { label: "Mobile Number", value: phone ? formatPhone(phone) : "—" },
-    { label: "Email", value: email },
-    { label: "Subscription", value: status },
-  ];
+  const apiConversation: ApiConversation | undefined =
+    apiConvo ||
+    (contact
+      ? {
+          id: convo.id,
+          contactId: contact.id,
+          contactName: convo.name,
+          phone: contact.phone || convo.phone,
+          lastMessage: convo.preview,
+          assignedTo: null,
+          status: "Open",
+          tags: convo.tags,
+          updatedAt: new Date().toISOString(),
+          unread: !!convo.unread,
+          messages: [],
+        }
+      : undefined);
 
   return (
-    <div
-      className="ref-scroll"
-      style={{
-        width: 276,
-        borderLeft: "1px solid var(--tv-border)",
-        background: "#fff",
-        overflowY: "auto",
-        flexShrink: 0,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          padding: "22px 16px 16px",
-          borderBottom: "1px solid var(--tv-border)",
-          position: "relative",
-          background: "linear-gradient(180deg, var(--tv-panel) 0%, #fff 100%)",
-        }}
-      >
-        <button
-          type="button"
-          className="tv-icon-btn"
-          onClick={onClose}
-          title="Close panel"
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            width: 26,
-            height: 26,
-            border: "none",
-            background: "transparent",
-            borderRadius: 7,
-          }}
-        >
-          <X size={14} />
-        </button>
-        <span
-          className="tv-avatar"
-          style={{
-            width: 52,
-            height: 52,
-            fontSize: 17,
-            background: convo.color,
-            boxShadow: "0 2px 8px rgba(16,24,40,.14), inset 0 0 0 1px rgba(255,255,255,.2)",
-          }}
-        >
-          {convo.initials}
-        </span>
-        <div
-          style={{
-            fontSize: 14.5,
-            fontWeight: 700,
-            marginTop: 11,
-            letterSpacing: -0.2,
-            color: "var(--tv-text)",
-          }}
-        >
-          {convo.name}
-        </div>
-        {convo.contactId ? (
-          <Link
-            href={`/contacts/${convo.contactId}`}
-            style={{
-              marginTop: 10,
-              fontSize: 12,
-              fontWeight: 600,
-              color: "var(--tv-primary)",
-              textDecoration: "none",
-            }}
-          >
-            View full contact profile →
-          </Link>
-        ) : null}
-      </div>
-      <div style={{ padding: "14px 16px 16px" }}>
-        <div
-          style={{
-            fontSize: 10.5,
-            fontWeight: 700,
-            color: "var(--tv-faint)",
-            letterSpacing: 0.8,
-            margin: "2px 0 14px",
-          }}
-        >
-          CONTACT DETAILS
-        </div>
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
-            <Loader2 size={18} className="animate-spin" color="var(--tv-faint)" />
-          </div>
-        ) : (
-          fields.map((field) => (
-            <div
-              key={field.label}
-              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 13 }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 10.5, color: "var(--tv-faint)", marginBottom: 2.5 }}>
-                  {field.label}
-                </div>
-                <div className={"tv-field-value" + (field.value === "—" ? " empty" : "")}>
-                  {field.value}
-                </div>
-              </div>
-              {convo.contactId ? (
-                <Link href={`/contacts/${convo.contactId}`} title={`Edit ${field.label.toLowerCase()}`}>
-                  <Pencil size={12} color="#d1d5db" style={{ cursor: "pointer", flexShrink: 0 }} />
-                </Link>
-              ) : (
-                <Pencil size={12} color="#d1d5db" style={{ flexShrink: 0, opacity: 0.35 }} />
-              )}
-            </div>
-          ))
-        )}
-        <Link
-          href="/conversations/saved-replies"
-          style={{
-            display: "block",
-            marginTop: 8,
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--tv-primary)",
-          }}
-        >
-          Saved replies →
-        </Link>
-        <button
-          type="button"
-          className="tv-btn-ghost"
-          onClick={onClose}
-          style={{
-            width: "100%",
-            justifyContent: "center",
-            marginTop: 12,
-            borderRadius: 8,
-            border: "1px solid var(--tv-border)",
-          }}
-        >
-          Close Panel
-        </button>
-      </div>
-    </div>
+    <InboxContactDrawer
+      open
+      onClose={onClose}
+      contact={contact ?? undefined}
+      conversation={apiConversation}
+    />
   );
 }

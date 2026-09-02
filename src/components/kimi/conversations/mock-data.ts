@@ -1,18 +1,5 @@
-export type Tag = { id: string; name: string; color: string; description: string; created: string; untagOnClose: boolean };
-export type Teammate = { id: string; name: string; initials: string; color: string };
-export type MessageKind = "inbound" | "outbound" | "note" | "event" | "mms" | "other" | "day";
-export type Message = {
-  id: string; kind: MessageKind; author?: string; initials?: string; text?: string;
-  time?: string; eventText?: string; image?: string; caption?: string;
-};
-export type Conversation = {
-  id: string;
-  contactId?: string;
-  name: string; initials: string; color: string; preview: string; ago: string;
-  unread?: boolean; status: "open" | "pending" | "closed";
-  assignee: string | null; tags: string[]; phone: string; email?: string;
-  messages: Message[];
-};
+export type { Tag, Teammate, MessageKind, Message, ConversationStatus, Conversation } from "@/lib/inbox/conversation-types";
+import type { Conversation, Message, Tag, Teammate } from "@/lib/inbox/conversation-types";
 
 export const TEAMMATES: Teammate[] = [
   { id: "me", name: "Me", initials: "JD", color: "#4f46e5" },

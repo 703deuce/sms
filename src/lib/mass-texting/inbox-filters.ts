@@ -9,7 +9,9 @@ export type InboxListFilters = {
   unread?: boolean;
   filter?: string;
   assigneeId?: string | null;
-  status?: "OPEN" | "PENDING" | "CLOSED";
+  status?: "OPEN" | "PENDING" | "CLOSED" | "SNOOZED" | "SPAM";
+  tag?: string;
+  q?: string;
 };
 
 export function parseInboxSearchParams(
@@ -35,6 +37,8 @@ export function parseInboxSearchParams(
     filter: searchParams.get("filter") || undefined,
     assigneeId: searchParams.get("assigneeId") || undefined,
     status: parseStatusParam(searchParams.get("status")),
+    tag: searchParams.get("tag") || undefined,
+    q: searchParams.get("q")?.trim() || undefined,
   };
 }
 
@@ -44,6 +48,8 @@ function parseStatusParam(raw: string | null): InboxListFilters["status"] | unde
   if (s === "open") return "OPEN";
   if (s === "pending") return "PENDING";
   if (s === "closed" || s === "archived") return "CLOSED";
+  if (s === "snoozed") return "SNOOZED";
+  if (s === "spam") return "SPAM";
   return undefined;
 }
 
@@ -69,6 +75,17 @@ export function buildConversationWhere(
   if (legacy === "archived") where.status = "CLOSED";
   if (legacy === "mine" && userId) where.assigneeId = userId;
   if (filters.assigneeId) where.assigneeId = filters.assigneeId;
+  if (filters.tag) where.tags = { has: filters.tag };
+
+  if (filters.q) {
+    const q = filters.q.trim();
+    where.OR = [
+      { contact: { firstName: { contains: q, mode: "insensitive" } } },
+      { contact: { lastName: { contains: q, mode: "insensitive" } } },
+      { contact: { phone: { contains: q } } },
+      { messages: { some: { body: { contains: q, mode: "insensitive" } } } },
+    ];
+  }
 
   return where;
 }

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import ThreadView from "@/components/kimi/conversations/components/ThreadView";
-import type { Conversation, Tag, Teammate } from "@/components/kimi/conversations/mock-data";
+import type { Conversation, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { ConversationsComposer } from "@/components/inbox/conversations-composer";
 import {
   InboxAiAssistPanel,
@@ -20,6 +20,11 @@ type Props = {
   onOpenTagsSettings: () => void;
   onDownloadTranscript: () => void;
   allowTagging?: boolean;
+  allowAssign?: boolean;
+  composerDisabled?: boolean;
+  composerDisabledReason?: string;
+  onBack?: () => void;
+  phoneNumbers?: Array<{ id: string; number: string; label?: string }>;
 };
 
 export function ConversationsThreadArea({
@@ -32,6 +37,11 @@ export function ConversationsThreadArea({
   onOpenTagsSettings,
   onDownloadTranscript,
   allowTagging = true,
+  allowAssign = true,
+  composerDisabled = false,
+  composerDisabledReason,
+  onBack,
+  phoneNumbers = [],
 }: Props) {
   const assist = useInboxAiAssist(convo.id);
   const [prefill, setPrefill] = useState("");
@@ -41,19 +51,41 @@ export function ConversationsThreadArea({
   }, [convo.id]);
 
   const Composer = useCallback(
-    ({ onSend, onNote }: { onSend: (t: string, mediaUrls?: string[]) => void; onNote: (t: string) => void }) => (
-      <ConversationsComposer
-        onSend={onSend}
-        onNote={onNote}
-        prefill={prefill}
-        onPrefillApplied={() => setPrefill("")}
-      />
+    ({
+      onSend,
+      onNote,
+      disabled,
+    }: {
+      onSend: (t: string, mediaUrls?: string[]) => void;
+      onNote: (t: string) => void;
+      disabled?: boolean;
+    }) => (
+      <>
+        {composerDisabledReason ? (
+          <div style={{ padding: "8px 16px", fontSize: 12, color: "#b45309", background: "#fffbeb", borderTop: "1px solid #fde68a" }}>
+            {composerDisabledReason}
+          </div>
+        ) : null}
+        <ConversationsComposer
+          onSend={onSend}
+          onNote={onNote}
+          disabled={disabled || composerDisabled}
+          prefill={prefill}
+          onPrefillApplied={() => setPrefill("")}
+          teammates={teammates}
+          phoneNumbers={phoneNumbers}
+          defaultFromNumberId={phoneNumbers[0]?.id}
+        />
+      </>
     ),
-    [prefill],
+    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers],
   );
 
   return (
-    <div style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>
+    <div
+      className="conversations-thread-area conversations-thread--mobile-full"
+      style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}
+    >
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         {assist.session?.status === "ai_active" ? (
           <div style={{ padding: "8px 16px 0", background: "#fff" }}>
@@ -71,6 +103,10 @@ export function ConversationsThreadArea({
           onDownloadTranscript={onDownloadTranscript}
           liveMode
           ComposerSlot={Composer}
+          allowAssign={allowAssign}
+          allowTag={allowTagging}
+          composerDisabled={composerDisabled}
+          onBack={onBack}
         />
       </div>
       <InboxAiAssistPanel

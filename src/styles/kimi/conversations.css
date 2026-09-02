@@ -218,3 +218,15 @@
   cursor: pointer; display: flex; align-items: center; gap: 5px; transition: filter .12s;
 }
 .kimi-conversations .tv-online-pill:hover{ filter: brightness(.97); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .kimi-conversations .conversations-list--mobile-hidden {
+    display: none !important;
+  }
+  .kimi-conversations .conversations-thread--mobile-full {
+    flex: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}

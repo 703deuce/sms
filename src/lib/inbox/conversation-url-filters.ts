@@ -32,6 +32,14 @@ export function inboxFiltersFromUrlParams(
   if (statusParam === "open") filters.status = "OPEN";
   if (statusParam === "pending") filters.status = "PENDING";
   if (statusParam === "closed" || statusParam === "archived") filters.status = "CLOSED";
+  if (statusParam === "snoozed") filters.status = "SNOOZED";
+  if (statusParam === "spam") filters.status = "SPAM";
+
+  const tag = typeof params.tag === "string" ? params.tag : undefined;
+  if (tag) filters.tag = decodeURIComponent(tag);
+
+  const q = typeof params.q === "string" ? params.q.trim() : undefined;
+  if (q) filters.q = q;
 
   const assigneeId = typeof params.assigneeId === "string" ? params.assigneeId : undefined;
   if (assigneeId) filters.assigneeId = assigneeId;
@@ -89,6 +97,14 @@ export function filterSelFromUrlParams(
   if (filter === "archived" || filter === "closed" || status === "closed") {
     return { kind: "all", key: "closed" };
   }
+  if (filter === "snoozed" || status === "snoozed") return { kind: "all", key: "snoozed" };
+  if (filter === "spam" || status === "spam") return { kind: "all", key: "spam" };
+
+  const q = typeof params.q === "string" ? params.q.trim() : undefined;
+  if (q) {
+    // Search is server-side; rail shows "Everyone / All"
+    return { kind: "all", key: "all" };
+  }
 
   return { kind: "mine", key: "all" };
 }
@@ -103,6 +119,7 @@ export function filterSelToSearchParams(
   params.delete("status");
   params.delete("tag");
   params.delete("assigneeId");
+  params.delete("q");
 
   if (sel.kind === "mine") {
     params.set("filter", "mine");
@@ -113,8 +130,10 @@ export function filterSelToSearchParams(
     else if (sel.key === "unread") {
       params.set("filter", "unread");
       params.set("unread", "1");
-    } else if (sel.key === "open" || sel.key === "pending") params.set("filter", sel.key);
+    }     else if (sel.key === "open" || sel.key === "pending") params.set("filter", sel.key);
     else if (sel.key === "closed") params.set("filter", "closed");
+    else if (sel.key === "snoozed") params.set("filter", "snoozed");
+    else if (sel.key === "spam") params.set("filter", "spam");
   } else if (sel.kind === "tag") {
     params.set("tag", sel.key);
     if (sel.sub) params.set("status", sel.sub);

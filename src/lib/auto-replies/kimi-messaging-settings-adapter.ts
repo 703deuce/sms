@@ -123,6 +123,19 @@ export async function deleteInboxTag(tagName: string): Promise<InboxTagDefinitio
   return inboxTagsFromSettings(saved.inboxTagsJson);
 }
 
+export async function updateInboxTag(
+  tagName: string,
+  patch: Partial<Omit<InboxTagDefinition, "id">>,
+): Promise<InboxTagDefinition[]> {
+  const settings = await fetchMessagingRuntimeSettings();
+  const existing = inboxTagsFromSettings(settings.inboxTagsJson);
+  const next = existing.map((t) =>
+    t.name === tagName || t.id === tagName ? { ...t, ...patch, name: patch.name ?? t.name } : t,
+  );
+  const saved = await patchMessagingRuntimeSettings({ inboxTagsJson: next });
+  return inboxTagsFromSettings(saved.inboxTagsJson);
+}
+
 export { KEY_TO_KIMI_DAY };
 
 const KIMI_TOGGLE_TO_PERMISSION: Record<string, keyof InboxPermissionsJson> = {

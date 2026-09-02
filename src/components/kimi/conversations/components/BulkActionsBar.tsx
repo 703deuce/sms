@@ -2,14 +2,14 @@
 import React from "react";
 import { ChevronDown, UserCheck, Tag as TagIcon, CheckSquare, ListChecks } from "lucide-react";
 import { Popover, usePopover } from "./Popover";
-import { TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
+import type { Tag, Teammate } from "@/lib/inbox/conversation-types";
 
 export default function BulkActionsBar({ count, onAction, tags, teammates, allowAssign = true, allowTag = true }:{
   count: number; onAction: (a: string)=>void; tags?: Tag[]; teammates?: Teammate[];
   allowAssign?: boolean; allowTag?: boolean;
 }) {
-  const tagList = tags ?? TAGS;
-  const teammateList = teammates ?? TEAMMATES;
+  const tagList = tags ?? [];
+  const teammateList = teammates ?? [];
   const [s, setS] = usePopover(); const [a, setA] = usePopover(); const [t, setT] = usePopover(); const [m, setM] = usePopover();
   const Btn = ({ label, icon, onClick }:{ label: string; icon?: React.ReactNode; onClick?: ()=>void }) => (
     <button className="tv-btn-ghost" onClick={onClick}

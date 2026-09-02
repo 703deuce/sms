@@ -3,7 +3,7 @@
  * Lives outside Kimi UI — presentation components stay untouched.
  */
 import type { Conversation as ApiConversation, User } from "@/lib/types";
-import type { Conversation, Message, Tag, Teammate } from "@/components/kimi/conversations/mock-data";
+import type { Conversation, Message, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import type { InboxPermissionsJson, InboxTagDefinition } from "@/lib/messaging/messaging-settings";
 import { resolveInboxPermissions } from "@/lib/messaging/messaging-settings";
 import type { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
@@ -67,13 +67,17 @@ function formatMessageTime(iso: string): string {
 export function apiStatusToKimi(status: string): Conversation["status"] {
   const s = status.toLowerCase();
   if (s === "pending") return "pending";
-  if (s === "closed" || s === "spam" || s === "snoozed") return "closed";
+  if (s === "snoozed") return "snoozed";
+  if (s === "spam") return "spam";
+  if (s === "closed") return "closed";
   return "open";
 }
 
 export function kimiStatusToApi(status: Conversation["status"]): string {
   if (status === "pending") return "Pending";
   if (status === "closed") return "Closed";
+  if (status === "snoozed") return "Snoozed";
+  if (status === "spam") return "Spam";
   return "Open";
 }
 
@@ -97,23 +101,39 @@ export function resolveAssigneeApiId(
 }
 
 function mapApiMessage(m: ApiConversation["messages"][number], contactName: string): Message {
+  const body = m.body || "";
+  const isMediaPlaceholder =
+    body === "[Media attachment]" || body.startsWith("[Inbound MMS") || body.startsWith("[MMS");
   if (m.direction === "note") {
     return {
       id: m.id,
       kind: "note",
       author: m.user ? `Note From ${m.user}` : "Note",
-      text: m.body,
+      text: body,
       time: formatMessageTime(m.at),
     };
   }
   const outbound = m.direction === "out";
+  const isAi = outbound && (m.user === "AI" || m.user?.toLowerCase().includes("ai "));
+  if (isMediaPlaceholder) {
+    return {
+      id: m.id,
+      kind: "mms",
+      author: outbound ? (isAi ? "AI" : m.user || "Me") : contactName,
+      initials: outbound ? undefined : initials(contactName),
+      caption: body,
+      time: formatMessageTime(m.at),
+      isAi,
+    };
+  }
   return {
     id: m.id,
     kind: outbound ? "outbound" : "inbound",
-    author: outbound ? (m.user || "Me") : contactName,
+    author: outbound ? (isAi ? "AI" : m.user || "Me") : contactName,
     initials: outbound ? undefined : initials(contactName),
-    text: m.body,
+    text: body,
     time: formatMessageTime(m.at),
+    isAi,
   };
 }
 
@@ -138,6 +158,12 @@ export function mapApiConversationToKimi(
     tags: apiTagNamesToKeys(c.tags || [], tagCatalog, tagDefinitions),
     phone: c.phone,
     messages: (c.messages || []).map((m) => mapApiMessage(m, name)),
+    productSource: c.productSource ?? null,
+    productSourceLabel: c.productSourceLabel ?? null,
+    campaignId: c.campaignId ?? null,
+    campaignName: c.campaignName ?? null,
+    fromE164: c.fromE164 ?? null,
+    repeatCaller: c.repeatCaller,
   };
 }
 
@@ -259,28 +285,52 @@ export type InboxQuery = {
   filter?: "mine" | "unassigned" | "unread" | "archived";
   unread?: boolean;
   product?: string;
-  status?: "open" | "pending" | "closed";
+  status?: "open" | "pending" | "closed" | "snoozed" | "spam";
   assigneeId?: string;
   contactId?: string;
+  tag?: string;
+  phoneNumberId?: string;
+  campaignId?: string;
+  q?: string;
 };
 
-export function inboxQueryFromFilter(sel: FilterSel, product = "all"): InboxQuery {
+export function inboxQueryFromFilter(
+  sel: FilterSel,
+  product = "all",
+  extra: Pick<InboxQuery, "phoneNumberId" | "campaignId" | "q"> = {},
+): InboxQuery {
   const q: InboxQuery = {
     product: product === "all" ? "all" : product,
+    ...extra,
   };
   if (sel.kind === "mine") {
     q.filter = "mine";
     if (sel.key === "unread") q.unread = true;
-    if (sel.key === "open" || sel.key === "pending") q.status = sel.key;
+    if (sel.key === "open" || sel.key === "pending" || sel.key === "snoozed" || sel.key === "spam") {
+      q.status = sel.key;
+    }
   } else if (sel.kind === "all") {
     if (sel.key === "unassigned") q.filter = "unassigned";
     else if (sel.key === "unread") q.unread = true;
-    else if (sel.key === "open" || sel.key === "pending" || sel.key === "closed") {
+    else if (
+      sel.key === "open" ||
+      sel.key === "pending" ||
+      sel.key === "closed" ||
+      sel.key === "snoozed" ||
+      sel.key === "spam"
+    ) {
       q.status = sel.key;
     }
   } else if (sel.kind === "teammate") {
     q.assigneeId = sel.key;
-    if (sel.sub === "open" || sel.sub === "pending") q.status = sel.sub;
+    if (sel.sub === "open" || sel.sub === "pending" || sel.sub === "snoozed" || sel.sub === "spam") {
+      q.status = sel.sub;
+    }
+  } else if (sel.kind === "tag") {
+    q.tag = sel.key;
+    if (sel.sub === "open" || sel.sub === "pending" || sel.sub === "closed" || sel.sub === "snoozed" || sel.sub === "spam") {
+      q.status = sel.sub;
+    }
   }
   return q;
 }
@@ -293,6 +343,10 @@ export async function fetchInboxList(query: InboxQuery = { product: "all" }): Pr
   if (query.status) params.set("status", query.status);
   if (query.assigneeId) params.set("assigneeId", query.assigneeId);
   if (query.contactId) params.set("contactId", query.contactId);
+  if (query.tag) params.set("tag", query.tag);
+  if (query.phoneNumberId) params.set("phoneNumberId", query.phoneNumberId);
+  if (query.campaignId) params.set("campaignId", query.campaignId);
+  if (query.q) params.set("q", query.q);
   const res = await fetch(`/api/inbox?${params.toString()}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load conversations");
@@ -303,6 +357,13 @@ export async function fetchConversationForContact(contactId: string): Promise<Ap
   const rows = await fetchInboxList({ product: "all", contactId });
   if (!rows.length) return null;
   return fetchConversation(rows[0]!.id);
+}
+
+export async function fetchContactById(contactId: string): Promise<import("@/lib/types").Contact | null> {
+  const res = await fetch(`/api/contacts/${contactId}`);
+  const json = await res.json();
+  if (!res.ok || !json.data) return null;
+  return json.data;
 }
 
 export async function fetchContactSummary(

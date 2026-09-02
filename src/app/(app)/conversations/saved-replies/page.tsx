@@ -40,12 +40,17 @@ export default async function SavedRepliesPage() {
               <TH>Preview</TH>
               <TH>Tags</TH>
               <TH>Shared</TH>
+              <TH className="text-right">Actions</TH>
             </TR>
           </THead>
           <TBody>
             {inboxReplies.map((t) => (
               <TR key={t.id}>
-                <TD className="font-medium">{t.name}</TD>
+                <TD className="font-medium">
+                  <Link href={`/templates/${t.id}`} className="text-primary hover:underline">
+                    {t.name}
+                  </Link>
+                </TD>
                 <TD className="text-muted-foreground">{t.category}</TD>
                 <TD className="max-w-md truncate text-muted-foreground">{t.body}</TD>
                 <TD>
@@ -62,6 +67,11 @@ export default async function SavedRepliesPage() {
                 </TD>
                 <TD>
                   <StatusChip status={t.shared ? "Active" : "Draft"} />
+                </TD>
+                <TD className="text-right">
+                  <Link href={`/templates/${t.id}`} className="text-sm font-medium text-primary hover:underline">
+                    Edit
+                  </Link>
                 </TD>
               </TR>
             ))}

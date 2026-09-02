@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Image, Smile, Braces, SendHorizonal } from "lucide-react";
 import { TemplatePicker } from "@/components/inbox/template-picker";
 import { MediaPicker } from "@/components/messaging/media-picker";
+import type { Teammate } from "@/lib/inbox/conversation-types";
 
 type Props = {
   onSend: (text: string, mediaUrls?: string[]) => void;
@@ -11,6 +12,9 @@ type Props = {
   disabled?: boolean;
   prefill?: string;
   onPrefillApplied?: () => void;
+  teammates?: Teammate[];
+  phoneNumbers?: Array<{ id: string; number: string; label?: string }>;
+  defaultFromNumberId?: string;
 };
 
 /** Production composer for conversations — wires saved replies + MMS attach. */
@@ -20,13 +24,31 @@ export function ConversationsComposer({
   disabled,
   prefill = "",
   onPrefillApplied,
+  teammates = [],
+  phoneNumbers = [],
+  defaultFromNumberId = "",
 }: Props) {
   const [tab, setTab] = useState<"message" | "note">("message");
   const [text, setText] = useState("");
+  const [fromNumberId, setFromNumberId] = useState(defaultFromNumberId);
+  const [mentionOpen, setMentionOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const note = tab === "note";
+
+  useEffect(() => {
+    if (defaultFromNumberId) setFromNumberId(defaultFromNumberId);
+  }, [defaultFromNumberId]);
+
+  const mentionCandidates = teammates.filter((t) => t.id !== "me");
+  const noteMentionMatch = note ? text.match(/@([\w\s]*)$/) : null;
+
+  const insertMention = (name: string) => {
+    const base = text.replace(/@[\w\s]*$/, "");
+    setText(`${base}@${name} `);
+    setMentionOpen(false);
+  };
 
   useEffect(() => {
     if (!prefill) return;
@@ -77,7 +99,10 @@ export function ConversationsComposer({
             <textarea
               className="tv-input"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (note && e.target.value.includes("@")) setMentionOpen(true);
+              }}
               placeholder={note ? "Type a note" : "Type a message"}
               rows={3}
               disabled={disabled}
@@ -96,6 +121,36 @@ export function ConversationsComposer({
                 }
               }}
             />
+            {note && mentionOpen && noteMentionMatch && mentionCandidates.length > 0 ? (
+              <div style={{ padding: "0 12px 8px", maxHeight: 100, overflowY: "auto" }}>
+                {mentionCandidates
+                  .filter((t) =>
+                    !noteMentionMatch[1]?.trim()
+                      ? true
+                      : t.name.toLowerCase().includes(noteMentionMatch[1].trim().toLowerCase()),
+                  )
+                  .slice(0, 6)
+                  .map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => insertMention(t.name)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "6px 8px",
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        fontSize: 12,
+                      }}
+                    >
+                      @{t.name}
+                    </button>
+                  ))}
+              </div>
+            ) : null}
             {mediaUrls.length > 0 && !note ? (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "0 12px 8px" }}>
                 {mediaUrls.map((url) => (
@@ -156,6 +211,21 @@ export function ConversationsComposer({
               >
                 <Braces size={16} />
               </button>
+              {phoneNumbers.length > 1 && !note ? (
+                <select
+                  className="tv-input"
+                  style={{ width: 120, padding: "2px 6px", fontSize: 11, marginLeft: 4 }}
+                  value={fromNumberId}
+                  onChange={(e) => setFromNumberId(e.target.value)}
+                  disabled={disabled}
+                >
+                  {phoneNumbers.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label || n.number}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <span style={{ flex: 1 }} />
               <span
                 style={{

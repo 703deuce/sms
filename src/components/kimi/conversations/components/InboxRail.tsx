@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash, Settings } from "lucide-react";
-import { TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
+import { Search, ChevronDown, ChevronRight, MessageSquarePlus, Inbox as InboxIcon, MailQuestion, MessageSquare, Clock, CheckCircle2, Tag as TagIcon, CircleSlash, Settings, Ban, AlarmClock } from "lucide-react";
+import type { Tag, Teammate } from "@/lib/inbox/conversation-types";
 
 export type FilterSel = { kind: "mine" | "all" | "tag" | "teammate"; key: string; sub?: string };
 
@@ -46,8 +46,8 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
   onSearchChange?: (value: string) => void;
   onOpenSettings?: () => void;
 }) {
-  const tagList = tags ?? TAGS;
-  const teammateList = teammates ?? TEAMMATES;
+  const tagList = tags ?? [];
+  const teammateList = teammates ?? [];
   const is = (k: string, key: string, sub?: string) => sel.kind === k && sel.key === key && (sub === undefined ? !sel.sub : sel.sub === sub);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -60,8 +60,8 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
     <div style={{ width: 216, borderRight: "1px solid var(--tv-border)", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 14px 12px" }}>
         <h1 style={{ fontSize: 17, fontWeight: 700, flex: 1, letterSpacing: -0.3, margin: 0, color: "var(--tv-text)" }}>Inbox</h1>
-        <button className="tv-online-pill">
-          <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#10b981" }} />Online <ChevronDown size={11} />
+        <button className="tv-online-pill" title="You are online" type="button" style={{ cursor: "default" }}>
+          <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#10b981" }} />Online
         </button>
       </div>
       <div style={{ display: "flex", gap: 6, padding: "0 12px 14px" }}>
@@ -96,6 +96,8 @@ export default function InboxRail({ sel, onSel, counts, onNew, tags, teammates, 
           <Item active={is("all","open")} icon={<MessageSquare size={14}/>} label="Open" count={counts.allOpen} onClick={() => onSel({ kind: "all", key: "open" })} />
           <Item active={is("all","pending")} icon={<Clock size={14}/>} label="Pending" count={counts.allPending} onClick={() => onSel({ kind: "all", key: "pending" })} />
           <Item active={is("all","closed")} icon={<CheckCircle2 size={14}/>} label="Closed" count={counts.closed} onClick={() => onSel({ kind: "all", key: "closed" })} />
+          <Item active={is("all","snoozed")} icon={<AlarmClock size={14}/>} label="Snoozed" count={counts.snoozed} onClick={() => onSel({ kind: "all", key: "snoozed" })} />
+          <Item active={is("all","spam")} icon={<Ban size={14}/>} label="Spam" count={counts.spam} onClick={() => onSel({ kind: "all", key: "spam" })} />
         </Group>
         <Group title="TAGGED CONVERSATIONS" defaultOpen>
           {tagList.map((t) => {
