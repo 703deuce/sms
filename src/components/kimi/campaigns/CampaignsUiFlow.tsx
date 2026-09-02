@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import CampaignsList from "./components/CampaignsList";
 import CreateCampaign from "./components/CreateCampaign";
 import ReviewDetails from "./components/ReviewDetails";
+import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
 
 export type CampaignsInitialView = "list" | "create" | "review";
 
@@ -30,7 +31,10 @@ export default function CampaignsUiFlow({ initialView = "list" }: { initialView?
 
   return (
     <CampaignsList
-      onCreate={() => router.push("/campaigns/new")}
+      onCreate={() => {
+        startFreshComposeDraft();
+        router.push("/campaigns/new");
+      }}
     />
   );
 }
