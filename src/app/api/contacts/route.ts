@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { mapContact } from "@/lib/mappers";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   fireContactAddedAutomations,
@@ -8,6 +9,40 @@ import {
 } from "@/lib/automate/contact-added-triggers";
 
 const CONTACT_STATUSES = new Set(["SUBSCRIBED", "UNSUBSCRIBED", "BLOCKED", "INVALID"]);
+
+const contactInclude = {
+  tagMembers: { include: { tag: true } },
+  listMembers: { include: { list: true } },
+} as const;
+
+type ContactRow = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string;
+  email: string | null;
+  status: string;
+  consentSource: string | null;
+  consentDate: Date | string | null;
+  lastMessaged: Date | string | null;
+  lastReply: Date | string | null;
+  createdAt?: Date | string;
+  assignedUser: string | null;
+  company?: string | null;
+  customFields?: unknown;
+  tagMembers?: Array<{ tag: { name: string } }>;
+  listMembers?: Array<{ list: { name: string } }>;
+};
+
+function mapContactRows(rows: ContactRow[]) {
+  return rows.map((c) =>
+    mapContact({
+      ...c,
+      tags: c.tagMembers,
+      lists: c.listMembers,
+    }),
+  );
+}
 
 export async function GET(request: Request) {
   try {
@@ -20,20 +55,18 @@ export async function GET(request: Request) {
     const take = Math.min(200, Math.max(1, Number(searchParams.get("take") || 50)));
     const skip = Math.max(0, Number(searchParams.get("skip") || 0));
 
-    const include = { tagMembers: { include: { tag: true } } };
-
     if (phone) {
       const normalized = normalizeE164(phone);
-      const data = await getPrisma().contact.findMany({
+      const rows = await getPrisma().contact.findMany({
         where: { workspaceId: auth.workspaceId, phone: normalized },
-        include,
+        include: contactInclude,
         take: 5,
       });
-      return NextResponse.json({ data });
+      return NextResponse.json({ data: mapContactRows(rows as ContactRow[]) });
     }
 
     if (q) {
-      const data = await getPrisma().contact.findMany({
+      const rows = await getPrisma().contact.findMany({
         where: {
           workspaceId: auth.workspaceId,
           OR: [
@@ -44,26 +77,27 @@ export async function GET(request: Request) {
             { company: { contains: q, mode: "insensitive" } },
           ],
         },
-        include,
+        include: contactInclude,
         orderBy: { createdAt: "desc" },
         take,
         skip,
       });
-      return NextResponse.json({ data });
+      return NextResponse.json({ data: mapContactRows(rows as ContactRow[]) });
     }
 
-    const data = await getPrisma().contact.findMany({
+    const rows = await getPrisma().contact.findMany({
       where: {
         workspaceId: auth.workspaceId,
         ...(status
           ? { status: status.toUpperCase() as "SUBSCRIBED" | "UNSUBSCRIBED" | "BLOCKED" | "INVALID" }
           : {}),
       },
+      include: contactInclude,
       orderBy: { createdAt: "desc" },
       take,
       skip,
     });
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: mapContactRows(rows as ContactRow[]) });
   } catch (err) {
     return jsonError(err, 500);
   }

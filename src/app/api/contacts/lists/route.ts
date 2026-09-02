@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { filterWorkspaceContactIds } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
 import { loadLists } from "@/lib/workspace-data";
 
@@ -34,8 +35,12 @@ export async function POST(request: Request) {
       },
     });
     if (body.contactIds?.length) {
+      const validContactIds = await filterWorkspaceContactIds(
+        auth.workspaceId,
+        body.contactIds,
+      );
       let addedCount = 0;
-      for (const contactId of body.contactIds) {
+      for (const contactId of validContactIds) {
         const created = await getPrisma().contactListMember.create({
           data: { listId: list.id, contactId },
         }).catch(() => null);
@@ -88,15 +93,22 @@ export async function PATCH(request: Request) {
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const list = await getPrisma().contactList.update({
-      where: { id: body.id },
-      data: {
-        name: body.name?.trim() || undefined,
-        description: body.description ?? undefined,
-      },
-    });
+    const hasMetaUpdate = body.name !== undefined || body.description !== undefined;
+    const list = hasMetaUpdate
+      ? await getPrisma().contactList.update({
+          where: { id: body.id },
+          data: {
+            ...(body.name !== undefined ? { name: body.name.trim() || existing.name } : {}),
+            ...(body.description !== undefined ? { description: body.description } : {}),
+          },
+        })
+      : existing;
 
-    for (const contactId of body.addContactIds || []) {
+    const validAddContactIds = await filterWorkspaceContactIds(
+      auth.workspaceId,
+      body.addContactIds || [],
+    );
+    for (const contactId of validAddContactIds) {
       const existingMember = await getPrisma().contactListMember.findFirst({
         where: { listId: list.id, contactId },
       });

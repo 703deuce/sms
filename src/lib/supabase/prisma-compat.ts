@@ -1036,6 +1036,31 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       continue;
     }
 
+    // One-to-many: contact.listMembers (ContactListMember.contactId) + nested list
+    if (rel === "listMembers" && model === "contact") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = ids.length
+        ? await db.from("ContactListMember").select("*").in("contactId", ids)
+        : { data: [] as Row[] };
+      let members = (data ?? []).map((r) => reviveRow(r as Row));
+      if (isObject(cfg) && isObject(cfg.include) && cfg.include.list) {
+        const listIds = [...new Set(members.map((m) => m.listId).filter(Boolean))] as string[];
+        const { data: lists } = listIds.length
+          ? await db.from("ContactList").select("*").in("id", listIds)
+          : { data: [] as Row[] };
+        const listMap = new Map((lists ?? []).map((l) => [l.id as string, reviveRow(l as Row)]));
+        members = members.map((m) => ({ ...m, list: listMap.get(m.listId as string) ?? null }));
+      }
+      const by = new Map<string, Row[]>();
+      for (const m of members) {
+        const list = by.get(m.contactId as string) ?? [];
+        list.push(m);
+        by.set(m.contactId as string, list);
+      }
+      out = out.map((r) => ({ ...r, listMembers: by.get(r.id as string) ?? [] }));
+      continue;
+    }
+
     // One-to-many: conferenceCall.participants
     if (rel === "participants" && model === "conferenceCall") {
       const ids = out.map((r) => r.id as string);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
 import { loadContactById } from "@/lib/workspace-data";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -60,25 +61,28 @@ export async function PATCH(
       }
     }
 
-    await getPrisma().contact.update({
-      where: { id },
-      data: {
-        firstName: body.firstName ?? undefined,
-        lastName: body.lastName ?? undefined,
-        email: body.email ?? undefined,
-        phone: phoneUpdate,
-        status: body.status
-          ? (body.status.toUpperCase() as
-              | "SUBSCRIBED"
-              | "UNSUBSCRIBED"
-              | "BLOCKED"
-              | "INVALID")
-          : undefined,
-        assignedUser: body.assignedUser === undefined ? undefined : body.assignedUser,
-        company: body.company ?? undefined,
-        ...(body.customFields !== undefined ? { customFields: body.customFields } : {}),
-      },
-    });
+    const contactPatch: Record<string, unknown> = {};
+    if (body.firstName !== undefined) contactPatch.firstName = body.firstName;
+    if (body.lastName !== undefined) contactPatch.lastName = body.lastName;
+    if (body.email !== undefined) contactPatch.email = body.email;
+    if (phoneUpdate !== undefined) contactPatch.phone = phoneUpdate;
+    if (body.status) {
+      contactPatch.status = body.status.toUpperCase() as
+        | "SUBSCRIBED"
+        | "UNSUBSCRIBED"
+        | "BLOCKED"
+        | "INVALID";
+    }
+    if (body.assignedUser !== undefined) contactPatch.assignedUser = body.assignedUser;
+    if (body.company !== undefined) contactPatch.company = body.company;
+    if (body.customFields !== undefined) contactPatch.customFields = body.customFields;
+
+    if (Object.keys(contactPatch).length > 0) {
+      await getPrisma().contact.update({
+        where: { id },
+        data: contactPatch,
+      });
+    }
 
     if (body.tagNames) {
       const priorTags = await getPrisma().contactTag.findMany({
@@ -128,6 +132,7 @@ export async function PATCH(
     }
 
     if (body.listIds) {
+      const validListIds = await filterWorkspaceListIds(auth.workspaceId, body.listIds);
       const priorLists = await getPrisma().contactListMember.findMany({
         where: { contactId: id },
         select: { listId: true },
@@ -136,7 +141,7 @@ export async function PATCH(
 
       await getPrisma().contactListMember.deleteMany({ where: { contactId: id } });
       const addedListIds: string[] = [];
-      for (const listId of body.listIds) {
+      for (const listId of validListIds) {
         await getPrisma().contactListMember.create({
           data: { listId, contactId: id },
         }).catch(() => null);
