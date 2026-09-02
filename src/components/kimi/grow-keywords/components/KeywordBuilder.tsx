@@ -132,6 +132,7 @@ export default function KeywordBuilder({
     listName?: string;
     confirmation?: string;
     autoReply?: string;
+    status?: string;
   }) => void | Promise<void>;
 }) {
   const [setupOpen, setSetupOpen] = useState(true);
@@ -173,9 +174,10 @@ export default function KeywordBuilder({
       void Promise.resolve(
         onSaveKeyword({
           keyword: keyword.trim(),
-          listName: selectedLists[0],
+          listName: createContact === "yes" ? selectedLists[0] : undefined,
           confirmation: description.trim() || autoResponse,
           autoReply: autoResponse,
+          status: active ? "Active" : "Inactive",
         }),
       )
         .then(done)

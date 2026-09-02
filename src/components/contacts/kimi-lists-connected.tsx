@@ -17,6 +17,7 @@ import {
   fetchContactsForLists,
   fetchKeywordsForLists,
   fetchLists,
+  removeContactsFromLists,
   updateKeywordForList,
 } from "@/lib/contacts/kimi-lists-adapter";
 import {
@@ -199,6 +200,11 @@ export function KimiListsConnected() {
             lists={lists}
             stats={contactStats}
             onAddToLists={addToLists}
+            onRemoveFromLists={async (contactIds, listIds) => {
+              await removeContactsFromLists(listIds, contactIds);
+              await reload();
+              showToast("Contacts removed from lists.");
+            }}
             onDeleteContacts={async (ids) => {
               await deleteContacts(ids);
               await reload();

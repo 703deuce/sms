@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       autoReply?: string;
       tags?: string[];
       startCampaignId?: string;
+      status?: string;
     };
     const keyword = (body.keyword || "").trim().toUpperCase();
     if (!keyword) {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
         autoReply: body.autoReply?.trim() || null,
         tagsJson: body.tags || [],
         startCampaignId: body.startCampaignId || null,
-        status: "Active",
+        status: body.status === "Inactive" ? "Inactive" : "Active",
       },
     });
     return NextResponse.json({ data: created }, { status: 201 });

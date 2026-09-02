@@ -111,6 +111,20 @@ export async function addContactsToList(listId: string, contactIds: string[]): P
   if (!res.ok) throw new Error(json.error || "Could not add contacts to list");
 }
 
+export async function removeContactsFromLists(listIds: string[], contactIds: string[]): Promise<void> {
+  await Promise.all(
+    listIds.map(async (listId) => {
+      const res = await fetch("/api/contacts/lists", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: listId, removeContactIds: contactIds }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not remove contacts from list");
+    }),
+  );
+}
+
 export async function updateKeywordForList(
   keywordId: string,
   payload: { listName?: string; keyword?: string; confirmation?: string; autoReply?: string },

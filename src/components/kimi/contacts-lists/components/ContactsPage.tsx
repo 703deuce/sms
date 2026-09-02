@@ -1,14 +1,16 @@
 "use client";
-import { useMemo, useState } from "react";
-import { Users, UserCheck, UserX, Search, Filter, ChevronDown, X, UserPlus, UserMinus, Download, Ban, Trash2, ListPlus, Info, ArrowUpDown } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Users, UserCheck, UserX, Search, Filter, ChevronDown, X, UserPlus, UserMinus, Download, Ban, Trash2, ListPlus, Info, ArrowUpDown, Upload } from "lucide-react";
 import { Contact, ContactList } from "../mock-data";
 import type { KimiContactStats } from "@/lib/contacts/kimi-contacts-adapter";
+import { downloadContactsCsv } from "@/lib/contacts/download-csv";
 
 interface Props {
   contacts: Contact[];
   lists: ContactList[];
   stats: KimiContactStats;
   onAddToLists: (contactIds: string[], listIds: string[]) => void;
+  onRemoveFromLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
   onDeleteContacts?: (contactIds: string[]) => void | Promise<void>;
   onUnsubscribeContacts?: (contactIds: string[]) => void | Promise<void>;
 }
@@ -18,15 +20,21 @@ export default function ContactsPage({
   lists,
   stats,
   onAddToLists,
+  onRemoveFromLists,
   onDeleteContacts,
   onUnsubscribeContacts,
 }: Props) {
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [pickedLists, setPickedLists] = useState<Set<string>>(new Set());
+  const [removeLists, setRemoveLists] = useState<Set<string>>(new Set());
   const [listSearch, setListSearch] = useState("");
+  const [removeListSearch, setRemoveListSearch] = useState("");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -48,8 +56,15 @@ export default function ContactsPage({
     s.has(id) ? s.delete(id) : s.add(id);
     setPickedLists(s);
   };
+  const toggleRemovePick = (id: string) => {
+    const s = new Set(removeLists);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setRemoveLists(s);
+  };
 
   const filteredLists = lists.filter((l) => l.name.toLowerCase().includes(listSearch.toLowerCase()));
+  const filteredRemoveLists = lists.filter((l) => l.name.toLowerCase().includes(removeListSearch.toLowerCase()));
+  const selectedContacts = contacts.filter((c) => selected.has(c.id));
 
   const statCards = [
     { label: "Contacts", value: stats.contacts.toLocaleString(), icon: <Users size={16} />, tone: "bg-[#eef1fe] text-[#3b4ef5]" },
@@ -70,7 +85,7 @@ export default function ContactsPage({
   };
 
   return (
-    <div onClick={() => actionsOpen && setActionsOpen(false)}>
+    <div onClick={() => { if (actionsOpen) setActionsOpen(false); if (createOpen) setCreateOpen(false); }}>
       <h1 className="page-title"><Users size={19} className="text-[#3b4ef5]" /> Contacts</h1>
       <p className="page-subtitle mb-6">View and manage all of your contacts.</p>
 
@@ -100,8 +115,21 @@ export default function ContactsPage({
                 <div className="menu-pop w-[220px]">
                   {[
                     { icon: <UserPlus size={14} />, label: "Add to Lists", fn: () => { setActionsOpen(false); setAddOpen(true); } },
-                    { icon: <UserMinus size={14} />, label: "Remove From Lists", fn: () => setActionsOpen(false) },
-                    { icon: <Download size={14} />, label: "Download", fn: () => setActionsOpen(false) },
+                    {
+                      icon: <UserMinus size={14} />,
+                      label: "Remove From Lists",
+                      fn: () => { setActionsOpen(false); setRemoveOpen(true); },
+                    },
+                    {
+                      icon: <Download size={14} />,
+                      label: "Download",
+                      fn: () => void runBulkAction(async () => {
+                        downloadContactsCsv(
+                          selectedContacts,
+                          `contacts-selected-${new Date().toISOString().slice(0, 10)}.csv`,
+                        );
+                      }),
+                    },
                     {
                       icon: <Ban size={14} />,
                       label: "Unsubscribe",
@@ -135,12 +163,35 @@ export default function ContactsPage({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
             <input className="input pl-8 w-[220px]" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <button className="btn-primary flex items-center gap-1.5"><UserPlus size={14} /> Create Contact <ChevronDown size={12} /></button>
+          <div className="relative" ref={createMenuRef}>
+            <button
+              className="btn-primary flex items-center gap-1.5"
+              onClick={() => setCreateOpen(!createOpen)}
+            >
+              <UserPlus size={14} /> Create Contact <ChevronDown size={12} className={`transition-transform ${createOpen ? "rotate-180" : ""}`} />
+            </button>
+            {createOpen && (
+              <div className="menu-pop right-0 left-auto mt-1.5 w-48">
+                <button
+                  className="menu-item w-full"
+                  onClick={() => { setCreateOpen(false); window.location.assign("/contacts/create"); }}
+                >
+                  <UserPlus size={14} /> Create One
+                </button>
+                <button
+                  className="menu-item w-full"
+                  onClick={() => { setCreateOpen(false); window.location.assign("/contacts/imports"); }}
+                >
+                  <Upload size={14} /> Import List
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -234,6 +285,48 @@ export default function ContactsPage({
                 Add to Lists
               </button>
               <button className="btn-secondary" onClick={() => setAddOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeOpen && (
+        <div className="modal-overlay" onClick={() => setRemoveOpen(false)}>
+          <div className="modal-card p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-[15px] font-bold text-[#0f1b3d]"><UserMinus size={15} className="text-[#3b4ef5]" /> Remove From Lists</h3>
+              <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#f1f3f9] hover:text-[#44507a]" onClick={() => setRemoveOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <p className="mb-4 text-[12px] text-[#7a85a8]">Select lists to remove your selected contacts from.</p>
+            <div className="relative mb-3">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa3c0]" />
+              <input className="input pl-8" placeholder="Search" value={removeListSearch} onChange={(e) => setRemoveListSearch(e.target.value)} />
+            </div>
+            <div className="mb-5 divide-y divide-[#f1f3f9] overflow-hidden rounded-lg border border-[#eceef5]">
+              {filteredRemoveLists.map((l) => (
+                <label key={l.id} className="flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 transition-colors hover:bg-[#fafbfe]">
+                  <input type="checkbox" className="checkbox" checked={removeLists.has(l.id)} onChange={() => toggleRemovePick(l.id)} />
+                  <span className="text-[13px] text-[#0f1b3d]">{l.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                className="btn-primary"
+                disabled={removeLists.size === 0 || busy}
+                onClick={() => void runBulkAction(async () => {
+                  if (onRemoveFromLists) {
+                    await onRemoveFromLists(Array.from(selected), Array.from(removeLists));
+                  }
+                  setRemoveOpen(false);
+                  setRemoveLists(new Set());
+                })}
+              >
+                Remove From Lists
+              </button>
+              <button className="btn-secondary" onClick={() => setRemoveOpen(false)}>Cancel</button>
             </div>
           </div>
         </div>

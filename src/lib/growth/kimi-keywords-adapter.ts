@@ -46,6 +46,7 @@ export async function createKeyword(payload: {
   listName?: string;
   confirmation?: string;
   autoReply?: string;
+  status?: string;
 }): Promise<Keyword> {
   const res = await fetch("/api/growth/keywords", {
     method: "POST",

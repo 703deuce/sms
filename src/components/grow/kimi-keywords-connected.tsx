@@ -35,7 +35,13 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
     }
   }, [initialKeywords.length, reload]);
 
-  const handleSaved = async (payload: { keyword: string; listName?: string; confirmation?: string }) => {
+  const handleSaved = async (payload: {
+    keyword: string;
+    listName?: string;
+    confirmation?: string;
+    autoReply?: string;
+    status?: string;
+  }) => {
     try {
       await createKeyword(payload);
       await reload();
