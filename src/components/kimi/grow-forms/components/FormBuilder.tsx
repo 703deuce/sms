@@ -24,6 +24,9 @@ import {
   updateBlockInLayout,
   updateBlockStyle,
   addPaletteElement,
+  insertPaletteElementAt,
+  moveFormBlock,
+  FORM_DND_PALETTE,
   layoutFromTemplate,
   removeBlockFromLayout,
   setFieldKeyOnBlock,
@@ -323,7 +326,7 @@ export default function FormBuilder({
               </SectionRow>
 
               <SectionRow num={2} title="Design" open={openSection === 2} onToggle={() => setOpenSection(2)}>
-                <p className="text-[11px] text-muted-foreground">Click elements on the canvas to edit them. Use the palette to add optional fields.</p>
+                <p className="text-[11px] text-muted-foreground">Drag elements onto the canvas to place them, or click to add. Drag block handles to reorder.</p>
                 <button onClick={() => setTemplatesOpen(true)} className="w-full border border-dashed border-indigo-400 text-indigo-600 rounded-lg py-2.5 text-xs font-medium hover:bg-indigo-50">✦ Select a Template</button>
                 <div className="grid grid-cols-3 gap-2">
                   {designElements.map((el) => (
@@ -331,6 +334,11 @@ export default function FormBuilder({
                       key={el.id}
                       type="button"
                       className="tv-element-tile"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(FORM_DND_PALETTE, el.id);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                       onClick={() => {
                         if (el.id === "field") {
                           setLayout((prev) => ensureEmailField(prev, true));
@@ -437,7 +445,30 @@ export default function FormBuilder({
         </div>
         <div className="flex-1 overflow-auto tv-scroll flex items-start justify-center p-8">
           <div style={{ width: deviceWidth, transition: "width .25s" }} className="tv-fade">
-            <BuilderCanvas layout={layout} view={view} selected={selected} onSelect={setSelected} device={device} />
+            <BuilderCanvas
+              layout={layout}
+              view={view}
+              selected={selected}
+              onSelect={setSelected}
+              device={device}
+              onInsertPalette={(elementId, index) => {
+                if (elementId === "field") {
+                  setLayout((prev) => {
+                    const withEmail = ensureEmailField(prev, true);
+                    const emailBlock = withEmail.blocks.find(
+                      (b) => b.type === "field" && b.props?.fieldKey === "email" && !b.props?.hidden,
+                    );
+                    if (!emailBlock) return withEmail;
+                    return moveFormBlock(withEmail, emailBlock.id, index);
+                  });
+                  return;
+                }
+                setLayout((prev) => insertPaletteElementAt(prev, elementId, index));
+              }}
+              onMoveBlock={(blockId, index) => {
+                setLayout((prev) => moveFormBlock(prev, blockId, index));
+              }}
+            />
           </div>
         </div>
       </div>

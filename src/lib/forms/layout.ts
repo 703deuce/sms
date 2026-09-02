@@ -385,6 +385,59 @@ export function createBlockFromPalette(elementId: string): FormBlock | null {
   }
 }
 
+export const FORM_DND_PALETTE = "application/x-transovo-form-palette";
+export const FORM_DND_BLOCK = "application/x-transovo-form-block";
+
+/** Blocks rendered in the form column (excludes landing image column). */
+export function isFormCanvasBlock(block: FormBlock): boolean {
+  return block.type !== "image-column";
+}
+
+export function formCanvasBlocks(layout: FormLayout): FormBlock[] {
+  return layout.blocks.filter(isFormCanvasBlock);
+}
+
+function blocksWithCanvasOrder(layout: FormLayout, canvasBlocks: FormBlock[]): FormBlock[] {
+  const imageBlocks = layout.blocks.filter((b) => b.type === "image-column");
+  return [...canvasBlocks, ...imageBlocks];
+}
+
+/** Insert a palette element at a canvas index (0 = top of form column). */
+export function insertPaletteElementAt(
+  layout: FormLayout,
+  elementId: string,
+  canvasIndex: number,
+): FormLayout {
+  const block = createBlockFromPalette(elementId);
+  if (!block) return layout;
+
+  if (block.type === "image-column") {
+    if (layout.formType !== "landing" || layout.blocks.some((b) => b.type === "image-column")) {
+      return layout;
+    }
+    return { ...layout, blocks: [...layout.blocks, block] };
+  }
+
+  const canvasBlocks = formCanvasBlocks(layout);
+  const safeIndex = Math.max(0, Math.min(canvasIndex, canvasBlocks.length));
+  const next = [...canvasBlocks];
+  next.splice(safeIndex, 0, block);
+  return { ...layout, blocks: blocksWithCanvasOrder(layout, next) };
+}
+
+/** Move an existing canvas block to a new canvas index. */
+export function moveFormBlock(layout: FormLayout, blockId: string, canvasIndex: number): FormLayout {
+  const canvasBlocks = formCanvasBlocks(layout);
+  const fromIdx = canvasBlocks.findIndex((b) => b.id === blockId);
+  if (fromIdx < 0) return layout;
+
+  const reordered = [...canvasBlocks];
+  const [moved] = reordered.splice(fromIdx, 1);
+  const safeIndex = Math.max(0, Math.min(canvasIndex, reordered.length));
+  reordered.splice(safeIndex, 0, moved);
+  return { ...layout, blocks: blocksWithCanvasOrder(layout, reordered) };
+}
+
 export function addPaletteElement(layout: FormLayout, elementId: string): FormLayout {
   const block = createBlockFromPalette(elementId);
   if (!block) return layout;
@@ -397,8 +450,8 @@ export function addPaletteElement(layout: FormLayout, elementId: string): FormLa
   }
 
   const insertBefore = layout.blocks.findIndex((b) => b.type === "button" || b.type === "compliance");
-  const index = insertBefore >= 0 ? insertBefore : layout.blocks.length;
-  return insertBlockAt(layout, index, block);
+  const index = insertBefore >= 0 ? insertBefore : formCanvasBlocks(layout).length;
+  return insertPaletteElementAt(layout, elementId, index);
 }
 
 export function syncLayoutContent(
@@ -411,7 +464,7 @@ export function syncLayoutContent(
     formType?: "landing" | "embed";
   },
 ): FormLayout {
-  let next = { ...layout };
+  const next = { ...layout };
   if (patch.formType) next.formType = patch.formType;
   if (patch.imageHue !== undefined) next.imageHue = patch.imageHue;
 
