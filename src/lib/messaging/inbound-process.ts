@@ -581,10 +581,14 @@ export async function processInboundMessage(input: {
     where: {
       workspaceId: input.workspaceId,
       phone: from,
-      workflowStatus: { in: ["pending", "scheduled", "in_progress", "waiting"] },
+      campaign: { status: { in: ["SENDING", "COMPLETED", "SCHEDULED"] } },
     },
+    select: { id: true, campaignId: true, metadata: true },
+    orderBy: { enrolledAt: "desc" },
+    take: 20,
   });
   const repliedCampaignIds = new Set<string>();
+  const repliedAt = new Date().toISOString();
   for (const r of active) {
     await prisma.$transaction(async (tx: any) => {
       const row = await tx.campaignRecipient.findUnique({ where: { id: r.id } });
@@ -593,10 +597,16 @@ export async function processInboundMessage(input: {
         row.metadata && typeof row.metadata === "object"
           ? (row.metadata as Record<string, unknown>)
           : {};
-      if (prev.customer_replied) return;
+      if (prev.customer_replied || prev.repliedAt) return;
       await tx.campaignRecipient.update({
         where: { id: r.id },
-        data: { metadata: { ...prev, customer_replied: true } },
+        data: {
+          metadata: {
+            ...prev,
+            customer_replied: true,
+            repliedAt,
+          },
+        },
       });
       repliedCampaignIds.add(r.campaignId);
     });

@@ -1,15 +1,14 @@
 import { CampaignDetailView } from "@/components/campaigns/campaign-detail-view";
 import { CampaignResultsView } from "@/components/campaigns/broadcast/campaign-results";
 import { listBroadcastRecipients } from "@/lib/mass-texting/broadcast/analytics";
-import { buildCampaignTimeline } from "@/lib/campaigns/campaign-detail-helpers";
+import { buildCampaignTimelineFromData } from "@/lib/campaigns/campaign-timeline";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { estimateSmsSegments } from "@/lib/utils";
 import { getActiveWorkspaceId } from "@/lib/auth";
-import { loadAuditLogs, loadCampaignById } from "@/lib/workspace-data";
+import { getPrisma } from "@/lib/db";
+import { loadCampaignById } from "@/lib/workspace-data";
 import { notFound } from "next/navigation";
-
-type AuditLogRow = Awaited<ReturnType<typeof loadAuditLogs>>[number];
 
 export default async function CampaignDetailPage({
   params,
@@ -37,14 +36,25 @@ export default async function CampaignDetailPage({
     notFound();
   }
 
-  const auditLogs = await loadAuditLogs(workspaceId);
+  const auditLogs = await getPrisma().campaignLaunchAudit.findMany({
+    where: { workspaceId, campaignId },
+    orderBy: { confirmedAt: "desc" },
+    take: 20,
+  });
   const segments = estimateSmsSegments(campaign.body);
-  const timeline = buildCampaignTimeline(campaign);
-  const activity = auditLogs.filter(
-    (log: AuditLogRow) =>
-      log.detail?.toLowerCase().includes(campaign.name.toLowerCase()) ||
-      log.event.toLowerCase().includes("campaign"),
-  );
+  const timeline = await buildCampaignTimelineFromData(workspaceId, campaign);
+  const activity = auditLogs.map((audit) => ({
+    id: audit.id,
+    event: audit.metadata &&
+      typeof audit.metadata === "object" &&
+      (audit.metadata as Record<string, unknown>).recurringTemplate
+      ? "Recurring campaign activated"
+      : audit.scheduledAt
+        ? "Campaign scheduled"
+        : "Campaign launched",
+    detail: `${audit.finalRecipientCount.toLocaleString()} recipients · ${audit.estimatedSegments.toLocaleString()} credits`,
+    at: audit.confirmedAt.toISOString(),
+  }));
 
   const statusNorm = campaign.status.toLowerCase();
   const showResultsView =
@@ -94,6 +104,7 @@ export default async function CampaignDetailPage({
     <CampaignDetailView
       campaign={campaign}
       campaignId={campaignId}
+      timeline={timeline}
       activity={activity.map((log) => ({
         id: log.id,
         event: log.event,

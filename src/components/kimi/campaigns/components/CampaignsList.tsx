@@ -266,8 +266,8 @@ export default function CampaignsList({
                       {isSent ? (
                         <>
                           <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.clicks ?? 0)}</p><p className="text-[11px] text-slate-400">Clicks</p></div>
-                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.optOuts ?? 0)}</p><p className="text-[11px] text-slate-400">Unsubs</p></div>
-                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">—</p><p className="text-[11px] text-slate-400">Revenue</p></div>
+                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.replies ?? 0)}</p><p className="text-[11px] text-slate-400">Replies</p></div>
+                          <div><p className="text-[13px] font-semibold leading-tight text-slate-800">{formatNumber(c.optOuts ?? 0)}</p><p className="text-[11px] text-slate-400">Opt-outs</p></div>
                         </>
                       ) : <span className="text-[12px] text-slate-300">Not sent yet</span>}
                     </div>

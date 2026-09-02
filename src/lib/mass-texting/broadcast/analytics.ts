@@ -85,7 +85,12 @@ export async function listBroadcastRecipients(
       sentAt: sentMsg?.sentAt?.toISOString() ?? null,
       deliveredAt: deliveredMsg?.updatedAt?.toISOString() ?? null,
       clickedAt: clickedMsg?.updatedAt?.toISOString() ?? null,
-      repliedAt: typeof meta.repliedAt === "string" ? meta.repliedAt : null,
+      repliedAt:
+        typeof meta.repliedAt === "string"
+          ? meta.repliedAt
+          : meta.customer_replied
+            ? row.completedAt?.toISOString() ?? deliveredMsg?.updatedAt?.toISOString() ?? null
+            : null,
       optedOutAt:
         row.workflowStatus === "opted_out"
           ? row.completedAt?.toISOString() ?? null

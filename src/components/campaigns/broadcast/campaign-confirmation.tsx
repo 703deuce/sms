@@ -2,6 +2,7 @@
 
 import { campaignUi } from "@/components/campaigns/broadcast/campaign-layout";
 import { clearComposeDraft, loadComposeDraft } from "@/lib/campaigns/compose-draft";
+import { formatRecurrenceSummary } from "@/lib/campaigns/recurrence-format";
 import {
   fetchLaunchReview,
   launchCampaign,
@@ -22,13 +23,20 @@ export function CampaignSuccessView() {
     return () => clearComposeDraft();
   }, []);
 
-  const title = mode === "now" ? "Campaign Queued!" : "Campaign Scheduled!";
+  const title =
+    mode === "recurring"
+      ? "Recurring Campaign Started!"
+      : mode === "now"
+        ? "Campaign Queued!"
+        : "Campaign Scheduled!";
   const detail =
     mode === "later" && draft.scheduledDate
-      ? `Your campaign is scheduled to send on ${draft.scheduledDate} at ${draft.scheduledTime || ""}.`
-      : mode === "recurring"
-        ? "Your recurring campaign has been started."
-        : "Your campaign has been queued for delivery.";
+      ? `Your campaign is scheduled to send on ${draft.scheduledDate} at ${draft.scheduledTime || ""} (${draft.timezone}).`
+      : mode === "recurring" && draft.recurrence
+        ? formatRecurrenceSummary(draft.recurrence, draft.timezone)
+        : mode === "recurring"
+          ? "Your recurring campaign has been started."
+          : "Your campaign has been queued for delivery.";
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">

@@ -12,7 +12,8 @@ export default function CampaignRecurringPage() {
       <CampaignsFilteredView
         title="Recurring campaigns"
         subtitle="Automated sends that repeat on a schedule."
-        defaultFilter="scheduled"
+        defaultFilter="all"
+        lockFilter
         rowFilter={isRecurringCampaignRow}
       />
     </Suspense>

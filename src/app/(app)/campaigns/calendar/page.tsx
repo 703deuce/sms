@@ -140,15 +140,35 @@ export default function CampaignCalendarPage() {
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setCursor(new Date(year, month - 1, 1))}
+              onClick={() => {
+                if (view === "week") {
+                  const next = new Date(cursor);
+                  next.setDate(cursor.getDate() - 7);
+                  setCursor(next);
+                  return;
+                }
+                setCursor(new Date(year, month - 1, 1));
+              }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600"
             >
               Prev
             </button>
-            <span className="text-[13px] font-semibold text-slate-700">{monthLabel}</span>
+            <span className="text-[13px] font-semibold text-slate-700">
+              {view === "week"
+                ? `${weekDays[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${weekDays[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+                : monthLabel}
+            </span>
             <button
               type="button"
-              onClick={() => setCursor(new Date(year, month + 1, 1))}
+              onClick={() => {
+                if (view === "week") {
+                  const next = new Date(cursor);
+                  next.setDate(cursor.getDate() + 7);
+                  setCursor(next);
+                  return;
+                }
+                setCursor(new Date(year, month + 1, 1));
+              }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600"
             >
               Next

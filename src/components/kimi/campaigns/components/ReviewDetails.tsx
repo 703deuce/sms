@@ -46,17 +46,18 @@ export default function ReviewDetails({
     try {
       const data = await fetchLaunchReview(campaignId);
       setReview(data);
-      if (data.scheduledAt) {
+      setDraft((prev) => {
+        if (prev.scheduleMode === "recurring") return prev;
+        if (!data.scheduledAt) return prev;
         const when = new Date(data.scheduledAt);
-        if (!Number.isNaN(when.getTime())) {
-          setDraft((prev) => ({
-            ...prev,
-            scheduleMode: "later",
-            scheduledDate: when.toISOString().slice(0, 10),
-            scheduledTime: when.toTimeString().slice(0, 5),
-          }));
-        }
-      }
+        if (Number.isNaN(when.getTime())) return prev;
+        return {
+          ...prev,
+          scheduleMode: "later",
+          scheduledDate: when.toISOString().slice(0, 10),
+          scheduledTime: when.toTimeString().slice(0, 5),
+        };
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load review");
     } finally {

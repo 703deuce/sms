@@ -37,8 +37,13 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
     select: { id: true, workspaceId: true, configJson: true },
   });
   const { campaignConfigIsMassText } = await import("@/lib/mass-texting/campaign-send");
+  const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
   for (const campaign of dueScheduled) {
     if (campaignConfigIsMassText(campaign.configJson)) {
+      const broadcastConfig = readBroadcastConfig(campaign.configJson);
+      if (broadcastConfig?.scheduleMode === "recurring") {
+        continue;
+      }
       const audit = await prisma.campaignLaunchAudit.findFirst({
         where: { workspaceId: campaign.workspaceId, campaignId: campaign.id },
         select: { id: true },

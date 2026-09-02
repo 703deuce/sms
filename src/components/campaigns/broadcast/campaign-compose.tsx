@@ -672,6 +672,7 @@ export function CampaignComposeView() {
                     sendHour: 4,
                     sendMinute: 30,
                     ampm: "PM",
+                    timezone: draft.timezone,
                     endMode: "never",
                     weekdays: [1, 2, 3, 4, 5],
                   }

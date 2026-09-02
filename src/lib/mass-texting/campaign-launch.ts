@@ -207,6 +207,10 @@ export async function launchCampaignWithAudit(input: {
   }
 
   const { massTextProductConfigPatch } = await import("@/lib/mass-texting/campaign-send");
+  const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
+  const broadcastConfig = readBroadcastConfig(campaign.configJson);
+  const isRecurringTemplate = broadcastConfig?.scheduleMode === "recurring";
+
   await prisma.campaign.update({
     where: { id: input.campaignId },
     data: {
@@ -231,6 +235,91 @@ export async function launchCampaignWithAudit(input: {
 
   const { refreshMassTextingTrialState } = await import("@/lib/mass-texting/trial-lifecycle");
   await refreshMassTextingTrialState(input.workspaceId);
+
+  if (isRecurringTemplate) {
+    let audit = existingAudit;
+    if (!audit) {
+      try {
+        audit = await prisma.campaignLaunchAudit.create({
+          data: {
+            workspaceId: input.workspaceId,
+            campaignId: input.campaignId,
+            launchedByUserId: input.userId ?? null,
+            idempotencyKey,
+            rawContactCount: review.rawContactCount,
+            duplicateRemoved: review.duplicateRemoved,
+            invalidRemoved: review.invalidRemoved,
+            suppressedRemoved: review.suppressedRemoved,
+            finalRecipientCount: review.finalRecipientCount,
+            estimatedSegments: review.estimatedSegments,
+            estimatedCreditsCents: review.estimatedSegments,
+            phoneNumberId: review.phoneNumberId,
+            phoneE164: review.phoneE164,
+            scheduledAt: campaign.scheduledAt,
+            metadata: {
+              recurringTemplate: true,
+              listIds: review.listIds,
+              listNames: review.listNames,
+              a2pUseCase: review.a2pUseCase,
+            },
+          },
+        });
+      } catch (err) {
+        if (
+          err &&
+          typeof err === "object" &&
+          "code" in err &&
+          (err as { code: string }).code === "P2002"
+        ) {
+          audit = await prisma.campaignLaunchAudit.findUnique({
+            where: {
+              workspaceId_idempotencyKey: {
+                workspaceId: input.workspaceId,
+                idempotencyKey,
+              },
+            },
+          });
+        }
+        if (!audit) throw err;
+      }
+    }
+
+    const scheduledAt = campaign.scheduledAt;
+    if (!scheduledAt) {
+      return { ok: false, error: "Recurring campaign has no first run scheduled" };
+    }
+
+    const statusResult = await applyLaunchStatus({
+      workspaceId: input.workspaceId,
+      campaignId: input.campaignId,
+      sendLater: true,
+      scheduledAt,
+    });
+    if (!statusResult.ok) return statusResult;
+
+    try {
+      await emitMassTextOpsEvent({
+        workspaceId: input.workspaceId,
+        eventType: "mass_text.recurring_campaign_activated",
+        campaignId: input.campaignId,
+        idempotencyKey,
+        payload: {
+          auditId: audit!.id,
+          finalRecipientCount: review.finalRecipientCount,
+          scheduledAt: scheduledAt.toISOString(),
+        },
+      });
+    } catch {
+      // observability is best-effort
+    }
+
+    return {
+      ok: true,
+      campaignId: input.campaignId,
+      auditId: audit!.id,
+      idempotentReplay: Boolean(existingAudit),
+    };
+  }
 
   const reservation = await ensureLaunchReservation({
     workspaceId: input.workspaceId,

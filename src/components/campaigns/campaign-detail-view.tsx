@@ -4,9 +4,9 @@ import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/ui/status-chip";
 import {
-  buildCampaignTimeline,
   campaignStatusEmoji,
   formatCampaignDateTime,
+  type CampaignTimelineEvent,
 } from "@/lib/campaigns/campaign-detail-helpers";
 import { campaignDetailIsKimiBroadcast, campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import { mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
@@ -46,6 +46,7 @@ type Props = {
   campaign: Campaign;
   campaignId: string;
   activity: AuditLogRow[];
+  timeline: CampaignTimelineEvent[];
 };
 
 function KpiCard({
@@ -109,13 +110,12 @@ function SectionCard({
   );
 }
 
-export function CampaignDetailView({ campaign, campaignId, activity }: Props) {
+export function CampaignDetailView({ campaign, campaignId, activity, timeline }: Props) {
   const deliveryRate = campaign.sent > 0 ? (campaign.delivered / campaign.sent) * 100 : 0;
   const replyRate = campaign.delivered > 0 ? (campaign.replies / campaign.delivered) * 100 : 0;
   const clickRate = campaign.delivered > 0 ? (campaign.clicks / campaign.delivered) * 100 : 0;
   const optOutRate = campaign.delivered > 0 ? (campaign.optOuts / campaign.delivered) * 100 : 0;
   const segments = estimateSmsSegments(campaign.body);
-  const timeline = buildCampaignTimeline(campaign);
   const attachedMedia = mediaUrlsFromCampaignConfig(campaign.configJson);
 
   return (
@@ -355,7 +355,11 @@ export function CampaignDetailView({ campaign, campaignId, activity }: Props) {
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-muted-foreground">Rate per segment</dt>
-                <dd className="font-medium tabular-nums text-foreground">$0.015</dd>
+                <dd className="font-medium tabular-nums text-foreground">
+                  {campaign.sent > 0 && segments.segments > 0
+                    ? formatCurrency(campaign.cost / campaign.sent / segments.segments)
+                    : "—"}
+                </dd>
               </div>
               <div className="mt-1 flex items-center justify-between border-t border-border pt-3">
                 <dt className="font-semibold text-foreground">Total cost</dt>

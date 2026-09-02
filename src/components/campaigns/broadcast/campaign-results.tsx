@@ -121,6 +121,9 @@ function CostBreakdown({
   segments: number;
   cost: number;
 }) {
+  const ratePerSegment =
+    sent > 0 && segments > 0 ? cost / sent / segments : null;
+
   return (
     <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
       <h3 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
@@ -137,7 +140,9 @@ function CostBreakdown({
         </div>
         <div className="flex justify-between">
           <dt className="text-muted-foreground">Rate per segment</dt>
-          <dd className="font-medium">$0.015</dd>
+          <dd className="font-medium">
+            {ratePerSegment != null ? formatCurrency(ratePerSegment) : "—"}
+          </dd>
         </div>
         <div className="flex justify-between border-t border-border pt-3">
           <dt className="font-semibold text-foreground">Total cost</dt>
@@ -344,6 +349,7 @@ export function CampaignResultsView({
   const [recipientFilter, setRecipientFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(campaign);
+  const [liveRecipients, setLiveRecipients] = useState(recipients);
 
   const isSending = ["SENDING", "Sending", "sending"].includes(campaign.status);
 
@@ -352,24 +358,50 @@ export function CampaignResultsView({
   }, [campaign]);
 
   useEffect(() => {
+    setLiveRecipients(recipients);
+  }, [recipients]);
+
+  useEffect(() => {
     if (!isSending) return;
     let cancelled = false;
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/mass-texting/campaigns/${campaign.id}/stats`);
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!cancelled && json.data) {
-          setLive((prev) => ({
-            ...prev,
-            sent: json.data.sent ?? prev.sent,
-            delivered: json.data.delivered ?? prev.delivered,
-            clicks: json.data.clicks ?? prev.clicks,
-            replies: json.data.replies ?? prev.replies,
-            optOuts: json.data.optOuts ?? prev.optOuts,
-            status: json.data.status ?? prev.status,
-          }));
+        const [statsRes, recipientsRes] = await Promise.all([
+          fetch(`/api/mass-texting/campaigns/${campaign.id}/stats`),
+          fetch(`/api/mass-texting/campaigns/${campaign.id}/recipients`),
+        ]);
+        if (!cancelled && statsRes.ok) {
+          const json = await statsRes.json();
+          if (json.data) {
+            setLive((prev) => ({
+              ...prev,
+              sent: json.data.sent ?? prev.sent,
+              delivered: json.data.delivered ?? prev.delivered,
+              clicks: json.data.clicks ?? prev.clicks,
+              replies: json.data.replies ?? prev.replies,
+              optOuts: json.data.optOuts ?? prev.optOuts,
+              status: json.data.status ?? prev.status,
+            }));
+          }
+        }
+        if (!cancelled && recipientsRes.ok) {
+          const json = await recipientsRes.json();
+          if (Array.isArray(json.data)) {
+            setLiveRecipients(
+              json.data.map((r: RecipientRow) => ({
+                id: r.id,
+                name: r.name,
+                phone: r.phone,
+                status: r.status,
+                deliveredAt: r.deliveredAt,
+                clickedAt: r.clickedAt,
+                repliedAt: r.repliedAt,
+                optedOutAt: r.optedOutAt,
+                failureReason: r.failureReason,
+              })),
+            );
+          }
         }
       } catch {
         // ignore
@@ -391,7 +423,7 @@ export function CampaignResultsView({
   const pending = Math.max(0, live.sent - live.delivered);
 
   const filteredRecipients = useMemo(() => {
-    let rows = recipients;
+    let rows = liveRecipients;
     if (recipientFilter !== "All") {
       rows = rows.filter((r) => matchesRecipientFilter(r.status, recipientFilter));
     }
@@ -400,7 +432,9 @@ export function CampaignResultsView({
       rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.phone.includes(q));
     }
     return rows;
-  }, [recipients, recipientFilter, search]);
+  }, [liveRecipients, recipientFilter, search]);
+
+  const engagementMax = Math.max(live.clicks, live.replies, live.optOuts, 1);
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 pb-10">
@@ -509,7 +543,7 @@ export function CampaignResultsView({
                     <div key={bar.label} className="flex flex-1 flex-col items-center gap-1">
                       <div
                         className={cn("w-full rounded-t-md", bar.color)}
-                        style={{ height: `${Math.max(12, Math.min(100, bar.value * 6))}%` }}
+                        style={{ height: `${Math.max(12, (bar.value / engagementMax) * 100)}%` }}
                       />
                       <span className="text-[10px] text-muted-foreground">{bar.label}</span>
                     </div>
@@ -619,7 +653,7 @@ export function CampaignResultsView({
 
       {tab === "clicks" ? (
         <EngagementTable
-          rows={recipients}
+          rows={liveRecipients}
           field="clickedAt"
           emptyLabel="No link clicks recorded yet."
         />
@@ -627,7 +661,7 @@ export function CampaignResultsView({
 
       {tab === "replies" ? (
         <EngagementTable
-          rows={recipients}
+          rows={liveRecipients}
           field="repliedAt"
           emptyLabel="No replies recorded yet."
         />
@@ -635,14 +669,14 @@ export function CampaignResultsView({
 
       {tab === "opt-outs" ? (
         <EngagementTable
-          rows={recipients}
+          rows={liveRecipients}
           field="optedOutAt"
           emptyLabel="No opt-outs recorded yet."
         />
       ) : null}
 
       {tab === "activity" ? (
-        <ActivityFeed timeline={timelineProp} recipients={recipients} />
+        <ActivityFeed timeline={timelineProp} recipients={liveRecipients} />
       ) : null}
     </div>
   );

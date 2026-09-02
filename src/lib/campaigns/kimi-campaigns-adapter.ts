@@ -11,6 +11,7 @@ import {
   formatRecurrenceSummary,
   validateRecurrence,
 } from "@/lib/campaigns/recurrence-format";
+import { zonedLocalDateTimeToIso, zonedLocalDateTimeToUtc } from "@/lib/campaigns/schedule-time";
 
 export type CampaignListRow = {
   id: string;
@@ -53,7 +54,11 @@ export function toBroadcastPayload(draft: CampaignComposeDraft) {
   const body = composeMessageBody(draft.message);
   let scheduledAt: string | undefined;
   if (draft.scheduleMode === "later" && draft.scheduledDate && draft.scheduledTime) {
-    scheduledAt = new Date(`${draft.scheduledDate}T${draft.scheduledTime}`).toISOString();
+    scheduledAt = zonedLocalDateTimeToIso(
+      draft.scheduledDate,
+      draft.scheduledTime,
+      draft.timezone,
+    );
   }
   const category =
     draft.playbookCategoryId && ["broadcast", "promotion"].includes(draft.playbookCategoryId)
@@ -155,7 +160,11 @@ export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<st
     throw new Error("Select a date and time for scheduled sends.");
   }
   if (draft.scheduleMode === "later" && draft.scheduledDate && draft.scheduledTime) {
-    const when = new Date(`${draft.scheduledDate}T${draft.scheduledTime}`);
+    const when = zonedLocalDateTimeToUtc(
+      draft.scheduledDate,
+      draft.scheduledTime,
+      draft.timezone,
+    );
     if (Number.isNaN(when.getTime())) {
       throw new Error("Invalid scheduled date or time.");
     }
