@@ -101,22 +101,19 @@ export async function listBroadcastCampaigns(
   const prisma = getPrisma();
   const take = opts?.take ?? 50;
   const skip = opts?.skip ?? 0;
+  // JSON path filters on configJson are unreliable on our Postgres adapter — filter in memory.
   const rows = await prisma.campaign.findMany({
     where: {
       workspaceId,
-      configJson: {
-        path: ["broadcastVersion"],
-        equals: 1,
-      },
       ...statusWhereClause(opts?.status),
     },
     orderBy: { createdAt: "desc" },
-    take: Math.min(500, take + skip),
-    skip,
+    take: 500,
     include: { _count: { select: { recipients: true } } },
   });
   return rows
     .filter((c: (typeof rows)[number]) => isBroadcastCampaign(c.configJson))
+    .slice(skip, skip + take)
     .map((row: (typeof rows)[number]) => ({
       ...row,
       recipientCount: row._count?.recipients ?? 0,
@@ -301,7 +298,6 @@ export async function duplicateBroadcastCampaign(
       : null;
   if (!config?.audience) throw new Error("Campaign has no audience definition");
 
-  const scheduleMode = config.scheduleMode ?? "now";
   return createBroadcastCampaign(
     workspaceId,
     {
@@ -309,13 +305,8 @@ export async function duplicateBroadcastCampaign(
       message: source.body,
       audience: config.audience,
       numberId: config.numberId,
-      scheduleMode,
-      scheduledAt:
-        scheduleMode === "later" && source.scheduledAt
-          ? source.scheduledAt.toISOString()
-          : undefined,
+      scheduleMode: "now",
       timezone: config.timezone,
-      recurrence: scheduleMode === "recurring" ? config.recurrence : undefined,
       mediaUrls: config.mediaUrls,
       trackLinks: config.trackLinks,
       trackedLinks: config.trackedLinks,

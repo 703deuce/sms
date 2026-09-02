@@ -6,6 +6,7 @@ import {
   composeMessageBody,
   type AudienceSelection,
   type CampaignComposeDraft,
+  saveComposeDraft,
 } from "@/lib/campaigns/compose-draft";
 import {
   formatRecurrenceSummary,
@@ -216,7 +217,9 @@ export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<st
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not save campaign");
-  return (json.data?.id || draft.campaignId) as string;
+  const id = (json.data?.id || draft.campaignId) as string;
+  saveComposeDraft({ ...draft, campaignId: id });
+  return id;
 }
 
 export async function fetchLaunchReview(campaignId: string): Promise<LaunchReviewData> {

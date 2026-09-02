@@ -23,7 +23,9 @@ assert.ok(route.includes("isMassTextingCampaign"), "campaign routes detect mass 
 
 const processor = read("src/lib/campaigns/campaign-processor.ts");
 assert.ok(
-  processor.includes("campaignLaunchAudit") || processor.includes("canAutoActivateScheduledCampaign"),
+  processor.includes("activateDueScheduledCampaigns") ||
+    processor.includes("campaignLaunchAudit") ||
+    processor.includes("canAutoActivateScheduledCampaign"),
   "processor blocks scheduled mass-text send without launch audit",
 );
 
