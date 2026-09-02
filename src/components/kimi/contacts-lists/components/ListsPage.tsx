@@ -1,16 +1,36 @@
 "use client";
-import { useState } from "react";
-import { Search, Users, ListPlus, ArrowUpDown, MoreVertical, ListX } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Users, ListPlus, ArrowUpDown, MoreVertical, ListX, Trash2 } from "lucide-react";
 import { ContactList } from "../mock-data";
 
 interface Props {
   lists: ContactList[];
   onCreate: () => void;
+  onDelete?: (id: string) => void | Promise<void>;
 }
 
-export default function ListsPage({ lists, onCreate }: Props) {
+export default function ListsPage({ lists, onCreate, onDelete }: Props) {
   const [search, setSearch] = useState("");
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const visible = lists.filter((l) => l.name.toLowerCase().includes(search.toLowerCase()));
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu]);
+
+  const handleDelete = (list: ContactList) => {
+    if (!onDelete) return;
+    if (!window.confirm(`Delete list "${list.name}"? Contacts will not be deleted.`)) return;
+    void Promise.resolve(onDelete(list.id)).then(() => setOpenMenu(null));
+  };
 
   return (
     <div>
@@ -54,9 +74,22 @@ export default function ListsPage({ lists, onCreate }: Props) {
               <span className="text-[13px] font-semibold tabular-nums text-[#0f1b3d]">{l.contacts.toLocaleString()}</span>
               <span className="text-[11px] text-[#9aa3c0]">Contacts</span>
             </div>
-            <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#eef1fe] hover:text-[#3b4ef5]">
-              <MoreVertical size={15} />
-            </button>
+            <div className="relative" ref={openMenu === l.id ? menuRef : null}>
+              <button
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa3c0] transition-colors hover:bg-[#eef1fe] hover:text-[#3b4ef5]"
+                onClick={() => setOpenMenu(openMenu === l.id ? null : l.id)}
+                aria-label="List actions"
+              >
+                <MoreVertical size={15} />
+              </button>
+              {openMenu === l.id && onDelete && (
+                <div className="menu-pop right-0 mt-1 w-40">
+                  <button className="menu-item w-full text-[#f04438] hover:bg-[#feeeef]" onClick={() => handleDelete(l)}>
+                    <Trash2 size={14} /> Delete
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {visible.length === 0 && (

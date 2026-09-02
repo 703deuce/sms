@@ -18,9 +18,14 @@ import {
   Pencil,
   MoreHorizontal,
   X,
+  Download,
+  UserMinus,
+  Ban,
+  ListPlus,
 } from "lucide-react";
 import { contacts as seedContacts, stats as seedStats, type Contact, type OptInStatus } from "../mock-data";
 import { formatPhone } from "@/lib/utils";
+import { downloadContactsCsv } from "@/lib/contacts/download-csv";
 
 const STATUS_FILTERS: Array<{ value: OptInStatus | "all"; label: string }> = [
   { value: "all", label: "All statuses" },
@@ -71,25 +76,41 @@ function displayMobile(mobile: string) {
 export default function ContactsList({
   contacts = seedContacts,
   stats = seedStats,
+  listOptions = [],
   onCreateOne,
   onImportList,
   onDeleteContacts,
+  onAddToLists,
+  onRemoveFromLists,
+  onUnsubscribeContacts,
   savedToast,
 }: {
   contacts?: Contact[];
   stats?: typeof seedStats;
+  listOptions?: Array<{ id: string; name: string }>;
   onCreateOne: () => void;
   onImportList: () => void;
   onDeleteContacts?: (ids: string[]) => Promise<void>;
+  onAddToLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
+  onRemoveFromLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
+  onUnsubscribeContacts?: (contactIds: string[]) => void | Promise<void>;
   savedToast: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [rowMenuFor, setRowMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OptInStatus | "all">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pickedLists, setPickedLists] = useState<Set<string>>(new Set());
+  const [removeLists, setRemoveLists] = useState<Set<string>>(new Set());
+  const [listSearch, setListSearch] = useState("");
+  const [removeListSearch, setRemoveListSearch] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -158,11 +179,9 @@ export default function ContactsList({
     try {
       await onDeleteContacts([...selectedIds]);
       clearSelection();
-      setActionMessage(`Deleted ${count} contact${count === 1 ? "" : "s"}.`);
-      window.setTimeout(() => setActionMessage(""), 3000);
+      showActionMessage(`Deleted ${count} contact${count === 1 ? "" : "s"}.`);
     } catch {
-      setActionMessage("Could not delete selected contacts.");
-      window.setTimeout(() => setActionMessage(""), 4000);
+      showActionMessage("Could not delete selected contacts.", true);
     } finally {
       setDeleting(false);
     }
@@ -179,11 +198,9 @@ export default function ContactsList({
         next.delete(contact.id);
         return next;
       });
-      setActionMessage("Contact deleted.");
-      window.setTimeout(() => setActionMessage(""), 3000);
+      showActionMessage("Contact deleted.");
     } catch {
-      setActionMessage("Could not delete contact.");
-      window.setTimeout(() => setActionMessage(""), 4000);
+      showActionMessage("Could not delete contact.", true);
     } finally {
       setDeleting(false);
       setRowMenuFor(null);
@@ -198,15 +215,48 @@ export default function ContactsList({
     if (!phones) return;
     try {
       await navigator.clipboard.writeText(phones);
-      setActionMessage(`Copied ${selectedIds.size} phone number${selectedIds.size === 1 ? "" : "s"}.`);
-      window.setTimeout(() => setActionMessage(""), 3000);
+      showActionMessage(`Copied ${selectedIds.size} phone number${selectedIds.size === 1 ? "" : "s"}.`);
     } catch {
-      setActionMessage("Could not copy to clipboard.");
-      window.setTimeout(() => setActionMessage(""), 4000);
+      showActionMessage("Could not copy to clipboard.", true);
     }
   };
 
   const activeFilterLabel = STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? "Filter";
+  const selectedContacts = contacts.filter((c) => selectedIds.has(c.id));
+  const filteredLists = listOptions.filter((l) =>
+    l.name.toLowerCase().includes(listSearch.toLowerCase()),
+  );
+  const filteredRemoveLists = listOptions.filter((l) =>
+    l.name.toLowerCase().includes(removeListSearch.toLowerCase()),
+  );
+
+  const togglePick = (id: string) => {
+    const s = new Set(pickedLists);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setPickedLists(s);
+  };
+  const toggleRemovePick = (id: string) => {
+    const s = new Set(removeLists);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setRemoveLists(s);
+  };
+
+  const runBulkAction = async (action: () => void | Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setActionsOpen(false);
+    try {
+      await action();
+      clearSelection();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const showActionMessage = (msg: string, isError = false) => {
+    setActionMessage(msg);
+    window.setTimeout(() => setActionMessage(""), isError ? 4000 : 3000);
+  };
 
   return (
     <div className="px-8 pb-10 pt-6">
@@ -312,6 +362,54 @@ export default function ContactsList({
             <span className="text-[13px] font-medium text-foreground">
               {selectedIds.size} selected
             </span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setActionsOpen(!actionsOpen)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                Actions <ChevronDown className={`h-3.5 w-3.5 transition-transform ${actionsOpen ? "rotate-180" : ""}`} />
+              </button>
+              {actionsOpen && (
+                <div className="absolute left-0 top-full z-30 mt-1.5 w-52 rounded-lg border border-border bg-card py-1.5 shadow-lg">
+                  {onAddToLists && (
+                    <button type="button" className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted" onClick={() => { setActionsOpen(false); setAddOpen(true); }}>
+                      <ListPlus className="h-3.5 w-3.5 text-muted-foreground" /> Add to Lists
+                    </button>
+                  )}
+                  {onRemoveFromLists && (
+                    <button type="button" className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted" onClick={() => { setActionsOpen(false); setRemoveOpen(true); }}>
+                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" /> Remove From Lists
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted"
+                    onClick={() => void runBulkAction(async () => {
+                      downloadContactsCsv(
+                        selectedContacts,
+                        `contacts-selected-${new Date().toISOString().slice(0, 10)}.csv`,
+                      );
+                      showActionMessage(`Downloaded ${selectedContacts.length} contact${selectedContacts.length === 1 ? "" : "s"}.`);
+                    })}
+                  >
+                    <Download className="h-3.5 w-3.5 text-muted-foreground" /> Download
+                  </button>
+                  {onUnsubscribeContacts && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted"
+                      onClick={() => void runBulkAction(async () => {
+                        await onUnsubscribeContacts([...selectedIds]);
+                        showActionMessage(`Unsubscribed ${selectedIds.size} contact${selectedIds.size === 1 ? "" : "s"}.`);
+                      })}
+                    >
+                      <Ban className="h-3.5 w-3.5 text-muted-foreground" /> Unsubscribe
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => void handleCopyPhones()}
@@ -450,6 +548,92 @@ export default function ContactsList({
           </table>
         </div>
       </div>
+
+      {addOpen && onAddToLists && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAddOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-[15px] font-bold text-foreground">
+                <ListPlus size={15} className="text-primary" /> Add to Lists
+              </h3>
+              <button type="button" className="rounded-md p-1 text-muted-foreground hover:bg-muted" onClick={() => setAddOpen(false)}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px]" placeholder="Search lists" value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
+            </div>
+            <div className="mb-5 max-h-48 overflow-y-auto rounded-lg border border-border">
+              {filteredLists.map((l) => (
+                <label key={l.id} className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3.5 py-2.5 last:border-0 hover:bg-muted/40">
+                  <input type="checkbox" className="kc-check" checked={pickedLists.has(l.id)} onChange={() => togglePick(l.id)} />
+                  <span className="text-[13px]">{l.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="h-10 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
+                disabled={pickedLists.size === 0 || busy}
+                onClick={() => void runBulkAction(async () => {
+                  await onAddToLists([...selectedIds], [...pickedLists]);
+                  setAddOpen(false);
+                  setPickedLists(new Set());
+                  showActionMessage("Contacts added to lists.");
+                })}
+              >
+                Add to Lists
+              </button>
+              <button type="button" className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold" onClick={() => setAddOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeOpen && onRemoveFromLists && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRemoveOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-[15px] font-bold text-foreground">
+                <UserMinus size={15} className="text-primary" /> Remove From Lists
+              </h3>
+              <button type="button" className="rounded-md p-1 text-muted-foreground hover:bg-muted" onClick={() => setRemoveOpen(false)}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px]" placeholder="Search lists" value={removeListSearch} onChange={(e) => setRemoveListSearch(e.target.value)} />
+            </div>
+            <div className="mb-5 max-h-48 overflow-y-auto rounded-lg border border-border">
+              {filteredRemoveLists.map((l) => (
+                <label key={l.id} className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3.5 py-2.5 last:border-0 hover:bg-muted/40">
+                  <input type="checkbox" className="kc-check" checked={removeLists.has(l.id)} onChange={() => toggleRemovePick(l.id)} />
+                  <span className="text-[13px]">{l.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="h-10 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
+                disabled={removeLists.size === 0 || busy}
+                onClick={() => void runBulkAction(async () => {
+                  await onRemoveFromLists([...selectedIds], [...removeLists]);
+                  setRemoveOpen(false);
+                  setRemoveLists(new Set());
+                  showActionMessage("Contacts removed from lists.");
+                })}
+              >
+                Remove From Lists
+              </button>
+              <button type="button" className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold" onClick={() => setRemoveOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

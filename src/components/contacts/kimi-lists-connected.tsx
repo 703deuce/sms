@@ -14,6 +14,7 @@ import type { ContactList, Contact, Keyword } from "@/components/kimi/contacts-l
 import {
   addContactsToList,
   createList,
+  deleteList,
   fetchContactsForLists,
   fetchKeywordsForLists,
   fetchLists,
@@ -190,7 +191,17 @@ export function KimiListsConnected() {
             </button>
           </div>
         )}
-        {page === "lists" && <ListsPage lists={lists} onCreate={() => goToPage("createList")} />}
+        {page === "lists" && (
+          <ListsPage
+            lists={lists}
+            onCreate={() => goToPage("createList")}
+            onDelete={async (id) => {
+              await deleteList(id);
+              await reload();
+              showToast("List deleted.");
+            }}
+          />
+        )}
         {page === "createList" && (
           <CreateListPage onBack={() => goToPage("lists")} onSave={saveList} />
         )}

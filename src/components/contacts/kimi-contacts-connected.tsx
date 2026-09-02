@@ -17,8 +17,10 @@ import {
   fetchContacts,
   fetchContactLists,
   importContacts,
+  updateContact,
   type KimiContactStats,
 } from "@/lib/contacts/kimi-contacts-adapter";
+import { addContactsToList, removeContactsFromLists } from "@/lib/contacts/kimi-lists-adapter";
 
 type View = "list" | "create" | "import";
 
@@ -120,9 +122,22 @@ export function KimiContactsConnected({
           <ContactsList
             contacts={contacts}
             stats={stats}
+            listOptions={listOptions}
             onCreateOne={() => setView("create")}
             onImportList={() => setView("import")}
             onDeleteContacts={handleDeleteContacts}
+            onAddToLists={async (contactIds, listIds) => {
+              await Promise.all(listIds.map((listId) => addContactsToList(listId, contactIds)));
+              await reload();
+            }}
+            onRemoveFromLists={async (contactIds, listIds) => {
+              await removeContactsFromLists(listIds, contactIds);
+              await reload();
+            }}
+            onUnsubscribeContacts={async (ids) => {
+              await Promise.all(ids.map((id) => updateContact(id, { optInLabel: "Unsubscribed" })));
+              await reload();
+            }}
             savedToast={savedToast}
           />
         )}

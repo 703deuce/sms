@@ -345,9 +345,11 @@ export default async function ContactDetailPage({
                 <p className="text-[13px] text-muted-foreground">Not on any lists</p>
               )}
             </div>
-            <Button variant="outline" size="sm" className="mt-4 w-full">
-              Manage lists
-            </Button>
+            <Link href="/contacts/lists">
+              <Button variant="outline" size="sm" className="mt-4 w-full">
+                Manage lists
+              </Button>
+            </Link>
           </Card>
 
           <Card>
@@ -369,9 +371,11 @@ export default async function ContactDetailPage({
                 <p className="text-[13px] text-muted-foreground">No tags applied</p>
               )}
             </div>
-            <Button variant="outline" size="sm" className="mt-4 w-full">
-              Manage tags
-            </Button>
+            <Link href="/contacts/tags">
+              <Button variant="outline" size="sm" className="mt-4 w-full">
+                Manage tags
+              </Button>
+            </Link>
           </Card>
         </div>
       </div>

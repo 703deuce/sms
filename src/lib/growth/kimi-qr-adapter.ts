@@ -51,5 +51,11 @@ export async function fetchQrCodes(): Promise<QrCodeRow[]> {
   return json.data || [];
 }
 
+export async function deleteQrCode(id: string): Promise<void> {
+  const res = await fetch(`/api/growth/qr/${id}`, { method: "DELETE" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Could not delete QR code");
+}
+
 // Re-export for QR flow keyword mapping
 export { fetchKeywords, mapKw };

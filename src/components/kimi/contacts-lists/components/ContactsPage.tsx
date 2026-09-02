@@ -37,10 +37,15 @@ export default function ContactsPage({
   const [removeListSearch, setRemoveListSearch] = useState("");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "Subscribed" | "Unsubscribed" | "Not Subscribed">("all");
 
   const visible = useMemo(
-    () => contacts.filter((c) => (c.firstName + " " + c.lastName).toLowerCase().includes(search.toLowerCase())),
-    [contacts, search]
+    () =>
+      contacts.filter((c) => {
+        if (statusFilter !== "all" && c.optIn !== statusFilter) return false;
+        return (c.firstName + " " + c.lastName).toLowerCase().includes(search.toLowerCase());
+      }),
+    [contacts, search, statusFilter],
   );
 
   const toggle = (id: string) => {
@@ -240,15 +245,38 @@ export default function ContactsPage({
                 <X size={16} />
               </button>
             </div>
-            {["Audience", "Source", "Opt-In Status"].map((f) => (
+            {["Audience", "Source"].map((f) => (
               <div key={f} className="mb-4">
                 <label className="field-label">{f}</label>
                 <input className="input" placeholder="Search" />
               </div>
             ))}
+            <div className="mb-4">
+              <label className="field-label">Opt-In Status</label>
+              <select
+                className="input"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              >
+                <option value="all">All statuses</option>
+                <option value="Subscribed">Subscribed</option>
+                <option value="Unsubscribed">Unsubscribed</option>
+                <option value="Not Subscribed">Not Subscribed</option>
+              </select>
+            </div>
             <div className="mt-6 flex gap-3">
-              <button className="btn-primary" onClick={() => setFiltersOpen(false)}>Apply 0 Filters</button>
-              <button className="btn-secondary" onClick={() => setFiltersOpen(false)}>Clear Filters</button>
+              <button className="btn-primary" onClick={() => setFiltersOpen(false)}>
+                Apply {statusFilter === "all" ? "0" : "1"} Filter{statusFilter === "all" ? "s" : ""}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setFiltersOpen(false);
+                }}
+              >
+                Clear Filters
+              </button>
             </div>
           </div>
         </div>

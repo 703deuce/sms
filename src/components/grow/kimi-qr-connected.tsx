@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import QrGenerator from "@/components/kimi/grow-qr-codes/components/QrGenerator";
 import type { Keyword } from "@/components/kimi/grow-qr-codes/mock-data";
-import { createQrCode, fetchQrCodes, fetchQrKeywords, type QrCodeRow } from "@/lib/growth/kimi-qr-adapter";
+import { createQrCode, deleteQrCode, fetchQrCodes, fetchQrKeywords, type QrCodeRow } from "@/lib/growth/kimi-qr-adapter";
 import { fetchWebForms } from "@/lib/growth/kimi-forms-adapter";
 import { useSearchParams } from "next/navigation";
 
@@ -194,6 +194,18 @@ export function KimiQrCodesConnected() {
                               }}
                             >
                               <QrIcon size={14} className="mr-2.5 text-muted-foreground" />Regenerate
+                            </button>
+                            <button
+                              className="tv-menu-item text-rose-600 hover:bg-rose-50"
+                              onClick={() => {
+                                if (!window.confirm(`Delete QR code "${qr.name}"?`)) return;
+                                void deleteQrCode(qr.id)
+                                  .then(() => reload())
+                                  .then(() => setMenuFor(null))
+                                  .catch((err) => setError(err instanceof Error ? err.message : "Could not delete QR code"));
+                              }}
+                            >
+                              <Trash2 size={14} className="mr-2.5" />Delete
                             </button>
                           </div>
                         )}

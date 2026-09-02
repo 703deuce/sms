@@ -69,6 +69,12 @@ export async function createList(name: string, description: string): Promise<Con
   return mapApiListToKimi(json.data);
 }
 
+export async function deleteList(id: string): Promise<void> {
+  const res = await fetch(`/api/contacts/lists?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Could not delete list");
+}
+
 export async function fetchContactsForLists(): Promise<Contact[]> {
   const res = await fetch("/api/contacts?take=200");
   const json = await res.json();
