@@ -25,10 +25,10 @@ export default function KeywordsList({
 }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [items, setItems] = useState(keywordsProp ?? seedKeywords);
+  const [items, setItems] = useState(keywordsProp !== undefined ? keywordsProp : seedKeywords);
 
   useEffect(() => {
-    if (keywordsProp) setItems(keywordsProp);
+    if (keywordsProp !== undefined) setItems(keywordsProp);
   }, [keywordsProp]);
 
   const rows = items.filter((k) => k.keyword.toLowerCase().includes(query.toLowerCase()));

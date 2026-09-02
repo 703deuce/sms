@@ -10,13 +10,22 @@ export default function ImageSearchModal({
   const [q, setQ] = useState("");
   const [searched, setSearched] = useState(false);
 
+  const filtered = stockImages.filter((img) => {
+    const query = q.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      img.label.toLowerCase().includes(query) ||
+      img.by.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <Modal open={open} onClose={onClose} width={880}>
       <div className="p-7">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Search Images</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">Powered by Unsplash</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Choose a stock placeholder for your form background</p>
           </div>
           <div className="relative w-64">
             <input
@@ -33,12 +42,17 @@ export default function ImageSearchModal({
             <div className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
               <ImageIcon size={22} className="text-primary" />
             </div>
-            <div className="text-sm font-semibold text-foreground">Search Millions of Hi-Resolution Images</div>
-            <div className="mt-1.5 text-xs text-muted-foreground">Or click to upload your own jpg, png, gif or svg — 100 MB or less</div>
+            <div className="text-sm font-semibold text-foreground">Choose a background style</div>
+            <div className="mt-1.5 text-xs text-muted-foreground">Search sample images below, or pick a color in the form designer</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 py-20 text-center">
+            <div className="text-sm font-semibold text-foreground">No images match your search</div>
+            <div className="mt-1.5 text-xs text-muted-foreground">Try another keyword like “coffee” or “latte”.</div>
           </div>
         ) : (
           <div className="tv-scroll grid grid-cols-3 gap-3 overflow-auto md:grid-cols-4" style={{ maxHeight: "56vh" }}>
-            {stockImages.map((img) => (
+            {filtered.map((img) => (
               <div
                 key={img.id}
                 className="tv-img-tile"

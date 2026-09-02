@@ -68,6 +68,11 @@ export default function SegmentContacts({
         <Users className="h-4 w-4" />
         <span className="tabular-nums font-medium text-foreground">{total.toLocaleString()}</span> matched contacts · updates dynamically
       </p>
+      {total > source.length && (
+        <div className="mb-4 ml-12 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-[12px] text-primary">
+          Showing {source.length.toLocaleString()} of {total.toLocaleString()} matched contacts.
+        </div>
+      )}
 
       <div className="relative w-72 mb-4">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />

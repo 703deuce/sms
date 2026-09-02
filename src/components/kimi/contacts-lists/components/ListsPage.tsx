@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Search, Users, ListPlus, ArrowUpDown, MoreVertical, ListX, Trash2 } from "lucide-react";
 import { ContactList } from "../mock-data";
 
@@ -71,7 +72,12 @@ export default function ListsPage({ lists, highlightListId, onCreate, onDelete }
             }`}
           >
             <div>
-              <div className="cell-primary">{l.name}</div>
+              <Link
+                href={`/contacts/lists?listId=${encodeURIComponent(l.id)}`}
+                className="cell-primary hover:text-[#3b4ef5] hover:underline"
+              >
+                {l.name}
+              </Link>
               <div className="cell-sub">Created on {l.created}</div>
             </div>
             <div className="cell-body">{l.description}</div>
