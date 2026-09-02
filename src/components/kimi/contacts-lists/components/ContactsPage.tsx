@@ -71,6 +71,11 @@ export default function ContactsPage({
   const filteredLists = lists.filter((l) => l.name.toLowerCase().includes(listSearch.toLowerCase()));
   const filteredRemoveLists = lists.filter((l) => l.name.toLowerCase().includes(removeListSearch.toLowerCase()));
   const selectedContacts = contacts.filter((c) => selected.has(c.id));
+  const allLoadedSelected = contacts.length > 0 && contacts.every((c) => selected.has(c.id));
+
+  const selectAllLoaded = () => {
+    setSelected(new Set(contacts.map((c) => c.id)));
+  };
 
   const statCards = [
     { label: "Contacts", value: stats.contacts.toLocaleString(), icon: <Users size={16} />, tone: "bg-[#eef1fe] text-[#3b4ef5]" },
@@ -202,9 +207,17 @@ export default function ContactsPage({
       </div>
 
       <div className="table-card">
-        {selected.size === visible.length && visible.length > 0 && (
+        {selected.size === visible.length && visible.length > 0 && !allLoadedSelected && (
           <div className="border-b border-[#eceef5] bg-[#eef1fe] px-5 py-2 text-center text-[12px] text-[#3b4ef5]">
-            All {visible.length} contacts on this page are selected. <span className="cursor-pointer font-semibold underline">Select all {stats.contacts.toLocaleString()} contacts.</span>
+            All {visible.length} contacts on this page are selected.{" "}
+            <button type="button" className="cursor-pointer font-semibold underline" onClick={selectAllLoaded}>
+              Select all {contacts.length.toLocaleString()} loaded contacts.
+            </button>
+          </div>
+        )}
+        {allLoadedSelected && contacts.length > 0 && (
+          <div className="border-b border-[#eceef5] bg-[#eef1fe] px-5 py-2 text-center text-[12px] text-[#3b4ef5]">
+            All {contacts.length.toLocaleString()} loaded contacts are selected.
           </div>
         )}
         <div className="table-head grid grid-cols-[36px_1fr_1fr_1.1fr_1.2fr_1.2fr_1.3fr_32px]">
@@ -218,16 +231,25 @@ export default function ContactsPage({
             <Link href={`/contacts/${c.id}`} className="text-[13px] font-medium text-[#3b4ef5] hover:underline">
               {c.firstName}
             </Link>
-            <span className="text-[13px] text-[#0f1b3d]">{c.lastName}</span>
+            <Link
+              href={`/contacts/${c.id}`}
+              className="text-[13px] text-[#0f1b3d] hover:text-[#3b4ef5] hover:underline"
+            >
+              {c.lastName}
+            </Link>
             <span className="cell-body">{c.mobile}</span>
             <span className="cell-body">{c.email || <span className="text-[#c3c9dd]">—</span>}</span>
             <span>
               <span className={`pill ${c.optIn === "Subscribed" ? "pill-green" : "pill-gray"}`}>{c.optIn}</span>
             </span>
             <span className="text-[12.5px] text-[#7a85a8]">{c.created}</span>
-            <button className="flex h-7 w-7 items-center justify-center rounded-md text-[#c3c9dd] transition-colors hover:bg-[#eef1fe] hover:text-[#7a85a8]">
+            <Link
+              href={`/contacts/${c.id}`}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#c3c9dd] transition-colors hover:bg-[#eef1fe] hover:text-[#7a85a8]"
+              title="View contact"
+            >
               <Info size={13} />
-            </button>
+            </Link>
           </div>
         ))}
         {visible.length === 0 && (
@@ -248,12 +270,6 @@ export default function ContactsPage({
                 <X size={16} />
               </button>
             </div>
-            {["Audience", "Source"].map((f) => (
-              <div key={f} className="mb-4">
-                <label className="field-label">{f}</label>
-                <input className="input" placeholder="Search" />
-              </div>
-            ))}
             <div className="mb-4">
               <label className="field-label">Opt-In Status</label>
               <select

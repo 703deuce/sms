@@ -3,7 +3,20 @@ import React from "react";
 import { ArrowLeft, ChevronLeft, Plus } from "lucide-react";
 import { formDefaults } from "../mock-data";
 
-export default function TestFormScreen({ onBack }: { onBack: () => void }) {
+export default function TestFormScreen({
+  onBack,
+  optInMessage,
+  doubleOptInMessage,
+  doubleOptInEnabled = false,
+}: {
+  onBack: () => void;
+  optInMessage?: string;
+  doubleOptInMessage?: string;
+  doubleOptInEnabled?: boolean;
+}) {
+  const optIn = optInMessage?.trim() || formDefaults.optIn;
+  const doubleOptIn = doubleOptInMessage?.trim() || formDefaults.doubleOptIn;
+
   return (
     <div className="tv-forms flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-7 bg-slate-950 p-8">
       <div className="flex items-center gap-4">
@@ -14,7 +27,7 @@ export default function TestFormScreen({ onBack }: { onBack: () => void }) {
           <ArrowLeft size={12} /> Back to Builder
         </button>
         <span className="text-sm font-medium text-slate-200">
-          Test Form <span className="mx-1 text-slate-600">·</span> Double Opt-In Flow
+          Test Form <span className="mx-1 text-slate-600">·</span> {doubleOptInEnabled ? "Double Opt-In Flow" : "Single Opt-In Flow"}
         </span>
       </div>
 
@@ -39,18 +52,27 @@ export default function TestFormScreen({ onBack }: { onBack: () => void }) {
           <div className="text-center text-[10px] leading-relaxed text-slate-400">
             Text Message · SMS<br />Today 10:56 AM
           </div>
-          <div className="tv-msg-in">{formDefaults.doubleOptIn}</div>
-          <div className="text-[10px] text-slate-400">
-            The sender is not in your contact list. <span className="text-blue-500">Report Junk</span>
-          </div>
-          <div className="tv-msg-out">Yes</div>
-          <div className="tv-msg-in">
-            {formDefaults.optIn}
+          <div className="tv-msg-in">{doubleOptInEnabled ? doubleOptIn : optIn}</div>
+          {doubleOptInEnabled && (
+            <>
+              <div className="text-[10px] text-slate-400">
+                The sender is not in your contact list. <span className="text-blue-500">Report Junk</span>
+              </div>
+              <div className="tv-msg-out">Yes</div>
+              <div className="tv-msg-in">
+                {optIn}
+                <div className="mt-2 border-t border-slate-200 pt-2 text-[10px] leading-relaxed text-slate-500">
+                  Msg &amp; data rates may apply. Msg frequency varies. Text STOP to stop, HELP for help. Terms &amp; Privacy:{" "}
+                  <span className="text-blue-500">txt.tv/2Y24901G4</span>
+                </div>
+              </div>
+            </>
+          )}
+          {!doubleOptInEnabled && (
             <div className="mt-2 border-t border-slate-200 pt-2 text-[10px] leading-relaxed text-slate-500">
-              Msg &amp; data rates may apply. Msg frequency varies. Text STOP to stop, HELP for help. Terms &amp; Privacy:{" "}
-              <span className="text-blue-500">txt.tv/2Y24901G4</span>
+              Msg &amp; data rates may apply. Msg frequency varies. Text STOP to stop, HELP for help.
             </div>
-          </div>
+          )}
         </div>
         {/* Composer */}
         <div className="flex items-center gap-2 border-t border-slate-100 bg-white px-3 py-2.5">

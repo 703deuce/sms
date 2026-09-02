@@ -12,6 +12,11 @@ type View = "list" | "create" | "test" | "embed-site";
 
 export default function GrowFormsFlow() {
   const [view, setView] = useState<View>("list");
+  const [testPreview, setTestPreview] = useState<{
+    optInMessage: string;
+    doubleOptInMessage: string;
+    doubleOptInEnabled: boolean;
+  } | null>(null);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -19,11 +24,21 @@ export default function GrowFormsFlow() {
       {view === "create" && (
         <FormBuilder
           onExit={() => setView("list")}
-          onTestForm={() => setView("test")}
+          onTestForm={(preview) => {
+            setTestPreview(preview);
+            setView("test");
+          }}
           onEmbedSite={() => setView("embed-site")}
         />
       )}
-      {view === "test" && <TestFormScreen onBack={() => setView("create")} />}
+      {view === "test" && (
+        <TestFormScreen
+          onBack={() => setView("create")}
+          optInMessage={testPreview?.optInMessage}
+          doubleOptInMessage={testPreview?.doubleOptInMessage}
+          doubleOptInEnabled={testPreview?.doubleOptInEnabled}
+        />
+      )}
       {view === "embed-site" && <EmbedSiteScreen onBack={() => setView("create")} />}
     </div>
   );

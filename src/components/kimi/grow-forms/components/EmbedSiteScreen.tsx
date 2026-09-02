@@ -15,11 +15,23 @@ const blocks = [
   { id: "code", label: "Code", icon: "{ }" },
 ];
 
-export default function EmbedSiteScreen({ onBack }: { onBack: () => void }) {
+export default function EmbedSiteScreen({
+  onBack,
+  embedCode,
+  formName,
+}: {
+  onBack: () => void;
+  embedCode?: string;
+  formName?: string;
+}) {
   const [palette, setPalette] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
   const [embedded, setEmbedded] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const defaultEmbed =
+    embedCode ||
+    `<script async src="https://static.transovo.io/forms/scripts/embed/eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9"></script>`;
 
   return (
     <div className="tv-forms min-h-[calc(100vh-64px)] bg-black text-white flex flex-col">
@@ -29,7 +41,7 @@ export default function EmbedSiteScreen({ onBack }: { onBack: () => void }) {
           <button onClick={() => setSaved(true)} className="bg-white text-black font-semibold px-3 py-1 rounded">{saved ? "SAVED ✓" : "SAVE"}</button>
           <span className="text-slate-400">EXIT</span>
         </div>
-        <span className="text-slate-400">Contact &nbsp;·&nbsp; Page: Published</span>
+        <span className="text-slate-400">{formName || "Contact"} &nbsp;·&nbsp; Page: Published</span>
         <div className="flex gap-2 text-slate-400"><span>🖥</span><span>📱</span></div>
       </div>
 
@@ -68,7 +80,7 @@ export default function EmbedSiteScreen({ onBack }: { onBack: () => void }) {
                   <div className="flex gap-2 text-[11px] mb-2"><span>Mode</span><span className="border border-slate-300 rounded px-1.5">HTML</span></div>
                   <textarea
                     className="w-full h-24 border border-slate-200 rounded p-2 text-[11px] font-mono"
-                    defaultValue={`<script async src="https://static.transovo.io/forms/scripts/embed/eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9"></script>`}
+                    defaultValue={defaultEmbed}
                   />
                   <button onClick={() => { setCodeOpen(false); setEmbedded(true); }} className="mt-2 flex items-center gap-1 bg-indigo-600 text-white text-xs px-3 py-1.5 rounded"><Code2 size={12} /> Apply Embed</button>
                 </div>

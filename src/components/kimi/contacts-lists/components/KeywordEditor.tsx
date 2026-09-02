@@ -35,6 +35,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
   const [doubleOptIn, setDoubleOptIn] = useState(false);
   const [createsContact, setCreatesContact] = useState(true);
   const [active, setActive] = useState(initialStatus !== "Inactive");
+  const [autoResponse, setAutoResponse] = useState(initialAutoResponse ?? keywordDetail.autoResponse);
   const [selectedList, setSelectedList] = useState<string | null>(
     () => lists.find((l) => l.name === initialListName)?.id ?? null,
   );
@@ -68,7 +69,12 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
               <label className="field-label flex justify-between">
                 Auto Response <span className="font-normal text-[#9aa3c0]">64/918</span>
               </label>
-              <textarea ref={autoResponseRef} className="input h-[76px] resize-none" defaultValue={initialAutoResponse ?? keywordDetail.autoResponse} />
+              <textarea
+                ref={autoResponseRef}
+                className="input h-[76px] resize-none"
+                value={autoResponse}
+                onChange={(e) => setAutoResponse(e.target.value)}
+              />
             </div>
           </div>
         </div>
@@ -164,7 +170,7 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
                   listId: addToLists ? selectedList : null,
                   keyword: keywordRef.current?.value ?? initialKeyword ?? "",
                   description: descriptionRef.current?.value ?? initialDescription ?? "",
-                  autoResponse: autoResponseRef.current?.value ?? initialAutoResponse ?? "",
+                  autoResponse: autoResponseRef.current?.value ?? autoResponse,
                   status: active ? "Active" : "Inactive",
                 })
               }
@@ -186,8 +192,8 @@ export default function KeywordEditor({ lists, keywordId: _keywordId, initialKey
             <span className="flex items-center gap-1 text-[#0f1b3d]"><Signal size={9} /><Wifi size={9} /><BatteryFull size={10} /></span>
           </div>
           <div className="phone-thread">
-            <div className="bubble-out">NashVIP</div>
-            <div className="bubble-in">{keywordDetail.autoResponse}</div>
+            <div className="bubble-out">{initialKeyword ?? keywordDetail.keyword}</div>
+            <div className="bubble-in">{autoResponse}</div>
             <div className="bubble-in text-[9px] leading-relaxed text-[#8a93b5]">
               Msg & data rates may apply. Msg frequency varies. Reply HELP for help, STOP to cancel. Terms & Privacy: s.trnsvo.io/tos
             </div>

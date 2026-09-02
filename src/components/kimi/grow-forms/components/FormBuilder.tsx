@@ -65,7 +65,7 @@ export default function FormBuilder({
   onSave, onSaveError,
 }: {
   onExit: () => void;
-  onTestForm: () => void;
+  onTestForm: (preview: { optInMessage: string; doubleOptInMessage: string; doubleOptInEnabled: boolean }) => void;
   onEmbedSite: () => void;
   formId?: string;
   formName?: string;
@@ -436,7 +436,7 @@ export default function FormBuilder({
               {previewMenu && (
                 <div className="absolute right-0 top-8 bg-card border border-border rounded-lg shadow-lg w-44 py-1 z-20 tv-pop text-xs">
                   <button className="w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2" onClick={() => { setPreviewMenu(false); setPreviewOpen(true); }}>🔗 Preview Form</button>
-                  <button className="w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2" onClick={() => { setPreviewMenu(false); onTestForm(); }}>🧪 Test Form</button>
+                  <button className="w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2" onClick={() => { setPreviewMenu(false); onTestForm({ optInMessage: optIn, doubleOptInMessage: doubleOptIn, doubleOptInEnabled }); }}>🧪 Test Form</button>
                   {layout.formType === "embed" && <button className="w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2" onClick={() => { setPreviewMenu(false); onEmbedSite(); }}>🌐 Embed on Website</button>}
                 </div>
               )}

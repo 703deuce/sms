@@ -22,10 +22,18 @@ import type { FormLayout } from "@/lib/forms/layout";
 
 type View = "list" | "create" | "test" | "embed-site";
 
+type FormTestPreview = {
+  optInMessage: string;
+  doubleOptInMessage: string;
+  doubleOptInEnabled: boolean;
+};
+
 type Props = { initialForms?: WebForm[] };
 
 export function KimiFormsConnected({ initialForms = [] }: Props) {
   const [view, setView] = useState<View>("list");
+  const [testPreview, setTestPreview] = useState<FormTestPreview | null>(null);
+  const [embedCode, setEmbedCode] = useState<string>("");
   const [forms, setForms] = useState<WebForm[]>(initialForms);
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [editingFormName, setEditingFormName] = useState<string>("");
@@ -253,12 +261,44 @@ export function KimiFormsConnected({ initialForms = [] }: Props) {
           onSave={handleSaveForm}
           onSaveError={(msg) => setError(msg)}
           onExit={() => { setView("list"); setEditingFormId(null); void reload(); }}
-          onTestForm={() => setView("test")}
-          onEmbedSite={() => setView("embed-site")}
+          onTestForm={(preview) => {
+            setTestPreview(preview);
+            setView("test");
+          }}
+          onEmbedSite={() => {
+            if (editingFormId) {
+              void fetchFormShareMeta(editingFormId)
+                .then((meta) => {
+                  setEmbedCode(
+                    meta.embedCode ||
+                      `<script async src="https://static.transovo.io/forms/scripts/embed/${editingFormId}"></script>`,
+                  );
+                  setView("embed-site");
+                })
+                .catch((err) => {
+                  setError(err instanceof Error ? err.message : "Could not load embed code");
+                });
+              return;
+            }
+            setView("embed-site");
+          }}
         />
       )}
-      {view === "test" && <TestFormScreen onBack={() => setView("create")} />}
-      {view === "embed-site" && <EmbedSiteScreen onBack={() => setView("create")} />}
+      {view === "test" && (
+        <TestFormScreen
+          onBack={() => setView("create")}
+          optInMessage={testPreview?.optInMessage}
+          doubleOptInMessage={testPreview?.doubleOptInMessage}
+          doubleOptInEnabled={testPreview?.doubleOptInEnabled}
+        />
+      )}
+      {view === "embed-site" && (
+        <EmbedSiteScreen
+          onBack={() => setView("create")}
+          embedCode={embedCode}
+          formName={editingFormName}
+        />
+      )}
     </div>
   );
 }
