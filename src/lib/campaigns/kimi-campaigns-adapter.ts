@@ -195,11 +195,31 @@ export async function previewAudience(
 
 export type AudiencePickerItem = AudienceSelection & { group: string };
 
-export async function loadAudiencePickerItems(): Promise<AudiencePickerItem[]> {
-  const [listsJson, segmentsJson, contactsJson] = await Promise.all([
+type ContactRow = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+};
+
+export function contactToAudienceItem(contact: ContactRow): AudiencePickerItem | null {
+  const phone = contact.phone?.trim();
+  if (!phone) return null;
+  const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
+  return {
+    type: "contact",
+    id: contact.id,
+    name: fullName || phone,
+    phone,
+    count: 1,
+    group: "contacts",
+  };
+}
+
+export async function loadAudiencePickerCatalog(): Promise<AudiencePickerItem[]> {
+  const [listsJson, segmentsJson] = await Promise.all([
     fetch("/api/contacts/lists").then((r) => (r.ok ? r.json() : { data: [] })),
     fetch("/api/contacts/segments").then((r) => (r.ok ? r.json() : { data: [] })),
-    fetch("/api/contacts?take=100").then((r) => (r.ok ? r.json() : { data: [] })),
   ]);
 
   const items: AudiencePickerItem[] = [
@@ -230,18 +250,29 @@ export async function loadAudiencePickerItems(): Promise<AudiencePickerItem[]> {
       group: "segments",
     });
   }
-  for (const c of contactsJson.data || []) {
-    const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone;
-    items.push({
-      type: "contact",
-      id: c.id,
-      name,
-      count: 1,
-      group: "contacts",
-    });
-  }
 
   return items;
+}
+
+/** Search individual contacts (SMS-capable only — must have a phone number). */
+export async function searchAudienceContacts(query?: string): Promise<AudiencePickerItem[]> {
+  const trimmed = query?.trim();
+  const url = trimmed
+    ? `/api/contacts?q=${encodeURIComponent(trimmed)}&take=50`
+    : "/api/contacts?take=200";
+
+  const contactsJson = await fetch(url).then((r) => (r.ok ? r.json() : { data: [] }));
+  return (contactsJson.data || [])
+    .map((contact: ContactRow) => contactToAudienceItem(contact))
+    .filter((item: AudiencePickerItem | null): item is AudiencePickerItem => Boolean(item));
+}
+
+export async function loadAudiencePickerItems(query?: string): Promise<AudiencePickerItem[]> {
+  const [catalog, contacts] = await Promise.all([
+    loadAudiencePickerCatalog(),
+    searchAudienceContacts(query),
+  ]);
+  return [...catalog, ...contacts];
 }
 
 export type CampaignNavPaths = {

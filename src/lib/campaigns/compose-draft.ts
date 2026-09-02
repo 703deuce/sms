@@ -4,6 +4,8 @@ export type AudienceSelection = {
   type: "all" | "list" | "segment" | "contact";
   id: string;
   name: string;
+  /** Present for type "contact" — used in composer chips and review. */
+  phone?: string;
   count?: number;
 };
 
