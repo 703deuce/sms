@@ -267,7 +267,7 @@ export default function ReviewDetails({
           </div>
         </div>
 
-        <PhonePreview message={previewBody} label="Campaign Preview" />
+        <PhonePreview message={previewBody} label="Campaign Preview" mediaUrls={draft.mediaUrls} />
       </div>
     </div>
   );

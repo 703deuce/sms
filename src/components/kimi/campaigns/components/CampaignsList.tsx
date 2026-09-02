@@ -94,6 +94,31 @@ export default function CampaignsList({
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (!filterOpen && !menuFor) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFilterOpen(false);
+        setMenuFor(null);
+      }
+    };
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (filterOpen && !target.closest("[data-campaign-filter-root]")) {
+        setFilterOpen(false);
+      }
+      if (menuFor && !target.closest(`[data-campaign-menu="${menuFor}"]`)) {
+        setMenuFor(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDoc);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, [filterOpen, menuFor]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((c) => {
@@ -141,7 +166,7 @@ export default function CampaignsList({
 
       <div className="flex items-center gap-3 px-8">
         {!lockFilter ? (
-        <div className="relative">
+        <div className="relative" data-campaign-filter-root>
           <button
             type="button"
             onClick={() => setFilterOpen((v) => !v)}
@@ -239,6 +264,14 @@ export default function CampaignsList({
                 return (
                   <div
                     key={c.id}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelected(c.id === selected ? null : c.id);
+                      }
+                    }}
                     onClick={() => setSelected(c.id === selected ? null : c.id)}
                     className={`grid cursor-pointer grid-cols-[minmax(0,2fr)_1.2fr_32px_1.2fr_130px_44px] items-center gap-4 px-5 py-4 transition-colors ${
                       selected === c.id ? "bg-indigo-50/40" : "hover:bg-slate-50/70"
@@ -287,7 +320,7 @@ export default function CampaignsList({
                         {statusLabel}
                       </span>
                     </div>
-                    <div className="relative justify-self-end">
+                    <div className="relative justify-self-end" data-campaign-menu={c.id}>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === c.id ? null : c.id); }}

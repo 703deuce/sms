@@ -75,7 +75,8 @@ export default function CreateCampaign({
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [recurringSummary, setRecurringSummary] = useState("");
   const [trackPrompt, setTrackPrompt] = useState<string | null>(null);
-  const [linkName, setLinkName] = useState<string | null>(null);
+  const [pendingTrackUrl, setPendingTrackUrl] = useState<string | null>(null);
+  const [linkName, setLinkName] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingCampaign, setLoadingCampaign] = useState(false);
   const [error, setError] = useState("");
@@ -383,12 +384,15 @@ export default function CreateCampaign({
               Campaigns <span className="mx-1 text-slate-300">/</span>{" "}
               <span className="font-medium text-slate-600">Create Campaign</span>
             </p>
-            <button
-              type="button"
+            <a
+              href="https://docs.textingplatform.com/campaigns"
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-slate-100"
+              aria-label="Campaign help"
             >
               <HelpCircle className="h-4 w-4 text-slate-400" />
-            </button>
+            </a>
           </div>
         )}
 
@@ -458,6 +462,18 @@ export default function CreateCampaign({
             ) : null}
           </div>
 
+          <label className="block text-[13px] font-semibold text-slate-700 mt-5 mb-1.5">
+            Exclude from audience
+            <span className="ml-1.5 text-[11px] font-normal text-slate-400">(optional)</span>
+          </label>
+          <div className="max-w-md">
+            <AudiencePicker
+              mode="exclude"
+              selected={draft.excludeAudience}
+              onChange={(excludeAudience) => updateDraft({ excludeAudience })}
+            />
+          </div>
+
           <div className="flex items-center justify-between max-w-md mt-5 mb-1.5">
             <label className="text-[13px] font-semibold text-slate-700">Message</label>
             <span className="flex items-center gap-1.5 text-[11px] text-slate-400 tabular-nums">
@@ -485,8 +501,8 @@ export default function CreateCampaign({
                   <button
                     type="button"
                     onClick={() => {
-                      const tracked = [...draft.trackedLinks, { url: trackPrompt, name: trackPrompt, tracked: true }];
-                      updateDraft({ trackedLinks: tracked });
+                      setPendingTrackUrl(trackPrompt);
+                      setLinkName(trackPrompt);
                       setTrackPrompt(null);
                     }}
                     className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
@@ -497,7 +513,7 @@ export default function CreateCampaign({
                 </span>
               </div>
             )}
-            {linkName !== null && (
+            {pendingTrackUrl !== null && (
               <div className="flex items-center gap-2 px-3 py-2 border-t border-slate-100 bg-slate-50/60">
                 <input
                   autoFocus
@@ -505,14 +521,58 @@ export default function CreateCampaign({
                   onChange={(e) => setLinkName(e.target.value)}
                   placeholder="Name your link"
                   className="flex-1 text-[12px] outline-none border-b border-indigo-300 focus:border-indigo-500 py-1 bg-transparent transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && pendingTrackUrl) {
+                      const tracked = [
+                        ...draft.trackedLinks,
+                        {
+                          url: pendingTrackUrl,
+                          name: linkName.trim() || pendingTrackUrl,
+                          tracked: true,
+                        },
+                      ];
+                      updateDraft({ trackedLinks: tracked });
+                      setPendingTrackUrl(null);
+                      setLinkName("");
+                    }
+                  }}
                 />
-                <button type="button" onClick={() => setLinkName(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pendingTrackUrl) return;
+                    const tracked = [
+                      ...draft.trackedLinks,
+                      {
+                        url: pendingTrackUrl,
+                        name: linkName.trim() || pendingTrackUrl,
+                        tracked: true,
+                      },
+                    ];
+                    updateDraft({ trackedLinks: tracked });
+                    setPendingTrackUrl(null);
+                    setLinkName("");
+                  }}
+                  className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingTrackUrl(null);
+                    setLinkName("");
+                  }}
+                  className="text-[12px] font-semibold text-slate-400 hover:text-slate-600"
+                >
+                  Cancel
+                </button>
               </div>
             )}
             <div className="composer-toolbar relative flex items-center gap-1.5 px-2.5 py-2 border-t border-slate-100">
-              <button type="button" title="Attach a File" onClick={() => setShowMedia(true)}><Paperclip className="w-4 h-4" /></button>
+              <button type="button" title="Attach a File" aria-label="Attach a file" onClick={() => setShowMedia(true)}><Paperclip className="w-4 h-4" /></button>
               <div className="relative">
-                <button type="button" title="Emojis" onClick={() => { setShowEmoji(!showEmoji); setShowMerge(false); }}><Smile className="w-4 h-4" /></button>
+                <button type="button" title="Emojis" aria-label="Insert emoji" onClick={() => { setShowEmoji(!showEmoji); setShowMerge(false); }}><Smile className="w-4 h-4" /></button>
                 {showEmoji && (
                   <div className="absolute bottom-9 left-0 z-20 grid grid-cols-6 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
                     {COMMON_EMOJIS.map((emoji) => (
@@ -529,7 +589,7 @@ export default function CreateCampaign({
                 )}
               </div>
               <div className="relative">
-                <button type="button" title="Merge Tags" onClick={() => { setShowMerge(!showMerge); setShowEmoji(false); }}><Braces className="w-4 h-4" /></button>
+                <button type="button" title="Merge Tags" aria-label="Insert merge tag" onClick={() => { setShowMerge(!showMerge); setShowEmoji(false); }}><Braces className="w-4 h-4" /></button>
                 {showMerge && (
                   <div className="absolute bottom-9 left-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 w-64 p-2 fade-in">
                     {MERGE_FIELDS.map((t) => (
@@ -545,8 +605,8 @@ export default function CreateCampaign({
                   </div>
                 )}
               </div>
-              <button type="button" title="AI Compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
-              <button type="button" title="Send a Test" className="ml-auto" onClick={() => setShowTest(true)}><Send className="w-4 h-4" /></button>
+              <button type="button" title="AI Compose" aria-label="AI compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
+              <button type="button" title="Send a Test" aria-label="Send test message" className="ml-auto" onClick={() => setShowTest(true)}><Send className="w-4 h-4" /></button>
             </div>
           </div>
 
@@ -676,7 +736,7 @@ export default function CreateCampaign({
           </div>
         </div>
 
-        <PhonePreview message={previewBody} />
+        <PhonePreview message={previewBody} mediaUrls={draft.mediaUrls} />
       </div>
       </div>
     </div>

@@ -111,6 +111,10 @@ export function CampaignLaunchReview({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Launch failed");
+      if (!review.scheduledAt) {
+        router.push(`/campaigns/${campaignId}`);
+        return;
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Launch failed");

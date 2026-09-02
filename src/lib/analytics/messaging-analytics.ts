@@ -442,10 +442,7 @@ export async function loadCampaignLiveStats(workspaceId: string, campaignId: str
     breakdown[row.status] = row._count._all;
   }
 
-  const pending = Math.max(
-    0,
-    (campaign.sent || 0) - (campaign.delivered || 0) - (campaign.failed || 0),
-  );
+  const pending = (breakdown.queued || 0) + (breakdown.sending || 0);
 
   return {
     ...campaign,

@@ -188,7 +188,9 @@ export async function buildPreSendReview(
     const { assertWorkspaceMessagingSendAllowed } = await import(
       "@/lib/messaging/unified-send-gate"
     );
-    const sender = await resolveMassTextSendingNumber(workspaceId);
+    const configNumberId =
+      typeof config.numberId === "string" && config.numberId ? config.numberId : undefined;
+    const sender = await resolveMassTextSendingNumber(workspaceId, configNumberId);
     const availability = await getSegmentAvailability(workspaceId);
     const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
     const canSend =
@@ -392,7 +394,9 @@ export async function buildPreSendReview(
   const { assertWorkspaceMessagingSendAllowed } = await import(
     "@/lib/messaging/unified-send-gate"
   );
-  const sender = await resolveMassTextSendingNumber(workspaceId);
+  const configNumberId =
+    typeof config.numberId === "string" && config.numberId ? config.numberId : undefined;
+  const sender = await resolveMassTextSendingNumber(workspaceId, configNumberId);
   const availability = await getSegmentAvailability(workspaceId);
   const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
   const canSend =

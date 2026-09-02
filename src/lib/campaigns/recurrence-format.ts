@@ -26,18 +26,22 @@ export function addRecurrenceInterval(date: Date, rec: BroadcastRecurrence): Dat
   }
 
   if (rec.unit === "weeks") {
-    const weekdays = rec.weekdays?.length ? rec.weekdays : [date.getDay()];
-    for (let dayOffset = 1; dayOffset <= 7 * rec.interval + 7; dayOffset++) {
-      const probe = new Date(date);
+    const weekdays = rec.weekdays?.length ? [...rec.weekdays].sort((a, b) => a - b) : [date.getDay()];
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+
+    for (let dayOffset = 1; dayOffset <= 366; dayOffset++) {
+      const probe = new Date(start);
       probe.setDate(probe.getDate() + dayOffset);
       if (!weekdays.includes(probe.getDay())) continue;
+
       const weeksSinceStart = Math.floor(dayOffset / 7);
-      if (weeksSinceStart > 0 && weeksSinceStart % rec.interval !== 0 && dayOffset >= 7) {
-        continue;
-      }
+      if (weeksSinceStart > 0 && weeksSinceStart % rec.interval !== 0) continue;
+
       return setSendTime(probe, rec);
     }
-    const fallback = new Date(date);
+
+    const fallback = new Date(start);
     fallback.setDate(fallback.getDate() + 7 * rec.interval);
     return setSendTime(fallback, rec);
   }

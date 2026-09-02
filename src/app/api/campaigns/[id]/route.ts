@@ -19,6 +19,14 @@ export async function GET(
     });
     if (!campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    const { isBroadcastCampaign } = await import("@/lib/mass-texting/broadcast/service");
+    if (isBroadcastCampaign(campaign.configJson)) {
+      return NextResponse.json(
+        { error: "Broadcast campaigns are served from /api/mass-texting/campaigns/:id" },
+        { status: 410 },
+      );
+    }
+
     const recentMessages = await getPrisma().campaignMessage.findMany({
       where: { campaignId: id, workspaceId: auth.workspaceId },
       orderBy: { createdAt: "desc" },

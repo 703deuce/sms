@@ -131,12 +131,15 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
             <Link href="/campaigns">
               <Button variant="ghost">← Back</Button>
             </Link>
-            {campaign.status === "Draft" && campaignDetailIsKimiBroadcast(campaign.configJson) ? (
+            {(campaign.status === "Draft" || campaign.status === "Scheduled") &&
+            campaignDetailIsKimiBroadcast(campaign.configJson) ? (
               <Link href={`/campaigns/new?edit=${campaignId}`}>
                 <Button>Continue editing</Button>
               </Link>
             ) : null}
-            {campaign.status !== "Draft" && campaignDetailIsKimiBroadcast(campaign.configJson) ? (
+            {campaign.status !== "Draft" &&
+            campaign.status !== "Scheduled" &&
+            campaignDetailIsKimiBroadcast(campaign.configJson) ? (
               <Link href={`/campaigns/new?duplicate=${campaignId}`}>
                 <Button variant="outline">Duplicate</Button>
               </Link>

@@ -436,10 +436,13 @@ export async function sendCampaignMessageById(messageId: string) {
       providerSid = result.id;
     } else {
       if (massTextCampaign) {
-        const { resolveMassTextSendingNumber } = await import(
-          "@/lib/mass-texting/messaging-registration"
-        );
-        const sender = await resolveMassTextSendingNumber(message.workspaceId);
+    const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
+    const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
+    const broadcastConfig = readBroadcastConfig(message.campaign.configJson);
+    const sender = await resolveMassTextSendingNumber(
+      message.workspaceId,
+      broadcastConfig?.numberId,
+    );
         if (!sender?.phoneE164) {
           throw new Error("Mass Texting sending number not configured");
         }

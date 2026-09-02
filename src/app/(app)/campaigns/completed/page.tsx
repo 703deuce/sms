@@ -13,6 +13,7 @@ export default function CampaignCompletedPage() {
         title="Completed campaigns"
         subtitle="Campaigns that finished sending."
         defaultFilter="completed"
+        fetchStatus="completed"
         lockFilter
         rowFilter={(row) => {
           const status = statusRowFilter("completed")(row);

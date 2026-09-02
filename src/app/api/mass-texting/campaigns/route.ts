@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     await requireMassTextingWorkspace(auth.workspaceId);
 
     const url = new URL(request.url);
-    const take = Math.min(100, Math.max(1, Number(url.searchParams.get("take") || 50)));
+    const take = Math.min(500, Math.max(1, Number(url.searchParams.get("take") || 50)));
     const skip = Math.max(0, Number(url.searchParams.get("skip") || 0));
     const status = url.searchParams.get("status") || undefined;
 

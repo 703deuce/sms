@@ -36,9 +36,11 @@ function chipIcon(item: AudienceSelection) {
 export default function AudiencePicker({
   selected,
   onChange,
+  mode = "include",
 }: {
   selected: AudienceChip[];
   onChange: (c: AudienceChip[]) => void;
+  mode?: "include" | "exclude";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -170,18 +172,36 @@ export default function AudiencePicker({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      const root = document.getElementById("audience-picker-root");
+      const root = document.getElementById(`audience-picker-root-${mode}`);
       if (root?.contains(e.target as Node)) return;
       setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, mode]);
+
+  const placeholder =
+    mode === "exclude"
+      ? selected.length
+        ? ""
+        : "Exclude lists, segments, or contacts…"
+      : selected.length
+        ? ""
+        : "Search lists, segments, or contacts by name or number…";
 
   return (
-    <div className="relative" id="audience-picker-root">
+    <div className="relative" id={`audience-picker-root-${mode}`}>
       <div
-        className="input-field flex min-h-[42px] cursor-text flex-wrap items-center gap-1.5 !py-1.5"
+        className={`input-field flex min-h-[42px] cursor-text flex-wrap items-center gap-1.5 !py-1.5 ${
+          mode === "exclude" ? "border-rose-200/80 bg-rose-50/30" : ""
+        }`}
         onClick={() => setOpen(!open)}
       >
         {selected.map((s) => {
@@ -210,7 +230,7 @@ export default function AudiencePicker({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder={selected.length ? "" : "Search lists, segments, or contacts by name or number…"}
+          placeholder={placeholder}
           className="min-w-[120px] flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
         />
         <Search className="h-4 w-4 shrink-0 text-slate-400" />

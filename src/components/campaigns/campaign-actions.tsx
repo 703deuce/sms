@@ -49,14 +49,13 @@ export function CampaignActions({
       variant: "default",
     });
   }
-  if (normalized === "SENDING" && !isMassText) {
+  if (normalized === "SENDING") {
     actions.push({ action: "pause", label: "Pause", variant: "outline" });
   }
   if (
     normalized !== "CANCELED" &&
     normalized !== "COMPLETED" &&
-    normalized !== "FAILED" &&
-    !(isMassText && normalized === "SENDING")
+    normalized !== "FAILED"
   ) {
     actions.push({ action: "cancel", label: "Cancel", variant: "danger" });
   }
@@ -68,14 +67,38 @@ export function CampaignActions({
     setLoading(action);
     setError("");
     try {
-      if (isMassText && action === "cancel") {
-        const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, {
-          method: "DELETE",
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Action failed");
-        router.refresh();
-        return;
+      if (isMassText) {
+        if (action === "cancel") {
+          const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, {
+            method: "DELETE",
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || "Action failed");
+          router.refresh();
+          return;
+        }
+        if (action === "pause" || action === "resume") {
+          const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action }),
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || "Action failed");
+          router.refresh();
+          return;
+        }
+        if (action === "activate") {
+          const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmLargeSend: true }),
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || "Action failed");
+          router.refresh();
+          return;
+        }
       }
       const res = await fetch("/api/campaigns", {
         method: "PATCH",

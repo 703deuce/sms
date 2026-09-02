@@ -5,6 +5,8 @@ import {
   cancelBroadcastCampaign,
   duplicateBroadcastCampaign,
   getBroadcastCampaign,
+  pauseBroadcastCampaign,
+  resumeBroadcastCampaign,
   updateBroadcastCampaign,
 } from "@/lib/mass-texting/broadcast/service";
 import type { BroadcastCampaignInput } from "@/lib/mass-texting/broadcast/types";
@@ -33,12 +35,20 @@ export async function PATCH(request: Request, ctx: Ctx) {
     await requireMassTextingWorkspace(auth.workspaceId);
     const { id } = await ctx.params;
     const body = (await request.json()) as Partial<BroadcastCampaignInput> & {
-      action?: "duplicate";
+      action?: "duplicate" | "pause" | "resume";
     };
 
     if (body.action === "duplicate") {
       const copy = await duplicateBroadcastCampaign(auth.workspaceId, id, auth.session.email);
       return NextResponse.json({ data: copy });
+    }
+    if (body.action === "pause") {
+      const paused = await pauseBroadcastCampaign(auth.workspaceId, id);
+      return NextResponse.json({ data: paused });
+    }
+    if (body.action === "resume") {
+      const resumed = await resumeBroadcastCampaign(auth.workspaceId, id);
+      return NextResponse.json({ data: resumed });
     }
 
     const updated = await updateBroadcastCampaign(auth.workspaceId, id, body);

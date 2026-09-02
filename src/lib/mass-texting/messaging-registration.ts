@@ -43,7 +43,10 @@ export async function ensureMessagingProductRegistration(
 }
 
 /** Mass Text sends use the same workspace A2P registration as MCTB (low-volume mixed). */
-export async function resolveMassTextSendingNumber(workspaceId: string) {
+export async function resolveMassTextSendingNumber(
+  workspaceId: string,
+  preferredNumberId?: string | null,
+) {
   const { pickPreferredSmsSendingNumber, isApprovedMessagingStatus } = await import(
     "@/lib/messaging/preferred-sending-number"
   );
@@ -52,6 +55,20 @@ export async function resolveMassTextSendingNumber(workspaceId: string) {
   );
 
   const reg = await getMessagingProductRegistration(workspaceId, "MASS_TEXT_MARKETING");
+
+  if (preferredNumberId) {
+    const prisma = getPrisma();
+    const preferred = await prisma.phoneNumber.findFirst({
+      where: { id: preferredNumberId, workspaceId, status: "Active" },
+    });
+    if (preferred?.e164) {
+      return {
+        phoneE164: preferred.e164,
+        phoneNumberId: preferred.id,
+        registration: reg,
+      };
+    }
+  }
   if (reg?.phoneE164 && (reg.messagingEnabled || isApprovedMessagingStatus(reg.overallStatus))) {
     return {
       phoneE164: reg.phoneE164,

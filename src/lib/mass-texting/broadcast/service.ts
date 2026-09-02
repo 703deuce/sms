@@ -70,6 +70,27 @@ function resolveScheduledAt(input: BroadcastCampaignInput): Date | null {
   return null;
 }
 
+function statusWhereClause(status?: string) {
+  if (!status || status === "all") return {};
+  const normalized = status.toLowerCase();
+  if (normalized === "completed") {
+    return { status: { in: ["COMPLETED" as const] } };
+  }
+  if (normalized === "failed") {
+    return { status: { in: ["FAILED" as const, "CANCELED" as const] } };
+  }
+  return {
+    status: status.toUpperCase() as
+      | "DRAFT"
+      | "SCHEDULED"
+      | "SENDING"
+      | "COMPLETED"
+      | "FAILED"
+      | "PAUSED"
+      | "CANCELED",
+  };
+}
+
 export async function listBroadcastCampaigns(
   workspaceId: string,
   opts?: { take?: number; skip?: number; status?: string },
@@ -80,19 +101,17 @@ export async function listBroadcastCampaigns(
   const rows = await prisma.campaign.findMany({
     where: {
       workspaceId,
-      ...(opts?.status && opts.status !== "all"
-        ? { status: opts.status.toUpperCase() as "DRAFT" | "SCHEDULED" | "SENDING" | "COMPLETED" | "FAILED" | "PAUSED" | "CANCELED" }
-        : {}),
+      configJson: {
+        path: ["broadcastVersion"],
+        equals: 1,
+      },
+      ...statusWhereClause(opts?.status),
     },
     orderBy: { createdAt: "desc" },
-    take: Math.min(500, take + skip + 50),
+    take: Math.min(500, take + skip),
+    skip,
   });
-  const filtered = rows.filter((c: (typeof rows)[number]) => isBroadcastCampaign(c.configJson));
-  if (opts?.status && opts.status !== "all") {
-    const status = opts.status.toUpperCase();
-    return filtered.filter((c: (typeof filtered)[number]) => c.status === status).slice(skip, skip + take);
-  }
-  return filtered.slice(skip, skip + take);
+  return rows.filter((c: (typeof rows)[number]) => isBroadcastCampaign(c.configJson));
 }
 
 export async function getBroadcastCampaign(workspaceId: string, campaignId: string) {
@@ -156,7 +175,12 @@ export async function createBroadcastCampaign(
     },
   });
 
-  await enrollBroadcastAudience(workspaceId, campaign.id, input.audience);
+  try {
+    await enrollBroadcastAudience(workspaceId, campaign.id, input.audience);
+  } catch (err) {
+    await prisma.campaign.delete({ where: { id: campaign.id } }).catch(() => undefined);
+    throw err;
+  }
   return campaign;
 }
 
@@ -239,7 +263,14 @@ export async function updateBroadcastCampaign(
       where: {
         campaignId,
         workspaceId,
-        workflowStatus: { in: ["pending", "scheduled", "waiting"] },
+        workflowStatus: { in: ["pending", "scheduled", "waiting", "in_progress"] },
+      },
+    });
+    await prisma.campaignMessage.deleteMany({
+      where: {
+        campaignId,
+        workspaceId,
+        status: { in: ["queued", "sending"] },
       },
     });
     await enrollBroadcastAudience(workspaceId, campaignId, audience);
@@ -261,6 +292,7 @@ export async function duplicateBroadcastCampaign(
       : null;
   if (!config?.audience) throw new Error("Campaign has no audience definition");
 
+  const scheduleMode = config.scheduleMode ?? "now";
   return createBroadcastCampaign(
     workspaceId,
     {
@@ -268,14 +300,48 @@ export async function duplicateBroadcastCampaign(
       message: source.body,
       audience: config.audience,
       numberId: config.numberId,
-      scheduleMode: "now",
+      scheduleMode,
+      scheduledAt:
+        scheduleMode === "later" && source.scheduledAt
+          ? source.scheduledAt.toISOString()
+          : undefined,
       timezone: config.timezone,
+      recurrence: scheduleMode === "recurring" ? config.recurrence : undefined,
       mediaUrls: config.mediaUrls,
       trackLinks: config.trackLinks,
       trackedLinks: config.trackedLinks,
     },
     createdBy,
   );
+}
+
+export async function pauseBroadcastCampaign(workspaceId: string, campaignId: string) {
+  const prisma = getPrisma();
+  const campaign = await getBroadcastCampaign(workspaceId, campaignId);
+  if (!campaign) throw new Error("Campaign not found");
+  if (campaign.status !== "SENDING") {
+    throw new Error("Only sending campaigns can be paused");
+  }
+  return prisma.campaign.update({
+    where: { id: campaignId },
+    data: { status: "PAUSED" },
+  });
+}
+
+export async function resumeBroadcastCampaign(workspaceId: string, campaignId: string) {
+  const prisma = getPrisma();
+  const campaign = await getBroadcastCampaign(workspaceId, campaignId);
+  if (!campaign) throw new Error("Campaign not found");
+  if (campaign.status !== "PAUSED") {
+    throw new Error("Only paused campaigns can be resumed");
+  }
+  const updated = await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { status: "SENDING" },
+  });
+  const { enqueueDueCampaignMessages } = await import("@/lib/campaigns/campaign-processor");
+  await enqueueDueCampaignMessages(workspaceId);
+  return updated;
 }
 
 export async function cancelBroadcastCampaign(workspaceId: string, campaignId: string) {

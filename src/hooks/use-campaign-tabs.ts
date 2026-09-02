@@ -1,6 +1,6 @@
 "use client";
 
-import { campaignTabs } from "@/lib/campaign-tabs";
+import { campaignTabs, getClientCampaignTabs } from "@/lib/campaign-tabs";
 import { useEffect, useState } from "react";
 
 export function useCampaignTabs() {
@@ -11,7 +11,7 @@ export function useCampaignTabs() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (json?.data) {
-          setTabs(campaignTabs.filter((tab) => tab.href !== "/campaigns/recurring"));
+          setTabs(getClientCampaignTabs());
         }
       })
       .catch(() => undefined);
