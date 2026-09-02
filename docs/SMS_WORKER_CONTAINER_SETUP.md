@@ -294,7 +294,7 @@ Kill switch active:
 
 ## Certification (before go-live)
 
-From repo root on a machine with `DATABASE_URL`:
+From repo root on a machine with Supabase configured:
 
 ```bash
 npm run test:sms-worker
