@@ -19,13 +19,15 @@ function formatCreated(iso?: string): string {
   });
 }
 
-export function mapApiListToKimi(l: ContactListSummary): ContactList {
+export function mapApiListToKimi(
+  l: Partial<ContactListSummary> & { id: string; name: string; description?: string | null },
+): ContactList {
   return {
     id: l.id,
     name: l.name,
     description: l.description || "",
     created: formatCreated(),
-    contacts: l.contactCount,
+    contacts: l.contactCount ?? 0,
   };
 }
 

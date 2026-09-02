@@ -40,7 +40,17 @@ export async function POST(request: Request) {
         }).catch(() => null);
       }
     }
-    return NextResponse.json({ data: list }, { status: 201 });
+    return NextResponse.json(
+      {
+        data: {
+          id: list.id,
+          name: list.name,
+          description: list.description || "",
+          contactCount: 0,
+        },
+      },
+      { status: 201 },
+    );
   } catch (err) {
     return jsonError(err, 400);
   }

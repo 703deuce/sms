@@ -4,7 +4,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Page } from "@/components/kimi/contacts-lists/components/Sidebar";
 import ListsPage from "@/components/kimi/contacts-lists/components/ListsPage";
 import CreateListPage from "@/components/kimi/contacts-lists/components/CreateListPage";
@@ -25,9 +25,11 @@ import {
 } from "lucide-react";
 
 export function KimiListsConnected() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const editKeywordId = searchParams.get("editKeyword");
-  const [page, setPage] = useState<Page>("lists");
+  const createRequested = searchParams.get("create") === "1";
+  const [page, setPage] = useState<Page>(createRequested ? "createList" : "lists");
   const [lists, setLists] = useState<ContactList[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
@@ -50,6 +52,12 @@ export function KimiListsConnected() {
   }, [reload]);
 
   useEffect(() => {
+    if (createRequested) {
+      setPage("createList");
+    }
+  }, [createRequested]);
+
+  useEffect(() => {
     if (!editKeywordId || keywords.length === 0) return;
     const kw = keywords.find((k) => k.id === editKeywordId);
     if (!kw) return;
@@ -57,20 +65,33 @@ export function KimiListsConnected() {
     setPage("keyword");
   }, [editKeywordId, keywords]);
 
+  const goToPage = useCallback(
+    (next: Page) => {
+      setPage(next);
+      if (next === "createList") {
+        router.replace("/contacts/lists?create=1");
+        return;
+      }
+      if (next === "lists") {
+        router.replace("/contacts/lists");
+        return;
+      }
+      router.replace("/contacts/lists");
+    },
+    [router],
+  );
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
   };
 
   const saveList = async (name: string, description: string) => {
-    try {
-      const created = await createList(name, description);
-      setLists((prev) => [created, ...prev]);
-      setPage("lists");
-      showToast("List created.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create list");
-    }
+    setError("");
+    await createList(name, description);
+    await reload();
+    goToPage("lists");
+    showToast("List created.");
   };
 
   const addToLists = async (contactIds: string[], listIds: string[]) => {
@@ -125,19 +146,21 @@ export function KimiListsConnected() {
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
         {showTabs && (
           <div className="page-tabs">
-            <button className={`page-tab ${activeTab === "contacts" ? "active" : ""}`} onClick={() => setPage("contacts")}>
+            <button className={`page-tab ${activeTab === "contacts" ? "active" : ""}`} onClick={() => goToPage("contacts")}>
               <Users size={14} /> Contacts
             </button>
-            <button className={`page-tab ${activeTab === "lists" ? "active" : ""}`} onClick={() => setPage("lists")}>
+            <button className={`page-tab ${activeTab === "lists" ? "active" : ""}`} onClick={() => goToPage("lists")}>
               <ListTodo size={14} /> Lists
             </button>
-            <button className={`page-tab ${activeTab === "tools" ? "active" : ""}`} onClick={() => setPage("tools")}>
+            <button className={`page-tab ${activeTab === "tools" ? "active" : ""}`} onClick={() => goToPage("tools")}>
               <Wrench size={14} /> Tools
             </button>
           </div>
         )}
-        {page === "lists" && <ListsPage lists={lists} onCreate={() => setPage("createList")} />}
-        {page === "createList" && <CreateListPage onBack={() => setPage("lists")} onSave={saveList} />}
+        {page === "lists" && <ListsPage lists={lists} onCreate={() => goToPage("createList")} />}
+        {page === "createList" && (
+          <CreateListPage onBack={() => goToPage("lists")} onSave={saveList} />
+        )}
         {page === "contacts" && <ContactsPage contacts={contacts} lists={lists} onAddToLists={addToLists} />}
         {page === "tools" && (
           <ToolsPage

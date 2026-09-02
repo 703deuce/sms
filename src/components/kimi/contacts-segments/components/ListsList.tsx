@@ -1,5 +1,6 @@
 "use client";
 import { Search, Plus, Users, MoreVertical, SearchX, ListChecks } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { lists as mockLists, type ContactList } from "../mock-data";
 
@@ -21,9 +22,12 @@ export default function ListsList({ lists: listsProp }: { lists?: ContactList[] 
             className="seg-input w-full h-9 rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring/30"
           />
         </div>
-        <button className="seg-btn-primary h-9 px-4 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-150 active:scale-[0.98]">
+        <Link
+          href="/contacts/lists?create=1"
+          className="seg-btn-primary h-9 px-4 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-150 active:scale-[0.98]"
+        >
           <Plus className="h-4 w-4" /> Create List
-        </button>
+        </Link>
       </div>
       <div className="seg-card rounded-xl border border-border bg-card overflow-hidden">
         <div className="grid grid-cols-[1fr_180px_180px_40px] gap-3 px-4 py-2.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border">
