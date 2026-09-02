@@ -134,6 +134,12 @@ export async function validateBulkRecipients(
   const seenPhones = new Set<string>();
   const seenEmails = new Set<string>();
 
+  const normalized: Array<{
+    raw: BulkRecipient;
+    phone?: string;
+    email?: string;
+  }> = [];
+
   for (const r of recipients) {
     let phone: string | undefined;
     try {
@@ -155,56 +161,74 @@ export async function validateBulkRecipients(
       rejected.push({ ...r, reason: "duplicate_in_batch" });
       continue;
     }
+    if (phone) seenPhones.add(phone);
+    if (email) seenEmails.add(email);
+    normalized.push({ raw: r, phone, email });
+  }
 
-    if (phone) {
-      const suppressed = await prisma.suppression.findFirst({
-        where: { workspaceId, phone },
-      });
-      if (suppressed) {
-        rejected.push({ ...r, reason: "suppressed" });
-        continue;
-      }
-      if (campaignId) {
-        const active = await prisma.campaignRecipient.findFirst({
+  const phones = [...new Set(normalized.map((n) => n.phone).filter(Boolean))] as string[];
+  const emails = [...new Set(normalized.map((n) => n.email).filter(Boolean))] as string[];
+
+  const [phoneSuppressions, emailSuppressions, activeEnrollments] = await Promise.all([
+    phones.length
+      ? prisma.suppression.findMany({
+          where: { workspaceId, phone: { in: phones } },
+          select: { phone: true },
+        })
+      : Promise.resolve([]),
+    emails.length
+      ? prisma.suppression.findMany({
+          where: { workspaceId, email: { in: emails } },
+          select: { email: true },
+        })
+      : Promise.resolve([]),
+    campaignId && (phones.length || emails.length)
+      ? prisma.campaignRecipient.findMany({
           where: {
             campaignId,
-            phone,
             workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
+            OR: [
+              ...(phones.length ? [{ phone: { in: phones } }] : []),
+              ...(emails.length ? [{ email: { in: emails } }] : []),
+            ],
           },
-        });
-        if (active) {
-          rejected.push({ ...r, reason: "already_enrolled" });
-          continue;
-        }
-      }
-      seenPhones.add(phone);
-    }
+          select: { phone: true, email: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
-    if (email) {
-      const suppressed = await prisma.suppression.findFirst({
-        where: { workspaceId, email },
-      });
-      if (suppressed) {
-        rejected.push({ ...r, reason: "suppressed" });
-        continue;
-      }
-      if (campaignId) {
-        const active = await prisma.campaignRecipient.findFirst({
-          where: {
-            campaignId,
-            email,
-            workflowStatus: { notIn: ["completed", "stopped", "failed", "opted_out"] },
-          },
-        });
-        if (active) {
-          rejected.push({ ...r, reason: "already_enrolled" });
-          continue;
-        }
-      }
-      seenEmails.add(email);
-    }
+  const suppressedPhones = new Set(
+    phoneSuppressions.map((s: { phone: string | null }) => s.phone).filter(Boolean),
+  );
+  const suppressedEmails = new Set(
+    emailSuppressions.map((s: { email: string | null }) => s.email).filter(Boolean),
+  );
+  const enrolledPhones = new Set(
+    activeEnrollments.map((e: { phone: string | null }) => e.phone).filter(Boolean),
+  );
+  const enrolledEmails = new Set(
+    activeEnrollments.map((e: { email: string | null }) => e.email).filter(Boolean),
+  );
 
-    accepted.push({ ...r, phone, email });
+  for (const row of normalized) {
+    const { raw, phone, email } = row;
+    if (phone && suppressedPhones.has(phone)) {
+      rejected.push({ ...raw, reason: "suppressed" });
+      continue;
+    }
+    if (email && suppressedEmails.has(email)) {
+      rejected.push({ ...raw, reason: "suppressed" });
+      continue;
+    }
+    if (phone && campaignId && enrolledPhones.has(phone)) {
+      rejected.push({ ...raw, reason: "already_enrolled" });
+      continue;
+    }
+    if (email && campaignId && enrolledEmails.has(email)) {
+      rejected.push({ ...raw, reason: "already_enrolled" });
+      continue;
+    }
+    accepted.push({ ...raw, phone, email });
   }
 
   return { accepted, rejected };

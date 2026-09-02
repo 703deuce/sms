@@ -42,7 +42,10 @@ export default function ReviewDetails({
   const [confirmLargeSend, setConfirmLargeSend] = useState(false);
 
   const loadReview = useCallback(async () => {
-    if (!campaignId) return;
+    if (!campaignId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {

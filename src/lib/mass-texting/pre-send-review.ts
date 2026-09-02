@@ -8,6 +8,112 @@ import { creditsForRecipientBody, massTextMergeVarsFromContact } from "@/lib/mas
 import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
 import { mediaUrlsForSequenceStep, mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
 
+const REVIEW_SEGMENT_SAMPLE = 25;
+
+/** Local review gate — DB only. No Telnyx/provider sync on the review screen. */
+async function resolveReviewCreditsGate(
+  workspaceId: string,
+  configNumberId: string | undefined,
+  estimatedSegments: number,
+  mmsBlocked: boolean,
+) {
+  const availability = await getSegmentAvailability(workspaceId);
+  const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
+  const { getRegistrationByWorkspace } = await import("@/lib/messaging/store");
+
+  const sender = await resolveMassTextSendingNumber(workspaceId, configNumberId);
+  const reg = await getRegistrationByWorkspace(workspaceId);
+  const shortage = Math.max(0, estimatedSegments - availability.available);
+  /** Review screen: credits math only — launch enforces A2P/sender separately. */
+  const canSend =
+    availability.canSend && estimatedSegments <= availability.available && !mmsBlocked;
+
+  const blockReason = mmsBlocked
+    ? "MMS is not enabled in production yet"
+    : shortage > 0
+      ? `Need ${estimatedSegments} credits but only ${availability.available} available`
+      : !availability.canSend
+        ? availability.blockReason
+        : null;
+
+  return {
+    availability,
+    sender,
+    canSend,
+    shortage,
+    blockReason,
+    useCase: String(reg?.useCase || "MIXED"),
+  };
+}
+
+type ReviewRecipient = {
+  phone?: string;
+  email?: string;
+  contactId?: string;
+  displayName?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  customFields?: Record<string, unknown> | null;
+};
+
+function estimateCreditsForRecipients(input: {
+  body: string;
+  config: Record<string, unknown>;
+  sequenceJson: unknown;
+  workspaceName?: string | null;
+  recipients: ReviewRecipient[];
+  eligibleTotal: number;
+  acceptedPhones: Set<string>;
+}): { estimatedSegments: number; mmsStepCount: number; mmsBlocked: boolean } {
+  const sequence = parseSequence(input.sequenceJson);
+  const smsSteps = sequence.filter((s) => s.step_type === "send_sms");
+  const stepsToPrice = smsSteps.length
+    ? smsSteps
+    : [{ step_key: "sms_1", step_type: "send_sms" as const, config: { body: input.body } }];
+  const sequenceForMedia = smsSteps.length ? sequence : undefined;
+  const mmsStepCount = stepsToPrice.filter(
+    (step) => mediaUrlsForSequenceStep(step, input.config, sequenceForMedia).length > 0,
+  ).length;
+  const isMms = mmsStepCount > 0;
+  const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
+
+  const pricedRecipients = input.recipients.filter(
+    (r) => r.phone && input.acceptedPhones.has(r.phone),
+  );
+  const sample = pricedRecipients.slice(0, REVIEW_SEGMENT_SAMPLE);
+  let estimatedSegments = 0;
+
+  for (const recipient of sample) {
+    const vars = massTextMergeVarsFromContact({
+      firstName: recipient.firstName,
+      lastName: recipient.lastName,
+      displayName: recipient.displayName,
+      phone: recipient.phone,
+      email: recipient.email,
+      businessName: input.workspaceName,
+      customFields: recipient.customFields,
+    });
+    for (const step of stepsToPrice) {
+      const template = String(step.config?.body || input.body);
+      const stepMedia = mediaUrlsForSequenceStep(step, input.config, sequenceForMedia);
+      const priced = creditsForRecipientBody({
+        template,
+        isMms: stepMedia.length > 0,
+        vars,
+      });
+      estimatedSegments += priced.credits;
+    }
+  }
+
+  const pricedCount = sample.length;
+  const totalRecipients = Math.max(input.eligibleTotal, pricedCount);
+  if (pricedCount > 0 && totalRecipients > pricedCount) {
+    estimatedSegments = Math.ceil((estimatedSegments / pricedCount) * totalRecipients);
+  }
+
+  return { estimatedSegments, mmsStepCount, mmsBlocked };
+}
+
 export type PreSendReview = {
   campaignId: string;
   campaignName: string;
@@ -113,8 +219,7 @@ export async function buildPreSendReview(
       });
     }
     if (!recipients.length) {
-      const resolved = await previewBroadcastAudience(workspaceId, audience, campaignId);
-      for (const sample of resolved.eligibleSample) {
+      for (const sample of preview.eligibleSample) {
         const contact = byId.get(sample.contactId);
         recipients.push({
           phone: sample.phone,
@@ -143,62 +248,27 @@ export async function buildPreSendReview(
     );
     void rejected;
     const body = campaign.body || "";
-    const sequence = parseSequence(campaign.sequenceJson);
-    const smsSteps = sequence.filter((s) => s.step_type === "send_sms");
-    const stepsToPrice = smsSteps.length
-      ? smsSteps
-      : [{ step_key: "sms_1", step_type: "send_sms" as const, config: { body } }];
-    const sequenceForMedia = smsSteps.length ? sequence : undefined;
-    const mmsStepCount = stepsToPrice.filter(
-      (step) => mediaUrlsForSequenceStep(step, config, sequenceForMedia).length > 0,
-    ).length;
-    const isMms = mmsStepCount > 0;
-    const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
-    let estimatedSegments = 0;
-    let pricedRecipients = 0;
-    const acceptedByPhone = new Map(accepted.map((r) => [r.phone, r]));
-    for (const recipient of recipients) {
-      if (!recipient.phone || !acceptedByPhone.has(recipient.phone)) continue;
-      const vars = massTextMergeVarsFromContact({
-        firstName: recipient.firstName,
-        lastName: recipient.lastName,
-        displayName: recipient.displayName,
-        phone: recipient.phone,
-        email: recipient.email,
-        businessName: workspace?.name,
-        customFields: recipient.customFields,
-      });
-      for (const step of stepsToPrice) {
-        const template = String(step.config?.body || body);
-        const stepMedia = mediaUrlsForSequenceStep(step, config, sequenceForMedia);
-        const priced = creditsForRecipientBody({
-          template,
-          isMms: stepMedia.length > 0,
-          vars,
-        });
-        estimatedSegments += priced.credits;
-      }
-      pricedRecipients += 1;
-    }
     const eligibleTotal = enrolled.length > 0 ? accepted.length : preview.eligibleCount || accepted.length;
-    if (pricedRecipients > 0 && eligibleTotal > pricedRecipients) {
-      estimatedSegments = Math.ceil((estimatedSegments / pricedRecipients) * eligibleTotal);
-    }
-    const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
-    const { assertWorkspaceMessagingSendAllowed } = await import(
-      "@/lib/messaging/unified-send-gate"
+    const acceptedPhones = new Set(
+      accepted.map((r) => r.phone).filter((phone): phone is string => Boolean(phone)),
     );
+    const creditEstimate = estimateCreditsForRecipients({
+      body,
+      config,
+      sequenceJson: campaign.sequenceJson,
+      workspaceName: workspace?.name,
+      recipients,
+      eligibleTotal,
+      acceptedPhones,
+    });
     const configNumberId =
       typeof config.numberId === "string" && config.numberId ? config.numberId : undefined;
-    const sender = await resolveMassTextSendingNumber(workspaceId, configNumberId);
-    const availability = await getSegmentAvailability(workspaceId);
-    const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
-    const canSend =
-      a2p.allowed &&
-      availability.canSend &&
-      estimatedSegments <= availability.available &&
-      !mmsBlocked;
-    const shortage = Math.max(0, estimatedSegments - availability.available);
+    const gate = await resolveReviewCreditsGate(
+      workspaceId,
+      configNumberId,
+      creditEstimate.estimatedSegments,
+      creditEstimate.mmsBlocked,
+    );
     return {
       campaignId,
       campaignName: campaign.name,
@@ -209,29 +279,21 @@ export async function buildPreSendReview(
       invalidRemoved,
       suppressedRemoved,
       finalRecipientCount: eligibleTotal,
-      estimatedSegments,
-      mmsCount: accepted.length * mmsStepCount,
+      estimatedSegments: creditEstimate.estimatedSegments,
+      mmsCount: accepted.length * creditEstimate.mmsStepCount,
       messagePreview: body.slice(0, 280),
       mediaUrls: mediaUrlsFromCampaignConfig(config),
-      phoneNumberId: sender?.phoneNumberId ?? null,
-      phoneE164: sender?.phoneE164 ?? null,
+      phoneNumberId: gate.sender?.phoneNumberId ?? null,
+      phoneE164: gate.sender?.phoneE164 ?? null,
       scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
-      a2pUseCase: a2p.useCase,
-      availableSegments: availability.available,
-      requiredSegments: estimatedSegments,
-      shortage,
-      canSend,
-      blockReason: mmsBlocked
-        ? "MMS is not enabled in production yet"
-        : !a2p.allowed
-          ? a2p.reason || "Messaging A2P not ready"
-          : shortage > 0
-            ? `Need ${estimatedSegments} credits but only ${availability.available} available`
-            : availability.blockReason,
-      mmsBlocked,
-      acceptedPhones: accepted
-        .map((r) => r.phone)
-        .filter((phone): phone is string => Boolean(phone)),
+      a2pUseCase: gate.useCase,
+      availableSegments: gate.availability.available,
+      requiredSegments: creditEstimate.estimatedSegments,
+      shortage: gate.shortage,
+      canSend: gate.canSend,
+      blockReason: gate.blockReason,
+      mmsBlocked: creditEstimate.mmsBlocked,
+      acceptedPhones: [...acceptedPhones],
     };
   }
 
@@ -353,58 +415,27 @@ export async function buildPreSendReview(
   const suppressedRemoved = rejected.filter((r) => r.reason === "suppressed").length;
 
   const body = campaign.body || "";
-  const sequence = parseSequence(campaign.sequenceJson);
-  const smsSteps = sequence.filter((s) => s.step_type === "send_sms");
-  const stepsToPrice = smsSteps.length
-    ? smsSteps
-    : [{ step_key: "sms_1", step_type: "send_sms" as const, config: { body } }];
-  const sequenceForMedia = smsSteps.length ? sequence : undefined;
-  const mmsStepCount = stepsToPrice.filter(
-    (step) => mediaUrlsForSequenceStep(step, config, sequenceForMedia).length > 0,
-  ).length;
-  const isMms = mmsStepCount > 0;
-  const mmsBlocked = isMms && !MASS_TEXT_MMS_PRODUCTION_ENABLED;
-
-  let estimatedSegments = 0;
-  const acceptedByPhone = new Map(accepted.map((r) => [r.phone, r]));
-  for (const recipient of recipients) {
-    if (!recipient.phone || !acceptedByPhone.has(recipient.phone)) continue;
-    const vars = massTextMergeVarsFromContact({
-      firstName: recipient.firstName,
-      lastName: recipient.lastName,
-      displayName: recipient.displayName,
-      phone: recipient.phone,
-      email: recipient.email,
-      businessName: workspace?.name,
-      customFields: recipient.customFields,
-    });
-    for (const step of stepsToPrice) {
-      const template = String(step.config?.body || body);
-      const stepMedia = mediaUrlsForSequenceStep(step, config, sequenceForMedia);
-      const priced = creditsForRecipientBody({
-        template,
-        isMms: stepMedia.length > 0,
-        vars,
-      });
-      estimatedSegments += priced.credits;
-    }
-  }
-
-  const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
-  const { assertWorkspaceMessagingSendAllowed } = await import(
-    "@/lib/messaging/unified-send-gate"
+  const eligibleTotal = accepted.length;
+  const acceptedPhones = new Set(
+    accepted.map((r) => r.phone).filter((phone): phone is string => Boolean(phone)),
   );
+  const creditEstimate = estimateCreditsForRecipients({
+    body,
+    config,
+    sequenceJson: campaign.sequenceJson,
+    workspaceName: workspace?.name,
+    recipients,
+    eligibleTotal,
+    acceptedPhones,
+  });
   const configNumberId =
     typeof config.numberId === "string" && config.numberId ? config.numberId : undefined;
-  const sender = await resolveMassTextSendingNumber(workspaceId, configNumberId);
-  const availability = await getSegmentAvailability(workspaceId);
-  const a2p = await assertWorkspaceMessagingSendAllowed(workspaceId);
-  const canSend =
-    a2p.allowed &&
-    availability.canSend &&
-    estimatedSegments <= availability.available &&
-    !mmsBlocked;
-  const shortage = Math.max(0, estimatedSegments - availability.available);
+  const gate = await resolveReviewCreditsGate(
+    workspaceId,
+    configNumberId,
+    creditEstimate.estimatedSegments,
+    creditEstimate.mmsBlocked,
+  );
 
   return {
     campaignId,
@@ -415,29 +446,21 @@ export async function buildPreSendReview(
     duplicateRemoved,
     invalidRemoved,
     suppressedRemoved,
-    finalRecipientCount: accepted.length,
-    estimatedSegments,
-    mmsCount: accepted.length * mmsStepCount,
+    finalRecipientCount: eligibleTotal,
+    estimatedSegments: creditEstimate.estimatedSegments,
+    mmsCount: accepted.length * creditEstimate.mmsStepCount,
     messagePreview: body.slice(0, 280),
     mediaUrls: mediaUrlsFromCampaignConfig(config),
-    phoneNumberId: sender?.phoneNumberId ?? null,
-    phoneE164: sender?.phoneE164 ?? null,
+    phoneNumberId: gate.sender?.phoneNumberId ?? null,
+    phoneE164: gate.sender?.phoneE164 ?? null,
     scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
-    a2pUseCase: a2p.useCase,
-    availableSegments: availability.available,
-    requiredSegments: estimatedSegments,
-    shortage,
-    canSend,
-    blockReason: mmsBlocked
-      ? "MMS is not enabled in production yet"
-      : !a2p.allowed
-        ? a2p.reason || "Messaging A2P not ready"
-        : shortage > 0
-          ? `Need ${estimatedSegments} credits but only ${availability.available} available`
-          : availability.blockReason,
-    mmsBlocked,
-    acceptedPhones: accepted
-      .map((r) => r.phone)
-      .filter((phone): phone is string => Boolean(phone)),
+    a2pUseCase: gate.useCase,
+    availableSegments: gate.availability.available,
+    requiredSegments: creditEstimate.estimatedSegments,
+    shortage: gate.shortage,
+    canSend: gate.canSend,
+    blockReason: gate.blockReason,
+    mmsBlocked: creditEstimate.mmsBlocked,
+    acceptedPhones: [...acceptedPhones],
   };
 }

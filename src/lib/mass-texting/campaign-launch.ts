@@ -206,6 +206,17 @@ export async function launchCampaignWithAudit(input: {
     };
   }
 
+  const { assertMassTextMarketingSendAllowed } = await import(
+    "@/lib/mass-texting/a2p-enforcement"
+  );
+  const a2p = await assertMassTextMarketingSendAllowed(input.workspaceId);
+  if (!a2p.allowed) {
+    return { ok: false, error: a2p.reason || "Messaging A2P not ready" };
+  }
+  if (!review.phoneE164) {
+    return { ok: false, error: "No sending number configured" };
+  }
+
   const { massTextProductConfigPatch } = await import("@/lib/mass-texting/campaign-send");
   const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
   const broadcastConfig = readBroadcastConfig(campaign.configJson);
@@ -224,14 +235,6 @@ export async function launchCampaignWithAudit(input: {
       }),
     },
   });
-
-  const { assertMassTextMarketingSendAllowed } = await import(
-    "@/lib/mass-texting/a2p-enforcement"
-  );
-  const a2pGate = await assertMassTextMarketingSendAllowed(input.workspaceId);
-  if (!a2pGate.allowed) {
-    return { ok: false, error: a2pGate.reason || "Mass Texting A2P not ready" };
-  }
 
   const { refreshMassTextingTrialState } = await import("@/lib/mass-texting/trial-lifecycle");
   await refreshMassTextingTrialState(input.workspaceId);
