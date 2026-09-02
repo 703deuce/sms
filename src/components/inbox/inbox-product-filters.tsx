@@ -31,7 +31,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
     if (next.unread) params.set("unread", "1");
     else if (next.unread === false) params.delete("unread");
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   return (

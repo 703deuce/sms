@@ -84,21 +84,23 @@ export async function PATCH(
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    if (body.action === "reply" && body.body?.trim()) {
+    const replyMedia = body.mediaUrls?.filter(Boolean) ?? [];
+    const replyBody = body.body?.trim() ?? "";
+    if (body.action === "reply" && (replyBody || replyMedia.length)) {
       const to = existing.contact.phone;
       const replyFrom = body.from || existing.fromE164 || undefined;
       await sendQuickSms({
         workspaceId: auth.workspaceId,
         to,
-        body: body.body.trim(),
+        body: replyBody,
         from: replyFrom,
-        mediaUrls: body.mediaUrls?.filter(Boolean),
+        mediaUrls: replyMedia.length ? replyMedia : undefined,
       });
       await getPrisma().conversationMessage.create({
         data: {
           conversationId: id,
           direction: "out",
-          body: body.body.trim(),
+          body: replyBody || (replyMedia.length ? "[Media attachment]" : ""),
           userName: auth.session.name,
           fromE164: replyFrom ?? null,
         },

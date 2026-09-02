@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Image, Smile, Braces, SendHorizonal } from "lucide-react";
 import { TemplatePicker } from "@/components/inbox/template-picker";
 import { MediaPicker } from "@/components/messaging/media-picker";
@@ -9,16 +9,31 @@ type Props = {
   onSend: (text: string, mediaUrls?: string[]) => void;
   onNote: (text: string) => void;
   disabled?: boolean;
+  prefill?: string;
+  onPrefillApplied?: () => void;
 };
 
 /** Production composer for conversations — wires saved replies + MMS attach. */
-export function ConversationsComposer({ onSend, onNote, disabled }: Props) {
+export function ConversationsComposer({
+  onSend,
+  onNote,
+  disabled,
+  prefill = "",
+  onPrefillApplied,
+}: Props) {
   const [tab, setTab] = useState<"message" | "note">("message");
   const [text, setText] = useState("");
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const note = tab === "note";
+
+  useEffect(() => {
+    if (!prefill) return;
+    setTab("message");
+    setText(prefill);
+    onPrefillApplied?.();
+  }, [prefill, onPrefillApplied]);
 
   const send = () => {
     if (disabled) return;

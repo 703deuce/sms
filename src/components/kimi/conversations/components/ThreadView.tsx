@@ -26,6 +26,18 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
   const [moreOpen, setMoreOpen] = usePopover();
   const [filters, setFilters] = useState<Filters>({ inbox: true, other: true, notes: true, events: true, days: true });
   const [pendingTags, setPendingTags] = useState<string[]>(convo.tags);
+  const [teammateQuery, setTeammateQuery] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
+
+  const filteredTeammates = teammateCatalog.filter((t) =>
+    !teammateQuery.trim() ? true : t.name.toLowerCase().includes(teammateQuery.trim().toLowerCase()),
+  );
+  const filteredTagCatalog = tagCatalog.filter((t) =>
+    !tagQuery.trim()
+      ? true
+      : t.name.toLowerCase().includes(tagQuery.trim().toLowerCase()) ||
+        t.description.toLowerCase().includes(tagQuery.trim().toLowerCase()),
+  );
 
   const ev = (text: string): Message => ({ id: "e" + Date.now() + Math.random(), kind: "event", eventText: text });
   const now = liveMode
@@ -113,9 +125,9 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
           </button>
         }>
           <div style={{ padding: 8 }}>
-            <input className="tv-input" placeholder="Search Teammates" style={{ marginBottom: 6, padding: "6px 10px" }} />
+            <input className="tv-input" placeholder="Search Teammates" style={{ marginBottom: 6, padding: "6px 10px" }} value={teammateQuery} onChange={(e) => setTeammateQuery(e.target.value)} />
             <div className="tv-menu-label">ASSIGN CONVERSATION</div>
-            {[{ id: null, name: "No One", initials: "—", color: "#9ca3af" }, ...teammateCatalog].map((t) => (
+            {[{ id: null, name: "No One", initials: "—", color: "#9ca3af" }, ...filteredTeammates].map((t) => (
               <MenuItem key={t.id ?? "none"} onClick={() => assign(t.id)}>
                 <span className="tv-avatar" style={{ width: 20, height: 20, fontSize: 9, background: t.color }}>{t.initials}</span>
                 <span style={{ flex: 1 }}>{t.name}</span>
@@ -129,9 +141,9 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
           <button className="tv-icon-btn" title="Tag"><TagIcon size={15} /></button>
         }>
           <div style={{ padding: 8 }}>
-            <input className="tv-input" placeholder="Search Tags" style={{ marginBottom: 6, padding: "6px 10px" }} />
+            <input className="tv-input" placeholder="Search Tags" style={{ marginBottom: 6, padding: "6px 10px" }} value={tagQuery} onChange={(e) => setTagQuery(e.target.value)} />
             <div className="tv-menu-label">TAG CONVERSATION</div>
-            {tagCatalog.map((t) => (
+            {filteredTagCatalog.map((t) => (
               <label key={t.id} className="tv-menu-item" style={{ cursor: "pointer" }}>
                 <input type="checkbox" checked={pendingTags.includes(t.id)} style={{ accentColor: "var(--tv-primary)" }}
                   onChange={(e) => setPendingTags(e.target.checked ? [...pendingTags, t.id] : pendingTags.filter((x) => x !== t.id))} />

@@ -4,8 +4,9 @@ import { ChevronDown, UserCheck, Tag as TagIcon, CheckSquare, ListChecks } from 
 import { Popover, usePopover } from "./Popover";
 import { TAGS, TEAMMATES, type Tag, type Teammate } from "../mock-data";
 
-export default function BulkActionsBar({ count, onAction, tags, teammates }:{
+export default function BulkActionsBar({ count, onAction, tags, teammates, allowAssign = true, allowTag = true }:{
   count: number; onAction: (a: string)=>void; tags?: Tag[]; teammates?: Teammate[];
+  allowAssign?: boolean; allowTag?: boolean;
 }) {
   const tagList = tags ?? TAGS;
   const teammateList = teammates ?? TEAMMATES;
@@ -41,6 +42,7 @@ export default function BulkActionsBar({ count, onAction, tags, teammates }:{
             {["Open", "Pending", "Closed"].map((x) => <MenuItem key={x} label={x} onClick={() => { onAction("status:" + x.toLowerCase()); setS(false); }} />)}
           </div>
         </Popover>
+        {allowAssign ? (
         <Popover open={a} onOpenChange={setA} align="left" width={210} trigger={<Btn label="Assign To" icon={<UserCheck size={14} />} />}>
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">ASSIGN CONVERSATIONS</div>
@@ -48,6 +50,8 @@ export default function BulkActionsBar({ count, onAction, tags, teammates }:{
             {teammateList.map((x) => <MenuItem key={x.id} label={x.name} onClick={() => { onAction("assign:" + x.id); setA(false); }} />)}
           </div>
         </Popover>
+        ) : null}
+        {allowTag ? (
         <Popover open={t} onOpenChange={setT} align="left" width={220} trigger={<Btn label="Tag As" icon={<TagIcon size={14} />} />}>
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">TAG CONVERSATIONS</div>
@@ -57,6 +61,7 @@ export default function BulkActionsBar({ count, onAction, tags, teammates }:{
             </div>
           </div>
         </Popover>
+        ) : null}
         <Popover open={m} onOpenChange={setM} align="left" width={190} trigger={<Btn label="Mark As" icon={<CheckSquare size={14} />} />}>
           <div style={{ padding: 6 }}>
             <div className="tv-menu-label">MARK CONVERSATIONS</div>

@@ -5,8 +5,8 @@ import { Tag } from "../mock-data";
 
 const PALETTE = ["#23ddcd", "#6a329f", "#ef4444", "#f59e0b", "#22c55e", "#0ea5e9", "#8b5cf6", "#ec4899", "#a3e635", "#64748b"];
 
-export default function TagsSettings({ tags, onCreate, onBack }:{
-  tags: Tag[]; onCreate: (t: Omit<Tag, "id" | "created">)=>void; onBack: ()=>void;
+export default function TagsSettings({ tags, onCreate, onDelete, onBack }:{
+  tags: Tag[]; onCreate: (t: Omit<Tag, "id" | "created">)=>void; onDelete?: (name: string)=>void; onBack: ()=>void;
 }) {
   const [view, setView] = useState<"list" | "create">("list");
   const [name, setName] = useState("");
@@ -15,6 +15,13 @@ export default function TagsSettings({ tags, onCreate, onBack }:{
   const [untag, setUntag] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const visibleTags = tags.filter((t) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q);
+  });
 
   const save = () => {
     if (!name.trim()) return;
@@ -86,7 +93,7 @@ export default function TagsSettings({ tags, onCreate, onBack }:{
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 14 }}>
         <div style={{ position: "relative" }}>
           <Search size={13} style={{ position: "absolute", left: 10, top: 10, color: "#9ca3af" }} />
-          <input className="tv-input" placeholder="Search" style={{ paddingLeft: 30, width: 220, borderRadius: 8 }} />
+          <input className="tv-input" placeholder="Search" style={{ paddingLeft: 30, width: 220, borderRadius: 8 }} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <button className="tv-btn" onClick={() => setView("create")} style={{ borderRadius: 8, padding: "8px 16px" }}>Create Tag</button>
       </div>
@@ -98,7 +105,13 @@ export default function TagsSettings({ tags, onCreate, onBack }:{
             </tr>
           </thead>
           <tbody>
-            {tags.map((t) => (
+            {visibleTags.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ padding: "24px 16px", textAlign: "center", color: "#9ca3af" }}>
+                  {search.trim() ? "No tags match your search." : "No tags yet. Create one to get started."}
+                </td>
+              </tr>
+            ) : visibleTags.map((t) => (
               <tr key={t.id} style={{ borderTop: "1px solid #f3f4f6" }}>
                 <td style={{ padding: "13px 16px" }}>
                   <div style={{ fontWeight: 600, color: "#111827" }}>{t.name}</div>
@@ -109,7 +122,24 @@ export default function TagsSettings({ tags, onCreate, onBack }:{
                 <td style={{ padding: "13px 16px" }}>
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: t.untagOnClose ? "#047857" : "#6b7280", background: t.untagOnClose ? "#ecfdf5" : "#f3f4f6", borderRadius: 9999, padding: "3px 10px", border: t.untagOnClose ? "1px solid #a7f3d0" : "1px solid #e5e7eb" }}>{t.untagOnClose ? "Yes" : "No"}</span>
                 </td>
-                <td style={{ padding: "13px 16px" }}><MoreVertical size={15} color="#9ca3af" style={{ cursor: "pointer" }} /></td>
+                <td style={{ padding: "13px 16px" }}>
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete tag "${t.name}"? It will remain on existing conversations until removed manually.`)) {
+                          onDelete(t.name);
+                        }
+                      }}
+                      style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
+                      title="Delete tag"
+                    >
+                      <MoreVertical size={15} color="#9ca3af" />
+                    </button>
+                  ) : (
+                    <MoreVertical size={15} color="#9ca3af" style={{ opacity: 0.35 }} />
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

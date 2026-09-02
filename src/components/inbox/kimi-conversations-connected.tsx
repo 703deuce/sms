@@ -10,14 +10,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import InboxRail, { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 import ConversationList from "@/components/kimi/conversations/components/ConversationList";
-import ThreadView from "@/components/kimi/conversations/components/ThreadView";
 import BulkActionsBar from "@/components/kimi/conversations/components/BulkActionsBar";
 import TagsSettings from "@/components/kimi/conversations/components/TagsSettings";
 import SettingsHome from "@/components/kimi/conversations/components/SettingsHome";
 import InboxSettings from "@/components/kimi/conversations/components/InboxSettings";
 import type { Conversation, Tag } from "@/components/kimi/conversations/mock-data";
 import { ConversationsContactPanel } from "@/components/inbox/conversations-contact-panel";
-import { ConversationsComposer } from "@/components/inbox/conversations-composer";
+import { ConversationsThreadArea } from "@/components/inbox/conversations-thread-area";
 import { InboxProductFilters } from "@/components/inbox/inbox-product-filters";
 import { MessageSquarePlus, MessagesSquare, SendHorizonal, X, Loader2 } from "lucide-react";
 import {
@@ -39,9 +38,12 @@ import {
   searchContacts,
   sendNewMessage,
   syncConversationUpdate,
+  resolveInboxPerms,
   tagKeysToApiNames,
   type KimiInboxContext,
 } from "@/lib/inbox/kimi-inbox-adapter";
+import type { InboxPermissionsJson, InboxTagDefinition } from "@/lib/messaging/messaging-settings";
+import { DEFAULT_INBOX_PERMISSIONS } from "@/lib/messaging/messaging-settings";
 import {
   filterSelFromUrlParams,
   filterSelToSearchParams,
@@ -50,6 +52,7 @@ import {
   fetchMessagingRuntimeSettings,
   inboxTagsFromSettings,
   persistInboxTag,
+  deleteInboxTag,
 } from "@/lib/auto-replies/kimi-messaging-settings-adapter";
 
 type View = "inbox" | "settings" | "inboxSettings" | "tags";
@@ -99,10 +102,17 @@ export function KimiConversationsConnected({
   const teammates = useMemo(() => buildTeammates(ctx), [ctx]);
 
   const [persistedTags, setPersistedTags] = useState<Tag[]>([]);
+  const [tagDefinitions, setTagDefinitions] = useState<InboxTagDefinition[]>([]);
+  const [permissions, setPermissions] = useState<InboxPermissionsJson>(DEFAULT_INBOX_PERMISSIONS);
 
   useEffect(() => {
     void fetchMessagingRuntimeSettings()
-      .then((s) => setPersistedTags(inboxTagDefinitionsToKimi(inboxTagsFromSettings(s.inboxTagsJson))))
+      .then((s) => {
+        const defs = inboxTagsFromSettings(s.inboxTagsJson);
+        setTagDefinitions(defs);
+        setPersistedTags(inboxTagDefinitionsToKimi(defs));
+        setPermissions(resolveInboxPerms(s.inboxPermissionsJson));
+      })
       .catch(() => undefined);
   }, []);
 
@@ -114,10 +124,18 @@ export function KimiConversationsConnected({
     const fromConvos = buildTagsFromConversations(convos);
     return mergeTagCatalog(persistedTags, fromConvos);
   }, [convos, persistedTags]);
-  const [sel, setSel] = useState<FilterSel>(initialSel);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    () => urlConversation || initialConversations[0]?.id || null,
+  const mapConvo = useCallback(
+    (c: ApiConversation) => mapApiConversationToKimi(c, ctx, tags, tagDefinitions),
+    [ctx, tags, tagDefinitions],
   );
+
+  const mapRow = useCallback(
+    (r: Parameters<typeof mapListItemToKimi>[0]) => mapListItemToKimi(r, ctx, tags, tagDefinitions),
+    [ctx, tags, tagDefinitions],
+  );
+
+  const [sel, setSel] = useState<FilterSel>(initialSel);
+  const [selectedId, setSelectedId] = useState<string | null>(() => urlConversation || null);
   const [searchQuery, setSearchQuery] = useState("");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [contactOpen, setContactOpen] = useState(false);
@@ -141,13 +159,26 @@ export function KimiConversationsConnected({
   }, [initialSel]);
 
   useEffect(() => {
+    if (!tagDefinitions.length) return;
+    setConvos((prev) =>
+      prev.map((c) => ({
+        ...c,
+        tags: c.tags.map((key) => {
+          const def = tagDefinitions.find((d) => d.id === key || d.name === key);
+          return def ? def.name : key;
+        }),
+      })),
+    );
+  }, [tagDefinitions]);
+
+  useEffect(() => {
     if (!urlContactId) return;
     let cancelled = false;
     void fetchConversationForContact(urlContactId)
       .then(async (data) => {
         if (cancelled) return;
         if (data) {
-          const mapped = mapApiConversationToKimi(data, ctx, tags);
+          const mapped = mapConvo(data);
           setConvos((prev) => (prev.some((c) => c.id === mapped.id) ? prev : [mapped, ...prev]));
           setSelectedId(mapped.id);
           if (urlDraft) {
@@ -169,7 +200,7 @@ export function KimiConversationsConnected({
     return () => {
       cancelled = true;
     };
-  }, [urlContactId, ctx, urlDraft]);
+  }, [urlContactId, ctx, urlDraft, mapConvo]);
 
   useEffect(() => {
     if (urlDraft && !urlContactId) {
@@ -185,7 +216,7 @@ export function KimiConversationsConnected({
     void fetchConversation(urlConversation)
       .then((data) => {
         if (cancelled) return;
-        const mapped = mapApiConversationToKimi(data, ctx, tags);
+        const mapped = mapConvo(data);
         setConvos((prev) => (prev.some((c) => c.id === mapped.id) ? prev : [mapped, ...prev]));
       })
       .catch((err) => {
@@ -196,7 +227,7 @@ export function KimiConversationsConnected({
     return () => {
       cancelled = true;
     };
-  }, [urlConversation, ctx]);
+  }, [urlConversation, ctx, mapConvo]);
 
   const [composeQuery, setComposeQuery] = useState("");
   const [composeTo, setComposeTo] = useState("");
@@ -213,10 +244,10 @@ export function KimiConversationsConnected({
       .then((json) => {
         const rows = (json?.data || []) as Array<{ id: string; number: string; label?: string }>;
         setPhoneNumbers(rows);
-        if (!composeNumberId && rows[0]) setComposeNumberId(rows[0].id);
+        setComposeNumberId((prev) => prev || rows[0]?.id || "");
       })
       .catch(() => undefined);
-  }, [newMsgOpen, composeNumberId]);
+  }, [newMsgOpen]);
 
   const reloadList = useCallback(async () => {
     try {
@@ -224,7 +255,7 @@ export function KimiConversationsConnected({
       setConvos((prev) => {
         const prevById = new Map(prev.map((c) => [c.id, c]));
         return rows.map((r) => {
-          const mapped = mapListItemToKimi(r, ctx, tags);
+          const mapped = mapRow(r);
           const existing = prevById.get(mapped.id);
           if (existing?.messages.length) {
             return { ...mapped, messages: existing.messages };
@@ -235,7 +266,7 @@ export function KimiConversationsConnected({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load conversations");
     }
-  }, [sel, ctx, tags, productFilter]);
+  }, [sel, ctx, tags, tagDefinitions, productFilter, mapRow]);
 
   useEffect(() => {
     if (skipInitialReload.current) {
@@ -251,7 +282,7 @@ export function KimiConversationsConnected({
     fetchConversation(selectedId)
       .then((data) => {
         if (cancelled) return;
-        const mapped = mapApiConversationToKimi(data, ctx, tags);
+        const mapped = mapConvo(data);
         setConvos((prev) => prev.map((c) => (c.id === selectedId ? mapped : c)));
         if (mapped.unread) {
           void patchConversation(selectedId, { unread: false }).catch(() => undefined);
@@ -264,7 +295,7 @@ export function KimiConversationsConnected({
     return () => {
       cancelled = true;
     };
-  }, [selectedId, ctx]);
+  }, [selectedId, ctx, mapConvo]);
 
   useEffect(() => {
     if (!newMsgOpen) return;
@@ -377,7 +408,7 @@ export function KimiConversationsConnected({
       try {
         const data = await syncConversationUpdate(prev, next, ctx, tags);
         if (data) {
-          const mapped = mapApiConversationToKimi(data, ctx, tags);
+          const mapped = mapConvo(data);
           setConvos((p) => p.map((x) => (x.id === next.id ? mapped : x)));
         }
       } catch (err) {
@@ -385,7 +416,7 @@ export function KimiConversationsConnected({
         setConvos((p) => p.map((x) => (x.id === prev.id ? prev : x)));
       }
     },
-    [convos, ctx, selectedId],
+    [convos, ctx, selectedId, tags, mapConvo],
   );
 
   const toggleCheck = (id: string, v: boolean) =>
@@ -408,7 +439,7 @@ export function KimiConversationsConnected({
             const data = await patchConversation(id, {
               status: kimiStatusToApi(val as Conversation["status"]),
             });
-            const mapped = mapApiConversationToKimi(data, ctx, tags);
+            const mapped = mapConvo(data);
             setConvos((p) => p.map((c) => (c.id === id ? mapped : c)));
             return;
           }
@@ -416,7 +447,7 @@ export function KimiConversationsConnected({
             const data = await patchConversation(id, {
               assigneeId: resolveAssigneeApiId(val || null, ctx),
             });
-            const mapped = mapApiConversationToKimi(data, ctx, tags);
+            const mapped = mapConvo(data);
             setConvos((p) => p.map((c) => (c.id === id ? mapped : c)));
             return;
           }
@@ -428,13 +459,13 @@ export function KimiConversationsConnected({
             const data = await patchConversation(id, {
               tags: tagKeysToApiNames(next, tags),
             });
-            const mapped = mapApiConversationToKimi(data, ctx, tags);
+            const mapped = mapConvo(data);
             setConvos((p) => p.map((c) => (c.id === id ? mapped : c)));
             return;
           }
           if (kind === "mark") {
             const data = await patchConversation(id, { unread: val === "unread" });
-            const mapped = mapApiConversationToKimi(data, ctx, tags);
+            const mapped = mapConvo(data);
             setConvos((p) => p.map((c) => (c.id === id ? mapped : c)));
           }
         }),
@@ -481,7 +512,7 @@ export function KimiConversationsConnected({
       setComposeMessage("");
       setComposeQuery("");
       const rows = await fetchInboxList(inboxQueryFromFilter(sel, productFilter));
-      const mapped = rows.map((r) => mapListItemToKimi(r, ctx, tags));
+      const mapped = rows.map((r) => mapRow(r));
       setConvos((prev) => {
         const prevById = new Map(prev.map((c) => [c.id, c]));
         return mapped.map((m) => {
@@ -502,6 +533,10 @@ export function KimiConversationsConnected({
     }
   };
 
+  const canStartConversations = permissions.allowStartConversations !== false;
+  const canAssign = permissions.allowAssignment !== false;
+  const canTag = permissions.allowTagging !== false;
+
   return (
     <div className="ref-scope" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {error ? (
@@ -516,9 +551,20 @@ export function KimiConversationsConnected({
             padding: "8px 12px",
             borderRadius: 8,
             fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            maxWidth: 360,
           }}
         >
-          {error}
+          <span style={{ flex: 1 }}>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError("")}
+            style={{ border: "none", background: "transparent", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}
+          >
+            ×
+          </button>
         </div>
       ) : null}
 
@@ -541,9 +587,18 @@ export function KimiConversationsConnected({
               untagOnClose: t.untagOnClose,
             })
               .then((rows) => {
+                setTagDefinitions(rows);
                 setPersistedTags(inboxTagDefinitionsToKimi(rows));
               })
               .catch((err) => setError(err instanceof Error ? err.message : "Could not save tag"));
+          }}
+          onDelete={(name) => {
+            void deleteInboxTag(name)
+              .then((rows) => {
+                setTagDefinitions(rows);
+                setPersistedTags(inboxTagDefinitionsToKimi(rows));
+              })
+              .catch((err) => setError(err instanceof Error ? err.message : "Could not delete tag"));
           }}
         />
       ) : (
@@ -563,7 +618,7 @@ export function KimiConversationsConnected({
             counts={counts}
             tags={tags}
             teammates={teammates}
-            onNew={() => setNewMsgOpen(true)}
+            onNew={() => canStartConversations && setNewMsgOpen(true)}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onOpenSettings={() => { setSettingsReturn("inbox"); setView("inboxSettings"); }}
@@ -580,10 +635,17 @@ export function KimiConversationsConnected({
             onCheckAll={checkAll}
           />
           {checked.size > 0 ? (
-            <BulkActionsBar count={checked.size} onAction={(a) => void bulk(a)} tags={tags} teammates={teammates} />
+            <BulkActionsBar
+              count={checked.size}
+              onAction={(a) => void bulk(a)}
+              tags={tags}
+              teammates={teammates}
+              allowAssign={canAssign}
+              allowTag={canTag}
+            />
           ) : selected ? (
             <>
-              <ThreadView
+              <ConversationsThreadArea
                 convo={selected}
                 tags={tags}
                 teammates={teammates}
@@ -592,8 +654,7 @@ export function KimiConversationsConnected({
                 onToggleContact={() => setContactOpen(!contactOpen)}
                 onOpenTagsSettings={() => { setSettingsReturn("inbox"); setView("tags"); }}
                 onDownloadTranscript={() => downloadTranscript(selected)}
-                liveMode
-                ComposerSlot={ConversationsComposer}
+                allowTagging={canTag}
               />
               {contactOpen && (
                 <ConversationsContactPanel convo={selected} onClose={() => setContactOpen(false)} />
@@ -632,7 +693,13 @@ export function KimiConversationsConnected({
                   Select a conversation to begin chatting.
                 </div>
               </div>
-              <button type="button" className="tv-btn" onClick={() => setNewMsgOpen(true)}>
+              <button
+                type="button"
+                className="tv-btn"
+                onClick={() => canStartConversations && setNewMsgOpen(true)}
+                disabled={!canStartConversations}
+                title={!canStartConversations ? "Starting conversations is disabled in inbox settings" : undefined}
+              >
                 <MessageSquarePlus size={14} /> New Message
               </button>
               <button

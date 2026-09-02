@@ -4,7 +4,8 @@
  */
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import type { Conversation, Message, Tag, Teammate } from "@/components/kimi/conversations/mock-data";
-import type { InboxTagDefinition } from "@/lib/messaging/messaging-settings";
+import type { InboxPermissionsJson, InboxTagDefinition } from "@/lib/messaging/messaging-settings";
+import { resolveInboxPermissions } from "@/lib/messaging/messaging-settings";
 import type { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 
 const AVATAR_COLORS = ["#14b8a6", "#6366f1", "#22c55e", "#0ea5e9", "#f59e0b", "#ec4899", "#8b5cf6"];
@@ -120,6 +121,7 @@ export function mapApiConversationToKimi(
   c: ApiConversation,
   ctx: KimiInboxContext,
   tagCatalog: Tag[] = [],
+  tagDefinitions: InboxTagDefinition[] = [],
 ): Conversation {
   const name = c.contactName || c.phone || "Unknown";
   return {
@@ -133,7 +135,7 @@ export function mapApiConversationToKimi(
     unread: c.unread,
     status: apiStatusToKimi(c.status),
     assignee: resolveAssigneeId(c.assignedTo, ctx),
-    tags: apiTagNamesToKeys(c.tags || [], tagCatalog),
+    tags: apiTagNamesToKeys(c.tags || [], tagCatalog, tagDefinitions),
     phone: c.phone,
     messages: (c.messages || []).map((m) => mapApiMessage(m, name)),
   };
@@ -143,6 +145,7 @@ export function mapListItemToKimi(
   item: InboxListItem,
   ctx: KimiInboxContext,
   tagCatalog: Tag[] = [],
+  tagDefinitions: InboxTagDefinition[] = [],
 ): Conversation {
   const first = item.contact?.firstName || "";
   const last = item.contact?.lastName || "";
@@ -158,7 +161,7 @@ export function mapListItemToKimi(
     unread: item.unread,
     status: apiStatusToKimi(item.status),
     assignee: resolveAssigneeId(item.assignedTo, ctx),
-    tags: apiTagNamesToKeys(item.tags || [], tagCatalog),
+    tags: apiTagNamesToKeys(item.tags || [], tagCatalog, tagDefinitions),
     phone: item.contact?.phone || "",
     messages: [],
   };
@@ -235,11 +238,21 @@ export function tagKeysToApiNames(tagKeys: string[], catalog: Tag[]): string[] {
 }
 
 /** Map API tag names onto canonical Kimi tag keys. */
-export function apiTagNamesToKeys(tagNames: string[], catalog: Tag[]): string[] {
-  return tagNames.map((name) => {
-    const hit = catalog.find((t) => t.name === name);
+export function apiTagNamesToKeys(
+  tagNames: string[],
+  catalog: Tag[],
+  definitions: InboxTagDefinition[] = [],
+): string[] {
+  return tagNames.map((raw) => {
+    const legacy = definitions.find((d) => d.id === raw);
+    const name = legacy?.name ?? raw;
+    const hit = catalog.find((t) => t.name === name || t.id === name);
     return hit ? hit.id : canonicalTagId(name);
   });
+}
+
+export function resolveInboxPerms(json: InboxPermissionsJson | null | undefined) {
+  return resolveInboxPermissions(json);
 }
 
 export type InboxQuery = {
@@ -387,9 +400,11 @@ export async function syncConversationUpdate(
     const added = next.messages[next.messages.length - 1];
     if ((added.kind === "outbound" || added.kind === "mms") && (added.text || added.caption || added.image)) {
       const mediaUrls = added.image ? [added.image] : undefined;
+      const body = (added.text || added.caption || "").trim();
+      if (!body && !mediaUrls?.length) return null;
       return patchConversation(prev.id, {
         action: "reply",
-        body: (added.text || added.caption || "").trim(),
+        body,
         mediaUrls,
       });
     }

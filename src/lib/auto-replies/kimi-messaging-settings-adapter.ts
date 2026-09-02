@@ -110,7 +110,15 @@ export async function persistInboxTag(
     untagOnClose: tag.untagOnClose,
     created: new Date().toISOString(),
   };
-  const next = [...existing.filter((t) => t.id !== id), row];
+  const next = [...existing.filter((t) => t.id !== id && t.name !== tag.name), row];
+  const saved = await patchMessagingRuntimeSettings({ inboxTagsJson: next });
+  return inboxTagsFromSettings(saved.inboxTagsJson);
+}
+
+export async function deleteInboxTag(tagName: string): Promise<InboxTagDefinition[]> {
+  const settings = await fetchMessagingRuntimeSettings();
+  const existing = inboxTagsFromSettings(settings.inboxTagsJson);
+  const next = existing.filter((t) => t.name !== tagName && t.id !== tagName);
   const saved = await patchMessagingRuntimeSettings({ inboxTagsJson: next });
   return inboxTagsFromSettings(saved.inboxTagsJson);
 }
