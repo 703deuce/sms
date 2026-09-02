@@ -1,3 +1,4 @@
+/** @deprecated Kimi draft scaffolding only — production campaigns use live APIs. */
 export type Campaign = {
   id: string;
   name: string;

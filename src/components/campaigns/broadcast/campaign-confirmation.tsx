@@ -68,22 +68,46 @@ export function CampaignQueueView() {
   const campaignId = searchParams.get("id");
   const [seconds, setSeconds] = useState(3);
   const [launching, setLaunching] = useState(false);
+  const [loadingReview, setLoadingReview] = useState(true);
+  const [recipientCount, setRecipientCount] = useState(0);
+  const [confirmLargeSend, setConfirmLargeSend] = useState(false);
+  const [armed, setArmed] = useState(false);
   const [error, setError] = useState("");
   const launchedRef = useRef(false);
   const cancelledRef = useRef(false);
   const router = useRouter();
 
+  const requiresLargeConfirm = recipientCount >= 1000;
+
+  useEffect(() => {
+    if (!campaignId) {
+      setLoadingReview(false);
+      return;
+    }
+    setLoadingReview(true);
+    fetchLaunchReview(campaignId)
+      .then((review) => {
+        setRecipientCount(review.finalRecipientCount);
+        if (review.finalRecipientCount < 1000) {
+          setArmed(true);
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not load launch review");
+      })
+      .finally(() => setLoadingReview(false));
+  }, [campaignId]);
+
   const runLaunch = async () => {
     if (!campaignId) return;
+    if (requiresLargeConfirm && !confirmLargeSend) {
+      setError("Confirm the large-send checkbox before launching.");
+      return;
+    }
     setLaunching(true);
     setError("");
     try {
-      const review = await fetchLaunchReview(campaignId);
-      await launchCampaign(
-        campaignId,
-        review.finalRecipientCount,
-        review.finalRecipientCount >= 1000,
-      );
+      await launchCampaign(campaignId, recipientCount, confirmLargeSend);
       clearComposeDraft();
       router.push(`/campaigns/${campaignId}`);
     } catch (err) {
@@ -95,7 +119,8 @@ export function CampaignQueueView() {
   };
 
   useEffect(() => {
-    if (!campaignId || cancelledRef.current || launchedRef.current) return;
+    if (!campaignId || cancelledRef.current || launchedRef.current || !armed) return;
+    if (requiresLargeConfirm) return;
     if (seconds > 0) {
       const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
       return () => clearTimeout(t);
@@ -103,7 +128,7 @@ export function CampaignQueueView() {
 
     launchedRef.current = true;
     void runLaunch();
-  }, [seconds, campaignId, router]);
+  }, [seconds, campaignId, armed, requiresLargeConfirm]);
 
   async function cancelSend() {
     if (launchedRef.current || launching) return;
@@ -146,10 +171,27 @@ export function CampaignQueueView() {
         {launching ? "Launching campaign…" : "Campaign is being queued…"}
       </h1>
       <p className="mt-2 text-[14px] text-[#6b7280]">
-        {launching
-          ? "Sending messages to your audience."
-          : `You can cancel for ${seconds} seconds.`}
+        {loadingReview
+          ? "Loading launch review…"
+          : launching
+            ? "Sending messages to your audience."
+            : requiresLargeConfirm
+              ? `Confirm sending to ${recipientCount.toLocaleString()} recipients before launch.`
+              : `You can cancel for ${seconds} seconds.`}
       </p>
+      {requiresLargeConfirm && !launching ? (
+        <label className="mt-4 flex max-w-md items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left text-[13px] text-amber-900">
+          <input
+            type="checkbox"
+            checked={confirmLargeSend}
+            onChange={(e) => setConfirmLargeSend(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            I confirm sending to {recipientCount.toLocaleString()} recipients.
+          </span>
+        </label>
+      ) : null}
       {error ? (
         <p className="mt-4 max-w-md rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
           {error}
@@ -160,7 +202,19 @@ export function CampaignQueueView() {
           <button type="button" onClick={() => void cancelSend()} className={cn(campaignUi.outlineBtn)}>
             Cancel Send
           </button>
-          {error ? (
+          {requiresLargeConfirm ? (
+            <button
+              type="button"
+              disabled={loadingReview || !confirmLargeSend}
+              onClick={() => {
+                launchedRef.current = true;
+                void runLaunch();
+              }}
+              className={campaignUi.primaryBtn}
+            >
+              Launch Campaign
+            </button>
+          ) : error ? (
             <button
               type="button"
               onClick={() => {

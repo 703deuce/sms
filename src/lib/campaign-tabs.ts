@@ -9,7 +9,9 @@ export const campaignTabs = [
 ];
 
 export const campaignTabsWithRecurring = [
-  ...campaignTabs,
+  ...campaignTabs.slice(0, 4),
+  { label: "Paused", href: "/campaigns/paused" },
+  ...campaignTabs.slice(4),
   { label: "Sending", href: "/campaigns/sending" },
   { label: "Recurring", href: "/campaigns/recurring" },
   { label: "Calendar", href: "/campaigns/calendar" },

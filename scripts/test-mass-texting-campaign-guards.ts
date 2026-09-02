@@ -38,7 +38,7 @@ assert.ok(actions.includes("isMassText"), "campaign actions hide bypass activate
 
 const launchReview = read("src/components/campaigns/campaign-launch-review.tsx");
 assert.ok(launchReview.includes("launch-review"), "launch review UI loads pre-send review");
-assert.ok(launchReview.includes("/api/campaigns/${campaignId}/launch"), "launch review posts to audited launch route");
+assert.ok(launchReview.includes("/api/mass-texting/campaigns/${campaignId}/launch"), "launch review posts to audited mass-texting launch route");
 
 const launchReviewRoute = read("src/app/api/campaigns/[id]/launch-review/route.ts");
 assert.ok(

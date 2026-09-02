@@ -1,3 +1,4 @@
+/** @deprecated Unused Kimi scaffold sidebar — app shell provides navigation. */
 "use client";
 import { Home, Users, Megaphone, Inbox, Workflow, BarChart3, Wrench, Bell, HelpCircle, ChevronRight, ChevronDown, Zap } from "lucide-react";
 

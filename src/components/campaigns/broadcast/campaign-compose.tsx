@@ -1,3 +1,4 @@
+/** @deprecated Use CreateCampaign via /campaigns/new — legacy duplicate compose UI. */
 "use client";
 
 import { AiComposeModal } from "@/components/campaigns/broadcast/ai-compose-modal";

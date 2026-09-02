@@ -18,6 +18,7 @@ import {
   type LaunchReviewData,
   type ReviewNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
+import { zonedIsoToLocalDateTime } from "@/lib/campaigns/schedule-time";
 
 export default function ReviewDetails({
   onPrev,
@@ -50,13 +51,13 @@ export default function ReviewDetails({
       setDraft((prev) => {
         if (prev.scheduleMode === "recurring") return prev;
         if (!data.scheduledAt) return prev;
-        const when = new Date(data.scheduledAt);
-        if (Number.isNaN(when.getTime())) return prev;
+        const local = zonedIsoToLocalDateTime(data.scheduledAt, prev.timezone);
+        if (!local.date) return prev;
         return {
           ...prev,
           scheduleMode: "later",
-          scheduledDate: when.toISOString().slice(0, 10),
-          scheduledTime: when.toTimeString().slice(0, 5),
+          scheduledDate: local.date,
+          scheduledTime: local.time,
         };
       });
     } catch (err) {

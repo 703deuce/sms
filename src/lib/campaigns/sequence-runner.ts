@@ -1,6 +1,5 @@
 import type { Prisma, RecipientWorkflowStatus } from "@/lib/domain";
 import { getPrisma } from "@/lib/db";
-import { randomTrackingToken } from "@/lib/messaging/crypto";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { mergeTemplate, splitDisplayName } from "@/lib/messaging/template";
 import {
@@ -344,10 +343,8 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
     return false;
   }
 
-  const trackingToken = randomTrackingToken();
-  const trackedUrl = `${getAppBaseUrl()}/r/${trackingToken}`;
   const { resolveReviewLink } = await import("@/lib/messaging/review-link");
-  const destinationUrl = await resolveReviewLink(recipient.workspaceId);
+  const fallbackDestination = await resolveReviewLink(recipient.workspaceId);
   const names = splitDisplayName(recipient.displayName);
   let firstName = names.first_name;
   let lastName = names.last_name;
@@ -381,6 +378,9 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
     template.includes("{{tracking_link}}") ||
     template.includes("{{review_link}}") ||
     campaignConfig.trackLinks === true;
+  const trackedLinks = Array.isArray(campaignConfig.trackedLinks)
+    ? (campaignConfig.trackedLinks as Array<{ url: string; name: string; tracked: boolean }>)
+    : undefined;
 
   let paymentLinkUrl = "";
   if (template.includes("{{payment_link}}")) {
@@ -413,14 +413,33 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
       customFields,
     }),
   );
-  let body = mergeTemplate(rendered.body, {
-    tracking_link: trackLinks ? trackedUrl : "",
-    review_link: trackLinks ? trackedUrl : "",
+
+  const { applyCampaignLinkTracking } = await import("@/lib/campaigns/link-tracking");
+  const linkTracking = applyCampaignLinkTracking({
+    body: rendered.body,
+    trackedLinks,
+    trackLinks,
+    fallbackDestination,
+  });
+  const primaryTrackedUrl = linkTracking.primaryToken
+    ? `${getAppBaseUrl()}/r/${linkTracking.primaryToken}`
+    : "";
+
+  let body = mergeTemplate(linkTracking.body, {
+    tracking_link: primaryTrackedUrl,
+    review_link: primaryTrackedUrl,
     payment_link: paymentLinkUrl,
   });
-  if (trackLinks && !body.includes(trackedUrl)) {
-    body = `${body.trim()} ${trackedUrl}`.trim();
+  if (
+    linkTracking.primaryToken &&
+    linkTracking.primaryDestination &&
+    !body.includes(primaryTrackedUrl)
+  ) {
+    body = `${body.trim()} ${primaryTrackedUrl}`.trim();
   }
+
+  const messageTrackingToken = linkTracking.primaryToken;
+  const destinationUrl = linkTracking.primaryDestination || fallbackDestination;
 
   try {
     await prisma.campaignMessage.create({
@@ -434,10 +453,25 @@ async function queueSendForStep(recipientId: string, step: SequenceStep): Promis
         body,
         status: "queued",
         scheduledFor: new Date(),
-        trackingToken,
+        trackingToken: messageTrackingToken,
         destinationUrl,
       },
     });
+
+    for (const stub of linkTracking.redirectStubs) {
+      await prisma.message.create({
+        data: {
+          workspaceId: recipient.workspaceId,
+          campaignId: recipient.campaignId,
+          to: recipient.phone || recipient.email || "link",
+          from: "link_redirect",
+          body: "",
+          status: "link_redirect",
+          trackingToken: stub.token,
+          destinationUrl: stub.destinationUrl,
+        },
+      });
+    }
     return true;
   } catch (err) {
     if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {

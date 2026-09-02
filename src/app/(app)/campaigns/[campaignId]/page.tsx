@@ -61,7 +61,8 @@ export default async function CampaignDetailPage({
     statusNorm === "completed" ||
     statusNorm === "sending" ||
     statusNorm === "sent" ||
-    statusNorm === "failed";
+    statusNorm === "failed" ||
+    statusNorm === "paused";
 
   if (showResultsView) {
     const recipients = await listBroadcastRecipients(workspaceId, campaignId);

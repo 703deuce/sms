@@ -77,7 +77,10 @@ function statusWhereClause(status?: string) {
     return { status: { in: ["COMPLETED" as const] } };
   }
   if (normalized === "failed") {
-    return { status: { in: ["FAILED" as const, "CANCELED" as const] } };
+    return { status: { in: ["FAILED" as const] } };
+  }
+  if (normalized === "canceled") {
+    return { status: { in: ["CANCELED" as const] } };
   }
   return {
     status: status.toUpperCase() as
@@ -110,8 +113,14 @@ export async function listBroadcastCampaigns(
     orderBy: { createdAt: "desc" },
     take: Math.min(500, take + skip),
     skip,
+    include: { _count: { select: { recipients: true } } },
   });
-  return rows.filter((c: (typeof rows)[number]) => isBroadcastCampaign(c.configJson));
+  return rows
+    .filter((c: (typeof rows)[number]) => isBroadcastCampaign(c.configJson))
+    .map((row: (typeof rows)[number]) => ({
+      ...row,
+      recipientCount: row._count?.recipients ?? 0,
+    }));
 }
 
 export async function getBroadcastCampaign(workspaceId: string, campaignId: string) {

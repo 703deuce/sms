@@ -1,3 +1,4 @@
+/** @deprecated Use ReviewDetails via /campaigns/new/review — legacy duplicate review UI. */
 "use client";
 
 import {
@@ -63,7 +64,7 @@ export function CampaignReviewView() {
       const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmLargeSend: review.finalRecipientCount >= 1000 }),
+        body: JSON.stringify({ confirmLargeSend: false }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Launch failed");

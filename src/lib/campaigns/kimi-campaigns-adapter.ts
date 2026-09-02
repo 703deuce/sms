@@ -23,6 +23,7 @@ export type CampaignListRow = {
   clicks?: number;
   replies?: number;
   optOuts?: number;
+  recipientCount?: number;
   scheduledAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -91,6 +92,7 @@ export function displayCampaignStatus(status: string): string {
   if (s === "draft") return "Draft";
   if (s === "scheduled") return "Scheduled";
   if (s === "sending") return "Sending";
+  if (s === "paused") return "Paused";
   if (s === "failed") return "Failed";
   if (s === "canceled" || s === "cancelled") return "Canceled";
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
@@ -102,9 +104,24 @@ export function statusMatchesFilter(status: string, filter: string): boolean {
   if (filter === "draft") return s === "draft";
   if (filter === "scheduled") return s === "scheduled";
   if (filter === "sending") return s === "sending" || s === "queued";
+  if (filter === "paused") return s === "paused";
   if (filter === "completed") return s === "completed" || s === "sent";
-  if (filter === "failed") return s === "failed" || s === "canceled" || s === "cancelled";
+  if (filter === "failed") return s === "failed";
+  if (filter === "canceled") return s === "canceled" || s === "cancelled";
   return true;
+}
+
+export function formatScheduledAt(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `Scheduled ${date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
 }
 
 export function formatSavedAt(value?: string | null): string {
@@ -143,7 +160,10 @@ export async function fetchCampaigns(opts?: {
   const res = await fetch(`/api/mass-texting/campaigns?${params.toString()}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load campaigns");
-  return json.data || [];
+  return (json.data || []).map((row: CampaignListRow & { _count?: { recipients?: number } }) => ({
+    ...row,
+    recipientCount: row.recipientCount ?? row._count?.recipients,
+  }));
 }
 
 export async function duplicateCampaign(campaignId: string): Promise<string> {
@@ -208,15 +228,13 @@ export async function fetchLaunchReview(campaignId: string): Promise<LaunchRevie
 
 export async function launchCampaign(
   campaignId: string,
-  finalRecipientCount: number,
+  _finalRecipientCount: number,
   confirmLargeSend = false,
 ): Promise<void> {
   const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      confirmLargeSend: confirmLargeSend || finalRecipientCount >= 1000,
-    }),
+    body: JSON.stringify({ confirmLargeSend }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Launch failed");
@@ -260,9 +278,16 @@ export function contactToAudienceItem(contact: ContactRow): AudiencePickerItem |
 }
 
 export async function loadAudiencePickerCatalog(): Promise<AudiencePickerItem[]> {
-  const [listsJson, segmentsJson] = await Promise.all([
+  const [listsJson, segmentsJson, eligibleJson] = await Promise.all([
     fetch("/api/contacts/lists").then((r) => (r.ok ? r.json() : { data: [] })),
     fetch("/api/contacts/segments").then((r) => (r.ok ? r.json() : { data: [] })),
+    fetch("/api/mass-texting/campaigns/audience-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        audience: { include: [{ type: "all", id: "all-eligible", name: "All Eligible Contacts" }], exclude: [] },
+      }),
+    }).then((r) => (r.ok ? r.json() : { data: { eligibleCount: 0 } })),
   ]);
 
   const items: AudiencePickerItem[] = [
@@ -270,7 +295,7 @@ export async function loadAudiencePickerCatalog(): Promise<AudiencePickerItem[]>
       type: "all",
       id: "all-eligible",
       name: "All Eligible Contacts",
-      count: 0,
+      count: eligibleJson.data?.eligibleCount ?? 0,
       group: "everyone",
     },
   ];
@@ -284,15 +309,33 @@ export async function loadAudiencePickerCatalog(): Promise<AudiencePickerItem[]>
       group: "lists",
     });
   }
-  for (const s of segmentsJson.data || []) {
+
+  const segments = segmentsJson.data || [];
+  const segmentCounts = await Promise.all(
+    segments.map(async (s: { id: string; name: string; conditions?: unknown }) => {
+      try {
+        const res = await fetch("/api/contacts/segments/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conditions: s.conditions || {} }),
+        });
+        const json = await res.json();
+        return json.data?.count ?? 0;
+      } catch {
+        return 0;
+      }
+    }),
+  );
+
+  segments.forEach((s: { id: string; name: string }, index: number) => {
     items.push({
       type: "segment",
       id: s.id,
       name: s.name,
-      count: 0,
+      count: segmentCounts[index] ?? 0,
       group: "segments",
     });
-  }
+  });
 
   return items;
 }

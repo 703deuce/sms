@@ -1,3 +1,4 @@
+/** @deprecated Use CampaignsList via KimiCampaignsConnected — legacy duplicate list UI. */
 "use client";
 
 import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";

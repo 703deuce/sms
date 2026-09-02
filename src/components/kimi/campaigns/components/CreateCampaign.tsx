@@ -323,6 +323,7 @@ export default function CreateCampaign({
     Boolean(draft.name.trim()) &&
     Boolean(draft.message.trim()) &&
     draft.audience.length > 0 &&
+    Boolean(draft.numberId) &&
     !laterIncomplete &&
     !recurringIncomplete;
 
@@ -692,6 +693,10 @@ export default function CreateCampaign({
             <p className="mt-3 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
               MMS attachments may be blocked at review until MMS is enabled for your workspace.
             </p>
+          ) : null}
+
+          {!draft.numberId ? (
+            <p className="mt-3 max-w-md text-[13px] text-amber-700">Select a send-from number before continuing.</p>
           ) : null}
 
           {laterIncomplete ? (

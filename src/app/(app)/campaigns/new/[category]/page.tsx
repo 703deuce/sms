@@ -97,6 +97,13 @@ export default function NewCategoryCampaignPage() {
         }
       })
       .catch(() => undefined);
+    fetch("/api/numbers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const first = json?.data?.[0]?.number;
+        if (first) setManualPhone((prev) => prev || first);
+      })
+      .catch(() => undefined);
   }, [searchParams]);
 
   const segmentsEstimate = useMemo(() => estimateSmsSegments(message), [message]);
@@ -332,7 +339,7 @@ export default function NewCategoryCampaignPage() {
               <Label htmlFor="manual-phone">Phone number</Label>
               <Input
                 id="manual-phone"
-                placeholder="(571) 477-6175"
+                placeholder="Your sending number"
                 value={manualPhone}
                 onChange={(e) => setManualPhone(e.target.value)}
               />

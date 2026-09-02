@@ -10,6 +10,7 @@ import {
   displayCampaignStatus,
   fetchCampaigns,
   formatSavedAt,
+  formatScheduledAt,
   normalizeCampaignStatus,
   statusMatchesFilter,
   type CampaignListRow,
@@ -21,8 +22,10 @@ const FILTER_OPTIONS = [
   { id: "draft", label: "Drafts" },
   { id: "scheduled", label: "Scheduled" },
   { id: "sending", label: "Sending" },
+  { id: "paused", label: "Paused" },
   { id: "completed", label: "Completed" },
   { id: "failed", label: "Failed" },
+  { id: "canceled", label: "Canceled" },
 ];
 
 function statusPillClasses(status: string): string {
@@ -33,8 +36,12 @@ function statusPillClasses(status: string): string {
     return "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/70";
   if (s === "sending" || s === "queued")
     return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/70";
-  if (s === "failed" || s === "canceled" || s === "cancelled")
+  if (s === "paused")
+    return "bg-violet-50 text-violet-700 ring-1 ring-violet-200/70";
+  if (s === "failed")
     return "bg-rose-50 text-rose-700 ring-1 ring-rose-200/70";
+  if (s === "canceled" || s === "cancelled")
+    return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
   return "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80";
 }
 
@@ -43,7 +50,9 @@ function statusDot(status: string): string {
   if (s === "completed" || s === "sent") return "bg-emerald-500";
   if (s === "scheduled") return "bg-indigo-500";
   if (s === "sending" || s === "queued") return "bg-amber-500";
-  if (s === "failed" || s === "canceled" || s === "cancelled") return "bg-rose-500";
+  if (s === "paused") return "bg-violet-500";
+  if (s === "failed") return "bg-rose-500";
+  if (s === "canceled" || s === "cancelled") return "bg-slate-400";
   return "bg-slate-400";
 }
 
@@ -256,15 +265,18 @@ export default function CampaignsList({
                 const norm = normalizeCampaignStatus(c.status);
                 const isSent = norm === "completed" || norm === "sent";
                 const statusLabel = displayCampaignStatus(c.status);
-                const recipients = isSent ? c.sent ?? 0 : 0;
+                const recipients = isSent
+                  ? c.sent ?? 0
+                  : c.recipientCount && c.recipientCount > 0
+                    ? c.recipientCount
+                    : 0;
                 const savedAt = formatSavedAt(c.createdAt);
                 const scheduleAt =
-                  norm === "scheduled" && c.scheduledAt ? formatSavedAt(c.scheduledAt) : "";
+                  norm === "scheduled" && c.scheduledAt ? formatScheduledAt(c.scheduledAt) : "";
 
                 return (
                   <div
                     key={c.id}
-                    role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -335,7 +347,7 @@ export default function CampaignsList({
                             <BarChart2 className="w-4 h-4" /> Analytics
                           </Link>
                           <button type="button" onClick={() => void clone(c)}><Copy className="w-4 h-4" /> Clone</button>
-                          {(norm === "draft" || norm === "scheduled") && (
+                          {(norm === "draft" || norm === "scheduled" || norm === "paused") && (
                             <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
                               <PencilLine className="w-4 h-4" /> Edit
                             </Link>

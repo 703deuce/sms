@@ -1,42 +1,7 @@
 /**
- * Kimi campaigns flow — wired to mass-texting broadcast APIs.
+ * @deprecated Use KimiCampaignsConnected from @/components/campaigns/kimi-campaigns-connected
  */
-"use client";
-import { useRouter } from "next/navigation";
-import CampaignsList from "./components/CampaignsList";
-import CreateCampaign from "./components/CreateCampaign";
-import ReviewDetails from "./components/ReviewDetails";
-import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
-
-export type CampaignsInitialView = "list" | "create" | "review";
-
-export default function CampaignsUiFlow({ initialView = "list" }: { initialView?: CampaignsInitialView }) {
-  const router = useRouter();
-
-  if (initialView === "create") {
-    return (
-      <CreateCampaign
-        onCancel={() => router.push("/campaigns")}
-      />
-    );
-  }
-
-  if (initialView === "review") {
-    return (
-      <ReviewDetails
-        onPrev={(campaignId) =>
-          router.push(campaignId ? `/campaigns/new?edit=${campaignId}` : "/campaigns/new")
-        }
-      />
-    );
-  }
-
-  return (
-    <CampaignsList
-      onCreate={() => {
-        startFreshComposeDraft();
-        router.push("/campaigns/new");
-      }}
-    />
-  );
-}
+export {
+  KimiCampaignsConnected as default,
+  type CampaignsInitialView,
+} from "@/components/campaigns/kimi-campaigns-connected";

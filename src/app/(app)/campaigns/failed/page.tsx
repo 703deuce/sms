@@ -15,12 +15,7 @@ export default function CampaignFailedPage() {
         defaultFilter="failed"
         fetchStatus="failed"
         lockFilter
-        rowFilter={(row) => {
-          const failed = statusRowFilter("failed")(row);
-          const canceled = statusRowFilter("canceled")(row);
-          const cancelled = statusRowFilter("cancelled")(row);
-          return failed || canceled || cancelled;
-        }}
+        rowFilter={(row) => statusRowFilter("failed")(row)}
       />
     </Suspense>
   );

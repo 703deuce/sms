@@ -352,7 +352,10 @@ export function CampaignResultsView({
   const [liveRecipients, setLiveRecipients] = useState(recipients);
 
   const liveStatus = live.status || campaign.status;
-  const isSending = ["SENDING", "Sending", "sending"].includes(liveStatus);
+  const isSending = ["SENDING", "Sending", "sending", "PAUSED", "Paused", "paused"].includes(
+    liveStatus,
+  );
+  const pollLive = ["SENDING", "Sending", "sending"].includes(liveStatus);
 
   useEffect(() => {
     setLive(campaign);
@@ -363,7 +366,7 @@ export function CampaignResultsView({
   }, [recipients]);
 
   useEffect(() => {
-    if (!isSending) return;
+    if (!pollLive) return;
     let cancelled = false;
 
     const poll = async () => {
@@ -415,7 +418,7 @@ export function CampaignResultsView({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [campaign.id, isSending]);
+  }, [campaign.id, pollLive]);
 
   const deliveryRate = live.sent > 0 ? (live.delivered / live.sent) * 100 : 0;
   const clickRate = live.delivered > 0 ? (live.clicks / live.delivered) * 100 : 0;
