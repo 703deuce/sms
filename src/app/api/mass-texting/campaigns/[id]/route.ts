@@ -3,6 +3,7 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { requireMassTextingWorkspace } from "@/lib/mass-texting/access";
 import {
   cancelBroadcastCampaign,
+  deleteBroadcastDraft,
   duplicateBroadcastCampaign,
   getBroadcastCampaign,
   pauseBroadcastCampaign,
@@ -64,6 +65,13 @@ export async function DELETE(_request: Request, ctx: Ctx) {
     if ("error" in auth) return auth.error;
     await requireMassTextingWorkspace(auth.workspaceId);
     const { id } = await ctx.params;
+
+    const existing = await getBroadcastCampaign(auth.workspaceId, id);
+    if (!existing) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    if (existing.status === "DRAFT") {
+      const deleted = await deleteBroadcastDraft(auth.workspaceId, id);
+      return NextResponse.json({ data: deleted });
+    }
 
     const canceled = await cancelBroadcastCampaign(auth.workspaceId, id);
     return NextResponse.json({ data: canceled });

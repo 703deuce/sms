@@ -35,6 +35,10 @@ export type LaunchReviewData = {
   campaignId: string;
   campaignName: string;
   listNames: string[];
+  rawContactCount: number;
+  duplicateRemoved: number;
+  invalidRemoved: number;
+  suppressedRemoved: number;
   finalRecipientCount: number;
   estimatedSegments: number;
   availableSegments: number;
@@ -45,6 +49,77 @@ export type LaunchReviewData = {
   phoneE164: string | null;
   scheduledAt: string | null;
 };
+
+export type AudiencePreviewData = {
+  selectedCount: number;
+  duplicateRemoved: number;
+  excludedCount: number;
+  suppressedRemoved: number;
+  invalidRemoved: number;
+  unsubscribedRemoved: number;
+  eligibleCount: number;
+};
+
+export function formatAudiencePreviewSummary(preview: AudiencePreviewData): string {
+  const adjustments: string[] = [];
+  if (preview.duplicateRemoved > 0) {
+    adjustments.push(`${preview.duplicateRemoved.toLocaleString()} duplicate${preview.duplicateRemoved === 1 ? "" : "s"} removed`);
+  }
+  if (preview.suppressedRemoved > 0) {
+    adjustments.push(`${preview.suppressedRemoved.toLocaleString()} opted out`);
+  }
+  if (preview.invalidRemoved > 0) {
+    adjustments.push(`${preview.invalidRemoved.toLocaleString()} invalid`);
+  }
+  if (preview.excludedCount > 0) {
+    adjustments.push(`${preview.excludedCount.toLocaleString()} excluded`);
+  }
+  const base = `${preview.eligibleCount.toLocaleString()} eligible recipient${preview.eligibleCount === 1 ? "" : "s"}`;
+  return adjustments.length ? `${base} (${adjustments.join(", ")})` : base;
+}
+
+export function formatLaunchReviewAudienceSummary(review: LaunchReviewData): string | null {
+  const adjustments: string[] = [];
+  if (review.duplicateRemoved > 0) {
+    adjustments.push(`${review.duplicateRemoved.toLocaleString()} duplicate${review.duplicateRemoved === 1 ? "" : "s"} removed`);
+  }
+  if (review.suppressedRemoved > 0) {
+    adjustments.push(`${review.suppressedRemoved.toLocaleString()} opted out`);
+  }
+  if (review.invalidRemoved > 0) {
+    adjustments.push(`${review.invalidRemoved.toLocaleString()} invalid`);
+  }
+  if (!adjustments.length) return null;
+  const raw =
+    review.rawContactCount > review.finalRecipientCount
+      ? `From ${review.rawContactCount.toLocaleString()} selected: `
+      : "";
+  return `${raw}${adjustments.join(", ")}.`;
+}
+
+export function parseCampaignConfigJson(configJson: unknown): Record<string, unknown> | null {
+  if (!configJson) return null;
+  if (typeof configJson === "string") {
+    try {
+      const parsed = JSON.parse(configJson) as unknown;
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof configJson === "object" && !Array.isArray(configJson)) {
+    return configJson as Record<string, unknown>;
+  }
+  return null;
+}
+
+export function stripCampaignComplianceFooter(body: string): string {
+  return body
+    .replace(/\n\nReply STOP to opt out\.?\s*Msg(?:age)?\s*&\s*data rates may apply\.?/i, "")
+    .trim();
+}
 
 export function draftAudiencePayload(draft: CampaignComposeDraft) {
   return {
@@ -178,7 +253,11 @@ export async function duplicateCampaign(campaignId: string): Promise<string> {
   return json.data?.id as string;
 }
 
-export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<string> {
+export async function saveCampaignDraft(
+  draft: CampaignComposeDraft,
+  options?: { forReview?: boolean },
+): Promise<string> {
+  const forReview = options?.forReview ?? false;
   const body = composeMessageBody(draft.message);
   if (!draft.name.trim() || !body.trim()) {
     throw new Error("Campaign name and message are required.");
@@ -186,10 +265,10 @@ export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<st
   if (draft.audience.length === 0) {
     throw new Error("Select at least one audience.");
   }
-  if (draft.scheduleMode === "later" && (!draft.scheduledDate || !draft.scheduledTime)) {
+  if (forReview && draft.scheduleMode === "later" && (!draft.scheduledDate || !draft.scheduledTime)) {
     throw new Error("Select a date and time for scheduled sends.");
   }
-  if (draft.scheduleMode === "later" && draft.scheduledDate && draft.scheduledTime) {
+  if (forReview && draft.scheduleMode === "later" && draft.scheduledDate && draft.scheduledTime) {
     const when = zonedLocalDateTimeToUtc(
       draft.scheduledDate,
       draft.scheduledTime,
@@ -202,7 +281,7 @@ export async function saveCampaignDraft(draft: CampaignComposeDraft): Promise<st
       throw new Error("Scheduled time must be in the future.");
     }
   }
-  if (draft.scheduleMode === "recurring") {
+  if (forReview && draft.scheduleMode === "recurring") {
     const recurrenceError = validateRecurrence(draft.recurrence);
     if (recurrenceError) throw new Error(recurrenceError);
   }
@@ -226,7 +305,25 @@ export async function fetchLaunchReview(campaignId: string): Promise<LaunchRevie
   const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch-review`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load review");
-  return json.data;
+  const data = json.data || {};
+  return {
+    campaignId: data.campaignId ?? campaignId,
+    campaignName: data.campaignName ?? "",
+    listNames: Array.isArray(data.listNames) ? data.listNames : [],
+    rawContactCount: data.rawContactCount ?? 0,
+    duplicateRemoved: data.duplicateRemoved ?? 0,
+    invalidRemoved: data.invalidRemoved ?? 0,
+    suppressedRemoved: data.suppressedRemoved ?? 0,
+    finalRecipientCount: data.finalRecipientCount ?? 0,
+    estimatedSegments: data.estimatedSegments ?? 0,
+    availableSegments: data.availableSegments ?? 0,
+    requiredSegments: data.requiredSegments ?? data.estimatedSegments ?? 0,
+    shortage: data.shortage ?? 0,
+    canSend: Boolean(data.canSend),
+    blockReason: data.blockReason ?? null,
+    phoneE164: data.phoneE164 ?? null,
+    scheduledAt: data.scheduledAt ?? null,
+  };
 }
 
 export async function launchCampaign(
@@ -255,10 +352,16 @@ export async function launchCampaign(
   }
 }
 
+export async function deleteCampaignDraft(campaignId: string): Promise<void> {
+  const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, { method: "DELETE" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Could not delete campaign");
+}
+
 export async function previewAudience(
   audience: ReturnType<typeof draftAudiencePayload>,
   campaignId?: string,
-): Promise<number> {
+): Promise<AudiencePreviewData> {
   const res = await fetch("/api/mass-texting/campaigns/audience-preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -266,7 +369,16 @@ export async function previewAudience(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not preview audience");
-  return json.data?.eligibleCount ?? 0;
+  const data = json.data || {};
+  return {
+    selectedCount: data.selectedCount ?? 0,
+    duplicateRemoved: data.duplicateRemoved ?? 0,
+    excludedCount: data.excludedCount ?? 0,
+    suppressedRemoved: data.suppressedRemoved ?? 0,
+    invalidRemoved: data.invalidRemoved ?? 0,
+    unsubscribedRemoved: data.unsubscribedRemoved ?? 0,
+    eligibleCount: data.eligibleCount ?? 0,
+  };
 }
 
 export type AudiencePickerItem = AudienceSelection & { group: string };

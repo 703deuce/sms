@@ -13,9 +13,11 @@ import {
   Megaphone,
   Check,
   PencilLine,
+  Trash2,
 } from "lucide-react";
 import {
   duplicateCampaign,
+  deleteCampaignDraft,
   displayCampaignStatus,
   fetchCampaigns,
   formatSavedAt,
@@ -143,6 +145,18 @@ export default function CampaignsList({
       router.push(editCampaignPath ? editCampaignPath(newId) : `/campaigns/new?edit=${newId}`);
     } catch (err) {
       notify(err instanceof Error ? err.message : "Could not clone campaign");
+    }
+  };
+
+  const removeDraft = async (c: CampaignListRow) => {
+    setMenuFor(null);
+    if (!confirm(`Delete draft "${c.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteCampaignDraft(c.id);
+      notify("Draft deleted.");
+      reload();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Could not delete draft");
     }
   };
 
@@ -340,6 +354,11 @@ export default function CampaignsList({
                           <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
                             <PencilLine className="w-4 h-4" /> Edit
                           </Link>
+                        )}
+                        {norm === "draft" && (
+                          <button type="button" onClick={() => void removeDraft(c)}>
+                            <Trash2 className="w-4 h-4" /> Delete
+                          </button>
                         )}
                       </div>
                     ) : null}

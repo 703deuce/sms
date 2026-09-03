@@ -133,6 +133,48 @@ Always verify:
 - Contact detail inbox link uses `/conversations?conversation=:id`
 - List/segment IDs in campaign audience picker match API enrollment
 
+### Campaign creation (44–63)
+
+| Role | Files |
+|------|--------|
+| Shell / nav | `src/components/campaigns/kimi-campaigns-connected.tsx` |
+| Compose / review Kimi | `src/components/kimi/campaigns/components/CreateCampaign.tsx`, `ReviewDetails.tsx`, `AudiencePicker.tsx` |
+| Adapter | `src/lib/campaigns/kimi-campaigns-adapter.ts`, `compose-draft.ts` |
+| Queue / launch | `src/components/campaigns/broadcast/campaign-confirmation.tsx` |
+| Audience math | `src/lib/mass-texting/broadcast/audience.ts`, `pre-send-review.ts` |
+| APIs | `src/app/api/mass-texting/campaigns/**` |
+
+**User flow:**
+
+```
+/campaigns → Create → compose (audience, message, sender) → Review → Queue (send now) or Schedule
+  → /campaigns/:id results
+```
+
+**Checklist (44–63):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 44 | Create from scratch | `/campaigns/new` → `CreateCampaign` → `saveCampaignDraft` |
+| 45 | Select sender number | `/api/numbers` → Send From dropdown |
+| 46–47 | One/multiple lists | `AudiencePicker` multi-select + `audience.include[]` |
+| 48 | Tags/segments | Segments in picker; tags via segment rules (not direct tag picker) |
+| 49–53 | SMS, merge, emoji, link, MMS | Composer toolbar + `MediaPicker` + tracked links |
+| 54–55 | Save/reopen draft | `saveCampaignDraft({ forReview: false })`; `?edit=` loads via `parseCampaignConfigJson` |
+| 56 | Duplicate | `duplicateCampaign` / Clone menu |
+| 57 | Delete draft | `deleteCampaignDraft` → hard DELETE for `DRAFT` status |
+| 58–59 | Cost + recipient preview | `fetchLaunchReview` on review; `previewAudience` on compose |
+| 60–62 | Dedup, STOP, invalid | `formatAudiencePreviewSummary` / `formatLaunchReviewAudienceSummary` |
+| 63 | Segment warning | Multi-segment badge on compose; 1000+ confirm on review/queue |
+
+**Glue checks:**
+
+- `parseCampaignConfigJson` when reopening drafts (`configJson` may be a string from DB)
+- `previewAudience` returns full breakdown, not only `eligibleCount`
+- `saveCampaignDraft({ forReview: true })` only on Review navigation (draft save allows incomplete schedule)
+- Draft DELETE removes row; non-draft DELETE cancels campaign
+- Review + queue use same `fetchLaunchReview` recipient/credit counts
+
 ### Drip campaigns (automations)
 
 | Role | Files |
@@ -196,7 +238,7 @@ These caused real user-visible bugs — grep for them when touching glue:
 
 ## Quick manual smoke (5 min per feature)
 
-**Campaigns:** create → review → queue → detail → recipients tab → back to list.
+**Campaigns:** create → pick list → review (check recipient + credit summary) → queue → detail → back to list.
 
 **Inbox:** cold `/conversations` → open thread → send reply.
 

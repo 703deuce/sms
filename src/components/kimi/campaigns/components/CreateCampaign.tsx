@@ -28,6 +28,10 @@ import {
   previewAudience,
   saveCampaignDraft,
   draftAudiencePayload,
+  parseCampaignConfigJson,
+  stripCampaignComplianceFooter,
+  formatAudiencePreviewSummary,
+  type AudiencePreviewData,
   type CampaignNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 
@@ -81,7 +85,7 @@ export default function CreateCampaign({
   const [loadingCampaign, setLoadingCampaign] = useState(false);
   const [error, setError] = useState("");
   const [audiencePreviewError, setAudiencePreviewError] = useState("");
-  const [eligibleCount, setEligibleCount] = useState(0);
+  const [audiencePreview, setAudiencePreview] = useState<AudiencePreviewData | null>(null);
   const [playbookId, setPlaybookId] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<Array<{ id: string; number: string }>>([]);
 
@@ -143,23 +147,20 @@ export default function CreateCampaign({
             name: string;
             body: string;
             scheduledAt?: string | null;
-            configJson?: {
-              audience?: {
+            configJson?: unknown;
+          };
+          const config = parseCampaignConfigJson(c.configJson);
+          const audienceConfig = config?.audience as
+            | {
                 include?: Array<{ type: CampaignComposeDraft["audience"][0]["type"]; id: string; name: string }>;
                 exclude?: Array<{ type: CampaignComposeDraft["audience"][0]["type"]; id: string; name: string }>;
-              };
-              numberId?: string;
-              mediaUrls?: string[];
-              trackedLinks?: CampaignComposeDraft["trackedLinks"];
-              scheduleMode?: CampaignComposeDraft["scheduleMode"];
-              timezone?: string;
-              recurrence?: CampaignComposeDraft["recurrence"];
-            };
-          };
-          const config = c.configJson;
-          const include = config?.audience?.include || [];
-          const tz = config?.timezone || loaded.timezone;
-          const scheduleMode = duplicateId ? "now" : config?.scheduleMode || "now";
+              }
+            | undefined;
+          const include = audienceConfig?.include || [];
+          const tz = (typeof config?.timezone === "string" ? config.timezone : null) || loaded.timezone;
+          const scheduleMode = duplicateId
+            ? "now"
+            : (config?.scheduleMode as CampaignComposeDraft["scheduleMode"]) || "now";
           let scheduledDate: string | undefined;
           let scheduledTime: string | undefined;
           if (c.scheduledAt && scheduleMode === "later") {
@@ -171,19 +172,21 @@ export default function CreateCampaign({
             ...defaultComposeDraft(),
             campaignId: editId ? c.id : undefined,
             name: duplicateId ? `${c.name} (copy)` : c.name,
-            message: c.body.replace(/\n\nReply STOP to opt out\. Msg & data rates may apply\./i, ""),
+            message: stripCampaignComplianceFooter(c.body),
             audience: include.map((a) => ({ type: a.type, id: a.id, name: a.name })),
-            excludeAudience: (config?.audience?.exclude || []).map((a) => ({
+            excludeAudience: (audienceConfig?.exclude || []).map((a) => ({
               type: a.type,
               id: a.id,
               name: a.name,
             })),
-            numberId: config?.numberId || "",
-            mediaUrls: config?.mediaUrls || [],
-            trackedLinks: config?.trackedLinks || [],
+            numberId: typeof config?.numberId === "string" ? config.numberId : "",
+            mediaUrls: Array.isArray(config?.mediaUrls) ? (config.mediaUrls as string[]) : [],
+            trackedLinks: Array.isArray(config?.trackedLinks)
+              ? (config.trackedLinks as CampaignComposeDraft["trackedLinks"])
+              : [],
             scheduleMode,
             timezone: tz,
-            recurrence: config?.recurrence,
+            recurrence: config?.recurrence as CampaignComposeDraft["recurrence"],
             scheduledDate,
             scheduledTime,
           };
@@ -228,17 +231,17 @@ export default function CreateCampaign({
 
   useEffect(() => {
     if (draft.audience.length === 0) {
-      setEligibleCount(0);
+      setAudiencePreview(null);
       setAudiencePreviewError("");
       return;
     }
     let cancelled = false;
     setAudiencePreviewError("");
     previewAudience(draftAudiencePayload(draft), draft.campaignId)
-      .then((count) => { if (!cancelled) setEligibleCount(count); })
+      .then((preview) => { if (!cancelled) setAudiencePreview(preview); })
       .catch((err) => {
         if (!cancelled) {
-          setEligibleCount(0);
+          setAudiencePreview(null);
           setAudiencePreviewError(err instanceof Error ? err.message : "Could not preview audience");
         }
       });
@@ -304,7 +307,7 @@ export default function CreateCampaign({
     setSaving(true);
     setError("");
     try {
-      const id = await saveCampaignDraft(next);
+      const id = await saveCampaignDraft(next, { forReview: true });
       router.push(reviewPath(id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save campaign");
@@ -452,9 +455,16 @@ export default function CreateCampaign({
               selected={draft.audience}
               onChange={(audience) => updateDraft({ audience })}
             />
-            {eligibleCount > 0 && (
-              <p className="mt-1.5 text-[12px] text-emerald-600">{eligibleCount.toLocaleString()} eligible contacts</p>
+            {audiencePreview && audiencePreview.eligibleCount > 0 && (
+              <p className="mt-1.5 text-[12px] text-emerald-600">
+                {formatAudiencePreviewSummary(audiencePreview)}
+              </p>
             )}
+            {audiencePreview && audiencePreview.eligibleCount === 0 && draft.audience.length > 0 ? (
+              <p className="mt-1.5 text-[12px] text-amber-700">
+                No eligible recipients after suppression and validation filters.
+              </p>
+            ) : null}
             {audiencePreviewError ? (
               <p className="mt-1.5 text-[12px] text-red-600">{audiencePreviewError}</p>
             ) : null}
@@ -476,6 +486,9 @@ export default function CreateCampaign({
             <label className="text-[13px] font-semibold text-slate-700">Message</label>
             <span className="flex items-center gap-1.5 text-[11px] text-slate-400 tabular-nums">
               {characters}/{limit} <span className="segment-badge">{segments}</span>
+              {segments > 1 ? (
+                <span className="text-amber-600">({segments} segments/recipient)</span>
+              ) : null}
             </span>
           </div>
           <div className="max-w-md composer-box">

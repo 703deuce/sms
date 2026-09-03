@@ -15,6 +15,7 @@ import {
   launchCampaign,
   saveCampaignDraft,
   timingLabel,
+  formatLaunchReviewAudienceSummary,
   type LaunchReviewData,
   type ReviewNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
@@ -173,6 +174,12 @@ export default function ReviewDetails({
                 {loading ? "…" : formatNumber(review?.finalRecipientCount ?? 0)}
               </span>
             </div>
+            {review && !loading ? (
+              <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+                {formatLaunchReviewAudienceSummary(review) ||
+                  "Recipients are deduplicated across lists and exclude opted-out or invalid numbers."}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-7 max-w-xl">
@@ -206,6 +213,14 @@ export default function ReviewDetails({
                   ["Credits Available", formatNumber(review.availableSegments)],
                   ["Credits Required", formatNumber(review.requiredSegments)],
                   ["Credits Remaining", formatNumber(Math.max(0, review.availableSegments - review.requiredSegments))],
+                  ...(review.finalRecipientCount > 0
+                    ? [
+                        [
+                          "Est. segments per recipient",
+                          formatNumber(Math.max(1, Math.round(review.requiredSegments / review.finalRecipientCount))),
+                        ],
+                      ]
+                    : []),
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between px-5 py-3.5">
                     <span className="text-[13px] text-slate-500">{k}</span>

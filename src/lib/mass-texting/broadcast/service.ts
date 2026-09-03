@@ -362,6 +362,20 @@ export async function resumeBroadcastCampaign(workspaceId: string, campaignId: s
   return updated;
 }
 
+export async function deleteBroadcastDraft(workspaceId: string, campaignId: string) {
+  const prisma = getPrisma();
+  const campaign = await getBroadcastCampaign(workspaceId, campaignId);
+  if (!campaign) throw new Error("Campaign not found");
+  if (campaign.status !== "DRAFT") {
+    throw new Error("Only draft campaigns can be deleted");
+  }
+
+  await prisma.campaignMessage.deleteMany({ where: { campaignId, workspaceId } });
+  await prisma.campaignRecipient.deleteMany({ where: { campaignId, workspaceId } });
+  await prisma.campaign.delete({ where: { id: campaignId } });
+  return { deleted: true, id: campaignId };
+}
+
 export async function cancelBroadcastCampaign(workspaceId: string, campaignId: string) {
   const prisma = getPrisma();
   const campaign = await getBroadcastCampaign(workspaceId, campaignId);
