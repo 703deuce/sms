@@ -56,16 +56,7 @@ export function inboxFiltersFromUrlParams(
   const campaignId = typeof params.campaignId === "string" ? params.campaignId : undefined;
   if (campaignId) filters.campaignId = campaignId;
 
-  if (
-    !filters.filter &&
-    !filters.assigneeId &&
-    !filters.tag &&
-    !filters.unread &&
-    !filters.status &&
-    !filters.contactId
-  ) {
-    filters.filter = "mine";
-  }
+  // Default: all conversations (no assignee filter). "mine" is only applied when filter=mine.
 
   return filters;
 }
@@ -101,6 +92,7 @@ export function filterSelFromUrlParams(
     return { kind: "mine", key: "all" };
   }
 
+  if (filter === "all") return { kind: "all", key: "all" };
   if (filter === "unassigned") return { kind: "all", key: "unassigned" };
   if (unread || filter === "unread") return { kind: "all", key: "unread" };
   if (filter === "open" || status === "open") return { kind: "all", key: "open" };
@@ -117,7 +109,7 @@ export function filterSelFromUrlParams(
     return { kind: "all", key: "all" };
   }
 
-  return { kind: "mine", key: "all" };
+  return { kind: "all", key: "all" };
 }
 
 export function filterSelToSearchParams(
@@ -137,11 +129,12 @@ export function filterSelToSearchParams(
     if (sel.key === "unread") params.set("unread", "1");
     if (sel.key === "open" || sel.key === "pending") params.set("status", sel.key);
   } else if (sel.kind === "all") {
-    if (sel.key === "unassigned") params.set("filter", "unassigned");
+    if (sel.key === "all") params.set("filter", "all");
+    else if (sel.key === "unassigned") params.set("filter", "unassigned");
     else if (sel.key === "unread") {
       params.set("filter", "unread");
       params.set("unread", "1");
-    }     else if (sel.key === "open" || sel.key === "pending") params.set("filter", sel.key);
+    } else if (sel.key === "open" || sel.key === "pending") params.set("filter", sel.key);
     else if (sel.key === "closed") params.set("filter", "closed");
     else if (sel.key === "snoozed") params.set("filter", "snoozed");
     else if (sel.key === "spam") params.set("filter", "spam");

@@ -3,14 +3,30 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
 
+function parseConfigRecord(configJson: unknown): Record<string, unknown> {
+  if (!configJson) return {};
+  if (typeof configJson === "string") {
+    try {
+      const parsed = JSON.parse(configJson) as unknown;
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return { ...(parsed as Record<string, unknown>) };
+      }
+    } catch {
+      return {};
+    }
+    return {};
+  }
+  if (typeof configJson === "object" && !Array.isArray(configJson)) {
+    return { ...(configJson as Record<string, unknown>) };
+  }
+  return {};
+}
+
 export function massTextProductConfigPatch(
   configJson: unknown,
   extra?: Record<string, unknown>,
 ): Record<string, unknown> {
-  const base =
-    configJson && typeof configJson === "object"
-      ? { ...(configJson as Record<string, unknown>) }
-      : {};
+  const base = parseConfigRecord(configJson);
   return { ...base, productSource: "mass_text", massTexting: true, ...(extra || {}) };
 }
 

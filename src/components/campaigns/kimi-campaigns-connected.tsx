@@ -5,7 +5,8 @@
  * Wire APIs and navigation here — do not change presentation under components/kimi/campaigns/.
  */
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import CampaignsList from "@/components/kimi/campaigns/components/CampaignsList";
 import CreateCampaign from "@/components/kimi/campaigns/components/CreateCampaign";
 import ReviewDetails from "@/components/kimi/campaigns/components/ReviewDetails";
@@ -16,6 +17,14 @@ export type CampaignsInitialView = "list" | "create" | "review";
 
 export function KimiCampaignsConnected({ initialView = "list" }: { initialView?: CampaignsInitialView }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [listKey, setListKey] = useState(0);
+
+  useEffect(() => {
+    if (initialView === "list" && pathname === "/campaigns") {
+      setListKey((k) => k + 1);
+    }
+  }, [pathname, initialView]);
 
   const navShell = (content: ReactNode) => (
     <div className="kimi-surface kimi-campaigns">
@@ -42,6 +51,7 @@ export function KimiCampaignsConnected({ initialView = "list" }: { initialView?:
 
   return navShell(
     <CampaignsList
+      key={listKey}
       onCreate={() => {
         startFreshComposeDraft();
         router.push("/campaigns/new");

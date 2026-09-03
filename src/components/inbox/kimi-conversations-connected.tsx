@@ -160,6 +160,7 @@ export function KimiConversationsConnected({
   const [error, setError] = useState("");
   const updateInFlightRef = useRef(false);
   const listRequestRef = useRef(0);
+  const pendingConversationRef = useRef<string | null>(null);
 
   const listQueryExtra = useMemo(
     () => ({
@@ -562,8 +563,21 @@ export function KimiConversationsConnected({
     if (filtered.some((c) => c.id === selectedId)) return;
     if (convos.some((c) => c.id === selectedId)) return;
     if (urlConversation === selectedId) return;
+    if (pendingConversationRef.current === selectedId) return;
     setSelectedId(null);
   }, [filtered, selectedId, convos, urlConversation]);
+
+  useEffect(() => {
+    if (urlConversation && urlConversation === selectedId) {
+      pendingConversationRef.current = null;
+    }
+  }, [urlConversation, selectedId]);
+
+  const listConvos = useMemo(() => {
+    if (!selectedId || filtered.some((c) => c.id === selectedId)) return filtered;
+    const pinned = convos.find((c) => c.id === selectedId);
+    return pinned ? [pinned, ...filtered] : filtered;
+  }, [filtered, selectedId, convos]);
 
   const title =
     sel.kind === "mine"
@@ -700,6 +714,7 @@ export function KimiConversationsConnected({
   }, [selectedId, urlConversation, sel, syncUrl]);
 
   const pickConvo = (c: Conversation) => {
+    pendingConversationRef.current = c.id;
     setSelectedId(c.id);
     syncUrl(sel, { conversationId: c.id });
     if (c.unread) {
@@ -888,7 +903,7 @@ export function KimiConversationsConnected({
           <ConversationList
             title={title}
             subtitle={subtitle}
-            convos={filtered}
+            convos={listConvos}
             selectedId={selectedId}
             onSelect={pickConvo}
             checked={checked}

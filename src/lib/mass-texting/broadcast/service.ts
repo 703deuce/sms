@@ -7,18 +7,36 @@ import { normalizeMediaUrls } from "@/lib/mass-texting/mms";
 import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
 import { computeBroadcastNextRun, validateRecurrence } from "@/lib/campaigns/recurrence-format";
 import { audienceSummaryLabel, enrollBroadcastAudience } from "./audience";
+import { campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import type {
   BroadcastCampaignConfig,
   BroadcastCampaignInput,
   BroadcastRecurrence,
 } from "./types";
 
+function parseCampaignConfig(configJson: unknown): Record<string, unknown> | null {
+  if (!configJson) return null;
+  if (typeof configJson === "string") {
+    try {
+      const parsed = JSON.parse(configJson) as unknown;
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof configJson === "object" && !Array.isArray(configJson)) {
+    return configJson as Record<string, unknown>;
+  }
+  return null;
+}
+
 export function isBroadcastCampaign(configJson: unknown): boolean {
-  const config =
-    configJson && typeof configJson === "object"
-      ? (configJson as Record<string, unknown>)
-      : {};
-  return config.broadcastVersion === 1 && config.productSource === "mass_text";
+  const config = parseCampaignConfig(configJson);
+  if (!config) return false;
+  if (config.broadcastVersion === 1 && config.productSource === "mass_text") return true;
+  return campaignLooksLikeMassText(config);
 }
 
 export function broadcastCampaignWhere(workspaceId: string) {
