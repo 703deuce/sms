@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
+import { assignContactToLists } from "@/lib/contacts/list-assignment";
 import { getPrisma } from "@/lib/db";
 import { loadContactById } from "@/lib/workspace-data";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -39,6 +40,8 @@ export async function PATCH(
       company?: string;
       tagNames?: string[];
       listIds?: string[];
+      addListIds?: string[];
+      removeListIds?: string[];
       customFields?: Record<string, string>;
     };
 
@@ -75,7 +78,13 @@ export async function PATCH(
     }
     if (body.assignedUser !== undefined) contactPatch.assignedUser = body.assignedUser;
     if (body.company !== undefined) contactPatch.company = body.company;
-    if (body.customFields !== undefined) contactPatch.customFields = body.customFields;
+    if (body.customFields !== undefined) {
+      const prior =
+        existing.customFields && typeof existing.customFields === "object"
+          ? (existing.customFields as Record<string, string>)
+          : {};
+      contactPatch.customFields = { ...prior, ...body.customFields };
+    }
 
     if (Object.keys(contactPatch).length > 0) {
       await getPrisma().contact.update({
@@ -128,6 +137,18 @@ export async function PATCH(
             tagId,
           }).catch(() => undefined);
         }
+      }
+    }
+
+    if (body.addListIds?.length) {
+      await assignContactToLists(auth.workspaceId, id, body.addListIds);
+    }
+    if (body.removeListIds?.length) {
+      const validRemove = await filterWorkspaceListIds(auth.workspaceId, body.removeListIds);
+      for (const listId of validRemove) {
+        await getPrisma().contactListMember.deleteMany({
+          where: { listId, contactId: id },
+        });
       }
     }
 

@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 
 export type SegmentOperator =
   | "equals"
@@ -12,7 +13,9 @@ export type SegmentOperator =
   | "lt"
   | "lte"
   | "between"
-  | "not_between";
+  | "not_between"
+  | "in"
+  | "not_in";
 
 export type SegmentRule = {
   /**
@@ -28,10 +31,11 @@ export type SegmentRule = {
 export type SegmentConditions = {
   match: "all" | "any";
   rules: SegmentRule[];
+  /** Nested boolean groups (AND/OR blocks from the segment builder). */
+  groups?: SegmentConditions[];
 };
 
-/** Normalize arbitrary stored JSON into a SegmentConditions shape. */
-export function parseSegmentConditions(raw: unknown): SegmentConditions {
+function parseSegmentConditionsNode(raw: unknown): SegmentConditions {
   if (!raw || typeof raw !== "object") return { match: "all", rules: [] };
   const obj = raw as Record<string, unknown>;
   const match = obj.match === "any" ? "any" : "all";
@@ -50,7 +54,24 @@ export function parseSegmentConditions(raw: unknown): SegmentConditions {
       } as SegmentRule;
     })
     .filter((r): r is SegmentRule => r !== null);
-  return { match, rules };
+  const groupsRaw = Array.isArray(obj.groups) ? obj.groups : [];
+  const groups = groupsRaw.map((g) => parseSegmentConditionsNode(g));
+  return { match, rules, ...(groups.length ? { groups } : {}) };
+}
+
+/** Normalize arbitrary stored JSON into a SegmentConditions shape. */
+export function parseSegmentConditions(raw: unknown): SegmentConditions {
+  return parseSegmentConditionsNode(raw);
+}
+
+/** Flatten all rules from a condition tree (including nested groups). */
+export function collectSegmentRules(conditions: SegmentConditions): SegmentRule[] {
+  const nested = (conditions.groups || []).flatMap((group) => collectSegmentRules(group));
+  return [...conditions.rules, ...nested];
+}
+
+function segmentRuleUsesField(conditions: SegmentConditions, predicate: (field: string) => boolean): boolean {
+  return collectSegmentRules(conditions).some((rule) => predicate(rule.field));
 }
 
 type EvaluableContact = {
@@ -83,6 +104,47 @@ type EvaluableContact = {
   linkClicks?: string[];
   campaignsSent?: string[];
 };
+
+function splitListValue(raw: string): string[] {
+  return raw
+    .split(/[,;|]/)
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function matchScalar(
+  actual: string,
+  rule: SegmentRule,
+  present: boolean,
+): boolean {
+  const target = (rule.value ?? "").trim();
+  const targetLc = target.toLowerCase();
+  const val = actual.toLowerCase();
+  switch (rule.op) {
+    case "equals":
+      return val === targetLc;
+    case "not_equals":
+      return val !== targetLc;
+    case "contains":
+      return val.includes(targetLc);
+    case "not_contains":
+      return !val.includes(targetLc);
+    case "exists":
+      return present;
+    case "not_exists":
+      return !present;
+    case "in": {
+      const options = splitListValue(target);
+      return options.length > 0 ? options.includes(val) : present;
+    }
+    case "not_in": {
+      const options = splitListValue(target);
+      return options.length > 0 ? !options.includes(val) : !present;
+    }
+    default:
+      return val === targetLc;
+  }
+}
 
 function matchListField(
   values: string[] | undefined,
@@ -360,23 +422,27 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
     ) {
       return matchNumeric(parseNumeric(raw), rule);
     }
-    const val = stringVal(raw).toLowerCase();
-    const present = raw !== undefined && raw !== null && stringVal(raw) !== "";
+    const val = stringVal(raw);
+    const present = raw !== undefined && raw !== null && val !== "";
+    if (rule.op === "in" || rule.op === "not_in") {
+      return matchScalar(val, rule, present);
+    }
+    const valLc = val.toLowerCase();
     switch (rule.op) {
       case "equals":
-        return val === targetLc;
+        return valLc === targetLc;
       case "not_equals":
-        return val !== targetLc;
+        return valLc !== targetLc;
       case "contains":
-        return val.includes(targetLc);
+        return valLc.includes(targetLc);
       case "not_contains":
-        return !val.includes(targetLc);
+        return !valLc.includes(targetLc);
       case "exists":
         return present;
       case "not_exists":
         return !present;
       default:
-        return val === targetLc;
+        return valLc === targetLc;
     }
   }
 
@@ -385,13 +451,24 @@ function evaluateRule(contact: EvaluableContact, rule: SegmentRule): boolean {
 
 export function contactMatchesSegment(
   contact: EvaluableContact,
-  conditions: SegmentConditions,
+  conditions: SegmentConditions | unknown,
 ): boolean {
-  if (!conditions.rules.length) return true;
-  if (conditions.match === "any") {
-    return conditions.rules.some((rule) => evaluateRule(contact, rule));
-  }
-  return conditions.rules.every((rule) => evaluateRule(contact, rule));
+  const parsed =
+    conditions &&
+    typeof conditions === "object" &&
+    "match" in conditions &&
+    Array.isArray((conditions as SegmentConditions).rules)
+      ? (conditions as SegmentConditions)
+      : parseSegmentConditions(conditions);
+
+  const ruleResults = parsed.rules.map((rule) => evaluateRule(contact, rule));
+  const groupResults = (parsed.groups || []).map((group) =>
+    contactMatchesSegment(contact, group),
+  );
+  const parts = [...ruleResults, ...groupResults];
+  if (!parts.length) return true;
+  if (parsed.match === "any") return parts.some(Boolean);
+  return parts.every(Boolean);
 }
 
 /** Resolve the contact IDs matching a segment's conditions. */
@@ -404,7 +481,7 @@ export async function resolveSegmentContactIds(
 
   // Push status equality down to the query when it's the only status rule, to
   // keep the in-memory set small for large workspaces.
-  const where: Record<string, unknown> = { workspaceId };
+  const where: Record<string, unknown> = visibleContactWhere(workspaceId);
   const statusRules = parsed.rules.filter((r) => r.field === "status");
   if (
     parsed.match === "all" &&
@@ -431,18 +508,28 @@ export async function resolveSegmentContactIds(
   // Load tag names per contact only when a tag rule is present (avoids extra
   // queries otherwise). The Supabase compat layer does not hydrate nested
   // relations via `select`, so we resolve the join manually.
-  const needsTags = parsed.rules.some((r) => r.field === "tag" || r.field === "external_tag");
-  const needsLists = parsed.rules.some((r) => r.field === "list");
-  const needsProviders = parsed.rules.some(
-    (r) => r.field === "provider" || r.field === "connection" || r.field === "external_list" || r.field === "deal_stage" || r.field === "ticket_status",
+  const needsTags = segmentRuleUsesField(
+    parsed,
+    (field) => field === "tag" || field === "external_tag",
   );
-  const needsForms = parsed.rules.some((r) => r.field === "form");
-  const needsAppt = parsed.rules.some(
-    (r) => r.field === "appointment_status" || r.field === "appointment_type",
+  const needsLists = segmentRuleUsesField(parsed, (field) => field === "list");
+  const needsProviders = segmentRuleUsesField(
+    parsed,
+    (field) =>
+      field === "provider" ||
+      field === "connection" ||
+      field === "external_list" ||
+      field === "deal_stage" ||
+      field === "ticket_status",
   );
-  const needsOrders = parsed.rules.some((r) => r.field === "order_status");
-  const needsLinkClicks = parsed.rules.some((r) => r.field === "link_clicked");
-  const needsCampaigns = parsed.rules.some((r) => r.field === "campaign_sent");
+  const needsForms = segmentRuleUsesField(parsed, (field) => field === "form");
+  const needsAppt = segmentRuleUsesField(
+    parsed,
+    (field) => field === "appointment_status" || field === "appointment_type",
+  );
+  const needsOrders = segmentRuleUsesField(parsed, (field) => field === "order_status");
+  const needsLinkClicks = segmentRuleUsesField(parsed, (field) => field === "link_clicked");
+  const needsCampaigns = segmentRuleUsesField(parsed, (field) => field === "campaign_sent");
   const tagNamesByContact = new Map<string, string[]>();
   const listNamesByContact = new Map<string, string[]>();
   const providersByContact = new Map<string, string[]>();

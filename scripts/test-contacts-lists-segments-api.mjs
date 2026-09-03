@@ -1,8 +1,9 @@
 /**
  * Smoke test contacts / lists / segments APIs.
  * Run: node scripts/test-contacts-lists-segments-api.mjs
+ * Remote: CONTACTS_TEST_URL=https://your-host node scripts/test-contacts-lists-segments-api.mjs
  */
-const BASE = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+const BASE = (process.env.CONTACTS_TEST_URL || "http://localhost:3000").replace(/\/$/, "");
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
 const EMAIL = process.env.SMOKE_EMAIL || "alex@harborhome.co";
 const WORKSPACE_ID = process.env.SMOKE_WORKSPACE_ID || "ws_1";
@@ -99,15 +100,58 @@ async function main() {
     JSON.stringify(patchLists.json?.data?.lists),
   );
 
+  const segments = await api("/api/contacts/segments");
+  check("GET segments", segments.ok, `count ${segments.json?.data?.length}`);
+  check(
+    "GET segments include contactCount",
+    segments.ok && (segments.json?.data?.length === 0 || segments.json?.data?.every((s) => typeof s.contactCount === "number")),
+    `first count=${segments.json?.data?.[0]?.contactCount}`,
+  );
+
+  const importPhone = `+1571${String(Date.now()).slice(-7)}`;
+  const attestRes = await api("/api/mass-texting/import-attestation", {
+    method: "POST",
+    body: JSON.stringify({
+      listNames: [testListName, `${testListName} B`],
+      contactCount: 1,
+      attestationAccepted: true,
+      source: "csv_import",
+    }),
+  });
+  const attestId = attestRes.json?.data?.id;
+  const importRes = await api("/api/contacts/import", {
+    method: "POST",
+    body: JSON.stringify({
+      rows: [{ phone: importPhone, firstName: "Import", lastName: "Test", status: "SUBSCRIBED" }],
+      listNames: [testListName, `${testListName} B`],
+      marketingImport: true,
+      attestationId: attestId,
+    }),
+  });
+  check("POST import multi-list", importRes.ok, JSON.stringify(importRes.json?.data?.listIds?.length));
+  check(
+    "import assigned multiple lists",
+    (importRes.json?.data?.listIds?.length ?? 0) >= 2,
+    JSON.stringify(importRes.json?.data),
+  );
+
   const createdSeg = await api("/api/contacts/segments", {
     method: "POST",
     body: JSON.stringify({
       name: `API Test Segment ${Date.now()}`,
-      conditions: { match: "all", rules: [{ field: "list", op: "equals", value: testListName }] },
+      conditions: {
+        match: "all",
+        groups: [
+          {
+            match: "any",
+            rules: [{ field: "list", op: "equals", value: testListName }],
+          },
+        ],
+      },
     }),
   });
   const segId = createdSeg.json?.data?.id;
-  check("POST segment", createdSeg.ok, segId);
+  check("POST segment nested groups", createdSeg.ok, segId);
 
   const segContacts = await api("/api/contacts/segments/contacts", {
     method: "POST",
@@ -120,6 +164,12 @@ async function main() {
   );
 
   if (newContactId) await api(`/api/contacts/${newContactId}`, { method: "DELETE" });
+  const importContact = await api(`/api/contacts?phone=${encodeURIComponent(importPhone)}`);
+  const importContactId = importContact.json?.data?.[0]?.id;
+  if (importContactId) await api(`/api/contacts/${importContactId}`, { method: "DELETE" });
+  const extraList = await api("/api/contacts/lists");
+  const extraListId = extraList.json?.data?.find((l) => l.name === `${testListName} B`)?.id;
+  if (extraListId) await api(`/api/contacts/lists?id=${extraListId}`, { method: "DELETE" });
   if (segId) await api(`/api/contacts/segments?id=${segId}`, { method: "DELETE" });
   if (listId) await api(`/api/contacts/lists?id=${listId}`, { method: "DELETE" });
 

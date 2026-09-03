@@ -2,6 +2,7 @@
  * Maps Kimi segment builder UI state → SegmentConditions for /api/contacts/segments.
  */
 import type { SegmentConditions, SegmentOperator, SegmentRule } from "@/lib/contacts/segment-query";
+import { parseSegmentConditions } from "@/lib/contacts/segment-query";
 
 export type KimiConditionState = {
   property: string;
@@ -95,9 +96,15 @@ function mapOneCondition(cond: KimiConditionState): SegmentRule[] {
   if (!op || !field) return [];
 
   if (cond.property === "State" && cond.values?.length) {
+    if (cond.condition === "Is Not") {
+      return [{ field, op: "not_in", value: cond.values.join(",") }];
+    }
+    if (cond.values.length > 1) {
+      return [{ field, op: "in", value: cond.values.join(",") }];
+    }
     return cond.values.map((v) => ({
       field,
-      op: cond.condition === "Is Not" ? "not_equals" : "equals",
+      op: "equals",
       value: v,
     }));
   }
@@ -129,19 +136,22 @@ export function kimiGroupsToSegmentConditions(groups: KimiConditionGroup[]): Seg
     return { match, rules };
   }
 
-  // Multiple AND groups — flatten (API has no nested boolean logic).
-  const rules = activeGroups.flatMap((g) => g.conditions.flatMap(mapOneCondition));
-  return { match: "all", rules };
+  return {
+    match: "all",
+    rules: [],
+    groups: activeGroups.map((g) => {
+      const rules = g.conditions.flatMap(mapOneCondition);
+      const match = g.conditions.length > 1 ? "any" : "all";
+      return { match, rules };
+    }),
+  };
 }
 
 /** Seed Kimi builder from stored API conditions (partial reverse map). */
 export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditionGroup[] {
-  const parsed =
-    conditions && typeof conditions === "object"
-      ? (conditions as SegmentConditions)
-      : { match: "all" as const, rules: [] };
-  const rules = Array.isArray(parsed.rules) ? parsed.rules : [];
-  if (!rules.length) {
+  const parsed = parseSegmentConditions(conditions);
+  const rules = parsed.rules;
+  if (!rules.length && !(parsed.groups || []).length) {
     return [{ conditions: [{ property: "", condition: "", value: "", values: [] }] }];
   }
 
@@ -187,14 +197,55 @@ export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditio
     return "Is";
   };
 
+  const ruleToKimi = (r: SegmentRule): KimiConditionState => {
+    if (r.field === "custom:state" && r.op === "in" && r.value) {
+      return {
+        property: reverseField(r.field),
+        condition: "Is",
+        value: "",
+        values: splitListValue(r.value),
+      };
+    }
+    if (r.field === "custom:state" && r.op === "not_in" && r.value) {
+      return {
+        property: reverseField(r.field),
+        condition: "Is Not",
+        value: "",
+        values: splitListValue(r.value),
+      };
+    }
+    return {
+      property: reverseField(r.field),
+      condition: reverseOp(r.op),
+      value: r.field === "status" ? r.value?.toLowerCase() || "" : r.value || "",
+      values: r.field === "custom:state" && r.value ? [r.value] : [],
+    };
+  };
+
+  if (parsed.groups?.length) {
+    return parsed.groups.map((group) => ({
+      conditions: group.rules.length
+        ? group.rules.map(ruleToKimi)
+        : [{ property: "", condition: "", value: "", values: [] }],
+    }));
+  }
+
+  if (parsed.match === "all" && rules.length > 1) {
+    return rules.map((r) => ({
+      conditions: [ruleToKimi(r)],
+    }));
+  }
+
   return [
     {
-      conditions: rules.map((r) => ({
-        property: reverseField(r.field),
-        condition: reverseOp(r.op),
-        value: r.field === "status" ? r.value?.toLowerCase() || "" : r.value || "",
-        values: r.field === "custom:state" && r.value ? [r.value] : [],
-      })),
+      conditions: rules.map(ruleToKimi),
     },
   ];
+}
+
+function splitListValue(raw: string): string[] {
+  return raw
+    .split(/[,;|]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 }

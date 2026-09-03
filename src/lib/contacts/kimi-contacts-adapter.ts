@@ -22,6 +22,7 @@ function mapOptIn(status: string): KimiContact["status"] {
   if (s === "SUBSCRIBED") return "Subscribed";
   if (s === "UNSUBSCRIBED") return "Unsubscribed";
   if (s === "BLOCKED") return "Blocked";
+  if (s === "INVALID") return "Not Subscribed";
   return "Not Subscribed";
 }
 
@@ -49,10 +50,18 @@ export function mapApiContactToKimi(c: ApiContact): KimiContact {
 export type KimiContactStats = { contacts: number; subscribed: number; unsubscribed: number };
 
 export async function fetchContacts(): Promise<KimiContact[]> {
+  const rows = await fetchContactsDetailed();
+  return rows.map(({ lists: _lists, ...contact }) => contact);
+}
+
+export async function fetchContactsDetailed(): Promise<Array<KimiContact & { lists: string[] }>> {
   const res = await fetch("/api/contacts?take=200");
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load contacts");
-  return (json.data || []).map((c: ApiContact) => mapApiContactToKimi(c));
+  return (json.data || []).map((c: ApiContact) => ({
+    ...mapApiContactToKimi(c),
+    lists: c.lists || [],
+  }));
 }
 
 export async function fetchContactStats(): Promise<KimiContactStats> {
@@ -118,8 +127,18 @@ export async function createContact(payload: {
   status?: string;
   optInLabel?: string;
   listIds?: string[];
+  listNames?: string[];
 }): Promise<string> {
   const status = mapOptInLabelToApiStatus(payload.optInLabel || payload.status || "Subscribed");
+  let listIds = [...(payload.listIds || [])];
+  if (payload.listNames?.length) {
+    const options = await fetchContactListOptions();
+    const resolved = payload.listNames
+      .map((name) => options.find((l) => l.name === name)?.id)
+      .filter((id): id is string => Boolean(id));
+    listIds = [...new Set([...listIds, ...resolved])];
+  }
+
   const res = await fetch("/api/contacts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -129,15 +148,13 @@ export async function createContact(payload: {
       phone: payload.phone,
       email: payload.email,
       status,
+      listIds: listIds.length ? listIds : undefined,
+      listNames: payload.listNames?.length ? payload.listNames : undefined,
     }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not create contact");
-  const contactId = json.data?.id as string | undefined;
-  if (contactId && payload.listIds?.length) {
-    await updateContact(contactId, { listIds: payload.listIds });
-  }
-  return contactId || "";
+  return (json.data?.id as string | undefined) || "";
 }
 
 export type ContactListOption = { id: string; name: string };
@@ -240,7 +257,7 @@ export async function importContacts(payload: KimiImportPayload): Promise<{ crea
     throw new Error("No rows with a mapped phone number found. Map a column to Mobile Number.");
   }
 
-  const listName = payload.selectedLists[0] || undefined;
+  const listNames = payload.selectedLists.filter(Boolean);
 
   async function submitImport(attestationId?: string) {
     const res = await fetch("/api/contacts/import", {
@@ -248,7 +265,7 @@ export async function importContacts(payload: KimiImportPayload): Promise<{ crea
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         rows,
-        listName,
+        listNames,
         consentSource: "csv_import",
         marketingImport: Boolean(attestationId),
         attestationId,
@@ -264,7 +281,7 @@ export async function importContacts(payload: KimiImportPayload): Promise<{ crea
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        listName,
+        listNames,
         contactCount: rows.length,
         attestationAccepted: true,
         source: "csv_import",

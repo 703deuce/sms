@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { getPrisma } from "@/lib/db";
 
 function escapeCsv(value: string) {
@@ -9,13 +10,14 @@ function escapeCsv(value: string) {
   return value;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const status = new URL(request.url).searchParams.get("status") || undefined;
 
     const contacts = await getPrisma().contact.findMany({
-      where: { workspaceId: auth.workspaceId },
+      where: visibleContactWhere(auth.workspaceId, { status }),
       include: { tagMembers: { include: { tag: true } } },
       orderBy: { createdAt: "desc" },
     });

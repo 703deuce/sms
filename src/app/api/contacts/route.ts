@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { assignContactToLists, resolveOrCreateListIdsByName } from "@/lib/contacts/list-assignment";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { getPrisma } from "@/lib/db";
 import { mapContact } from "@/lib/mappers";
+import { loadContactById } from "@/lib/workspace-data";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   fireContactAddedAutomations,
@@ -52,13 +55,18 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
     const q = searchParams.get("q")?.trim();
     const phone = searchParams.get("phone")?.trim();
+    const tag = searchParams.get("tag")?.trim();
     const take = Math.min(200, Math.max(1, Number(searchParams.get("take") || 50)));
     const skip = Math.max(0, Number(searchParams.get("skip") || 0));
+
+    const baseWhere = visibleContactWhere(auth.workspaceId, {
+      status: status || undefined,
+    });
 
     if (phone) {
       const normalized = normalizeE164(phone);
       const rows = await getPrisma().contact.findMany({
-        where: { workspaceId: auth.workspaceId, phone: normalized },
+        where: { ...baseWhere, phone: normalized },
         include: contactInclude,
         take: 5,
       });
@@ -68,7 +76,7 @@ export async function GET(request: Request) {
     if (q) {
       const rows = await getPrisma().contact.findMany({
         where: {
-          workspaceId: auth.workspaceId,
+          ...baseWhere,
           OR: [
             { firstName: { contains: q, mode: "insensitive" } },
             { lastName: { contains: q, mode: "insensitive" } },
@@ -85,13 +93,26 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: mapContactRows(rows as ContactRow[]) });
     }
 
+    if (tag) {
+      const tagRow = await getPrisma().tag.findFirst({
+        where: { workspaceId: auth.workspaceId, name: tag.toLowerCase() },
+        select: { id: true },
+      });
+      if (!tagRow) {
+        return NextResponse.json({ data: [] });
+      }
+      const rows = await getPrisma().contact.findMany({
+        where: visibleContactWhere(auth.workspaceId, { tagId: tagRow.id }),
+        include: contactInclude,
+        orderBy: { createdAt: "desc" },
+        take,
+        skip,
+      });
+      return NextResponse.json({ data: mapContactRows(rows as ContactRow[]) });
+    }
+
     const rows = await getPrisma().contact.findMany({
-      where: {
-        workspaceId: auth.workspaceId,
-        ...(status
-          ? { status: status.toUpperCase() as "SUBSCRIBED" | "UNSUBSCRIBED" | "BLOCKED" | "INVALID" }
-          : {}),
-      },
+      where: baseWhere,
       include: contactInclude,
       orderBy: { createdAt: "desc" },
       take,
@@ -114,6 +135,8 @@ export async function POST(request: Request) {
       email?: string;
       consentSource?: string;
       status?: string;
+      listIds?: string[];
+      listNames?: string[];
     };
     if (!body.phone) {
       return NextResponse.json({ error: "phone is required" }, { status: 400 });
@@ -180,9 +203,19 @@ export async function POST(request: Request) {
       // CRM push is optional
     }
 
+    const listIds = [
+      ...(body.listIds || []),
+      ...(await resolveOrCreateListIdsByName(auth.workspaceId, body.listNames || [])),
+    ];
+    if (listIds.length) {
+      await assignContactToLists(auth.workspaceId, contact.id, listIds);
+    }
+
+    const data = await loadContactById(auth.workspaceId, contact.id);
+
     return NextResponse.json(
       {
-        data: contact,
+        data: data || contact,
         meta: {
           created: isNew,
           automations,

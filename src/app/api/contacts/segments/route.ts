@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@/lib/domain";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { countSegmentContacts } from "@/lib/contacts/segment-query";
 import { getPrisma } from "@/lib/db";
 import { loadSegments } from "@/lib/workspace-data";
 
@@ -8,7 +9,13 @@ export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const data = await loadSegments(auth.workspaceId);
+    const segments = await loadSegments(auth.workspaceId);
+    const data = await Promise.all(
+      segments.map(async (segment) => ({
+        ...segment,
+        contactCount: await countSegmentContacts(auth.workspaceId, segment.conditions),
+      })),
+    );
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 500);

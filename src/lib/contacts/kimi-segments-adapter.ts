@@ -29,14 +29,10 @@ export async function fetchSegments(): Promise<Segment[]> {
   const res = await fetch("/api/contacts/segments");
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load segments");
-  const rows = (json.data || []) as Array<SegmentSummary & { createdAt?: string; conditions?: unknown }>;
-  const withCounts = await Promise.all(
-    rows.map(async (s) => {
-      const count = await previewSegmentCount(s.conditions ?? { match: "all", rules: [] });
-      return mapApiSegmentToKimi(s, count);
-    }),
-  );
-  return withCounts;
+  const rows = (json.data || []) as Array<
+    SegmentSummary & { createdAt?: string; conditions?: unknown; contactCount?: number }
+  >;
+  return rows.map((s) => mapApiSegmentToKimi(s, s.contactCount ?? 0));
 }
 
 export async function previewSegmentCount(conditions: unknown): Promise<number> {

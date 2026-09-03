@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { assignContactToLists, resolveOrCreateListIdsByName } from "@/lib/contacts/list-assignment";
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
@@ -20,7 +21,9 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       rows?: ImportRow[];
       listName?: string;
+      listNames?: string[];
       listId?: string;
+      listIds?: string[];
       consentSource?: string;
       marketingImport?: boolean;
       attestationId?: string;
@@ -50,25 +53,28 @@ export async function POST(request: Request) {
     let suppressedSkipped = 0;
     const errors: Array<{ row: number; error: string }> = [];
 
-    let listId: string | null = null;
-    const listName = body.listName?.trim();
+    let targetListIds: string[] = [];
+    if (body.listIds?.length) {
+      targetListIds.push(...body.listIds);
+    }
     if (body.listId) {
-      const existingList = await prisma.contactList.findFirst({
-        where: { id: body.listId, workspaceId: auth.workspaceId },
+      targetListIds.push(body.listId);
+    }
+    const listNames = [
+      ...(body.listName ? [body.listName] : []),
+      ...(body.listNames || []),
+    ];
+    if (listNames.length) {
+      targetListIds.push(...(await resolveOrCreateListIdsByName(auth.workspaceId, listNames)));
+    }
+    targetListIds = [...new Set(targetListIds)];
+
+    if (targetListIds.length) {
+      const valid = await prisma.contactList.findMany({
+        where: { workspaceId: auth.workspaceId, id: { in: targetListIds } },
+        select: { id: true },
       });
-      if (!existingList) {
-        return NextResponse.json({ error: "List not found" }, { status: 404 });
-      }
-      listId = existingList.id;
-    } else if (listName) {
-      const list = await prisma.contactList.create({
-        data: {
-          workspaceId: auth.workspaceId,
-          name: listName,
-          description: `Import ${new Date().toISOString().slice(0, 10)}`,
-        },
-      });
-      listId = list.id;
+      targetListIds = valid.map((l) => l.id);
     }
 
     for (let i = 0; i < body.rows.length; i += 1) {
@@ -117,12 +123,8 @@ export async function POST(request: Request) {
         if (existing) updated += 1;
         else created += 1;
 
-        if (listId) {
-          await prisma.contactListMember.upsert({
-            where: { listId_contactId: { listId, contactId: contact.id } },
-            create: { listId, contactId: contact.id },
-            update: {},
-          });
+        if (targetListIds.length) {
+          await assignContactToLists(auth.workspaceId, contact.id, targetListIds);
         }
 
         for (const tagName of row.tags || []) {
@@ -159,7 +161,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      data: { created, updated, suppressedSkipped, errors, listId },
+      data: { created, updated, suppressedSkipped, errors, listIds: targetListIds },
     });
   } catch (err) {
     return jsonError(err, 400);

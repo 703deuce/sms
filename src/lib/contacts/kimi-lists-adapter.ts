@@ -101,7 +101,8 @@ export async function fetchContactsForLists(): Promise<Contact[]> {
             ? "Unsubscribed"
             : "Not Subscribed",
       created: mapped.created,
-    } satisfies Contact;
+      lists: c.lists || [],
+    } satisfies Contact & { lists?: string[] };
   });
 }
 

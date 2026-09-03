@@ -20,7 +20,7 @@ import {
   mapKimiToDefinition,
   persistCustomFields,
 } from "@/lib/contacts/kimi-fields-adapter";
-import { fetchContacts, fetchContactStats, fetchContactById, fetchContactListOptions, updateContact, deleteContact } from "@/lib/contacts/kimi-contacts-adapter";
+import { fetchContactsDetailed, fetchContactStats, fetchContactById, fetchContactListOptions, updateContact, deleteContact } from "@/lib/contacts/kimi-contacts-adapter";
 import type { Contact } from "@/components/kimi/contacts-fields/mock-data";
 
 type Props = {
@@ -55,7 +55,7 @@ export function KimiFieldsConnected({ initialFields }: Props) {
   }, []);
 
   const reloadContacts = useCallback(async () => {
-    const [rows, stats] = await Promise.all([fetchContacts(), fetchContactStats()]);
+    const [rows, stats] = await Promise.all([fetchContactsDetailed(), fetchContactStats()]);
     setContactRows(
       rows.map((c) => ({
         id: c.id,
@@ -65,7 +65,7 @@ export function KimiFieldsConnected({ initialFields }: Props) {
         email: c.email,
         optIn: c.status === "Subscribed" ? "Subscribed" : "Unsubscribed",
         created: c.created,
-        lists: [],
+        lists: c.lists || [],
       })),
     );
     setContactStats({

@@ -95,6 +95,7 @@ export function KimiContactsConnected({
         email: formData.email || undefined,
         optInLabel: formData.optIn || "Subscribed",
         listIds,
+        listNames: formData.selectedLists || [],
       });
       await reload();
     } catch (err) {

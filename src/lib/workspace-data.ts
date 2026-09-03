@@ -13,6 +13,7 @@ import {
   titleCaseStatus,
 } from "@/lib/mappers";
 import type { DashboardMetrics, Campaign, Contact, Conversation, AutomationFlow, PhoneNumber, Template, Workspace, User, StatusChip } from "@/lib/types";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 
 export async function requireWorkspaceContext() {
   const session = await getSession();
@@ -77,30 +78,6 @@ export async function loadPhoneNumbers(
 export async function loadContacts(workspaceId: string, status?: string): Promise<Contact[]> {
   const { contacts } = await loadContactsPage(workspaceId, { page: 1, perPage: 200, status });
   return contacts;
-}
-
-function visibleContactWhere(
-  workspaceId: string,
-  opts?: { status?: string; listId?: string },
-) {
-  return {
-    workspaceId,
-    NOT: { customFields: { path: ["systemAutomationContact"], equals: true } },
-    ...(opts?.status
-      ? {
-          status: opts.status.toUpperCase() as
-            | "SUBSCRIBED"
-            | "UNSUBSCRIBED"
-            | "BLOCKED"
-            | "INVALID",
-        }
-      : {}),
-    ...(opts?.listId
-      ? {
-          listMembers: { some: { listId: opts.listId } },
-        }
-      : {}),
-  };
 }
 
 export async function loadContactStats(workspaceId: string) {
@@ -177,6 +154,7 @@ export type SegmentSummary = {
   id: string;
   name: string;
   conditions: unknown;
+  contactCount?: number;
 };
 
 export async function loadLists(workspaceId: string): Promise<ContactListSummary[]> {
