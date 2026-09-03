@@ -64,9 +64,16 @@ export async function runListCleanup(workspaceId: string): Promise<ListCleanupRe
   for (const contactId of contactIds) {
     const contact = await prisma.contact.findUnique({
       where: { id: contactId },
-      select: { id: true, phone: true, status: true },
+      select: { id: true, phone: true, status: true, customFields: true },
     });
     if (!contact) continue;
+    if (
+      contact.customFields &&
+      typeof contact.customFields === "object" &&
+      (contact.customFields as Record<string, unknown>).systemAutomationContact === true
+    ) {
+      continue;
+    }
 
     let phone = contact.phone;
     try {
