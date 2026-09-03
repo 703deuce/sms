@@ -298,7 +298,14 @@ export function AppointmentTypesClient() {
               <Card key={type.id} className="rounded-xl border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-900">{type.name}</p>
+                    <p className="font-semibold text-slate-900">
+                      {type.name}
+                      {!type.active ? (
+                        <span className="ml-2 rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          Inactive
+                        </span>
+                      ) : null}
+                    </p>
                     <p className="mt-1 text-sm text-slate-500">
                       {type.durationMinutes} min
                       {type.bufferMinutes ? ` · ${type.bufferMinutes} min buffer` : ""}
@@ -336,11 +343,11 @@ export function AppointmentTypesClient() {
             })
           )}
           <p className="text-xs text-slate-500">
-            Connect Google or Microsoft calendars on{" "}
-            <Link href="/voice/calendars" className="text-sky-700 hover:underline">
-              Calendar connections
-            </Link>{" "}
-            to drive live availability.
+            Set weekly availability on{" "}
+            <Link href="/appointments/availability" className="text-sky-700 hover:underline">
+              Availability
+            </Link>
+            . Inactive types cannot be booked publicly.
           </p>
         </div>
       </div>

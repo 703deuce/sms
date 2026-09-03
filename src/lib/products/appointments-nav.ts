@@ -40,6 +40,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
         { label: "Calendar", href: "/appointments/calendar" },
         { label: "Scheduled", href: "/appointments" },
         { label: "Appointment Types", href: "/appointments/types" },
+        { label: "Availability", href: "/appointments/availability" },
         { label: "Reminder Settings", href: "/appointments/reminders" },
         { label: "Booking Page", href: "/appointments/booking" },
         { label: "Get Started", href: "/appointments/setup" },
@@ -124,6 +125,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Overview";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/types")) return "Appointment Types";
+  if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
   if (pathname.startsWith("/appointments/booking")) return "Booking Page";

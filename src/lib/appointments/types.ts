@@ -18,6 +18,14 @@ export type ReminderStepConfig = {
   label: string;
 };
 
+export type DateOverride = {
+  date: string;
+  closed?: boolean;
+  windows?: Array<{ open: string; close: string }>;
+};
+
+export type BookingProtectionMode = "standard" | "strict" | "off";
+
 export type AppointmentPlatformConfig = {
   bookingEnabled: boolean;
   timezone: string;
@@ -25,11 +33,30 @@ export type AppointmentPlatformConfig = {
   businessAddress?: string;
   businessDisplayName?: string;
   consentText?: string;
+  consentVersion?: string;
   termsUrl?: string;
   privacyUrl?: string;
   onboardingComplete?: boolean;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
+  dateOverrides?: DateOverride[];
   blackoutDates?: string[];
+  minimumBookingNoticeMinutes?: number;
+  maximumBookingDaysAhead?: number;
+  bookingProtection?: {
+    mode: BookingProtectionMode;
+  };
+  suspiciousBookings?: Array<{
+    id: string;
+    at: string;
+    serviceName?: string;
+    phone?: string;
+    email?: string;
+    riskLevel: "LOW" | "MEDIUM" | "HIGH";
+    riskScore: number;
+    signals: string[];
+    action: "challenge" | "block";
+    recovered?: boolean;
+  }>;
   reminders: {
     confirmation: ReminderStepConfig;
     reminder24h: ReminderStepConfig;
@@ -74,6 +101,8 @@ export type AppointmentMetadata = {
   rescheduleToken?: string;
   smsConsent?: boolean;
   smsConsentAt?: string;
+  smsConsentVersion?: string;
+  smsConsentText?: string;
   reminderStatus?: string;
   reminderGeneration?: number;
   remindersSuppressed?: boolean;
@@ -101,8 +130,12 @@ export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
   bookingEnabled: false,
   timezone: "America/New_York",
   consentText: DEFAULT_SMS_CONSENT_TEXT,
+  consentVersion: "v1",
   termsUrl: "/terms",
   privacyUrl: "/privacy",
+  minimumBookingNoticeMinutes: 60,
+  maximumBookingDaysAhead: 14,
+  bookingProtection: { mode: "standard" },
   reminders: {
     confirmation: {
       enabled: true,

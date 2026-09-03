@@ -52,6 +52,10 @@ export function PublicBookingClient({
   const [notes, setNotes] = useState("");
   const [bookingAnswers, setBookingAnswers] = useState<Record<string, string>>({});
   const [smsConsent, setSmsConsent] = useState(false);
+  const [humanVerification, setHumanVerification] = useState(false);
+  const [challengeRequired, setChallengeRequired] = useState(false);
+  const [formStartedAt] = useState(() => Date.now());
+  const [honeypot, setHoneypot] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -133,8 +137,8 @@ export function PublicBookingClient({
         return;
       }
     }
-    if (!selectedType || !startsAt || !phone.trim() || !smsConsent) {
-      setError("Please complete all required fields and consent to SMS.");
+    if (!selectedType || !startsAt || !phone.trim() || !firstName.trim()) {
+      setError("Please complete all required fields.");
       return;
     }
     setSubmitting(true);
@@ -152,10 +156,19 @@ export function PublicBookingClient({
         email,
         notes,
         bookingAnswers: Object.keys(bookingAnswers).length ? bookingAnswers : undefined,
-        smsConsent: true,
+        smsConsent,
+        humanVerification: challengeRequired ? humanVerification : undefined,
+        formStartedAt,
+        website: honeypot,
       }),
     });
     const json = await res.json().catch(() => ({}));
+    if (res.status === 428 && json.challengeRequired) {
+      setChallengeRequired(true);
+      setError("Please confirm you are a real person to continue.");
+      setSubmitting(false);
+      return;
+    }
     if (!res.ok) {
       setError(json.error || "Could not complete booking");
       setSubmitting(false);
@@ -286,6 +299,16 @@ export function PublicBookingClient({
                 <Label htmlFor="phone">Mobile phone *</Label>
                 <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
+              <div className="sr-only" aria-hidden="true">
+                <Label htmlFor="website">Website</Label>
+                <Input
+                  id="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                />
+              </div>
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -339,6 +362,17 @@ export function PublicBookingClient({
                   .
                 </span>
               </label>
+              {challengeRequired ? (
+                <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <input
+                    className="mt-1"
+                    type="checkbox"
+                    checked={humanVerification}
+                    onChange={(e) => setHumanVerification(e.target.checked)}
+                  />
+                  <span>I confirm I am a real person booking this appointment.</span>
+                </label>
+              ) : null}
               {error ? <p className="text-sm text-rose-600">{error}</p> : null}
               <Button className="w-full" disabled={submitting} onClick={book}>
                 {submitting ? "Booking…" : "Book appointment"}
@@ -351,7 +385,9 @@ export function PublicBookingClient({
           <Card className="rounded-xl border-emerald-200 bg-emerald-50/40 p-6 text-center">
             <h2 className="text-xl font-semibold text-emerald-900">You&apos;re booked!</h2>
             <p className="mt-2 text-sm text-emerald-800">
-              We sent a confirmation text with details and links to confirm, reschedule, or cancel.
+              {smsConsent
+                ? "We sent a confirmation text with details and links to confirm, reschedule, or cancel."
+                : "Your appointment is booked. Save your confirmation details below."}
             </p>
             {selectedType && startsAt ? (
               <a

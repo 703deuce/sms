@@ -8,6 +8,12 @@ export function currentReminderGeneration(meta: AppointmentMetadata): number {
   return Number(meta.reminderGeneration) || 1;
 }
 
+export function reminderTimelineType(stepKey: string, minutesBefore?: number): string {
+  if (stepKey === "confirmation") return "confirmation_sent";
+  const minutes = minutesBefore ?? 0;
+  return `reminder_${minutes}m_sent`;
+}
+
 export function wasReminderSent(meta: AppointmentMetadata, timelineType: string): boolean {
   const gen = currentReminderGeneration(meta);
   const keys = meta.reminderSentKeys || [];

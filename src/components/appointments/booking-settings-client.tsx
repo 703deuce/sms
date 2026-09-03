@@ -21,6 +21,17 @@ export function AppointmentBookingSettingsClient({ workspaceSlug, workspaceName 
   const [consentText, setConsentText] = useState(DEFAULT_SMS_CONSENT_TEXT);
   const [termsUrl, setTermsUrl] = useState("/terms");
   const [privacyUrl, setPrivacyUrl] = useState("/privacy");
+  const [bookingProtectionMode, setBookingProtectionMode] = useState<"standard" | "strict" | "off">("standard");
+  const [suspiciousBookings, setSuspiciousBookings] = useState<
+    Array<{
+      id: string;
+      at: string;
+      serviceName?: string;
+      riskLevel: string;
+      action: string;
+      signals: string[];
+    }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -45,6 +56,8 @@ export function AppointmentBookingSettingsClient({ workspaceSlug, workspaceName 
         setConsentText(data.consentText || DEFAULT_SMS_CONSENT_TEXT);
         setTermsUrl(data.termsUrl || "/terms");
         setPrivacyUrl(data.privacyUrl || "/privacy");
+        setBookingProtectionMode(data.bookingProtection?.mode || "standard");
+        setSuspiciousBookings(data.suspiciousBookings || []);
       })
       .finally(() => setLoading(false));
   }, [workspaceName]);
@@ -216,13 +229,69 @@ export function AppointmentBookingSettingsClient({ workspaceSlug, workspaceName 
       </Card>
 
       <Card className="rounded-xl border-slate-200 p-4">
+        <h2 className="mb-2 font-semibold text-slate-900">AI Booking Protection</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Automatically detects suspicious and automated bookings and adds verification only when needed.
+        </p>
+        <div className="space-y-2 text-sm">
+          {(
+            [
+              ["standard", "Standard (recommended)", "Challenge suspicious bookings with light verification."],
+              ["strict", "Strict", "Stronger verification for medium-risk activity."],
+              ["off", "Off", "Baseline rate limits only — not recommended for public booking."],
+            ] as const
+          ).map(([value, title, detail]) => (
+            <label key={value} className="flex items-start gap-2 rounded-md border border-slate-200 p-3">
+              <input
+                type="radio"
+                name="booking-protection"
+                checked={bookingProtectionMode === value}
+                onChange={() => setBookingProtectionMode(value)}
+              />
+              <span>
+                <span className="font-medium text-slate-900">{title}</span>
+                <span className="mt-0.5 block text-slate-500">{detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4">
+          <Button
+            disabled={saving}
+            onClick={() => savePatch({ bookingProtection: { mode: bookingProtectionMode } })}
+          >
+            Save protection settings
+          </Button>
+        </div>
+      </Card>
+
+      {suspiciousBookings.length > 0 ? (
+        <Card className="rounded-xl border-slate-200 p-4">
+          <h2 className="mb-4 font-semibold text-slate-900">Blocked / Suspicious Bookings</h2>
+          <ul className="space-y-2 text-sm">
+            {suspiciousBookings.slice(0, 20).map((entry) => (
+              <li key={entry.id} className="rounded-md bg-slate-50 px-3 py-2">
+                <p className="font-medium text-slate-900">
+                  {new Date(entry.at).toLocaleString()} · {entry.riskLevel} · {entry.action}
+                </p>
+                <p className="text-slate-600">
+                  {entry.serviceName || "Booking attempt"}
+                  {entry.signals?.length ? ` — ${entry.signals.slice(0, 3).join(", ")}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      <Card className="rounded-xl border-slate-200 p-4">
         <h2 className="font-semibold text-slate-900">Before you launch</h2>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
           <li>Create at least one appointment type.</li>
           <li>
-            Connect a calendar on{" "}
-            <Link href="/voice/calendars" className="text-sky-700 hover:underline">
-              Calendar connections
+            Set your weekly availability on{" "}
+            <Link href="/appointments/availability" className="text-sky-700 hover:underline">
+              Availability
             </Link>
             .
           </li>

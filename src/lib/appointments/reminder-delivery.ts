@@ -13,20 +13,44 @@ import {
 import type { AppointmentMetadata, ReminderStepConfig } from "@/lib/appointments/types";
 import {
   markReminderSentInMeta,
+  reminderTimelineType,
   wasReminderSent,
 } from "@/lib/appointments/reminder-state";
 
-const REMINDER_WINDOWS: Array<{
-  key: "reminder24h" | "reminder2h";
-  timelineType: "reminder_24h_sent" | "reminder_2h_sent";
-  defaultMinutes: number;
-}> = [
-  { key: "reminder24h", timelineType: "reminder_24h_sent", defaultMinutes: 1440 },
-  { key: "reminder2h", timelineType: "reminder_2h_sent", defaultMinutes: 120 },
-];
+type ReminderStepKey = "confirmation" | "reminder24h" | "reminder2h";
 
-function reminderAlreadySent(meta: AppointmentMetadata, timelineType: string): boolean {
-  return wasReminderSent(meta, timelineType);
+function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>) {
+  const steps: Array<{
+    key: ReminderStepKey;
+    timelineType: string;
+    minutesBefore: number;
+    immediate?: boolean;
+    step: ReminderStepConfig;
+  }> = [];
+
+  if (config.reminders.confirmation.enabled) {
+    steps.push({
+      key: "confirmation",
+      timelineType: reminderTimelineType("confirmation"),
+      minutesBefore: 0,
+      immediate: true,
+      step: config.reminders.confirmation,
+    });
+  }
+
+  for (const key of ["reminder24h", "reminder2h"] as ReminderStepKey[]) {
+    const step = config.reminders[key];
+    if (!step.enabled) continue;
+    const minutesBefore = step.minutesBefore || (key === "reminder24h" ? 1440 : 120);
+    steps.push({
+      key,
+      timelineType: reminderTimelineType(key, minutesBefore),
+      minutesBefore,
+      step,
+    });
+  }
+
+  return steps;
 }
 
 function inviteePhone(meta: AppointmentMetadata, contactPhone?: string | null): string | null {
@@ -94,7 +118,7 @@ async function trySendStep(input: {
   rescheduleToken?: string;
 }) {
   if (!input.step.enabled || input.step.channel !== "sms") return false;
-  if (reminderAlreadySent(input.metadata, input.timelineType)) return false;
+  if (wasReminderSent(input.metadata, input.timelineType)) return false;
 
   const body = renderAppointmentTemplate(
     input.step.template,
@@ -134,36 +158,35 @@ async function trySendStep(input: {
   }
 }
 
-/** Scan platform appointments and send configured 24h / 2h SMS reminders. */
+/** Scan platform appointments and send configured reminder SMS using workspace settings. */
 export async function scanPlatformAppointmentReminders() {
   const prisma = getPrisma();
   const now = Date.now();
   let sent = 0;
+  const windowMs = 4 * 60_000;
 
-  for (const window of REMINDER_WINDOWS) {
-    const minutes = window.defaultMinutes;
-    const windowStart = new Date(now + minutes * 60_000 - 3 * 60_000);
-    const windowEnd = new Date(now + minutes * 60_000 + 3 * 60_000);
+  const rows = await prisma.voiceAppointment.findMany({
+    where: {
+      startsAt: { gt: new Date(now - windowMs) },
+      status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+    },
+    take: 500,
+    orderBy: { startsAt: "asc" },
+  });
 
-    const rows = await prisma.voiceAppointment.findMany({
-      where: {
-        startsAt: { gte: windowStart, lte: windowEnd },
-        status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
-      },
-      take: 200,
-    });
+  for (const row of rows) {
+    const meta = (row.metadata || {}) as AppointmentMetadata;
+    if (meta.remindersSuppressed) continue;
+    if (meta.smsConsent === false) continue;
 
-    for (const row of rows) {
-      const meta = (row.metadata || {}) as AppointmentMetadata;
-      if (meta.remindersSuppressed) continue;
-      if (meta.smsConsent === false) continue;
-      if (reminderAlreadySent(meta, window.timelineType)) continue;
+    const config = await loadAppointmentPlatformConfig(row.workspaceId);
+    const steps = configuredReminderSteps(config).filter((s) => !s.immediate);
 
-      const config = await loadAppointmentPlatformConfig(row.workspaceId);
-      const step = config.reminders[window.key];
-      const minutesBefore = step.minutesBefore || window.defaultMinutes;
-      const targetStart = new Date(now + minutesBefore * 60_000);
-      if (Math.abs(row.startsAt.getTime() - targetStart.getTime()) > 4 * 60_000) continue;
+    for (const scheduled of steps) {
+      if (wasReminderSent(meta, scheduled.timelineType)) continue;
+
+      const fireAt = row.startsAt.getTime() - scheduled.minutesBefore * 60_000;
+      if (now < fireAt - windowMs || now > fireAt + windowMs) continue;
 
       const workspace = await prisma.workspace.findUnique({
         where: { id: row.workspaceId },
@@ -184,8 +207,8 @@ export async function scanPlatformAppointmentReminders() {
         startsAt: row.startsAt,
         serviceName: row.serviceName,
         timezone: row.timezone || config.timezone,
-        step,
-        timelineType: window.timelineType,
+        step: scheduled.step,
+        timelineType: scheduled.timelineType,
         metadata: meta,
         phone,
         businessName: workspace?.displayName || workspace?.name || "our team",
@@ -240,11 +263,11 @@ export async function sendTestReminderSms(
   ]);
   const step = platform.reminders[input.stepKey];
   if (!step.enabled) throw new Error("This reminder step is disabled");
-  const body = previewReminderMessage({
+  const body = `[TEST] ${previewReminderMessage({
     step,
     platform,
     workspaceName: workspace?.displayName || workspace?.name || "Business",
-  });
+  })}`;
   const { sendQuickSms } = await import("@/lib/sms/send-quick");
   await sendQuickSms({ workspaceId, to: input.phone, body });
   return { body };
@@ -260,6 +283,10 @@ export function buildReminderSchedule(input: {
   };
 }) {
   const meta = input.metadata;
+  const timeline = meta.timeline || [];
+  const sent = (type: string) => timeline.some((e) => e.type === type);
+  const failed = (type: string) => timeline.some((e) => e.type === `${type}_failed`);
+
   if (meta.remindersSuppressed) {
     return [
       { key: "confirmation", label: input.config.confirmation.label, status: "canceled" },
@@ -267,33 +294,43 @@ export function buildReminderSchedule(input: {
       { key: "reminder2h", label: input.config.reminder2h.label, status: "canceled" },
     ];
   }
-  const timeline = meta.timeline || [];
-  const sent = (type: string) => timeline.some((e) => e.type === type);
-  const failed = (type: string) => timeline.some((e) => e.type === `${type}_failed`);
 
-  const statusFor = (type: string, enabled: boolean) => {
+  const statusFor = (timelineType: string, enabled: boolean) => {
     if (!enabled) return "disabled";
-    if (sent(type)) return "sent";
-    if (failed(type)) return "failed";
+    if (sent(timelineType)) return "sent";
+    if (failed(timelineType)) return "failed";
     if (new Date(input.startsAt).getTime() <= Date.now()) return "skipped";
     return "scheduled";
   };
+
+  const reminder24Type = reminderTimelineType(
+    "reminder24h",
+    input.config.reminder24h.minutesBefore || 1440,
+  );
+  const reminder2Type = reminderTimelineType(
+    "reminder2h",
+    input.config.reminder2h.minutesBefore || 120,
+  );
 
   return [
     {
       key: "confirmation",
       label: input.config.confirmation.label,
-      status: sent("confirmation_sent") ? "sent" : meta.smsConsent ? "scheduled" : "disabled",
+      status: sent(reminderTimelineType("confirmation"))
+        ? "sent"
+        : meta.smsConsent && input.config.confirmation.enabled
+          ? "scheduled"
+          : "disabled",
     },
     {
       key: "reminder24h",
       label: input.config.reminder24h.label,
-      status: statusFor("reminder_24h_sent", input.config.reminder24h.enabled),
+      status: statusFor(reminder24Type, input.config.reminder24h.enabled),
     },
     {
       key: "reminder2h",
       label: input.config.reminder2h.label,
-      status: statusFor("reminder_2h_sent", input.config.reminder2h.enabled),
+      status: statusFor(reminder2Type, input.config.reminder2h.enabled),
     },
   ];
 }

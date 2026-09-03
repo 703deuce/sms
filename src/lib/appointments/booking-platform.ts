@@ -14,12 +14,24 @@ import {
 } from "@/lib/appointments/settings";
 import type { AppointmentMetadata, AppointmentTypeConfig } from "@/lib/appointments/types";
 import { assertSlotAvailableForBooking } from "@/lib/appointments/slot-validation";
+import { withAtomicSlotBooking } from "@/lib/appointments/slot-booking";
 import {
   markReminderSentInMeta,
   resetAppointmentReminders,
   suppressAppointmentReminders,
 } from "@/lib/appointments/reminder-state";
-import { bookAppointment, cancelAppointment, getAvailability } from "@/lib/voice/calendar/booking";
+import { bookAppointment, cancelAppointment } from "@/lib/voice/calendar/booking";
+import { generateNativeSlots } from "@/lib/appointments/availability-engine";
+
+export async function getAvailability(
+  workspaceId: string,
+  input: Record<string, unknown>,
+): Promise<{ slots: Array<{ startsAt: string; endsAt: string }> }> {
+  const serviceName = String(input.serviceName || input.service || "Appointment");
+  const daysAhead = Number(input.daysAhead || 14);
+  const timezone = input.timezone ? String(input.timezone) : undefined;
+  return generateNativeSlots(workspaceId, { serviceName, daysAhead, timezone });
+}
 
 export async function listAppointmentTypes(workspaceId: string) {
   const prisma = getPrisma();
@@ -147,24 +159,25 @@ export async function createPlatformAppointment(
   const cancelToken = publicToken();
   const rescheduleToken = publicToken();
 
-  await assertSlotAvailableForBooking(workspaceId, {
-    serviceName,
-    startsAt: input.startsAt,
-  });
-
-  const result = await bookAppointment(workspaceId, {
-    serviceName,
-    startsAt: input.startsAt,
-    phone: input.phone,
-    email: input.email,
-    contactId,
-    firstName: input.firstName,
-    lastName: input.lastName,
-    timezone: platform.timezone,
-    skipSms: true,
-    source: input.source || "admin",
-    notes: input.notes,
-  });
+  const result = await withAtomicSlotBooking(
+    workspaceId,
+    { serviceName, startsAt: input.startsAt },
+    async () => {
+      return bookAppointment(workspaceId, {
+        serviceName,
+        startsAt: input.startsAt,
+        phone: input.phone,
+        email: input.email,
+        contactId,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        timezone: platform.timezone,
+        skipSms: true,
+        source: input.source || "admin",
+        notes: input.notes,
+      });
+    },
+  );
 
   const appointmentId = String(result.appointmentId || "");
   if (!appointmentId) throw new Error("Booking failed");
@@ -178,6 +191,8 @@ export async function createPlatformAppointment(
       inviteePhone: input.phone,
       smsConsent: Boolean(input.smsConsent),
       smsConsentAt: input.smsConsent ? new Date().toISOString() : undefined,
+      smsConsentVersion: input.smsConsent ? platform.consentVersion || "v1" : undefined,
+      smsConsentText: input.smsConsent ? platform.consentText : undefined,
       confirmToken,
       cancelToken,
       rescheduleToken,
@@ -315,11 +330,17 @@ export async function reschedulePlatformAppointment(
   if (!row) throw new Error("Appointment not found");
   if (!row.serviceName) throw new Error("Appointment has no service type");
 
-  await assertSlotAvailableForBooking(workspaceId, {
-    serviceName: row.serviceName,
-    startsAt,
-    excludeAppointmentId: appointmentId,
-  });
+  await withAtomicSlotBooking(
+    workspaceId,
+    { serviceName: row.serviceName, startsAt, excludeAppointmentId: appointmentId },
+    async () => {
+      await assertSlotAvailableForBooking(workspaceId, {
+        serviceName: row.serviceName!,
+        startsAt,
+        excludeAppointmentId: appointmentId,
+      });
+    },
+  );
 
   const service = await prisma.voiceService.findFirst({
     where: { workspaceId, name: row.serviceName },
@@ -346,4 +367,3 @@ export async function reschedulePlatformAppointment(
   });
 }
 
-export { getAvailability };

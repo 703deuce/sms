@@ -1,22 +1,13 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
-import { getAvailability } from "@/lib/voice/calendar/booking";
+import type { Prisma } from "@prisma/client";
+import { generateNativeSlots, isBlackoutOrClosed, loadAvailabilityContext } from "@/lib/appointments/availability-engine";
 
-function dateKeyInTimezone(iso: string, timezone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(iso));
-}
+type Db = Prisma.TransactionClient | ReturnType<typeof getPrisma>;
 
-export function isBlackoutDate(startsAt: string, blackoutDates: string[] | undefined, timezone: string) {
-  if (!blackoutDates?.length) return false;
-  const key = dateKeyInTimezone(startsAt, timezone);
-  return blackoutDates.some((entry) => entry.trim() === key);
+function dbClient(tx?: Db): Db {
+  return tx || getPrisma();
 }
 
 /** Shared gate for admin + public booking — same availability source of truth. */
@@ -27,6 +18,7 @@ export async function assertSlotAvailableForBooking(
     startsAt: string;
     excludeAppointmentId?: string;
   },
+  tx?: Db,
 ) {
   const start = new Date(input.startsAt);
   if (Number.isNaN(start.getTime())) throw new Error("Invalid appointment time");
@@ -34,37 +26,47 @@ export async function assertSlotAvailableForBooking(
     throw new Error("Cannot book a time in the past");
   }
 
-  const platform = await loadAppointmentPlatformConfig(workspaceId);
-  if (isBlackoutDate(input.startsAt, platform.blackoutDates, platform.timezone)) {
+  const ctx = await loadAvailabilityContext(workspaceId, input.serviceName);
+  const { platform, service, svcCfg } = ctx;
+  if (isBlackoutOrClosed(input.startsAt, platform)) {
     throw new Error("Selected date is unavailable — please choose another day");
   }
 
-  const prisma = getPrisma();
-  const service = await prisma.voiceService.findFirst({
-    where: { workspaceId, name: input.serviceName },
-  });
+  const noticeMs = (ctx.minimumNoticeMinutes || 0) * 60_000;
+  if (start.getTime() < Date.now() + noticeMs) {
+    throw new Error("This time is too soon — please choose a later slot");
+  }
+
+  const maxDays = ctx.maximumDaysAhead || 14;
+  const maxDate = Date.now() + maxDays * 86_400_000;
+  if (start.getTime() > maxDate) {
+    throw new Error("This time is outside the booking window");
+  }
+
   if (!service) throw new Error("Appointment type not found");
-  const svcCfg = (service.config || {}) as { enabled?: boolean };
   if (svcCfg.enabled === false) throw new Error("This appointment type is not bookable");
 
   const durationMinutes = service.durationMinutes || 30;
-  const bufferMs = (service.bufferMinutes || 0) * 60_000;
+  const bufferBefore = (svcCfg.bufferBeforeMinutes || 0) * 60_000;
+  const bufferAfter = (svcCfg.bufferAfterMinutes || service.bufferMinutes || 0) * 60_000;
   const endsAt = new Date(start.getTime() + durationMinutes * 60_000);
+  const prisma = dbClient(tx);
 
   const conflict = await prisma.voiceAppointment.findFirst({
     where: {
       workspaceId,
       ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
-      startsAt: { lte: new Date(endsAt.getTime() + bufferMs) },
-      endsAt: { gte: new Date(start.getTime() - bufferMs) },
+      startsAt: { lte: new Date(endsAt.getTime() + bufferAfter) },
+      endsAt: { gte: new Date(start.getTime() - bufferBefore) },
       status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
     },
   });
   if (conflict) throw new Error("That time slot is no longer available");
 
-  const { slots } = await getAvailability(workspaceId, {
+  const { slots } = await generateNativeSlots(workspaceId, {
     serviceName: input.serviceName,
-    daysAhead: 21,
+    daysAhead: Math.min(maxDays, 21),
+    timezone: ctx.timezone,
   });
   const startMs = start.getTime();
   const allowed = slots.some((slot) => {

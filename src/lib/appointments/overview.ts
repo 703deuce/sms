@@ -23,6 +23,15 @@ export async function loadAppointmentsOverview(workspaceId: string) {
   });
 
   const normalized = (status: string) => status.toLowerCase();
+  const reminderFailed = await prisma.voiceAppointment.count({
+    where: {
+      workspaceId,
+      startsAt: { gte: startOfDay },
+      metadata: { path: ["reminderStatus"], equals: "failed" },
+      status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+    },
+  });
+
   const counts = {
     todayTotal: today.length,
     confirmed: today.filter((a) => normalized(a.status) === "confirmed").length,
@@ -34,6 +43,7 @@ export async function loadAppointmentsOverview(workspaceId: string) {
     unreadConversations: await prisma.conversation.count({
       where: { workspaceId, unread: true },
     }),
+    reminderFailed,
   };
 
   const needsAttention = [
@@ -55,6 +65,16 @@ export async function loadAppointmentsOverview(workspaceId: string) {
         label: `${a.inviteeName || "Customer"} requested reschedule`,
         href: `/appointments/${a.id}`,
       })),
+    ...(reminderFailed > 0
+      ? [
+          {
+            id: "reminder-failed",
+            kind: "reminder_failed" as const,
+            label: `${reminderFailed} reminder${reminderFailed === 1 ? "" : "s"} failed`,
+            href: "/appointments/reminders",
+          },
+        ]
+      : []),
   ];
 
   const recentConversations = await prisma.conversation.findMany({

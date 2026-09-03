@@ -9,6 +9,8 @@ type SetupStatus = {
   typesCount: number;
   bookingEnabled: boolean;
   hasSlug: boolean;
+  hasAvailability: boolean;
+  remindersConfigured: boolean;
   onboardingComplete: boolean;
 };
 
@@ -20,11 +22,15 @@ export function AppointmentsSetupClient() {
       fetch("/api/appointments/types").then((r) => r.json()),
       fetch("/api/appointments/settings").then((r) => r.json()),
     ]).then(([typesJson, settingsJson]) => {
+      const data = settingsJson.data || {};
+      const weekly = data.weeklyHours || {};
       setStatus({
         typesCount: (typesJson.data || []).length,
-        bookingEnabled: Boolean(settingsJson.data?.bookingEnabled),
+        bookingEnabled: Boolean(data.bookingEnabled),
         hasSlug: Boolean(settingsJson.workspace?.slug),
-        onboardingComplete: Boolean(settingsJson.data?.onboardingComplete),
+        hasAvailability: Object.keys(weekly).length > 0,
+        remindersConfigured: Boolean(data.reminders?.confirmation?.enabled),
+        onboardingComplete: Boolean(data.onboardingComplete),
       });
     });
   }, []);
@@ -40,43 +46,57 @@ export function AppointmentsSetupClient() {
 
   const steps = [
     {
+      title: "Business information",
+      done: Boolean(status?.hasSlug),
+      href: "/appointments/booking",
+      detail: "Display name, timezone, and public booking link.",
+    },
+    {
+      title: "Set availability",
+      done: Boolean(status?.hasAvailability),
+      href: "/appointments/availability",
+      detail: "Weekly hours, date overrides, and booking rules.",
+    },
+    {
       title: "Create an appointment type",
       done: (status?.typesCount || 0) > 0,
       href: "/appointments/types",
-      detail: "Name, duration, availability hours, and booking notice.",
+      detail: "Name, duration, location, and booking questions.",
     },
     {
-      title: "Connect your calendar",
-      done: false,
-      href: "/voice/calendars",
-      detail: "Google or Microsoft — drives live availability and prevents double-booking.",
+      title: "Turn on booking page",
+      done: Boolean(status?.bookingEnabled && status?.hasSlug),
+      href: "/appointments/booking",
+      detail: "Enable your public link and preview the customer flow.",
     },
     {
       title: "Configure reminders",
+      done: Boolean(status?.remindersConfigured),
+      href: "/appointments/reminders",
+      detail: "Preview templates and adjust timing.",
+    },
+    {
+      title: "Send test reminder",
       done: false,
       href: "/appointments/reminders",
-      detail: "Preview templates and send yourself a test SMS.",
+      detail: "Send yourself a real test SMS before going live.",
     },
     {
-      title: "Enable your booking page",
-      done: Boolean(status?.bookingEnabled && status?.hasSlug),
-      href: "/appointments/booking",
-      detail: "Copy your public link and preview the customer experience.",
-    },
-    {
-      title: "Book a test appointment",
+      title: "Create/test booking",
       done: false,
       href: "/appointments/new",
-      detail: "Verify slots, confirmation SMS, and timeline on the detail page.",
+      detail: "Book a test appointment and verify timeline + confirmations.",
     },
   ];
+
+  const completed = steps.filter((s) => s.done).length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-slate-900">Get started</h1>
+        <h1 className="font-display text-2xl font-semibold text-slate-900">Set up your booking system</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Complete these steps to launch online booking and SMS reminders.
+          {completed} of {steps.length} steps complete — finish at your own pace.
         </p>
       </div>
 
@@ -85,7 +105,9 @@ export function AppointmentsSetupClient() {
           <Card key={step.title} className="rounded-xl border-slate-200 p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Step {idx + 1}</p>
+                <p className="text-xs font-semibold uppercase text-slate-500">
+                  {step.done ? "✓" : "○"} Step {idx + 1}
+                </p>
                 <h2 className="font-semibold text-slate-900">{step.title}</h2>
                 <p className="mt-1 text-sm text-slate-600">{step.detail}</p>
               </div>

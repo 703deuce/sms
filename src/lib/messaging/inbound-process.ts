@@ -321,6 +321,44 @@ export async function processInboundMessage(input: {
     };
   }
 
+  // Narrow YES confirmation for platform appointments awaiting confirmation.
+  if (/^(yes|y)$/i.test(body.trim())) {
+    const apptContact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
+    });
+    if (apptContact) {
+      const pending = await prisma.voiceAppointment.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          contactId: apptContact.id,
+          status: "awaiting_confirmation",
+          startsAt: { gte: new Date() },
+        },
+        orderBy: { startsAt: "asc" },
+      });
+      if (pending) {
+        const { updatePlatformAppointmentStatus } = await import(
+          "@/lib/appointments/booking-platform"
+        );
+        await recordInboundReceipt({
+          workspaceId: input.workspaceId,
+          from,
+          to: input.to,
+          body,
+          providerMessageId: input.providerMessageId,
+        });
+        await updatePlatformAppointmentStatus(input.workspaceId, pending.id, "confirmed", {
+          type: "confirmed_via_sms",
+          label: "Customer replied YES to confirm",
+        });
+        return {
+          kind: "message",
+          replyText: "Thanks — your appointment is confirmed.",
+        };
+      }
+    }
+  }
+
   // Single-letter appointment confirm (C) / cancel (X) for contacts with an
   // upcoming appointment. Falls through to normal handling when none exists.
   if (upper === "C" || upper === "X") {
