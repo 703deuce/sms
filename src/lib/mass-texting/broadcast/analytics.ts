@@ -70,11 +70,12 @@ export async function listBroadcastRecipients(
       row.metadata && typeof row.metadata === "object"
         ? (row.metadata as Record<string, unknown>)
         : {};
-    type MsgRow = (typeof row.messages)[number];
-    const deliveredMsg = row.messages.find((m: MsgRow) => m.status === "delivered" || m.deliveredCounted);
-    const sentMsg = row.messages.find((m: MsgRow) => m.sentAt || m.status === "sent");
-    const clickedMsg = row.messages.find((m: MsgRow) => m.clickedCounted);
-    const { status, failureReason } = recipientDisplayStatus(row.workflowStatus, row.messages);
+    const messages = Array.isArray(row.messages) ? row.messages : [];
+    type MsgRow = (typeof messages)[number];
+    const deliveredMsg = messages.find((m: MsgRow) => m.status === "delivered" || m.deliveredCounted);
+    const sentMsg = messages.find((m: MsgRow) => m.sentAt || m.status === "sent");
+    const clickedMsg = messages.find((m: MsgRow) => m.clickedCounted);
+    const { status, failureReason } = recipientDisplayStatus(row.workflowStatus, messages);
 
     return {
       id: row.id,

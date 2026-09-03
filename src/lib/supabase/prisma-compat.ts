@@ -982,6 +982,32 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
       continue;
     }
 
+    // One-to-many: campaignRecipient.messages (campaign_messages.recipientId)
+    if (rel === "messages" && model === "campaignRecipient") {
+      const ids = out.map((r) => r.id as string);
+      const { data } = ids.length
+        ? await db.from("campaign_messages").select("*").in("recipientId", ids)
+        : { data: [] as Row[] };
+      const orderBy = isObject(cfg) ? (cfg.orderBy as Row | undefined) : undefined;
+      const dir = orderBy && "createdAt" in orderBy ? orderBy.createdAt : "asc";
+      const by = new Map<string, Row[]>();
+      for (const m of data ?? []) {
+        const list = by.get(m.recipientId as string) ?? [];
+        list.push(reviveRow(m as Row));
+        by.set(m.recipientId as string, list);
+      }
+      out = out.map((r) => {
+        let list = by.get(r.id as string) ?? [];
+        list = list.sort((a, b) => {
+          const av = new Date(a.createdAt as string).getTime();
+          const bv = new Date(b.createdAt as string).getTime();
+          return dir === "desc" ? bv - av : av - bv;
+        });
+        return { ...r, messages: list };
+      });
+      continue;
+    }
+
     // One-to-many: conversation.messages (ConversationMessage.conversationId)
     if (rel === "messages" && model === "conversation") {
       const ids = out.map((r) => r.id as string);
