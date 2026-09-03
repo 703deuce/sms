@@ -4,14 +4,24 @@ import { campaignUi } from "@/components/campaigns/broadcast/campaign-layout";
 import { clearComposeDraft, loadComposeDraft } from "@/lib/campaigns/compose-draft";
 import { formatRecurrenceSummary } from "@/lib/campaigns/recurrence-format";
 import {
+  fetchCampaignById,
   fetchLaunchReview,
+  isCampaignLaunchPending,
   launchCampaign,
+  type LaunchReviewData,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
+import { formatNumber } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Loader2, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const LAUNCHED_STATUSES = new Set(["SENDING", "SCHEDULED", "COMPLETED", "SENT"]);
+
+function normalizeStatus(status: string): string {
+  return status.toUpperCase().replace(/\s+/g, "_");
+}
 
 export function CampaignSuccessView() {
   const searchParams = useSearchParams();
@@ -69,69 +79,108 @@ export function CampaignQueueView() {
   const [seconds, setSeconds] = useState(3);
   const [launching, setLaunching] = useState(false);
   const [loadingReview, setLoadingReview] = useState(true);
-  const [recipientCount, setRecipientCount] = useState(0);
+  const [review, setReview] = useState<LaunchReviewData | null>(null);
   const [confirmLargeSend, setConfirmLargeSend] = useState(false);
   const [armed, setArmed] = useState(false);
   const [error, setError] = useState("");
   const launchedRef = useRef(false);
+  const inFlightRef = useRef(false);
   const cancelledRef = useRef(false);
   const router = useRouter();
 
+  const recipientCount = review?.finalRecipientCount ?? 0;
+  const requiredCredits = review?.requiredSegments ?? 0;
   const requiresLargeConfirm = recipientCount >= 1000;
+
+  const redirectToDetail = useCallback(() => {
+    if (!campaignId) return;
+    clearComposeDraft();
+    router.replace(`/campaigns/${campaignId}`);
+  }, [campaignId, router]);
 
   useEffect(() => {
     if (!campaignId) {
       setLoadingReview(false);
       return;
     }
-    setLoadingReview(true);
-    fetchLaunchReview(campaignId)
-      .then((review) => {
-        setRecipientCount(review.finalRecipientCount);
-        if (review.finalRecipientCount < 1000) {
+
+    let cancelled = false;
+
+    async function bootstrap() {
+      setLoadingReview(true);
+      setError("");
+      try {
+        const [campaign, launchReview] = await Promise.all([
+          fetchCampaignById(campaignId),
+          fetchLaunchReview(campaignId),
+        ]);
+        if (cancelled) return;
+
+        const status = normalizeStatus(campaign?.status || "DRAFT");
+        if (LAUNCHED_STATUSES.has(status)) {
+          redirectToDetail();
+          return;
+        }
+
+        setReview(launchReview);
+        if (launchReview.finalRecipientCount < 1000) {
           setArmed(true);
         }
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Could not load launch review");
-      })
-      .finally(() => setLoadingReview(false));
-  }, [campaignId]);
 
-  const runLaunch = async () => {
-    if (!campaignId) return;
+        if (isCampaignLaunchPending(campaignId) && status === "DRAFT") {
+          setSeconds(0);
+          setArmed(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not load launch review");
+        }
+      } finally {
+        if (!cancelled) setLoadingReview(false);
+      }
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, redirectToDetail]);
+
+  const runLaunch = useCallback(async () => {
+    if (!campaignId || inFlightRef.current) return;
     if (requiresLargeConfirm && !confirmLargeSend) {
       setError("Confirm the large-send checkbox before launching.");
       return;
     }
+    inFlightRef.current = true;
+    launchedRef.current = true;
     setLaunching(true);
     setError("");
     try {
       await launchCampaign(campaignId, recipientCount, confirmLargeSend);
-      clearComposeDraft();
-      router.push(`/campaigns/${campaignId}`);
+      redirectToDetail();
     } catch (err) {
       launchedRef.current = false;
+      inFlightRef.current = false;
       setError(err instanceof Error ? err.message : "Could not launch campaign");
     } finally {
       setLaunching(false);
     }
-  };
+  }, [campaignId, confirmLargeSend, recipientCount, redirectToDetail, requiresLargeConfirm]);
 
   useEffect(() => {
-    if (!campaignId || cancelledRef.current || launchedRef.current || !armed) return;
+    if (!campaignId || cancelledRef.current || !armed || loadingReview) return;
     if (requiresLargeConfirm) return;
     if (seconds > 0) {
       const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
       return () => clearTimeout(t);
     }
 
-    launchedRef.current = true;
     void runLaunch();
-  }, [seconds, campaignId, armed, requiresLargeConfirm]);
+  }, [seconds, campaignId, armed, requiresLargeConfirm, loadingReview, runLaunch]);
 
   async function cancelSend() {
-    if (launchedRef.current || launching) return;
+    if (inFlightRef.current || launching) return;
     cancelledRef.current = true;
     if (campaignId) {
       const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, {
@@ -168,7 +217,7 @@ export function CampaignQueueView() {
         </span>
       </div>
       <h1 className="mt-8 text-[22px] font-bold text-[#111827]">
-        {launching ? "Launching campaign…" : "Campaign is being queued…"}
+        {launching ? "Launching campaign…" : "Confirm send"}
       </h1>
       <p className="mt-2 text-[14px] text-[#6b7280]">
         {loadingReview
@@ -176,9 +225,24 @@ export function CampaignQueueView() {
           : launching
             ? "Sending messages to your audience."
             : requiresLargeConfirm
-              ? `Confirm sending to ${recipientCount.toLocaleString()} recipients before launch.`
+              ? "Confirm the recipient count and credits before launch."
               : `You can cancel for ${seconds} seconds.`}
       </p>
+      {review && !loadingReview ? (
+        <div className="mt-4 max-w-md rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-left text-[13px] text-slate-700">
+          <p className="font-semibold text-slate-900">{review.campaignName || "Campaign"}</p>
+          <p className="mt-1 tabular-nums">
+            <span className="font-medium">{formatNumber(review.finalRecipientCount)}</span> recipients
+            {" · "}
+            <span className="font-medium">{formatNumber(review.requiredSegments)}</span> credits required
+          </p>
+          {review.availableSegments < review.requiredSegments ? (
+            <p className="mt-1 text-red-700">
+              Insufficient credits ({formatNumber(review.availableSegments)} available).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {requiresLargeConfirm && !launching ? (
         <label className="mt-4 flex max-w-md items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left text-[13px] text-amber-900">
           <input
@@ -188,7 +252,8 @@ export function CampaignQueueView() {
             className="mt-0.5"
           />
           <span>
-            I confirm sending to {recipientCount.toLocaleString()} recipients.
+            I confirm sending to {formatNumber(recipientCount)} recipients ({formatNumber(requiredCredits)}{" "}
+            credits).
           </span>
         </label>
       ) : null}
@@ -205,11 +270,8 @@ export function CampaignQueueView() {
           {requiresLargeConfirm ? (
             <button
               type="button"
-              disabled={loadingReview || !confirmLargeSend}
-              onClick={() => {
-                launchedRef.current = true;
-                void runLaunch();
-              }}
+              disabled={loadingReview || !confirmLargeSend || inFlightRef.current}
+              onClick={() => void runLaunch()}
               className={campaignUi.primaryBtn}
             >
               Launch Campaign
@@ -217,10 +279,8 @@ export function CampaignQueueView() {
           ) : error ? (
             <button
               type="button"
-              onClick={() => {
-                launchedRef.current = true;
-                void runLaunch();
-              }}
+              disabled={inFlightRef.current}
+              onClick={() => void runLaunch()}
               className={campaignUi.primaryBtn}
             >
               Try Again

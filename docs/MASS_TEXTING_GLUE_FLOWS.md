@@ -175,6 +175,42 @@ Always verify:
 - Draft DELETE removes row; non-draft DELETE cancels campaign
 - Review + queue use same `fetchLaunchReview` recipient/credit counts
 
+### Send-now campaign (64–73)
+
+| Role | Files |
+|------|--------|
+| Queue / launch UI | `src/components/campaigns/broadcast/campaign-confirmation.tsx` |
+| Launch API | `src/app/api/mass-texting/campaigns/[id]/launch/route.ts` |
+| Launch engine | `src/lib/mass-texting/campaign-launch.ts` |
+| Results / polling | `src/components/campaigns/broadcast/campaign-results.tsx` |
+| Detail SSR | `src/app/(app)/campaigns/[campaignId]/page.tsx` |
+
+**User flow:**
+
+```
+Review → Send Now → /campaigns/new/queue?id= → countdown → launch → /campaigns/:id (results)
+```
+
+**Checklist (64–73):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 64 | Send immediately | `ReviewDetails` → `queuePath` → `launchCampaign` |
+| 65 | Confirmation shows count/cost | Queue view shows `fetchLaunchReview` recipients + credits |
+| 66 | Appears in campaign list | Status `SENDING`/`COMPLETED`; list remount on return (`listKey`) |
+| 67–68 | Detail after send + refresh | Redirect to `/campaigns/:id`; SSR + client poll on `SENDING` |
+| 69 | Status progresses | `CampaignResultsView` polls `/stats` every 5s while sending |
+| 70 | Messages reach test numbers | `TestMessageModal` on compose; live send via worker (not glue) |
+| 71 | Partial failure handling | `reconcileCampaignStatus`: partial fail → `COMPLETED` not whole-campaign `FAILED` |
+| 72 | Double-click protection | `inFlightRef` + server launch audit idempotency |
+| 73 | Refresh during send | Queue checks campaign status on load; `launch-pending` session resumes idempotent launch |
+
+**Glue checks:**
+
+- Queue redirects to detail if campaign already `SENDING`/`COMPLETED` (refresh-safe)
+- `launchCampaign` passes idempotency key; server dedupes via `campaignLaunchAudit`
+- Queue summary card matches review numbers before countdown
+
 ### Drip campaigns (automations)
 
 | Role | Files |
@@ -238,7 +274,7 @@ These caused real user-visible bugs — grep for them when touching glue:
 
 ## Quick manual smoke (5 min per feature)
 
-**Campaigns:** create → pick list → review (check recipient + credit summary) → queue → detail → back to list.
+**Campaigns:** create → review → queue (verify recipient + credits) → detail polls while sending → back to list.
 
 **Inbox:** cold `/conversations` → open thread → send reply.
 

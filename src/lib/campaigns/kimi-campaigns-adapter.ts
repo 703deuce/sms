@@ -326,23 +326,58 @@ export async function fetchLaunchReview(campaignId: string): Promise<LaunchRevie
   };
 }
 
+export async function fetchCampaignById(
+  campaignId: string,
+): Promise<{ id: string; name: string; status: string } | null> {
+  const res = await fetch(`/api/mass-texting/campaigns/${encodeURIComponent(campaignId)}`);
+  const json = await res.json();
+  if (!res.ok) return null;
+  const row = json.data as { id?: string; name?: string; status?: string } | undefined;
+  if (!row?.id) return null;
+  return { id: row.id, name: row.name || "", status: row.status || "DRAFT" };
+}
+
+const LAUNCH_PENDING_PREFIX = "campaign-launch-pending:";
+
+export function markCampaignLaunchPending(campaignId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(`${LAUNCH_PENDING_PREFIX}${campaignId}`, String(Date.now()));
+}
+
+export function clearCampaignLaunchPending(campaignId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(`${LAUNCH_PENDING_PREFIX}${campaignId}`);
+}
+
+export function isCampaignLaunchPending(campaignId: string): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(sessionStorage.getItem(`${LAUNCH_PENDING_PREFIX}${campaignId}`));
+}
+
 export async function launchCampaign(
   campaignId: string,
   _finalRecipientCount: number,
   confirmLargeSend = false,
-): Promise<void> {
+): Promise<{ idempotentReplay?: boolean }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
+  markCampaignLaunchPending(campaignId);
   try {
     const res = await fetch(`/api/mass-texting/campaigns/${campaignId}/launch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmLargeSend }),
+      body: JSON.stringify({
+        confirmLargeSend,
+        idempotencyKey: `launch:${campaignId}`,
+      }),
       signal: controller.signal,
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Launch failed");
+    clearCampaignLaunchPending(campaignId);
+    return { idempotentReplay: Boolean(json.data?.idempotentReplay) };
   } catch (err) {
+    clearCampaignLaunchPending(campaignId);
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error("Launch timed out — try again in a moment");
     }
