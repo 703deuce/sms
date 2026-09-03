@@ -59,32 +59,70 @@ Always verify:
 - List remounts when returning from detail (`kimi-campaigns-connected` `listKey`)
 - Results page root: `w-full max-w-[1200px]` on **all** tabs
 
-### Inbox / Conversations
+### Inbox / Conversations (106–136)
 
 | Role | Files |
 |------|--------|
 | Shell | `src/components/inbox/kimi-conversations-connected.tsx` |
 | Adapter | `src/lib/inbox/kimi-inbox-adapter.ts` |
+| Compose glue | `src/lib/inbox/inbox-compose.ts` |
 | URL filters | `src/lib/inbox/conversation-url-filters.ts` |
 | SSR page | `src/app/(app)/conversations/page.tsx` |
-| API | `src/app/api/inbox/**` |
+| API | `src/app/api/inbox/**`, `src/app/api/sms/send/route.ts` (inbox compose) |
 
 **User flow:**
 
 ```
-/conversations (cold load) → All Conversations shows rows + counts
-  → click thread → messages panel opens, row stays visible
-  → change filter → optional; open thread should not vanish
-  → reply → message appears
+/conversations (cold load, filter=all) → list rows + rail counts
+  → click thread → messages panel; row stays pinned
+  → reply → PATCH action=reply → message in thread
+  → compose new → POST /api/sms/send (inboxCompose) → conversation thread created
 ```
+
+**Checklist (106–136):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 106 | Inbox list cold load | SSR `loadConversations` + client `reloadList` on mount |
+| 107 | Default filter = Everyone | `filterSelFromUrlParams` → `{kind:'all',key:'all'}`; URL sync `filter=all` |
+| 108 | Rail filter URL persistence | `filterSelToSearchParams` + `syncUrl` on rail change |
+| 109 | Product source chips | `InboxProductFilters` + `?product=` in API query |
+| 110 | Server-side search | `?q=` → `buildConversationWhere`; no double client filter during debounce |
+| 111 | Open thread from list | `pickConvo` → `?conversation=` + `fetchConversation` |
+| 112 | Thread pinned when filtered out | `listConvos` + `reloadList` pin selected id |
+| 113 | Deep link `?conversation=` | SSR + client fetch on mount |
+| 114 | Deep link `?contactId=` | `fetchConversationForContact` or compose modal |
+| 115 | Deep link `?draft=` | Opens compose with draft text |
+| 116 | Reply in thread | `syncConversationUpdate` → PATCH `action=reply` |
+| 117 | MMS reply in thread | Composer `mediaUrls` → PATCH reply |
+| 118 | New message compose | `recordInboxComposeSend` after `inboxCompose` send → thread + message |
+| 119 | Mark read on open | Optimistic + `patchConversation({ unread: false })` |
+| 120 | Status change | `syncConversationUpdate` / bulk PATCH |
+| 121 | Assign / unassign | `resolveAssigneeApiId` + PATCH |
+| 122 | Tag conversation | `tagKeysToApiNames` + PATCH; `untagOnClose` server-side |
+| 123 | Bulk actions | `bulk()` → parallel PATCH + `reloadList` |
+| 124 | Internal notes | PATCH `action=note` + mentions |
+| 125 | Saved replies | `TemplatePicker` + `/conversations/saved-replies` |
+| 126 | Contact panel | `ConversationsContactPanel` → `fetchContactById` |
+| 127 | Inbox disabled gate | `inboxEnabled` / permissions before render |
+| 128 | Inbox tag management | `TagsSettings` + messaging settings adapter |
+| 129 | Product isolation | `productSource` filter in API |
+| 130 | Pagination load more | `listHasMore` / `loadMoreList` cursor |
+| 131 | Live thread refresh | 15s poll `fetchConversation(selectedId)` |
+| 132 | Presence | `/api/inbox/:id/presence` heartbeat |
+| 133 | AI inbox assist | `InboxAiAssistPanel` + ai-assist API |
+| 134 | Rail counts | Client counts from loaded `convos` (page subset) |
+| 135 | Closed-thread reply blocked | `composerBlocked` when setting disallows |
+| 136 | Contact detail → inbox | `loadConversations({ contactId })`; link `?conversation=` or `?contactId=` |
 
 **Glue checks:**
 
-- Default filter is **all**, not mine (`filter=all` in URL)
-- `reloadList` does **not** depend on `selectedId` (opening a thread must not refetch-wipe list)
-- Preserve SSR `initialConversations` until first successful client fetch
-- `filterSelToSearchParams({ kind: 'all', key: 'all' })` sets `filter=all`
-- `listBroadcastRecipients`-style issues: prisma-compat must hydrate relations used in SSR
+- `reloadList` does **not** depend on `selectedId` (uses `selectedIdRef`)
+- Preserve SSR `initialConversations` until first successful client fetch (`retainInitialConvosRef`)
+- `recordInboxComposeSend` creates conversation + `conversationMessage` after inbox compose send
+- Contact detail uses `contactId` filter (not global top-50 scan)
+- Activity timeline links use `/conversations?conversation=`
+- Search is server-side only once `?q=` is in URL (no misleading client substring filter)
 
 ### Contacts / Lists / Segments
 

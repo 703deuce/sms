@@ -61,6 +61,19 @@ export async function POST(request: Request) {
         undefined,
     });
 
+    if (body.inboxCompose) {
+      const { recordInboxComposeSend } = await import("@/lib/inbox/inbox-compose");
+      const { conversationId } = await recordInboxComposeSend({
+        workspaceId,
+        to,
+        body: message,
+        fromE164: body.from,
+        mediaUrls: body.mediaUrls,
+        userName: auth.session.name ?? auth.session.email ?? null,
+      });
+      return NextResponse.json({ data: { ...result, conversationId } });
+    }
+
     return NextResponse.json({ data: result });
   } catch (err) {
     return jsonError(err, 400);

@@ -456,7 +456,7 @@ export async function sendNewMessage(input: {
   fromE164?: string;
   mediaUrls?: string[];
   inboxCompose?: boolean;
-}): Promise<void> {
+}): Promise<{ conversationId?: string }> {
   const res = await fetch("/api/sms/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -470,6 +470,7 @@ export async function sendNewMessage(input: {
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not send message");
+  return { conversationId: json.data?.conversationId as string | undefined };
 }
 
 export function downloadTranscript(convo: Conversation) {

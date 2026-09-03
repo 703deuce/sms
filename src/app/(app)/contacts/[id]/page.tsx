@@ -176,10 +176,11 @@ export default async function ContactDetailPage({
     );
   }
 
-  const conversations: Conversation[] = await loadConversations(workspaceId);
-  const conversation = conversations.find(
-    (c: Conversation) => c.contactId === contact.id,
-  );
+  const conversations = await loadConversations(workspaceId, {
+    product: "all",
+    contactId: contact.id,
+  });
+  const conversation = conversations[0] ?? null;
   const consentHistory = consentHistoryFor(contact);
 
   return (
@@ -292,6 +293,16 @@ export default async function ContactDetailPage({
                 <Link href={`/conversations?conversation=${encodeURIComponent(conversation.id)}`}>
                   <Button variant="outline" size="sm">
                     Open in inbox
+                  </Button>
+                </Link>
+              </div>
+            ) : contact.status === "Subscribed" ? (
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-muted/20 px-3.5 py-2.5">
+                <p className="text-sm text-muted-foreground">No inbox thread yet for this contact.</p>
+                <Link href={`/conversations?contactId=${encodeURIComponent(contact.id)}`}>
+                  <Button variant="outline" size="sm">
+                    <Inbox className="h-3.5 w-3.5" />
+                    Start conversation
                   </Button>
                 </Link>
               </div>

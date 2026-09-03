@@ -13,15 +13,7 @@ export async function fetchDripCampaigns(): Promise<DripCampaignRecord[]> {
 
 export type DripCampaignDetailPayload = {
   campaign: DripCampaignRecord;
-  recipients: Array<{
-    id: string;
-    contactName: string;
-    contactPhone: string;
-    status: string;
-    currentStepIndex: number;
-    replied: boolean;
-    lastSentAt: string | null;
-  }>;
+  recipients: DripEnrollmentRecord[];
   stats: {
     totalTriggered: number;
     totalEnrollments: number;

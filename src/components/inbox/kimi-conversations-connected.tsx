@@ -556,12 +556,7 @@ export function KimiConversationsConnected({
 
   const filtered = useMemo(
     () => {
-      const needle = searchQuery.trim().toLowerCase();
       const rows = convos.filter((c) => {
-        if (needle && !listQueryExtra.q) {
-          const haystack = `${c.name} ${c.phone} ${c.preview}`.toLowerCase();
-          if (!haystack.includes(needle)) return false;
-        }
         if (sel.kind === "mine") {
           if (c.assignee !== "me") return false;
           if (sel.key === "unread") return !!c.unread;
@@ -583,7 +578,7 @@ export function KimiConversationsConnected({
       });
       return sortOrder === "oldest" ? [...rows].reverse() : rows;
     },
-    [convos, sel, searchQuery, sortOrder, listQueryExtra.q],
+    [convos, sel, sortOrder],
   );
 
   useEffect(() => {
@@ -761,13 +756,26 @@ export function KimiConversationsConnected({
     const message = composeMessage.trim();
     const fromE164 = phoneNumbers.find((n) => n.id === composeNumberId)?.number;
     try {
-      await sendNewMessage({ to, message, fromE164, inboxCompose: true });
+      const { conversationId } = await sendNewMessage({ to, message, fromE164, inboxCompose: true });
       setNewMsgOpen(false);
       setComposeTo("");
       setComposeQuery("");
       setComposePicked(false);
       setComposeMessage("");
       clearEphemeralUrlParams();
+      if (conversationId) {
+        const data = await fetchConversation(conversationId);
+        const mapped = mapConvo(data);
+        setApiConvoById((prev) => ({ ...prev, [data.id]: data }));
+        setConvos((prev) =>
+          prev.some((c) => c.id === mapped.id)
+            ? prev.map((c) => (c.id === mapped.id ? mapped : c))
+            : [mapped, ...prev],
+        );
+        setSelectedId(mapped.id);
+        syncUrl(sel, { conversationId: mapped.id });
+        return;
+      }
       const rows = await reloadList();
       const normalized = to.replace(/\D/g, "");
       const match = rows.find((c) => c.phone.replace(/\D/g, "") === normalized);

@@ -59,7 +59,7 @@ export async function getContactActivityTimeline(
         summary: (m.body || "").slice(0, 160) || "(empty message)",
         status: m.status,
         at: new Date(m.createdAt).toISOString(),
-        href: `/inbox?conversation=${m.conversationId}`,
+        href: `/conversations?conversation=${m.conversationId}`,
         meta: { mediaUrl: m.mediaUrl || null },
       });
     }
