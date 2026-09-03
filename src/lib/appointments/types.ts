@@ -85,6 +85,9 @@ export type AppointmentMetadata = {
   [key: string]: unknown;
 };
 
+export const DEFAULT_SMS_CONSENT_TEXT =
+  "I agree to receive appointment confirmations and reminders by SMS. Message and data rates may apply. Reply STOP to opt out.";
+
 export const DEFAULT_REMINDER_TEMPLATES = {
   confirmation:
     "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}. Reply YES to confirm. Reschedule: {{reschedule_link}} Cancel: {{cancel_link}}",
@@ -97,6 +100,9 @@ export const DEFAULT_REMINDER_TEMPLATES = {
 export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
   bookingEnabled: false,
   timezone: "America/New_York",
+  consentText: DEFAULT_SMS_CONSENT_TEXT,
+  termsUrl: "/terms",
+  privacyUrl: "/privacy",
   reminders: {
     confirmation: {
       enabled: true,

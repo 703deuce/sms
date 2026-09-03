@@ -17,7 +17,11 @@ type AppointmentType = {
     description?: string;
     location?: string;
     priceDisplay?: string;
+    bookingHours?: string;
+    minimumBookingNoticeMinutes?: number;
+    maximumBookingDaysAhead?: number;
     enabled?: boolean;
+    bookingQuestions?: Array<{ id: string; label: string; type: string; required?: boolean }>;
   };
 };
 
@@ -32,6 +36,8 @@ const emptyForm = {
   minimumBookingNoticeMinutes: 60,
   maximumBookingDaysAhead: 14,
   enabled: true,
+  customQuestion: "",
+  customQuestionRequired: false,
 };
 
 export function AppointmentTypesClient() {
@@ -84,6 +90,16 @@ export function AppointmentTypesClient() {
           minimumBookingNoticeMinutes: form.minimumBookingNoticeMinutes,
           maximumBookingDaysAhead: form.maximumBookingDaysAhead,
           enabled: form.enabled,
+          bookingQuestions: form.customQuestion.trim()
+            ? [
+                {
+                  id: "custom_question",
+                  label: form.customQuestion.trim(),
+                  type: "text",
+                  required: form.customQuestionRequired,
+                },
+              ]
+            : [],
         },
       }),
     });
@@ -112,6 +128,8 @@ export function AppointmentTypesClient() {
       minimumBookingNoticeMinutes: type.config.minimumBookingNoticeMinutes || 60,
       maximumBookingDaysAhead: type.config.maximumBookingDaysAhead || 14,
       enabled: type.config.enabled !== false,
+      customQuestion: type.config.bookingQuestions?.[0]?.label || "",
+      customQuestionRequired: Boolean(type.config.bookingQuestions?.[0]?.required),
     });
   }
 
@@ -221,6 +239,25 @@ export function AppointmentTypesClient() {
               />
               Active on booking page
             </label>
+            <div>
+              <Label htmlFor="custom-q">Custom booking question (optional)</Label>
+              <Input
+                id="custom-q"
+                placeholder="e.g. What brings you in today?"
+                value={form.customQuestion}
+                onChange={(e) => setForm({ ...form, customQuestion: e.target.value })}
+              />
+            </div>
+            {form.customQuestion.trim() ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.customQuestionRequired}
+                  onChange={(e) => setForm({ ...form, customQuestionRequired: e.target.checked })}
+                />
+                Require answer on booking form
+              </label>
+            ) : null}
             {error ? <p className="text-sm text-rose-600">{error}</p> : null}
             <div className="flex gap-2">
               <Button onClick={save} disabled={saving}>

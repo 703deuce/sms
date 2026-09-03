@@ -112,6 +112,7 @@ export async function createPlatformAppointment(
     phone: string;
     email?: string;
     notes?: string;
+    bookingAnswers?: Record<string, string>;
     smsConsent?: boolean;
     source?: "admin" | "public_booking";
     status?: string;
@@ -185,6 +186,7 @@ export async function createPlatformAppointment(
       cancelUrl: publicActionUrl("cancel", cancelToken),
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
       reminderGeneration: 1,
+      bookingAnswers: input.bookingAnswers,
     }),
     { type: "created", label: "Appointment created" },
   );
@@ -245,12 +247,21 @@ export async function updatePlatformAppointmentStatus(
     where: { id: appointmentId, workspaceId },
   });
   if (!row) throw new Error("Appointment not found");
-  const metadata = timeline
-    ? appendTimeline((row.metadata || {}) as Record<string, unknown>, timeline)
-    : row.metadata;
+  let meta = (row.metadata || {}) as AppointmentMetadata;
+  if (timeline) meta = appendTimeline(meta, timeline) as AppointmentMetadata;
+  const normalized = status.toLowerCase();
+  if (["canceled", "cancelled", "completed", "no_show"].includes(normalized)) {
+    meta = suppressAppointmentReminders(meta);
+    if (normalized !== "canceled" && normalized !== "cancelled") {
+      meta = appendTimeline(meta, {
+        type: "reminders_suppressed",
+        label: "Reminders cleared for closed appointment",
+      }) as AppointmentMetadata;
+    }
+  }
   return prisma.voiceAppointment.update({
     where: { id: appointmentId },
-    data: { status, metadata: metadata as object },
+    data: { status, metadata: meta as object },
   });
 }
 
@@ -261,16 +272,19 @@ export async function cancelPlatformAppointment(workspaceId: string, appointment
   });
   if (!row) throw new Error("Appointment not found");
   await cancelAppointment(workspaceId, appointmentId);
-  const meta = suppressAppointmentReminders((row.metadata || {}) as AppointmentMetadata);
-  return updatePlatformAppointmentStatus(workspaceId, appointmentId, "canceled", {
-    type: "canceled",
-    label: "Appointment canceled — pending reminders cleared",
-  }).then(async (updated) => {
-    await prisma.voiceAppointment.update({
-      where: { id: appointmentId },
-      data: { metadata: appendTimeline(meta, { type: "reminders_suppressed", label: "Reminders canceled" }) as object },
-    });
-    return updated;
+  const meta = appendTimeline(
+    suppressAppointmentReminders((row.metadata || {}) as AppointmentMetadata),
+    { type: "canceled", label: "Appointment canceled — pending reminders cleared" },
+  ) as AppointmentMetadata;
+  return prisma.voiceAppointment.update({
+    where: { id: appointmentId },
+    data: {
+      status: "canceled",
+      metadata: appendTimeline(meta, {
+        type: "reminders_suppressed",
+        label: "Reminders canceled",
+      }) as object,
+    },
   });
 }
 

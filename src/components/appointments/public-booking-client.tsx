@@ -9,7 +9,17 @@ type BookingType = {
   id: string;
   name: string;
   durationMinutes: number;
-  config?: { description?: string; location?: string; priceDisplay?: string };
+  config?: {
+    description?: string;
+    location?: string;
+    priceDisplay?: string;
+    bookingQuestions?: Array<{
+      id: string;
+      label: string;
+      type: "text" | "textarea";
+      required?: boolean;
+    }>;
+  };
 };
 
 type Slot = { startsAt: string; endsAt: string };
@@ -25,6 +35,12 @@ export function PublicBookingClient({
 }) {
   const [step, setStep] = useState<Step>("service");
   const [workspaceName, setWorkspaceName] = useState("");
+  const [timezone, setTimezone] = useState("");
+  const [businessPhone, setBusinessPhone] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [consentText, setConsentText] = useState("");
+  const [termsUrl, setTermsUrl] = useState("/terms");
+  const [privacyUrl, setPrivacyUrl] = useState("/privacy");
   const [types, setTypes] = useState<BookingType[]>([]);
   const [selectedType, setSelectedType] = useState<BookingType | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -34,6 +50,7 @@ export function PublicBookingClient({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [bookingAnswers, setBookingAnswers] = useState<Record<string, string>>({});
   const [smsConsent, setSmsConsent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -51,6 +68,12 @@ export function PublicBookingClient({
       })
       .then((json) => {
         setWorkspaceName(json.data.workspace.name);
+        setTimezone(json.data.timezone || "");
+        setBusinessPhone(json.data.businessPhone || "");
+        setBusinessAddress(json.data.businessAddress || "");
+        setConsentText(json.data.consentText || "");
+        setTermsUrl(json.data.termsUrl || "/terms");
+        setPrivacyUrl(json.data.privacyUrl || "/privacy");
         const list = json.data.types || [];
         setTypes(list);
         if (initialServiceId) {
@@ -84,6 +107,7 @@ export function PublicBookingClient({
   async function pickType(type: BookingType) {
     setSelectedType(type);
     setStartsAt("");
+    setBookingAnswers({});
     setStep("datetime");
     setLoadingSlots(true);
     setError("");
@@ -102,6 +126,13 @@ export function PublicBookingClient({
   }
 
   async function book() {
+    const questions = selectedType?.config?.bookingQuestions || [];
+    for (const q of questions) {
+      if (q.required && !bookingAnswers[q.id]?.trim()) {
+        setError(`Please answer: ${q.label}`);
+        return;
+      }
+    }
     if (!selectedType || !startsAt || !phone.trim() || !smsConsent) {
       setError("Please complete all required fields and consent to SMS.");
       return;
@@ -120,6 +151,7 @@ export function PublicBookingClient({
         phone,
         email,
         notes,
+        bookingAnswers: Object.keys(bookingAnswers).length ? bookingAnswers : undefined,
         smsConsent: true,
       }),
     });
@@ -157,6 +189,14 @@ export function PublicBookingClient({
         <div className="mb-8 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Book online</p>
           <h1 className="mt-2 font-display text-3xl font-semibold text-slate-900">{workspaceName}</h1>
+          {timezone ? (
+            <p className="mt-2 text-sm text-slate-500">All times shown in {timezone.replace(/_/g, " ")}</p>
+          ) : null}
+          {businessPhone || businessAddress ? (
+            <p className="mt-1 text-sm text-slate-500">
+              {[businessPhone, businessAddress].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
         </div>
 
         {step === "service" ? (
@@ -254,6 +294,32 @@ export function PublicBookingClient({
                 <Label htmlFor="notes">Notes (optional)</Label>
                 <Textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
               </div>
+              {(selectedType?.config?.bookingQuestions || []).map((q) => (
+                <div key={q.id}>
+                  <Label htmlFor={q.id}>
+                    {q.label}
+                    {q.required ? " *" : ""}
+                  </Label>
+                  {q.type === "textarea" ? (
+                    <Textarea
+                      id={q.id}
+                      rows={3}
+                      value={bookingAnswers[q.id] || ""}
+                      onChange={(e) =>
+                        setBookingAnswers({ ...bookingAnswers, [q.id]: e.target.value })
+                      }
+                    />
+                  ) : (
+                    <Input
+                      id={q.id}
+                      value={bookingAnswers[q.id] || ""}
+                      onChange={(e) =>
+                        setBookingAnswers({ ...bookingAnswers, [q.id]: e.target.value })
+                      }
+                    />
+                  )}
+                </div>
+              ))}
               <label className="flex items-start gap-2 text-sm text-slate-700">
                 <input
                   className="mt-1"
@@ -262,13 +328,12 @@ export function PublicBookingClient({
                   onChange={(e) => setSmsConsent(e.target.checked)}
                 />
                 <span>
-                  I agree to receive appointment confirmations and reminders by SMS. Message and data
-                  rates may apply. Reply STOP to opt out. See our{" "}
-                  <a href="/terms" className="text-sky-700 hover:underline" target="_blank" rel="noreferrer">
+                  {consentText || "I agree to receive appointment confirmations and reminders by SMS."}{" "}
+                  <a href={termsUrl} className="text-sky-700 hover:underline" target="_blank" rel="noreferrer">
                     Terms
                   </a>{" "}
                   and{" "}
-                  <a href="/privacy" className="text-sky-700 hover:underline" target="_blank" rel="noreferrer">
+                  <a href={privacyUrl} className="text-sky-700 hover:underline" target="_blank" rel="noreferrer">
                     Privacy Policy
                   </a>
                   .

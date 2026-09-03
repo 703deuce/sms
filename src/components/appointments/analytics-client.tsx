@@ -70,6 +70,13 @@ export function AppointmentsAnalyticsClient() {
         </div>
       </div>
 
+      {data.booked === 0 ? (
+        <Card className="rounded-xl border-dashed border-slate-200 p-6 text-sm text-slate-600">
+          No appointments booked in the last {range} days. Once customers book online or you add
+          appointments manually, metrics will appear here.
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
           <Card key={card.label} className="rounded-xl border-slate-200 p-4 shadow-sm">

@@ -21,6 +21,10 @@ export async function GET(_request: Request, { params }: Params) {
       serviceName: row.serviceName || undefined,
       daysAhead: 14,
     });
+    const now = Date.now();
+    const slots = availability.slots.filter(
+      (slot) => new Date(slot.startsAt).getTime() > now + 60_000,
+    );
     return NextResponse.json({
       data: {
         id: row.id,
@@ -29,7 +33,7 @@ export async function GET(_request: Request, { params }: Params) {
         endsAt: row.endsAt,
         status: row.status,
         timezone: row.timezone || config.timezone,
-        slots: availability.slots,
+        slots,
       },
     });
   } catch (err) {

@@ -28,6 +28,12 @@ export async function GET(_request: Request, { params }: Params) {
           logoUrl: workspace.logoUrl,
         },
         timezone: config.timezone,
+        businessDisplayName: config.businessDisplayName || workspace.displayName || workspace.name,
+        businessPhone: config.businessPhone,
+        businessAddress: config.businessAddress,
+        consentText: config.consentText,
+        termsUrl: config.termsUrl,
+        privacyUrl: config.privacyUrl,
         types,
       },
     });
@@ -60,6 +66,11 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "SMS consent is required" }, { status: 400 });
     }
 
+    const bookingAnswers =
+      body.bookingAnswers && typeof body.bookingAnswers === "object"
+        ? (body.bookingAnswers as Record<string, string>)
+        : undefined;
+
     const result = await createPlatformAppointment(workspace.id, {
       serviceId: body.serviceId ? String(body.serviceId) : undefined,
       serviceName: String(body.serviceName || ""),
@@ -69,6 +80,7 @@ export async function POST(request: Request, { params }: Params) {
       phone: String(body.phone || ""),
       email: body.email ? String(body.email) : undefined,
       notes: body.notes ? String(body.notes) : undefined,
+      bookingAnswers,
       smsConsent: true,
       source: "public_booking",
       status: "awaiting_confirmation",
