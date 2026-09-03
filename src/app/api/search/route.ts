@@ -113,7 +113,7 @@ export async function GET(request: Request) {
           type: "conversation",
           title: name,
           subtitle: "Conversation",
-          href: `/inbox?conversation=${conv.id}`,
+          href: `/conversations?conversation=${conv.id}`,
         });
       }
     }
