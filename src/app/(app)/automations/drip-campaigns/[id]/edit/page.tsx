@@ -1,4 +1,5 @@
 import { DripCampaignWizard } from "@/components/drip-campaigns/drip-campaign-wizard";
+import { DripSectionShell } from "@/components/drip-campaigns/drip-section-shell";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { getDripCampaign } from "@/lib/drip-campaigns/service";
 import { notFound } from "next/navigation";
@@ -13,5 +14,9 @@ export default async function EditDripCampaignPage({ params }: Props) {
   if (!workspaceId) notFound();
   const initial = await getDripCampaign(workspaceId, id);
   if (!initial) notFound();
-  return <DripCampaignWizard mode="edit" initial={initial} />;
+  return (
+    <DripSectionShell>
+      <DripCampaignWizard mode="edit" initial={initial} />
+    </DripSectionShell>
+  );
 }

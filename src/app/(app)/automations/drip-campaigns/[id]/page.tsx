@@ -1,4 +1,5 @@
 import { DripCampaignDetail } from "@/components/drip-campaigns/drip-campaign-detail";
+import { DripSectionShell } from "@/components/drip-campaigns/drip-section-shell";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { loadDripCampaignDetail } from "@/lib/drip-campaigns/engine";
 import { notFound } from "next/navigation";
@@ -16,12 +17,14 @@ export default async function DripCampaignDetailPage({ params }: Props) {
   if (!data) notFound();
 
   return (
-    <DripCampaignDetail
-      campaign={data.campaign}
-      recipients={data.recipients}
-      stats={data.stats}
-      chart={data.chart}
-      recentDeliveries={data.recentDeliveries}
-    />
+    <DripSectionShell>
+      <DripCampaignDetail
+        campaign={data.campaign}
+        recipients={data.recipients}
+        stats={data.stats}
+        chart={data.chart}
+        recentDeliveries={data.recentDeliveries}
+      />
+    </DripSectionShell>
   );
 }

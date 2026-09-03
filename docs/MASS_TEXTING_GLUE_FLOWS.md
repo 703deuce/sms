@@ -257,10 +257,12 @@ Worker: scheduledAt <= now → SENDING → enqueueDueCampaignMessages
 - `CampaignSuccessView` loads `fetchCampaignById` + `fetchLaunchReview` after schedule
 - `buildPreSendReview` parses string `configJson` and returns `timezone`
 
-### Drip campaigns (automations)
+### Drip campaigns (87–105)
 
 | Role | Files |
 |------|--------|
+| Adapter | `src/lib/drip-campaigns/drip-campaigns-adapter.ts` |
+| Section shell | `src/components/drip-campaigns/drip-section-shell.tsx` |
 | UI | `src/components/drip-campaigns/*` |
 | Service / engine | `src/lib/drip-campaigns/service.ts`, `engine.ts` |
 | APIs | `src/app/api/drip-campaigns/**` |
@@ -269,16 +271,43 @@ Worker: scheduledAt <= now → SENDING → enqueueDueCampaignMessages
 **User flow:**
 
 ```
-/automations/drip-campaigns → list → new → wizard → save
-  → detail → activate → enrollment stats update
-  → edit → save (no duplicate-row bugs)
+/automations/drip-campaigns → list → new → wizard (Setup → Messages → Review)
+  → Save & Activate → detail (stats refresh)
+  → pause / edit → save → detail (no duplicate rows)
 ```
+
+**Checklist (87–105):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 87 | List cold load | SSR `listDripCampaigns` + client `fetchDripCampaigns` reload on mount |
+| 88 | Create from scratch | `/new` → `DripCampaignWizard` |
+| 89 | Select sender number | `GET /api/numbers` in wizard |
+| 90 | List-join trigger | `list_join` + `triggerConfig.listId` |
+| 91 | Tag-added trigger | `tag_added` + `tagId` |
+| 92 | Contact-added trigger | `contact_added` fires via `fireContactAddedAutomations` |
+| 93 | Form-submitted trigger | `form_submitted` + `formId` from `GET /api/growth/forms` |
+| 94 | Multi-message sequence + delays | Steps array + `delayUnit` / `delayAmount` |
+| 95 | Merge fields in messages | `MockupMessageToolbar` + `mergeMessageVars` at send |
+| 96 | Save as paused | Review secondary → `status: "paused"` |
+| 97 | Save & activate | Review primary → `status: "active"` + `assertDripCampaignLaunchReady` |
+| 98 | Appears in list after save | `fetchDripCampaigns` reload on mount + return navigation |
+| 99 | Open detail | Row link → SSR `loadDripCampaignDetail` |
+| 100 | Activate / pause | List toggle, kebab, detail toggle → PATCH with error toast |
+| 101 | Edit existing | `/[id]/edit` PATCH → redirect to detail |
+| 102 | Duplicate | `action: "duplicate"` prepends row |
+| 103 | Delete | DELETE removes row + toast |
+| 104 | Launch validation before activate | `assertDripCampaignLaunchReady` on server; errors surfaced in UI |
+| 105 | Detail stats from engine | `stats.activeEnrollments` / `totalEnrollments`; poll `/detail` while active |
 
 **Glue checks:**
 
-- SMS-only nav tabs (`DRIP_SECTION_NAV_TABS`) — no voice/MCTB builder links
-- Launch validation (`assertDripCampaignLaunchReady`) before activate
-- Detail stats / chart data from engine, not mock
+- `DRIP_SECTION_NAV_TABS` on **all** drip routes via `DripSectionShell` (SMS-only: Drip + Auto Replies)
+- `fetchDripCampaigns()` background reload on list mount (not only SSR seed)
+- Save & Activate on create → `dripCampaignDetailHref(id)` (not list-only redirect)
+- Detail enrollment counts use `stats.*`, not capped `recipients` slice (max 100)
+- Active campaigns poll `GET /api/drip-campaigns/:id/detail` every 15s for live stats
+- List toggle/patch errors show toast (launch validation failures visible)
 
 ### Media library
 

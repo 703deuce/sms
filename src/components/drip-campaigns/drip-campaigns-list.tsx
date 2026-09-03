@@ -6,14 +6,11 @@ import {
 } from "@/components/audience/slick-audience-ui";
 import { RowActionsMenu } from "@/components/audience/row-actions-menu";
 import { DripStatusToggle } from "@/components/drip-campaigns/drip-ui";
-import {
-  MockupListToolbar,
-  MockupTablePagination,
-} from "@/components/automate/mockup-automate-ui";
-import { Button } from "@/components/ui/button";
+import { MockupListToolbar } from "@/components/automate/mockup-automate-ui";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { fetchDripCampaigns } from "@/lib/drip-campaigns/drip-campaigns-adapter";
 import {
   dripTriggerLabel,
   type DripCampaignRecord,
@@ -22,12 +19,13 @@ import {
   dripCampaignDetailHref,
   dripCampaignEditHref,
   dripCampaignNewHref,
+  dripCampaignsListHref,
 } from "@/lib/drip-campaigns/routes";
 import { cn, formatNumber } from "@/lib/utils";
-import { Filter, Layers, MessageSquare, Plus, Zap } from "lucide-react";
+import { Check, Layers, MessageSquare, Plus, Zap } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 function StatusPill({ status }: { status: DripCampaignRecord["status"] }) {
   const styles =
@@ -68,10 +66,45 @@ export function DripCampaignsList({
   embedded?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const prevPathRef = useRef(pathname);
   const [rows, setRows] = useState(initialRows);
+  const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active">("all");
+  const [toast, setToast] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setError("");
+    fetchDripCampaigns()
+      .then(setRows)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not load drip campaigns");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  useEffect(() => {
+    if (
+      pathname === dripCampaignsListHref() &&
+      prevPathRef.current !== dripCampaignsListHref()
+    ) {
+      reload();
+    }
+    prevPathRef.current = pathname;
+  }, [pathname, reload]);
+
+  const notify = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -87,6 +120,7 @@ export function DripCampaignsList({
 
   async function patchRow(id: string, body: Record<string, unknown>) {
     setBusyId(id);
+    setError("");
     try {
       const res = await fetch(`/api/drip-campaigns/${id}`, {
         method: "PATCH",
@@ -97,10 +131,20 @@ export function DripCampaignsList({
       if (!res.ok) throw new Error(json.error || "Request failed");
       if (body.action === "duplicate" || json.created) {
         setRows((prev) => [json.data, ...prev.filter((r) => r.id !== json.data.id)]);
+        notify("Campaign duplicated.");
       } else {
         setRows((prev) => prev.map((r) => (r.id === id ? json.data : r)));
+        if (body.status === "active" || body.action === "toggle_status") {
+          notify("Campaign activated.");
+        } else if (body.status === "paused") {
+          notify("Campaign paused.");
+        }
       }
       router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Request failed";
+      setError(message);
+      notify(message);
     } finally {
       setBusyId(null);
     }
@@ -109,6 +153,7 @@ export function DripCampaignsList({
   async function removeRow(id: string) {
     if (!confirm("Delete this drip campaign?")) return;
     setBusyId(id);
+    setError("");
     try {
       const res = await fetch(`/api/drip-campaigns/${id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -116,7 +161,12 @@ export function DripCampaignsList({
         throw new Error(json.error || "Delete failed");
       }
       setRows((prev) => prev.filter((r) => r.id !== id));
+      notify("Campaign deleted.");
       router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Delete failed";
+      setError(message);
+      notify(message);
     } finally {
       setBusyId(null);
     }
@@ -124,6 +174,12 @@ export function DripCampaignsList({
 
   return (
     <div className="text-[13px]">
+      {toast ? (
+        <div className="toast fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">
+          <Check className="h-4 w-4" /> {toast}
+        </div>
+      ) : null}
+
       <SlickAudienceHeader
         breadcrumb={embedded ? "Automations / Drip Campaigns" : "Campaigns / Drip Campaigns"}
         title="Drip Campaigns"
@@ -164,19 +220,20 @@ export function DripCampaignsList({
               ))}
             </div>
           }
-          createSlot={
-            <Button
-              variant="outline"
-              size="sm"
-              className="hidden h-10 gap-2 border-slate-200 text-slate-600 sm:inline-flex"
-            >
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
-          }
         />
 
-        {filtered.length === 0 ? (
+        {error ? (
+          <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+            {error}
+          </p>
+        ) : null}
+
+        {loading && rows.length === 0 ? (
+          <div className="flex flex-col items-center py-12 text-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />
+            <p className="mt-3 text-[13px] text-slate-500">Loading drip campaigns…</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Layers className="h-6 w-6" />}
             title={rows.length === 0 ? "No drip campaigns yet" : "No campaigns match your search"}
@@ -290,7 +347,6 @@ export function DripCampaignsList({
                 ))}
               </TBody>
             </Table>
-            <MockupTablePagination total={filtered.length} />
           </>
         )}
       </Card>

@@ -1,6 +1,5 @@
 import { DripCampaignsList } from "@/components/drip-campaigns/drip-campaigns-list";
-import { Tabs } from "@/components/ui/tabs";
-import { DRIP_SECTION_NAV_TABS } from "@/lib/drip-campaigns/routes";
+import { DripSectionShell } from "@/components/drip-campaigns/drip-section-shell";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { listDripCampaigns } from "@/lib/drip-campaigns/service";
 
@@ -9,9 +8,8 @@ export default async function AutomationsDripCampaignsPage() {
   const rows = workspaceId ? await listDripCampaigns(workspaceId) : [];
 
   return (
-    <div>
-      <Tabs items={[...DRIP_SECTION_NAV_TABS]} />
+    <DripSectionShell>
       <DripCampaignsList initialRows={rows} embedded />
-    </div>
+    </DripSectionShell>
   );
 }

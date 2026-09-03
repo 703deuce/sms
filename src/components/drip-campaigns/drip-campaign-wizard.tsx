@@ -172,10 +172,13 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not save drip campaign");
+      const savedId = (json.data?.id || initial?.id) as string | undefined;
       router.push(
         mode === "edit" && initial
           ? dripCampaignDetailHref(initial.id)
-          : dripCampaignsListHref(),
+          : launch && savedId
+            ? dripCampaignDetailHref(savedId)
+            : dripCampaignsListHref(),
       );
       router.refresh();
     } catch (err) {

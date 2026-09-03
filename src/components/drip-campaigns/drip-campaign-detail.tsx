@@ -6,6 +6,7 @@ import {
   SlickStatCard,
 } from "@/components/audience/slick-audience-ui";
 import { DripStatusToggle } from "@/components/drip-campaigns/drip-ui";
+import { fetchDripCampaignDetail } from "@/lib/drip-campaigns/drip-campaigns-adapter";
 import { MockupDetailTabs } from "@/components/automate/mockup-automate-ui";
 import { Card } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -27,17 +28,19 @@ import {
   Reply,
   Search,
   Send,
-  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Props = {
   campaign: DripCampaignRecord;
   recipients: DripEnrollmentRecord[];
   stats: {
     totalTriggered: number;
+    totalEnrollments: number;
+    activeEnrollments: number;
+    completedEnrollments: number;
     messagesSent: number;
     avgOpenRate: number;
     avgReplyRate: number;
@@ -167,13 +170,44 @@ export function DripCampaignDetail({
 }: Props) {
   const router = useRouter();
   const [campaign, setCampaign] = useState(initial);
+  const [detailStats, setDetailStats] = useState(stats);
+  const [detailRecipients, setDetailRecipients] = useState(recipients);
+  const [detailChart, setDetailChart] = useState(chart);
+  const [detailDeliveries, setDetailDeliveries] = useState(recentDeliveries);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [tab, setTab] = useState("Overview");
   const [query, setQuery] = useState("");
   const totalSteps = campaign.steps.length;
 
+  const reloadDetail = useCallback(async () => {
+    try {
+      const data = await fetchDripCampaignDetail(campaign.id);
+      setCampaign(data.campaign);
+      setDetailStats(data.stats);
+      setDetailRecipients(data.recipients);
+      setDetailChart(data.chart);
+      setDetailDeliveries(data.recentDeliveries || []);
+    } catch {
+      // Keep SSR seed on transient errors.
+    }
+  }, [campaign.id]);
+
+  useEffect(() => {
+    void reloadDetail();
+  }, [reloadDetail]);
+
+  useEffect(() => {
+    if (campaign.status !== "active") return;
+    const timer = setInterval(() => {
+      void reloadDetail();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [campaign.status, reloadDetail]);
+
   async function toggleStatus(next: boolean) {
     setBusy(true);
+    setError("");
     try {
       const res = await fetch(`/api/drip-campaigns/${campaign.id}`, {
         method: "PATCH",
@@ -184,28 +218,34 @@ export function DripCampaignDetail({
       if (!res.ok) throw new Error(json.error || "Update failed");
       setCampaign(json.data);
       router.refresh();
+      void reloadDetail();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
     } finally {
       setBusy(false);
     }
   }
 
-  const maxChart = Math.max(1, ...chart.sent, ...chart.replies);
+  const maxChart = Math.max(1, ...detailChart.sent, ...detailChart.replies);
   const isActive = campaign.status === "active";
-  const activeEnrollments = recipients.filter((r) => r.status === "active").length;
-  const completedEnrollments = recipients.filter((r) => r.status === "completed").length;
 
   const filteredRecipients = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return recipients;
-    return recipients.filter(
+    if (!q) return detailRecipients;
+    return detailRecipients.filter(
       (r) =>
         r.contactName.toLowerCase().includes(q) ||
         r.contactPhone.toLowerCase().includes(q),
     );
-  }, [recipients, query]);
+  }, [detailRecipients, query]);
 
   return (
     <div className="text-[13px]">
+      {error ? (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
+          {error}
+        </p>
+      ) : null}
       <SlickAudienceHeader
         breadcrumb="Drip Campaigns"
         title={campaign.name}
@@ -248,31 +288,35 @@ export function DripCampaignDetail({
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SlickStatCard
           label="Total Triggered"
-          value={formatNumber(stats.totalTriggered)}
+          value={formatNumber(detailStats.totalTriggered)}
           icon={Send}
           tone="violet"
         />
         <SlickStatCard
           label="Messages Sent"
-          value={formatNumber(stats.messagesSent)}
+          value={formatNumber(detailStats.messagesSent)}
           icon={MessageSquare}
           tone="green"
         />
         <SlickStatCard
           label="Delivered"
           value={
-            stats.deliveryRate != null && stats.messagesSent > 0
-              ? formatPercent(stats.deliveryRate)
+            detailStats.deliveryRate != null && detailStats.messagesSent > 0
+              ? formatPercent(detailStats.deliveryRate)
               : "—"
           }
           icon={CheckCircle2}
           tone="green"
         />
         <SlickStatCard
-          label="Failed"
-          value={formatNumber(stats.failedCount ?? 0)}
-          icon={XCircle}
-          tone="rose"
+          label="Reply Rate"
+          value={
+            detailStats.totalEnrollments > 0
+              ? formatPercent(detailStats.avgReplyRate)
+              : "—"
+          }
+          icon={Reply}
+          tone="violet"
         />
       </div>
 
@@ -291,7 +335,7 @@ export function DripCampaignDetail({
             </div>
           }
         />
-        {chart.labels.length === 0 ? (
+        {detailChart.labels.length === 0 ? (
           <div className="mt-4 flex h-44 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-center">
             <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Inbox className="h-5 w-5" />
@@ -303,19 +347,19 @@ export function DripCampaignDetail({
           </div>
         ) : (
           <div className="mt-6 flex h-48 items-end gap-4 border-b border-slate-100 pb-px">
-            {chart.labels.map((label, i) => (
+            {detailChart.labels.map((label, i) => (
               <div key={label} className="group flex flex-1 flex-col items-center gap-2">
                 <div className="flex h-40 w-full items-end justify-center gap-1.5">
                   <div
                     className="w-3.5 rounded-t-[3px] bg-primary/85 transition-all duration-200 group-hover:bg-primary"
                     style={{
-                      height: `${Math.max(((chart.sent[i] || 0) / maxChart) * 100, chart.sent[i] ? 4 : 0)}%`,
+                      height: `${Math.max(((detailChart.sent[i] || 0) / maxChart) * 100, detailChart.sent[i] ? 4 : 0)}%`,
                     }}
                   />
                   <div
                     className="w-3.5 rounded-t-[3px] bg-sky-300 transition-all duration-200 group-hover:bg-sky-400"
                     style={{
-                      height: `${Math.max(((chart.replies[i] || 0) / maxChart) * 100, chart.replies[i] ? 4 : 0)}%`,
+                      height: `${Math.max(((detailChart.replies[i] || 0) / maxChart) * 100, detailChart.replies[i] ? 4 : 0)}%`,
                     }}
                   />
                 </div>
@@ -345,13 +389,13 @@ export function DripCampaignDetail({
             <div className="border-l-2 border-emerald-200 pl-3">
               <dt className="text-[12px] font-medium text-slate-500">Active enrollments</dt>
               <dd className="mt-0.5 font-medium text-slate-900">
-                {formatNumber(activeEnrollments)}
+                {formatNumber(detailStats.activeEnrollments)}
               </dd>
             </div>
             <div className="border-l-2 border-slate-100 pl-3">
               <dt className="text-[12px] font-medium text-slate-500">Completed</dt>
               <dd className="mt-0.5 font-medium text-slate-900">
-                {formatNumber(completedEnrollments)}
+                {formatNumber(detailStats.completedEnrollments)}
               </dd>
             </div>
           </dl>
@@ -360,7 +404,7 @@ export function DripCampaignDetail({
               title="Delivery log"
               description="Most recent message deliveries for this campaign"
             />
-            {recentDeliveries.length ? (
+            {detailDeliveries.length ? (
               <Table className="mt-4 text-[13px]">
                 <THead>
                   <TR className="hover:bg-transparent">
@@ -370,7 +414,7 @@ export function DripCampaignDetail({
                   </TR>
                 </THead>
                 <TBody>
-                  {recentDeliveries.slice(0, 20).map((row) => (
+                  {detailDeliveries.slice(0, 20).map((row) => (
                     <TR key={row.id}>
                       <TD className="font-medium tabular-nums text-slate-800">
                         {formatPhone(row.to)}
@@ -404,7 +448,7 @@ export function DripCampaignDetail({
         <Card className="rounded-xl border-slate-200 p-5 shadow-sm">
           <SectionTitle
             title="Recipients"
-            description={`${formatNumber(recipients.length)} contact${recipients.length === 1 ? "" : "s"} enrolled in this campaign`}
+            description={`${formatNumber(detailStats.totalEnrollments)} contact${detailStats.totalEnrollments === 1 ? "" : "s"} enrolled in this campaign`}
             action={
               <div className="relative w-full sm:w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
