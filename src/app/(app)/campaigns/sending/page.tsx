@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CampaignsFilteredPage, statusRowFilter } from "@/components/campaigns/campaigns-filtered-page";
+import { CampaignsFilteredPage } from "@/components/campaigns/campaigns-filtered-page";
 
 export default function CampaignSendingPage() {
   return (
@@ -10,11 +10,7 @@ export default function CampaignSendingPage() {
         defaultFilter="sending"
         fetchStatus="sending"
         lockFilter
-        rowFilter={(row) => {
-          const sending = statusRowFilter("sending")(row);
-          const queued = statusRowFilter("queued")(row);
-          return sending || queued;
-        }}
+        rowFilterKey="sending"
       />
     </Suspense>
   );

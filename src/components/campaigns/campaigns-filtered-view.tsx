@@ -3,17 +3,20 @@
 import { useRouter } from "next/navigation";
 import CampaignsList from "@/components/kimi/campaigns/components/CampaignsList";
 import { CampaignNavTabs } from "@/components/campaigns/campaign-nav-tabs";
+import type { CampaignRowFilterKey } from "@/lib/campaigns/campaign-list-filters";
 import {
-  normalizeCampaignStatus,
-  type CampaignListRow,
-} from "@/lib/campaigns/kimi-campaigns-adapter";
+  campaignRowMatchesFilter,
+  filterCampaignRows,
+} from "@/lib/campaigns/campaign-list-filters";
+import type { CampaignListRow } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
+import { useMemo } from "react";
 
 export function CampaignsFilteredView({
   title,
   subtitle,
   defaultFilter = "all",
-  rowFilter,
+  rowFilterKey,
   fetchStatus,
   lockFilter = false,
   initialRows = [],
@@ -21,12 +24,16 @@ export function CampaignsFilteredView({
   title: string;
   subtitle: string;
   defaultFilter?: string;
-  rowFilter?: (row: CampaignListRow) => boolean;
+  rowFilterKey?: CampaignRowFilterKey;
   fetchStatus?: string;
   lockFilter?: boolean;
   initialRows?: CampaignListRow[];
 }) {
   const router = useRouter();
+  const rowFilter = useMemo(() => {
+    if (!rowFilterKey) return undefined;
+    return (row: CampaignListRow) => campaignRowMatchesFilter(row, rowFilterKey);
+  }, [rowFilterKey]);
 
   return (
     <div className="kimi-surface kimi-campaigns">
@@ -40,7 +47,7 @@ export function CampaignsFilteredView({
         lockFilter={lockFilter}
         rowFilter={rowFilter}
         fetchStatus={fetchStatus}
-        initialRows={initialRows}
+        initialRows={filterCampaignRows(initialRows, rowFilterKey)}
         onCreate={() => {
           startFreshComposeDraft();
           router.push("/campaigns/new");
@@ -50,12 +57,4 @@ export function CampaignsFilteredView({
   );
 }
 
-export function isRecurringCampaignRow(row: CampaignListRow): boolean {
-  if (!row.configJson || typeof row.configJson !== "object") return false;
-  const config = row.configJson as Record<string, unknown>;
-  return config.scheduleMode === "recurring" && Boolean(config.recurrence);
-}
-
-export function statusRowFilter(status: string) {
-  return (row: CampaignListRow) => normalizeCampaignStatus(row.status) === status;
-}
+export { filterCampaignRows, isRecurringCampaignRow, statusRowFilter } from "@/lib/campaigns/campaign-list-filters";

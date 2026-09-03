@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CampaignsFilteredPage, statusRowFilter } from "@/components/campaigns/campaigns-filtered-page";
+import { CampaignsFilteredPage } from "@/components/campaigns/campaigns-filtered-page";
 
 export default function CampaignDraftsPage() {
   return (
@@ -10,7 +10,7 @@ export default function CampaignDraftsPage() {
         defaultFilter="draft"
         fetchStatus="draft"
         lockFilter
-        rowFilter={statusRowFilter("draft")}
+        rowFilterKey="draft"
       />
     </Suspense>
   );

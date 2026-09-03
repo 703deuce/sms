@@ -42,8 +42,8 @@ export function mapBroadcastRowToListRow(row: {
   replies: number;
   optOuts: number;
   scheduledAt: Date | string | null;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
   configJson?: unknown;
   recipientCount?: number;
 }): CampaignListRow {
@@ -58,8 +58,8 @@ export function mapBroadcastRowToListRow(row: {
     replies: row.replies,
     optOuts: row.optOuts,
     scheduledAt: row.scheduledAt ? new Date(row.scheduledAt).toISOString() : null,
-    createdAt: new Date(row.createdAt).toISOString(),
-    updatedAt: new Date(row.updatedAt).toISOString(),
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : undefined,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : undefined,
     configJson: row.configJson,
     recipientCount: row.recipientCount,
   };

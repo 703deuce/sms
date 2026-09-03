@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CampaignsFilteredPage, statusRowFilter } from "@/components/campaigns/campaigns-filtered-page";
+import { CampaignsFilteredPage } from "@/components/campaigns/campaigns-filtered-page";
 
 export default function CampaignCanceledPage() {
   return (
@@ -10,7 +10,7 @@ export default function CampaignCanceledPage() {
         defaultFilter="canceled"
         fetchStatus="canceled"
         lockFilter
-        rowFilter={statusRowFilter("canceled")}
+        rowFilterKey="canceled"
       />
     </Suspense>
   );

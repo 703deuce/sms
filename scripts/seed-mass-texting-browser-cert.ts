@@ -117,6 +117,37 @@ async function main() {
     },
   });
 
+  await prisma.messagingRegistration.upsert({
+    where: { workspaceId: workspace.id },
+    create: {
+      workspaceId: workspace.id,
+      overallStatus: "ready",
+      messagingEnabled: true,
+      phoneAttached: true,
+      phoneE164: SENDER_E164,
+      brandStatus: "approved",
+      campaignStatus: "approved",
+      messagingProfileId: "mock-profile",
+      campaignId: "mock-campaign",
+      messagingProvider: "mock",
+      messagingServiceSid: "mock-service",
+      useCase: "mixed",
+    },
+    update: {
+      overallStatus: "ready",
+      messagingEnabled: true,
+      phoneAttached: true,
+      phoneE164: SENDER_E164,
+      brandStatus: "approved",
+      campaignStatus: "approved",
+      messagingProfileId: "mock-profile",
+      campaignId: "mock-campaign",
+      messagingProvider: "mock",
+      messagingServiceSid: "mock-service",
+      useCase: "mixed",
+    },
+  });
+
   await prisma.phoneNumber.upsert({
     where: { workspaceId_e164: { workspaceId: workspace.id, e164: SENDER_E164 } },
     create: {

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CampaignsFilteredPage, statusRowFilter } from "@/components/campaigns/campaigns-filtered-page";
+import { CampaignsFilteredPage } from "@/components/campaigns/campaigns-filtered-page";
 
 export default function CampaignCompletedPage() {
   return (
@@ -10,7 +10,7 @@ export default function CampaignCompletedPage() {
         defaultFilter="completed"
         fetchStatus="completed"
         lockFilter
-        rowFilter={statusRowFilter("completed")}
+        rowFilterKey="completed"
       />
     </Suspense>
   );

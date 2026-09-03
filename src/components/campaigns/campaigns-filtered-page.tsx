@@ -1,8 +1,11 @@
-import { CampaignsFilteredView, statusRowFilter } from "@/components/campaigns/campaigns-filtered-view";
+import { CampaignsFilteredView } from "@/components/campaigns/campaigns-filtered-view";
+import {
+  filterCampaignRows,
+  type CampaignRowFilterKey,
+} from "@/lib/campaigns/campaign-list-filters";
 import { mapBroadcastRowToListRow } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import { listBroadcastCampaigns } from "@/lib/mass-texting/broadcast/service";
-import type { CampaignListRow } from "@/lib/campaigns/kimi-campaigns-adapter";
 
 type Props = {
   title: string;
@@ -10,7 +13,7 @@ type Props = {
   defaultFilter?: string;
   fetchStatus?: string;
   lockFilter?: boolean;
-  rowFilter?: (row: CampaignListRow) => boolean;
+  rowFilterKey?: CampaignRowFilterKey;
 };
 
 export async function CampaignsFilteredPage({
@@ -19,14 +22,14 @@ export async function CampaignsFilteredPage({
   defaultFilter = "all",
   fetchStatus,
   lockFilter = false,
-  rowFilter,
+  rowFilterKey,
 }: Props) {
   const workspaceId = await getActiveWorkspaceId();
-  let initialRows: CampaignListRow[] = [];
+  let initialRows = [];
   if (workspaceId) {
     const rows = await listBroadcastCampaigns(workspaceId, { take: 200, status: fetchStatus });
     const mapped = rows.map(mapBroadcastRowToListRow);
-    initialRows = rowFilter ? mapped.filter(rowFilter) : mapped;
+    initialRows = filterCampaignRows(mapped, rowFilterKey);
   }
 
   return (
@@ -36,10 +39,10 @@ export async function CampaignsFilteredPage({
       defaultFilter={defaultFilter}
       fetchStatus={fetchStatus}
       lockFilter={lockFilter}
-      rowFilter={rowFilter}
+      rowFilterKey={rowFilterKey}
       initialRows={initialRows}
     />
   );
 }
 
-export { statusRowFilter, isRecurringCampaignRow } from "@/components/campaigns/campaigns-filtered-view";
+export type { CampaignRowFilterKey } from "@/lib/campaigns/campaign-list-filters";

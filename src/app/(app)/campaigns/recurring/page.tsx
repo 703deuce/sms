@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CampaignsFilteredPage, isRecurringCampaignRow } from "@/components/campaigns/campaigns-filtered-page";
+import { CampaignsFilteredPage } from "@/components/campaigns/campaigns-filtered-page";
 
 export default function CampaignRecurringPage() {
   return (
@@ -9,7 +9,7 @@ export default function CampaignRecurringPage() {
         subtitle="Automated sends that repeat on a schedule."
         defaultFilter="all"
         lockFilter
-        rowFilter={isRecurringCampaignRow}
+        rowFilterKey="recurring"
       />
     </Suspense>
   );
