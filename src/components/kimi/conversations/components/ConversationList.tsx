@@ -19,6 +19,7 @@ export default function ConversationList({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loading = false,
 }: {
   title: string;
   subtitle: string;
@@ -35,6 +36,7 @@ export default function ConversationList({
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  loading?: boolean;
 }) {
   return (
     <div
@@ -89,7 +91,13 @@ export default function ConversationList({
         ) : null}
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto" }}>
-        {convos.length === 0 && (
+        {loading && convos.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "56px 24px", textAlign: "center" }}>
+            <div style={{ width: 28, height: 28, borderRadius: 9999, border: "2px solid var(--tv-border)", borderTopColor: "var(--tv-primary)", animation: "spin 0.8s linear infinite" }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tv-muted)" }}>Loading conversations…</div>
+          </div>
+        ) : null}
+        {!loading && convos.length === 0 && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "56px 24px", textAlign: "center" }}>
             <span style={{
               width: 44, height: 44, borderRadius: 9999, background: "var(--tv-primary-soft)",

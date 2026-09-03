@@ -196,8 +196,8 @@ function EngagementTable({
 }) {
   const engaged = rows.filter((r) => r[field]);
   return (
-    <div className="overflow-x-auto rounded-[14px] border border-border bg-card shadow-sm">
-      <table className="w-full min-w-[640px] text-left text-[13px]">
+    <div className="w-full overflow-x-auto rounded-[14px] border border-border bg-card shadow-sm">
+      <table className="w-full min-w-full text-left text-[13px]">
         <thead>
           <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase text-muted-foreground">
             <th className="px-4 py-3">Contact</th>
@@ -441,7 +441,7 @@ export function CampaignResultsView({
   const engagementMax = Math.max(live.clicks, live.replies, live.optOuts, 1);
 
   return (
-    <div className="mx-auto max-w-[1200px] px-1 pb-10">
+    <div className="mx-auto w-full max-w-[1200px] px-4 pb-10 lg:px-6">
       <V1Breadcrumb items={[{ label: "Campaigns", href: "/campaigns" }, { label: campaign.name }]} />
 
       <V1PageHeader
@@ -508,7 +508,7 @@ export function CampaignResultsView({
       </div>
 
       {tab === "overview" ? (
-        <div className="grid gap-6 xl:grid-cols-3">
+        <div className="grid w-full gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
             <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
@@ -587,7 +587,7 @@ export function CampaignResultsView({
       ) : null}
 
       {tab === "recipients" ? (
-        <div>
+        <div className="w-full min-w-0">
           <div className="mb-4 flex flex-wrap gap-2">
             {RECIPIENT_FILTERS.map((f) => (
               <button
@@ -613,7 +613,7 @@ export function CampaignResultsView({
             />
           </div>
           <div className="overflow-x-auto rounded-[14px] border border-border bg-card shadow-sm">
-            <table className="w-full min-w-[800px] text-left text-[13px]">
+            <table className="w-full min-w-full text-left text-[13px]">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase text-muted-foreground">
                   <th className="px-4 py-3">Contact</th>
@@ -656,31 +656,39 @@ export function CampaignResultsView({
       ) : null}
 
       {tab === "clicks" ? (
-        <EngagementTable
-          rows={liveRecipients}
-          field="clickedAt"
-          emptyLabel="No link clicks recorded yet."
-        />
+        <div className="w-full min-w-0">
+          <EngagementTable
+            rows={liveRecipients}
+            field="clickedAt"
+            emptyLabel="No link clicks recorded yet."
+          />
+        </div>
       ) : null}
 
       {tab === "replies" ? (
-        <EngagementTable
-          rows={liveRecipients}
-          field="repliedAt"
-          emptyLabel="No replies recorded yet."
-        />
+        <div className="w-full min-w-0">
+          <EngagementTable
+            rows={liveRecipients}
+            field="repliedAt"
+            emptyLabel="No replies recorded yet."
+          />
+        </div>
       ) : null}
 
       {tab === "opt-outs" ? (
-        <EngagementTable
-          rows={liveRecipients}
-          field="optedOutAt"
-          emptyLabel="No opt-outs recorded yet."
-        />
+        <div className="w-full min-w-0">
+          <EngagementTable
+            rows={liveRecipients}
+            field="optedOutAt"
+            emptyLabel="No opt-outs recorded yet."
+          />
+        </div>
       ) : null}
 
       {tab === "activity" ? (
-        <ActivityFeed timeline={timelineProp} recipients={liveRecipients} />
+        <div className="w-full min-w-0">
+          <ActivityFeed timeline={timelineProp} recipients={liveRecipients} />
+        </div>
       ) : null}
     </div>
   );

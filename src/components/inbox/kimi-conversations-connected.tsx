@@ -161,6 +161,13 @@ export function KimiConversationsConnected({
   const updateInFlightRef = useRef(false);
   const listRequestRef = useRef(0);
   const pendingConversationRef = useRef<string | null>(null);
+  const selectedIdRef = useRef<string | null>(selectedId);
+  const urlSyncedRef = useRef(false);
+  const retainInitialConvosRef = useRef(initialConversations.length > 0);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const listQueryExtra = useMemo(
     () => ({
@@ -218,6 +225,20 @@ export function KimiConversationsConnected({
   useEffect(() => {
     setSel(initialSel);
   }, [initialSel]);
+
+  useEffect(() => {
+    if (urlSyncedRef.current) return;
+    if (searchParams.get("filter") || searchParams.get("tag") || searchParams.get("assigneeId")) {
+      urlSyncedRef.current = true;
+      return;
+    }
+    urlSyncedRef.current = true;
+    const params = filterSelToSearchParams({ kind: "all", key: "all" }, searchParams);
+    if (urlProduct && urlProduct !== "all") params.set("product", urlProduct);
+    if (urlQ.trim()) params.set("q", urlQ.trim());
+    const suffix = params.toString();
+    router.replace(suffix ? `/conversations?${suffix}` : "/conversations", { scroll: false });
+  }, [router, searchParams, urlProduct, urlQ]);
 
   useEffect(() => {
     if (!tagDefinitions.length) return;
@@ -334,7 +355,7 @@ export function KimiConversationsConnected({
       if (requestId !== listRequestRef.current) return [];
       setListHasMore(page.pagination.hasMore);
       setListCursor(page.pagination.nextCursor);
-      const pinId = urlConversation || selectedId;
+      const pinId = urlConversation || selectedIdRef.current;
       let merged: Conversation[] = [];
       setConvos((prev) => {
         const prevById = new Map(prev.map((c) => [c.id, c]));
@@ -346,6 +367,12 @@ export function KimiConversationsConnected({
           }
           return mapped;
         });
+        if (merged.length === 0 && prev.length > 0 && retainInitialConvosRef.current) {
+          return prev;
+        }
+        if (merged.length > 0) {
+          retainInitialConvosRef.current = false;
+        }
         if (pinId && !merged.some((c) => c.id === pinId)) {
           const pinned = prevById.get(pinId);
           if (pinned) merged = [pinned, ...merged];
@@ -361,7 +388,7 @@ export function KimiConversationsConnected({
     } finally {
       if (requestId === listRequestRef.current) setListLoading(false);
     }
-  }, [sel, urlProduct, mapRow, listQueryExtra, urlConversation, selectedId]);
+  }, [sel, urlProduct, mapRow, listQueryExtra, urlConversation]);
 
   const loadMoreList = useCallback(async () => {
     if (!listHasMore || !listCursor || listLoading) return;
@@ -454,8 +481,9 @@ export function KimiConversationsConnected({
   }, [selectedId, mapConvo, view]);
 
   useEffect(() => {
+    if (!permissionsReady || view !== "inbox") return;
     void reloadList();
-  }, [reloadList]);
+  }, [permissionsReady, view, reloadList]);
 
   useEffect(() => {
     if (view !== "inbox" || !selectedId) return;
@@ -564,8 +592,9 @@ export function KimiConversationsConnected({
     if (convos.some((c) => c.id === selectedId)) return;
     if (urlConversation === selectedId) return;
     if (pendingConversationRef.current === selectedId) return;
+    if (listLoading) return;
     setSelectedId(null);
-  }, [filtered, selectedId, convos, urlConversation]);
+  }, [filtered, selectedId, convos, urlConversation, listLoading]);
 
   useEffect(() => {
     if (urlConversation && urlConversation === selectedId) {
@@ -884,9 +913,9 @@ export function KimiConversationsConnected({
             sel={sel}
             onSel={(s) => {
               setSel(s);
-              setSelectedId(null);
               setChecked(new Set());
-              syncUrl(s, { clearConversation: true });
+              retainInitialConvosRef.current = false;
+              syncUrl(s, selectedId ? { conversationId: selectedId } : { clearConversation: true });
             }}
             counts={counts}
             tags={tags}
@@ -915,6 +944,7 @@ export function KimiConversationsConnected({
             className={selectedId ? "conversations-list--mobile-hidden" : ""}
             hasMore={listHasMore}
             loadingMore={listLoading}
+            loading={listLoading && convos.length === 0}
             onLoadMore={() => void loadMoreList()}
           />
           {checked.size > 0 ? (
