@@ -54,7 +54,10 @@ export async function createSegment(name: string, conditions: unknown): Promise<
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not create segment");
-  const count = await previewSegmentCount(conditions);
+  const count =
+    typeof json.data?.contactCount === "number"
+      ? json.data.contactCount
+      : await previewSegmentCount(conditions);
   return mapApiSegmentToKimi(json.data, count);
 }
 
@@ -66,7 +69,10 @@ export async function updateSegment(id: string, name: string, conditions: unknow
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not update segment");
-  const count = await previewSegmentCount(conditions);
+  const count =
+    typeof json.data?.contactCount === "number"
+      ? json.data.contactCount
+      : await previewSegmentCount(conditions);
   return mapApiSegmentToKimi(json.data, count);
 }
 

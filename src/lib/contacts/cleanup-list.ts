@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/db";
-import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
+import { isAutomationContact, visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 const FAILED_THRESHOLD = 3;
@@ -67,11 +67,7 @@ export async function runListCleanup(workspaceId: string): Promise<ListCleanupRe
       select: { id: true, phone: true, status: true, customFields: true },
     });
     if (!contact) continue;
-    if (
-      contact.customFields &&
-      typeof contact.customFields === "object" &&
-      (contact.customFields as Record<string, unknown>).systemAutomationContact === true
-    ) {
+    if (isAutomationContact(contact.customFields)) {
       continue;
     }
 

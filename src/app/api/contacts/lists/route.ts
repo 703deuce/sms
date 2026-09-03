@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { filterWorkspaceContactIds } from "@/lib/contacts/workspace-membership";
+import { filterWorkspaceContactIds, countVisibleListMembers } from "@/lib/contacts/workspace-membership";
+import { assignContactToLists } from "@/lib/contacts/list-assignment";
 import { getPrisma } from "@/lib/db";
 import { loadLists } from "@/lib/workspace-data";
 
@@ -39,20 +40,17 @@ export async function POST(request: Request) {
         auth.workspaceId,
         body.contactIds,
       );
-      let addedCount = 0;
-      for (const contactId of validContactIds) {
-        const created = await getPrisma().contactListMember.create({
-          data: { listId: list.id, contactId },
-        }).catch(() => null);
-        if (created) addedCount += 1;
+      if (validContactIds.length) {
+        await assignContactToLists(auth.workspaceId, list.id, validContactIds);
       }
+      const contactCount = await countVisibleListMembers(auth.workspaceId, list.id);
       return NextResponse.json(
         {
           data: {
             id: list.id,
             name: list.name,
             description: list.description || "",
-            contactCount: addedCount,
+            contactCount,
           },
         },
         { status: 201 },
@@ -141,7 +139,15 @@ export async function PATCH(request: Request) {
       });
     }
 
-    return NextResponse.json({ data: list });
+    const contactCount = await countVisibleListMembers(auth.workspaceId, list.id);
+
+    return NextResponse.json({
+      data: {
+        ...list,
+        description: list.description || "",
+        contactCount,
+      },
+    });
   } catch (err) {
     return jsonError(err, 400);
   }

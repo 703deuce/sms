@@ -479,12 +479,15 @@ export async function resolveSegmentContactIds(
   const parsed = parseSegmentConditions(conditions);
   const prisma = getPrisma();
 
-  // Push status equality down to the query when it's the only status rule, to
-  // keep the in-memory set small for large workspaces.
+  // Push status equality down to the query when segment logic is globally AND
+  // and there is exactly one status-equals rule in the tree.
   const where: Record<string, unknown> = visibleContactWhere(workspaceId);
   const statusRules = collectSegmentRules(parsed).filter((r) => r.field === "status");
-  if (
+  const isGloballyAnd =
     parsed.match === "all" &&
+    (parsed.groups || []).every((group) => group.match === "all");
+  if (
+    isGloballyAnd &&
     statusRules.length === 1 &&
     statusRules[0].op === "equals" &&
     statusRules[0].value

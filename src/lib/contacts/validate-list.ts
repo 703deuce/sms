@@ -142,7 +142,7 @@ export async function markInvalidContacts(workspaceId: string, phones: string[])
     try {
       const e164 = normalizeE164(phone);
       const row = await prisma.contact.updateMany({
-        where: { workspaceId, phone: e164 },
+        where: { ...visibleContactWhere(workspaceId), phone: e164 },
         data: { status: "INVALID" },
       });
       updated += row.count;

@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
 import { assignContactToLists } from "@/lib/contacts/list-assignment";
+import { isAutomationContact } from "@/lib/contacts/visible-contacts";
 import { getPrisma } from "@/lib/db";
 import { loadContactById } from "@/lib/workspace-data";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+
+const CONTACT_STATUSES = new Set(["SUBSCRIBED", "UNSUBSCRIBED", "BLOCKED", "INVALID"]);
 
 export async function GET(
   _request: Request,
@@ -49,6 +52,9 @@ export async function PATCH(
       where: { id, workspaceId: auth.workspaceId },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (isAutomationContact(existing.customFields)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     let phoneUpdate: string | undefined;
     if (body.phone?.trim()) {
@@ -69,12 +75,15 @@ export async function PATCH(
     if (body.lastName !== undefined) contactPatch.lastName = body.lastName;
     if (body.email !== undefined) contactPatch.email = body.email;
     if (phoneUpdate !== undefined) contactPatch.phone = phoneUpdate;
-    if (body.status) {
-      contactPatch.status = body.status.toUpperCase() as
-        | "SUBSCRIBED"
-        | "UNSUBSCRIBED"
-        | "BLOCKED"
-        | "INVALID";
+    if (body.status !== undefined) {
+      const statusRaw = String(body.status).toUpperCase();
+      if (CONTACT_STATUSES.has(statusRaw)) {
+        contactPatch.status = statusRaw as
+          | "SUBSCRIBED"
+          | "UNSUBSCRIBED"
+          | "BLOCKED"
+          | "INVALID";
+      }
     }
     if (body.assignedUser !== undefined) contactPatch.assignedUser = body.assignedUser;
     if (body.company !== undefined) contactPatch.company = body.company;
@@ -265,6 +274,9 @@ export async function DELETE(
       where: { id, workspaceId: auth.workspaceId },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (isAutomationContact(existing.customFields)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     await getPrisma().contact.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {

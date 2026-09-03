@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
+import { filterWorkspaceContactIds } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
 import { loadTags } from "@/lib/workspace-data";
 
@@ -35,12 +36,20 @@ export async function POST(request: Request) {
       },
       update: {},
     });
-    for (const contactId of body.contactIds || []) {
+    const validContactIds = await filterWorkspaceContactIds(
+      auth.workspaceId,
+      body.contactIds || [],
+    );
+    for (const contactId of validContactIds) {
+      const existingTag = await getPrisma().contactTag.findFirst({
+        where: { tagId: tag.id, contactId },
+      });
       await getPrisma().contactTag.upsert({
         where: { tagId_contactId: { tagId: tag.id, contactId } },
         create: { tagId: tag.id, contactId },
         update: {},
       });
+      if (existingTag) continue;
       const { emitAutomationEvent } = await import("@/lib/automations/events");
       await emitAutomationEvent(auth.workspaceId, "customer.tag_added", contactId, {
         tag: tag.name,

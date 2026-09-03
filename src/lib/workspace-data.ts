@@ -14,6 +14,10 @@ import {
 } from "@/lib/mappers";
 import type { DashboardMetrics, Campaign, Contact, Conversation, AutomationFlow, PhoneNumber, Template, Workspace, User, StatusChip } from "@/lib/types";
 import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
+import {
+  countVisibleListMembersBulk,
+  resolveVisibleContactFilter,
+} from "@/lib/contacts/workspace-membership";
 
 export async function requireWorkspaceContext() {
   const session = await getSession();
@@ -95,7 +99,7 @@ export async function loadContactsPage(
   workspaceId: string,
   opts: { page: number; perPage: number; status?: string; listId?: string },
 ): Promise<{ contacts: Contact[]; total: number }> {
-  const where = visibleContactWhere(workspaceId, {
+  const where = await resolveVisibleContactFilter(workspaceId, {
     status: opts.status,
     listId: opts.listId,
   });
@@ -128,7 +132,7 @@ export async function loadContactsPage(
 
 export async function loadContactById(workspaceId: string, id: string) {
   const c = await getPrisma().contact.findFirst({
-    where: { id, workspaceId },
+    where: { id, ...visibleContactWhere(workspaceId) },
     include: {
       tagMembers: { include: { tag: true } },
       listMembers: { include: { list: true } },
@@ -176,19 +180,19 @@ export async function loadListsPage(
       take: opts.perPage,
     }),
   ]);
-  const lists = await Promise.all(
-    (rows as Array<{ id: string; name: string; description: string | null }>).map(async (l) => {
-      const contactCount = await getPrisma().contact.count({
-        where: visibleContactWhere(workspaceId, { listId: l.id }),
-      });
-      return {
-        id: l.id,
-        name: l.name,
-        description: l.description || "",
-        contactCount,
-      };
-    }),
-  );
+  const lists = await (async () => {
+    const listRows = rows as Array<{ id: string; name: string; description: string | null }>;
+    const counts = await countVisibleListMembersBulk(
+      workspaceId,
+      listRows.map((l) => l.id),
+    );
+    return listRows.map((l) => ({
+      id: l.id,
+      name: l.name,
+      description: l.description || "",
+      contactCount: counts.get(l.id) || 0,
+    }));
+  })();
   return { lists, total };
 }
 

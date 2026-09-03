@@ -41,15 +41,22 @@ export async function POST(request: Request) {
       },
     });
 
-    const contacts = rows.map((c: {
-      id: string;
-      phone: string | null;
-      firstName: string | null;
-      lastName: string | null;
-      email: string | null;
-      status: string;
-      customFields: unknown;
-    }) => {
+    const rowById = new Map(
+      rows.map((c: {
+        id: string;
+        phone: string | null;
+        firstName: string | null;
+        lastName: string | null;
+        email: string | null;
+        status: string;
+        customFields: unknown;
+      }) => [c.id, c]),
+    );
+
+    const contacts = slice
+      .map((id) => rowById.get(id))
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      .map((c) => {
       const cf =
         c.customFields && typeof c.customFields === "object"
           ? (c.customFields as Record<string, unknown>)

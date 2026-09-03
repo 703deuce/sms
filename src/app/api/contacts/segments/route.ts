@@ -40,7 +40,8 @@ export async function POST(request: Request) {
         conditions: (body.conditions || {}) as Prisma.InputJsonValue,
       },
     });
-    return NextResponse.json({ data: segment }, { status: 201 });
+    const contactCount = await countSegmentContacts(auth.workspaceId, segment.conditions);
+    return NextResponse.json({ data: { ...segment, contactCount } }, { status: 201 });
   } catch (err) {
     return jsonError(err, 400);
   }
@@ -79,7 +80,11 @@ export async function PATCH(request: Request) {
             data: patch,
           })
         : existing;
-    return NextResponse.json({ data: segment });
+    const contactCount = await countSegmentContacts(
+      auth.workspaceId,
+      segment.conditions,
+    );
+    return NextResponse.json({ data: { ...segment, contactCount } });
   } catch (err) {
     return jsonError(err, 400);
   }

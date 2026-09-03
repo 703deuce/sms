@@ -77,6 +77,24 @@ export async function POST(request: Request) {
       targetListIds = valid.map((l) => l.id);
     }
 
+    const listNameCache = new Map<string, string>();
+    const resolveRowListNames = async (names: string[]): Promise<string[]> => {
+      const uniqueNames = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+      const uncached = uniqueNames.filter((name) => !listNameCache.has(name));
+      if (uncached.length) {
+        const resolved = await resolveOrCreateListIdsByName(auth.workspaceId, uncached);
+        uncached.forEach((name, idx) => {
+          const id = resolved[idx];
+          if (id) listNameCache.set(name, id);
+        });
+      }
+      return [
+        ...new Set(
+          uniqueNames.map((name) => listNameCache.get(name)).filter((id): id is string => Boolean(id)),
+        ),
+      ];
+    };
+
     for (let i = 0; i < body.rows.length; i += 1) {
       const row = body.rows[i];
       try {
@@ -123,8 +141,17 @@ export async function POST(request: Request) {
         if (existing) updated += 1;
         else created += 1;
 
-        if (targetListIds.length) {
-          await assignContactToLists(auth.workspaceId, contact.id, targetListIds);
+        if (targetListIds.length || row.listName?.trim()) {
+          const rowListIds = [
+            ...targetListIds,
+            ...(row.listName?.trim()
+              ? await resolveRowListNames([row.listName.trim()])
+              : []),
+          ];
+          const uniqueRowListIds = [...new Set(rowListIds)];
+          if (uniqueRowListIds.length) {
+            await assignContactToLists(auth.workspaceId, contact.id, uniqueRowListIds);
+          }
         }
 
         for (const tagName of row.tags || []) {

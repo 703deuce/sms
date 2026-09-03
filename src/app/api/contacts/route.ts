@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { assignContactToLists, resolveOrCreateListIdsByName } from "@/lib/contacts/list-assignment";
 import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
+import { resolveVisibleContactFilter } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
 import { mapContact } from "@/lib/mappers";
 import { loadContactById } from "@/lib/workspace-data";
@@ -102,7 +103,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ data: [] });
       }
       const rows = await getPrisma().contact.findMany({
-        where: visibleContactWhere(auth.workspaceId, {
+        where: await resolveVisibleContactFilter(auth.workspaceId, {
           tagId: tagRow.id,
           status: status || undefined,
         }),

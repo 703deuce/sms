@@ -198,6 +198,14 @@ export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditio
   };
 
   const ruleToKimi = (r: SegmentRule): KimiConditionState => {
+    if (r.field === "list" && r.op === "not_equals" && r.value) {
+      return {
+        property: reverseField(r.field),
+        condition: "Is Not",
+        value: r.value,
+        values: [],
+      };
+    }
     if (r.field === "custom:state" && r.op === "in" && r.value) {
       return {
         property: reverseField(r.field),

@@ -71,6 +71,13 @@ async function main() {
     body: JSON.stringify({ id: listId, addContactIds: [contactId] }),
   });
   check("PATCH add to list", addToList.ok, addToList.json?.error || "ok");
+  check(
+    "PATCH list returns contactCount",
+    addToList.ok &&
+      typeof addToList.json?.data?.contactCount === "number" &&
+      addToList.json.data.contactCount >= 1,
+    `count=${addToList.json?.data?.contactCount}`,
+  );
 
   const listPreview = await api("/api/contacts/segments/preview", {
     method: "POST",
@@ -152,6 +159,11 @@ async function main() {
   });
   const segId = createdSeg.json?.data?.id;
   check("POST segment nested groups", createdSeg.ok, segId);
+  check(
+    "POST segment returns contactCount",
+    createdSeg.ok && typeof createdSeg.json?.data?.contactCount === "number",
+    `count=${createdSeg.json?.data?.contactCount}`,
+  );
 
   const segNoop = await api("/api/contacts/segments", {
     method: "PATCH",
