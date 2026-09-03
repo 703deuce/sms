@@ -140,19 +140,7 @@ export async function PATCH(
       }
     }
 
-    if (body.addListIds?.length) {
-      await assignContactToLists(auth.workspaceId, id, body.addListIds);
-    }
-    if (body.removeListIds?.length) {
-      const validRemove = await filterWorkspaceListIds(auth.workspaceId, body.removeListIds);
-      for (const listId of validRemove) {
-        await getPrisma().contactListMember.deleteMany({
-          where: { listId, contactId: id },
-        });
-      }
-    }
-
-    if (body.listIds) {
+    if (body.listIds !== undefined) {
       const validListIds = await filterWorkspaceListIds(auth.workspaceId, body.listIds);
       const priorLists = await getPrisma().contactListMember.findMany({
         where: { contactId: id },
@@ -187,6 +175,18 @@ export async function PATCH(
             triggerType: "list_join",
             listId,
           }).catch(() => undefined);
+        }
+      }
+    } else {
+      if (body.addListIds?.length) {
+        await assignContactToLists(auth.workspaceId, id, body.addListIds);
+      }
+      if (body.removeListIds?.length) {
+        const validRemove = await filterWorkspaceListIds(auth.workspaceId, body.removeListIds);
+        for (const listId of validRemove) {
+          await getPrisma().contactListMember.deleteMany({
+            where: { listId, contactId: id },
+          });
         }
       }
     }

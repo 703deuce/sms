@@ -62,15 +62,23 @@ export async function PATCH(request: Request) {
       where: { id: body.id, workspaceId: auth.workspaceId },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const segment = await getPrisma().segment.update({
-      where: { id: body.id },
-      data: {
-        name: body.name?.trim() || undefined,
-        conditions: body.conditions
-          ? (body.conditions as Prisma.InputJsonValue)
-          : undefined,
-      },
-    });
+
+    const patch: Prisma.SegmentUpdateInput = {};
+    if (body.name !== undefined) {
+      const trimmed = body.name.trim();
+      if (trimmed) patch.name = trimmed;
+    }
+    if (body.conditions !== undefined) {
+      patch.conditions = body.conditions as Prisma.InputJsonValue;
+    }
+
+    const segment =
+      Object.keys(patch).length > 0
+        ? await getPrisma().segment.update({
+            where: { id: body.id },
+            data: patch,
+          })
+        : existing;
     return NextResponse.json({ data: segment });
   } catch (err) {
     return jsonError(err, 400);

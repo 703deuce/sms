@@ -171,18 +171,24 @@ export async function loadListsPage(
     getPrisma().contactList.count({ where: { workspaceId } }),
     getPrisma().contactList.findMany({
       where: { workspaceId },
-      include: { _count: { select: { members: true } } },
       orderBy: { name: "asc" },
       skip,
       take: opts.perPage,
     }),
   ]);
-  const lists = (rows as Array<{ id: string; name: string; description: string | null; _count: { members: number } }>).map((l) => ({
-    id: l.id,
-    name: l.name,
-    description: l.description || "",
-    contactCount: l._count.members,
-  }));
+  const lists = await Promise.all(
+    (rows as Array<{ id: string; name: string; description: string | null }>).map(async (l) => {
+      const contactCount = await getPrisma().contact.count({
+        where: visibleContactWhere(workspaceId, { listId: l.id }),
+      });
+      return {
+        id: l.id,
+        name: l.name,
+        description: l.description || "",
+        contactCount,
+      };
+    }),
+  );
   return { lists, total };
 }
 

@@ -151,10 +151,12 @@ export function KimiListsConnected() {
     }
     setError("");
     try {
-      const listName = payload.listId ? lists.find((l) => l.id === payload.listId)?.name : "";
+      const listName = payload.listId
+        ? lists.find((l) => l.id === payload.listId)?.name || ""
+        : "";
       await updateKeywordForList(editingKeyword.id, {
         keyword: payload.keyword,
-        listName: listName || undefined,
+        listName,
         confirmation: payload.description,
         autoReply: payload.autoResponse,
         status: payload.status,

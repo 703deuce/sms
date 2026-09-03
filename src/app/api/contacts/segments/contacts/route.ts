@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { resolveSegmentContactIds } from "@/lib/contacts/segment-query";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 
 /**
  * Return contacts matching segment conditions (or an existing segment id).
@@ -34,7 +35,10 @@ export async function POST(request: Request) {
     }
 
     const rows = await getPrisma().contact.findMany({
-      where: { workspaceId: auth.workspaceId, id: { in: slice } },
+      where: {
+        ...visibleContactWhere(auth.workspaceId),
+        id: { in: slice },
+      },
     });
 
     const contacts = rows.map((c: {

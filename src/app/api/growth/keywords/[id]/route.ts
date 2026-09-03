@@ -24,16 +24,31 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Keyword not found" }, { status: 404 });
     }
 
-    const updated = await getPrisma().keyword.update({
-      where: { id },
-      data: {
-        keyword: body.keyword?.trim().toUpperCase() || undefined,
-        listName: body.listName?.trim() || undefined,
-        confirmation: body.confirmation?.trim() || undefined,
-        autoReply: body.autoReply?.trim() ?? undefined,
-        status: body.status || undefined,
-      },
-    });
+    const patch: Record<string, unknown> = {};
+    if (body.keyword !== undefined) {
+      const keyword = body.keyword.trim().toUpperCase();
+      if (keyword) patch.keyword = keyword;
+    }
+    if (body.listName !== undefined) {
+      patch.listName = body.listName.trim();
+    }
+    if (body.confirmation !== undefined) {
+      patch.confirmation = body.confirmation.trim() || null;
+    }
+    if (body.autoReply !== undefined) {
+      patch.autoReply = body.autoReply.trim() || null;
+    }
+    if (body.status !== undefined) {
+      patch.status = body.status || existing.status;
+    }
+
+    const updated =
+      Object.keys(patch).length > 0
+        ? await getPrisma().keyword.update({
+            where: { id },
+            data: patch,
+          })
+        : existing;
     return NextResponse.json({ data: updated });
   } catch (err) {
     return jsonError(err, 400);

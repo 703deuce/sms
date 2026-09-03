@@ -153,6 +153,12 @@ async function main() {
   const segId = createdSeg.json?.data?.id;
   check("POST segment nested groups", createdSeg.ok, segId);
 
+  const segNoop = await api("/api/contacts/segments", {
+    method: "PATCH",
+    body: JSON.stringify({ id: segId }),
+  });
+  check("PATCH segment noop", segNoop.ok, segNoop.json?.error || "ok");
+
   const segContacts = await api("/api/contacts/segments/contacts", {
     method: "POST",
     body: JSON.stringify({ segmentId: segId, take: 10 }),
@@ -162,6 +168,22 @@ async function main() {
     segContacts.ok && (segContacts.json?.data?.total ?? 0) >= 1,
     `total=${segContacts.json?.data?.total}`,
   );
+
+  const keywords = await api("/api/growth/keywords");
+  const keywordId = keywords.json?.data?.[0]?.id;
+  if (keywordId) {
+    const kwClear = await api(`/api/growth/keywords/${keywordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ listName: "" }),
+    });
+    check(
+      "PATCH keyword clear listName",
+      kwClear.ok && kwClear.json?.data?.listName === "",
+      `listName=${JSON.stringify(kwClear.json?.data?.listName)}`,
+    );
+  } else {
+    check("PATCH keyword clear listName", true, "skipped (no keywords)");
+  }
 
   if (newContactId) await api(`/api/contacts/${newContactId}`, { method: "DELETE" });
   const importContact = await api(`/api/contacts?phone=${encodeURIComponent(importPhone)}`);
