@@ -86,6 +86,7 @@ export default async function CampaignDetailPage({
         }}
         recipients={recipients.map((r) => ({
           id: r.id,
+          contactId: r.contactId,
           name: r.name,
           phone: r.phone,
           status: r.status,
@@ -93,6 +94,7 @@ export default async function CampaignDetailPage({
           clickedAt: r.clickedAt,
           repliedAt: r.repliedAt,
           optedOutAt: r.optedOutAt,
+          failureReason: r.failureReason,
         }))}
         timeline={timeline}
         segmentsPerMessage={segments.segments}

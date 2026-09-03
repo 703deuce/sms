@@ -182,12 +182,14 @@ export function KimiConversationsConnected({
     const params = filterSelToSearchParams(sel, searchParams);
     if (urlProduct && urlProduct !== "all") params.set("product", urlProduct);
     if (searchQuery.trim()) params.set("q", searchQuery.trim());
+    if (urlPhoneNumberId) params.set("phoneNumberId", urlPhoneNumberId);
+    if (urlCampaignId) params.set("campaignId", urlCampaignId);
     params.delete("contactId");
     params.delete("contact");
     params.delete("draft");
     const suffix = params.toString();
     router.replace(suffix ? `/conversations?${suffix}` : "/conversations", { scroll: false });
-  }, [sel, searchParams, urlProduct, searchQuery, router]);
+  }, [sel, searchParams, urlProduct, searchQuery, urlPhoneNumberId, urlCampaignId, router]);
 
   useEffect(() => {
     fetch("/api/numbers")
@@ -211,12 +213,14 @@ export function KimiConversationsConnected({
       if (searchQuery.trim() === urlQ) return;
       const params = filterSelToSearchParams(sel, searchParams);
       if (urlProduct && urlProduct !== "all") params.set("product", urlProduct);
+      if (urlPhoneNumberId) params.set("phoneNumberId", urlPhoneNumberId);
+      if (urlCampaignId) params.set("campaignId", urlCampaignId);
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       else params.delete("q");
       router.replace(`/conversations?${params.toString()}`, { scroll: false });
     }, 350);
     return () => clearTimeout(t);
-  }, [searchQuery, urlQ, sel, searchParams, urlProduct, router]);
+  }, [searchQuery, urlQ, sel, searchParams, urlProduct, urlPhoneNumberId, urlCampaignId, router]);
 
   useEffect(() => {
     setSearchQuery(urlQ);
@@ -235,10 +239,12 @@ export function KimiConversationsConnected({
     urlSyncedRef.current = true;
     const params = filterSelToSearchParams({ kind: "all", key: "all" }, searchParams);
     if (urlProduct && urlProduct !== "all") params.set("product", urlProduct);
+    if (urlPhoneNumberId) params.set("phoneNumberId", urlPhoneNumberId);
+    if (urlCampaignId) params.set("campaignId", urlCampaignId);
     if (urlQ.trim()) params.set("q", urlQ.trim());
     const suffix = params.toString();
     router.replace(suffix ? `/conversations?${suffix}` : "/conversations", { scroll: false });
-  }, [router, searchParams, urlProduct, urlQ]);
+  }, [router, searchParams, urlProduct, urlPhoneNumberId, urlCampaignId, urlQ]);
 
   useEffect(() => {
     if (!tagDefinitions.length) return;
@@ -624,6 +630,23 @@ export function KimiConversationsConnected({
 
   const selected = convos.find((c) => c.id === selectedId) ?? null;
 
+  const campaignFilterLabel = useMemo(() => {
+    if (!urlCampaignId) return null;
+    const fromConvo = convos.find((c) => c.campaignId === urlCampaignId && c.campaignName);
+    return fromConvo?.campaignName ?? null;
+  }, [urlCampaignId, convos]);
+
+  const clearCampaignFilter = useCallback(() => {
+    const params = filterSelToSearchParams(sel, searchParams);
+    if (urlProduct && urlProduct !== "all") params.set("product", urlProduct);
+    if (searchQuery.trim()) params.set("q", searchQuery.trim());
+    if (urlPhoneNumberId) params.set("phoneNumberId", urlPhoneNumberId);
+    params.delete("campaignId");
+    if (selectedId) params.set("conversation", selectedId);
+    const suffix = params.toString();
+    router.replace(suffix ? `/conversations?${suffix}` : "/conversations", { scroll: false });
+  }, [sel, searchParams, urlProduct, searchQuery, urlPhoneNumberId, selectedId, router]);
+
   const update = useCallback(
     async (next: Conversation) => {
       const prev = convos.find((c) => c.id === next.id);
@@ -915,6 +938,39 @@ export function KimiConversationsConnected({
           <div className="tv-product-filters-bar">
             <InboxProductFilters basePath="/conversations" />
           </div>
+          {urlCampaignId ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "8px 16px",
+                background: "var(--tv-primary-soft)",
+                borderBottom: "1px solid var(--tv-border)",
+                fontSize: 13,
+              }}
+            >
+              <span style={{ color: "var(--tv-text)" }}>
+                Showing replies for campaign{" "}
+                <strong>{campaignFilterLabel || urlCampaignId}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={clearCampaignFilter}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--tv-primary)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                Clear filter
+              </button>
+            </div>
+          ) : null}
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
           <div className={selectedId ? "conversations-rail--mobile-hidden" : undefined} style={{ display: "flex", flexShrink: 0 }}>
           <InboxRail

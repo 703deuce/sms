@@ -549,10 +549,13 @@ export async function processInboundMessage(input: {
     // Web push for new inbound conversation message
     try {
       const { sendPushToWorkspaceAgents } = await import("@/lib/push/send");
+      const campaignQuery = conversation.campaignId
+        ? `&campaignId=${encodeURIComponent(conversation.campaignId)}`
+        : "";
       await sendPushToWorkspaceAgents(input.workspaceId, {
         title: "New inbox message",
         body: preview || "New reply from " + from,
-        url: `/conversations?conversation=${conversation.id}`,
+        url: `/conversations?conversation=${conversation.id}${campaignQuery}`,
         tag: `inbox-${conversation.id}`,
       });
     } catch {
@@ -562,11 +565,14 @@ export async function processInboundMessage(input: {
     // In-app notification bell for a new inbound reply
     try {
       const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+      const campaignQuery = conversation.campaignId
+        ? `&campaignId=${encodeURIComponent(conversation.campaignId)}`
+        : "";
       await notifyWorkspace(input.workspaceId, {
         type: "newReply",
         title: `New reply from ${contactName}`,
         body: preview || undefined,
-        href: `/conversations?conversation=${conversation.id}`,
+        href: `/conversations?conversation=${conversation.id}${campaignQuery}`,
       });
     } catch {
       // in-app notifications are best-effort

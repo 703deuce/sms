@@ -31,6 +31,40 @@ export type CampaignListRow = {
   configJson?: unknown;
 };
 
+export function mapBroadcastRowToListRow(row: {
+  id: string;
+  name: string;
+  audience: string;
+  status: string;
+  sent: number;
+  delivered: number;
+  clicks: number;
+  replies: number;
+  optOuts: number;
+  scheduledAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  configJson?: unknown;
+  recipientCount?: number;
+}): CampaignListRow {
+  return {
+    id: row.id,
+    name: row.name,
+    audience: row.audience,
+    status: row.status,
+    sent: row.sent,
+    delivered: row.delivered,
+    clicks: row.clicks,
+    replies: row.replies,
+    optOuts: row.optOuts,
+    scheduledAt: row.scheduledAt ? new Date(row.scheduledAt).toISOString() : null,
+    createdAt: new Date(row.createdAt).toISOString(),
+    updatedAt: new Date(row.updatedAt).toISOString(),
+    configJson: row.configJson,
+    recipientCount: row.recipientCount,
+  };
+}
+
 export type LaunchReviewData = {
   campaignId: string;
   campaignName: string;

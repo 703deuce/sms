@@ -24,6 +24,11 @@ export type InboxListItem = {
   lastMessage: string;
   updatedAt: string;
   tags?: string[];
+  productSource?: string | null;
+  productSourceLabel?: string | null;
+  campaignId?: string | null;
+  campaignName?: string | null;
+  fromE164?: string | null;
 };
 
 export type KimiInboxContext = {
@@ -204,6 +209,11 @@ export function mapListItemToKimi(
     tags: apiTagNamesToKeys(item.tags || [], tagCatalog, tagDefinitions),
     phone: item.contact?.phone || "",
     messages: [],
+    productSource: item.productSource ?? null,
+    productSourceLabel: item.productSourceLabel ?? null,
+    campaignId: item.campaignId ?? null,
+    campaignName: item.campaignName ?? null,
+    fromE164: item.fromE164 ?? null,
   };
 }
 

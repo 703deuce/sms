@@ -46,7 +46,7 @@ export async function fetchKeywords(): Promise<Keyword[]> {
 
 export async function createKeyword(payload: {
   keyword: string;
-  listName?: string;
+  listName?: string | null;
   confirmation?: string;
   autoReply?: string;
   status?: string;
@@ -101,6 +101,8 @@ export async function cloneKeyword(id: string, keywords: Keyword[]): Promise<Key
   return createKeyword({
     keyword: candidate,
     confirmation: src.description || undefined,
+    autoReply: src.autoReply,
+    listName: src.listName ?? null,
   });
 }
 

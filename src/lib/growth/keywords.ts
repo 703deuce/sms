@@ -162,6 +162,16 @@ export async function handleKeywordInbound(input: {
       },
     });
   } else if (contact.status !== "SUBSCRIBED") {
+    const { assertCanSubscribeContact } = await import("@/lib/contacts/subscribe-guard");
+    const subscribeCheck = await assertCanSubscribeContact(input.workspaceId, from, "SUBSCRIBED");
+    if (!subscribeCheck.ok) {
+      return {
+        matched: true,
+        keyword: keyword.keyword,
+        replyText:
+          "This number has opted out and cannot be re-subscribed via keyword. Reply HELP for assistance.",
+      };
+    }
     await prisma.contact.update({
       where: { id: contact.id },
       data: { status: "SUBSCRIBED", consentSource: `keyword:${keyword.keyword}`, consentDate: new Date() },

@@ -48,6 +48,7 @@ export function KimiContactsConnected({
   const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [listLoading, setListLoading] = useState(false);
   const [serverFiltered, setServerFiltered] = useState(false);
+  const retainInitialContactsRef = useRef(initialContacts.length > 0);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestFilterRef = useRef<{ q: string; status: OptInStatus | "all" }>({
     q: "",
@@ -70,7 +71,11 @@ export function KimiContactsConnected({
       fetchContactLists(),
       fetchContactListOptions(),
     ]);
-    setContacts(rows);
+    if (rows.length > 0) retainInitialContactsRef.current = false;
+    setContacts((prev) => {
+      if (rows.length === 0 && prev.length > 0 && retainInitialContactsRef.current) return prev;
+      return rows;
+    });
     setStats(s);
     setContactLists(lists);
     setListOptions(options);

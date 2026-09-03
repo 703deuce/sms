@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -62,6 +62,7 @@ export default function CampaignsList({
   subtitle = "View and manage all of your campaigns.",
   defaultFilter = "all",
   lockFilter = false,
+  initialRows = [],
 }: {
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
@@ -71,10 +72,12 @@ export default function CampaignsList({
   subtitle?: string;
   defaultFilter?: string;
   lockFilter?: boolean;
+  initialRows?: CampaignListRow[];
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<CampaignListRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<CampaignListRow[]>(initialRows);
+  const [loading, setLoading] = useState(initialRows.length === 0);
+  const retainInitialRef = useRef(initialRows.length > 0);
   const [filter, setFilter] = useState(defaultFilter);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -87,8 +90,12 @@ export default function CampaignsList({
     setLoading(true);
     setError("");
     fetchCampaigns({ status: fetchStatus, take: 200 })
-      .then((data) => (rowFilter ? data.filter(rowFilter) : data))
-      .then(setRows)
+      .then((data) => {
+        const next = rowFilter ? data.filter(rowFilter) : data;
+        if (next.length === 0 && retainInitialRef.current) return;
+        if (next.length > 0) retainInitialRef.current = false;
+        setRows(next);
+      })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Could not load campaigns");
         setRows([]);

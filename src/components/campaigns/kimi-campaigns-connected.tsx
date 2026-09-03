@@ -16,7 +16,13 @@ import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
 
 export type CampaignsInitialView = "list" | "create" | "review";
 
-export function KimiCampaignsConnected({ initialView = "list" }: { initialView?: CampaignsInitialView }) {
+export function KimiCampaignsConnected({
+  initialView = "list",
+  initialRows = [],
+}: {
+  initialView?: CampaignsInitialView;
+  initialRows?: import("@/lib/campaigns/kimi-campaigns-adapter").CampaignListRow[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [listKey, setListKey] = useState(0);
@@ -59,6 +65,7 @@ export function KimiCampaignsConnected({ initialView = "list" }: { initialView?:
   return navShell(
     <CampaignsList
       key={listKey}
+      initialRows={initialRows}
       onCreate={() => {
         startFreshComposeDraft();
         router.push("/campaigns/new");

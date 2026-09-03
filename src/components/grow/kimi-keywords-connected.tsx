@@ -8,7 +8,7 @@ import KeywordsList from "@/components/kimi/grow-keywords/components/KeywordsLis
 import KeywordBuilder from "@/components/kimi/grow-keywords/components/KeywordBuilder";
 import type { Keyword } from "@/components/kimi/grow-keywords/mock-data";
 import { createKeyword, deleteKeyword, fetchContactListNames, fetchKeywords, cloneKeyword, updateKeyword } from "@/lib/growth/kimi-keywords-adapter";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 
 type View = "list" | "create" | "edit";
 
@@ -21,20 +21,21 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
   const [contactLists, setContactLists] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(initialKeywords.length === 0);
 
   const reload = useCallback(async () => {
     const [rows, lists] = await Promise.all([fetchKeywords(), fetchContactListNames()]);
     setKeywords(rows);
     setContactLists(lists);
+    return rows;
   }, []);
 
   useEffect(() => {
-    if (initialKeywords.length === 0) {
-      void reload().catch((err) => setError(err instanceof Error ? err.message : "Load failed"));
-    } else {
-      void fetchContactListNames().then(setContactLists).catch(() => undefined);
-    }
-  }, [initialKeywords.length, reload]);
+    setLoading(true);
+    void reload()
+      .catch((err) => setError(err instanceof Error ? err.message : "Load failed"))
+      .finally(() => setLoading(false));
+  }, [reload]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -54,7 +55,10 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
         await updateKeyword(payload.keywordId, payload);
         showToast("Keyword updated.");
       } else {
-        await createKeyword(payload);
+        await createKeyword({
+          ...payload,
+          listName: payload.listName ?? null,
+        });
         showToast("Keyword created.");
       }
       await reload();
@@ -89,6 +93,12 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
       <main className="kw-main">
         {error && <p className="px-6 pt-4 text-sm text-red-600">{error}</p>}
         {view === "list" ? (
+          loading && keywords.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading keywords…
+            </div>
+          ) : (
           <KeywordsList
             keywords={keywords}
             onCreate={() => {
@@ -112,6 +122,7 @@ export function KimiKeywordsConnected({ initialKeywords = [] }: Props) {
               window.location.assign(kw ? `/grow/tap-to-join?keyword=${encodeURIComponent(kw.name)}` : "/grow/tap-to-join");
             }}
           />
+          )
         ) : (
           <KeywordBuilder
             key={editingKeyword?.id ?? "create"}

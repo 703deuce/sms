@@ -29,7 +29,9 @@ export async function POST(request: Request) {
     }
     const phone = body.phone ? normalizeE164(body.phone) : null;
     const email = body.email?.trim().toLowerCase() || null;
-    const suppressionKey = phone ? `p:${phone}` : `e:${email}`;
+    const suppressionKey = phone
+      ? `${auth.workspaceId}:p:${phone}`
+      : `${auth.workspaceId}:e:${email}`;
     const row = await getPrisma().suppression.upsert({
       where: { suppressionKey },
       create: {

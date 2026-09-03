@@ -347,6 +347,183 @@ Worker: scheduledAt <= now → SENDING → enqueueDueCampaignMessages
 - Active campaigns poll `GET /api/drip-campaigns/:id/detail` every 15s for live stats
 - List toggle/patch errors show toast (launch validation failures visible)
 
+### Campaign replies (137–143)
+
+| Role | Files |
+|------|--------|
+| Inbox filter | `kimi-conversations-connected.tsx`, `conversation-url-filters.ts` |
+| List adapter | `kimi-inbox-adapter.ts` (`campaignId` on list rows) |
+| Results → inbox | `campaign-results.tsx` |
+| Inbound push | `src/lib/messaging/inbound-process.ts` |
+
+**User flow:**
+
+```
+/campaigns/:id (Replies tab) → click contact → /conversations?contactId=&campaignId=
+  → campaign filter banner → thread opens → reply
+```
+
+**Checklist (137–143):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 137 | Filter inbox by campaign | `?campaignId=` → `inboxQueryFromFilter` + API filter |
+| 138 | Campaign filter persists in URL | `syncUrl`, search debounce, cold-load `filter=all` keep `campaignId` |
+| 139 | List rows show campaign context | `mapListItemToKimi` maps `campaignId`, `campaignName`, `productSource` |
+| 140 | Campaign filter banner | Banner + clear when `urlCampaignId` set |
+| 141 | Results replies tab → inbox | `EngagementTable` links `/conversations?contactId=&campaignId=` |
+| 142 | Recipients table → inbox | Recipient name links with `contactId` + `campaignId` |
+| 143 | Inbound notification deep link | Push/in-app href includes `campaignId` when conversation has one |
+
+**Glue checks:**
+
+- `clearEphemeralUrlParams` preserves `campaignId` (and `phoneNumberId`)
+- List adapter does not drop campaign fields from `/api/inbox` list response
+- Campaign results engagement rows include `contactId` from `listBroadcastRecipients`
+
+### Campaign results / analytics (144–159)
+
+| Role | Files |
+|------|--------|
+| Results UI | `src/components/campaigns/broadcast/campaign-results.tsx` |
+| Detail SSR | `src/app/(app)/campaigns/[campaignId]/page.tsx` |
+| Analytics | `src/lib/mass-texting/broadcast/analytics.ts` |
+| Actions | `src/components/campaigns/campaign-actions.tsx` |
+
+**User flow:**
+
+```
+/campaigns/:id → Overview / Recipients / Clicks / Replies / Opt-outs / Activity
+  → live poll while SENDING → filters + search on recipients
+```
+
+**Checklist (144–159):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 144 | Results view for sent campaigns | SSR `showResultsView` for completed/sending/sent/failed/paused |
+| 145 | KPI cards | `live.sent/delivered/clicks/replies/optOuts` |
+| 146 | Live poll while sending | 5s poll `/stats` + `/recipients` when status SENDING |
+| 147 | Overview tab width | `w-full min-w-0` wrapper on overview panel |
+| 148 | Recipients tab filters | Delivered/Failed/Clicked/Replied/Opt-Outs chips |
+| 149 | Delivered filter accuracy | Exact match — not matching "Undelivered" substring |
+| 150 | Clicked/Replied filters | Use `clickedAt` / `repliedAt`, not status substring |
+| 151 | Recipient search | Client search on name/phone in filtered set |
+| 152 | Failure reason column | `failureReason` from analytics SSR + poll |
+| 153 | Engagement tables | Clicks / Replies / Opt-outs tabs with timestamps |
+| 154 | Activity feed | Timeline + per-recipient delivery/click/reply/opt-out events |
+| 155 | Campaign actions use live status | `CampaignActions` gets `liveStatus` during poll |
+| 156 | Duplicate from results | Link to `/campaigns/new?duplicate=` for Kimi broadcast |
+| 157 | Cost breakdown | `CostBreakdown` segments + total |
+| 158 | Message preview | `MessagePreview` from campaign body |
+| 159 | contactId on recipients | SSR + poll map includes `contactId` for inbox deep links |
+
+**Glue checks:**
+
+- `matchesRecipientFilter` uses row fields, not loose status substring matching
+- Poll updates `CampaignActions` status (pause/resume while sending)
+- SSR recipient map includes `contactId` and `failureReason`
+
+### Keywords / opt-in (160–168)
+
+| Role | Files |
+|------|--------|
+| Shell | `src/components/grow/kimi-keywords-connected.tsx` |
+| Adapter | `src/lib/growth/kimi-keywords-adapter.ts` |
+| Runtime | `src/lib/growth/keywords.ts` |
+| API | `src/app/api/growth/keywords/**` |
+| Page SSR | `src/app/(app)/grow/keywords/page.tsx` |
+
+**User flow:**
+
+```
+/grow/keywords → list → create/edit keyword → inbound SMS matches → subscribe + auto-reply
+```
+
+**Checklist (160–168):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 160 | Keywords list cold load | SSR `keyword.findMany` + client `fetchKeywords` reload |
+| 161 | Create keyword | `POST /api/growth/keywords` |
+| 162 | Edit keyword | `PATCH /api/growth/keywords/:id` |
+| 163 | Delete / clone | DELETE + `cloneKeyword` with preserved fields |
+| 164 | List assignment on opt-in | `handleKeywordInbound` → `contactListMember` when `listName` set |
+| 165 | No list when createContact=no | API `listName: null` when explicitly omitted; adapter sends `null` |
+| 166 | STOP can't re-subscribe via keyword | `assertCanSubscribeContact` in `handleKeywordInbound` |
+| 167 | Auto-reply sent | `replyText` from keyword `autoReply` / `confirmation` |
+| 168 | Clone preserves fields | `cloneKeyword` copies `autoReply`, `listName`, `confirmation` |
+
+**Glue checks:**
+
+- Keywords page SSR seeds list (no empty flash)
+- `reload()` always runs on mount with loading state
+- Inbound keyword handler respects suppression / STOP before re-subscribe
+
+### Deliverability edge cases (224–235)
+
+| Role | Files |
+|------|--------|
+| Blocked contacts | `src/app/(app)/contacts/blocked/page.tsx` |
+| Suppression API | `src/app/api/compliance/suppression/route.ts` |
+| Subscribe guard | `src/lib/contacts/subscribe-guard.ts` |
+| Pre-send review | `src/lib/mass-texting/pre-send-review.ts`, `ReviewDetails.tsx` |
+
+**Checklist (224–235):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 224 | STOP adds suppression | `inbound-process` uses `${workspaceId}:p:${phone}` key |
+| 225 | Manual suppression POST | Same workspace-scoped `suppressionKey` format |
+| 226 | Suppressed excluded from send | `pre-send-review` / audience `suppressedRemoved` |
+| 227 | Invalid numbers excluded | `invalidRemoved` in launch review |
+| 228 | Review shows adjustments | `formatLaunchReviewAudienceSummary` in `ReviewDetails` |
+| 229 | Blocked contacts page | `/contacts/blocked` lists `BLOCKED` status |
+| 230 | Unblock contact | `BlockedContactUnblockButton` → PATCH `SUBSCRIBED` |
+| 231 | BLOCKED can unblock | `subscribe-guard` blocks UNSUBSCRIBED only, not BLOCKED→SUBSCRIBED |
+| 232 | UNSUBSCRIBED can't manual re-subscribe | `assertCanSubscribeContact` on contact PATCH |
+| 233 | Keyword can't bypass STOP | `handleKeywordInbound` checks guard |
+| 234 | Import skips opted-out | Import route skips UNSUBSCRIBED/BLOCKED upsert to subscribed |
+| 235 | Campaign queue shows suppressed count | Launch review `suppressedRemoved` row |
+
+**Glue checks:**
+
+- Suppression keys use workspace prefix consistently (`${workspaceId}:p:${e164}`)
+- Blocked page Unblock button calls API (not dead UI)
+- BLOCKED ≠ UNSUBSCRIBED for re-subscribe guard semantics
+
+### Browser / navigation (266–277)
+
+| Role | Files |
+|------|--------|
+| Campaigns list | `campaigns/page.tsx`, `CampaignsList.tsx`, `kimi-campaigns-connected.tsx` |
+| Filtered lists | `campaigns-filtered-page.tsx`, `/campaigns/*/page.tsx` |
+| Contacts list | `kimi-contacts-connected.tsx`, `contacts/page.tsx` |
+| Inbox | `kimi-conversations-connected.tsx` |
+
+**Checklist (266–277):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 266 | Campaigns cold load SSR | `listBroadcastCampaigns` → `initialRows` on `/campaigns` |
+| 267 | Campaigns client reload | `fetchCampaigns` on mount; retain SSR until rows return |
+| 268 | Filtered campaign routes SSR | `CampaignsFilteredPage` server wrapper per status route |
+| 269 | Return from detail refreshes list | `kimi-campaigns-connected` `listKey` on pathname return |
+| 270 | Contacts cold load SSR | `loadContacts` + `initialContacts` on `/contacts` |
+| 271 | Contacts reload keeps SSR | `retainInitialContactsRef` until fetch returns rows |
+| 272 | Inbox cold load SSR | `loadConversations` + `retainInitialConvosRef` |
+| 273 | Inbox filter=all URL sync | One-time `router.replace` adds `filter=all` |
+| 274 | Inbox campaign deep link | `?campaignId=` preserved across filter/search changes |
+| 275 | Keywords cold load SSR | `grow/keywords/page.tsx` server seed |
+| 276 | Drip list SSR (prior) | `listDripCampaigns` initial rows on automations route |
+| 277 | No false empty states | Loading/retain patterns — not "0 items" flash on hydration |
+
+**Glue checks:**
+
+- Server pages seed list data; client reload must not wipe SSR with empty array
+- `CampaignsList` / contacts connected use `retainInitial*Ref` pattern from inbox
+- Filtered campaign sub-routes use `CampaignsFilteredPage` for SSR parity
+
 ### Media library
 
 | Role | Files |

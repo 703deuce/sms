@@ -34,6 +34,7 @@ type CampaignStats = {
 
 type RecipientRow = {
   id: string;
+  contactId?: string | null;
   name: string;
   phone: string;
   status: string;
@@ -174,25 +175,36 @@ function MessagePreview({ body }: { body?: string }) {
   );
 }
 
-function matchesRecipientFilter(status: string, filter: string): boolean {
-  const s = status.toLowerCase();
+function matchesRecipientFilter(row: RecipientRow, filter: string): boolean {
+  const s = row.status.toLowerCase();
   if (filter === "All") return true;
-  if (filter === "Delivered") return s.includes("delivered");
-  if (filter === "Failed") return s.includes("failed");
-  if (filter === "Clicked") return s.includes("click");
-  if (filter === "Replied") return s.includes("repl");
-  if (filter === "Opt-Outs") return s.includes("opt");
-  return s.includes(filter.toLowerCase().replace(/-/g, ""));
+  if (filter === "Delivered") return s === "delivered" || s === "sent";
+  if (filter === "Failed") {
+    return s.includes("fail") || s === "undelivered" || Boolean(row.failureReason);
+  }
+  if (filter === "Clicked") return Boolean(row.clickedAt);
+  if (filter === "Replied") return Boolean(row.repliedAt);
+  if (filter === "Opt-Outs") return Boolean(row.optedOutAt) || s.includes("opt");
+  return false;
+}
+
+function inboxThreadHref(row: RecipientRow, campaignId: string) {
+  const params = new URLSearchParams();
+  if (row.contactId) params.set("contactId", row.contactId);
+  params.set("campaignId", campaignId);
+  return `/conversations?${params.toString()}`;
 }
 
 function EngagementTable({
   rows,
   field,
   emptyLabel,
+  campaignId,
 }: {
   rows: RecipientRow[];
   field: "clickedAt" | "repliedAt" | "optedOutAt";
   emptyLabel: string;
+  campaignId: string;
 }) {
   const engaged = rows.filter((r) => r[field]);
   return (
@@ -216,7 +228,18 @@ function EngagementTable({
           ) : (
             engaged.map((r) => (
               <tr key={r.id} className="hover:bg-muted/20">
-                <td className="px-4 py-3 font-medium">{r.name}</td>
+                <td className="px-4 py-3 font-medium">
+                  {r.contactId ? (
+                    <Link
+                      href={inboxThreadHref(r, campaignId)}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      {r.name}
+                    </Link>
+                  ) : (
+                    r.name
+                  )}
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
                 <td className="px-4 py-3 text-muted-foreground">{formatTs(r[field])}</td>
                 <td className="px-4 py-3">
@@ -395,6 +418,7 @@ export function CampaignResultsView({
             setLiveRecipients(
               json.data.map((r: RecipientRow) => ({
                 id: r.id,
+                contactId: r.contactId,
                 name: r.name,
                 phone: r.phone,
                 status: r.status,
@@ -429,7 +453,7 @@ export function CampaignResultsView({
   const filteredRecipients = useMemo(() => {
     let rows = liveRecipients;
     if (recipientFilter !== "All") {
-      rows = rows.filter((r) => matchesRecipientFilter(r.status, recipientFilter));
+      rows = rows.filter((r) => matchesRecipientFilter(r, recipientFilter));
     }
     const q = search.trim().toLowerCase();
     if (q) {
@@ -463,7 +487,7 @@ export function CampaignResultsView({
             ) : null}
             <CampaignActions
               campaignId={campaign.id}
-              status={campaign.status}
+              status={liveStatus}
               isMassText={campaignLooksLikeMassText(campaign.configJson)}
             />
           </>
@@ -508,6 +532,7 @@ export function CampaignResultsView({
       </div>
 
       {tab === "overview" ? (
+        <div className="w-full min-w-0">
         <div className="grid w-full gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
             <div className="grid gap-4 lg:grid-cols-2">
@@ -584,6 +609,7 @@ export function CampaignResultsView({
             <CostBreakdown sent={live.sent} segments={segmentsPerMessage} cost={cost} />
           </div>
         </div>
+        </div>
       ) : null}
 
       {tab === "recipients" ? (
@@ -636,7 +662,18 @@ export function CampaignResultsView({
                 ) : (
                   filteredRecipients.map((r) => (
                     <tr key={r.id} className="hover:bg-muted/20">
-                      <td className="px-4 py-3 font-medium">{r.name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {r.contactId ? (
+                          <Link
+                            href={inboxThreadHref(r, campaign.id)}
+                            className="text-indigo-600 hover:underline"
+                          >
+                            {r.name}
+                          </Link>
+                        ) : (
+                          r.name
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
                       <td className="px-4 py-3">
                         <RecipientStatus status={r.status} />
@@ -661,6 +698,7 @@ export function CampaignResultsView({
             rows={liveRecipients}
             field="clickedAt"
             emptyLabel="No link clicks recorded yet."
+            campaignId={campaign.id}
           />
         </div>
       ) : null}
@@ -671,6 +709,7 @@ export function CampaignResultsView({
             rows={liveRecipients}
             field="repliedAt"
             emptyLabel="No replies recorded yet."
+            campaignId={campaign.id}
           />
         </div>
       ) : null}
@@ -681,6 +720,7 @@ export function CampaignResultsView({
             rows={liveRecipients}
             field="optedOutAt"
             emptyLabel="No opt-outs recorded yet."
+            campaignId={campaign.id}
           />
         </div>
       ) : null}

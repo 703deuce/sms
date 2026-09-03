@@ -1,3 +1,4 @@
+import { BlockedContactUnblockButton } from "@/components/contacts/blocked-contact-unblock-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -105,9 +106,7 @@ export default async function BlockedContactsPage() {
                         View
                       </Button>
                     </Link>
-                    <Button variant="ghost" size="sm">
-                      Unblock
-                    </Button>
+                    <BlockedContactUnblockButton contactId={contact.id} />
                   </div>
                 </TD>
               </TR>

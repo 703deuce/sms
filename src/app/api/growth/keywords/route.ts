@@ -39,7 +39,10 @@ export async function POST(request: Request) {
         workspaceId: auth.workspaceId,
         keyword,
         phoneNumber: body.phoneNumber?.trim() || "*",
-        listName: body.listName?.trim() || "Keyword subscribers",
+        listName:
+          body.listName === undefined
+            ? "Keyword subscribers"
+            : body.listName?.trim() || null,
         confirmation:
           body.confirmation?.trim() ||
           `You're subscribed to ${keyword}. Reply STOP to opt out. Msg&data rates may apply.`,

@@ -30,7 +30,7 @@ export async function assertCanSubscribeContact(
     where: { workspaceId_phone: { workspaceId, phone: normalized } },
     select: { status: true },
   });
-  if (existing && (existing.status === "UNSUBSCRIBED" || existing.status === "BLOCKED")) {
+  if (existing && existing.status === "UNSUBSCRIBED") {
     return {
       ok: false,
       error: "This contact has opted out and cannot be re-subscribed from this screen.",
