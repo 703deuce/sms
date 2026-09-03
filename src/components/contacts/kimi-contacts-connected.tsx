@@ -3,12 +3,12 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ContactsList from "@/components/kimi/contacts/components/ContactsList";
 import CreateContact from "@/components/kimi/contacts/components/CreateContact";
 import ImportWizard from "@/components/kimi/contacts/components/ImportWizard";
 import { ImportStartedModal } from "@/components/kimi/contacts/components/Modal";
-import type { Contact } from "@/components/kimi/contacts/mock-data";
+import type { Contact, OptInStatus } from "@/components/kimi/contacts/mock-data";
 import {
   createContact,
   deleteContacts,
@@ -17,8 +17,10 @@ import {
   fetchContacts,
   fetchContactLists,
   importContacts,
+  mapKimiStatusFilterToApi,
   updateContact,
   type KimiContactStats,
+  type KimiImportResult,
 } from "@/lib/contacts/kimi-contacts-adapter";
 import { addContactsToList, removeContactsFromLists } from "@/lib/contacts/kimi-lists-adapter";
 
@@ -40,13 +42,30 @@ export function KimiContactsConnected({
   const [stats, setStats] = useState(initialStats);
   const [savedToast, setSavedToast] = useState(false);
   const [importModal, setImportModal] = useState(false);
+  const [importResult, setImportResult] = useState<KimiImportResult | null>(null);
   const [error, setError] = useState("");
   const [contactLists, setContactLists] = useState<string[]>([]);
   const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [serverFiltered, setServerFiltered] = useState(false);
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestFilterRef = useRef<{ q: string; status: OptInStatus | "all" }>({
+    q: "",
+    status: "all",
+  });
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (filters?: { q?: string; status?: OptInStatus | "all" }) => {
+    const q = filters?.q?.trim() ?? "";
+    const status = filters?.status ?? "all";
+    const apiStatus = mapKimiStatusFilterToApi(status);
+    const usingServerFilters = Boolean(q || apiStatus);
+
     const [rows, s, lists, options] = await Promise.all([
-      fetchContacts(),
+      fetchContacts({
+        q: q || undefined,
+        status: apiStatus,
+        take: 200,
+      }),
       fetchContactStats(),
       fetchContactLists(),
       fetchContactListOptions(),
@@ -55,6 +74,8 @@ export function KimiContactsConnected({
     setStats(s);
     setContactLists(lists);
     setListOptions(options);
+    setServerFiltered(usingServerFilters);
+    return rows;
   }, []);
 
   useEffect(() => {
@@ -66,11 +87,30 @@ export function KimiContactsConnected({
       .catch(() => undefined);
   }, []);
 
+  // Background sync on mount so counts match after navigation/reload (item 43).
   useEffect(() => {
-    if (initialContacts.length === 0) {
-      void reload().catch(() => undefined);
-    }
-  }, [initialContacts.length, reload]);
+    void reload(latestFilterRef.current).catch(() => undefined);
+  }, [reload]);
+
+  const handleFiltersChange = useCallback(
+    (q: string, status: OptInStatus | "all") => {
+      latestFilterRef.current = { q, status };
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+      filterDebounceRef.current = setTimeout(() => {
+        setListLoading(true);
+        void reload({ q, status })
+          .catch(() => undefined)
+          .finally(() => setListLoading(false));
+      }, 300);
+    },
+    [reload],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+    };
+  }, []);
 
   const handleSaved = async (formData?: {
     firstName: string;
@@ -97,7 +137,7 @@ export function KimiContactsConnected({
         listIds,
         listNames: formData.selectedLists || [],
       });
-      await reload();
+      await reload(latestFilterRef.current);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save contact");
       return;
@@ -112,7 +152,7 @@ export function KimiContactsConnected({
     if (failed > 0 && deleted === 0) {
       throw new Error("Could not delete contacts");
     }
-    await reload();
+    await reload(latestFilterRef.current);
   };
 
   return (
@@ -124,20 +164,23 @@ export function KimiContactsConnected({
             contacts={contacts}
             stats={stats}
             listOptions={listOptions}
+            loading={listLoading}
+            serverFiltered={serverFiltered}
+            onFiltersChange={handleFiltersChange}
             onCreateOne={() => setView("create")}
             onImportList={() => setView("import")}
             onDeleteContacts={handleDeleteContacts}
             onAddToLists={async (contactIds, listIds) => {
               await Promise.all(listIds.map((listId) => addContactsToList(listId, contactIds)));
-              await reload();
+              await reload(latestFilterRef.current);
             }}
             onRemoveFromLists={async (contactIds, listIds) => {
               await removeContactsFromLists(listIds, contactIds);
-              await reload();
+              await reload(latestFilterRef.current);
             }}
             onUnsubscribeContacts={async (ids) => {
               await Promise.all(ids.map((id) => updateContact(id, { optInLabel: "Unsubscribed" })));
-              await reload();
+              await reload(latestFilterRef.current);
             }}
             savedToast={savedToast}
           />
@@ -151,14 +194,23 @@ export function KimiContactsConnected({
             onCancel={() => setView("list")}
             onDone={() => setImportModal(true)}
             onImportFile={async (payload) => {
-              await importContacts(payload);
-              await reload();
+              const result = await importContacts(payload);
+              setImportResult(result);
+              await reload(latestFilterRef.current);
             }}
           />
         )}
       </main>
       {importModal && (
-        <ImportStartedModal onClose={() => { setImportModal(false); setView("list"); void reload(); }} />
+        <ImportStartedModal
+          result={importResult}
+          onClose={() => {
+            setImportModal(false);
+            setImportResult(null);
+            setView("list");
+            void reload(latestFilterRef.current);
+          }}
+        />
       )}
     </div>
   );

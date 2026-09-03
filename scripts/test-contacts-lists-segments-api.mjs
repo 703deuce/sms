@@ -54,6 +54,17 @@ async function main() {
   const first = contacts.json?.data?.[0];
   check("GET contacts", contacts.ok && first?.dateAdded, `dateAdded=${first?.dateAdded || "missing"}`);
 
+  if (first?.firstName) {
+    const search = await api(`/api/contacts?q=${encodeURIComponent(String(first.firstName).slice(0, 3))}&take=5`);
+    check(
+      "GET contacts search q=",
+      search.ok && (search.json?.data?.length ?? 0) >= 1,
+      `matches=${search.json?.data?.length ?? 0}`,
+    );
+  } else {
+    check("GET contacts search q=", true, "skipped (no contacts)");
+  }
+
   const stats = await api("/api/contacts/stats");
   check("GET stats", stats.ok, JSON.stringify(stats.json?.data));
 

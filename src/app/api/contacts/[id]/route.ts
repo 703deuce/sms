@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
 import { assignContactToLists } from "@/lib/contacts/list-assignment";
+import { assertCanSubscribeContact } from "@/lib/contacts/subscribe-guard";
 import { isAutomationContact } from "@/lib/contacts/visible-contacts";
 import { getPrisma } from "@/lib/db";
 import { loadContactById } from "@/lib/workspace-data";
@@ -78,11 +79,21 @@ export async function PATCH(
     if (body.status !== undefined) {
       const statusRaw = String(body.status).toUpperCase();
       if (CONTACT_STATUSES.has(statusRaw)) {
-        contactPatch.status = statusRaw as
+        const nextStatus = statusRaw as
           | "SUBSCRIBED"
           | "UNSUBSCRIBED"
           | "BLOCKED"
           | "INVALID";
+        const phoneForCheck = phoneUpdate || existing.phone;
+        const subscribeCheck = await assertCanSubscribeContact(
+          auth.workspaceId,
+          phoneForCheck,
+          nextStatus,
+        );
+        if (!subscribeCheck.ok) {
+          return NextResponse.json({ error: subscribeCheck.error }, { status: 400 });
+        }
+        contactPatch.status = nextStatus;
       }
     }
     if (body.assignedUser !== undefined) contactPatch.assignedUser = body.assignedUser;

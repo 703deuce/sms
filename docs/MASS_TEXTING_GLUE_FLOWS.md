@@ -98,15 +98,40 @@ Always verify:
 
 ```
 /contacts → list loads → create → back to list (row visible)
+/contacts → import CSV → map columns → summary modal (created/updated/skipped/errors)
+/contacts → search/filter → server-side query (not only first 200 rows)
 /contacts/lists → create list → add members → count updates
+/contacts/tags → create tag → apply to contacts
+/contacts/[id] → history/activity → open inbox thread (deep link)
 /contacts/segments → create → preview count → use in campaign audience
 ```
 
+**Checklist (contacts 26–43):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 26 | Add contact manually | `KimiContactsConnected` → `createContact` → `POST /api/contacts` → `reload()` |
+| 27–28 | Import CSV + map fields | `ImportWizard` + `importContacts` + `parseImportCsvColumns` |
+| 29 | Invalid rows don't kill import | API per-row `errors[]`; modal shows row errors |
+| 30–31 | Duplicates / updates | Import upsert + `updated` count in modal |
+| 32–34 | Lists create / add / remove | `kimi-lists-connected` + `kimi-lists-adapter` |
+| 35 | Tags | `/contacts/tags` → `TagsManager` → `POST /api/contacts/tags` |
+| 36–37 | Search / filter | `onFiltersChange` → debounced `fetchContacts({ q, status })` |
+| 38 | Edit contact | Row → `/contacts/[id]` or `/contacts/fields` edit shell |
+| 39 | Delete / archive | `deleteContacts` in connected shell |
+| 40 | Contact history | `/contacts/[id]` activity + consent tables |
+| 41 | Opted-out marked | `StatusPill` / `StatusChip` for Unsubscribed |
+| 42 | STOP can't re-subscribe | `assertCanSubscribeContact` on POST/PATCH; campaigns use suppression in pre-send |
+| 43 | Count after reload | Background `reload()` on mount syncs `fetchContactStats()` |
+
 **Glue checks:**
 
-- Only full `reload()` on mount when SSR seed is empty (`kimi-contacts-connected` pattern)
+- Background `reload()` on mount syncs stats + rows (not only when SSR seed empty)
+- Search/filter hits `/api/contacts?q=` and `status=` server-side (`serverFiltered` skips double client filter)
+- Import modal shows `created`, `updated`, `suppressedSkipped`, per-row `errors`
+- Manual create blocked for STOP/suppressed numbers (`subscribe-guard.ts`)
+- Contact detail inbox link uses `/conversations?conversation=:id`
 - List/segment IDs in campaign audience picker match API enrollment
-- Import flow: attestation + import API + list refresh
 
 ### Drip campaigns (automations)
 
@@ -175,7 +200,7 @@ These caused real user-visible bugs — grep for them when touching glue:
 
 **Inbox:** cold `/conversations` → open thread → send reply.
 
-**Contacts:** create contact → appears in list → add to list.
+**Contacts:** create contact → appears in list → search finds it → import CSV → summary modal → add to list.
 
 **Drip:** create draft → activate → open detail → pause.
 

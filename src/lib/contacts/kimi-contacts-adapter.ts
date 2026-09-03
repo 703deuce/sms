@@ -49,13 +49,43 @@ export function mapApiContactToKimi(c: ApiContact): KimiContact {
 
 export type KimiContactStats = { contacts: number; subscribed: number; unsubscribed: number };
 
-export async function fetchContacts(): Promise<KimiContact[]> {
-  const rows = await fetchContactsDetailed();
+export type FetchContactsOptions = {
+  q?: string;
+  status?: string;
+  take?: number;
+  skip?: number;
+};
+
+export function mapKimiStatusFilterToApi(
+  status: KimiContact["status"] | "all",
+): string | undefined {
+  if (status === "all") return undefined;
+  if (status === "Subscribed") return "SUBSCRIBED";
+  if (status === "Unsubscribed") return "UNSUBSCRIBED";
+  if (status === "Blocked") return "BLOCKED";
+  if (status === "Not Subscribed") return "INVALID";
+  return undefined;
+}
+
+function buildContactsQuery(options?: FetchContactsOptions): string {
+  const params = new URLSearchParams();
+  params.set("take", String(Math.min(200, Math.max(1, options?.take ?? 200))));
+  if (options?.skip) params.set("skip", String(Math.max(0, options.skip)));
+  const q = options?.q?.trim();
+  if (q) params.set("q", q);
+  if (options?.status) params.set("status", options.status);
+  return params.toString();
+}
+
+export async function fetchContacts(options?: FetchContactsOptions): Promise<KimiContact[]> {
+  const rows = await fetchContactsDetailed(options);
   return rows.map(({ lists: _lists, ...contact }) => contact);
 }
 
-export async function fetchContactsDetailed(): Promise<Array<KimiContact & { lists: string[] }>> {
-  const res = await fetch("/api/contacts?take=200");
+export async function fetchContactsDetailed(
+  options?: FetchContactsOptions,
+): Promise<Array<KimiContact & { lists: string[] }>> {
+  const res = await fetch(`/api/contacts?${buildContactsQuery(options)}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Could not load contacts");
   return (json.data || []).map((c: ApiContact) => ({
@@ -213,7 +243,14 @@ export function parseImportCsvColumns(
   return { columns, mapping };
 }
 
-export async function importContacts(payload: KimiImportPayload): Promise<{ created: number; updated: number }> {
+export type KimiImportResult = {
+  created: number;
+  updated: number;
+  suppressedSkipped: number;
+  errors: Array<{ row: number; error: string }>;
+};
+
+export async function importContacts(payload: KimiImportPayload): Promise<KimiImportResult> {
   const text = await payload.file.text();
   const allRows = parseCsv(text);
   if (!allRows.length) throw new Error("CSV file is empty");
@@ -298,6 +335,8 @@ export async function importContacts(payload: KimiImportPayload): Promise<{ crea
   return {
     created: json.data?.created ?? 0,
     updated: json.data?.updated ?? 0,
+    suppressedSkipped: json.data?.suppressedSkipped ?? 0,
+    errors: Array.isArray(json.data?.errors) ? json.data.errors : [],
   };
 }
 

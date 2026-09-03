@@ -77,6 +77,9 @@ export default function ContactsList({
   contacts = seedContacts,
   stats = seedStats,
   listOptions = [],
+  loading = false,
+  serverFiltered = false,
+  onFiltersChange,
   onCreateOne,
   onImportList,
   onDeleteContacts,
@@ -88,6 +91,9 @@ export default function ContactsList({
   contacts?: Contact[];
   stats?: typeof seedStats;
   listOptions?: Array<{ id: string; name: string }>;
+  loading?: boolean;
+  serverFiltered?: boolean;
+  onFiltersChange?: (query: string, status: OptInStatus | "all") => void;
   onCreateOne: () => void;
   onImportList: () => void;
   onDeleteContacts?: (ids: string[]) => Promise<void>;
@@ -116,6 +122,7 @@ export default function ContactsList({
   const filterRef = useRef<HTMLDivElement>(null);
   const rowMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const filtersReadyRef = useRef(false);
 
   useEffect(() => {
     if (!menuOpen && !filterOpen && !rowMenuFor) return;
@@ -129,7 +136,16 @@ export default function ContactsList({
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen, filterOpen, rowMenuFor]);
 
+  useEffect(() => {
+    if (!filtersReadyRef.current) {
+      filtersReadyRef.current = true;
+      return;
+    }
+    onFiltersChange?.(query, statusFilter);
+  }, [query, statusFilter, onFiltersChange]);
+
   const filtered = useMemo(() => {
+    if (serverFiltered) return contacts;
     const q = query.trim().toLowerCase();
     return contacts.filter((c) => {
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
@@ -137,7 +153,7 @@ export default function ContactsList({
       const haystack = `${c.firstName} ${c.lastName} ${c.mobile} ${displayMobile(c.mobile)} ${c.email}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [contacts, query, statusFilter]);
+  }, [contacts, query, statusFilter, serverFiltered]);
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((c) => selectedIds.has(c.id));
   const someVisibleSelected = filtered.some((c) => selectedIds.has(c.id));
@@ -275,7 +291,7 @@ export default function ContactsList({
       </div>
       <p className="mb-6 mt-1 text-[13px] text-muted-foreground">View and manage all of your contacts.</p>
 
-      {stats.contacts > contacts.length && (
+      {stats.contacts > contacts.length && !serverFiltered && (
         <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-[12px] text-primary">
           Showing {contacts.length.toLocaleString()} of {stats.contacts.toLocaleString()} contacts. Refine your search or use filters to find specific contacts.
         </div>
@@ -533,7 +549,14 @@ export default function ContactsList({
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-3 text-center text-[12px] text-muted-foreground">
+                    Loading contacts…
+                  </td>
+                </tr>
+              )}
+              {filtered.length === 0 && !loading && (
                 <tr>
                   <td colSpan={8} className="px-4 py-14 text-center">
                     <div className="mx-auto flex max-w-xs flex-col items-center">

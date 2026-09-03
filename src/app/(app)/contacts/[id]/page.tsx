@@ -289,7 +289,7 @@ export default async function ContactDetailPage({
                   <p className="text-sm font-medium text-foreground">Open inbox thread</p>
                   <StatusChip status={conversation.status} />
                 </div>
-                <Link href="/conversations">
+                <Link href={`/conversations?conversation=${encodeURIComponent(conversation.id)}`}>
                   <Button variant="outline" size="sm">
                     Open in inbox
                   </Button>

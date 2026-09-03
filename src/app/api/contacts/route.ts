@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { assignContactToLists, resolveOrCreateListIdsByName } from "@/lib/contacts/list-assignment";
+import { assertCanSubscribeContact } from "@/lib/contacts/subscribe-guard";
 import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { resolveVisibleContactFilter } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
@@ -151,6 +152,11 @@ export async function POST(request: Request) {
     const status = CONTACT_STATUSES.has(statusRaw)
       ? (statusRaw as "SUBSCRIBED" | "UNSUBSCRIBED" | "BLOCKED" | "INVALID")
       : "SUBSCRIBED";
+
+    const subscribeCheck = await assertCanSubscribeContact(auth.workspaceId, phone, status);
+    if (!subscribeCheck.ok) {
+      return NextResponse.json({ error: subscribeCheck.error }, { status: 400 });
+    }
 
     const prisma = getPrisma();
     const existing = await prisma.contact.findUnique({
