@@ -24,48 +24,29 @@ function formatInboundMessageBody(body: string, mediaUrls?: string[] | null): st
   return "(empty)";
 }
 
-export async function resolveInboundContext(toRaw: string, accountOrProfileId?: string) {
-  const prisma = getPrisma();
-  let to = toRaw;
-  try {
-    to = normalizeE164(toRaw);
-  } catch {
-    // keep raw
-  }
-
-  const phone = await prisma.phoneNumber.findFirst({
-    where: {
-      OR: [{ e164: to }, { e164: toRaw }],
-      status: "Active",
-    },
+export async function resolveInboundContext(
+  toRaw: string,
+  accountOrProfileId?: string,
+  options?: { fromE164?: string; body?: string },
+) {
+  const { resolveInboundWorkspaceRouting } = await import(
+    "@/lib/messaging/inbound-workspace-routing"
+  );
+  const routed = await resolveInboundWorkspaceRouting({
+    toRaw,
+    fromE164: options?.fromE164,
+    body: options?.body,
+    accountOrProfileId,
   });
-  if (phone) {
-    const reg = await prisma.messagingRegistration.findUnique({
-      where: { workspaceId: phone.workspaceId },
-    });
-    return { workspaceId: phone.workspaceId, phoneE164: phone.e164, registration: reg };
+  if (!routed.ok) {
+    return null;
   }
-
-  const reg =
-    (await prisma.messagingRegistration.findFirst({
-      where: { OR: [{ phoneE164: to }, { phoneE164: toRaw }], phoneAttached: true },
-    })) ||
-    (accountOrProfileId
-      ? await prisma.messagingRegistration.findFirst({
-          where: {
-            OR: [
-              { subaccountSid: accountOrProfileId },
-              { messagingProfileId: accountOrProfileId },
-              { messagingServiceSid: accountOrProfileId },
-            ],
-          },
-        })
-      : null);
-
-  if (reg?.phoneE164) {
-    return { workspaceId: reg.workspaceId, phoneE164: reg.phoneE164, registration: reg };
-  }
-  return null;
+  return {
+    workspaceId: routed.workspaceId,
+    phoneE164: routed.phoneE164,
+    registration: routed.registration ?? null,
+    routeReason: routed.reason,
+  };
 }
 
 export type InboundProcessResult = {

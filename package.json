@@ -94,6 +94,7 @@
     "cleanup:livekit-fqdn-connections": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cleanup-livekit-fqdn-connections.ts",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
+    "test:inbound-sms-workspace-routing": "tsx scripts/test-inbound-sms-workspace-routing.ts",
     "test:v1-api-products": "tsx scripts/test-v1-api-products.ts",
     "test:verify": "tsx scripts/test-verify.ts",
     "test:fax-routing-regression": "tsx scripts/test-fax-routing-regression.ts",

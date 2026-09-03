@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     const to = params.To || "";
     const body = (params.Body || "").trim();
 
-    const ctx = await resolveInboundContext(to, params.AccountSid);
+    const ctx = await resolveInboundContext(to, params.AccountSid, { fromE164: from, body });
     if (!(await verifySignature(request, params, ctx?.registration))) {
       return new NextResponse("Invalid signature", { status: 403 });
     }

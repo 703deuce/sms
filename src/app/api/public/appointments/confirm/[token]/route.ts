@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import {
-  appendTimeline,
   findAppointmentByPublicToken,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";

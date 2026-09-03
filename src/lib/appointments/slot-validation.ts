@@ -1,7 +1,23 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { getAvailability } from "@/lib/voice/calendar/booking";
+
+function dateKeyInTimezone(iso: string, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+export function isBlackoutDate(startsAt: string, blackoutDates: string[] | undefined, timezone: string) {
+  if (!blackoutDates?.length) return false;
+  const key = dateKeyInTimezone(startsAt, timezone);
+  return blackoutDates.some((entry) => entry.trim() === key);
+}
 
 /** Shared gate for admin + public booking — same availability source of truth. */
 export async function assertSlotAvailableForBooking(
@@ -16,6 +32,11 @@ export async function assertSlotAvailableForBooking(
   if (Number.isNaN(start.getTime())) throw new Error("Invalid appointment time");
   if (start.getTime() < Date.now() - 60_000) {
     throw new Error("Cannot book a time in the past");
+  }
+
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  if (isBlackoutDate(input.startsAt, platform.blackoutDates, platform.timezone)) {
+    throw new Error("Selected date is unavailable — please choose another day");
   }
 
   const prisma = getPrisma();

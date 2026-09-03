@@ -77,7 +77,10 @@ export async function handleTelnyxInbound(payload: unknown) {
 
   const root = payload as { data?: { payload?: { messaging_profile_id?: string } } };
   const profileId = root?.data?.payload?.messaging_profile_id;
-  const ctx = await resolveInboundContext(parsed.to, profileId);
+  const ctx = await resolveInboundContext(parsed.to, profileId, {
+    fromE164: parsed.from,
+    body: parsed.body,
+  });
   if (!ctx) {
     return { ok: true as const, unmatched: true as const };
   }
