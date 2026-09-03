@@ -10,8 +10,11 @@ export const VOICE_PRIMARY_LAUNCH = true;
 /** Standalone SMS platform hidden from primary nav/launcher — infrastructure preserved. */
 export const SMS_STANDALONE_HIDDEN = true;
 
+/** Sidebar uses Appointments V1 nav (Appointments + shared ops; mass SMS + MCTB hidden). */
+export const APPOINTMENTS_V1_PRIMARY = true;
+
 /** Sidebar/mobile show SMS mass marketing only — MCTB & AI After Hours hidden from chrome (routes preserved). */
-export const SMS_ONLY_APP_NAV = true;
+export const SMS_ONLY_APP_NAV = false;
 
 /** Smart Routing in primary product sidebar (MCTB + Numbers when enabled). */
 export const SMART_ROUTING_IN_V1_NAV = true;
@@ -48,4 +51,8 @@ export function isSmsStandaloneHidden(): boolean {
 
 export function isSmsOnlyAppNav(): boolean {
   return SMS_ONLY_APP_NAV;
+}
+
+export function isAppointmentsV1Primary(): boolean {
+  return APPOINTMENTS_V1_PRIMARY;
 }

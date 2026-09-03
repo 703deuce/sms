@@ -367,6 +367,9 @@ function AppointmentBlock({
       ) : null}
       {!compact ? (
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          <Link href={`/appointments/${appt.id}`} className="underline">
+            Open appointment
+          </Link>
           <Link href={`/contacts/${contactId}`} className="underline">
             Contact
           </Link>
@@ -754,7 +757,7 @@ export function ConnectedRecordsPanel({
 
       {!compact ? (
         <p className="text-xs text-muted-foreground">
-          <Link href="/integrations/native/appointments" className="underline">
+          <Link href="/appointments" className="underline">
             All appointments
           </Link>
           {" · "}

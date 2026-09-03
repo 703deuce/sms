@@ -1,0 +1,62 @@
+import { NextResponse } from "next/server";
+import { jsonError } from "@/lib/api-auth";
+import {
+  findAppointmentByPublicToken,
+  getAvailability,
+  loadAppointmentPlatformConfig,
+  reschedulePlatformAppointment,
+} from "@/lib/appointments";
+
+type Params = { params: Promise<{ token: string }> };
+
+export async function GET(_request: Request, { params }: Params) {
+  try {
+    const { token } = await params;
+    const row = await findAppointmentByPublicToken(token);
+    if (!row || (row.metadata as { rescheduleToken?: string })?.rescheduleToken !== token) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 404 });
+    }
+    const config = await loadAppointmentPlatformConfig(row.workspaceId);
+    const availability = await getAvailability(row.workspaceId, {
+      serviceName: row.serviceName || undefined,
+      daysAhead: 14,
+    });
+    return NextResponse.json({
+      data: {
+        id: row.id,
+        serviceName: row.serviceName,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+        status: row.status,
+        timezone: row.timezone || config.timezone,
+        slots: availability.slots,
+      },
+    });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}
+
+export async function POST(request: Request, { params }: Params) {
+  try {
+    const { token } = await params;
+    const row = await findAppointmentByPublicToken(token);
+    if (!row || (row.metadata as { rescheduleToken?: string })?.rescheduleToken !== token) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 404 });
+    }
+    const body = (await request.json()) as { startsAt?: string };
+    if (!body.startsAt) {
+      return NextResponse.json({ error: "startsAt is required" }, { status: 400 });
+    }
+    const updated = await reschedulePlatformAppointment(row.workspaceId, row.id, body.startsAt);
+    return NextResponse.json({
+      data: {
+        id: updated.id,
+        startsAt: updated.startsAt,
+        status: updated.status,
+      },
+    });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}

@@ -256,6 +256,10 @@ export function mapConversation(c: {
     campaignId: c.campaignId ?? null,
     campaignName: c.campaignName ?? null,
     repeatCaller,
+    appointmentContext:
+      "appointmentContext" in c && c.appointmentContext
+        ? (c.appointmentContext as Conversation["appointmentContext"])
+        : undefined,
     messages: sortedMessages.map((m) => ({
         id: m.id,
         direction: (m.direction === "in" || m.direction === "inbound"

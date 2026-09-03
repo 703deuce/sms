@@ -12,8 +12,9 @@ import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
+import { buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
 import { productLogoHome } from "@/lib/products/context";
-import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
+import { isAppointmentsV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import {
   aiAfterHoursShellHome,
   massSmsShellHome,
@@ -338,6 +339,10 @@ export function Sidebar({
       return buildNumbersNav({
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
+    }
+
+    if (isAppointmentsV1Primary()) {
+      return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
     }
 
     if (isSmsOnlyAppNav()) {

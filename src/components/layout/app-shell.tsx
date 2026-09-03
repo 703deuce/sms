@@ -13,6 +13,9 @@ import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
 import { getAiAfterHoursPageTitle } from "@/lib/products/ai-after-hours-nav";
 import { getVoicePageTitle } from "@/lib/products/voice-nav";
 import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
+import { getAppointmentsPageTitle } from "@/lib/products/appointments-nav";
+import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
@@ -167,21 +170,27 @@ export function AppShell({
   });
   const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
   const smsPlatformTitle = isSmsShellRoute(pathname) ? getSmsPlatformPageTitle(pathname) : "";
+  const appointmentsTitle =
+    isAppointmentsV1Primary() && isAppointmentsProductPath(pathname)
+      ? getAppointmentsPageTitle(pathname)
+      : "";
   const title = hideChromeTitle
     ? ""
     : isLauncher
       ? "Your Transovo Products"
-      : smsPlatformTitle
-        ? smsPlatformTitle
-        : currentProduct === "numbers"
-          ? getNumbersPageTitle(pathname)
-          : multiProduct && productShell === "ai_after_hours"
-            ? getAiAfterHoursPageTitle(pathname) ||
-              getVoicePageTitle(pathname) ||
-              getSmsPlatformPageTitle(pathname)
-            : currentProduct === "voice" || currentProduct === "sms"
-              ? getVoicePageTitle(pathname) || getSmsPlatformPageTitle(pathname)
-              : getPageTitle(pathname);
+      : appointmentsTitle
+        ? appointmentsTitle
+        : smsPlatformTitle
+          ? smsPlatformTitle
+          : currentProduct === "numbers"
+            ? getNumbersPageTitle(pathname)
+            : multiProduct && productShell === "ai_after_hours"
+              ? getAiAfterHoursPageTitle(pathname) ||
+                getVoicePageTitle(pathname) ||
+                getSmsPlatformPageTitle(pathname)
+              : currentProduct === "voice" || currentProduct === "sms"
+                ? getVoicePageTitle(pathname) || getSmsPlatformPageTitle(pathname)
+                : getPageTitle(pathname);
 
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;

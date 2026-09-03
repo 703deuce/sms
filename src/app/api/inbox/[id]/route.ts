@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { mapConversation } from "@/lib/mappers";
+import type { Conversation } from "@/lib/types";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { parseMentionsFromNote } from "@/lib/inbox/parse-mentions";
 import { loadTeamMembers } from "@/lib/workspace-data";
@@ -51,11 +52,32 @@ export async function GET(
       }
     }
 
+    let appointmentContext: Conversation["appointmentContext"];
+    if (row.contactId) {
+      const { loadUpcomingAppointmentsByContactIds } = await import("@/lib/appointments/analytics");
+      const map = await loadUpcomingAppointmentsByContactIds(auth.workspaceId, [row.contactId]);
+      const appt = map.get(row.contactId);
+      if (appt) {
+        appointmentContext = {
+          id: appt.id,
+          serviceName: appt.serviceName,
+          startsAt: appt.startsAt.toISOString(),
+          label: `${appt.serviceName || "Appointment"} — ${appt.startsAt.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}`,
+        };
+      }
+    }
+
     return NextResponse.json({
       data: mapConversation({
         ...row,
         campaignName: await loadCampaignName(auth.workspaceId, row.campaignId),
         repeatCaller,
+        appointmentContext,
       }),
     });
   } catch (err) {

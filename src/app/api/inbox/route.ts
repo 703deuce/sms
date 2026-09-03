@@ -13,16 +13,45 @@ import {
 } from "@/lib/mass-texting/inbox-filters";
 import { prismaProductSourceToApp, productSourceLabel } from "@/lib/mass-texting/product-source";
 import { assertInboxEnabled } from "@/lib/inbox/inbox-access";
+import { loadUpcomingAppointmentsByContactIds } from "@/lib/appointments/analytics";
+
+function formatAppointmentContextLabel(serviceName: string | null, startsAt: Date) {
+  const when = startsAt.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${serviceName || "Appointment"} — ${when}`;
+}
 
 export async function GET(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     await assertInboxEnabled(auth.workspaceId);
+    const prisma = getPrisma();
     const { searchParams } = new URL(request.url);
     const filters = parseInboxSearchParams(searchParams);
     const take = parseInboxTake(searchParams.get("take"));
-    const baseWhere = buildConversationWhere(auth.workspaceId, filters, auth.session.userId);
+    let baseWhere = buildConversationWhere(auth.workspaceId, filters, auth.session.userId);
+
+    if (filters.filter === "appointments") {
+      const apptRows = await prisma.voiceAppointment.findMany({
+        where: {
+          workspaceId: auth.workspaceId,
+          startsAt: { gte: new Date() },
+          status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+          contactId: { not: null },
+        },
+        select: { contactId: true },
+        distinct: ["contactId"],
+        take: 500,
+      });
+      const contactIds = apptRows.map((r) => r.contactId).filter(Boolean) as string[];
+      baseWhere = { AND: [baseWhere, { contactId: { in: contactIds.length ? contactIds : ["__none__"] } }] };
+    }
+
     const cursor = decodeInboxCursor(filters.cursor);
 
     const cursorFilter = cursor
@@ -63,10 +92,19 @@ export async function GET(request: Request) {
         : [];
     const campaignNames = new Map(campaigns.map((c: (typeof campaigns)[number]) => [c.id, c.name]));
 
+    const contactIds = [
+      ...new Set(page.map((c) => c.contactId).filter(Boolean)),
+    ] as string[];
+    const appointmentByContact = await loadUpcomingAppointmentsByContactIds(
+      auth.workspaceId,
+      contactIds,
+    );
+
     return NextResponse.json({
       data: page.map((c: (typeof page)[number]) => {
         const productSource = prismaProductSourceToApp(c.productSource);
         const lastMsg = c.messages[0];
+        const appt = c.contactId ? appointmentByContact.get(c.contactId) : undefined;
         return {
           id: c.id,
           status: c.status,
@@ -95,6 +133,14 @@ export async function GET(request: Request) {
             : "",
           updatedAt: c.updatedAt,
           tags: c.tags || [],
+          appointmentContext: appt
+            ? {
+                id: appt.id,
+                serviceName: appt.serviceName,
+                startsAt: appt.startsAt.toISOString(),
+                label: formatAppointmentContextLabel(appt.serviceName, appt.startsAt),
+              }
+            : null,
         };
       }),
       filters,

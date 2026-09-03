@@ -120,6 +120,12 @@ export type Conversation = {
   campaignId?: string | null;
   campaignName?: string | null;
   repeatCaller?: { missedToday: number; total: number };
+  appointmentContext?: {
+    id: string;
+    serviceName: string | null;
+    startsAt: string;
+    label: string;
+  } | null;
   messages: Array<{
     id: string;
     direction: "in" | "out" | "note";

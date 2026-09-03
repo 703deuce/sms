@@ -1,10 +1,12 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 
-const PRODUCT_CHIPS: Array<
-  | { label: string; product: string | null; unread?: never }
-  | { label: string; unread: true; product?: never }
+const BASE_CHIPS: Array<
+  | { label: string; product: string | null; filter?: never; unread?: never }
+  | { label: string; filter: string; product?: never; unread?: never }
+  | { label: string; unread: true; product?: never; filter?: never }
 > = [
   { label: "All", product: null },
   { label: "Missed Call Text Back", product: "mctb" },
@@ -14,19 +16,33 @@ const PRODUCT_CHIPS: Array<
   { label: "Unread", unread: true },
 ];
 
+const APPOINTMENTS_CHIP = { label: "Appointments", filter: "appointments" } as const;
+
 export function InboxProductFilters({ basePath = "/conversations" }: { basePath?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeProduct = searchParams.get("product");
+  const activeFilter = searchParams.get("filter");
   const unread = searchParams.get("unread");
 
-  function setFilter(next: { product?: string | null; unread?: boolean }) {
+  const chips = isAppointmentsV1Primary()
+    ? [BASE_CHIPS[0], APPOINTMENTS_CHIP, ...BASE_CHIPS.slice(1)]
+    : BASE_CHIPS;
+
+  function setFilter(next: { product?: string | null; filter?: string | null; unread?: boolean }) {
     const params = new URLSearchParams(searchParams.toString());
     if (next.product === null || next.product === undefined) {
       params.delete("product");
     } else {
       params.set("product", next.product);
+      params.delete("filter");
+    }
+    if (next.filter === null || next.filter === undefined) {
+      params.delete("filter");
+    } else if (next.filter) {
+      params.set("filter", next.filter);
+      params.delete("product");
     }
     if (next.unread) params.set("unread", "1");
     else if (next.unread === false) params.delete("unread");
@@ -36,13 +52,16 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
 
   return (
     <div className="tv-product-filters">
-      {PRODUCT_CHIPS.map((chip) => {
+      {chips.map((chip) => {
         const isUnreadChip = "unread" in chip;
+        const isFilterChip = "filter" in chip;
         const active = isUnreadChip
           ? unread === "1" || unread === "true"
-          : chip.product
-            ? activeProduct === chip.product
-            : !activeProduct && !unread;
+          : isFilterChip
+            ? activeFilter === chip.filter
+            : chip.product
+              ? activeProduct === chip.product
+              : !activeProduct && !activeFilter && !unread;
         return (
           <button
             key={chip.label}
@@ -51,7 +70,9 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
               setFilter(
                 isUnreadChip
                   ? { unread: !active }
-                  : { product: "product" in chip ? chip.product : null, unread: false },
+                  : isFilterChip
+                    ? { filter: active ? null : chip.filter, unread: false }
+                    : { product: "product" in chip ? chip.product : null, filter: null, unread: false },
               )
             }
             className={"tv-chip" + (active ? " active" : "")}
@@ -62,7 +83,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
       })}
       <button
         type="button"
-        onClick={() => setFilter({ product: null, unread: false })}
+        onClick={() => setFilter({ product: null, filter: null, unread: false })}
         className="tv-chip tv-chip-clear"
       >
         Clear filters

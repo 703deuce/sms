@@ -1,16 +1,19 @@
 "use client";
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
+import { buildAppointmentsMobileNav } from "@/lib/products/appointments-nav";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
 import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
-import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
+import { isSmsOnlyAppNav, isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { cn } from "@/lib/utils";
 import {
   AudioLines,
   BookOpen,
+  Calendar,
+  ClipboardList,
   LayoutDashboard,
   Megaphone,
   MessageSquare,
@@ -75,9 +78,16 @@ export function MobileNav({
     icon: voiceMobileIcons[i] ?? LayoutDashboard,
   }));
 
+  const appointmentsItems = buildAppointmentsMobileNav().map((item, i) => ({
+    ...item,
+    icon: [LayoutDashboard, Calendar, ClipboardList, MessageSquare, Users][i] ?? LayoutDashboard,
+  }));
+
   const items = realtorMode
     ? buildRealtorMobileNav()
-    : currentProduct === "numbers"
+    : isAppointmentsV1Primary()
+      ? appointmentsItems
+      : currentProduct === "numbers"
       ? numbersItems
       : isSmsOnlyAppNav()
         ? massSmsItems

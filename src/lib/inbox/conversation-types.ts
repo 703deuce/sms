@@ -55,4 +55,10 @@ export type Conversation = {
   campaignName?: string | null;
   fromE164?: string | null;
   repeatCaller?: { missedToday: number; total: number };
+  appointmentContext?: {
+    id: string;
+    serviceName: string | null;
+    startsAt: string;
+    label: string;
+  } | null;
 };

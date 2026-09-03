@@ -149,6 +149,11 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
                 Repeat caller ({convo.repeatCaller.missedToday} today)
               </span>
             ) : null}
+            {convo.appointmentContext ? (
+              <span className="tv-chip" style={{ fontSize: 10, color: "#0369a1" }}>
+                Appointment: {convo.appointmentContext.label}
+              </span>
+            ) : null}
             {convo.tags.map((tid) => {
               const t = tagCatalog.find((x) => x.id === tid); if (!t) return null;
               return <span key={tid} className="tv-chip"><TagIcon size={10} color={t.color} fill={t.color} />{t.name}</span>;

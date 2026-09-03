@@ -6,7 +6,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## V1 launch scope (frozen)
 
-**ACTIVE V1 products:** Missed Call Text Back · Transovo Fax
+**ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
+
+**UI rebuild directive:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · Nav flags: `src/lib/products/v1-launch-nav.ts`
+
+**PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 
 **DORMANT (preserved, not customer-facing):** Transovo Verify — see `docs/verify-dormant.md`
 

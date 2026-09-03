@@ -1,0 +1,36 @@
+---
+description: V1 launch UI rebuild — Appointments + MCTB. Hide mass SMS from nav; reuse before building; never delete preserved routes.
+alwaysApply: true
+---
+
+# V1 Appointments + MCTB UI Rebuild
+
+**Read first:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` (full spec + reuse map)
+
+## Hard rules
+
+1. **Do not delete** Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, workers, or related routes/APIs — **hide from nav** only.
+2. **Reuse before building** — audit existing Contacts, Conversations, SMS composer, templates, scheduler, compliance, MCTB components. No parallel appointment messaging system.
+3. **Nav flags** — use `src/lib/products/v1-launch-nav.ts`; do not scatter hardcoded nav conditionals.
+4. **MCTB** — tighten UI to match new shell; do not rebuild voice/SMS runtime. Keep both `press_1` and `existing_consent`.
+5. **Appointments** — new surfaces required (`/appointments`, `/appointments/calendar`, `/appointments/types`). Reuse messaging + worker infra. `AppointmentType` ≠ `Appointment`.
+6. **One product chrome** — single sidebar/header; operational dashboard; calendar stays visually sparse (Calendly/Google patterns for types, availability, preview, overlay detail).
+
+## V1 primary nav
+
+Overview · Appointments (Calendar, Scheduled, Types, Reminders) · Conversations · Contacts · Missed Calls · Analytics · Numbers · Compliance · Settings
+
+## Hide from launch nav
+
+Campaigns · Drips · Keywords · Playbooks · Automations · Grow · mass-SMS analytics · Smart Routing · AI Receptionist (routes preserved)
+
+## Before coding UI changes
+
+1. Audit existing routes/components  
+2. Check reuse map in the doc (Appendix A)  
+3. Consolidate nav/header first  
+4. Browser + real SMS/MCTB E2E before declaring ready
+
+## Do not build before launch
+
+AI receptionist, mass SMS expansion, giant automation builder, fake integrations, payments (unless trivial), Calendly enterprise complexity.

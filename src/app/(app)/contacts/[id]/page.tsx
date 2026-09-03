@@ -8,6 +8,7 @@ import { getActiveWorkspaceId } from "@/lib/auth";
 import type { Contact, Conversation } from "@/lib/types";
 import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { formatPhone } from "@/lib/utils";
+import { ContactAppointmentsPanel } from "@/components/appointments/contact-appointments-panel";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
 import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
@@ -308,6 +309,16 @@ export default async function ContactDetailPage({
               </div>
             ) : null}
             <ContactActivityTimeline contactId={contact.id} />
+          </Card>
+
+          <Card>
+            <CardTitle>Appointments</CardTitle>
+            <CardDescription>
+              Upcoming and past bookings for this contact.
+            </CardDescription>
+            <div className="mt-4">
+              <ContactAppointmentsPanel contactId={contact.id} />
+            </div>
           </Card>
 
           <Card>

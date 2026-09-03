@@ -33,6 +33,7 @@ export const SMS_APP_ROUTE_PREFIXES = [
   "/sms",
   "/sms/dashboard",
   "/sms/analytics",
+  "/appointments",
   "/dashboard",
   "/conversations",
   "/inbox",

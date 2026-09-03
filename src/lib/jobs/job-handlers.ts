@@ -752,6 +752,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return scanAppointmentsCompleted();
     }
+    case "appointments_platform_reminder_scan": {
+      const { scanPlatformAppointmentReminders } = await import(
+        "@/lib/appointments/reminder-delivery"
+      );
+      return scanPlatformAppointmentReminders();
+    }
     case "promote_scheduled_receptionists": {
       const { promoteScheduledReceptionists } = await import(
         "@/lib/solutions/appointment-receptionist/promote-scheduled"
@@ -1020,6 +1026,13 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `appt-completed:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "appointments_platform_reminder_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `appt-platform-reminders:${minuteKey}`,
   });
 
   // Scheduled receptionist activation (wizard activationMode=schedule).
