@@ -34,19 +34,24 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (body.action === "duplicate") {
       const data = await duplicateDripCampaign(auth.workspaceId, id);
-      return NextResponse.json({ data });
+      return NextResponse.json({ data, created: true }, { status: 201 });
     }
 
     if (body.action === "toggle_status") {
       const current = await getDripCampaign(auth.workspaceId, id);
       if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
-      const data = await updateDripCampaign(auth.workspaceId, id, {
-        status: current.status === "active" ? "paused" : "active",
-      });
+      const nextStatus =
+        current.status === "active"
+          ? "paused"
+          : current.status === "draft"
+            ? "active"
+            : "active";
+      const data = await updateDripCampaign(auth.workspaceId, id, { status: nextStatus });
       return NextResponse.json({ data });
     }
 
-    const data = await updateDripCampaign(auth.workspaceId, id, body);
+    const { action: _action, ...updates } = body;
+    const data = await updateDripCampaign(auth.workspaceId, id, updates);
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 400);

@@ -1,16 +1,23 @@
 import "server-only";
 
 import { mergeMessageVars } from "@/lib/automations/actions";
+import {
+  contactMatchesSegment,
+  parseSegmentConditions,
+} from "@/lib/contacts/segment-query";
+import { isAutomationContact } from "@/lib/contacts/visible-contacts";
+import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { sendQuickSms } from "@/lib/sms/send-quick";
-import { getDripCampaign, listDripCampaigns } from "./service";
+import { getDripCampaign, listActiveDripCampaigns } from "./service";
 import {
   delayToMs,
   parseDripSteps,
   type DripCampaignRecord,
   type DripCampaignTriggerType,
   type DripEnrollmentRecord,
+  type DripTriggerConfig,
 } from "./types";
 
 export type DripTriggerContext = {
@@ -39,17 +46,58 @@ function matchesTrigger(row: DripCampaignRecord, ctx: DripTriggerContext): boole
   }
 }
 
+async function contactInExclusionSegment(
+  workspaceId: string,
+  contactId: string,
+  segmentId: string,
+): Promise<boolean> {
+  const prisma = getPrisma();
+  const segment = await prisma.segment.findFirst({
+    where: { id: segmentId, workspaceId },
+  });
+  if (!segment) return false;
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, workspaceId },
+    include: { tagMembers: { include: { tag: true } } },
+  });
+  if (!contact) return false;
+
+  return contactMatchesSegment(
+    {
+      id: contact.id,
+      status: contact.status,
+      customFields: contact.customFields,
+      tagNames: contact.tagMembers.map((t) => t.tag.name),
+      source: contact.consentSource,
+    },
+    parseSegmentConditions(segment.conditions),
+  );
+}
+
 async function isExcluded(
   workspaceId: string,
   contactId: string,
-  config: DripCampaignRecord["triggerConfig"],
+  config: DripTriggerConfig,
 ): Promise<boolean> {
+  const prisma = getPrisma();
+
   if (config.exclusionListId) {
-    const member = await getPrisma().contactListMember.findFirst({
-      where: { contactId, listId: config.exclusionListId },
-    });
-    if (member) return true;
+    const [listId] = await filterWorkspaceListIds(workspaceId, [config.exclusionListId]);
+    if (listId) {
+      const member = await prisma.contactListMember.findFirst({
+        where: { contactId, listId },
+      });
+      if (member) return true;
+    }
   }
+
+  if (config.exclusionSegmentId) {
+    if (await contactInExclusionSegment(workspaceId, contactId, config.exclusionSegmentId)) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -75,8 +123,10 @@ export async function enrollContactInDripCampaign(
   const prisma = getPrisma();
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, workspaceId: campaign.workspaceId },
+    select: { id: true, status: true, customFields: true },
   });
   if (!contact || contact.status !== "SUBSCRIBED") return false;
+  if (isAutomationContact(contact.customFields)) return false;
   if (await isExcluded(campaign.workspaceId, contactId, campaign.triggerConfig)) return false;
 
   const existing = await prisma.dripCampaignEnrollment.findFirst({
@@ -115,7 +165,7 @@ export async function enrollContactInDripCampaign(
 }
 
 export async function triggerDripCampaigns(ctx: DripTriggerContext): Promise<number> {
-  const campaigns = await listDripCampaigns(ctx.workspaceId);
+  const campaigns = await listActiveDripCampaigns(ctx.workspaceId);
   let enrolled = 0;
   for (const campaign of campaigns) {
     if (!matchesTrigger(campaign, ctx)) continue;
@@ -123,6 +173,24 @@ export async function triggerDripCampaigns(ctx: DripTriggerContext): Promise<num
     if (ok) enrolled += 1;
   }
   return enrolled;
+}
+
+/** Mark active/completed drip enrollments as replied after an inbound SMS. */
+export async function markDripEnrollmentReplies(
+  workspaceId: string,
+  contactId: string,
+): Promise<number> {
+  const result = await getPrisma().dripCampaignEnrollment.updateMany({
+    where: {
+      workspaceId,
+      contactId,
+      replied: false,
+      lastSentAt: { not: null },
+      status: { in: ["active", "completed"] },
+    },
+    data: { replied: true },
+  });
+  return result.count;
 }
 
 export async function processDripCampaignStep(payload: {
@@ -148,10 +216,34 @@ export async function processDripCampaignStep(payload: {
     return { skipped: true, reason: "campaign_inactive" };
   }
 
+  const campaign = await getDripCampaign(enrollment.workspaceId, enrollment.dripCampaignId);
+  if (
+    campaign &&
+    (await isExcluded(enrollment.workspaceId, enrollment.contactId, campaign.triggerConfig))
+  ) {
+    await prisma.dripCampaignEnrollment.update({
+      where: { id: enrollment.id },
+      data: { status: "paused", nextRunAt: null },
+    });
+    return { skipped: true, reason: "contact_excluded" };
+  }
+
   const contact = await prisma.contact.findFirst({
     where: { id: enrollment.contactId, workspaceId: enrollment.workspaceId },
+    select: {
+      id: true,
+      phone: true,
+      status: true,
+      customFields: true,
+      firstName: true,
+      lastName: true,
+    },
   });
-  if (!contact || contact.status !== "SUBSCRIBED") {
+  if (
+    !contact ||
+    contact.status !== "SUBSCRIBED" ||
+    isAutomationContact(contact.customFields)
+  ) {
     await prisma.dripCampaignEnrollment.update({
       where: { id: enrollment.id },
       data: { status: "opted_out", completedAt: new Date(), nextRunAt: null },
@@ -234,11 +326,22 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
   if (!campaign) return null;
 
   const prisma = getPrisma();
-  const enrollments = await prisma.dripCampaignEnrollment.findMany({
-    where: { dripCampaignId: id, workspaceId },
-    orderBy: { startedAt: "desc" },
-    take: 100,
-  });
+  const enrollmentWhere = { dripCampaignId: id, workspaceId };
+
+  const [enrollments, totalEnrollments, repliedCount, openedCount] = await Promise.all([
+    prisma.dripCampaignEnrollment.findMany({
+      where: enrollmentWhere,
+      orderBy: { startedAt: "desc" },
+      take: 100,
+    }),
+    prisma.dripCampaignEnrollment.count({ where: enrollmentWhere }),
+    prisma.dripCampaignEnrollment.count({
+      where: { ...enrollmentWhere, replied: true },
+    }),
+    prisma.dripCampaignEnrollment.count({
+      where: { ...enrollmentWhere, opened: true },
+    }),
+  ]);
 
   const contactIds = enrollments.map((e) => e.contactId);
   const contacts = await prisma.contact.findMany({
@@ -267,10 +370,6 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
       contactPhone: c?.phone || "",
     };
   });
-
-  const totalEnrollments = enrollments.length;
-  const repliedCount = enrollments.filter((e) => e.replied).length;
-  const openedCount = enrollments.filter((e) => e.opened).length;
 
   const activityByDay = new Map<string, { sent: number; replies: number }>();
   for (const e of enrollments) {
@@ -303,6 +402,7 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
     recipients,
     stats: {
       totalTriggered: campaign.triggeredCount,
+      totalEnrollments,
       messagesSent: campaign.messagesSent,
       avgOpenRate: totalEnrollments ? (openedCount / totalEnrollments) * 100 : 0,
       avgReplyRate: totalEnrollments ? (repliedCount / totalEnrollments) * 100 : 0,

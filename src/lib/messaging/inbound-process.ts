@@ -618,6 +618,13 @@ export async function processInboundMessage(input: {
     });
   }
 
+  try {
+    const { markDripEnrollmentReplies } = await import("@/lib/drip-campaigns/engine");
+    await markDripEnrollmentReplies(input.workspaceId, contact.id);
+  } catch {
+    /* non-fatal */
+  }
+
   // AI conversational replies (scheduled with optional delay).
   try {
     const phone = await prisma.phoneNumber.findFirst({

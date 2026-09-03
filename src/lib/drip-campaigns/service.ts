@@ -1,5 +1,6 @@
 import "server-only";
 
+import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
 import { getPrisma } from "@/lib/db";
 import {
   DRIP_CAMPAIGN_TRIGGERS,
@@ -36,6 +37,80 @@ async function resolvePhoneE164(
     select: { e164: true },
   });
   return row?.e164 || null;
+}
+
+async function resolveWorkspacePhoneNumberId(
+  workspaceId: string,
+  phoneNumberId: string | null | undefined,
+): Promise<string | null> {
+  if (!phoneNumberId) return null;
+  const row = await getPrisma().phoneNumber.findFirst({
+    where: { id: phoneNumberId, workspaceId },
+    select: { id: true },
+  });
+  if (!row) throw new Error("Invalid phone number");
+  return row.id;
+}
+
+async function validateTriggerConfig(
+  workspaceId: string,
+  triggerType: DripCampaignTriggerType,
+  config: DripTriggerConfig | undefined,
+): Promise<DripTriggerConfig> {
+  const prisma = getPrisma();
+  const out: DripTriggerConfig = { ...(config || {}) };
+
+  switch (triggerType) {
+    case "list_join": {
+      if (!out.listId) throw new Error("List is required for list_join trigger");
+      const [listId] = await filterWorkspaceListIds(workspaceId, [out.listId]);
+      if (!listId) throw new Error("Invalid list");
+      out.listId = listId;
+      break;
+    }
+    case "tag_added": {
+      if (!out.tagId) throw new Error("Tag is required for tag_added trigger");
+      const tag = await prisma.tag.findFirst({
+        where: { id: out.tagId, workspaceId },
+        select: { id: true, name: true },
+      });
+      if (!tag) throw new Error("Invalid tag");
+      out.tagId = tag.id;
+      if (!out.tagName) out.tagName = tag.name;
+      break;
+    }
+    case "form_submitted": {
+      if (!out.formId) throw new Error("Form is required for form_submitted trigger");
+      const form = await prisma.optInForm.findFirst({
+        where: { id: out.formId, workspaceId },
+        select: { id: true, name: true },
+      });
+      if (!form) throw new Error("Invalid form");
+      out.formId = form.id;
+      if (!out.formName) out.formName = form.name;
+      break;
+    }
+    case "contact_added":
+      break;
+    default:
+      throw new Error("Invalid trigger type");
+  }
+
+  if (out.exclusionListId) {
+    const [exclusionListId] = await filterWorkspaceListIds(workspaceId, [out.exclusionListId]);
+    if (!exclusionListId) delete out.exclusionListId;
+    else out.exclusionListId = exclusionListId;
+  }
+
+  if (out.exclusionSegmentId) {
+    const segment = await prisma.segment.findFirst({
+      where: { id: out.exclusionSegmentId, workspaceId },
+      select: { id: true },
+    });
+    if (!segment) delete out.exclusionSegmentId;
+  }
+
+  return out;
 }
 
 function mapRow(row: {
@@ -88,6 +163,17 @@ export async function listDripCampaigns(workspaceId: string): Promise<DripCampai
   return Promise.all(mapped.map(hydratePhone));
 }
 
+/** Active campaigns only — used by trigger matching to avoid hydrating phones. */
+export async function listActiveDripCampaigns(
+  workspaceId: string,
+): Promise<DripCampaignRecord[]> {
+  const rows = await getPrisma().dripCampaign.findMany({
+    where: { workspaceId, status: "active" },
+    orderBy: { updatedAt: "desc" },
+  });
+  return rows.map(mapRow);
+}
+
 export async function getDripCampaign(
   workspaceId: string,
   id: string,
@@ -119,13 +205,20 @@ export async function createDripCampaign(
   const steps = parseDripSteps(input.steps);
   if (!steps.length) throw new Error("At least one message is required");
 
+  const triggerConfig = await validateTriggerConfig(
+    workspaceId,
+    input.triggerType,
+    input.triggerConfig,
+  );
+  const phoneNumberId = await resolveWorkspacePhoneNumberId(workspaceId, input.phoneNumberId);
+
   const row = await getPrisma().dripCampaign.create({
     data: {
       workspaceId,
       name: input.name.trim(),
       triggerType: input.triggerType,
-      triggerConfig: (input.triggerConfig || {}) as object,
-      phoneNumberId: input.phoneNumberId || null,
+      triggerConfig: triggerConfig as object,
+      phoneNumberId,
       status: input.status || "paused",
       stepsJson: steps as object[],
     },
@@ -141,17 +234,45 @@ export async function updateDripCampaign(
   const existing = await getPrisma().dripCampaign.findFirst({ where: { id, workspaceId } });
   if (!existing) throw new Error("Drip campaign not found");
 
-  const row = await getPrisma().dripCampaign.update({
-    where: { id },
-    data: {
-      ...(input.name != null ? { name: input.name.trim() } : {}),
-      ...(input.triggerType != null ? { triggerType: input.triggerType } : {}),
-      ...(input.triggerConfig != null ? { triggerConfig: input.triggerConfig as object } : {}),
-      ...(input.phoneNumberId !== undefined ? { phoneNumberId: input.phoneNumberId } : {}),
-      ...(input.status != null ? { status: input.status } : {}),
-      ...(input.steps != null ? { stepsJson: parseDripSteps(input.steps) as object[] } : {}),
-    },
-  });
+  const triggerType = (input.triggerType ??
+    existing.triggerType) as DripCampaignTriggerType;
+  const patch: Record<string, unknown> = {};
+
+  if (input.name != null) {
+    const trimmed = input.name.trim();
+    if (trimmed) patch.name = trimmed;
+  }
+  if (input.triggerType != null) {
+    if (!DRIP_CAMPAIGN_TRIGGERS.includes(input.triggerType)) {
+      throw new Error("Invalid trigger type");
+    }
+    patch.triggerType = input.triggerType;
+  }
+  if (input.triggerConfig != null) {
+    patch.triggerConfig = await validateTriggerConfig(
+      workspaceId,
+      triggerType,
+      input.triggerConfig,
+    );
+  }
+  if (input.phoneNumberId !== undefined) {
+    patch.phoneNumberId = await resolveWorkspacePhoneNumberId(workspaceId, input.phoneNumberId);
+  }
+  if (input.status != null) patch.status = input.status;
+  if (input.steps != null) {
+    const steps = parseDripSteps(input.steps);
+    if (!steps.length) throw new Error("At least one message is required");
+    patch.stepsJson = steps;
+  }
+
+  const row =
+    Object.keys(patch).length > 0
+      ? await getPrisma().dripCampaign.update({
+          where: { id },
+          data: patch,
+        })
+      : existing;
+
   return hydratePhone(mapRow(row));
 }
 
