@@ -328,13 +328,20 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
   const prisma = getPrisma();
   const enrollmentWhere = { dripCampaignId: id, workspaceId };
 
-  const [enrollments, totalEnrollments, repliedCount, openedCount] = await Promise.all([
+  const [enrollments, totalEnrollments, activeEnrollments, completedEnrollments, repliedCount, openedCount] =
+    await Promise.all([
     prisma.dripCampaignEnrollment.findMany({
       where: enrollmentWhere,
       orderBy: { startedAt: "desc" },
       take: 100,
     }),
     prisma.dripCampaignEnrollment.count({ where: enrollmentWhere }),
+    prisma.dripCampaignEnrollment.count({
+      where: { ...enrollmentWhere, status: "active" },
+    }),
+    prisma.dripCampaignEnrollment.count({
+      where: { ...enrollmentWhere, status: "completed" },
+    }),
     prisma.dripCampaignEnrollment.count({
       where: { ...enrollmentWhere, replied: true },
     }),
@@ -371,20 +378,6 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
     };
   });
 
-  const activityByDay = new Map<string, { sent: number; replies: number }>();
-  for (const e of enrollments) {
-    if (!e.lastSentAt) continue;
-    const key = e.lastSentAt.toISOString().slice(0, 10);
-    const cur = activityByDay.get(key) || { sent: 0, replies: 0 };
-    cur.sent += 1;
-    if (e.replied) cur.replies += 1;
-    activityByDay.set(key, cur);
-  }
-
-  const chartLabels = [...activityByDay.keys()].sort().slice(-7);
-  const chartSent = chartLabels.map((d) => activityByDay.get(d)?.sent || 0);
-  const chartReplies = chartLabels.map((d) => activityByDay.get(d)?.replies || 0);
-
   const dripMessages = await prisma.message.findMany({
     where: {
       workspaceId,
@@ -394,6 +387,31 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
     take: 500,
     select: { id: true, to: true, status: true, createdAt: true },
   });
+
+  const activityByDay = new Map<string, { sent: number; replies: number }>();
+  for (const m of dripMessages) {
+    const key = m.createdAt.toISOString().slice(0, 10);
+    const cur = activityByDay.get(key) || { sent: 0, replies: 0 };
+    cur.sent += 1;
+    activityByDay.set(key, cur);
+  }
+  const repliedEnrollments = await prisma.dripCampaignEnrollment.findMany({
+    where: { ...enrollmentWhere, replied: true, lastSentAt: { not: null } },
+    select: { lastSentAt: true },
+    take: 500,
+  });
+  for (const e of repliedEnrollments) {
+    if (!e.lastSentAt) continue;
+    const key = e.lastSentAt.toISOString().slice(0, 10);
+    const cur = activityByDay.get(key) || { sent: 0, replies: 0 };
+    cur.replies += 1;
+    activityByDay.set(key, cur);
+  }
+
+  const chartLabels = [...activityByDay.keys()].sort().slice(-7);
+  const chartSent = chartLabels.map((d) => activityByDay.get(d)?.sent || 0);
+  const chartReplies = chartLabels.map((d) => activityByDay.get(d)?.replies || 0);
+
   const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
   const delivery = summarizeDeliveryStatuses(dripMessages.map((m) => m.status));
 
@@ -403,6 +421,8 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
     stats: {
       totalTriggered: campaign.triggeredCount,
       totalEnrollments,
+      activeEnrollments,
+      completedEnrollments,
       messagesSent: campaign.messagesSent,
       avgOpenRate: totalEnrollments ? (openedCount / totalEnrollments) * 100 : 0,
       avgReplyRate: totalEnrollments ? (repliedCount / totalEnrollments) * 100 : 0,

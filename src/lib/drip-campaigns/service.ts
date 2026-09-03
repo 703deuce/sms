@@ -52,6 +52,25 @@ async function resolveWorkspacePhoneNumberId(
   return row.id;
 }
 
+export async function assertDripCampaignLaunchReady(
+  workspaceId: string,
+  record: {
+    triggerType: string;
+    triggerConfig: unknown;
+    phoneNumberId: string | null;
+    stepsJson: unknown;
+  },
+): Promise<void> {
+  const steps = parseDripSteps(record.stepsJson);
+  if (!steps.length) throw new Error("At least one message is required");
+  if (!record.phoneNumberId) throw new Error("Phone number is required");
+  await validateTriggerConfig(
+    workspaceId,
+    record.triggerType as DripCampaignTriggerType,
+    parseTriggerConfig(record.triggerConfig),
+  );
+}
+
 async function validateTriggerConfig(
   workspaceId: string,
   triggerType: DripCampaignTriggerType,
@@ -211,6 +230,16 @@ export async function createDripCampaign(
     input.triggerConfig,
   );
   const phoneNumberId = await resolveWorkspacePhoneNumberId(workspaceId, input.phoneNumberId);
+  const status = input.status || "paused";
+
+  if (status === "active") {
+    await assertDripCampaignLaunchReady(workspaceId, {
+      triggerType: input.triggerType,
+      triggerConfig,
+      phoneNumberId,
+      stepsJson: steps,
+    });
+  }
 
   const row = await getPrisma().dripCampaign.create({
     data: {
@@ -219,7 +248,7 @@ export async function createDripCampaign(
       triggerType: input.triggerType,
       triggerConfig: triggerConfig as object,
       phoneNumberId,
-      status: input.status || "paused",
+      status,
       stepsJson: steps as object[],
     },
   });
@@ -254,6 +283,12 @@ export async function updateDripCampaign(
       triggerType,
       input.triggerConfig,
     );
+  } else if (input.triggerType != null) {
+    patch.triggerConfig = await validateTriggerConfig(
+      workspaceId,
+      triggerType,
+      parseTriggerConfig(existing.triggerConfig),
+    );
   }
   if (input.phoneNumberId !== undefined) {
     patch.phoneNumberId = await resolveWorkspacePhoneNumberId(workspaceId, input.phoneNumberId);
@@ -263,6 +298,23 @@ export async function updateDripCampaign(
     const steps = parseDripSteps(input.steps);
     if (!steps.length) throw new Error("At least one message is required");
     patch.stepsJson = steps;
+  }
+
+  const nextStatus = (patch.status as string | undefined) ?? existing.status;
+  if (nextStatus === "active") {
+    await assertDripCampaignLaunchReady(workspaceId, {
+      triggerType: (patch.triggerType as string | undefined) ?? existing.triggerType,
+      triggerConfig:
+        patch.triggerConfig ??
+        (input.triggerConfig != null
+          ? input.triggerConfig
+          : parseTriggerConfig(existing.triggerConfig)),
+      phoneNumberId:
+        patch.phoneNumberId !== undefined
+          ? (patch.phoneNumberId as string | null)
+          : existing.phoneNumberId,
+      stepsJson: patch.stepsJson ?? existing.stepsJson,
+    });
   }
 
   const row =

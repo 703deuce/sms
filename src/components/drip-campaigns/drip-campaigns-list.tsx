@@ -95,7 +95,11 @@ export function DripCampaignsList({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Request failed");
-      setRows((prev) => prev.map((r) => (r.id === id ? json.data : r)));
+      if (body.action === "duplicate" || json.created) {
+        setRows((prev) => [json.data, ...prev.filter((r) => r.id !== json.data.id)]);
+      } else {
+        setRows((prev) => prev.map((r) => (r.id === id ? json.data : r)));
+      }
       router.refresh();
     } finally {
       setBusyId(null);

@@ -118,6 +118,13 @@ async function main() {
   const dupId = dup.json?.data?.id;
   check("PATCH duplicate", dup.status === 201 && dupId && dupId !== campaignId, dup.json?.data?.name);
 
+  const listAfterDup = await api("/api/drip-campaigns");
+  check(
+    "GET list includes duplicate",
+    listAfterDup.ok && listAfterDup.json?.data?.some((r) => r.id === dupId),
+    `count=${listAfterDup.json?.data?.length}`,
+  );
+
   const badPhone = await api("/api/drip-campaigns", {
     method: "POST",
     body: JSON.stringify({
@@ -140,6 +147,17 @@ async function main() {
     }),
   });
   check("POST rejects invalid list", badTrigger.status === 400, badTrigger.json?.error);
+
+  const noPhoneActivate = await api("/api/drip-campaigns", {
+    method: "POST",
+    body: JSON.stringify({
+      name: "No phone active drip",
+      triggerType: "contact_added",
+      status: "active",
+      steps: [{ id: "s1", delayAmount: 0, delayUnit: "immediate", message: "x" }],
+    }),
+  });
+  check("POST rejects active without phone", noPhoneActivate.status === 400, noPhoneActivate.json?.error);
 
   for (const id of [campaignId, dupId].filter(Boolean)) {
     const del = await api(`/api/drip-campaigns/${id}`, { method: "DELETE" });
