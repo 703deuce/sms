@@ -131,7 +131,11 @@ export async function PATCH(request: Request) {
         listId: list.id,
       }).catch(() => undefined);
     }
-    for (const contactId of body.removeContactIds || []) {
+    const validRemoveContactIds = await filterWorkspaceContactIds(
+      auth.workspaceId,
+      body.removeContactIds || [],
+    );
+    for (const contactId of validRemoveContactIds) {
       await getPrisma().contactListMember.deleteMany({
         where: { listId: list.id, contactId },
       });

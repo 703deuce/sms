@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { getTelnyxApiKey } from "@/lib/messaging/telnyx/config";
@@ -111,7 +112,7 @@ export async function validateWorkspaceContacts(workspaceId: string, phones?: st
   let inputPhones = phones;
   if (!inputPhones?.length) {
     const contacts = await prisma.contact.findMany({
-      where: { workspaceId },
+      where: visibleContactWhere(workspaceId),
       select: { phone: true },
     });
     inputPhones = contacts.map((c: { phone: string }) => c.phone);

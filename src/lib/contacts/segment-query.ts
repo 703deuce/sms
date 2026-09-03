@@ -482,7 +482,7 @@ export async function resolveSegmentContactIds(
   // Push status equality down to the query when it's the only status rule, to
   // keep the in-memory set small for large workspaces.
   const where: Record<string, unknown> = visibleContactWhere(workspaceId);
-  const statusRules = parsed.rules.filter((r) => r.field === "status");
+  const statusRules = collectSegmentRules(parsed).filter((r) => r.field === "status");
   if (
     parsed.match === "all" &&
     statusRules.length === 1 &&

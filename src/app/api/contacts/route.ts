@@ -102,7 +102,10 @@ export async function GET(request: Request) {
         return NextResponse.json({ data: [] });
       }
       const rows = await getPrisma().contact.findMany({
-        where: visibleContactWhere(auth.workspaceId, { tagId: tagRow.id }),
+        where: visibleContactWhere(auth.workspaceId, {
+          tagId: tagRow.id,
+          status: status || undefined,
+        }),
         include: contactInclude,
         orderBy: { createdAt: "desc" },
         take,
@@ -204,8 +207,10 @@ export async function POST(request: Request) {
     }
 
     const listIds = [
-      ...(body.listIds || []),
-      ...(await resolveOrCreateListIdsByName(auth.workspaceId, body.listNames || [])),
+      ...new Set([
+        ...(body.listIds || []),
+        ...(await resolveOrCreateListIdsByName(auth.workspaceId, body.listNames || [])),
+      ]),
     ];
     if (listIds.length) {
       await assignContactToLists(auth.workspaceId, contact.id, listIds);

@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 const FAILED_THRESHOLD = 3;
@@ -22,7 +23,7 @@ export async function runListCleanup(workspaceId: string): Promise<ListCleanupRe
   };
 
   const invalidContacts = await prisma.contact.findMany({
-    where: { workspaceId, status: "INVALID" },
+    where: visibleContactWhere(workspaceId, { status: "INVALID" }),
     select: { id: true, phone: true },
   });
 

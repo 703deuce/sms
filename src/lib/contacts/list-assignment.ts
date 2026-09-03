@@ -44,11 +44,15 @@ export async function assignContactToLists(
 
   const prisma = getPrisma();
   for (const listId of validListIds) {
-    await prisma.contactListMember.upsert({
-      where: { listId_contactId: { listId, contactId } },
-      create: { listId, contactId },
-      update: {},
-    }).catch(() => undefined);
+    const existingMember = await prisma.contactListMember.findFirst({
+      where: { listId, contactId },
+    });
+    if (existingMember) continue;
+
+    const created = await prisma.contactListMember.create({
+      data: { listId, contactId },
+    }).catch(() => null);
+    if (!created) continue;
 
     const { dispatchAutoReplies } = await import("@/lib/auto-replies/dispatch");
     await dispatchAutoReplies({
