@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { parseCampaignConfig } from "@/lib/mass-texting/broadcast/service";
 import { validateBulkRecipients } from "@/lib/campaigns/enroll-campaign";
 import { parseSequence } from "@/lib/campaigns/sequence-engine";
 import { MASS_TEXT_MMS_PRODUCTION_ENABLED } from "@/lib/mass-texting/pricing";
@@ -131,6 +132,7 @@ export type PreSendReview = {
   phoneNumberId: string | null;
   phoneE164: string | null;
   scheduledAt: string | null;
+  timezone: string | null;
   a2pUseCase: string;
   availableSegments: number;
   requiredSegments: number;
@@ -156,10 +158,9 @@ export async function buildPreSendReview(
     select: { name: true },
   });
 
-  const config =
-    campaign.configJson && typeof campaign.configJson === "object"
-      ? (campaign.configJson as Record<string, unknown>)
-      : {};
+  const config = parseCampaignConfig(campaign.configJson) ?? {};
+  const scheduleTimezone =
+    typeof config.timezone === "string" && config.timezone.trim() ? config.timezone : null;
 
   const { isBroadcastCampaign } = await import("@/lib/mass-texting/broadcast/service");
   const { previewBroadcastAudience, audienceSummaryLabel } = await import(
@@ -286,6 +287,7 @@ export async function buildPreSendReview(
       phoneNumberId: gate.sender?.phoneNumberId ?? null,
       phoneE164: gate.sender?.phoneE164 ?? null,
       scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
+      timezone: scheduleTimezone,
       a2pUseCase: gate.useCase,
       availableSegments: gate.availability.available,
       requiredSegments: creditEstimate.estimatedSegments,
@@ -454,6 +456,7 @@ export async function buildPreSendReview(
     phoneNumberId: gate.sender?.phoneNumberId ?? null,
     phoneE164: gate.sender?.phoneE164 ?? null,
     scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
+    timezone: scheduleTimezone,
     a2pUseCase: gate.useCase,
     availableSegments: gate.availability.available,
     requiredSegments: creditEstimate.estimatedSegments,

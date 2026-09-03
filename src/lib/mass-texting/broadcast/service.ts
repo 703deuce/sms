@@ -14,7 +14,7 @@ import type {
   BroadcastRecurrence,
 } from "./types";
 
-function parseCampaignConfig(configJson: unknown): Record<string, unknown> | null {
+export function parseCampaignConfig(configJson: unknown): Record<string, unknown> | null {
   if (!configJson) return null;
   if (typeof configJson === "string") {
     try {
@@ -220,10 +220,7 @@ export async function updateBroadcastCampaign(
     throw new Error("Only draft or scheduled campaigns can be edited");
   }
 
-  const prevConfig =
-    existing.configJson && typeof existing.configJson === "object"
-      ? (existing.configJson as BroadcastCampaignConfig)
-      : null;
+  const prevConfig = parseCampaignConfig(existing.configJson) as BroadcastCampaignConfig | null;
 
   const message = (input.message ?? existing.body).trim();
   const audience = input.audience ?? prevConfig?.audience ?? { include: [], exclude: [] };
@@ -310,10 +307,7 @@ export async function duplicateBroadcastCampaign(
 ) {
   const source = await getBroadcastCampaign(workspaceId, campaignId);
   if (!source) throw new Error("Campaign not found");
-  const config =
-    source.configJson && typeof source.configJson === "object"
-      ? (source.configJson as BroadcastCampaignConfig)
-      : null;
+  const config = parseCampaignConfig(source.configJson) as BroadcastCampaignConfig | null;
   if (!config?.audience) throw new Error("Campaign has no audience definition");
 
   return createBroadcastCampaign(

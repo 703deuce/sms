@@ -7,9 +7,22 @@ export type CampaignTimelineEvent = {
   emoji: string;
 };
 
-export function formatCampaignDateTime(at: string | null) {
+export function formatCampaignDateTime(at: string | null, timeZone?: string | null) {
   if (!at) return "—";
-  return new Date(at).toLocaleString(undefined, {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return "—";
+  if (timeZone) {
+    const formatted = new Intl.DateTimeFormat(undefined, {
+      timeZone,
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+    return `${formatted} (${timeZone})`;
+  }
+  return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",

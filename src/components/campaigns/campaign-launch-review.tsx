@@ -9,6 +9,7 @@ import {
   Rocket,
   ShieldAlert,
 } from "lucide-react";
+import { formatZonedScheduleLabel } from "@/lib/campaigns/schedule-time";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -26,6 +27,7 @@ type LaunchReview = {
   mediaUrls?: string[];
   phoneE164: string | null;
   scheduledAt: string | null;
+  timezone: string | null;
   a2pUseCase: string;
   availableSegments: number;
   requiredSegments: number;
@@ -191,7 +193,14 @@ export function CampaignLaunchReview({
             <ReviewRow label="A2P use case" value={review.a2pUseCase} />
             <ReviewRow
               label="Scheduled"
-              value={review.scheduledAt ? new Date(review.scheduledAt).toLocaleString() : "Send now"}
+              value={
+                review.scheduledAt
+                  ? review.timezone
+                    ? formatZonedScheduleLabel(review.scheduledAt, review.timezone, { prefix: "" }).trim()
+                    : new Date(review.scheduledAt).toLocaleString()
+                  : "Send now"
+              }
+            />
             />
           </dl>
         </div>

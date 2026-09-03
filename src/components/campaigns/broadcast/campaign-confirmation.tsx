@@ -6,6 +6,7 @@ import { formatRecurrenceSummary } from "@/lib/campaigns/recurrence-format";
 import {
   fetchCampaignById,
   fetchLaunchReview,
+  formatScheduledAt,
   isCampaignLaunchPending,
   launchCampaign,
   type LaunchReviewData,
@@ -28,10 +29,46 @@ export function CampaignSuccessView() {
   const campaignId = searchParams.get("id");
   const mode = searchParams.get("mode") || loadComposeDraft().scheduleMode;
   const draft = loadComposeDraft();
+  const [summary, setSummary] = useState<{
+    scheduledLabel: string;
+    recipients: number;
+    credits: number;
+  } | null>(null);
 
   useEffect(() => {
     return () => clearComposeDraft();
   }, []);
+
+  useEffect(() => {
+    if (!campaignId || mode !== "later") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [campaign, review] = await Promise.all([
+          fetchCampaignById(campaignId),
+          fetchLaunchReview(campaignId),
+        ]);
+        if (cancelled) return;
+        const tz = campaign?.timezone || draft.timezone || review.timezone;
+        const scheduledLabel =
+          campaign?.scheduledAt && tz
+            ? formatScheduledAt(campaign.scheduledAt, tz).replace(/^Scheduled /, "")
+            : draft.scheduledDate
+              ? `${draft.scheduledDate} at ${draft.scheduledTime || ""} (${draft.timezone})`
+              : "";
+        setSummary({
+          scheduledLabel,
+          recipients: review.finalRecipientCount,
+          credits: review.requiredSegments,
+        });
+      } catch {
+        // Fall back to compose draft copy below.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, draft.scheduledDate, draft.scheduledTime, draft.timezone, mode]);
 
   const title =
     mode === "recurring"
@@ -40,13 +77,15 @@ export function CampaignSuccessView() {
         ? "Campaign Queued!"
         : "Campaign Scheduled!";
   const detail =
-    mode === "later" && draft.scheduledDate
-      ? `Your campaign is scheduled to send on ${draft.scheduledDate} at ${draft.scheduledTime || ""} (${draft.timezone}).`
-      : mode === "recurring" && draft.recurrence
-        ? formatRecurrenceSummary(draft.recurrence, draft.timezone)
-        : mode === "recurring"
-          ? "Your recurring campaign has been started."
-          : "Your campaign has been queued for delivery.";
+    mode === "later" && summary?.scheduledLabel
+      ? `Your campaign is scheduled to send on ${summary.scheduledLabel}.`
+      : mode === "later" && draft.scheduledDate
+        ? `Your campaign is scheduled to send on ${draft.scheduledDate} at ${draft.scheduledTime || ""} (${draft.timezone}).`
+        : mode === "recurring" && draft.recurrence
+          ? formatRecurrenceSummary(draft.recurrence, draft.timezone)
+          : mode === "recurring"
+            ? "Your recurring campaign has been started."
+            : "Your campaign has been queued for delivery.";
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
@@ -55,6 +94,11 @@ export function CampaignSuccessView() {
       </div>
       <h1 className="mt-6 text-[28px] font-bold text-[#111827]">{title}</h1>
       <p className="mt-2 max-w-md text-[15px] text-[#6b7280]">{detail}</p>
+      {mode === "later" && summary ? (
+        <p className="mt-3 max-w-md text-[13px] text-slate-600 tabular-nums">
+          {formatNumber(summary.recipients)} recipients · {formatNumber(summary.credits)} credits reserved
+        </p>
+      ) : null}
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         {campaignId ? (
           <Link href={`/campaigns/${campaignId}`} className={campaignUi.primaryBtn}>
@@ -83,7 +127,6 @@ export function CampaignQueueView() {
   const [confirmLargeSend, setConfirmLargeSend] = useState(false);
   const [armed, setArmed] = useState(false);
   const [error, setError] = useState("");
-  const launchedRef = useRef(false);
   const inFlightRef = useRef(false);
   const cancelledRef = useRef(false);
   const router = useRouter();
@@ -153,14 +196,12 @@ export function CampaignQueueView() {
       return;
     }
     inFlightRef.current = true;
-    launchedRef.current = true;
     setLaunching(true);
     setError("");
     try {
       await launchCampaign(campaignId, recipientCount, confirmLargeSend);
       redirectToDetail();
     } catch (err) {
-      launchedRef.current = false;
       inFlightRef.current = false;
       setError(err instanceof Error ? err.message : "Could not launch campaign");
     } finally {

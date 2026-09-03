@@ -211,6 +211,52 @@ Review → Send Now → /campaigns/new/queue?id= → countdown → launch → /c
 - `launchCampaign` passes idempotency key; server dedupes via `campaignLaunchAudit`
 - Queue summary card matches review numbers before countdown
 
+### Scheduled campaigns (74–86)
+
+| Role | Files |
+|------|--------|
+| Compose schedule | `CreateCampaign.tsx` (Later + date/time/timezone) |
+| Review / launch | `ReviewDetails.tsx`, `campaign-launch.ts` |
+| Success | `campaign-confirmation.tsx` (`CampaignSuccessView`) |
+| Scheduled list | `/campaigns/scheduled` → `CampaignsFilteredView` |
+| Detail / cancel | `campaign-detail-view.tsx`, `CampaignActions`, `CampaignsList` menu |
+| Worker | `activate-scheduled-campaigns.ts`, `campaign-processor.ts` |
+
+**User flow:**
+
+```
+Create → Later + timezone → Review → Schedule Campaign → /campaigns/new/success?mode=later
+  → /campaigns/scheduled (row shows campaign timezone)
+  → edit (?edit=) or cancel (list menu or detail)
+Worker: scheduledAt <= now → SENDING → enqueueDueCampaignMessages
+```
+
+**Checklist (74–86):**
+
+| # | Item | Glue check |
+|---|------|------------|
+| 74 | Schedule for later | Review `Schedule Campaign` → `launchCampaign` → `successPath` with `mode=later` |
+| 75 | Timezone shown/stored | `zonedLocalDateTimeToIso` on save; `formatScheduledAt` / `formatZonedScheduleLabel` on display |
+| 76 | Scheduled list | `/campaigns/scheduled` fetches `status=scheduled` (`SCHEDULED` only) |
+| 77 | Edit scheduled | `updateBroadcastCampaign` allows `SCHEDULED`; `parseCampaignConfig` for string `configJson` |
+| 78 | Cancel scheduled | `cancelScheduledCampaign` / DELETE; list menu + `CampaignActions` on detail |
+| 79 | Worker activates due | `activateDueScheduledCampaigns` when `scheduledAt <= now` (backend) |
+| 80 | Fair queue at send time | `enqueueDueCampaignMessages` fair queue (backend) |
+| 81 | Idempotent schedule launch | `campaignLaunchAudit` + idempotency key on launch |
+| 82 | Credits reserved at schedule | Launch audit + reservation on `launchCampaign` |
+| 83 | Success page after schedule | `CampaignSuccessView` fetches campaign + review for time/credits |
+| 84 | Detail shows scheduled time | `formatCampaignDateTime(at, campaignTimezone)` on detail |
+| 85 | Pre-send review shows schedule | `buildPreSendReview` returns `timezone`; launch review row |
+| 86 | Refresh-safe success | Success page reads API (not only compose draft) after schedule |
+
+**Glue checks:**
+
+- `parseCampaignConfig` when editing scheduled campaigns (`configJson` may be a string from DB)
+- `readCampaignTimezone(configJson)` for list/detail/success labels
+- Scheduled row **Cancel** in `CampaignsList` kebab menu (not only detail page)
+- `CampaignSuccessView` loads `fetchCampaignById` + `fetchLaunchReview` after schedule
+- `buildPreSendReview` parses string `configJson` and returns `timezone`
+
 ### Drip campaigns (automations)
 
 | Role | Files |

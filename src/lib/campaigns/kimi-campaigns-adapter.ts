@@ -12,7 +12,7 @@ import {
   formatRecurrenceSummary,
   validateRecurrence,
 } from "@/lib/campaigns/recurrence-format";
-import { zonedLocalDateTimeToIso, zonedLocalDateTimeToUtc } from "@/lib/campaigns/schedule-time";
+import { formatZonedScheduleLabel, zonedLocalDateTimeToIso, zonedLocalDateTimeToUtc } from "@/lib/campaigns/schedule-time";
 
 export type CampaignListRow = {
   id: string;
@@ -48,6 +48,7 @@ export type LaunchReviewData = {
   blockReason: string | null;
   phoneE164: string | null;
   scheduledAt: string | null;
+  timezone: string | null;
 };
 
 export type AudiencePreviewData = {
@@ -187,8 +188,17 @@ export function statusMatchesFilter(status: string, filter: string): boolean {
   return true;
 }
 
-export function formatScheduledAt(value?: string | null): string {
+export function readCampaignTimezone(configJson: unknown): string | null {
+  const config = parseCampaignConfigJson(configJson);
+  const tz = config?.timezone;
+  return typeof tz === "string" && tz.trim() ? tz : null;
+}
+
+export function formatScheduledAt(value?: string | null, timeZone?: string | null): string {
   if (!value) return "";
+  if (timeZone) {
+    return formatZonedScheduleLabel(value, timeZone, { prefix: "Scheduled" });
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return `Scheduled ${date.toLocaleString(undefined, {
@@ -323,18 +333,39 @@ export async function fetchLaunchReview(campaignId: string): Promise<LaunchRevie
     blockReason: data.blockReason ?? null,
     phoneE164: data.phoneE164 ?? null,
     scheduledAt: data.scheduledAt ?? null,
+    timezone: typeof data.timezone === "string" ? data.timezone : null,
   };
 }
 
-export async function fetchCampaignById(
-  campaignId: string,
-): Promise<{ id: string; name: string; status: string } | null> {
+export type CampaignSummary = {
+  id: string;
+  name: string;
+  status: string;
+  scheduledAt: string | null;
+  timezone: string | null;
+};
+
+export async function fetchCampaignById(campaignId: string): Promise<CampaignSummary | null> {
   const res = await fetch(`/api/mass-texting/campaigns/${encodeURIComponent(campaignId)}`);
   const json = await res.json();
   if (!res.ok) return null;
-  const row = json.data as { id?: string; name?: string; status?: string } | undefined;
+  const row = json.data as
+    | { id?: string; name?: string; status?: string; scheduledAt?: string | Date | null; configJson?: unknown }
+    | undefined;
   if (!row?.id) return null;
-  return { id: row.id, name: row.name || "", status: row.status || "DRAFT" };
+  const scheduledAt =
+    row.scheduledAt == null
+      ? null
+      : typeof row.scheduledAt === "string"
+        ? row.scheduledAt
+        : new Date(row.scheduledAt).toISOString();
+  return {
+    id: row.id,
+    name: row.name || "",
+    status: row.status || "DRAFT",
+    scheduledAt,
+    timezone: readCampaignTimezone(row.configJson),
+  };
 }
 
 const LAUNCH_PENDING_PREFIX = "campaign-launch-pending:";
@@ -391,6 +422,12 @@ export async function deleteCampaignDraft(campaignId: string): Promise<void> {
   const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, { method: "DELETE" });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || "Could not delete campaign");
+}
+
+export async function cancelScheduledCampaign(campaignId: string): Promise<void> {
+  const res = await fetch(`/api/mass-texting/campaigns/${campaignId}`, { method: "DELETE" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Could not cancel campaign");
 }
 
 export async function previewAudience(

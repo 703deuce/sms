@@ -58,6 +58,27 @@ export function zonedIsoToLocalDateTime(
   };
 }
 
+/** Human-readable schedule label in a specific IANA timezone. */
+export function formatZonedScheduleLabel(
+  iso: string | null | undefined,
+  timeZone: string,
+  options?: { prefix?: string },
+): string {
+  if (!iso || !timeZone.trim()) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+  const prefix = options?.prefix ?? "Scheduled";
+  return `${prefix} ${formatted} (${timeZone})`;
+}
+
 function getZonedParts(date: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,

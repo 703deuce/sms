@@ -14,15 +14,18 @@ import {
   Check,
   PencilLine,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import {
   duplicateCampaign,
   deleteCampaignDraft,
+  cancelScheduledCampaign,
   displayCampaignStatus,
   fetchCampaigns,
   formatSavedAt,
   formatScheduledAt,
   normalizeCampaignStatus,
+  readCampaignTimezone,
   statusMatchesFilter,
   type CampaignListRow,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
@@ -160,6 +163,18 @@ export default function CampaignsList({
     }
   };
 
+  const cancelScheduled = async (c: CampaignListRow) => {
+    setMenuFor(null);
+    if (!confirm(`Cancel scheduled campaign "${c.name}"? Queued messages will not be sent.`)) return;
+    try {
+      await cancelScheduledCampaign(c.id);
+      notify("Campaign canceled.");
+      reload();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Could not cancel campaign");
+    }
+  };
+
   const activeFilterLabel = FILTER_OPTIONS.find((o) => o.id === filter)?.label ?? "All";
 
   return (
@@ -272,7 +287,9 @@ export default function CampaignsList({
                   : 0;
               const savedAt = formatSavedAt(c.createdAt);
               const scheduleAt =
-                norm === "scheduled" && c.scheduledAt ? formatScheduledAt(c.scheduledAt) : "";
+                norm === "scheduled" && c.scheduledAt
+                  ? formatScheduledAt(c.scheduledAt, readCampaignTimezone(c.configJson))
+                  : "";
 
               return (
                 <div
@@ -358,6 +375,11 @@ export default function CampaignsList({
                         {norm === "draft" && (
                           <button type="button" onClick={() => void removeDraft(c)}>
                             <Trash2 className="w-4 h-4" /> Delete
+                          </button>
+                        )}
+                        {norm === "scheduled" && (
+                          <button type="button" onClick={() => void cancelScheduled(c)}>
+                            <XCircle className="w-4 h-4" /> Cancel
                           </button>
                         )}
                       </div>

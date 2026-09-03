@@ -8,6 +8,7 @@ import {
   formatCampaignDateTime,
   type CampaignTimelineEvent,
 } from "@/lib/campaigns/campaign-detail-helpers";
+import { readCampaignTimezone } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { campaignDetailIsKimiBroadcast, campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
 import { mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
 import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
@@ -117,6 +118,7 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
   const optOutRate = campaign.delivered > 0 ? (campaign.optOuts / campaign.delivered) * 100 : 0;
   const segments = estimateSmsSegments(campaign.body);
   const attachedMedia = mediaUrlsFromCampaignConfig(campaign.configJson);
+  const scheduleTimezone = readCampaignTimezone(campaign.configJson);
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 pb-12">
@@ -164,7 +166,7 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
             <span className="hidden h-4 w-px bg-border sm:block" aria-hidden />
             <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
               <Clock className="h-3.5 w-3.5" aria-hidden />
-              {formatCampaignDateTime(campaign.scheduledAt)}
+              {formatCampaignDateTime(campaign.scheduledAt, scheduleTimezone)}
             </span>
           </>
         ) : null}
@@ -213,7 +215,7 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
               {[
                 { label: "Type", value: campaign.type },
                 { label: "Audience", value: campaign.audience },
-                { label: "Scheduled", value: formatCampaignDateTime(campaign.scheduledAt) },
+                { label: "Scheduled", value: formatCampaignDateTime(campaign.scheduledAt, scheduleTimezone) },
                 {
                   label: "Segments per message",
                   value: `${segments.segments} (${segments.characters} chars)`,
