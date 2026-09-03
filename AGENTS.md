@@ -239,3 +239,45 @@ Screenshots (current Transovo captures) stay as compact image data URLs. See `VI
 See `scripts/ui-agent/README.md`.
 
 **Persistence (Cloud Agents):** Kimi-generated frontend source is never disposable. On successful generation, source is copied immediately to `src/kimi-drafts/<route>/<session>/` before preview/refinement. Generation fails with `KIMI_OUTPUT_NOT_PERSISTED` if that copy does not succeed. The ephemeral sandbox under `.ui-agent/generated/` remains gitignored scratch.
+
+---
+
+## Mass Texting — glue code & user flows (mandatory for Kimi-connected work)
+
+**Read:** `docs/MASS_TEXTING_GLUE_FLOWS.md`
+
+When the user asks to wire, audit, or fix Mass Texting pages (campaigns, inbox, contacts, drip, media):
+
+### What to change
+
+- **DO change:** `*-connected.tsx` shells, `kimi-*-adapter.ts`, URL/filter helpers (`conversation-url-filters.ts`), `src/components/campaigns/broadcast/*`, `src/components/inbox/*`, `src/components/drip-campaigns/*`, API routes, `src/lib/mass-texting/**`, `src/lib/campaigns/**` (glue only).
+- **DO NOT change for backend wiring:** Kimi **look** under `src/components/kimi/**` (layout, colors, spacing, CSS). Presentation polish uses `ui:kimi --mode polish` separately.
+
+### Definition of done
+
+Not “API tests pass.” Done when the **full user journey** in `MASS_TEXTING_GLUE_FLOWS.md` works:
+
+- Cold load (hard refresh on the route)
+- Main action start → finish
+- Navigate away and back (list still shows the item)
+- No false empty states, no SSR→client wipe, no crash on the **next** screen after success
+
+### Review process
+
+1. Identify the feature’s flow section in `docs/MASS_TEXTING_GLUE_FLOWS.md`.
+2. Trace glue only: every `fetch`, `router.push`, filter URL sync, and `setState` that replaces lists.
+3. Check **common glue failure patterns** table in that doc (filter URL, SSR wipe, selection-triggered reload, prisma-compat includes, tab width).
+4. Fix glue; spot-check the manual smoke steps for that feature (do not run full cert suites unless asked).
+
+### Pages in scope (recent work)
+
+| Area | Entry route | Glue shell |
+|------|-------------|------------|
+| Campaigns | `/campaigns` | `kimi-campaigns-connected.tsx` |
+| Inbox | `/conversations` | `kimi-conversations-connected.tsx` |
+| Contacts | `/contacts` | `kimi-contacts-connected.tsx` |
+| Lists / Segments | `/contacts/lists`, `/contacts/segments` | `kimi-lists-connected.tsx`, `kimi-segments-connected.tsx` |
+| Drip | `/automations/drip-campaigns` | `drip-campaigns-list.tsx` + `lib/drip-campaigns/*` |
+| Media | `/messaging/media` | `kimi-media-connected.tsx` |
+
+API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow review — they skip connected-shell state bugs.

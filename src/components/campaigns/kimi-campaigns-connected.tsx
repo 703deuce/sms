@@ -3,6 +3,7 @@
 /**
  * Backend adapter shell for Kimi campaigns.
  * Wire APIs and navigation here — do not change presentation under components/kimi/campaigns/.
+ * User flows + glue checklist: docs/MASS_TEXTING_GLUE_FLOWS.md
  */
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -19,11 +20,17 @@ export function KimiCampaignsConnected({ initialView = "list" }: { initialView?:
   const router = useRouter();
   const pathname = usePathname();
   const [listKey, setListKey] = useState(0);
+  const prevPathRef = useRef(pathname);
 
   useEffect(() => {
-    if (initialView === "list" && pathname === "/campaigns") {
+    if (
+      initialView === "list" &&
+      pathname === "/campaigns" &&
+      prevPathRef.current !== "/campaigns"
+    ) {
       setListKey((k) => k + 1);
     }
+    prevPathRef.current = pathname;
   }, [pathname, initialView]);
 
   const navShell = (content: ReactNode) => (
