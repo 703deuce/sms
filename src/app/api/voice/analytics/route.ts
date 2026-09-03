@@ -9,7 +9,8 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
     await requireVoicePermission(auth.session.userId, auth.workspaceId, "view_analytics");
     const url = new URL(request.url);
-    const days = Number(url.searchParams.get("days") || 30);
+    const rawDays = Number(url.searchParams.get("days") || "30");
+    const days = [7, 30, 90].includes(rawDays) ? rawDays : 30;
     const data = await loadVoiceAnalytics(auth.workspaceId, days, {
       agentId: url.searchParams.get("agentId") || undefined,
       campaignId: url.searchParams.get("campaignId") || undefined,

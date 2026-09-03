@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 import { loadDashboardMetrics } from "@/lib/workspace-data";
 
 export async function GET() {
@@ -27,7 +28,7 @@ export async function GET() {
       }),
       prisma.contact.groupBy({
         by: ["status"],
-        where: { workspaceId },
+        where: visibleContactWhere(workspaceId),
         _count: true,
       }),
       prisma.conversation.groupBy({

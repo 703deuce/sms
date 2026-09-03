@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { countVisibleListMembersBulk } from "@/lib/contacts/workspace-membership";
 
 export type SmsAnalyticsRange = {
   from: Date;
@@ -202,7 +203,7 @@ async function loadAudienceAnalytics(
     }),
     prisma.contactList.findMany({
       where: { workspaceId },
-      include: { _count: { select: { members: true } } },
+      select: { id: true, name: true },
       take: 20,
     }),
   ]);
@@ -232,6 +233,10 @@ async function loadAudienceAnalytics(
   }
 
   const sourceTotal = [...sourceBuckets.values()].reduce((s, n) => s + n, 0);
+  const listCounts = await countVisibleListMembersBulk(
+    workspaceId,
+    lists.map((l) => l.id),
+  );
 
   return {
     activeContacts,
@@ -247,28 +252,47 @@ async function loadAudienceAnalytics(
       }))
       .sort((a, b) => b.count - a.count),
     topLists: [...lists]
-      .sort((a, b) => b._count.members - a._count.members)
-      .slice(0, 5)
-      .map((l) => ({ id: l.id, name: l.name, contacts: l._count.members })),
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        contacts: listCounts.get(l.id) || 0,
+      }))
+      .sort((a, b) => b.contacts - a.contacts)
+      .slice(0, 5),
   };
 }
 
 async function loadPeriodData(workspaceId: string, range: SmsAnalyticsRange) {
   const prisma = getPrisma();
 
-  const [messages, campaigns, clicks, compareCampaigns] = await Promise.all([
-    prisma.campaignMessage.findMany({
-      where: {
+  const messages = await prisma.campaignMessage.findMany({
+    where: {
+      workspaceId,
+      createdAt: { gte: range.from, lte: range.to },
+    },
+    select: { status: true, createdAt: true, error: true, campaignId: true },
+  });
+
+  const campaignIdsFromMessages = [
+    ...new Set(messages.map((m) => m.campaignId).filter(Boolean)),
+  ] as string[];
+
+  const campaignWhere = campaignIdsFromMessages.length
+    ? {
+        workspaceId,
+        OR: [
+          { id: { in: campaignIdsFromMessages } },
+          { createdAt: { gte: range.from, lte: range.to } },
+        ],
+      }
+    : {
         workspaceId,
         createdAt: { gte: range.from, lte: range.to },
-      },
-      select: { status: true, createdAt: true, error: true },
-    }),
+      };
+
+  const [campaigns, clicks, compareCampaigns, compareMessages] = await Promise.all([
     prisma.campaign.findMany({
-      where: {
-        workspaceId,
-        createdAt: { gte: range.from, lte: range.to },
-      },
+      where: campaignWhere,
       select: {
         id: true,
         name: true,
@@ -303,6 +327,15 @@ async function loadPeriodData(workspaceId: string, range: SmsAnalyticsRange) {
           select: { sent: true, delivered: true, replies: true, clicks: true, optOuts: true },
         })
       : Promise.resolve([]),
+    range.compareFrom && range.compareTo
+      ? prisma.campaignMessage.findMany({
+          where: {
+            workspaceId,
+            createdAt: { gte: range.compareFrom, lte: range.compareTo },
+          },
+          select: { status: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const failedMessages = await prisma.campaignMessage.findMany({
@@ -314,14 +347,14 @@ async function loadPeriodData(workspaceId: string, range: SmsAnalyticsRange) {
     select: { error: true },
   });
 
-  return { messages, campaigns, clicks, compareCampaigns, failedMessages };
+  return { messages, campaigns, clicks, compareCampaigns, compareMessages, failedMessages };
 }
 
 export async function loadSmsAnalytics(
   workspaceId: string,
   range: SmsAnalyticsRange,
 ): Promise<SmsAnalyticsPayload> {
-  const { messages, campaigns, clicks, compareCampaigns, failedMessages } =
+  const { messages, campaigns, clicks, compareCampaigns, compareMessages, failedMessages } =
     await loadPeriodData(workspaceId, range);
 
   const campaignAgg = campaigns.reduce(
@@ -361,9 +394,21 @@ export async function loadSmsAnalytics(
         )
       : null;
 
-  const compareKpis = compareAgg
-    ? buildKpis({ messages: [], campaignAgg: compareAgg, uniqueClicks: 0 })
-    : null;
+  const compareKpis =
+    range.compareFrom && range.compareTo
+      ? buildKpis({
+          messages: compareMessages,
+          campaignAgg: compareAgg || {
+            sent: 0,
+            delivered: 0,
+            failed: 0,
+            replies: 0,
+            clicks: 0,
+            optOuts: 0,
+          },
+          uniqueClicks: 0,
+        })
+      : null;
 
   const buckets = new Map<string, SmsAnalyticsTimePoint>();
   for (const m of messages) {

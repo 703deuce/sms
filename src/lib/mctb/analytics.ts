@@ -48,7 +48,11 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
   });
 
   const linkClicks = await prisma.linkClickEvent.count({
-    where: { workspaceId, createdAt: { gte: since } },
+    where: {
+      workspaceId,
+      createdAt: { gte: since },
+      missedCallEventId: { not: null },
+    },
   }).catch(() => 0);
 
   const linksSent = textsSent;

@@ -96,7 +96,7 @@ export type MessagingAnalyticsPayload = {
   };
 };
 
-const FAILURE_STATUSES = new Set(["failed", "undelivered", "expired"]);
+const FAILURE_STATUSES = new Set(["failed", "undelivered", "expired", "error"]);
 const PENDING_STATUSES = new Set(["queued", "sending", "pending", "accepted", "sent"]);
 const DELIVERED_STATUSES = new Set(["delivered", "clicked", "read"]);
 
@@ -146,7 +146,8 @@ function buildKpis(input: {
 }
 
 export function parseAnalyticsRange(searchParams: URLSearchParams): MessagingAnalyticsRange {
-  const days = Number(searchParams.get("days") || "30");
+  const rawDays = Number(searchParams.get("days") || "30");
+  const days = [7, 30, 90].includes(rawDays) ? rawDays : 30;
   const to = searchParams.get("to")
     ? new Date(searchParams.get("to")!)
     : new Date();
@@ -169,12 +170,37 @@ export async function loadMessagingAnalytics(
 ): Promise<MessagingAnalyticsPayload> {
   const prisma = getPrisma();
 
-  const [campaigns, messages, clicks, compareCampaigns] = await Promise.all([
-    prisma.campaign.findMany({
-      where: {
+  const messages = await prisma.campaignMessage.findMany({
+    where: {
+      workspaceId,
+      createdAt: { gte: range.from, lte: range.to },
+    },
+    select: { status: true, createdAt: true, failureCategory: true, campaignId: true },
+    take: 50000,
+  });
+
+  const campaignIdsFromMessages = [
+    ...new Set(messages.map((m) => m.campaignId).filter(Boolean)),
+  ] as string[];
+
+  const campaignWhere = campaignIdsFromMessages.length
+    ? {
+        workspaceId,
+        OR: [
+          { id: { in: campaignIdsFromMessages } },
+          { createdAt: { gte: range.from, lte: range.to } },
+        ],
+      }
+    : {
         workspaceId,
         createdAt: { gte: range.from, lte: range.to },
-        status: { in: ["SENDING", "COMPLETED", "FAILED", "Sending", "Completed", "Failed"] },
+      };
+
+  const [campaigns, clicks, compareCampaigns] = await Promise.all([
+    prisma.campaign.findMany({
+      where: {
+        ...campaignWhere,
+        status: { in: ["SENDING", "COMPLETED", "FAILED", "PAUSED", "CANCELED"] },
       },
       select: {
         id: true,
@@ -189,14 +215,6 @@ export async function loadMessagingAnalytics(
       },
       orderBy: { sent: "desc" },
       take: 100,
-    }),
-    prisma.campaignMessage.findMany({
-      where: {
-        workspaceId,
-        createdAt: { gte: range.from, lte: range.to },
-      },
-      select: { status: true, createdAt: true, failureCategory: true },
-      take: 50000,
     }),
     prisma.linkClickEvent.findMany({
       where: {
@@ -442,12 +460,22 @@ export async function loadCampaignLiveStats(workspaceId: string, campaignId: str
     breakdown[row.status] = row._count._all;
   }
 
-  const pending = (breakdown.queued || 0) + (breakdown.sending || 0);
+  const pending = (breakdown.queued || 0) + (breakdown.sending || 0) + (breakdown.pending || 0);
+  const messageSent =
+    Object.values(breakdown).reduce((sum, count) => sum + count, 0) || campaign.sent;
+  const messageDelivered =
+    (breakdown.delivered || 0) + (breakdown.clicked || 0) + (breakdown.read || 0) ||
+    campaign.delivered;
+  const messageFailed = (breakdown.failed || 0) + (breakdown.undelivered || 0) + (breakdown.expired || 0) ||
+    campaign.failed;
 
   return {
     ...campaign,
+    sent: messageSent,
+    delivered: messageDelivered,
+    failed: messageFailed,
     pending,
-    deliveryRate: pct(campaign.delivered, campaign.sent),
+    deliveryRate: pct(messageDelivered, messageSent),
     statusBreakdown: breakdown,
     updatedAt: new Date().toISOString(),
   };

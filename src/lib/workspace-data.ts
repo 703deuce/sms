@@ -569,7 +569,7 @@ export async function loadSubscriberSources(workspaceId: string): Promise<Subscr
 
   const [contacts, forms, keywords, qrCodes] = await Promise.all([
     prisma.contact.findMany({
-      where: { workspaceId },
+      where: visibleContactWhere(workspaceId),
       select: { consentSource: true, consentDate: true, createdAt: true },
     }),
     prisma.optInForm.findMany({ where: { workspaceId }, select: { name: true } }),
