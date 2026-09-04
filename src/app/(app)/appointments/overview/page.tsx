@@ -2,7 +2,7 @@ import { AppointmentsOverviewClient } from "@/components/appointments/overview-c
 
 export default function AppointmentsOverviewPage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-8">
+    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 lg:px-6 lg:py-8">
       <AppointmentsOverviewClient />
     </div>
   );
