@@ -7,6 +7,7 @@ import { settingsTabs } from "@/lib/settings-tabs";
 import type { MerchantConnectionView } from "@/lib/merchant-payments/types";
 import { CreditCard, ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 function statusLabel(status: MerchantConnectionView["status"]) {
   switch (status) {
@@ -36,6 +37,7 @@ function ProviderCard({
   onConnect,
   onReconnect,
   onDisconnect,
+  onManageDashboard,
   connecting,
 }: {
   name: string;
@@ -43,6 +45,7 @@ function ProviderCard({
   onConnect: () => void;
   onReconnect: () => void;
   onDisconnect: () => void;
+  onManageDashboard?: () => void;
   connecting: boolean;
 }) {
   return (
@@ -81,6 +84,11 @@ function ProviderCard({
                   <RefreshCw className="mr-1 h-3.5 w-3.5" />
                   {connection.status === "needs_attention" ? "Update account" : "Continue setup"}
                 </Button>
+              ) : onManageDashboard ? (
+                <Button size="sm" variant="outline" onClick={onManageDashboard} disabled={connecting}>
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                  Manage in Stripe
+                </Button>
               ) : null}
               <Button size="sm" variant="ghost" onClick={onDisconnect} disabled={connecting}>
                 Disconnect
@@ -94,6 +102,7 @@ function ProviderCard({
 }
 
 export function MerchantPaymentsSettingsPanel() {
+  const searchParams = useSearchParams();
   const [connections, setConnections] = useState<MerchantConnectionView[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
@@ -110,6 +119,12 @@ export function MerchantPaymentsSettingsPanel() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (searchParams.get("stripe") === "return") {
+      load();
+    }
+  }, [load, searchParams]);
+
   async function connectStripe() {
     setActing("stripe");
     const res = await fetch("/api/merchant-payments/stripe/connect", { method: "POST" });
@@ -121,6 +136,14 @@ export function MerchantPaymentsSettingsPanel() {
   async function connectSquare() {
     setActing("square");
     const res = await fetch("/api/merchant-payments/square/connect");
+    const json = await res.json();
+    setActing(null);
+    if (json.data?.url) window.location.href = json.data.url;
+  }
+
+  async function openStripeDashboard() {
+    setActing("stripe-dashboard");
+    const res = await fetch("/api/merchant-payments/stripe/dashboard", { method: "POST" });
     const json = await res.json();
     setActing(null);
     if (json.data?.url) window.location.href = json.data.url;
@@ -176,7 +199,8 @@ export function MerchantPaymentsSettingsPanel() {
               onConnect={connectStripe}
               onReconnect={connectStripe}
               onDisconnect={() => disconnect("stripe")}
-              connecting={acting === "stripe"}
+              onManageDashboard={openStripeDashboard}
+              connecting={acting === "stripe" || acting === "stripe-dashboard"}
             />
           ) : null}
           {square ? (

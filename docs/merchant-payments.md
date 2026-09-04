@@ -23,10 +23,11 @@ PlatformBilling (SaaS)          MerchantPayments (Appointments)
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `STRIPE_SECRET_KEY` | Yes | Platform secret (Connect API calls) |
+| `STRIPE_SECRET_KEY` | Yes | Platform secret (SaaS billing + Connect API calls) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Optional | Client-side if needed |
-| `STRIPE_WEBHOOK_SECRET` | Yes (prod) | Webhook signature verification |
-| `STRIPE_CONNECT_CLIENT_ID` | Optional | Connect OAuth client ID if using Standard |
+| `STRIPE_WEBHOOK_SECRET` | Yes (prod) | Single webhook destination at `/api/webhooks/stripe` |
+
+No additional Stripe credentials are required for Connect. Express onboarding uses the same `STRIPE_SECRET_KEY` via `getStripe()` — there is no separate Connect secret key or webhook secret.
 
 ### Square
 
@@ -53,7 +54,7 @@ PlatformBilling (SaaS)          MerchantPayments (Appointments)
    - `checkout.session.expired`
    - `account.updated`
    - (existing SaaS events unchanged)
-4. Connect settings: Express accounts recommended
+4. Connect settings: Express accounts with Stripe-hosted onboarding and Express Dashboard management
 
 ## Square Developer Console Configuration (still required)
 

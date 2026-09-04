@@ -93,6 +93,25 @@ export async function startStripeConnectOnboarding(workspaceId: string): Promise
   return { url: link.url, accountId };
 }
 
+/** Stripe Express Dashboard login link for connected merchant account management. */
+export async function createStripeExpressDashboardLink(workspaceId: string): Promise<string> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe platform is not configured");
+
+  const connection = await getMerchantConnection(workspaceId, "STRIPE");
+  if (!connection?.merchantAccountId) {
+    throw new Error("Stripe is not connected for this business");
+  }
+
+  const refreshed = await refreshStripeConnectAccount(workspaceId, connection);
+  if (!refreshed.merchantAccountId) {
+    throw new Error("Stripe account is not available");
+  }
+
+  const link = await stripe.accounts.createLoginLink(refreshed.merchantAccountId);
+  return link.url;
+}
+
 export async function createStripeConnectCheckout(
   input: CreateMerchantPaymentInput,
 ): Promise<MerchantPaymentResult> {
