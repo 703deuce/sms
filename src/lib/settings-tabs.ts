@@ -8,6 +8,7 @@ export const settingsTabs = [
   { label: "Workspaces", href: "/settings/workspaces" },
   { label: "Notifications", href: "/settings/notifications" },
   { label: "Billing", href: "/settings/billing" },
+  { label: "Payments", href: "/settings/payments" },
   { label: "Limits", href: "/settings/limits" },
   { label: "Security", href: "/settings/security" },
   { label: "Branding", href: "/settings/branding" },

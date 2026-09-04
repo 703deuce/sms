@@ -82,6 +82,10 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   if (isAppointmentCheckoutMetadata(metadata)) {
     return handleAppointmentCheckoutCompleted(session);
   }
+  // Legacy appointment metadata without transaction_type
+  if (metadata.appointmentId && metadata.paymentMode) {
+    return handleAppointmentCheckoutCompleted(session);
+  }
   return { subsystem: "none" as const, skipped: true };
 }
 
@@ -196,6 +200,27 @@ async function processStripeEvent(event: Stripe.Event) {
       return routeCheckoutSessionAsyncSucceeded(obj as unknown as Stripe.Checkout.Session);
     case "checkout.session.async_payment_failed":
       return routeCheckoutSessionAsyncFailed(obj as unknown as Stripe.Checkout.Session);
+    case "checkout.session.expired": {
+      const session = obj as unknown as Stripe.Checkout.Session;
+      const metadata = (session.metadata || {}) as Record<string, string | undefined>;
+      if (metadata.transaction_type === "appointment_merchant_payment" && metadata.workspaceId && metadata.appointmentId) {
+        const { handleAppointmentCheckoutExpired } = await import("@/lib/appointments/payment-checkout");
+        await handleAppointmentCheckoutExpired(metadata.workspaceId, metadata.appointmentId);
+        return { subsystem: "merchant_payments" as const, action: "checkout_expired" };
+      }
+      return { subsystem: "none" as const, skipped: true };
+    }
+    case "account.updated": {
+      const { handleStripeConnectAccountUpdated } = await import("@/lib/merchant-payments/stripe-connect");
+      return handleStripeConnectAccountUpdated(obj as {
+        id: string;
+        metadata?: Record<string, string | null | undefined>;
+        charges_enabled?: boolean;
+        payouts_enabled?: boolean;
+        details_submitted?: boolean;
+        requirements?: { currently_due?: string[]; past_due?: string[] };
+      });
+    }
     case "invoice.upcoming":
       await handlePlatformInvoiceUpcoming(obj as unknown as Stripe.Invoice);
       return { subsystem: "platform_product" as const, action: "overage_billed" };
@@ -336,6 +361,8 @@ export const STRIPE_WEBHOOK_EVENT_TYPES = [
   "checkout.session.completed",
   "checkout.session.async_payment_succeeded",
   "checkout.session.async_payment_failed",
+  "checkout.session.expired",
+  "account.updated",
   "invoice.paid",
   "invoice.payment_succeeded",
   "invoice.payment_failed",

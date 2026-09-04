@@ -15,6 +15,9 @@ export function triggerLabel(trigger: AppointmentWorkflowTrigger): string {
     booking_approved: "Booking approved",
     booking_rejected: "Booking rejected",
     payment_received: "Payment received",
+    payment_failed: "Payment failed",
+    deposit_paid: "Deposit paid",
+    balance_due: "Balance due",
     waitlist_slot_available: "Waitlist slot available",
   };
   return labels[trigger] || trigger;

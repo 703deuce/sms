@@ -71,6 +71,14 @@ async function attachPaymentCheckout(
   checkoutUrl: string | null;
   checkoutConfigured: boolean;
   checkoutError?: string | null;
+  provider?: string;
+  square?: {
+    applicationId: string;
+    locationId: string;
+    amountCents: number;
+    currency: string;
+  };
+  appointmentId?: string;
 }> {
   if (!payment || payment.mode === "none") {
     return { paymentRequired: false, checkoutUrl: null, checkoutConfigured: true };
@@ -87,6 +95,9 @@ async function attachPaymentCheckout(
     checkoutUrl: checkout.url,
     checkoutConfigured: checkout.configured,
     checkoutError: checkout.error,
+    provider: checkout.provider?.toLowerCase(),
+    square: checkout.square,
+    appointmentId,
   };
 }
 
@@ -324,7 +335,8 @@ export async function POST(request: Request, { params }: Params) {
       bookingAnswers,
       smsConsent,
       source: "public_booking" as const,
-      status: payment?.mode && payment.mode !== "none" ? "awaiting_confirmation" : "awaiting_confirmation",
+      status:
+        payment?.mode && payment.mode !== "none" ? "pending_payment" : "awaiting_confirmation",
       staffId,
       staffName: assignedStaff?.name,
       locationId,
@@ -386,6 +398,15 @@ export async function POST(request: Request, { params }: Params) {
       checkoutUrl: string | null;
       checkoutConfigured: boolean;
       checkoutError?: string | null;
+      provider?: string;
+      square?: {
+        applicationId: string;
+        locationId: string;
+        amountCents: number;
+        currency: string;
+        sandbox?: boolean;
+      };
+      appointmentId?: string;
     } = { paymentRequired: false, checkoutUrl: null, checkoutConfigured: true };
     if (appointmentId && payment?.mode && payment.mode !== "none") {
       paymentInfo = await attachPaymentCheckout(
@@ -410,7 +431,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     return NextResponse.json(
-      { data: { ...result, ...paymentInfo } },
+      { data: { ...result, appointmentId, ...paymentInfo } },
       { status: 201 },
     );
   } catch (err) {

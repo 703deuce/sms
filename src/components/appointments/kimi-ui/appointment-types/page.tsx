@@ -71,6 +71,7 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               error={model.error}
               staffOptions={model.staffOptions}
               locationOptions={model.locationOptions}
+              connectedPaymentProviders={model.connectedPaymentProviders}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}

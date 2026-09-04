@@ -12,6 +12,10 @@ export async function GET() {
     );
     const openAiConfigured = Boolean(process.env.OPENAI_API_KEY?.trim());
     const brevoConfigured = Boolean(process.env.BREVO_API_KEY?.trim());
+    const squareConfigured = Boolean(
+      process.env.SQUARE_APPLICATION_ID?.trim() &&
+        process.env.SQUARE_APPLICATION_SECRET?.trim(),
+    );
 
     return NextResponse.json({
       data: {
@@ -19,6 +23,7 @@ export async function GET() {
         openAiConfigured,
         brevoConfigured,
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
+        squareConfigured,
       },
     });
   } catch (err) {

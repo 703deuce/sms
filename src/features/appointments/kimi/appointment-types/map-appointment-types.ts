@@ -67,6 +67,7 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   cancellationPolicy: { allowed: "anytime" },
   reschedulePolicy: { allowed: "anytime" },
   paymentMode: "none",
+  paymentProvider: "",
   paymentPriceCents: 0,
   paymentDepositCents: 0,
   paymentDepositPercent: 0,
@@ -167,6 +168,7 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     cancellationPolicy: cfg.cancellationPolicy || { allowed: "anytime" },
     reschedulePolicy: cfg.reschedulePolicy || { allowed: "anytime" },
     paymentMode: payment?.mode || "none",
+    paymentProvider: (payment?.provider as "stripe" | "square") || "",
     paymentPriceCents: payment?.priceCents || 0,
     paymentDepositCents: payment?.depositCents || 0,
     paymentDepositPercent: payment?.depositPercent || 0,
@@ -202,6 +204,7 @@ function buildPaymentConfig(form: AppointmentTypeFormState): PaymentRequirement 
   if (form.paymentMode === "none") return { mode: "none" };
   return {
     mode: form.paymentMode,
+    provider: form.paymentProvider || undefined,
     priceCents: form.paymentPriceCents || undefined,
     depositCents: form.paymentDepositCents || undefined,
     depositPercent: form.paymentDepositPercent || undefined,

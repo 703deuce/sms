@@ -25,7 +25,8 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { SquarePaymentStep } from "@/components/appointments/square-payment-step";
+import { appointmentSmsConsentDisclosure } from "@/lib/appointments/sms-consent-disclosure";
 
 type BookingType = {
   id: string;
@@ -50,7 +51,7 @@ type LocationOption = { id: string; name: string; kind?: string; address?: strin
 
 type Slot = { startsAt: string; endsAt: string; remaining?: number; capacity?: number };
 
-type Step = "service" | "datetime" | "info" | "done" | "ai" | "waitlist";
+type Step = "service" | "datetime" | "info" | "done" | "ai" | "waitlist" | "payment";
 
 const STEP_LABELS: Array<{ key: Exclude<Step, "done" | "waitlist" | "ai">; label: string }> = [
   { key: "service", label: "Service" },
@@ -155,6 +156,14 @@ export function PublicBookingClient({
   const [error, setError] = useState("");
   const [bookingConflicts, setBookingConflicts] = useState<Array<{ startsAt: string; reason: string }>>([]);
   const [paymentPending, setPaymentPending] = useState(false);
+  const [pendingAppointmentId, setPendingAppointmentId] = useState("");
+  const [squareConfig, setSquareConfig] = useState<{
+    applicationId: string;
+    locationId: string;
+    amountCents: number;
+    currency: string;
+    sandbox?: boolean;
+  } | null>(null);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiHistory, setAiHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
@@ -263,6 +272,9 @@ export function PublicBookingClient({
       if (data.serviceName && !selectedType) {
         const match = types.find((t) => t.name === data.serviceName);
         if (match) setSelectedType(match);
+      }
+      if (data.requiresPayment) {
+        setError("");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not process request");
@@ -415,6 +427,13 @@ export function PublicBookingClient({
     if (json.data?.checkoutUrl) {
       setPaymentPending(true);
       window.location.href = json.data.checkoutUrl;
+      return;
+    }
+    if (json.data?.square && json.data?.appointmentId) {
+      setPendingAppointmentId(json.data.appointmentId);
+      setSquareConfig(json.data.square);
+      setStep("payment");
+      setSubmitting(false);
       return;
     }
     setStep("done");
@@ -724,8 +743,15 @@ export function PublicBookingClient({
                 </div>
                 <label className="flex items-start gap-2 text-[12px] text-muted-foreground">
                   <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-0.5" />
-                  {consentText || "I agree to receive waitlist notifications by SMS."}
+                  <span>
+                    {consentText || "I agree to receive appointment-related text messages."}
+                  </span>
                 </label>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {appointmentSmsConsentDisclosure(workspaceName)}{" "}
+                  <a href={termsUrl} className="font-semibold text-primary">Terms</a> ·{" "}
+                  <a href={privacyUrl} className="font-semibold text-primary">Privacy</a>
+                </p>
                 {error ? <p className="text-sm text-rose-600">{error}</p> : null}
                 <Button className="w-full" disabled={submitting} onClick={joinWaitlist}>{submitting ? "Joining…" : "Join waitlist"}</Button>
               </div>
@@ -763,8 +789,15 @@ export function PublicBookingClient({
               <div><Label>Notes (optional)</Label><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
               <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-muted/30 px-3.5 py-3">
                 <input type="checkbox" className="mt-0.5" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} />
-                <span className="text-[12px] text-muted-foreground">{consentText} <a href={termsUrl} className="font-semibold text-primary">Terms</a> · <a href={privacyUrl} className="font-semibold text-primary">Privacy</a></span>
+                <span className="text-[12px] text-muted-foreground">
+                  {consentText || "I agree to receive appointment-related text messages."}
+                </span>
               </label>
+              <p className="text-[11px] leading-relaxed text-muted-foreground px-1">
+                {appointmentSmsConsentDisclosure(workspaceName)}{" "}
+                <a href={termsUrl} className="font-semibold text-primary">Terms</a> ·{" "}
+                <a href={privacyUrl} className="font-semibold text-primary">Privacy</a>
+              </p>
               {challengeRequired ? (
                 <label className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-3 text-[13px]">
                   <input type="checkbox" checked={humanVerification} onChange={(e) => setHumanVerification(e.target.checked)} />
@@ -789,6 +822,16 @@ export function PublicBookingClient({
           </Card>
         ) : null}
 
+        {step === "payment" && squareConfig && pendingAppointmentId ? (
+          <SquarePaymentStep
+            slug={slug}
+            appointmentId={pendingAppointmentId}
+            square={squareConfig}
+            onSuccess={() => setStep("done")}
+            onCancel={() => setStep("info")}
+          />
+        ) : null}
+
         {step === "done" ? (
           <Card className="p-8 text-center sm:p-10">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
@@ -797,8 +840,10 @@ export function PublicBookingClient({
             <h2 className="font-display text-xl font-semibold">You&apos;re booked!</h2>
             <p className="mt-2 text-sm font-medium">{selectedType?.name}</p>
             <p className="mt-1 text-[13px] text-muted-foreground">{selectedWhen}</p>
-            {recurringMode !== "once" ? (
-              <p className="mt-1 text-[12px] text-muted-foreground">Recurring series: {recurringOccurrences} appointments</p>
+            {paymentLabel ? (
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                {selectedType?.config?.payment?.mode === "deposit" ? "Deposit paid" : "Payment received"}
+              </p>
             ) : null}
             <div className="mx-auto mt-6 max-w-xs rounded-xl bg-muted/50 px-4 py-3 text-[12px] text-muted-foreground">
               You&apos;ll receive a confirmation text shortly with options to reschedule or cancel.

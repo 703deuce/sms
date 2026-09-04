@@ -69,14 +69,18 @@ export function AppointmentTypesConnected() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [staffOptions, setStaffOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [locationOptions, setLocationOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [connectedPaymentProviders, setConnectedPaymentProviders] = useState<
+    Array<{ provider: "stripe" | "square"; label: string }>
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [typesRes, settingsRes] = await Promise.all([
+      const [typesRes, settingsRes, paymentsRes] = await Promise.all([
         fetch("/api/appointments/types"),
         fetch("/api/appointments/settings"),
+        fetch("/api/merchant-payments/status"),
       ]);
       if (!typesRes.ok) throw new Error("types failed");
       const typesJson = await typesRes.json();
@@ -89,6 +93,16 @@ export function AppointmentTypesConnected() {
       const locations = (settingsJson.data?.locations || []) as Array<{ id: string; name: string; active?: boolean }>;
       setStaffOptions(staff.filter((s) => s.active !== false && s.name).map((s) => ({ id: s.id, name: s.name })));
       setLocationOptions(locations.filter((l) => l.active !== false && l.name).map((l) => ({ id: l.id, name: l.name })));
+      if (paymentsRes.ok) {
+        const paymentsJson = await paymentsRes.json();
+        const providers = (paymentsJson.data?.connections || [])
+          .filter((c: { canAcceptPayments: boolean }) => c.canAcceptPayments)
+          .map((c: { provider: string }) => ({
+            provider: c.provider.toLowerCase() as "stripe" | "square",
+            label: c.provider === "STRIPE" ? "Stripe" : "Square",
+          }));
+        setConnectedPaymentProviders(providers);
+      }
     } catch {
       setFailed(true);
     } finally {
@@ -289,6 +303,7 @@ export function AppointmentTypesConnected() {
       copiedId,
       staffOptions,
       locationOptions,
+      connectedPaymentProviders,
     };
   }, [
     bookingBaseUrl,
@@ -303,6 +318,7 @@ export function AppointmentTypesConnected() {
     selectedId,
     showInactive,
     staffOptions,
+    connectedPaymentProviders,
     types,
     visibleTypes,
     workspaceSlug,

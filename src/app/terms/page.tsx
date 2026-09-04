@@ -1,26 +1,31 @@
 import { LegalShell } from "@/components/landing/legal-shell";
 import { BRAND_NAME } from "@/lib/brand";
+import { legalPublicSiteHost, legalPublicSiteUrl } from "@/lib/legal/public-site";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "Terms of Service for Transovo AI LLC business messaging software and related services.",
+    "Terms of Service for [REDACTED] appointment scheduling, messaging, AI-assisted booking, and related business software.",
 };
 
 export default function TermsPage() {
+  const publicSiteUrl = legalPublicSiteUrl();
+  const publicSiteHost = legalPublicSiteHost();
+
   return (
-    <LegalShell title="Terms of Service" effectiveDate="July 16, 2026">
+    <LegalShell title="Terms of Service" effectiveDate="September 4, 2026">
       <p>
-        These Terms of Service (“Terms”) are a legally binding agreement between you and Transovo
-        AI LLC (“Transovo,” “we,” “us,” or “our”) and govern your access to and use of{" "}
-        <a href="https://transovo.ai">transovo.ai</a>, our business messaging software, and related
-        products and services (the “Services”).
+        These Terms of Service (&ldquo;Terms&rdquo;) are a legally binding agreement between you and
+        [REDACTED] LLC (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) and govern your
+        access to and use of{" "}
+        <a href={publicSiteUrl || "/"}>{publicSiteHost}</a>, our software platform, and related
+        products and services (the &ldquo;Services&rdquo;).
       </p>
       <p>
         By creating an account, accessing the Services, or clicking to accept these Terms, you agree
-        to them. If you are using the Services on behalf of a company or other organization, you
-        represent that you have authority to bind that organization, and “you” includes that
+        to them. If you use the Services on behalf of a company or other organization, you represent
+        that you have authority to bind that organization, and &ldquo;you&rdquo; includes that
         organization.
       </p>
       <p>
@@ -32,11 +37,11 @@ export default function TermsPage() {
 
       <h2>1. Who we are</h2>
       <p>
-        Transovo AI LLC is located in Woodbridge, Virginia, United States. We provide business
-        messaging software that helps small businesses send permission-based SMS campaigns, manage
-        customer replies, and organize related customer communications. We are a software provider.
-        We are not a carrier and we do not control every aspect of message delivery on wireless
-        networks.
+        [REDACTED] LLC is located in Woodbridge, Virginia, United States. We provide software that
+        helps businesses manage customer communications, appointment scheduling, reminders,
+        workflows, and related operations. We are a software provider. We are not a wireless
+        carrier, payment processor, or the provider of the underlying services that our customers
+        sell to their own customers.
       </p>
       <p>
         Support and legal notices: <a href="mailto:support@transovo.ai">support@transovo.ai</a>.
@@ -44,41 +49,210 @@ export default function TermsPage() {
 
       <h2>2. The Services</h2>
       <p>
-        The Services may include account and workspace management, contact and list tools, message
-        templates, campaign sending, two-way inbox features, messaging registration support,
-        reporting, and related administrative features. Features may change over time as we improve
-        the product. Some capabilities may require plan eligibility, business verification, carrier
-        approval, or third-party provider availability.
+        Transovo provides a software platform that may include, depending on your plan and
+        configuration:
+      </p>
+      <ul>
+        <li>Online appointment scheduling and public booking pages</li>
+        <li>Appointment availability, staff routing, and booking rules</li>
+        <li>AI-assisted booking, rescheduling, and scheduling assistance</li>
+        <li>SMS and email appointment reminders, confirmations, and related communications</li>
+        <li>Appointment workflows and automation</li>
+        <li>Team and staff scheduling, including round robin and shared availability</li>
+        <li>Recurring appointments, group bookings, waitlists, and custom booking questions</li>
+        <li>Connected calendar services and availability conflict checking</li>
+        <li>Customer and contact management related to appointments</li>
+        <li>Facilitation of deposits or payments through connected third-party payment processors</li>
+        <li>Business messaging, campaigns, inbox, and related communication tools</li>
+      </ul>
+      <p>
+        Features may vary by plan, workspace configuration, carrier or provider approval, connected
+        integrations, and product availability. We may add, change, or discontinue features over time.
       </p>
       <p>
-        Transovo does not guarantee that every message will be delivered, read, or answered.
-        Delivery can be affected by carrier filtering, invalid numbers, blocked contacts, content
-        rules, network conditions, user device settings, and other factors outside our control.
+        Transovo does not guarantee that every message will be delivered, every appointment will be
+        attended, every payment will succeed, or every integration will remain available. Delivery
+        and performance can be affected by carriers, processors, networks, user devices, third-party
+        outages, and other factors outside our reasonable control.
       </p>
 
-      <h2>3. Accounts and eligibility</h2>
+      <h2>3. Business and merchant responsibility</h2>
+      <p>
+        If you are a business using Transovo, you are responsible for the products and services you
+        offer to your own customers. Transovo does not provide the underlying appointment, professional,
+        medical, beauty, home-service, or other service that your customers book. You are solely
+        responsible for:
+      </p>
+      <ul>
+        <li>Your service descriptions, pricing, taxes, and availability</li>
+        <li>Your cancellation, refund, rescheduling, and no-show policies</li>
+        <li>Compliance with laws and regulations applicable to your business and industry</li>
+        <li>Customer disputes relating to the actual services you provide</li>
+        <li>The accuracy of information you publish in booking pages, reminders, and communications</li>
+      </ul>
+
+      <h2>4. Appointments</h2>
+      <p>
+        Businesses configure their own appointment types, availability, staff, locations, prices,
+        booking questions, policies, and payment requirements. Customers may book, cancel, or
+        reschedule subject to the policies configured by the business and the functionality enabled
+        in the Services.
+      </p>
+      <p>
+        Transovo provides software tools to manage appointments and related communications. We do not
+        guarantee attendance, revenue, staffing outcomes, calendar accuracy in every circumstance, or
+        customer behavior.
+      </p>
+
+      <h2>5. AI features</h2>
+      <p>
+        Transovo may use artificial intelligence to interpret natural-language scheduling requests,
+        assist with booking, rescheduling, cancellation, and related customer interactions. AI output
+        is assistive and may be incomplete or inaccurate. Authoritative availability, booking rules,
+        payment requirements, and confirmation status come from the scheduling system and configured
+        business settings, not from generated AI text alone.
+      </p>
+      <p>
+        You remain responsible for reviewing important business and customer information. Transovo may
+        use third-party AI service providers to process requests as reasonably necessary to provide
+        AI-enabled features. AI features do not replace your responsibility for lawful messaging,
+        consent, pricing, and service delivery.
+      </p>
+
+      <h2>6. SMS and messaging terms</h2>
+      <p>
+        When a person affirmatively opts in to receive SMS through a disclosed use case, they may
+        receive appointment-related or other specifically disclosed messages from the applicable
+        business using Transovo&apos;s platform, or from Transovo for account verification and
+        service-related notices as described in these Terms and our Privacy Policy.
+      </p>
+      <ul>
+        <li>Message frequency may vary.</li>
+        <li>Message and data rates may apply.</li>
+        <li>Reply STOP to opt out of the applicable messaging program.</li>
+        <li>Reply HELP for help.</li>
+        <li>
+          Consent to SMS is not a condition of purchasing goods or services unless permitted or
+          required by law for a specific disclosed program.
+        </li>
+      </ul>
+      <p>
+        SMS consent is limited to the use case disclosed at opt-in. Promotional or marketing SMS
+        requires the appropriate consent and disclosures. Businesses using Transovo must comply with
+        applicable messaging laws, carrier rules, CTIA and provider requirements, and Transovo
+        policies.
+      </p>
+      <p>
+        You may not use the Services for spam, purchased lists, unlawful unsolicited messaging, or
+        messaging without valid consent. Providing a phone number alone does not automatically
+        constitute consent to marketing or other non-disclosed messaging.
+      </p>
+
+      <h3>Account phone verification and one-time SMS codes</h3>
+      <p>
+        {BRAND_NAME} may send one-time verification codes when users request them for sign-in,
+        phone-number verification, or password recovery. Codes are sent only after a user actively
+        requests them. Sample verification message: &ldquo;Your {BRAND_NAME} verification code is
+        123456. This code expires in 10 minutes. Do not share this code with anyone.&rdquo; These
+        messages are transactional and are not used for unrelated advertising.
+      </p>
+
+      <h2>7. Email communications</h2>
+      <p>
+        Email confirmations, reminders, and other service-related messages may be sent as part of
+        appointment and account functionality. Marketing email requires applicable consent or another
+        lawful basis. Businesses are responsible for lawful recipient lists, content, and unsubscribe
+        compliance for messages they send through the Services.
+      </p>
+
+      <h2>8. Appointment payments</h2>
+      <p>
+        Transovo may allow businesses to connect third-party payment processors such as Stripe and
+        Square to collect deposits or full payments in connection with appointments. In that model:
+      </p>
+      <ul>
+        <li>The connected business is the merchant or provider of the underlying service.</li>
+        <li>Payment processing is performed by the selected third-party processor, not by Transovo.</li>
+        <li>Transovo does not store raw card numbers or card security codes.</li>
+        <li>
+          Businesses may configure deposit or full-payment requirements subject to processor and
+          account status.
+        </li>
+        <li>
+          Processor terms, fees, verification, settlement timing, chargebacks, and restrictions apply
+          separately.
+        </li>
+        <li>
+          Transovo is not responsible for processor holds, account restrictions, settlement delays,
+          chargebacks, or processor outages except to the extent required by law.
+        </li>
+        <li>
+          Refund and cancellation obligations are governed by the business&apos;s stated policies and
+          applicable law.
+        </li>
+        <li>
+          A business authorizes Transovo to perform only the payment-related actions reasonably
+          necessary to provide the connected integration, such as creating appointment-related
+          checkout sessions or payment records permitted by the connection.
+        </li>
+      </ul>
+      <p>
+        Merchant appointment payments are separate from fees you pay Transovo for subscription or
+        platform access. Paying Transovo for software does not itself complete an appointment payment
+        to a business&apos;s customer.
+      </p>
+
+      <h3>Stripe</h3>
+      <p>
+        Businesses may connect their own Stripe account through Stripe Connect. Stripe may require
+        identity and business verification. Stripe&apos;s own terms and privacy practices apply. By
+        connecting Stripe, a business authorizes Transovo to create and manage appointment-related
+        payment transactions permitted by the connection.
+      </p>
+
+      <h3>Square</h3>
+      <p>
+        Businesses may connect their own Square seller account through OAuth. The merchant explicitly
+        authorizes the permissions requested during connection. Transovo accesses only the Square
+        resources required to provide the enabled payment functionality. Square&apos;s own terms and
+        privacy practices apply.
+      </p>
+
+      <h2>9. Calendar integrations</h2>
+      <p>
+        You may authorize supported calendar providers. Where enabled, Transovo may read busy/free
+        information and create or update events for scheduling and conflict checking. You control
+        connected calendars and permissions. Third-party calendar provider terms also apply.
+      </p>
+
+      <h2>10. Accounts and eligibility</h2>
       <p>
         You must provide accurate registration information and keep it up to date. You are
-        responsible for safeguarding login credentials and for all activity under your account. Notify
-        us promptly at <a href="mailto:support@transovo.ai">support@transovo.ai</a> if you believe
-        your account has been compromised.
+        responsible for safeguarding login credentials and for activity under your account. Notify us
+        promptly at <a href="mailto:support@transovo.ai">support@transovo.ai</a> if you believe your
+        account has been compromised.
       </p>
       <p>
         You must be able to form a binding contract under applicable law. The Services are intended
-        for business use, not for personal consumer texting as a substitute for a personal phone
-        number.
+        for business use unless a specific product feature clearly states otherwise.
       </p>
 
-      <h2>4. Fees and billing</h2>
+      <h2>11. Fees, billing, trials, and subscriptions</h2>
       <p>
-        Paid plans, usage charges, number fees, or other pricing terms may apply. If you purchase a
-        paid plan, you agree to pay the fees described at the time of purchase or in your order.
-        Fees are generally non-refundable except where required by law or expressly stated by
-        Transovo in writing. We may change pricing with notice for future billing periods. Failure
-        to pay may result in suspension or termination of access.
+        Paid plans, usage charges, number fees, or other pricing terms may apply to your Transovo
+        subscription or platform usage. If you purchase a paid plan, you agree to pay the fees
+        described at checkout or in your order. Fees are generally non-refundable except where
+        required by law or expressly stated by Transovo in writing. We may change pricing with
+        notice for future billing periods. Failure to pay may result in suspension or termination.
+      </p>
+      <p>
+        Free trials, promotional access, or feature availability may vary by plan and
+        configuration. Any trial or free-access terms presented at signup or in-product apply to your
+        account. Merchant appointment payments collected through connected processors are not
+        Transovo subscription payments.
       </p>
 
-      <h2>5. Messaging compliance and your responsibilities</h2>
+      <h2>12. Messaging compliance and your responsibilities</h2>
       <p>You are solely responsible for:</p>
       <ul>
         <li>The content of messages you send through the Services</li>
@@ -89,172 +263,143 @@ export default function TermsPage() {
         <li>Ensuring your use matches the campaign and brand information you submit for verification</li>
       </ul>
       <p>
-        You may only message people who agreed to receive texts from your business. Purchased lists,
-        scraped phone numbers, and unsolicited mass texting are prohibited. Messages must identify
-        your business and provide a simple way to opt out. Consent must not be a condition of
-        purchase where prohibited by law.
-      </p>
-      <p>
-        U.S. application-to-person messaging often requires carrier or registry verification.
-        Messaging access may remain limited until verification is complete. Transovo may collect
-        business information to support that process, but approval decisions rest with carriers,
-        registries, and related partners.
+        U.S. application-to-person messaging may require carrier or registry verification. Messaging
+        access may remain limited until verification is complete.
       </p>
 
-      <h3>SMS phone verification and consent (2FA)</h3>
-      <p>
-        {BRAND_NAME} sends one-time verification codes to users who request them when signing in,
-        verifying their phone number, or resetting their password. Users enter their mobile phone
-        number during account registration, sign-in verification, phone-number verification (see{" "}
-        <a href="/sms-opt-in">/sms-opt-in</a>), or password recovery (
-        <a href="/forgot-password">/forgot-password</a>). Before requesting the code, users are
-        informed that {BRAND_NAME} will send a one-time verification code by SMS. The message is sent
-        only after the user actively requests it.
-      </p>
-      <p>
-        Sample verification message: &ldquo;Your {BRAND_NAME} verification code is 123456. This code
-        expires in 10 minutes. Do not share this code with anyone.&rdquo; Opt-in disclosure: &ldquo;
-        {BRAND_NAME}: You requested SMS verification codes for your account. Message frequency
-        varies. Msg &amp; data rates may apply. Reply STOP to opt out or HELP for help.&rdquo; Help
-        reply: &ldquo;{BRAND_NAME} Support: For assistance, visit https://transovo.ai or email
-        support@transovo.ai. Reply STOP to opt out.&rdquo;
-      </p>
-      <p>
-        Messages are transactional and are sent only after a user enters their phone number and
-        requests a verification code. The number will not be used for advertising, promotional
-        campaigns, or unsolicited messages. Consent to receive these codes is not a condition of any
-        purchase. Opt-in keywords are not used for this 2FA program (N/A). Age-gated content: No.
-      </p>
-
-      <h2>6. Acceptable use</h2>
+      <h2>13. Acceptable use and prohibited conduct</h2>
       <p>
         You must follow our <a href="/acceptable-use">Acceptable Use Policy</a>. Without limiting
-        that policy, you may not use the Services to send spam, phishing, deceptive offers,
-        harassment, unlawful content, or content prohibited by carriers. You may not attempt to
-        bypass rate limits, security controls, or opt-out systems. We may investigate suspected
-        violations and suspend or terminate access when we reasonably believe these Terms or the
-        Acceptable Use Policy have been violated.
+        that policy, you may not use the Services to:
+      </p>
+      <ul>
+        <li>Violate law or third-party rights</li>
+        <li>Send spam, phishing, harassment, or deceptive content</li>
+        <li>Use purchased, scraped, or unlawfully obtained contact lists</li>
+        <li>Commit fraud or impersonate others</li>
+        <li>Access accounts or data without authorization</li>
+        <li>Abuse payment services or attempt to circumvent processor rules</li>
+        <li>Interfere with the Services or bypass consent, opt-out, or security controls</li>
+        <li>Use malicious automation or attempt unauthorized access to integrations</li>
+      </ul>
+      <p>
+        We may investigate suspected violations and suspend or terminate access when we reasonably
+        believe these Terms or the Acceptable Use Policy have been violated.
       </p>
 
-      <h2>7. Customer data</h2>
+      <h2>14. Customer data</h2>
       <p>
-        As between you and Transovo, you retain rights to the contact lists, message content, and
-        other business data you submit to the Services (“Customer Data”). You grant Transovo a
-        limited license to host, process, transmit, and display Customer Data as needed to provide
-        and secure the Services, support messaging delivery, and comply with law.
+        As between you and Transovo, you retain rights to the contact lists, appointment records,
+        message content, and other business data you submit to the Services (&ldquo;Customer
+        Data&rdquo;). You grant Transovo a limited license to host, process, transmit, and display
+        Customer Data as needed to provide, secure, and support the Services and comply with law.
       </p>
       <p>
         You represent that you have all rights and consents needed to upload Customer Data and to
-        send messages to the recipients you select. End customers’ messaging preferences and
-        personal information remain your responsibility as the business communicating with them.
+        communicate with the people you message or book. End-customer preferences and personal
+        information remain your responsibility as the business communicating with them.
       </p>
 
-      <h2>8. Intellectual property</h2>
+      <h2>15. Third-party services</h2>
       <p>
-        The Services, including software, interfaces, branding, documentation, and related materials,
-        are owned by Transovo or its licensors and are protected by intellectual property laws. We
-        grant you a limited, non-exclusive, non-transferable right to use the Services for your
-        internal business purposes during your subscription or account term, subject to these Terms.
-        You may not copy, reverse engineer, resell, or create derivative works from the Services
-        except as allowed by law or written agreement with us.
+        The Services may depend on third-party providers, including payment processors such as Stripe
+        and Square; telecommunications carriers and messaging platforms; email providers; calendar
+        providers; AI providers; hosting and infrastructure vendors; and verification or registry
+        partners. Those parties have their own terms, privacy practices, and availability
+        constraints. Transovo is not responsible for outages, filtering, account decisions, or
+        actions by third parties outside our reasonable control.
       </p>
 
-      <h2>9. Third-party services</h2>
+      <h2>16. Intellectual property</h2>
       <p>
-        The Services may depend on third-party providers, including hosting platforms, email
-        services, messaging gateways, and wireless carriers. Those parties have their own terms and
-        availability constraints. Transovo is not responsible for outages, filtering, or decisions
-        made by third parties outside our reasonable control.
+        The Services, including software, interfaces, branding, documentation, and related
+        materials, are owned by Transovo or its licensors and are protected by intellectual property
+        laws. We grant you a limited, non-exclusive, non-transferable right to use the Services for
+        your internal business purposes during your subscription or account term, subject to these
+        Terms.
       </p>
 
-      <h2>10. Confidentiality</h2>
+      <h2>17. Confidentiality</h2>
       <p>
         Each party may receive non-public information from the other. The receiving party will use
         that information only to perform under these Terms and will protect it with reasonable care.
-        Confidentiality obligations do not apply to information that is public through no fault of
-        the receiving party, independently developed, or rightfully received from another source
-        without confidentiality duty.
       </p>
 
-      <h2>11. Disclaimers</h2>
+      <h2>18. Disclaimers</h2>
       <p>
-        THE SERVICES ARE PROVIDED “AS IS” AND “AS AVAILABLE.” TO THE MAXIMUM EXTENT PERMITTED BY
-        LAW, TRANSOVO DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING
-        IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
-        NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, ERROR-FREE, OR
-        THAT EVERY MESSAGE WILL BE DELIVERED OR FREE FROM FILTERING.
+        THE SERVICES ARE PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE.&rdquo; TO THE MAXIMUM
+        EXTENT PERMITTED BY LAW, TRANSOVO DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR
+        STATUTORY, INCLUDING IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+        TITLE, AND NON-INFRINGEMENT. WE DO NOT WARRANT UNINTERRUPTED OR ERROR-FREE OPERATION, PERFECT
+        AI OUTPUT, OR THAT EVERY MESSAGE OR PAYMENT WILL SUCCEED.
       </p>
 
-      <h2>12. Limitation of liability</h2>
+      <h2>19. Limitation of liability</h2>
       <p>
         TO THE MAXIMUM EXTENT PERMITTED BY LAW, TRANSOVO AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AND
-        AGENTS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY,
-        OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUE, DATA, OR GOODWILL, ARISING OUT OF OR
-        RELATED TO THESE TERMS OR THE SERVICES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+        AGENTS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR
+        PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUE, DATA, OR GOODWILL, ARISING OUT OF OR
+        RELATED TO THESE TERMS OR THE SERVICES.
       </p>
       <p>
-        TO THE MAXIMUM EXTENT PERMITTED BY LAW, TRANSOVO’S TOTAL LIABILITY FOR ALL CLAIMS ARISING OUT
-        OF OR RELATED TO THESE TERMS OR THE SERVICES WILL NOT EXCEED THE AMOUNTS YOU PAID TO
-        TRANSOVO FOR THE SERVICES IN THE TWELVE (12) MONTHS BEFORE THE EVENT GIVING RISE TO THE
-        CLAIM. IF YOU HAVE NOT PAID ANY AMOUNTS, TRANSOVO’S TOTAL LIABILITY WILL NOT EXCEED ONE
-        HUNDRED U.S. DOLLARS (US $100).
+        TO THE MAXIMUM EXTENT PERMITTED BY LAW, TRANSOVO&apos;S TOTAL LIABILITY FOR ALL CLAIMS
+        ARISING OUT OF OR RELATED TO THESE TERMS OR THE SERVICES WILL NOT EXCEED THE AMOUNTS YOU PAID
+        TO TRANSOVO FOR THE SERVICES IN THE TWELVE (12) MONTHS BEFORE THE EVENT GIVING RISE TO THE
+        CLAIM, OR ONE HUNDRED U.S. DOLLARS (US $100) IF YOU HAVE NOT PAID ANY AMOUNTS.
       </p>
 
-      <h2>13. Indemnification</h2>
+      <h2>20. Indemnification</h2>
       <p>
         You will defend, indemnify, and hold harmless Transovo and its officers, directors,
-        employees, and agents from and against claims, damages, losses, liabilities, costs, and
-        expenses (including reasonable attorneys’ fees) arising out of or related to your Customer
-        Data, your messages, your consent practices, your violation of law or carrier rules, or your
-        breach of these Terms or the Acceptable Use Policy.
+        employees, and agents from claims, damages, losses, liabilities, costs, and expenses
+        (including reasonable attorneys&apos; fees) arising out of or related to your Customer Data,
+        your messages, your appointment or payment practices, your consent practices, your violation
+        of law or carrier rules, or your breach of these Terms or the Acceptable Use Policy.
       </p>
 
-      <h2>14. Suspension and termination</h2>
+      <h2>21. Suspension and termination</h2>
       <p>
-        You may stop using the Services at any time. We may suspend or terminate access if you
-        breach these Terms, if required by a carrier or provider, if needed to protect the Services
-        or other users, or if your account remains inactive or unpaid. Upon termination, your right
-        to use the Services ends. Provisions that by their nature should survive termination will
-        survive, including ownership, confidentiality, disclaimers, limitations of liability, and
-        indemnification.
+        You may stop using the Services at any time. We may suspend or terminate access if you breach
+        these Terms, if required by a carrier, processor, or provider, if needed to protect the
+        Services or other users, or if your account remains inactive or unpaid. Upon termination,
+        your right to use the Services ends. Provisions that by their nature should survive
+        termination will survive.
       </p>
 
-      <h2>15. Changes to the Services or Terms</h2>
+      <h2>22. Changes to the Services or Terms</h2>
       <p>
         We may update the Services and these Terms from time to time. When we update these Terms, we
-        will revise the effective date above and may provide additional notice. If you continue
-        using the Services after the updated Terms take effect, you agree to the updated Terms. If
-        you do not agree, you must stop using the Services.
+        will revise the effective date above and may provide additional notice. Continued use after
+        the updated Terms take effect constitutes acceptance. If you do not agree, you must stop
+        using the Services.
       </p>
 
-      <h2>16. Governing law</h2>
+      <h2>23. Governing law</h2>
       <p>
         These Terms are governed by the laws of the Commonwealth of Virginia, without regard to
-        conflict-of-law rules. Subject to applicable law, exclusive venue for disputes arising out
-        of these Terms will lie in the state or federal courts located in Virginia, and you consent
-        to personal jurisdiction there.
+        conflict-of-law rules. Subject to applicable law, exclusive venue for disputes arising out of
+        these Terms will lie in the state or federal courts located in Virginia, and you consent to
+        personal jurisdiction there.
       </p>
 
-      <h2>17. Miscellaneous</h2>
+      <h2>24. Miscellaneous</h2>
       <p>
         These Terms are the entire agreement between you and Transovo regarding the Services and
-        supersede prior or contemporaneous agreements on that subject. If any provision is found
-        unenforceable, the remaining provisions remain in effect. Our failure to enforce a provision
-        is not a waiver. You may not assign these Terms without our prior written consent. We may
-        assign these Terms in connection with a merger, acquisition, corporate reorganization, or
-        sale of assets. Notices to Transovo should be sent to{" "}
-        <a href="mailto:support@transovo.ai">support@transovo.ai</a>.
+        supersede prior agreements on that subject. If any provision is found unenforceable, the
+        remaining provisions remain in effect. You may not assign these Terms without our prior
+        written consent. We may assign these Terms in connection with a merger, acquisition,
+        reorganization, or sale of assets.
       </p>
 
-      <h2>18. Contact</h2>
+      <h2>25. Contact</h2>
       <p>
-        Transovo AI LLC
+        [REDACTED] LLC
         <br />
         Woodbridge, Virginia, United States
         <br />
         Email: <a href="mailto:support@transovo.ai">support@transovo.ai</a>
         <br />
-        Website: <a href="https://transovo.ai">https://transovo.ai</a>
+        Website: <a href={publicSiteUrl || "/"}>{publicSiteHost}</a>
       </p>
     </LegalShell>
   );

@@ -16,6 +16,9 @@ export const APPOINTMENT_WORKFLOW_TRIGGERS = [
   "booking_approved",
   "booking_rejected",
   "payment_received",
+  "payment_failed",
+  "deposit_paid",
+  "balance_due",
   "waitlist_slot_available",
 ] as const;
 
@@ -61,7 +64,10 @@ export type WorkflowConditionOperator =
   | "was_rescheduled"
   | "appointment_type_equals"
   | "appointment_type_not_equals"
-  | "payment_status_equals";
+  | "payment_status_equals"
+  | "deposit_paid"
+  | "balance_due"
+  | "payment_failed";
 
 export type WorkflowCondition = {
   id: string;

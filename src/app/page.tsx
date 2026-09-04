@@ -1,14 +1,13 @@
-import { ReceptionistLandingPage } from "@/components/landing/receptionist/receptionist-landing-page";
-import { BRAND_NAME } from "@/lib/brand";
+import { AppointmentsLandingPage } from "@/components/landing/appointments/appointments-landing-page";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: {
-      absolute: `AI Phone Receptionist — Never Miss a Call | ${BRAND_NAME}`,
+      absolute: "Book More Appointments, Reduce No-Shows | Transovo",
     },
     description:
-      "Transovo answers business calls with AI, handles FAQs, takes messages, transfers callers, and books appointments 24/7.",
+      "AI-assisted booking, automatic SMS and email reminders, appointment workflows, team scheduling, and payments — Transovo manages the full appointment lifecycle for service businesses.",
     alternates: {
       canonical: "/",
     },
@@ -16,5 +15,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function HomePage() {
-  return <ReceptionistLandingPage />;
+  return <AppointmentsLandingPage />;
 }

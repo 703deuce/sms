@@ -1,13 +1,14 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
-import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
-import { createId } from "@/lib/supabase/id";
+/**
+ * @deprecated Use merchant-payments service — this module delegates to Stripe Connect.
+ * Platform SaaS billing remains in src/lib/payments/stripe-billing-webhook.ts
+ */
 import type { PaymentRequirement } from "@/lib/appointments/types";
-
-function stripeConfigured() {
-  return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
-}
+import { resolvePaymentProvider } from "@/lib/merchant-payments/amounts";
+import { createMerchantAppointmentPayment } from "@/lib/merchant-payments/service";
+import { MERCHANT_PAYMENT_TRANSACTION_TYPE } from "@/lib/merchant-payments/types";
+import { handleStripeConnectCheckoutCompleted } from "@/lib/merchant-payments/stripe-connect";
 
 export type AppointmentCheckoutInput = {
   workspaceId: string;
@@ -15,85 +16,44 @@ export type AppointmentCheckoutInput = {
   payment: PaymentRequirement;
   customerEmail?: string;
   description?: string;
+  idempotencyKey?: string;
 };
 
 export async function createAppointmentCheckoutSession(input: AppointmentCheckoutInput) {
-  if (!stripeConfigured()) {
+  const provider = resolvePaymentProvider(input.payment);
+  if (!provider) {
     return {
       configured: false,
       url: null,
       sessionId: null,
-      error: "Stripe is not configured. Set STRIPE_SECRET_KEY to enable appointment payments.",
+      error: "No payment provider configured on this appointment type",
     };
   }
 
-  const amountCents =
-    input.payment.mode === "deposit"
-      ? input.payment.depositCents || Math.round((input.payment.priceCents || 0) * ((input.payment.depositPercent || 0) / 100))
-      : input.payment.priceCents;
-
-  if (!amountCents || amountCents < 50) {
-    throw new Error("Payment amount must be at least 50 cents");
-  }
-
-  const sessionId = createId();
-  const base = getAppBaseUrl();
-  const key = process.env.STRIPE_SECRET_KEY!;
-
-  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+  const result = await createMerchantAppointmentPayment({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    payment: {
+      mode: input.payment.mode as "deposit" | "full",
+      priceCents: input.payment.priceCents || 0,
+      depositCents: input.payment.depositCents,
+      depositPercent: input.payment.depositPercent,
+      currency: input.payment.currency,
+      provider,
     },
-    body: new URLSearchParams({
-      mode: "payment",
-      success_url: `${base}/book/payment/success?session_id={CHECKOUT_SESSION_ID}&appointment=${input.appointmentId}`,
-      cancel_url: `${base}/book/payment/canceled?appointment=${input.appointmentId}`,
-      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
-      "line_items[0][quantity]": "1",
-      "line_items[0][price_data][currency]": (input.payment.currency || "usd").toLowerCase(),
-      "line_items[0][price_data][unit_amount]": String(amountCents),
-      "line_items[0][price_data][product_data][name]":
-        input.description || "Appointment payment",
-      "metadata[appointmentId]": input.appointmentId,
-      "metadata[workspaceId]": input.workspaceId,
-      "metadata[paymentMode]": input.payment.mode,
-      "metadata[checkoutSessionId]": sessionId,
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Stripe checkout failed: ${errText.slice(0, 200)}`);
-  }
-
-  const json = (await res.json()) as { id: string; url: string };
-
-  const prisma = getPrisma();
-  const row = await prisma.voiceAppointment.findFirst({
-    where: { id: input.appointmentId, workspaceId: input.workspaceId },
-  });
-  const existingMeta = (row?.metadata || {}) as Record<string, unknown>;
-
-  await prisma.voiceAppointment.update({
-    where: { id: input.appointmentId },
-    data: {
-      metadata: {
-        ...existingMeta,
-        paymentStatus: "pending",
-        paymentCheckoutSessionId: json.id,
-        paymentAmountCents: amountCents,
-        paymentMode: input.payment.mode,
-      } as object,
-    },
+    customerEmail: input.customerEmail,
+    description: input.description,
+    idempotencyKey: input.idempotencyKey,
   });
 
   return {
-    configured: true,
-    url: json.url,
-    sessionId: json.id,
-    error: null,
+    configured: result.configured,
+    url: result.checkoutUrl,
+    sessionId: result.sessionId,
+    square: result.square,
+    paymentRecordId: result.paymentRecordId,
+    provider: result.provider,
+    error: result.error,
   };
 }
 
@@ -103,82 +63,64 @@ export async function markAppointmentPaid(
   amountCents: number,
   stripeSessionId: string,
 ) {
-  const prisma = getPrisma();
-  const row = await prisma.voiceAppointment.findFirst({
-    where: { id: appointmentId, workspaceId },
-  });
-  if (!row) return false;
-
-  const meta = (row.metadata || {}) as Record<string, unknown>;
-  if (meta.paymentStatus === "paid" && meta.stripeSessionId === stripeSessionId) {
-    return true;
-  }
-
-  await prisma.voiceAppointment.update({
-    where: { id: appointmentId },
-    data: {
-      metadata: {
-        ...meta,
-        paymentStatus: "paid",
-        paymentAmountCents: amountCents,
-        stripeSessionId,
-        paidAt: new Date().toISOString(),
-      } as object,
-    },
-  });
-
-  try {
-    const { emitWorkflowTrigger } = await import("@/lib/appointment-workflows/triggers");
-    await emitWorkflowTrigger({
+  const { markAppointmentPaymentSucceeded } = await import("@/lib/merchant-payments/appointment-lifecycle");
+  const { getPaymentByAppointment } = await import("@/lib/merchant-payments/payment-record-store");
+  const record = await getPaymentByAppointment(workspaceId, appointmentId);
+  return markAppointmentPaymentSucceeded(
+    workspaceId,
+    appointmentId,
+    record || {
+      id: "",
       workspaceId,
       appointmentId,
-      trigger: "payment_received",
-    });
-  } catch {
-    // workflow trigger optional
-  }
-
-  return true;
+      provider: "STRIPE",
+      status: "pending",
+      paymentMode: "full",
+      currency: "usd",
+      totalPriceCents: amountCents,
+      amountDueCents: amountCents,
+      amountPaidCents: 0,
+      balanceDueCents: 0,
+      providerPaymentId: null,
+      providerSessionId: stripeSessionId,
+      idempotencyKey: null,
+      refundAmountCents: 0,
+      refundStatus: null,
+      paidAt: null,
+      metadata: null,
+    },
+    stripeSessionId,
+    amountCents,
+  );
 }
 
 export function isAppointmentCheckoutMetadata(metadata: Record<string, string | undefined>) {
-  return Boolean(metadata.appointmentId && metadata.paymentMode);
+  return metadata.transaction_type === MERCHANT_PAYMENT_TRANSACTION_TYPE;
 }
 
 export async function handleAppointmentCheckoutCompleted(
-  session: { id: string; metadata?: Record<string, string | null | undefined> | null; amount_total?: number | null },
+  session: { id: string; metadata?: Record<string, string | null | undefined> | null; amount_total?: number | null; payment_intent?: string | null },
 ) {
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
-  const appointmentId = metadata.appointmentId;
-  const workspaceId = metadata.workspaceId;
-  if (!appointmentId || !workspaceId) {
-    return { handled: false, skipped: true };
+  if (metadata.transaction_type === MERCHANT_PAYMENT_TRANSACTION_TYPE) {
+    return handleStripeConnectCheckoutCompleted(session);
   }
-
-  const amountCents = session.amount_total ?? Number(metadata.paymentAmountCents || 0);
-  await markAppointmentPaid(workspaceId, appointmentId, amountCents, session.id);
-  return { handled: true, appointmentId, workspaceId };
+  // Legacy platform-account appointment checkouts (pre-Connect migration)
+  if (metadata.appointmentId && metadata.paymentMode && !metadata.transaction_type) {
+    const appointmentId = metadata.appointmentId;
+    const workspaceId = metadata.workspaceId;
+    if (!appointmentId || !workspaceId) return { handled: false, skipped: true };
+    const amountCents = session.amount_total ?? Number(metadata.paymentAmountCents || 0);
+    await markAppointmentPaid(workspaceId, appointmentId, amountCents, session.id);
+    return { handled: true, appointmentId, workspaceId };
+  }
+  return { handled: false, skipped: true };
 }
 
 export async function handleAppointmentCheckoutExpired(
   workspaceId: string,
   appointmentId: string,
 ) {
-  const prisma = getPrisma();
-  const row = await prisma.voiceAppointment.findFirst({
-    where: { id: appointmentId, workspaceId },
-  });
-  if (!row) return;
-  const meta = (row.metadata || {}) as Record<string, unknown>;
-  if (meta.paymentStatus === "paid") return;
-  await prisma.voiceAppointment.update({
-    where: { id: appointmentId },
-    data: {
-      metadata: {
-        ...meta,
-        paymentStatus: "abandoned",
-        paymentAbandonedAt: new Date().toISOString(),
-      } as object,
-    },
-  });
+  const { expirePendingPaymentAppointment } = await import("@/lib/merchant-payments/appointment-lifecycle");
+  await expirePendingPaymentAppointment(workspaceId, appointmentId);
 }

@@ -52,6 +52,7 @@ export type AppointmentTypeFormState = {
   cancellationPolicy: CancellationPolicy;
   reschedulePolicy: ReschedulePolicy;
   paymentMode: "none" | "deposit" | "full";
+  paymentProvider: "stripe" | "square" | "";
   paymentPriceCents: number;
   paymentDepositCents: number;
   paymentDepositPercent: number;
@@ -82,6 +83,7 @@ export type AppointmentTypesPageModel = {
   copiedId: string | null;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
+  connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
 };
 
 export type AppointmentTypesPageActions = {

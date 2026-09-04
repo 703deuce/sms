@@ -100,6 +100,8 @@ export type ReschedulePolicy = {
 
 export type PaymentRequirement = {
   mode: "none" | "deposit" | "full";
+  /** Connected merchant processor — funds settle to business, not Transovo */
+  provider?: "stripe" | "square";
   priceCents?: number;
   depositCents?: number;
   depositPercent?: number;
@@ -241,7 +243,19 @@ export type AppointmentMetadata = {
   locationId?: string;
   staffId?: string;
   paymentStatus?: string;
+  paymentProvider?: string;
   paymentAmountCents?: number;
+  totalPriceCents?: number;
+  depositPaidCents?: number;
+  balanceDueCents?: number;
+  amountDueCents?: number;
+  merchantPaymentId?: string;
+  providerPaymentId?: string;
+  providerSessionId?: string;
+  refundAmountCents?: number;
+  refundStatus?: string;
+  paymentHoldExpiresAt?: string;
+  paymentAbandonedAt?: string;
   recurringSeriesId?: string;
   recurringOccurrenceIndex?: number;
   attendeeCount?: number;
@@ -251,8 +265,7 @@ export type AppointmentMetadata = {
   [key: string]: unknown;
 };
 
-export const DEFAULT_SMS_CONSENT_TEXT =
-  "I agree to receive appointment confirmations and reminders by SMS. Message and data rates may apply. Reply STOP to opt out.";
+export { DEFAULT_SMS_CONSENT_TEXT } from "./sms-consent-disclosure";
 
 export const DEFAULT_REMINDER_TEMPLATES = {
   confirmation:

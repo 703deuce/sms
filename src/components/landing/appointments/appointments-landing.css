@@ -1,0 +1,671 @@
+/* Transovo Appointments marketing homepage — extends landing.css */
+
+.appt-landing .appt-hero {
+  padding: 5.25rem 0 4.75rem;
+  text-align: center;
+}
+
+.appt-landing .appt-hero-title {
+  font-size: clamp(2.25rem, 4.2vw, 3.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+  max-width: 44rem;
+  margin: 0 auto 1.25rem;
+  text-wrap: balance;
+}
+
+.appt-landing .appt-hero-title-line {
+  display: block;
+}
+
+.appt-landing .appt-hero-title-accent {
+  color: var(--lp-navy);
+}
+
+.appt-landing .appt-hero-copy {
+  max-width: 38rem;
+  margin-inline: auto;
+  font-size: 1.1rem;
+  line-height: 1.72;
+}
+
+.appt-landing .appt-hero-actions {
+  justify-content: center;
+  margin-bottom: 0.85rem;
+}
+
+.appt-landing .appt-trust-line {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.appt-landing .appt-hero-visual {
+  margin-top: 3.75rem;
+  position: relative;
+}
+
+/* Capability credibility strip — no fake logos */
+.appt-landing .appt-trust-bar {
+  padding: 2.75rem 0;
+  border-top: 1px solid #e8eef7;
+  border-bottom: 1px solid #e8eef7;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.appt-landing .appt-trust-inner {
+  text-align: center;
+  max-width: 52rem;
+}
+
+.appt-landing .appt-trust-heading {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.appt-landing .appt-trust-capabilities {
+  margin: 0;
+  font-size: clamp(0.95rem, 1.6vw, 1.125rem);
+  font-weight: 600;
+  color: var(--lp-navy);
+  letter-spacing: -0.015em;
+  line-height: 1.5;
+}
+
+.appt-landing .appt-feature-grid {
+  display: grid;
+  gap: 1.15rem;
+  grid-template-columns: 1fr;
+}
+
+.appt-landing .appt-feature-card {
+  background: white;
+  border: 1px solid #e8eef7;
+  border-radius: 18px;
+  padding: 1.6rem 1.4rem;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 0.04);
+  transition: transform 0.2s, box-shadow 0.2s;
+  height: 100%;
+}
+
+.appt-landing .appt-feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgb(15 23 42 / 0.08);
+}
+
+.appt-landing .appt-feature-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--lp-navy);
+  letter-spacing: -0.02em;
+}
+
+.appt-landing .appt-feature-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--lp-muted);
+  line-height: 1.6;
+}
+
+.appt-landing .appt-deep {
+  padding: 5.5rem 0;
+}
+
+.appt-landing .appt-deep-grid {
+  display: grid;
+  gap: 3.25rem;
+  align-items: center;
+}
+
+.appt-landing .appt-deep.reverse .appt-deep-grid {
+  direction: rtl;
+}
+
+.appt-landing .appt-deep.reverse .appt-deep-grid > * {
+  direction: ltr;
+}
+
+.appt-landing .appt-deep-tag {
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lp-blue);
+  margin-bottom: 0.85rem;
+}
+
+.appt-landing .appt-deep h2 {
+  font-size: clamp(1.6rem, 2.8vw, 2.15rem);
+  margin-bottom: 0.85rem;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+}
+
+.appt-landing .appt-deep-lead {
+  color: var(--lp-muted);
+  font-size: 1.02rem;
+  line-height: 1.72;
+  margin: 0 0 1.25rem;
+}
+
+.appt-landing .appt-bullet-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.appt-landing .appt-bullet-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.96rem;
+  color: #475569;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.appt-landing .appt-bullet-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--lp-blue);
+  margin-top: 0.55rem;
+  flex-shrink: 0;
+}
+
+.appt-landing .appt-deep-dark {
+  background: linear-gradient(165deg, #0b1220 0%, #111827 45%, #0f172a 100%);
+  color: white;
+}
+
+.appt-landing .appt-deep-dark .appt-deep-tag {
+  color: #a5b4fc;
+}
+
+.appt-landing .appt-deep-dark h2 {
+  color: white;
+}
+
+.appt-landing .appt-deep-dark .appt-deep-lead,
+.appt-landing .appt-deep-dark .appt-bullet-list li {
+  color: #cbd5e1;
+}
+
+.appt-landing .appt-industry-grid {
+  display: grid;
+  gap: 1.15rem;
+  grid-template-columns: 1fr;
+}
+
+.appt-landing .appt-industry-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1.55rem 1.4rem 1.5rem;
+  box-shadow: 0 4px 16px rgb(15 23 42 / 0.05);
+  border-top: 3px solid #c7d2fe;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.appt-landing .appt-industry-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 0.08);
+  border-top-color: var(--lp-blue);
+}
+
+.appt-landing .appt-industry-card h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.05rem;
+  color: var(--lp-navy);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.appt-landing .appt-industry-card p {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--lp-muted);
+  line-height: 1.6;
+}
+
+.appt-landing .appt-compare-wrap {
+  background: white;
+  border: 1px solid #e8eef7;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgb(15 23 42 / 0.06);
+}
+
+.appt-landing .appt-compare-row {
+  display: grid;
+  grid-template-columns: 1.5fr 0.7fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  align-items: center;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.appt-landing .appt-compare-row:last-child {
+  border-bottom: 0;
+}
+
+.appt-landing .appt-compare-row.head {
+  background: #f8fafc;
+  font-weight: 700;
+  color: var(--lp-navy);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1.1rem 1.5rem;
+}
+
+.appt-landing .appt-compare-row .yes {
+  color: #059669;
+  font-weight: 800;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.appt-landing .appt-cta-band {
+  padding: 5.5rem 0;
+  background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.appt-landing .appt-cta-band::before {
+  content: "";
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 999px;
+  background: rgb(99 102 241 / 0.15);
+  filter: blur(60px);
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.appt-landing .appt-cta-band .lp-container {
+  position: relative;
+  z-index: 1;
+}
+
+.appt-landing .appt-cta-band h2 {
+  color: white;
+  margin-bottom: 0.85rem;
+}
+
+.appt-landing .appt-cta-band .appt-deep-lead {
+  color: #94a3b8;
+  max-width: 36rem;
+  margin-inline: auto;
+  margin-bottom: 1.75rem;
+}
+
+.appt-landing .appt-cta-band .appt-hero-actions {
+  justify-content: center;
+}
+
+.appt-landing .appt-cta-band .lp-btn-secondary {
+  background: transparent;
+  color: white !important;
+  border-color: rgb(255 255 255 / 0.25);
+}
+
+.appt-landing .appt-cta-band .lp-btn-secondary:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
+/* Hero product mockup */
+.appt-mockup {
+  position: relative;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+.appt-mockup-glow {
+  position: absolute;
+  inset: 5% 2% -8% 2%;
+  background: radial-gradient(circle at 50% 28%, rgb(99 102 241 / 0.24), transparent 68%);
+  filter: blur(28px);
+  z-index: 0;
+}
+
+.appt-mockup-frame {
+  position: relative;
+  z-index: 1;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  box-shadow: 0 32px 90px rgb(15 23 42 / 0.16);
+  overflow: hidden;
+}
+
+.appt-mockup-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfc;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.appt-mockup-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.appt-mockup-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.appt-mockup-body {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  min-height: 420px;
+}
+
+.appt-mockup-sidebar {
+  background: linear-gradient(180deg, #0f172a, #1e293b);
+  padding: 1.15rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.appt-mockup-nav {
+  height: 36px;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.06);
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.appt-mockup-nav.active {
+  background: var(--lp-blue);
+  color: white;
+}
+
+.appt-mockup-main {
+  padding: 1.15rem 1.2rem;
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.appt-mockup-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.7rem;
+}
+
+.appt-mockup-stat {
+  background: white;
+  border: 1px solid #e8eef7;
+  border-radius: 12px;
+  padding: 0.85rem 0.8rem;
+}
+
+.appt-mockup-stat .label {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.appt-mockup-stat .value {
+  font-size: 1.28rem;
+  font-weight: 800;
+  color: var(--lp-navy);
+  letter-spacing: -0.03em;
+}
+
+.appt-mockup-stat .delta {
+  font-size: 0.68rem;
+  color: #059669;
+  font-weight: 700;
+}
+
+.appt-mockup-panels {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 0.7rem;
+  flex: 1;
+}
+
+.appt-mockup-panel {
+  background: white;
+  border: 1px solid #e8eef7;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.appt-mockup-panel-h {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--lp-navy);
+}
+
+.appt-mockup-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #f8fafc;
+  font-size: 0.72rem;
+}
+
+.appt-mockup-row:last-child {
+  border-bottom: 0;
+}
+
+.appt-mockup-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #c7d2fe, #6366f1);
+  flex-shrink: 0;
+}
+
+.appt-mockup-badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.appt-mockup-badge.pending {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.appt-mockup-badge.paid {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+/* Feature mini mockups */
+.appt-mini-mock {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgb(15 23 42 / 0.1);
+  overflow: hidden;
+}
+
+.appt-mini-mock.dark {
+  background: #111827;
+  border-color: #1f2937;
+}
+
+.appt-sms-thread {
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.appt-sms-bubble {
+  max-width: 88%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.appt-sms-bubble.out {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.appt-sms-bubble.in {
+  align-self: flex-start;
+  background: #f1f5f9;
+  color: #334155;
+  border-bottom-left-radius: 4px;
+}
+
+.appt-mini-mock.dark .appt-sms-bubble.in {
+  background: #1f2937;
+  color: #e2e8f0;
+}
+
+.appt-workflow-steps {
+  padding: 1.15rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.appt-workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.62rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e8eef7;
+  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--lp-navy);
+}
+
+.appt-workflow-step .num {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--lp-blue-soft);
+  color: var(--lp-blue);
+  display: grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .appt-landing .appt-feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .appt-landing .appt-industry-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 960px) {
+  .appt-landing .appt-hero-visual {
+    margin-top: 4.25rem;
+  }
+
+  .appt-landing .appt-feature-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .appt-landing .appt-deep-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .appt-landing .appt-industry-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .appt-mockup-body {
+    min-height: 460px;
+  }
+
+  .appt-landing .appt-compare-row {
+    font-size: 1.02rem;
+    padding: 1.05rem 1.75rem;
+  }
+}
+
+@media (max-width: 959px) {
+  .appt-mockup-body {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .appt-mockup-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.65rem;
+  }
+
+  .appt-mockup-nav {
+    white-space: nowrap;
+    min-width: 100px;
+  }
+
+  .appt-mockup-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-mockup-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-landing .appt-deep.reverse .appt-deep-grid {
+    direction: ltr;
+  }
+}
+
+@media (max-width: 640px) {
+  .appt-landing .appt-trust-capabilities {
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .appt-landing .appt-compare-row {
+    font-size: 0.92rem;
+    padding: 0.9rem 1rem;
+  }
+}

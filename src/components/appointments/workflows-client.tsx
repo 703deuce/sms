@@ -349,6 +349,10 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
                   <option value="has_phone">Has phone</option>
                   <option value="has_email">Has email</option>
                   <option value="has_sms_consent">Has SMS consent</option>
+                  <option value="payment_status_equals">Payment status equals</option>
+                  <option value="deposit_paid">Deposit paid (balance remains)</option>
+                  <option value="balance_due">Balance due</option>
+                  <option value="payment_failed">Payment failed</option>
                 </Select>
               </div>
               <div className="min-w-[120px] flex-1">

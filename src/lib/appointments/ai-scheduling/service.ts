@@ -14,6 +14,9 @@ export type AiSchedulingResponse = {
   requiresFollowUp: boolean;
   requiresConfirmation: boolean;
   requiresBookingDetails: boolean;
+  /** True when the selected appointment type requires deposit or full payment before confirmation */
+  requiresPayment?: boolean;
+  paymentMode?: "deposit" | "full";
 };
 
 const AI_RATE_LIMIT = new Map<string, number[]>();
@@ -111,7 +114,15 @@ export async function processAiSchedulingRequest(input: {
   );
 
   const slotDisplay = formatSlotsForDisplay(availability.slots, platform.timezone);
-  const message = `${availability.message}\n\n${slotDisplay}`;
+  const matchedType = types.find((t) => t.name === serviceName);
+  const payment = matchedType?.config?.payment;
+  const requiresPayment = Boolean(payment?.mode && payment.mode !== "none");
+  const paymentNote = requiresPayment
+    ? payment?.mode === "deposit"
+      ? "\n\nA deposit is required to confirm this appointment. After you choose a time and enter your details, you'll complete secure payment before your booking is confirmed."
+      : "\n\nPayment is required to confirm this appointment. After you choose a time and enter your details, you'll complete secure checkout before your booking is confirmed."
+    : "";
+  const message = `${availability.message}\n\n${slotDisplay}${paymentNote}`;
 
   return {
     intent,
@@ -119,7 +130,9 @@ export async function processAiSchedulingRequest(input: {
     serviceName,
     message,
     requiresFollowUp: availability.slots.length > 1,
-    requiresConfirmation: availability.slots.length === 1,
+    requiresConfirmation: availability.slots.length === 1 && !requiresPayment,
     requiresBookingDetails: false,
+    requiresPayment,
+    paymentMode: payment?.mode === "deposit" || payment?.mode === "full" ? payment.mode : undefined,
   };
 }

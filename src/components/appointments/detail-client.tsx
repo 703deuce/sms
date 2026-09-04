@@ -108,6 +108,19 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
     load();
   }, [appointmentId]);
 
+  const [refunding, setRefunding] = useState(false);
+
+  async function refundPayment() {
+    setRefunding(true);
+    const res = await fetch("/api/merchant-payments/refund", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId }),
+    });
+    setRefunding(false);
+    if (res.ok) await load();
+  }
+
   async function addNote() {
     if (!internalNote.trim()) return;
     setAddingNote(true);
@@ -352,12 +365,33 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
             </div>
           ) : null}
           {appt.metadata.paymentStatus ? (
-            <div className="mt-4 rounded-lg bg-muted/40 p-3 text-[13px]">
-              <p className="font-semibold">Payment: {appt.metadata.paymentStatus}</p>
+            <div className="mt-4 rounded-lg bg-muted/40 p-3 text-[13px] space-y-2">
+              <p className="font-semibold">
+                Payment: {appt.metadata.paymentStatus}
+                {appt.metadata.paymentProvider ? ` via ${appt.metadata.paymentProvider}` : ""}
+              </p>
+              {appt.metadata.totalPriceCents ? (
+                <p className="text-muted-foreground">
+                  Service price: ${(appt.metadata.totalPriceCents / 100).toFixed(2)}
+                </p>
+              ) : null}
               {appt.metadata.paymentAmountCents ? (
                 <p className="text-muted-foreground">
-                  ${(appt.metadata.paymentAmountCents / 100).toFixed(2)}
+                  Amount paid: ${(appt.metadata.paymentAmountCents / 100).toFixed(2)}
                 </p>
+              ) : null}
+              {appt.metadata.balanceDueCents ? (
+                <p className="text-muted-foreground">
+                  Balance due: ${(appt.metadata.balanceDueCents / 100).toFixed(2)}
+                </p>
+              ) : null}
+              {appt.metadata.refundStatus ? (
+                <p className="text-muted-foreground">Refund: {appt.metadata.refundStatus}</p>
+              ) : null}
+              {appt.metadata.paymentStatus === "succeeded" && !appt.metadata.refundStatus ? (
+                <Button size="sm" variant="outline" disabled={refunding || acting} onClick={refundPayment}>
+                  {refunding ? "Refunding…" : "Refund payment"}
+                </Button>
               ) : null}
             </div>
           ) : null}

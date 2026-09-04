@@ -293,6 +293,8 @@ model Workspace {
   appointmentWorkflowExecutions AppointmentWorkflowExecution[]
   appointmentWaitlistEntries AppointmentWaitlistEntry[]
   appointmentRecurringSeries AppointmentRecurringSeries[]
+  merchantPaymentConnections MerchantPaymentConnection[]
+  appointmentMerchantPayments AppointmentMerchantPayment[]
   voiceTestRuns VoiceTestRun[]
   voiceComplianceProfile VoiceComplianceProfile?
   voiceUsageRecords VoiceUsageRecord[]
@@ -2904,6 +2906,72 @@ model AppointmentRecurringSeries {
 
   @@index([workspaceId])
   @@map("appointment_recurring_series")
+}
+
+/// Workspace-scoped merchant payment processor connection (Stripe Connect / Square).
+/// Separate from Workspace.stripeCustomerId (Transovo SaaS billing).
+model MerchantPaymentConnection {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  provider              String    // STRIPE | SQUARE
+  status                String    @default("not_connected")
+  /// Stripe connected account ID or Square merchant ID
+  merchantAccountId     String?
+  /// Square location ID used for payments
+  defaultLocationId     String?
+  chargesEnabled        Boolean   @default(false)
+  payoutsEnabled        Boolean   @default(false)
+  onboardingComplete    Boolean   @default(false)
+  /// Encrypted OAuth/access token (AES-GCM via integration secrets)
+  accessTokenEnc        String?
+  refreshTokenEnc       String?
+  tokenExpiresAt        DateTime?
+  connectedAt           DateTime?
+  disconnectedAt        DateTime?
+  providerMetadata      Json?
+  lastError             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@index([workspaceId])
+  @@index([merchantAccountId])
+  @@map("merchant_payment_connections")
+}
+
+/// Appointment customer payment record — funds settle to connected merchant, not Transovo.
+model AppointmentMerchantPayment {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  appointmentId       String
+  provider            String   // STRIPE | SQUARE
+  status              String   @default("pending")
+  paymentMode         String   // deposit | full
+  currency            String   @default("usd")
+  totalPriceCents     Int
+  amountDueCents      Int
+  amountPaidCents     Int      @default(0)
+  balanceDueCents     Int      @default(0)
+  providerPaymentId   String?
+  providerSessionId   String?
+  idempotencyKey      String?
+  refundAmountCents   Int      @default(0)
+  refundStatus        String?
+  paidAt              DateTime?
+  failedAt            DateTime?
+  canceledAt          DateTime?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentId])
+  @@index([appointmentId])
+  @@index([providerPaymentId])
+  @@index([providerSessionId])
+  @@unique([idempotencyKey])
+  @@map("appointment_merchant_payments")
 }
 
 model VoiceTestRun {

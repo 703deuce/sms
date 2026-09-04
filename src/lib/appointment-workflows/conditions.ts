@@ -66,6 +66,16 @@ function evaluateCondition(
       return ctx.serviceName !== String(condition.value || "");
     case "payment_status_equals":
       return (ctx.paymentStatus || "") === String(condition.value || "");
+    case "deposit_paid":
+      return Boolean(
+        ctx.metadata.depositPaidCents &&
+          ctx.metadata.depositPaidCents > 0 &&
+          (ctx.metadata.balanceDueCents ?? 0) > 0,
+      );
+    case "balance_due":
+      return (ctx.metadata.balanceDueCents ?? 0) > 0;
+    case "payment_failed":
+      return ctx.paymentStatus === "failed";
     default:
       return true;
   }

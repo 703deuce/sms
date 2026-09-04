@@ -11,6 +11,7 @@ interface Props {
   error: string;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
+  connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -30,6 +31,7 @@ export default function TypeEditorPanel({
   error,
   staffOptions,
   locationOptions,
+  connectedPaymentProviders,
   onFormChange,
   onSave,
   onCancel,
@@ -229,6 +231,7 @@ export default function TypeEditorPanel({
           form={form}
           staffOptions={staffOptions}
           locationOptions={locationOptions}
+          connectedPaymentProviders={connectedPaymentProviders}
           onFormChange={onFormChange}
         />
 

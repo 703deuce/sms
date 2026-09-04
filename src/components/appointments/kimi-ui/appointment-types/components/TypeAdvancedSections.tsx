@@ -13,6 +13,7 @@ type Props = {
   form: AppointmentTypeFormState;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
+  connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -23,6 +24,7 @@ export default function TypeAdvancedSections({
   form,
   staffOptions,
   locationOptions,
+  connectedPaymentProviders,
   onFormChange,
 }: Props) {
   const questions = form.bookingQuestions;
@@ -321,7 +323,7 @@ export default function TypeAdvancedSections({
       {/* Payment */}
       <section>
         <h3 className="text-[14px] font-semibold mb-4">Payment</h3>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Requirement</label>
             <select
@@ -335,18 +337,42 @@ export default function TypeAdvancedSections({
             </select>
           </div>
           {form.paymentMode !== "none" ? (
-            <>
-              <div>
-                <label className="label">Price (cents)</label>
-                <input
-                  className="input w-full"
-                  type="number"
-                  min={50}
-                  value={form.paymentPriceCents}
-                  onChange={(e) => onFormChange("paymentPriceCents", Number(e.target.value) || 0)}
-                />
-              </div>
-              {form.paymentMode === "deposit" ? (
+            <div>
+              <label className="label">Payment provider</label>
+              <select
+                className="input w-full"
+                value={form.paymentProvider}
+                onChange={(e) =>
+                  onFormChange("paymentProvider", e.target.value as typeof form.paymentProvider)
+                }
+              >
+                <option value="">Select provider…</option>
+                {connectedPaymentProviders.map((p) => (
+                  <option key={p.provider} value={p.provider}>{p.label}</option>
+                ))}
+              </select>
+              {connectedPaymentProviders.length === 0 ? (
+                <p className="mt-1 text-[11px] text-amber-700">
+                  Connect Stripe or Square in Settings → Payments first.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {form.paymentMode !== "none" ? (
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div>
+              <label className="label">Service price (cents)</label>
+              <input
+                className="input w-full"
+                type="number"
+                min={50}
+                value={form.paymentPriceCents}
+                onChange={(e) => onFormChange("paymentPriceCents", Number(e.target.value) || 0)}
+              />
+            </div>
+            {form.paymentMode === "deposit" ? (
+              <>
                 <div>
                   <label className="label">Deposit (cents)</label>
                   <input
@@ -357,10 +383,29 @@ export default function TypeAdvancedSections({
                     onChange={(e) => onFormChange("paymentDepositCents", Number(e.target.value) || 0)}
                   />
                 </div>
-              ) : null}
-            </>
-          ) : null}
-        </div>
+                <div>
+                  <label className="label">Or deposit %</label>
+                  <input
+                    className="input w-full"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={form.paymentDepositPercent}
+                    onChange={(e) => onFormChange("paymentDepositPercent", Number(e.target.value) || 0)}
+                  />
+                </div>
+              </>
+            ) : null}
+            <div>
+              <label className="label">Currency</label>
+              <input
+                className="input w-full"
+                value={form.paymentCurrency}
+                onChange={(e) => onFormChange("paymentCurrency", e.target.value.toLowerCase())}
+              />
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {/* Group & recurring */}

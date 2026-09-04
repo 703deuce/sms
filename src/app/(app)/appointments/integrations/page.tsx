@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CalendarIntegrationsCard } from "@/components/appointments/calendar-integrations-card";
 
 export default function AppointmentIntegrationsPage() {
@@ -24,12 +25,27 @@ export default function AppointmentIntegrationsPage() {
         </div>
         <CalendarIntegrationsCard />
         <div className="rounded-xl border border-[#ecedf2] bg-white p-5">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-[14px] font-semibold">Appointment payments</h3>
+            <Link
+              href="/settings/payments"
+              className="text-[12px] font-semibold text-primary hover:underline"
+            >
+              Manage Stripe & Square →
+            </Link>
+          </div>
+          <p className="text-[12px] text-[#8a8fa3] mb-3">
+            Connect your business Stripe or Square account to collect deposits and payments during booking.
+          </p>
+        </div>
+        <div className="rounded-xl border border-[#ecedf2] bg-white p-5">
           <h3 className="text-[14px] font-semibold mb-3">Provider status</h3>
           <ul className="space-y-2 text-[13px]">
             <StatusRow label="Google Calendar OAuth" ok={status.googleCalendarConfigured} />
             <StatusRow label="OpenAI (AI booking)" ok={status.openAiConfigured} fallback="Deterministic fallback active" />
             <StatusRow label="Brevo (workflow email)" ok={status.brevoConfigured} fallback="Email actions stub when unconfigured" />
-            <StatusRow label="Stripe (payments)" ok={status.stripeConfigured} fallback="Payments unavailable until configured" />
+            <StatusRow label="Stripe platform (Connect)" ok={status.stripeConfigured} fallback="Connect unavailable until configured" />
+            <StatusRow label="Square platform (OAuth)" ok={status.squareConfigured} fallback="Square unavailable until configured" />
           </ul>
         </div>
       </div>

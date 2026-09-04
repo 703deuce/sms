@@ -61,6 +61,14 @@ export async function upsertAppointmentType(
     config?: AppointmentTypeConfig;
   },
 ) {
+  if (input.config?.payment) {
+    const { validateAppointmentTypePayment } = await import("@/lib/merchant-payments/service");
+    const paymentError = await validateAppointmentTypePayment(workspaceId, input.config.payment);
+    if (paymentError) {
+      throw new Error(paymentError);
+    }
+  }
+
   const prisma = getPrisma();
   const data = {
     name: input.name.trim(),

@@ -622,6 +622,7 @@ export const pageTitles: Record<string, string> = {
   "/settings/workspaces": "Workspaces",
   "/settings/notifications": "Notifications",
   "/settings/billing": "Billing",
+  "/settings/payments": "Payments",
   "/settings/limits": "Usage Limits",
   "/settings/security": "Security",
   "/settings/branding": "Branding",
