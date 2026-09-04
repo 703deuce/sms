@@ -23,9 +23,9 @@ export const hours = [
 
 export type WeekEvent = {
   id: string;
-  day: number; // 0 = Sunday
-  start: number; // decimal hour
-  duration: number; // hours
+  day: number;
+  start: number;
+  duration: number;
   timeLabel: string;
   title: string;
   name: string;
@@ -57,7 +57,6 @@ export const typeColors: Record<string, { label: string; dot: string }> = {
 };
 
 const days: { day: number; muted: boolean; selected: boolean; hasEvent: boolean }[] = [];
-// July 26 - Aug 1 (Aug 2026 starts Saturday)
 [26, 27, 28, 29, 30, 31, 1].forEach((d) => days.push({ day: d, muted: true, selected: false, hasEvent: false }));
 const eventDays = new Set([4, 6, 10, 13, 18, 21, 26, 30]);
 for (let d = 2; d <= 31; d++) {

@@ -227,6 +227,9 @@
   z-index: 2;
   cursor: pointer;
   overflow: hidden;
+  text-align: left;
+  background: transparent;
+  font: inherit;
 }
 /* day offsets: left = 48px + day * column width */
 .week-event[data-day="0"] { left: calc(48px + (100% - 48px) * 0 / 7 + 5px); }
@@ -294,6 +297,9 @@
   border-radius: 6px;
   position: relative;
   cursor: pointer;
+  border: none;
+  background: transparent;
+  font: inherit;
 }
 .mini-day:hover { background: #f3f3f8; }
 .mini-day.muted { color: #c2c2d0; }
@@ -319,6 +325,12 @@
   gap: 10px;
   padding: 8px 0;
   border-top: 1px solid #f4f4f9;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 .agenda-item:first-child { border-top: none; }
 .agenda-left { display: flex; align-items: center; gap: 7px; width: 78px; flex-shrink: 0; }

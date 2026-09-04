@@ -1,9 +1,13 @@
 import React from "react";
 import { Phone, Video, ArrowRight } from "lucide-react";
-import { nextAppointment } from "../mock-data";
+import type { CalendarNextAppointment } from "@/features/appointments/kimi/calendar/types";
 
-export default function NextAppointment() {
-  const a = nextAppointment;
+type Props = {
+  appointment: CalendarNextAppointment;
+  onOpenAppointment: (id: string) => void;
+};
+
+export default function NextAppointment({ appointment: a, onOpenAppointment }: Props) {
   return (
     <div className="next-card card">
       <div className="next-head">
@@ -18,7 +22,9 @@ export default function NextAppointment() {
           <div className="next-appt-title">{a.title}</div>
           <div className="next-person">{a.name}</div>
         </div>
-        <span className="badge badge-confirmed">Confirmed</span>
+        <span className={`badge badge-${a.status === "confirmed" ? "confirmed" : a.status}`}>
+          {a.status === "confirmed" ? "Confirmed" : a.status === "pending" ? "Pending" : "Canceled"}
+        </span>
       </div>
       <div className="next-meta">
         <div className="next-meta-row">
@@ -29,7 +35,7 @@ export default function NextAppointment() {
           <Video size={14} className="muted-icon" /> Add meeting notes...
         </div>
       </div>
-      <button className="btn-primary full">
+      <button type="button" className="btn-primary full" onClick={() => onOpenAppointment(a.id)}>
         View appointment <ArrowRight size={15} />
       </button>
     </div>

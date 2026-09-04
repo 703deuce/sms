@@ -1,6 +1,6 @@
 import React from "react";
 import { Calendar, CheckCircle2, Clock, XCircle, Users, TrendingUp } from "lucide-react";
-import { stats } from "../mock-data";
+import type { CalendarStatItem } from "@/features/appointments/kimi/calendar/types";
 
 const icons: Record<string, React.ReactNode> = {
   calendar: <Calendar size={20} />,
@@ -10,7 +10,11 @@ const icons: Record<string, React.ReactNode> = {
   users: <Users size={20} />,
 };
 
-export default function StatCards() {
+type Props = {
+  stats: CalendarStatItem[];
+};
+
+export default function StatCards({ stats }: Props) {
   return (
     <div className="stat-row">
       {stats.map((s) => (

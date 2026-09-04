@@ -1,6 +1,11 @@
 import React from "react";
 import { CheckCircle2, Clock, XCircle, Settings } from "lucide-react";
-import { weekDays, weekEvents, hours, typeColors } from "../mock-data";
+import type {
+  CalendarNowLine,
+  CalendarTypeColor,
+  CalendarWeekDay,
+  CalendarWeekEvent,
+} from "@/features/appointments/kimi/calendar/types";
 
 const HOUR_H = 56;
 const START = 8;
@@ -11,57 +16,72 @@ function StatusIcon({ status }: { status: string }) {
   return <XCircle size={13} className="ev-status canceled" />;
 }
 
-export default function WeekCalendar() {
+type Props = {
+  weekDays: CalendarWeekDay[];
+  weekEvents: CalendarWeekEvent[];
+  hours: string[];
+  typeColors: Record<string, CalendarTypeColor>;
+  nowLine: CalendarNowLine | null;
+  timezoneLabel: string;
+  onOpenAppointment: (id: string) => void;
+  onShowCalendarSettings: () => void;
+};
+
+export default function WeekCalendar({
+  weekDays,
+  weekEvents,
+  hours,
+  typeColors,
+  nowLine,
+  timezoneLabel,
+  onOpenAppointment,
+  onShowCalendarSettings,
+}: Props) {
   return (
     <div className="week-card">
       <div className="week-grid">
-        {/* header row */}
         <div className="wg-corner">
-          <span className="gmt">GMT-4</span>
+          <span className="gmt">{timezoneLabel}</span>
         </div>
         {weekDays.map((d) => (
-          <div key={d.label} className={`wg-day-head ${d.today ? "today" : ""}`}>
+          <div key={d.dateKey} className={`wg-day-head ${d.today ? "today" : ""}`}>
             <span className="wg-dow">{d.label}</span>
             <span className="wg-date">
               {d.date}
-              {d.today && <span className="today-badge">4</span>}
+              {d.today && (
+                <span className="today-badge">{new Date(d.dateKey).getDate()}</span>
+              )}
             </span>
           </div>
         ))}
-        {/* time rows */}
         {hours.map((h) => (
           <React.Fragment key={h}>
             <div className="wg-time">{h}</div>
             {weekDays.map((d) => (
-              <div key={d.label + h} className="wg-cell" />
+              <div key={d.dateKey + h} className="wg-cell" />
             ))}
           </React.Fragment>
         ))}
 
-        {/* now line */}
-        <div
-          className="now-line"
-          style={{ top: 57 + (10.25 - START) * HOUR_H }}
-        >
-          <span className="now-label">10:15 AM</span>
-          <span className="now-track" />
-          <span className="now-dot" />
-        </div>
+        {nowLine ? (
+          <div className="now-line" style={{ top: nowLine.top }}>
+            <span className="now-label">{nowLine.label}</span>
+            <span className="now-track" />
+            <span className="now-dot" />
+          </div>
+        ) : null}
 
-        {/* events */}
         {weekEvents.map((ev) => {
           const top = 57 + (ev.start - START) * HOUR_H + 3;
           const height = ev.duration * HOUR_H - 8;
           return (
-            <div
+            <button
               key={ev.id}
+              type="button"
               className={`week-event ev-${ev.type}`}
-              style={{
-                top,
-                height,
-                left: `calc(${(ev.day / 7) * 100}% + 48px / 7 * 0 )`,
-              }}
+              style={{ top, height }}
               data-day={ev.day}
+              onClick={() => onOpenAppointment(ev.id)}
             >
               <div className="ev-time">{ev.timeLabel}</div>
               <div className="ev-title-row">
@@ -69,7 +89,7 @@ export default function WeekCalendar() {
                 <StatusIcon status={ev.status} />
               </div>
               <div className="ev-name">{ev.name}</div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -83,7 +103,7 @@ export default function WeekCalendar() {
             </span>
           ))}
         </div>
-        <button className="cal-settings">
+        <button type="button" className="cal-settings" onClick={onShowCalendarSettings}>
           <Settings size={14} /> Show calendar settings
         </button>
       </div>

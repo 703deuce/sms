@@ -1,7 +1,32 @@
 import React from "react";
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Plus } from "lucide-react";
+import type { CalendarViewMode } from "@/features/appointments/kimi/calendar/types";
 
-export default function CalendarHeader() {
+type Props = {
+  rangeLabel: string;
+  view: CalendarViewMode;
+  onToday: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onViewChange: (view: CalendarViewMode) => void;
+  onNewAppointment: () => void;
+};
+
+const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+];
+
+export default function CalendarHeader({
+  rangeLabel,
+  view,
+  onToday,
+  onPrev,
+  onNext,
+  onViewChange,
+  onNewAppointment,
+}: Props) {
   return (
     <div className="cal-header">
       <div className="cal-title-wrap">
@@ -12,20 +37,33 @@ export default function CalendarHeader() {
         </div>
       </div>
       <div className="cal-controls">
-        <button className="btn-today">Today</button>
+        <button type="button" className="btn-today" onClick={onToday}>
+          Today
+        </button>
         <div className="nav-arrows">
-          <button className="icon-btn"><ChevronLeft size={16} /></button>
-          <button className="icon-btn"><ChevronRight size={16} /></button>
+          <button type="button" className="icon-btn" onClick={onPrev} aria-label="Previous">
+            <ChevronLeft size={16} />
+          </button>
+          <button type="button" className="icon-btn" onClick={onNext} aria-label="Next">
+            <ChevronRight size={16} />
+          </button>
         </div>
-        <button className="btn-range">
-          Aug 30 – Sep 5, 2026 <ChevronDown size={14} />
+        <button type="button" className="btn-range">
+          {rangeLabel} <ChevronDown size={14} />
         </button>
         <div className="view-toggle">
-          <button className="vt-btn">Day</button>
-          <button className="vt-btn active">Week</button>
-          <button className="vt-btn">Month</button>
+          {VIEW_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`vt-btn ${view === opt.value ? "active" : ""}`}
+              onClick={() => onViewChange(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
-        <button className="btn-primary">
+        <button type="button" className="btn-primary" onClick={onNewAppointment}>
           <Plus size={16} /> New appointment
         </button>
       </div>

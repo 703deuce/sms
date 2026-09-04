@@ -1,7 +1,3 @@
 "use client";
 
-import CalendarPage from "@/components/appointments/kimi-ui/calendar/page";
-
-export function AppointmentsCalendarClient() {
-  return <CalendarPage />;
-}
+export { CalendarConnected, CalendarConnected as AppointmentsCalendarClient } from "@/features/appointments/kimi/calendar/calendar-connected";
